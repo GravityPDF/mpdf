@@ -1,7 +1,7 @@
 {
-	"name": "mpdf/mpdf",
+	"name": "blueliquiddesigns/mpdf",
 	"type": "library",
-	"description": "A PHP class to generate PDF files from HTML with Unicode/UTF-8 and CJK support",
+	"description": "A PHP class to generate PDF files from HTML with Unicode/UTF-8 and CJK support, with a strong focus on WordPress integration. If you just want a standalone option (without WordPress) use the mpdf/mpdf packagist option.",
 	"keywords": ["php", "pdf", "utf-8"],
 	"homepage": "http://www.mpdf1.com/mpdf/index.php",
 	"license": ["GPL-2.0"],
@@ -17,17 +17,10 @@
 	"source": "https://github.com/mpdf/mpdf"
 	},
 	"require": {
-		"php": ">=4.3.10",
-		"ext-mbstring": "*"
+		"php": ">=5.3.2",
+		"ext-mbstring": "*",
 	},
 	"autoload": {
 		"classmap": ["mpdf.php", "classes"]
 	},
-	"scripts": {
-			"post-install-cmd": [
-				"php -r \"chmod('./ttfontdata', 0777);\"",
-				"php -r \"chmod('./tmp', 0777);\"",
-				"php -r \"chmod('./graph_cache', 0777);\""
-			]
-		}
 }
