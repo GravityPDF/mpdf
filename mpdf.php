@@ -10394,6 +10394,7 @@ function _imageError($file, $firsttime, $msg) {
 
 
 function _getImage(&$file, $firsttime=true, $allowvector=true, $orig_srcpath=false, $interpolation=false) { 	// mPDF 6
+
 	// firsttime i.e. whether to add to this->images - use false when calling iteratively
 	// Image Data passed directly as var:varname
 	if (preg_match('/var:\s*(.*)/',$file, $v)) { 
@@ -12475,6 +12476,7 @@ function SetBasePath($str='') {
 
 
 function GetFullPath(&$path,$basepath='') {
+
 	// When parsing CSS need to pass temporary basepath - so links are relative to current stylesheet
 	if (!$basepath) { $basepath = $this->basepath; }
 	//Fix path value
@@ -12492,7 +12494,7 @@ function GetFullPath(&$path,$basepath='') {
 	if(substr($path,0,1) == '#') { return; }
 	// mPDF 5.7.4
 	if (substr($path,0,7) == "mailto:") { return; }
-	if (substr($path,0,3) == "../") { //It is a Relative Link
+	if (substr($path,0,3) == "../") { //It is a Relative Link	
 		$backtrackamount = substr_count($path,"../");
 		$maxbacktrack = substr_count($basepath,"/") - 3;
 		$filepath = str_replace("../",'',$path);
@@ -12503,8 +12505,8 @@ function GetFullPath(&$path,$basepath='') {
 		for( $i = 0 ; $i < $backtrackamount + 1 ; $i++ ) $path = substr( $path, 0 , strrpos($path,"/") );
 		$path = $path . "/" . $filepath; //Make it an absolute path
 	}
-	else if( strpos($path,":/") === false || strpos($path,":/") > 10) { //It is a Local Link
-		if (substr($path,0,1) == "/") { 
+	else if( (strpos($path,":/") === false || strpos($path,":/") > 10) && !is_file($path)) { //It is a Local Link
+		if (substr($path,0,1) != "/") { 
 			$tr = parse_url($basepath);
 			// mPDF 5.7.2
 			$root = '';
@@ -18022,7 +18024,7 @@ function OpenTag($tag,$attr,&$ahtml,&$ihtml) {	// mPDF 6
 		$objattr['border_left']['w'] = 0;
 		$objattr['border_right']['w'] = 0;
 	if(isset($attr['SRC']))	{
-     		$srcpath = $attr['SRC'];
+     	$srcpath = $attr['SRC'];
 		$orig_srcpath = (isset($attr['ORIG_SRC']) ? $attr['ORIG_SRC'] : '');
 		$properties = $this->cssmgr->MergeCSS('',$tag,$attr);
 		if(isset($properties ['DISPLAY']) && strtolower($properties ['DISPLAY'])=='none') { 
