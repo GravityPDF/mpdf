@@ -8,5 +8,4 @@
 			<directory suffix=".php">./</directory>
 		</testsuite>
 	</testsuites>
-    
 </phpunit>
