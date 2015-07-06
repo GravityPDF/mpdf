@@ -1424,7 +1424,7 @@ function _putform_ch( $form, $hPt ) {
 		}
 	      $this->mpdf->_out('/I ['.$selectIndex.'] ');
 	}
-    
+
 	if ( is_array($form['FF']) && count($form['FF'])>0 ) {
 		$this->mpdf->_out('/Ff '.$this->_setflag($form['FF']).' ');
 	}

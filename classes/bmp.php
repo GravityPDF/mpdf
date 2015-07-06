@@ -232,7 +232,7 @@ function rle4_decode ($str, $width){
                     $pixels[] = ($j%2==0 ? ($c & 240)>>4 : $c & 15);
         }
     }
-    
+
     $out = '';
     if (count($pixels)%2) $pixels[]=0;
     $cnt = count($pixels)/2;

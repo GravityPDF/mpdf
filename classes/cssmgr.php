@@ -37,7 +37,7 @@ function ReadCSS($html) {
 	// Remove Comment tags /* ...  */ inside CSS as <style> in HTML document
 	// But first, we replace upper and mixed case closing style tag with lower
 	// case so we can use str_replace later.
-	preg_replace('/<\/style>/i', '</style>', $html);
+	$html = preg_replace('/<\/style>/i', '</style>', $html);
 	preg_match_all('/<style.*?>(.*?)<\/style>/si',$html,$m);
 	if (count($m[1])) {
 		for($i=0;$i<count($m[1]);$i++) {
@@ -308,7 +308,7 @@ function ReadCSS($html) {
 							else { break; }
 						}
 					}
-		   
+
 					if ($tag) {
 						$x = &$this->cascadeCSS;
 						foreach($tmp AS $tp) { $x = &$x[$tp]; }
@@ -674,7 +674,7 @@ function fixCSS($prop) {
 			if (preg_match('/url\([\'\"]{0,1}(.*?)[\'\"]{0,1}\)/i',$v,$m)) {
 				$newprop['BACKGROUND-IMAGE'] = $m[1];
 			}
-		 
+
 			else if (strtolower($v)=='none') { $newprop['BACKGROUND-IMAGE'] = ''; }
 
 		}
@@ -1650,22 +1650,22 @@ function PreviewBlockCSS($tag,$attr) {
 	$this->_set_mergedCSS($oldcascadeCSS[$tag], $p);
 	// STYLESHEET CLASS e.g. .smallone{}  .redletter{}
 	foreach($classes AS $class) {
-	  
+
 	  $this->_set_mergedCSS($oldcascadeCSS['CLASS>>'.$class], $p);
 	}
 	// STYLESHEET CLASS e.g. #smallone{}  #redletter{}
 	if (isset($attr['ID'])) {
-	  
+
 	  $this->_set_mergedCSS($oldcascadeCSS['ID>>'.$attr['ID']], $p);
 	}
 	// STYLESHEET CLASS e.g. div.smallone{}  p.redletter{}
 	foreach($classes AS $class) {
-	  
+
 	  $this->_set_mergedCSS($oldcascadeCSS[$tag.'>>CLASS>>'.$class], $p);
 	}
 	// STYLESHEET CLASS e.g. div#smallone{}  p#redletter{}
 	if (isset($attr['ID'])) {
-	  
+
 	  $this->_set_mergedCSS($oldcascadeCSS[$tag.'>>ID>>'.$attr['ID']], $p);
 	}
 	//===============================================

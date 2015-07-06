@@ -380,7 +380,7 @@ function Shaded_box( $text,$font='',$fontstyle='B',$szfont='',$width='70%',$styl
 
 	$mid = ($r1 + $r2 ) / 2;
 	$loop   = 0;
-    
+
 	while ( $loop == 0 )
 	{
 		$this->mpdf->SetFont( $font, $fontstyle, $szfont, false );
