@@ -2526,7 +2526,6 @@ function AddPage($orientation='',$condition='', $resetpagenum='', $pagenumstyle=
    		if ($this->blklvl > 0) {
 			$save_tr = $this->table_rotate;	// *TABLES*
 			$this->table_rotate = 0;	// *TABLES*
-			if ($this->y == $this->blk[$this->blklvl]['y0']) {  $this->blk[$this->blklvl]['startpage']++; }
 			if (($this->y > $this->blk[$this->blklvl]['y0']) || $this->flowingBlockAttr['is_table'] ) { $toplvl = $this->blklvl; }
 			else { $toplvl = $this->blklvl-1; }
 			$sy = $this->y;
@@ -2645,7 +2644,7 @@ function AddPage($orientation='',$condition='', $resetpagenum='', $pagenumstyle=
 	// Paint Div Border if necessary
    	//PAINTS BACKGROUND COLOUR OR BORDERS for DIV - DISABLED FOR COLUMNS (cf. AcceptPageBreak) AT PRESENT in ->PaintDivBB
    	if (!$this->ColActive && $this->blklvl > 0) {
-		if (isset($this->blk[$this->blklvl]['y0']) && $this->y == $this->blk[$this->blklvl]['y0'] && !$this->extrapagebreak ) {	// mPDF 6 pagebreaktype
+		if (isset($this->blk[$this->blklvl]['y0']) && $this->y == $this->blk[$this->blklvl]['y0'] && !$this->extrapagebreak && !$this->blk[$this->blklvl]['float'] ) {	// mPDF 6 pagebreaktype
 			if (isset($this->blk[$this->blklvl]['startpage'])) { $this->blk[$this->blklvl]['startpage']++; }
 			else { $this->blk[$this->blklvl]['startpage'] = 1; }
 		}
@@ -20090,7 +20089,6 @@ function CloseTag($tag,&$ahtml,&$ihtml) {	// mPDF 6
 		}
 		if (($this->page - $this->kt_p00) > 0) {
 			for ($i=$this->page;$i>$this->kt_p00;$i--) {
-				unset($this->pages[$i]);
 				if (isset($this->blk[$this->blklvl]['bb_painted'][$i])) { unset($this->blk[$this->blklvl]['bb_painted'][$i]); }
 				if (isset($this->blk[$this->blklvl]['marginCorrected'][$i])) { unset($this->blk[$this->blklvl]['marginCorrected'][$i]); }
 				if (isset($this->pageoutput[$i])) { unset($this->pageoutput[$i]); }
