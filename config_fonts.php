@@ -181,19 +181,11 @@ $this->fontdata = array(
 	"taiheritagepro" => array(	/* Tai Viet */
 		'R' => "TaiHeritagePro.ttf",
 		),
-	"aegean" => array(
+	"aegean" => array( /* Greek */
 		'R' => "Aegean.otf",
 		'useOTL' => 0xFF,
 		),
-	"aegyptus" => array(
-		'R' => "Aegyptus.otf",
-		'useOTL' => 0xFF,
-		),
-	"akkadian" => array(		/* Cuneiform */
-		'R' => "Akkadian.otf",
-		'useOTL' => 0xFF,
-		),
-	"quivira" => array(
+	"quivira" => array( /* Greek */
 		'R' => "Quivira.otf",
 		'useOTL' => 0xFF,
 		),
@@ -247,7 +239,7 @@ $this->fontdata = array(
 		),
 
 
-/* SMP */
+/* SMP - Unicode */
 	"mph2bdamase" => array(
 		'R' => "damase_v.2.ttf",
 		),
@@ -284,24 +276,10 @@ $this->fontdata = array(
 		'useOTL' => 0xFF,
 		'useKashida' => 75,
 		),
-
-
-
-
-/* CJK fonts */
-	"sun-exta" => array(
-		'R' => "Sun-ExtA.ttf",
-		'sip-ext' => 'sun-extb',		/* SIP=Plane2 Unicode (extension B) */
-		),
-	"sun-extb" => array(
-		'R' => "Sun-ExtB.ttf",
-		),
-	"unbatang" => array(	/* Korean */
-		'R' => "UnBatang_0613.ttf",
-		),
-
-
 );
+
+/* Allow filter so the font data can be easily modified */
+$this->fontdata = apply_filters( 'mpdf_font_data', $this->fontdata );
 
 
 // Add fonts to this array if they contain characters in the SIP or SMP Unicode planes
@@ -339,6 +317,3 @@ $this->mono_fonts = array('dejavusansmono','mono','monospace','freemono','libera
 				'couriernew','monotypecorsiva'
 );
 
-
-
-?>

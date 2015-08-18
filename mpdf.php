@@ -64,12 +64,12 @@ require_once(_MPDF_PATH.'classes/sea.php');	// mPDF 6.0
 /*-- END OTL --*/
 
 
-if (!defined('_JPGRAPH_PATH')) define("_JPGRAPH_PATH", _MPDF_PATH.'jpgraph/');
+if (!defined('_JPGRAPH_PATH')) define("_JPGRAPH_PATH", apply_filters( 'mpdf_jgraph_path', _MPDF_PATH.'jpgraph/') );
 
-if (!defined('_MPDF_TEMP_PATH')) define("_MPDF_TEMP_PATH", _MPDF_PATH.'tmp/');
+if (!defined('_MPDF_TEMP_PATH')) define("_MPDF_TEMP_PATH", apply_filters( 'mpdf_tmp_path', _MPDF_PATH.'tmp/') );
 
-if (!defined('_MPDF_TTFONTPATH')) { define('_MPDF_TTFONTPATH',_MPDF_PATH.'ttfonts/'); }
-if (!defined('_MPDF_TTFONTDATAPATH')) { define('_MPDF_TTFONTDATAPATH',_MPDF_PATH.'ttfontdata/'); }
+if (!defined('_MPDF_TTFONTPATH')) { define('_MPDF_TTFONTPATH', apply_filters( 'mpdf_font_path', _MPDF_PATH.'ttfonts/') ); }
+if (!defined('_MPDF_TTFONTDATAPATH')) { define('_MPDF_TTFONTDATAPATH', apply_filters( 'mpdf_fontdata_path', _MPDF_PATH.'ttfontdata/') ); }
 
 $errorlevel=error_reporting();
 $errorlevel=error_reporting($errorlevel & ~E_NOTICE);
@@ -3257,10 +3257,16 @@ function AddFont($family,$style='') {
 		$ttffile = _MPDF_SYSTEM_TTFONTS.$this->fontdata[$family][$stylekey];
 		if (!file_exists($ttffile)) { $ttffile = ''; }
 	}
-	if (!$ttffile) {
-		$ttffile = _MPDF_TTFONTPATH.$this->fontdata[$family][$stylekey];
-		if (!file_exists($ttffile)) { die("mPDF Error - cannot find TTF TrueType font file - ".$ttffile); }
+	if (!$ttffile) {		
+		
+		/* Allow filter to change which file is loaded */
+		$ttffile = apply_filters( 'mpdf_current_font_path', _MPDF_TTFONTPATH . $this->fontdata[$family][$stylekey], $this->fontdata[$family][$stylekey]);
+
+		if ( ! file_exists($ttffile) ) { 
+			die("mPDF Error - cannot find TTF TrueType font file - ".$ttffile); 
+		}
 	}
+	
 	$ttfstat = stat($ttffile);
 
 	if (isset($this->fontdata[$family]['TTCfontID'][$stylekey])) { $TTCfontID = $this->fontdata[$family]['TTCfontID'][$stylekey]; }
@@ -8174,7 +8180,11 @@ function Output($name='',$dest='')
 {
 	//Output PDF to some destination
 	if ($this->showStats) {
-		echo '<div>Generated in '.sprintf('%.2F',(microtime(true) - $this->time0)).' seconds</div>';
+		$this->WriteHTML('<div>Generated in '.sprintf('%.2F',(microtime(true) - $this->time0)).' seconds</div>');
+		$this->WriteHTML('<div>Compiled in '.sprintf('%.2F',(microtime(true) - $this->time0)).' seconds (total)</div>');
+		$this->WriteHTML('<div>Peak Memory usage '.number_format((memory_get_peak_usage(true)/(1024*1024)),2).' MB</div>');
+		$this->WriteHTML('<div>PDF file size '.number_format((strlen($this->buffer)/1024)).' kB</div>');
+		$this->WriteHTML('<div>Number of fonts '.count($this->fonts).'</div>');		
 	}
 	//Finish document if necessary
 	if ($this->progressBar) { $this->UpdateProgressBar(1,'100','Finished'); }	// *PROGRESS-BAR*
@@ -8213,15 +8223,6 @@ function Output($name='',$dest='')
 		echo '</ul>';
 		exit;
 	}
-
-	if ($this->showStats) {
-		echo '<div>Compiled in '.sprintf('%.2F',(microtime(true) - $this->time0)).' seconds (total)</div>';
-		echo '<div>Peak Memory usage '.number_format((memory_get_peak_usage(true)/(1024*1024)),2).' MB</div>';
-		echo '<div>PDF file size '.number_format((strlen($this->buffer)/1024)).' kB</div>';
-		echo '<div>Number of fonts '.count($this->fonts).'</div>';
-		exit;
-	}
-
 
 	if(is_bool($dest)) $dest=$dest ? 'D' : 'F';
 	$dest=strtoupper($dest);

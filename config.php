@@ -126,9 +126,9 @@ $this->ICCProfile = '';				// Colour profile OutputIntent
 
 
 // DEBUGGING & DEVELOPERS
-$this->showStats = false;
+$this->showStats = (defined('WP_DEBUG') && WP_DEBUG === true) ? true : false;
 $this->debug =  (defined('WP_DEBUG') && WP_DEBUG === true) ? true : false;
-$this->debugfonts =  (defined('WP_DEBUG') && WP_DEBUG === true) ? true : false;	// Checks and reports on errors when parsing TTF files - adds significantly to processing time
+$this->debugfonts = false;	// Checks and reports on errors when parsing TTF files - adds significantly to processing time
 $this->showImageErrors = false;
 $this->table_error_report = false;		// Die and report error if table is too wide to contain whole words
 $this->table_error_report_param = '';	// Parameter which can be passed to show in error report i.e. chapter number being processed//
