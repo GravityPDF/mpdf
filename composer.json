@@ -1,7 +1,7 @@
 {
 	"name": "blueliquiddesigns/mpdf",
 	"type": "library",
-	"description": "A PHP class to generate PDF files from HTML with Unicode/UTF-8 and CJK support, with a strong focus on WordPress integration. If you just want a standalone option (without WordPress) use the mpdf/mpdf packagist option.",
+	"description": "A PHP class to generate PDF files from HTML with Unicode/UTF-8 and CJK support, with a stronger focus on WordPress integration. If you just want a standalone option (without WordPress) use the mpdf/mpdf packagist option.",
 	"keywords": ["php", "pdf", "utf-8"],
 	"homepage": "http://www.mpdf1.com/mpdf/index.php",
 	"license": ["GPL-2.0"],

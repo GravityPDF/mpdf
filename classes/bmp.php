@@ -4,7 +4,7 @@ class bmp {
 
 var $mpdf = null;
 
-function bmp(&$mpdf) {
+function __construct(&$mpdf) {
 	$this->mpdf = $mpdf;
 }
 
@@ -245,4 +245,3 @@ function rle4_decode ($str, $width){
 
 }
 
-?>

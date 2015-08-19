@@ -168,5 +168,3 @@ if(!function_exists('codeHex2utf')){
   }
 }
 
-
-?>

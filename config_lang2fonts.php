@@ -32,7 +32,7 @@ function GetLangOpts($llcc, $adobeCJK, &$fontdata) {
 	switch($lang){
 
 
-
+ 
 
 /* European */
 	CASE "en":  CASE "eng":	// English		// LATIN
@@ -498,4 +498,3 @@ function GetLangOpts($llcc, $adobeCJK, &$fontdata) {
 	return array($coreSuitable ,$unifont);
 }
 
-?>

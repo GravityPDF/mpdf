@@ -4,7 +4,7 @@ class directw {
 
 var $mpdf = null;
 
-function directw(&$mpdf) {
+function __construct(&$mpdf) {
 	$this->mpdf = $mpdf;
 }
 
@@ -409,4 +409,3 @@ function Shaded_box( $text,$font='',$fontstyle='B',$szfont='',$width='70%',$styl
 
 }
 
-?>

@@ -279,4 +279,3 @@ function makeSVG($tag, $type, $value, $max, $min, $optimum, $low, $high) {
 
 }	// end of class
 
-?>

@@ -6,5 +6,3 @@ $desc=array('Flags'=>97,'FontBBox'=>'[-57 -250 869 801]','ItalicAngle'=>-12,'Asc
 $up=-100;
 $ut=50;
 
-
-?>

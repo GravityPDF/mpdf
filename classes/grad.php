@@ -4,7 +4,7 @@ class grad {
 
 var $mpdf = null;
 
-function grad(&$mpdf) {
+function __construct(&$mpdf) {
 	$this->mpdf = $mpdf;
 }
 
@@ -721,4 +721,3 @@ function parseBackgroundGradient($bg) {
 
 }
 
-?>
