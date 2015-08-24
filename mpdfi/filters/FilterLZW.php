@@ -31,7 +31,7 @@ class FilterLZW {
     var $andTable = array(511, 1023, 2047, 4095);
 
     function error($msg) {
-        die($msg);
+        throw new Exception($msg);
     }
     
     /**

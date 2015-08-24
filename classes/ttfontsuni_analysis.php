@@ -67,7 +67,7 @@ class TTFontFile_Analysis EXTENDS TTFontFile {
 			$name_offset = $this->seek_table("name");
 			$format = $this->read_ushort();
 			if ($format != 0 && $format != 1)	// mPDF 5.3.73
-				die("Unknown name table format ".$format);
+				throw new Exception("Unknown name table format ".$format);
 			$numRecords = $this->read_ushort();
 			$string_data_offset = $name_offset + $this->read_ushort();
 			for ($i=0;$i<$numRecords; $i++) {
@@ -91,7 +91,7 @@ class TTFontFile_Analysis EXTENDS TTFontFile {
 					$length = $x[$i]['length'] ;
 					if ($length % 2 != 0)
 						$length -= 1;
-				//		die("PostScript name is UTF-16BE string of odd length");
+				//		throw new Exception("PostScript name is UTF-16BE string of odd length");
 					$length /= 2;
 					$N = '';
 					while ($length > 0) {

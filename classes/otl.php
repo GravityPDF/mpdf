@@ -232,7 +232,11 @@ for($sch=0;$sch<=$subchunk;$sch++) {
 	$this->assocMarks = array(); 	// assocMarks[$posarr mpos] => array(compID, ligPos)
 
 	if (!isset($this->GDEFdata[$this->fontkey]['GSUBGPOStables'])) {
-		$this->ttfOTLdata = $this->GDEFdata[$this->fontkey]['GSUBGPOStables'] = file_get_contents(_MPDF_TTFONTDATAPATH.$this->fontkey.'.GSUBGPOStables.dat','rb') or die('Can\'t open file ' . _MPDF_TTFONTDATAPATH.$this->fontkey.'.GSUBGPOStables.dat');
+		$this->ttfOTLdata = $this->GDEFdata[$this->fontkey]['GSUBGPOStables'] = file_get_contents(_MPDF_TTFONTDATAPATH.$this->fontkey.'.GSUBGPOStables.dat','rb');
+
+		if($this->ttfOTLdata === false) {
+			throw new Exception('Can\'t open file ' . _MPDF_TTFONTDATAPATH.$this->fontkey.'.GSUBGPOStables.dat');
+		}
 	}
 	else {
 		$this->ttfOTLdata = $this->GDEFdata[$this->fontkey]['GSUBGPOStables'];
@@ -1822,7 +1826,7 @@ function _applyGSUBsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $s
 		//===========
 		// Format 3: Coverage-based Context Glyph Substitution
 		else if ($SubstFormat==3) {
-			die("GSUB Lookup Type ".$Type." Format ".$SubstFormat." not TESTED YET.");
+			throw new Exception("GSUB Lookup Type ".$Type." Format ".$SubstFormat." not TESTED YET.");
 			return 0;
 		}
 
@@ -2142,7 +2146,7 @@ function _applyGSUBsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $s
 		}
 	}
 
-	else { die("GSUB Lookup Type ".$Type." not supported."); }
+	else { throw new Exception("GSUB Lookup Type ".$Type." not supported."); }
 
 }
 
@@ -2365,7 +2369,7 @@ function GSUBsubstitute($pos, $substitute, $Type, $GlyphPos=NULL ) {
 					$newComp = $currComp;
 					if (isset($this->assocMarks[$GlyphPos[$i]+$ic])) {	// One of the inbetween Marks is already associated with a Lig
 						// OK as long as it is associated with the current Lig
-				//		if ($this->assocMarks[($GlyphPos[$i]+$ic)]['ligPos'] != ($GlyphPos[$i]+$ic)) { die("Problem #1"); }
+				//		if ($this->assocMarks[($GlyphPos[$i]+$ic)]['ligPos'] != ($GlyphPos[$i]+$ic)) { throw new Exception("Problem #1"); }
 						$newComp += $this->assocMarks[($GlyphPos[$i]+$ic)]['compID'];
 					}
 					$this->assocMarks[($GlyphPos[$i]+$ic)] = array('compID'=>$newComp, 'ligPos'=>$pos);
@@ -3506,7 +3510,7 @@ function _applyGPOSsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $s
 		// Format 1:
 		//===========
 		if ($PosFormat==1) {
-			die("GPOS Lookup Type ".$Type." Format ".$PosFormat." not TESTED YET.");
+			throw new Exception("GPOS Lookup Type ".$Type." Format ".$PosFormat." not TESTED YET.");
 			return 0;
 		}
 		//===========
@@ -3612,10 +3616,10 @@ function _applyGPOSsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $s
 		// Format 3:
 		//===========
 		else if ($PosFormat==3) {
-			die("GPOS Lookup Type ".$Type." Format ".$PosFormat." not TESTED YET.");
+			throw new Exception("GPOS Lookup Type ".$Type." Format ".$PosFormat." not TESTED YET.");
 			return 0;
 		}
-		else { die("GPOS Lookup Type ".$Type.", Format ".$PosFormat." not supported."); }
+		else { throw new Exception("GPOS Lookup Type ".$Type.", Format ".$PosFormat." not supported."); }
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -3626,7 +3630,7 @@ function _applyGPOSsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $s
 		// Format 1:
 		//===========
 		if ($PosFormat==1) {
-			die("GPOS Lookup Type ".$Type." Format ".$PosFormat." not TESTED YET.");
+			throw new Exception("GPOS Lookup Type ".$Type." Format ".$PosFormat." not TESTED YET.");
 			return 0;
 		}
 		//===========
@@ -3843,10 +3847,10 @@ function _applyGPOSsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $s
 
 
 		}
-		else { die("GPOS Lookup Type ".$Type.", Format ".$PosFormat." not supported."); }
+		else { throw new Exception("GPOS Lookup Type ".$Type.", Format ".$PosFormat." not supported."); }
 	}
 
-	else { die("GPOS Lookup Type ".$Type." not supported."); }
+	else { throw new Exception("GPOS Lookup Type ".$Type." not supported."); }
 }
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -4150,9 +4154,9 @@ function _applyGPOSsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $s
 
 		// Flag & 0x0010 = UseMarkFilteringSet
 		if ($flag & 0x0010) {
-			die("This font [".$this->fontkey."] contains MarkGlyphSets - Not tested yet");
+			throw new Exception("This font [".$this->fontkey."] contains MarkGlyphSets - Not tested yet");
 			// Change also in ttfontsuni.php
-			if ($MarkFilteringSet=='') die("This font [".$this->fontkey."] contains MarkGlyphSets - but MarkFilteringSet not set");
+			if ($MarkFilteringSet=='') throw new Exception("This font [".$this->fontkey."] contains MarkGlyphSets - but MarkFilteringSet not set");
 			$str = $this->MarkGlyphSets[$MarkFilteringSet];
 		}
 

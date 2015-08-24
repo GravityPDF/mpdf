@@ -395,7 +395,7 @@ function print_graph($g,$pgwidth) {
 			foreach($data AS $series => $dat) {
 				$rdata = array();
 				foreach($data[$series] AS $row) { $rdata[] = $row;  }
-				if (count($rdata)<3) { die("ERROR::Graph::Cannot create a Radar Plot with less than 3 data points."); }
+				if (count($rdata)<3) { throw new Exception("ERROR::Graph::Cannot create a Radar Plot with less than 3 data points."); }
 				// Create the radar plot
 				$bplot = new RadarPlot($rdata);
 				$bplot->mark->SetType($markers[$series]);

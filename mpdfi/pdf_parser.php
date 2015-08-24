@@ -131,7 +131,7 @@ class pdf_parser {
      * @param string $msg  Error-Message
      */
     function error($msg) {
-    	die("<b>PDF-Parser Error:</b> ".$msg);
+    	throw new Exception("<b>PDF-Parser Error:</b> ".$msg);
     }
 
     /**

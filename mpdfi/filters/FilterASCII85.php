@@ -21,7 +21,7 @@ if (!defined('ORD_z'))
 	define('ORD_z',ord('z'));
 if (!defined('ORD_exclmark'))
 	define('ORD_exclmark', ord('!'));
-if (!defined('ORD_u'))	
+if (!defined('ORD_u'))
 	define('ORD_u', ord('u'));
 if (!defined('ORD_tilde'))
 	define('ORD_tilde', ord('~'));
@@ -29,7 +29,7 @@ if (!defined('ORD_tilde'))
 class FilterASCII85 {
     
     function error($msg) {
-        die($msg);
+        throw new Exception($msg);
     }
     
     function decode($in) {

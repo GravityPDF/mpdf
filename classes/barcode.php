@@ -1145,7 +1145,7 @@ class PDFBarcode {
 					}
 				}
 			}
-			if ($invalid_upce) { die("Error - UPC-A cannot produce a valid UPC-E barcode"); }	// Error generating a UPCE code
+			if ($invalid_upce) { throw new Exception("Error - UPC-A cannot produce a valid UPC-E barcode"); }	// Error generating a UPCE code
 		}
 		//Convert digits to bars
 		$codes = array(

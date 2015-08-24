@@ -361,7 +361,7 @@ public static function insert_dotted_circles(&$info, $dottedcircle) {
 	}
 	// I am not sue how this code below got in here, since $idx should now be > count($info) and thus invalid.
 	// In case I am missing something(!) I'll leave a warning here for now:
-	if (isset($info[$idx])) { die("This shouldn't happen (in otl.php)"); exit; }
+	if (isset($info[$idx])) { throw new Exception("This shouldn't happen (in otl.php)"); exit; }
 	// In case of final bloken cluster...
 	//$syllable = $info[$idx]['syllable'];
 	//$syllable_type = ($syllable & 0x0F);

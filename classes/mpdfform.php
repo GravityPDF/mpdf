@@ -1082,7 +1082,7 @@ function _put_button_icon( $array , $w, $h ) {
 			}
 		}
 	}
-	if (!$info) { die("Cannot find Button image"); }
+	if (!$info) { throw new Exception("Cannot find Button image"); }
 	$this->mpdf->_newobj();
 	$this->mpdf->_out('<<');
 	$this->mpdf->_out('/Type /XObject');
