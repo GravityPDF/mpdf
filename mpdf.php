@@ -10210,7 +10210,7 @@ function _dounderline($x,$y,$txt,$OTLdata=false,$textvar=0) {
 function _imageError($file, $firsttime, $msg) {
 	// Save re-trying image URL's which have already failed
 	$this->failedimages[$file] = true;
-	if ($firsttime && ($this->showImageErrors || $this->debug)) {
+	if ($firsttime && $this->showImageErrors) {
 			$this->Error("IMAGE Error (".$file."): ".$msg);
 	}
 	return false;
