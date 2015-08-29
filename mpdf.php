@@ -1599,6 +1599,14 @@ function Error($msg) {
 	throw new Exception('<B>mPDF error: </B>'.$msg);
 }
 
+/**
+ * Trigger a E_USER_NOTICE so the message is stored in PHP's log
+ * @param String $message
+ */
+function Notice( $message ) {
+	trigger_error( $message );
+}
+
 function Open() {
 	//Begin document
 	if($this->state==0) {
@@ -1614,38 +1622,38 @@ function Open() {
 // DEPRACATED but included for backwards compatability
 // Depracated - can use AddPage for all
 function AddPages($a='',$b='', $c='', $d='', $e='',$f='',$g='',$h='',$i='',$j='',$k='',$l='',$m='',$n='',$o='',$p=0,$q=0,$r=0,$s=0,$t='',$u='') {
-	$this->Error('function AddPages is depracated as of mPDF 6. Please use AddPage or HTML code methods instead.');
+	$this->Notice('function AddPages is depracated as of mPDF 6. Please use AddPage or HTML code methods instead.');
 }
 
-function startPageNums() { $this->Error('function startPageNums is depracated as of mPDF 6.'); }
+function startPageNums() { $this->Notice('function startPageNums is depracated as of mPDF 6.'); }
 
-function setUnvalidatedText($a='', $b=-1) { $this->Error('function setUnvalidatedText is depracated as of mPDF 6. Please use SetWatermarkText instead.');  }
+function setUnvalidatedText($a='', $b=-1) { $this->Notice('function setUnvalidatedText is depracated as of mPDF 6. Please use SetWatermarkText instead.');  }
 
-function SetAutoFont($a) { $this->Error('function SetAutoFont is depracated as of mPDF 6. Please use autoScriptToLang instead. See config.php'); }
+function SetAutoFont($a) { $this->Notice('function SetAutoFont is depracated as of mPDF 6. Please use autoScriptToLang instead. See config.php'); }
 
-function Reference($a) { $this->Error('function Reference is depracated as of mPDF 6. Please use IndexEntry instead.');  }
+function Reference($a) { $this->Notice('function Reference is depracated as of mPDF 6. Please use IndexEntry instead.');  }
 
-function ReferenceSee($a,$b) { $this->Error('function ReferenceSee is depracated as of mPDF 6. Please use IndexEntrySee instead.');  }
+function ReferenceSee($a,$b) { $this->Notice('function ReferenceSee is depracated as of mPDF 6. Please use IndexEntrySee instead.');  }
 
-function CreateReference($a=1, $b='', $c='', $d=3, $e=1, $f='', $g=5, $h='',$i='', $j=false) { $this->Error('function CreateReference is depracated as of mPDF 6. Please use InsertIndex instead.');  }
+function CreateReference($a=1, $b='', $c='', $d=3, $e=1, $f='', $g=5, $h='',$i='', $j=false) { $this->Notice('function CreateReference is depracated as of mPDF 6. Please use InsertIndex instead.');  }
 
-function CreateIndex($a=1, $b='', $c='', $d=3, $e=1, $f='', $g=5, $h='',$i='', $j=false) { $this->Error('function CreateIndex is depracated as of mPDF 6. Please use InsertIndex instead.');  }
+function CreateIndex($a=1, $b='', $c='', $d=3, $e=1, $f='', $g=5, $h='',$i='', $j=false) { $this->Notice('function CreateIndex is depracated as of mPDF 6. Please use InsertIndex instead.');  }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 function Close() {
 	// Check old Aliases - now depracated mPDF 6
-	if (isset($this->UnvalidatedText)) { $this->Error('$mpdf->UnvalidatedText is depracated as of mPDF 6. Please use $mpdf->watermarkText  instead.'); }
-	if (isset($this->TopicIsUnvalidated)) { $this->Error('$mpdf->TopicIsUnvalidated is depracated as of mPDF 6. Please use $mpdf->showWatermarkText instead.'); }
-	if (isset($this->AliasNbPg)) { $this->Error('$mpdf->AliasNbPg is depracated as of mPDF 6. Please use $mpdf->aliasNbPg instead.'); }
-	if (isset($this->AliasNbPgGp)) { $this->Error('$mpdf->AliasNbPgGp is depracated as of mPDF 6. Please use $mpdf->aliasNbPgGp instead.'); }
-	if (isset($this->BiDirectional)) { $this->Error('$mpdf->BiDirectional is depracated as of mPDF 6. Please use $mpdf->biDirectional instead.'); }
-	if (isset($this->Anchor2Bookmark)) { $this->Error('$mpdf->Anchor2Bookmark is depracated as of mPDF 6. Please use $mpdf->anchor2Bookmark instead.'); }
-	if (isset($this->KeepColumns)) { $this->Error('$mpdf->KeepColumns is depracated as of mPDF 6. Please use $mpdf->keepColumns instead.'); }
-	if (isset($this->useOddEven)) { $this->Error('$mpdf->useOddEven is depracated as of mPDF 6. Please use $mpdf->mirrorMargins instead.'); }
-	if (isset($this->useSubstitutionsMB)) { $this->Error('$mpdf->useSubstitutionsMB is depracated as of mPDF 6. Please use $mpdf->useSubstitutions instead.'); }
-	if (isset($this->useLang)) { $this->Error('$mpdf->useLang is depracated as of mPDF 6. Please use $mpdf->autoLangToFont instead.'); }
-	if (isset($this->useAutoFont)) { $this->Error('$mpdf->useAutoFont is depracated. Please use $mpdf->autoScriptToLang instead.'); }
+	if (isset($this->UnvalidatedText)) { $this->Notice('$mpdf->UnvalidatedText is depracated as of mPDF 6. Please use $mpdf->watermarkText  instead.'); }
+	if (isset($this->TopicIsUnvalidated)) { $this->Notice('$mpdf->TopicIsUnvalidated is depracated as of mPDF 6. Please use $mpdf->showWatermarkText instead.'); }
+	if (isset($this->AliasNbPg)) { $this->Notice('$mpdf->AliasNbPg is depracated as of mPDF 6. Please use $mpdf->aliasNbPg instead.'); }
+	if (isset($this->AliasNbPgGp)) { $this->Notice('$mpdf->AliasNbPgGp is depracated as of mPDF 6. Please use $mpdf->aliasNbPgGp instead.'); }
+	if (isset($this->BiDirectional)) { $this->Notice('$mpdf->BiDirectional is depracated as of mPDF 6. Please use $mpdf->biDirectional instead.'); }
+	if (isset($this->Anchor2Bookmark)) { $this->Notice('$mpdf->Anchor2Bookmark is depracated as of mPDF 6. Please use $mpdf->anchor2Bookmark instead.'); }
+	if (isset($this->KeepColumns)) { $this->Notice('$mpdf->KeepColumns is depracated as of mPDF 6. Please use $mpdf->keepColumns instead.'); }
+	if (isset($this->useOddEven)) { $this->Notice('$mpdf->useOddEven is depracated as of mPDF 6. Please use $mpdf->mirrorMargins instead.'); }
+	if (isset($this->useSubstitutionsMB)) { $this->Notice('$mpdf->useSubstitutionsMB is depracated as of mPDF 6. Please use $mpdf->useSubstitutions instead.'); }
+	if (isset($this->useLang)) { $this->Notice('$mpdf->useLang is depracated as of mPDF 6. Please use $mpdf->autoLangToFont instead.'); }
+	if (isset($this->useAutoFont)) { $this->Notice('$mpdf->useAutoFont is depracated. Please use $mpdf->autoScriptToLang instead.'); }
 
 	//Terminate document
 	if($this->state==3)	return;
@@ -20956,7 +20964,22 @@ function printbuffer($arrayaux,$blockstate=0,$is_table=false,$table_draft=false,
 		}
 		// Gets messed up if try and use core fonts inside a paragraph of text which needs to be BiDi re-ordered or OTLdata set
 		if (($blockdir == 'rtl' || $this->biDirectional) && isset($arrayaux[$i][4]) && in_array($arrayaux[$i][4],array('ccourier','ctimes','chelvetica','csymbol','czapfdingbats'))) {
-				$this->Error("You cannot use core fonts in a document which contains RTL text.");
+				
+				/* Fallback to appropriate font type when RTL is detected */
+				switch( $arrayaux[ $i ][4] ) {
+					case 'ccourier':
+						$arrayaux[ $i ][4] = $this->mono_fonts[0];
+					break;
+
+					case 'ctimes':
+						$arrayaux[ $i ][4] = $this->serif_fonts[0];
+					break;
+
+					case 'chelvetica':
+					default:
+						$arrayaux[ $i ][4] = $this->sans_fonts[0];
+					break;
+				}
 		}
 	}
 	// mPDF 6
