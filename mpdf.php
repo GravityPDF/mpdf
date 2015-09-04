@@ -8136,6 +8136,8 @@ function Output($name='',$dest='')
 		else { $dest='F'; }
 	}
 
+	$dest = apply_filters( 'mpdf_output_destination', $dest, $name );
+
 	switch($dest) {
 	   case 'I':
 		if ($this->debug && !$this->allow_output_buffering && ob_get_contents()) { echo "<p>Output has already been sent from the script - PDF file generation aborted.</p>"; exit; }
