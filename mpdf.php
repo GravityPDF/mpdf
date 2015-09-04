@@ -8137,6 +8137,7 @@ function Output($name='',$dest='')
 	}
 
 	$dest = apply_filters( 'mpdf_output_destination', $dest, $name );
+	$name = apply_filters( 'mpdf_output_name', $name, $dest );
 
 	switch($dest) {
 	   case 'I':
