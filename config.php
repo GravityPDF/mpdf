@@ -39,7 +39,7 @@ $this->maxTTFFilesize = 2000;
 // 100 will force always to subset
 // This value is overridden if you set new mPDF('s')
 // and/or Can set at runtime
-$this->percentSubset = 75;
+$this->percentSubset = 50;
 
 $this->useAdobeCJK = true;		// Uses Adobe CJK fonts for CJK languages
 			// default TRUE; only set false if you have defined some available fonts that support CJK
