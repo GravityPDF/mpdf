@@ -91,12 +91,16 @@ $this->fontdata = array(
 		'B' => "DejaVuSansCondensed-Bold.ttf",
 		'I' => "DejaVuSansCondensed-Oblique.ttf",
 		'BI' => "DejaVuSansCondensed-BoldOblique.ttf",
+		'useOTL' => 0xFF,
+		'useKashida' => 75,
 		),
 	"dejavusans" => array(
 		'R' => "DejaVuSans.ttf",
 		'B' => "DejaVuSans-Bold.ttf",
 		'I' => "DejaVuSans-Oblique.ttf",
 		'BI' => "DejaVuSans-BoldOblique.ttf",
+		'useOTL' => 0xFF,
+		'useKashida' => 75,
 		),
 	"dejavuserif" => array(
 		'R' => "DejaVuSerif.ttf",
@@ -115,6 +119,8 @@ $this->fontdata = array(
 		'B' => "DejaVuSansMono-Bold.ttf",
 		'I' => "DejaVuSansMono-Oblique.ttf",
 		'BI' => "DejaVuSansMono-BoldOblique.ttf",
+		'useOTL' => 0xFF,
+		'useKashida' => 75,
 		),
 
 
