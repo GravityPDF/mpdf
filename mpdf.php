@@ -8080,119 +8080,146 @@ function SetXY($x,$y)
 }
 
 
-function Output($name='',$dest='')
+function Output( $name = '', $dest = '' )
 {
-	//Output PDF to some destination
+	/* Output PDF to some destination */
 	if ($this->showStats) {
-		$this->WriteHTML('<div>Generated in '.sprintf('%.2F',(microtime(true) - $this->time0)).' seconds</div>');
-		$this->WriteHTML('<div>Compiled in '.sprintf('%.2F',(microtime(true) - $this->time0)).' seconds (total)</div>');
-		$this->WriteHTML('<div>Peak Memory usage '.number_format((memory_get_peak_usage(true)/(1024*1024)),2).' MB</div>');
-		$this->WriteHTML('<div>PDF file size '.number_format((strlen($this->buffer)/1024)).' kB</div>');
-		$this->WriteHTML('<div>Number of fonts '.count($this->fonts).'</div>');		
-	}
-	//Finish document if necessary
-	if($this->state < 3) $this->Close();
-	// fn. error_get_last is only in PHP>=5.2
-	if ($this->debug && function_exists('error_get_last') && error_get_last()) {
-	   $e = error_get_last();
-	   if (($e['type'] < 2048 && $e['type'] != 8) || (intval($e['type']) & intval(ini_get("error_reporting")))) {
-		echo "<p>Error message detected - PDF file generation aborted.</p>";
-		echo $e['message'].'<br />';
-		echo 'File: '.$e['file'].'<br />';
-		echo 'Line: '.$e['line'].'<br />';
-		exit;
-	   }
+		$this->WriteHTML( '<div>Generated in ' . sprintf('%.2F', ( microtime(true) - $this->time0 ) ) . ' seconds</div>' );
+		$this->WriteHTML( '<div>Compiled in ' . sprintf('%.2F',( microtime(true) - $this->time0 ) ) . ' seconds (total)</div>' );
+		$this->WriteHTML( '<div>Peak Memory usage ' . number_format( ( memory_get_peak_usage(true) / (1024 * 1024) ), 2 ) . ' MB</div>' );
+		$this->WriteHTML( '<div>PDF file size ' . number_format( ( strlen( $this->buffer ) / 1024 ) ) . ' kB</div>' );
+		$this->WriteHTML( '<div>Number of fonts ' . count( $this->fonts ) . '</div>' );		
 	}
 
+	/* Finish document if necessary */
+	if($this->state < 3) {
+		$this->Close();
+	}
+	
+	/* Add errors when incorrect settings are used */
+	if ( ($this->PDFA || $this->PDFX) && $this->encrypted ) { 
+		$this->Error("PDFA1-b or PDFX/1-a does not permit encryption of documents."); 
+	}
 
-	if (($this->PDFA || $this->PDFX) && $this->encrypted) { $this->Error("PDFA1-b or PDFX/1-a does not permit encryption of documents."); }
-	if (count($this->PDFAXwarnings) && (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto))) {
-		if ($this->PDFA) {
+	if ( count( $this->PDFAXwarnings ) && ( ( $this->PDFA && ! $this->PDFAauto ) || ( $this->PDFX && ! $this->PDFXauto ) ) ) {
+		if ( $this->PDFA ) {
 			echo '<div>WARNING - This file could not be generated as it stands as a PDFA1-b compliant file.</div>';
 			echo '<div>These issues can be automatically fixed by mPDF using <i>$mpdf-&gt;PDFAauto=true;</i></div>';
 			echo '<div>Action that mPDF will take to automatically force PDFA1-b compliance are shown in brackets.</div>';
-		}
-		else {
+		} else {
 			echo '<div>WARNING - This file could not be generated as it stands as a PDFX/1-a compliant file.</div>';
 			echo '<div>These issues can be automatically fixed by mPDF using <i>$mpdf-&gt;PDFXauto=true;</i></div>';
 			echo '<div>Action that mPDF will take to automatically force PDFX/1-a compliance are shown in brackets.</div>';
 		}
+
 		echo '<div>Warning(s) generated:</div><ul>';
-		$this->PDFAXwarnings = array_unique($this->PDFAXwarnings);
-		foreach($this->PDFAXwarnings AS $w) {
+
+		$this->PDFAXwarnings = array_unique( $this->PDFAXwarnings );
+		
+		foreach( $this->PDFAXwarnings as $w ) {
 			echo '<li>'.$w.'</li>';
 		}
+
 		echo '</ul>';
 		exit;
 	}
 
-	if(is_bool($dest)) $dest=$dest ? 'D' : 'F';
-	$dest=strtoupper($dest);
-	if($dest=='') {
-		if($name=='') {
-			$name='mpdf.pdf';
-			$dest='I';
+	/* Ensure appropriate defaults are in place */
+	if( is_bool( $dest ) ) {
+		$dest = $dest ? 'D' : 'F';	
+	} 
+
+	$dest = strtoupper($dest);
+	if( $dest == '' ) {
+		if( $name == '' ) {
+			$name = 'mpdf.pdf';
+			$dest = 'I';
+		} else { 
+			$dest = 'F'; 
 		}
-		else { $dest='F'; }
 	}
 
+	/* Add WordPress filters to allow minipulation of the destination and name */
 	$dest = apply_filters( 'mpdf_output_destination', $dest, $name );
 	$name = apply_filters( 'mpdf_output_name', $name, $dest );
 
-	switch($dest) {
-	   case 'I':
-		if ($this->debug && !$this->allow_output_buffering && ob_get_contents()) { echo "<p>Output has already been sent from the script - PDF file generation aborted.</p>"; exit; }
-		//Send to standard output
-		if(PHP_SAPI!='cli') {
-			//We send to a browser
-			header('Content-Type: application/pdf');
-			if(headers_sent())
-				$this->Error('Some data has already been output to browser, can\'t send PDF file');
-			if (!isset($_SERVER['HTTP_ACCEPT_ENCODING']) OR empty($_SERVER['HTTP_ACCEPT_ENCODING'])) {
-				// don't use length if server using compression
-				header('Content-Length: '.strlen($this->buffer));
+	/* Process the PDF based off the destination */
+	switch( $dest ) {
+	   case 'I': /* View File */
+			if ( $this->debug && ! $this->allow_output_buffering && ob_get_contents() ) { 
+				$this->Error( 'Output has already been sent from the script - PDF file generation aborted.' ); 
 			}
-			header('Content-disposition: inline; filename="'.$name.'"');
-			header('Cache-Control: public, must-revalidate, max-age=0');
-			header('Pragma: public');
-			header('Expires: Sat, 26 Jul 1997 05:00:00 GMT');
-			header('Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT');
-		}
-		echo $this->buffer;
-		break;
-	   case 'D':
-		//Download file
-		header('Content-Description: File Transfer');
-		if (headers_sent())
-			$this->Error('Some data has already been output to browser, can\'t send PDF file');
-		header('Content-Transfer-Encoding: binary');
-		header('Cache-Control: public, must-revalidate, max-age=0');
-		header('Pragma: public');
-		header('Expires: Sat, 26 Jul 1997 05:00:00 GMT');
-		header('Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT');
-		header('Content-Type: application/force-download');
-		header('Content-Type: application/octet-stream', false);
-		header('Content-Type: application/download', false);
-		header('Content-Type: application/pdf', false);
-		if (!isset($_SERVER['HTTP_ACCEPT_ENCODING']) OR empty($_SERVER['HTTP_ACCEPT_ENCODING'])) {
-			// don't use length if server using compression
-			header('Content-Length: '.strlen($this->buffer));
-		}
-		header('Content-disposition: attachment; filename="'.$name.'"');
+
+			/* Don't output headers if running in CLI mode */
+			if( PHP_SAPI != 'cli' ) {				
+				header( 'Content-Type: application/pdf' );
+
+				if( headers_sent() ) {
+					$this->Error( "Some data has already been output to browser, can't send PDF file" );
+				}
+
+				/* If the server is using compression we won't add the file length */
+				if ( !isset( $_SERVER['HTTP_ACCEPT_ENCODING'] ) || empty( $_SERVER['HTTP_ACCEPT_ENCODING'] ) ) {					
+					header( 'Content-Length: ' . strlen( $this->buffer ) );
+				}
+
+				header( 'Content-disposition: inline; filename="' . $name . '"' );
+				header( 'Cache-Control: public, must-revalidate, max-age=0' );
+				header( 'Pragma: public' );
+				header( 'Expires: Sat, 26 Jul 1997 05:00:00 GMT' );
+				header( 'Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT' );
+			}
+
 			echo $this->buffer;
-		break;
-	   case 'F':
-		//Save to local file
-		$f=fopen($name,'wb');
-		if(!$f) $this->Error('Unable to create output file: '.$name);
-		fwrite($f,$this->buffer,strlen($this->buffer));
-		fclose($f);
-		break;
-	   case 'S':
-		//Return as a string
-		return $this->buffer;
+			exit;
+
+	   break;
+	   case 'D': /* Download File */
+
+			header( 'Content-Description: File Transfer' );
+			if ( headers_sent() ) {
+				$this->Error( "Some data has already been output to browser, can't send PDF file" );
+			}
+
+			header( 'Content-Transfer-Encoding: binary' );
+			header( 'Cache-Control: public, must-revalidate, max-age=0' );
+			header( 'Pragma: public' );
+			header( 'Expires: Sat, 26 Jul 1997 05:00:00 GMT' );
+			header( 'Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT' );
+			header( 'Content-Type: application/force-download' );
+			header( 'Content-Type: application/octet-stream', false );
+			header( 'Content-Type: application/download', false );
+			header( 'Content-Type: application/pdf', false );
+
+			/* If the server is using compression we won't add the file length */
+			if ( ! isset( $_SERVER['HTTP_ACCEPT_ENCODING'] ) || empty( $_SERVER['HTTP_ACCEPT_ENCODING'] ) ) {				
+				header( 'Content-Length: ' . strlen( $this->buffer ) );
+			}
+
+			header( 'Content-disposition: attachment; filename="' . $name . '"' );
+			
+			echo $this->buffer;
+			exit;
+
+	   break;
+
+	   case 'F': /* Save the file locally */
+			
+			$f = fopen( $name,'wb' );
+			
+			if( ! $f ) {
+				$this->Error( 'Unable to create output file: '. $name );	
+			} 
+
+			fwrite( $f, $this->buffer, strlen( $this->buffer ) );
+			fclose( $f );
+
+	   break;
+	   case 'S': /* Return as a string */		
+			return $this->buffer;
 	   default:
-		$this->Error('Incorrect output destination: '.$dest);
+			$this->Error( 'Incorrect output destination: '. $dest );
+	   break;
 	}	
 
 	return '';
