@@ -30846,6 +30846,8 @@ class mPDF
 		}
 
 		$this->enableImports = true;
+
+		apply_filters( 'mpdf_import_use', $this );
 	}
 
 	// from mPDFI
