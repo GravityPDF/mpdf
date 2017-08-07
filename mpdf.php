@@ -5985,7 +5985,7 @@ class mPDF
 
 	/* -- DIRECTW -- */
 
-	function Write($h, $txt, $currentx = 0, $link = '', $directionality = 'ltr', $align = '')
+	function Write($h, $txt, $currentx = 0, $link = '', $directionality = 'ltr', $align = '', $fill = 0)
 	{
 		if (!class_exists('directw', false)) {
 			include(_MPDF_PATH . 'classes/directw.php');
@@ -5993,7 +5993,7 @@ class mPDF
 		if (empty($this->directw)) {
 			$this->directw = new directw($this);
 		}
-		$this->directw->Write($h, $txt, $currentx, $link, $directionality, $align);
+		$this->directw->Write($h, $txt, $currentx, $link, $directionality, $align, $fill);
 	}
 
 	/* -- END DIRECTW -- */
@@ -9709,7 +9709,6 @@ class mPDF
 						$annot = '';
 						$rect = sprintf('%.3F %.3F %.3F %.3F', $pl[0], $pl[1], $pl[0] + $pl[2], $pl[1] - $pl[3]);
 						$annot .= '<</Type /Annot /Subtype /Link /Rect [' . $rect . ']';
-						$annot .= ' /Contents ' . $this->_UTF16BEtextstring($pl[4]);
 						$annot .= ' /NM ' . $this->_textstring(sprintf('%04u-%04u', $n, $key));
 						$annot .= ' /M ' . $this->_textstring('D:' . date('YmdHis'));
 						$annot .= ' /Border [0 0 0]';
@@ -12768,6 +12767,7 @@ class mPDF
 		curl_setopt($ch, CURLOPT_NOBODY, 0);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
 		$data = curl_exec($ch);
 		curl_close($ch);
 	}
@@ -12801,7 +12801,7 @@ class mPDF
 		if (!$s) {
 			return false;
 		}
-		$httpheader .= $s;
+
 		while (!feof($fh)) {
 			$s = fgets($fh, 1024);
 			if ($s == "\r\n") {
@@ -23203,10 +23203,10 @@ class mPDF
 					else {
 						$xadj2 = $Tw / 2 - $bsh / 2;
 					}
-					if (!$bSeparate && $details['mbw']['TL']) {
+					if (!$bSeparate && !empty($details['mbw']) && !empty($details['mbw']['TL'])) {
 						$xadj = ($Tw - $details['mbw']['TL']) / 2;
 					}
-					if (!$bSeparate && $details['mbw']['TR']) {
+					if (!$bSeparate && !empty($details['mbw']) && !empty($details['mbw']['TR'])) {
 						$xadj2 = ($Tw - $details['mbw']['TR']) / 2;
 					}
 					$print = true;
@@ -23269,10 +23269,10 @@ class mPDF
 						$yadj2 = $Rw / 2 - $bsv / 2;
 					}
 
-					if (!$bSeparate && $details['mbw']['RT']) {
+					if (!$bSeparate && !empty($details['mbw']) && !empty($details['mbw']['RT'])) {
 						$yadj = ($Rw - $details['mbw']['RT']) / 2;
 					}
-					if (!$bSeparate && $details['mbw']['RB']) {
+					if (!$bSeparate && !empty($details['mbw']) && !empty($details['mbw']['RB'])) {
 						$yadj2 = ($Rw - $details['mbw']['RB']) / 2;
 					}
 					$print = true;
@@ -23301,10 +23301,10 @@ class mPDF
 					else {
 						$xadj2 = $Bw / 2 - $bsh / 2;
 					}
-					if (!$bSeparate && $details['mbw']['BL']) {
+					if (!$bSeparate && isset($details['mbw']) && isset($details['mbw']['BL'])) {
 						$xadj = ($Bw - $details['mbw']['BL']) / 2;
 					}
-					if (!$bSeparate && $details['mbw']['BR']) {
+					if (!$bSeparate && isset($details['mbw']) && isset($details['mbw']['BR'])) {
 						$xadj2 = ($Bw - $details['mbw']['BR']) / 2;
 					}
 					$print = true;
@@ -23857,7 +23857,7 @@ class mPDF
 
 
 									// Style set on cell vs. table
-									elseif ($celladj['border_details']['T']['dom'] > $cbord['border_details']['B']['dom']) {
+									elseif (isset($celladj['border_details']['T']['dom']) && isset($cbord['border_details']['B']['dom']) && $celladj['border_details']['T']['dom'] > $cbord['border_details']['B']['dom']) {
 										if ($ccolsp < 2) { // don't overwrite this cell if it spans
 											$cbord['border_details']['B'] = $celladj['border_details']['T'];
 											$this->setBorder($celladj['border'], _BORDER_TOP);
@@ -25641,12 +25641,12 @@ class mPDF
 			$this->_out('/Subtype /Form');
 			$this->_out('/FormType 1');
 			// Left/Bottom/Right/Top
-			$this->_out(sprintf('/BBox [%.2F %.2F %.2F %.2F]', $tpl['box']['x'] * _MPDFK, $tpl['box']['y'] * _MPDFK, ($tpl['box']['x'] + $tpl['box']['w']) * _MPDFK, ($tpl['box']['y'] + $tpl['box']['h']) * _MPDFK)
-			);
+			$this->_out(sprintf('/BBox [%.2F %.2F %.2F %.2F]', floatval($tpl['box']['x']) * _MPDFK, floatval($tpl['box']['y']) * _MPDFK, (floatval($tpl['box']['x']) + floatval($tpl['box']['w'])) * _MPDFK, (floatval($tpl['box']['y']) + floatval($tpl['box']['h'])) * _MPDFK));
 
+			if (isset($tpl['box'])) {
+				$this->_out( sprintf( '/Matrix [1 0 0 1 %.5F %.5F]', -1 * floatval( $tpl['box']['x'] ) * _MPDFK, -1 * floatval( $tpl['box']['y'] ) * _MPDFK ) );
+			}
 
-			if (isset($tpl['box']))
-				$this->_out(sprintf('/Matrix [1 0 0 1 %.5F %.5F]', -$tpl['box']['x'] * _MPDFK, -$tpl['box']['y'] * _MPDFK));
 			$this->_out('/Resources ');
 
 			if (isset($tpl['resources'])) {
@@ -30861,6 +30861,70 @@ class mPDF
 		return current(unpack("H*", $str));
 	}
 
+	/**
+	 * Un-escapes a PDF string
+	 *
+	 * @param string $s
+	 * @return string
+	 */
+	function _unescape($s)
+	{
+		$out = '';
+		for ($count = 0, $n = strlen($s); $count < $n; $count++) {
+			if ($s[$count] != '\\' || $count == $n-1) {
+				$out .= $s[$count];
+			} else {
+				switch ($s[++$count]) {
+					case ')':
+					case '(':
+					case '\\':
+						$out .= $s[$count];
+					break;
+					case 'f':
+						$out .= chr(0x0C);
+					break;
+					case 'b':
+						$out .= chr(0x08);
+					break;
+					case 't':
+						$out .= chr(0x09);
+					break;
+					case 'r':
+						$out .= chr(0x0D);
+					break;
+					case 'n':
+						$out .= chr(0x0A);
+					break;
+					case "\r":
+						if ($count != $n-1 && $s[$count+1] == "\n") {
+							$count++;
+						}
+					break;
+					case "\n":
+					break;
+					default:
+						// Octal-Values
+						if (ord($s[$count]) >= ord('0') &&
+						    ord($s[$count]) <= ord('9')) {
+							$oct = ''. $s[$count];
+							if (ord($s[$count+1]) >= ord('0') &&
+							    ord($s[$count+1]) <= ord('9')) {
+								$oct .= $s[++$count];
+								if (ord($s[$count+1]) >= ord('0') &&
+								    ord($s[$count+1]) <= ord('9')) {
+									$oct .= $s[++$count];
+								}
+							}
+							$out .= chr(octdec($oct));
+						} else {
+							$out .= $s[$count];
+						}
+				}
+			}
+		}
+		return $out;
+	}
+
 	function pdf_write_value(&$value)
 	{
 		switch ($value[0]) {
@@ -30914,6 +30978,7 @@ class mPDF
 
 			case pdf_parser::TYPE_STRING :
 				if ($this->encrypted) {
+					$value[1] = $this->_unescape($value[1]);
 					$value[1] = $this->_RC4($this->_objectkey($this->_current_obj_id), $value[1]);
 					$value[1] = $this->_escape($value[1]);
 				}

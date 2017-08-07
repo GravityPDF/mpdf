@@ -113,8 +113,14 @@ $this->ICCProfile = '';	// Colour profile OutputIntent
 // Must be CMYK for PDFX, or appropriate type for PDFA(RGB or CMYK)
 
 // DEBUGGING & DEVELOPERS
-$this->showStats = (defined('WP_DEBUG') && WP_DEBUG === true) ? true : false;;
-$this->debug = (defined('WP_DEBUG') && WP_DEBUG === true) ? true : false;;
+if ( defined( 'WP_DEBUG' ) && defined( 'WP_DEBUG_DISPLAY' ) && WP_DEBUG && WP_DEBUG_DISPLAY ) {
+	$this->showStats = true;
+	$this->debug     = true;
+} else {
+	$this->showStats = false;
+	$this->debug     = false;
+}
+
 $this->debugfonts = false;; // Checks and reports on errors when parsing TTF files - adds significantly to processing time
 $this->showImageErrors = false;
 $this->table_error_report = false; // Die and report error if table is too wide to contain whole words
