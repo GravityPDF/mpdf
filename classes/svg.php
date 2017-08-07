@@ -3496,7 +3496,9 @@ class SVG
 						$last_gradid = '';
 						break;
 					case "text":
-						$svg_class->txt_data[2] = rtrim($svg_class->txt_data[2]); // mPDF 5.7.4
+						if (!empty($svg_class->txt_data[2])) {
+							$svg_class->txt_data[2] = rtrim( $svg_class->txt_data[2] ); // mPDF 5.7.4
+						}
 						$path_cmd = $svg_class->svgText();
 						$svg_class->textoutput .= $path_cmd; // mPDF 5.7.4
 						$tmp = count($svg_class->svg_style) - 1;
@@ -3537,7 +3539,7 @@ class SVG
 						$svg_class->textoutput .= $p_cmd;
 						$tmp = count($svg_class->svg_style) - 1;
 						$current_style = $svg_class->svg_style[$tmp];
-						if ($current_style['transformations']) {
+						if (!empty($current_style['transformations'])) {
 							$svg_class->textoutput .= " Q\n";
 						}
 						array_pop($svg_class->svg_style);

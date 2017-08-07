@@ -1910,6 +1910,17 @@ class Tag
 				/* -- BORDER-RADIUS -- */
 				// Automatically increase padding if required for border-radius
 				if ($this->mpdf->autoPadding && !$this->mpdf->ColActive) {
+
+					/* Fix PHP Notices when these array keys aren't set */
+					$currblk['border_radius_TL_H'] = ( isset( $currblk['border_radius_TL_H'] ) ) ? $currblk['border_radius_TL_H'] : 0;
+					$currblk['border_radius_TL_V'] = ( isset( $currblk['border_radius_TL_V'] ) ) ? $currblk['border_radius_TL_V'] : 0;
+					$currblk['border_radius_TR_H'] = ( isset( $currblk['border_radius_TR_H'] ) ) ? $currblk['border_radius_TR_H'] : 0;
+					$currblk['border_radius_TR_V'] = ( isset( $currblk['border_radius_TR_V'] ) ) ? $currblk['border_radius_TR_V'] : 0;
+					$currblk['border_radius_BL_H'] = ( isset( $currblk['border_radius_BL_H'] ) ) ? $currblk['border_radius_BL_H'] : 0;
+					$currblk['border_radius_BL_V'] = ( isset( $currblk['border_radius_BL_V'] ) ) ? $currblk['border_radius_BL_V'] : 0;
+					$currblk['border_radius_BR_H'] = ( isset( $currblk['border_radius_BR_H'] ) ) ? $currblk['border_radius_BR_H'] : 0;
+					$currblk['border_radius_BR_V'] = ( isset( $currblk['border_radius_BR_V'] ) ) ? $currblk['border_radius_BR_V'] : 0;
+
 					if ($currblk['border_radius_TL_H'] > $currblk['padding_left'] && $currblk['border_radius_TL_V'] > $currblk['padding_top']) {
 						if ($currblk['border_radius_TL_H'] > $currblk['border_radius_TL_V']) {
 							$this->mpdf->_borderPadding($currblk['border_radius_TL_H'], $currblk['border_radius_TL_V'], $currblk['padding_left'], $currblk['padding_top']);
@@ -4963,7 +4974,7 @@ class Tag
 						$objattr = array();
 						$objattr['type'] = 'toc';
 						$objattr['toclevel'] = $this->mpdf->h2toc[$tag];
-						$objattr['CONTENT'] = htmlspecialchars($content);
+						$objattr['CONTENT'] = htmlspecialchars(utf8_encode($content));
 						$e = "\xbb\xa4\xactype=toc,objattr=" . serialize($objattr) . "\xbb\xa4\xac";
 						array_unshift($this->mpdf->textbuffer, array($e));
 					}

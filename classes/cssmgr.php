@@ -920,7 +920,7 @@ class cssmgr
 					}
 				}
 			}
-			if (!$new['col']) {
+			if (empty($new['col'])) {
 				$new['col'] = $this->mpdf->ConvertColor('#888888');
 			}
 			if (isset($new['y'])) {
