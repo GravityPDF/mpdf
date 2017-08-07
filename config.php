@@ -113,7 +113,7 @@ $this->ICCProfile = '';	// Colour profile OutputIntent
 // Must be CMYK for PDFX, or appropriate type for PDFA(RGB or CMYK)
 
 // DEBUGGING & DEVELOPERS
-$this->showStats = (defined('WP_DEBUG') && WP_DEBUG === true) ? true : false;;
+$this->showStats = (defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY === true) ? true : false;;
 $this->debug = (defined('WP_DEBUG') && WP_DEBUG === true) ? true : false;;
 $this->debugfonts = false;; // Checks and reports on errors when parsing TTF files - adds significantly to processing time
 $this->showImageErrors = false;
