@@ -56,7 +56,7 @@ $this->biDirectional = true; // automatically determine BIDI text in LTR page
 
 // AUTOMATIC FONT SELECTION
 // Based on script and/or language
-$this->autoScriptToLang = true; // mPDF 6.0 (similar to previously using function SetAutoFont() )
+$this->autoScriptToLang = false; // mPDF 6.0 (similar to previously using function SetAutoFont() )
 $this->baseScript = 1;	// =Latin; to set another base script see constants in classes/ucdn.php
 $this->autoVietnamese = true;
 $this->autoArabic = true;
