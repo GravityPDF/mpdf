@@ -22548,9 +22548,11 @@ class mPDF
 						}
 					} elseif ($numcols) { // If all columns
 						$ttl = array_sum($table['l']);
-						for ($i = 0; $i < $numcols; $i++) {
-							$widthcols[$i]['miw'] += $surplus * $table['l'][$i] / $ttl;
-						}
+                        if ( ! empty( $ttl ) ) {
+                            for ($i = 0; $i < $numcols; $i++) {
+                                $widthcols[$i]['miw'] += $surplus * $table['l'][$i] / $ttl;
+                            }
+                        }
 					}
 				}
 			}
