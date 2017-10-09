@@ -25639,10 +25639,10 @@ class mPDF
 			$this->_out('/Subtype /Form');
 			$this->_out('/FormType 1');
 			// Left/Bottom/Right/Top
-			$this->_out(sprintf('/BBox [%.2F %.2F %.2F %.2F]', floatval($tpl['box']['x']) * _MPDFK, floatval($tpl['box']['y']) * _MPDFK, (floatval($tpl['box']['x']) + floatval($tpl['box']['w'])) * _MPDFK, (floatval($tpl['box']['y']) + floatval($tpl['box']['h'])) * _MPDFK));
+			$this->_out(sprintf('/BBox [%.2F %.2F %.2F %.2F]', $tpl['box']['x'] * _MPDFK, $tpl['box']['y'] * _MPDFK, ($tpl['box']['x'] + $tpl['box']['w']) * _MPDFK, ($tpl['box']['y'] + $tpl['box']['h']) * _MPDFK));
 
 			if (isset($tpl['box'])) {
-				$this->_out( sprintf( '/Matrix [1 0 0 1 %.5F %.5F]', -1 * floatval( $tpl['box']['x'] ) * _MPDFK, -1 * floatval( $tpl['box']['y'] ) * _MPDFK ) );
+				$this->_out( sprintf( '/Matrix [1 0 0 1 %.5F %.5F]', -$tpl['box']['x'] * _MPDFK, -$tpl['box']['y'] * _MPDFK ) );
 			}
 
 			$this->_out('/Resources ');
