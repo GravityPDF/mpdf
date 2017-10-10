@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 class MYANMAR
 {
 	/* FROM hb-ot-shape-complex-indic-private.hh */

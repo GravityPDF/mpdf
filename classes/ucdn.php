@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 /* HarfBuzz ucdn/unicodedata_db.h */
 /* HarfBuzz ucdn/ucdn.c */
 /* HarfBuzz ucdn/ucdn.h */

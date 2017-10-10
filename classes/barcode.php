@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 // Adapted for mPDF from TCPDF barcode. Original Details left below.
 //============================================================+
 // File name   : barcodes.php

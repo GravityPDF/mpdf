@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 $this->script2lang = array(
 	/* European */
 	UCDN::SCRIPT_LATIN => 'und-Latn',

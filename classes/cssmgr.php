@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 class cssmgr
 {
 

@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 require_once __DIR__ . '/../MpdfException.php';
 
 /* * *****************************************************************************

@@ -10,6 +10,8 @@
  * @version		0.99
  */
 
+namespace blueliquiddesigns\Mpdf;
+
 if (!defined('__CLASS_QRCODE__'))
 {
 	define('__CLASS_QRCODE__', '0.99');

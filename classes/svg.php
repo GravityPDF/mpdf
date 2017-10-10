@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 //	svg class modified for mPDF version 6.0 by Ian Back: based on -
 //	svg2pdf fpdf class
 //	sylvain briand (syb@godisaduck.com), modified by rick trevino (rtrevino1@yahoo.com)

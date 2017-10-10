@@ -1,5 +1,7 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
 require_once __DIR__ . '/../MpdfException.php';
 
 define("_OTL_OLD_SPEC_COMPAT_1", true);

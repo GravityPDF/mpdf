@@ -1,5 +1,10 @@
 <?php
 
+namespace blueliquiddesigns\Mpdf;
+
+use fpdi_pdf_parser;
+use pdf_parser;
+
 // ******************************************************************************
 // Software: mPDF, Unicode-HTML Free PDF generator                              *
 // Version:  6.1        based on                                                *
@@ -838,17 +843,11 @@ class mPDF
 	public function __construct($mode = '', $format = 'A4', $default_font_size = 0, $default_font = '', $mgl = 15, $mgr = 15, $mgt = 16, $mgb = 16, $mgh = 9, $mgf = 9, $orientation = 'P')
 	{
 		/* -- BACKGROUNDS -- */
-		if (!class_exists('grad', false)) {
-			include(_MPDF_PATH . 'classes/grad.php');
-		}
 		if (empty($this->grad)) {
 			$this->grad = new grad($this);
 		}
 		/* -- END BACKGROUNDS -- */
 		/* -- FORMS -- */
-		if (!class_exists('mpdfform', false)) {
-			include(_MPDF_PATH . 'classes/mpdfform.php');
-		}
 		if (empty($this->mpdfform)) {
 			$this->mpdfform = new mpdfform($this);
 		}
@@ -1243,10 +1242,6 @@ class mPDF
 		}
 
 		/* -- HTML-CSS -- */
-
-		if (!class_exists('cssmgr', false)) {
-			include(_MPDF_PATH . 'classes/cssmgr.php');
-		}
 		$this->cssmgr = new cssmgr($this);
 		// mPDF 6
 		if (file_exists(_MPDF_PATH . 'mpdf.css')) {
@@ -3750,9 +3745,6 @@ class mPDF
 			$regenerate = true;
 		} // mPDF 6
 		if (!isset($name) || $originalsize != $ttfstat['size'] || $regenerate) {
-			if (!class_exists('TTFontFile', false)) {
-				include(_MPDF_PATH . 'classes/ttfontsuni.php');
-			}
 			$ttf = new TTFontFile();
 			$ttf->getMetrics($ttffile, $fontkey, $TTCfontID, $this->debugfonts, $BMPonly, $useOTL); // mPDF 5.7.1
 			$cw = $ttf->charWidths;
@@ -3915,9 +3907,6 @@ class mPDF
 		// mPDF 5.7.1
 		// Use OTL OpenType Table Layout - GSUB
 		if (isset($this->fontdata[$family]['useOTL']) && ($this->fontdata[$family]['useOTL'])) {
-			if (!class_exists('otl', false)) {
-				include(_MPDF_PATH . 'classes/otl.php');
-			}
 			if (empty($this->otl)) {
 				$this->otl = new otl($this);
 			}
@@ -5987,9 +5976,6 @@ class mPDF
 
 	function Write($h, $txt, $currentx = 0, $link = '', $directionality = 'ltr', $align = '', $fill = 0)
 	{
-		if (!class_exists('directw', false)) {
-			include(_MPDF_PATH . 'classes/directw.php');
-		}
 		if (empty($this->directw)) {
 			$this->directw = new directw($this);
 		}
@@ -7168,9 +7154,6 @@ class mPDF
 				}
 				// QR-code
 				elseif ($objattr['btype'] == 'QR') {
-					if (!class_exists('QRcode', false)) {
-						include(_MPDF_PATH . 'qrcode/qrcode.class.php');
-					}
 					$this->qrcode = new QRcode($objattr['code'], $objattr['errorlevel']);
 					$this->qrcode->displayFPDF($this, $objattr['INNER-X'], $objattr['INNER-Y'], $objattr['bsize'] * 25, array(255, 255, 255), array(0, 0, 0));
 				} else {
@@ -7196,9 +7179,6 @@ class mPDF
 				$this->SetFColor($this->ConvertColor(255));
 				if (isset($objattr['BORDER-WIDTH'])) {
 					$this->PaintImgBorder($objattr, $is_table);
-				}
-				if (!class_exists('directw', false)) {
-					include(_MPDF_PATH . 'classes/directw.php');
 				}
 				if (empty($this->directw)) {
 					$this->directw = new directw($this);
@@ -10044,9 +10024,6 @@ class mPDF
 							fclose($f);
 							include(_MPDF_TTFONTDATAPATH . $fontkey . '.ps.php'); // sets $originalsize (of repackaged font)
 						} else {
-							if (!class_exists('TTFontFile', false)) {
-								include(_MPDF_PATH . 'classes/ttfontsuni.php');
-							}
 							$ttf = new TTFontFile();
 							$font = $ttf->repackageTTF($this->FontFiles[$fontkey]['ttffile'], $this->fonts[$fontkey]['TTCfontID'], $this->debugfonts, $this->fonts[$fontkey]['useOTL']); // mPDF 5.7.1
 
@@ -10149,9 +10126,6 @@ class mPDF
 					continue;
 				}
 				$ssfaid = "AA";
-				if (!class_exists('TTFontFile', false)) {
-					include(_MPDF_PATH . 'classes/ttfontsuni.php');
-				}
 				$ttf = new TTFontFile();
 				for ($sfid = 0; $sfid < count($font['subsetfontids']); $sfid++) {
 					$this->fonts[$k]['n'][$sfid] = $this->n + 1;  // NB an array for subset
@@ -10267,9 +10241,6 @@ class mPDF
 				$this->fonts[$k]['n'] = $this->n + 1;
 				if ($asSubset) {
 					$ssfaid = "A";
-					if (!class_exists('TTFontFile', false)) {
-						include(_MPDF_PATH . 'classes/ttfontsuni.php');
-					}
 					$ttf = new TTFontFile();
 					$fontname = 'MPDFA' . $ssfaid . '+' . $font['name'];
 					$subset = $font['subset'];
@@ -10396,9 +10367,6 @@ class mPDF
 						}
 						fclose($f);
 					} else {
-						if (!class_exists('TTFontFile', false)) {
-							include(_MPDF_PATH . 'classes/ttfontsuni.php');
-						}
 						$ttf = new TTFontFile();
 						$charToGlyph = $ttf->getCTG($font['ttffile'], $font['TTCfontID'], $this->debugfonts, $font['useOTL']);
 						$cidtogidmap = str_pad('', 256 * 256 * 2, "\x00");
@@ -11645,9 +11613,6 @@ class mPDF
 
 		// SVG
 		if ($type == 'svg') {
-			if (!class_exists('SVG', false)) {
-				include(_MPDF_PATH . 'classes/svg.php');
-			}
 			$svg = new SVG($this);
 			$family = $this->FontFamily;
 			$style = $this->FontStyle;
@@ -12328,9 +12293,6 @@ class mPDF
 				}
 			}
 
-			if (!class_exists('gif', false)) {
-				include_once(_MPDF_PATH . 'classes/gif.php');
-			}
 			$gif = new CGIF();
 
 			$h = 0;
@@ -12388,9 +12350,6 @@ class mPDF
 		/* -- IMAGES-BMP -- */
 		// BMP (Windows Bitmap)
 		elseif ($type == 'bmp') {
-			if (!class_exists('bmp', false)) {
-				include(_MPDF_PATH . 'classes/bmp.php');
-			}
 			if (empty($this->bmp)) {
 				$this->bmp = new bmp($this);
 			}
@@ -12409,9 +12368,6 @@ class mPDF
 		/* -- IMAGES-WMF -- */
 		// WMF
 		elseif ($type == 'wmf') {
-			if (!class_exists('wmf', false)) {
-				include(_MPDF_PATH . 'classes/wmf.php');
-			}
 			if (empty($this->wmf)) {
 				$this->wmf = new wmf($this);
 			}
@@ -13093,9 +13049,6 @@ class mPDF
 
 	function CircularText($x, $y, $r, $text, $align = 'top', $fontfamily = '', $fontsize = 0, $fontstyle = '', $kerning = 120, $fontwidth = 100, $divider)
 	{
-		if (!class_exists('directw', false)) {
-			include(_MPDF_PATH . 'classes/directw.php');
-		}
 		if (empty($this->directw)) {
 			$this->directw = new directw($this);
 		}
@@ -13148,9 +13101,6 @@ class mPDF
 	function Shaded_box($text, $font = '', $fontstyle = 'B', $szfont = '', $width = '70%', $style = 'DF', $radius = 2.5, $fill = '#FFFFFF', $color = '#000000', $pad = 2)
 	{
 		// F (shading - no line),S (line, no shading),DF (both)
-		if (!class_exists('directw', false)) {
-			include(_MPDF_PATH . 'classes/directw.php');
-		}
 		if (empty($this->directw)) {
 			$this->directw = new directw($this);
 		}
@@ -18481,9 +18431,6 @@ class mPDF
 		// mPDF 6
 		// Process bidirectional text ready for bidi-re-ordering (which is done after line-breaks are established in WriteFlowingBlock etc.)
 		if (($blockdir == 'rtl' || $this->biDirectional) && !$table_draft) {
-			if (!class_exists('otl', false)) {
-				include(_MPDF_PATH . 'classes/otl.php');
-			}
 			if (empty($this->otl)) {
 				$this->otl = new otl($this);
 			}
@@ -26627,9 +26574,6 @@ class mPDF
 	// Initiate, and Mark a place for the Table of Contents to be inserted
 	function TOC($tocfont = '', $tocfontsize = 0, $tocindent = 0, $resetpagenum = '', $pagenumstyle = '', $suppress = '', $toc_orientation = '', $TOCusePaging = true, $TOCuseLinking = false, $toc_id = 0, $tocoutdent = '')
 	{
-		if (!class_exists('tocontents', false)) {
-			include(_MPDF_PATH . 'classes/tocontents.php');
-		}
 		if (empty($this->tocontents)) {
 			$this->tocontents = new tocontents($this);
 		}
@@ -26640,9 +26584,6 @@ class mPDF
 	{
 		if (!is_array($a)) {
 			$a = array();
-		}
-		if (!class_exists('tocontents', false)) {
-			include(_MPDF_PATH . 'classes/tocontents.php');
 		}
 		if (empty($this->tocontents)) {
 			$this->tocontents = new tocontents($this);
@@ -26697,9 +26638,6 @@ class mPDF
 
 	function TOCpagebreak($tocfont = '', $tocfontsize = '', $tocindent = '', $TOCusePaging = true, $TOCuseLinking = '', $toc_orientation = '', $toc_mgl = '', $toc_mgr = '', $toc_mgt = '', $toc_mgb = '', $toc_mgh = '', $toc_mgf = '', $toc_ohname = '', $toc_ehname = '', $toc_ofname = '', $toc_efname = '', $toc_ohvalue = 0, $toc_ehvalue = 0, $toc_ofvalue = 0, $toc_efvalue = 0, $toc_preHTML = '', $toc_postHTML = '', $toc_bookmarkText = '', $resetpagenum = '', $pagenumstyle = '', $suppress = '', $orientation = '', $mgl = '', $mgr = '', $mgt = '', $mgb = '', $mgh = '', $mgf = '', $ohname = '', $ehname = '', $ofname = '', $efname = '', $ohvalue = 0, $ehvalue = 0, $ofvalue = 0, $efvalue = 0, $toc_id = 0, $pagesel = '', $toc_pagesel = '', $sheetsize = '', $toc_sheetsize = '', $tocoutdent = '')
 	{
-		if (!class_exists('tocontents', false)) {
-			include(_MPDF_PATH . 'classes/tocontents.php');
-		}
 		if (empty($this->tocontents)) {
 			$this->tocontents = new tocontents($this);
 		}
@@ -26732,9 +26670,6 @@ class mPDF
 			$ily = $this->y;
 		} // use top of columns
 
-		if (!class_exists('tocontents', false)) {
-			include(_MPDF_PATH . 'classes/tocontents.php');
-		}
 		if (empty($this->tocontents)) {
 			$this->tocontents = new tocontents($this);
 		}
@@ -28656,9 +28591,6 @@ class mPDF
 
 	function getBasicOTLdata(&$chunkOTLdata, $unicode, &$is_strong)
 	{
-		if (!class_exists('otl', false)) {
-			include(_MPDF_PATH . 'classes/otl.php');
-		}
 		if (empty($this->otl)) {
 			$this->otl = new otl($this);
 		}
@@ -29251,9 +29183,6 @@ class mPDF
 		$codestr = $code;
 		$code = preg_replace('/\-/', '', $code);
 
-		if (!class_exists('PDFBarcode', false)) {
-			include(_MPDF_PATH . 'classes/barcode.php');
-		}
 		$this->barcode = new PDFBarcode();
 		if ($btype == 'ISSN' || $btype == 'ISBN') {
 			$arrcode = $this->barcode->getBarcodeArray($code, 'EAN13');
@@ -29585,9 +29514,7 @@ class mPDF
 		if (empty($code)) {
 			return;
 		}
-		if (!class_exists('PDFBarcode', false)) {
-			include(_MPDF_PATH . 'classes/barcode.php');
-		}
+
 		$this->barcode = new PDFBarcode();
 		$arrcode = $this->barcode->getBarcodeArray($code, $btype, $print_ratio);
 
