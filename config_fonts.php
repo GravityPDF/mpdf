@@ -15,14 +15,14 @@ namespace blueliquiddesigns\Mpdf;
 // More than 1 font can be specified but each will add to the processing time of the script
 
 // $this->backupSubsFont = array('dejavusanscondensed','arialunicodems','sun-exta');	// this will recognise most scripts
-$this->backupSubsFont = array('dejavusanscondensed');
+$this->backupSubsFont = array('dejavusanscondensed', 'freeserif', 'sun-exta');
 
 // Optionally set a font (name as defined below in $this->fontdata) to use for CJK characters
 // in Plane 2 Unicode (> U+20000) when using useSubstitutions.
 // Use a font like hannomb or sun-extb if available
 // only works using subsets (otherwise would add very large file)
 
-$this->backupSIPFont = '';
+$this->backupSIPFont = 'sun-extb';
 
 /*
   This array defines translations from font-family in CSS or HTML
@@ -263,6 +263,18 @@ $this->fontdata = array(
 		'R' => "Uthman.otf",
 		'useOTL' => 0xFF,
 		'useKashida' => 75,
+	),
+
+	/* CJK fonts */
+	"sun-exta" => array(
+		'R' => "Sun-ExtA.ttf",
+		'sip-ext' => 'sun-extb', /* SIP=Plane2 Unicode (extension B) */
+	),
+	"sun-extb" => array(
+		'R' => "Sun-ExtB.ttf",
+	),
+	"unbatang" => array(/* Korean */
+		'R' => "UnBatang_0613.ttf",
 	),
 );
 
