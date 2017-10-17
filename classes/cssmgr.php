@@ -1088,10 +1088,10 @@ class cssmgr
 					$b['BL-V'] = $prop[3];
 				}
 			} else {
-				$b['TL-V'] = $b['TL-H'];
-				$b['TR-V'] = $b['TR-H'];
-				$b['BL-V'] = $b['BL-H'];
-				$b['BR-V'] = $b['BR-H'];
+                $b['TL-V'] = Arrays::get($b, 'TL-H', 0);
+                $b['TR-V'] = Arrays::get($b, 'TR-H', 0);
+                $b['BL-V'] = Arrays::get($b, 'BL-H', 0);
+                $b['BR-V'] = Arrays::get($b, 'BR-H', 0);
 			}
 			return $b;
 		}

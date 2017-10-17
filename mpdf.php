@@ -2053,13 +2053,13 @@ class mPDF
 					$h = $ch;
 				}
 			} else {
-				if (stristr($size['w'], '%')) {
-					$size['w'] += 0;
+				if (NumericString::containsPercentChar($size['w'])) {
+                    $size['w'] = NumericString::removePercentChar($size['w']);
 					$size['w'] /= 100;
 					$size['w'] = ($cw * $size['w']);
 				}
-				if (stristr($size['h'], '%')) {
-					$size['h'] += 0;
+				if (NumericString::containsPercentChar($size['h'])) {
+                    $size['h'] = NumericString::removePercentChar($size['h']);
 					$size['h'] /= 100;
 					$size['h'] = ($ch * $size['h']);
 				}
@@ -2391,13 +2391,13 @@ class mPDF
 									$ih = $pb['bpa']['h'];
 								}
 							} else {
-								if (stristr($size['w'], '%')) {
-									$size['w'] += 0;
+                                if (NumericString::containsPercentChar($size['w'])) {
+                                    $size['w'] = NumericString::removePercentChar($size['w']);
 									$size['w'] /= 100;
 									$size['w'] = ($pb['bpa']['w'] * $size['w']);
 								}
-								if (stristr($size['h'], '%')) {
-									$size['h'] += 0;
+                                if (NumericString::containsPercentChar($size['h'])) {
+                                    $size['h'] = NumericString::removePercentChar($size['h']);
 									$size['h'] /= 100;
 									$size['h'] = ($pb['bpa']['h'] * $size['h']);
 								}
@@ -2430,14 +2430,14 @@ class mPDF
 						}
 
 						$x_pos = $pb['x_pos'];
-						if (stristr($x_pos, '%')) {
-							$x_pos += 0;
+                        if (NumericString::containsPercentChar($x_pos)) {
+                            $x_pos = NumericString::removePercentChar($x_pos);
 							$x_pos /= 100;
 							$x_pos = ($pb['bpa']['w'] * $x_pos) - ($iw * $x_pos);
 						}
 						$y_pos = $pb['y_pos'];
-						if (stristr($y_pos, '%')) {
-							$y_pos += 0;
+                        if (NumericString::containsPercentChar($y_pos)) {
+                            $y_pos = NumericString::removePercentChar($y_pos);
 							$y_pos /= 100;
 							$y_pos = ($pb['bpa']['h'] * $y_pos) - ($ih * $y_pos);
 						}
