@@ -360,7 +360,7 @@ class mPDF
 	var $OutputIntentRoot;
 	var $InfoRoot;
 	var $current_filename;
-	var $parsers;
+	var $parsers = [];
 	var $current_parser;
 	var $_obj_stack;
 	var $_don_obj_stack;
