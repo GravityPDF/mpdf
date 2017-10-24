@@ -4966,7 +4966,7 @@ class Tag
 						$objattr = array();
 						$objattr['type'] = 'toc';
 						$objattr['toclevel'] = $this->mpdf->h2toc[$tag];
-						$objattr['CONTENT'] = htmlspecialchars(utf8_encode($content));
+						$objattr['CONTENT'] = htmlspecialchars($content);
 						$e = "\xbb\xa4\xactype=toc,objattr=" . serialize($objattr) . "\xbb\xa4\xac";
 						array_unshift($this->mpdf->textbuffer, array($e));
 					}
