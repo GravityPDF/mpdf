@@ -2,6 +2,8 @@
 
 namespace blueliquiddesigns\Mpdf;
 
+require_once __DIR__ . '/../MpdfException.php';
+
 class directw
 {
 
@@ -255,9 +257,9 @@ class directw
 		$kerning/=100;
 		$fontwidth/=100;
 		if ($kerning == 0)
-			$this->mpdf->Error('Please use values unequal to zero for kerning (CircularText)');
+			throw new MpdfException('Please use values unequal to zero for kerning (CircularText)');
 		if ($fontwidth == 0)
-			$this->mpdf->Error('Please use values unequal to zero for font width (CircularText)');
+			throw new MpdfException('Please use values unequal to zero for font width (CircularText)');
 		$text = str_replace("\r", '', $text);
 		//circumference
 		$u = ($r * 2) * M_PI;
