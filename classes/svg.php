@@ -445,10 +445,10 @@ class SVG
 
 		for ($i = 0; $i < (count($gradient_info['color'])); $i++) {
 			if (stristr($gradient_info['color'][$i]['offset'], '%') !== false) {
-				$gradient_info['color'][$i]['offset'] = ($gradient_info['color'][$i]['offset'] + 0) / 100;
+				$gradient_info['color'][$i]['offset'] = ((int)$gradient_info['color'][$i]['offset']) / 100;
 			}
 			if (isset($gradient_info['color'][($i + 1)]['offset']) && stristr($gradient_info['color'][($i + 1)]['offset'], '%') !== false) {
-				$gradient_info['color'][($i + 1)]['offset'] = ($gradient_info['color'][($i + 1)]['offset'] + 0) / 100;
+				$gradient_info['color'][($i + 1)]['offset'] = ((int)$gradient_info['color'][($i + 1)]['offset']) / 100;
 			}
 			if ($gradient_info['color'][$i]['offset'] < 0) {
 				$gradient_info['color'][$i]['offset'] = 0;
@@ -515,16 +515,16 @@ class SVG
 			} // mPDF 6
 
 			if (stristr($x1, '%') !== false) {
-				$x1 = ($x1 + 0) / 100;
+				$x1 = ((int)$x1) / 100;
 			}
 			if (stristr($x2, '%') !== false) {
-				$x2 = ($x2 + 0) / 100;
+				$x2 = ((int)$x2) / 100;
 			}
 			if (stristr($y1, '%') !== false) {
-				$y1 = ($y1 + 0) / 100;
+				$y1 = ((int)$y1) / 100;
 			}
 			if (stristr($y2, '%') !== false) {
-				$y2 = ($y2 + 0) / 100;
+				$y2 = ((int)$y2) / 100;
 			}
 
 			// mPDF 5.0.042
@@ -764,22 +764,22 @@ class SVG
 			}
 
 			if (stristr($x1, '%') !== false) {
-				$x1 = ($x1 + 0) / 100;
+				$x1 = ((int)$x1) / 100;
 			}
 			if (stristr($x0, '%') !== false) {
-				$x0 = ($x0 + 0) / 100;
+				$x0 = ((int)$x0) / 100;
 			}
 			if (stristr($y1, '%') !== false) {
-				$y1 = ($y1 + 0) / 100;
+				$y1 = ((int)$y1) / 100;
 			}
 			if (stristr($y0, '%') !== false) {
-				$y0 = ($y0 + 0) / 100;
+				$y0 = ((int)$y0) / 100;
 			}
 			if (stristr($rx, '%') !== false) {
-				$rx = ($rx + 0) / 100;
+				$rx = ((int)$rx) / 100;
 			}
 			if (stristr($ry, '%') !== false) {
-				$ry = ($ry + 0) / 100;
+				$ry = ((int)$ry) / 100;
 			}
 
 			$bboxw = $w;
@@ -1364,7 +1364,7 @@ class SVG
 						$arr .= sprintf('%.3F %.3F ', $d[$i] * $this->kp, $d[$i + 1] * $this->kp);
 					}
 					if (isset($critere_style['stroke-dashoffset'])) {
-						$off = $critere_style['stroke-dashoffset'] + 0;
+						$off = (int) $critere_style['stroke-dashoffset'];
 					}
 					$path_style .= sprintf('[%s] %.3F d ', $arr, $off * $this->kp);
 				}

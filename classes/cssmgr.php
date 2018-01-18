@@ -816,7 +816,7 @@ class cssmgr
 			}
 			/* -- END BACKGROUNDS -- */ else if ($k == 'IMAGE-ORIENTATION') {
 				if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad)/i', $v, $m)) {
-					$angle = $m[1] + 0;
+					$angle = (int) $m[1];
 					if (strtolower($m[2]) == 'deg') {
 						$angle = $angle;
 					} else if (strtolower($m[2]) == 'grad') {
@@ -2004,7 +2004,7 @@ class cssmgr
 			$b = 0;
 		} else if (count($f) == 2) {
 			$a = 0;
-			$b = $f[1] + 0;
+			$b = (int) $f[1];
 		}  // e.g. (+6)
 		else if (count($f) == 3) {  // e.g. (2N)
 			if ($f[2] == '') {
@@ -2012,7 +2012,7 @@ class cssmgr
 			} else if ($f[2] == '-') {
 				$a = -1;
 			} else {
-				$a = $f[2] + 0;
+				$a = (int) $f[2];
 			}
 			$b = 0;
 		} else if (count($f) == 4) {  // e.g. (2N+6)
@@ -2021,9 +2021,9 @@ class cssmgr
 			} else if ($f[2] == '-') {
 				$a = -1;
 			} else {
-				$a = $f[2] + 0;
+				$a = (int) $f[2];
 			}
-			$b = $f[3] + 0;
+			$b = (int) $f[3];
 		} else {
 			return false;
 		}

@@ -4100,7 +4100,7 @@ class Tag
 						$table['w'] = $wmm + $tblblw;
 					}
 					if (strpos($w, '%') && $this->mpdf->tableLevel > 1 && !$this->mpdf->ignore_table_percents && $this->mpdf->keep_table_proportions) {
-						$table['wpercent'] = $w + 0;  // makes 80% -> 80
+						$table['wpercent'] = (int) $w;  // makes 80% -> 80
 					}
 					if (!strpos($w, '%') && !$this->mpdf->ignore_table_widths) {
 						$wmm = $this->mpdf->ConvertSize($w, $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);

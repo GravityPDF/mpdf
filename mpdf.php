@@ -91,9 +91,6 @@ if (!defined('_MPDF_TTFONTDATAPATH')) {
 	define('_MPDF_TTFONTDATAPATH', apply_filters('mpdf_fontdata_path', _MPDF_PATH.'ttfontdata/'));
 }
 
-$errorlevel = error_reporting();
-$errorlevel = error_reporting($errorlevel & ~E_NOTICE);
-
 if (!function_exists('mb_strlen')) {
 	throw new MpdfException('mPDF requires mb_string functions. Ensure that mb_string extension is loaded.');
 }
@@ -3792,7 +3789,7 @@ class mPDF
 			$ut = round($ttf->underlineThickness);
 			$strp = round($ttf->strikeoutPosition); // mPDF 6
 			$strs = round($ttf->strikeoutSize); // mPDF 6
-			$originalsize = $ttfstat['size'] + 0;
+			$originalsize = (int) $ttfstat['size'];
 			$type = 'TTF';
 			//Generate metrics .php file
 			$s = '<?php' . "\n";
@@ -13432,7 +13429,7 @@ class mPDF
 	{
 		$lh = false;
 		if (preg_match('/^[0-9\.,]*$/', $v) && $v >= 0) {
-			return ($v + 0);
+			return (int) $v;
 		} elseif (strtoupper($v) == 'NORMAL' || $v == 'N') {
 			return 'N';  // mPDF 6
 		} else {
@@ -13486,7 +13483,7 @@ class mPDF
 			$lh = $this->_getNormalLineheight();
 		}
 		if (preg_match('/mm/', $lh)) {
-			return (($lh + 0.0) / $k); // convert to number
+			return (((float) $lh) / $k); // convert to number
 		} elseif ($lh > 0) {
 			return ($fs * $lh);
 		}
@@ -13527,7 +13524,7 @@ class mPDF
 			$lineheight = ($fontsize * $lh);
 			$leading += $linegap; // specified in hhea or sTypo in OpenType tables	****************************************
 		} elseif (preg_match('/mm/', $CSSlineheight)) {
-			$lineheight = (($CSSlineheight + 0.0) / $shrin_k);
+			$lineheight = (((float)$CSSlineheight) / $shrin_k);
 		} // convert to number
 		// ??? If lineheight is a factor e.g. 1.3  ?? use factor x 1em or ? use 'normal' lineheight * factor ******************************
 		// Could depend on value for $text_height - a draft CSS value as set above for now
@@ -16408,6 +16405,7 @@ class mPDF
 		$this->InFooter = true; // suppresses autopagebreaks
 		$save_bgs = $this->pageBackgrounds;
 		$checkinnerhtml = preg_replace('/\s/', '', $html);
+		$rotate = 0;
 
 		if ($w > $this->w) {
 			$x = 0;
@@ -18828,7 +18826,7 @@ class mPDF
 									$this->floatmargins['R']['y1'] = $fy + $h;
 									if ($skipln == 1) {
 										$this->floatmargins['R']['skipline'] = true;
-										$this->floatmargins['R']['id'] = count($this->floatbuffer) + 0;
+										$this->floatmargins['R']['id'] = count((array)$this->floatbuffer);
 										$objattr['skipline'] = true;
 									}
 									$this->floatbuffer[] = $objattr;
@@ -18840,7 +18838,7 @@ class mPDF
 								$this->floatmargins['R']['y1'] = $fy + $h;
 								if ($skipln == 1) {
 									$this->floatmargins['R']['skipline'] = true;
-									$this->floatmargins['R']['id'] = count($this->floatbuffer) + 0;
+									$this->floatmargins['R']['id'] = count((array)$this->floatbuffer);
 									$objattr['skipline'] = true;
 								}
 								$this->floatbuffer[] = $objattr;
@@ -18865,7 +18863,7 @@ class mPDF
 									$this->floatmargins['L']['y1'] = $fy + $h;
 									if ($skipln == 1) {
 										$this->floatmargins['L']['skipline'] = true;
-										$this->floatmargins['L']['id'] = count($this->floatbuffer) + 0;
+										$this->floatmargins['L']['id'] = count((array)$this->floatbuffer);
 										$objattr['skipline'] = true;
 									}
 									$this->floatbuffer[] = $objattr;
@@ -18877,7 +18875,7 @@ class mPDF
 								$this->floatmargins['L']['y1'] = $fy + $h;
 								if ($skipln == 1) {
 									$this->floatmargins['L']['skipline'] = true;
-									$this->floatmargins['L']['id'] = count($this->floatbuffer) + 0;
+									$this->floatmargins['L']['id'] = count((array)$this->floatbuffer);
 									$objattr['skipline'] = true;
 								}
 								$this->floatbuffer[] = $objattr;
@@ -30412,7 +30410,7 @@ class mPDF
 	function ConvertAngle($s, $makepositive = true)
 	{
 		if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad)/i', $s, $m)) {
-			$angle = $m[1] + 0;
+			$angle = (int) $m[1];
 			if (strtolower($m[2]) == 'deg') {
 				$angle = $angle;
 			} elseif (strtolower($m[2]) == 'grad') {
@@ -30432,7 +30430,7 @@ class mPDF
 				}
 			}
 		} else {
-			$angle = $s + 0;
+			$angle = (int) $s;
 		}
 		return $angle;
 	}

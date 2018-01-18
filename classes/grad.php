@@ -630,7 +630,7 @@ class grad
 			if ($startStops == 1) { // default values
 				// [<point> || <angle>,] = [<% em px left center right bottom top> || <deg grad rad 0>,]
 				if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad)/i', $bgr[0], $m)) {
-					$angle = $m[1] + 0;
+					$angle = (int) $m[1];
 					if (strtolower($m[2]) == 'deg') {
 						$angle = $angle;
 					} else if (strtolower($m[2]) == 'grad') {
