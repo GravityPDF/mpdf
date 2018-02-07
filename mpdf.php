@@ -10443,10 +10443,14 @@ class mPDF
 					fclose($fh);
 				}
 			}
-			if ($font['cw'][$cid * 2] == "\00" && $font['cw'][$cid * 2 + 1] == "\00") {
+
+			$char1 = (isset($font['cw'][$cid * 2])) ? $font['cw'][$cid * 2] : '';
+			$char2 = (isset($font['cw'][$cid * 2 + 1])) ? $font['cw'][$cid * 2 + 1] : '';
+
+			if ($char1 == "\00" && $char2 == "\00") {
 				continue;
 			}
-			$width = (ord($font['cw'][$cid * 2]) << 8) + ord($font['cw'][$cid * 2 + 1]);
+			$width = (ord($char1) << 8) + ord($char2);
 			if ($width == 65535) {
 				$width = 0;
 			}
