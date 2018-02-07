@@ -26796,7 +26796,7 @@ class mPDF
 		/* -- END BOOKMARKS -- */
 
 		// Update Page Links
-		if (count($this->PageLinks)) {
+		if (is_array($this->PageLinks) && count($this->PageLinks)) {
 			$newarr = array();
 			foreach ($this->PageLinks as $i => $o) {
 				foreach ($this->PageLinks[$i] as $key => $pl) {
@@ -26821,7 +26821,7 @@ class mPDF
 		}
 
 		// OrientationChanges
-		if (count($this->OrientationChanges)) {
+		if (is_array($this->OrientationChanges) && count($this->OrientationChanges)) {
 			$newarr = array();
 			foreach ($this->OrientationChanges AS $p => $v) {
 				if ($p >= $start_page && $p <= $end_page) {
@@ -26837,7 +26837,7 @@ class mPDF
 		}
 
 		// Page Dimensions
-		if (count($this->pageDim)) {
+		if (is_array($this->pageDim) && count($this->pageDim)) {
 			$newarr = array();
 			foreach ($this->pageDim AS $p => $v) {
 				if ($p >= $start_page && $p <= $end_page) {
@@ -26853,7 +26853,7 @@ class mPDF
 		}
 
 		// HTML Headers & Footers
-		if (count($this->saveHTMLHeader)) {
+		if (is_array($this->saveHTMLHeader) && count($this->saveHTMLHeader)) {
 			$newarr = array();
 			foreach ($this->saveHTMLHeader AS $p => $v) {
 				if ($p >= $start_page && $p <= $end_page) {
@@ -26867,7 +26867,7 @@ class mPDF
 			ksort($newarr);
 			$this->saveHTMLHeader = $newarr;
 		}
-		if (count($this->saveHTMLFooter)) {
+		if (is_array($this->saveHTMLFooter) && count($this->saveHTMLFooter)) {
 			$newarr = array();
 			foreach ($this->saveHTMLFooter AS $p => $v) {
 				if ($p >= $start_page && $p <= $end_page) {
@@ -26883,7 +26883,7 @@ class mPDF
 		}
 
 		// Update Internal Links
-		if (count($this->internallink)) {
+		if (is_array($this->internallink) && count($this->internallink)) {
 			foreach ($this->internallink as $key => $o) {
 				if ($o['PAGE'] >= $start_page && $o['PAGE'] <= $end_page) {
 					$this->internallink[$key]['PAGE'] += ($target_page - $start_page);
@@ -26894,7 +26894,7 @@ class mPDF
 		}
 
 		// Update Links
-		if (count($this->links)) {
+		if (is_array($this->link) && count($this->links)) {
 			foreach ($this->links as $key => $o) {
 				if ($o[0] >= $start_page && $o[0] <= $end_page) {
 					$this->links[$key][0] += ($target_page - $start_page);
@@ -26906,7 +26906,7 @@ class mPDF
 		}
 
 		// Update Form fields
-		if (count($this->mpdfform->forms)) {
+		if (is_array($this->mpdfform->forms) && count($this->mpdfform->forms)) {
 			foreach ($this->mpdfform->forms as $key => $f) {
 				if ($f['page'] >= $start_page && $f['page'] <= $end_page) {
 					$this->mpdfform->forms[$key]['page'] += ($target_page - $start_page);
@@ -26919,7 +26919,7 @@ class mPDF
 
 		/* -- ANNOTATIONS -- */
 		// Update Annotations
-		if (count($this->PageAnnots)) {
+		if (is_array($this->PageAnnots) && count($this->PageAnnots)) {
 			$newarr = array();
 			foreach ($this->PageAnnots as $p => $anno) {
 				if ($p >= $start_page && $p <= $end_page) {
@@ -26942,7 +26942,7 @@ class mPDF
 		/* -- END ANNOTATIONS -- */
 
 		// Update PageNumSubstitutions
-		if (count($this->PageNumSubstitutions)) {
+		if (is_array($this->PageNumSubstitutions) && count($this->PageNumSubstitutions)) {
 			$newarr = array();
 			foreach ($this->PageNumSubstitutions AS $k => $v) {
 				if ($this->PageNumSubstitutions[$k]['from'] >= $start_page && $this->PageNumSubstitutions[$k]['from'] <= $end_page) {
