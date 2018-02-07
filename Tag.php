@@ -3991,7 +3991,7 @@ class Tag
 					if ($lastbottommargin) {
 						$tmp = $this->mpdf->ConvertSize($properties['MARGIN-TOP'], $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
 						if ($tmp > $lastbottommargin) {
-							$properties['MARGIN-TOP'] -= $lastbottommargin;
+							$properties['MARGIN-TOP'] = (int) $properties['MARGIN-TOP'] - $lastbottommargin;
 						} else {
 							$properties['MARGIN-TOP'] = 0;
 						}
