@@ -28017,7 +28017,7 @@ class mPDF
 						(preg_match('/\d+\.\d\d+ (\d+\.\d\d+) \d+\.\d\d+ \d+\.\d\d+ \d+\.\d\d+ \d+\.\d\d+ c/', $t))) {
 
 						$clb = $s['y'] + $s['h'];
-						if ($clb > $this->ColDetails[$s['col']]['max_bottom']) {
+						if ((isset($this->ColDetails[$s['col']]['max_bottom'])) && ($clb > $this->ColDetails[$s['col']]['max_bottom'])) {
 							$this->ColDetails[$s['col']]['max_bottom'] = $clb;
 						}
 						if ($clb > $lowest_bottom_y) {
