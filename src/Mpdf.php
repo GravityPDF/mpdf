@@ -23470,21 +23470,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if ($this->tableBackgrounds && $level == 1) {
-			$s = $this->PrintTableBackgrounds();
-			if ($this->table_rotate && !$this->processingHeader && !$this->processingFooter) {
-				$this->tablebuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->tablebuffer);
-				if ($level == 1) {
-					$this->tablebuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', " ", $this->tablebuffer);
-				}
-			} elseif ($this->bufferoutput) {
-				$this->headerbuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->headerbuffer);
-				if ($level == 1) {
-					$this->headerbuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', " ", $this->headerbuffer);
-				}
-			} else {
-				$this->pages[$this->page] = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->pages[$this->page]);
-				if ($level == 1) {
-					$this->pages[$this->page] = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', " ", $this->pages[$this->page]);
+			// Nothing else paints while a page-break-inside:avoid block is being measured - see
+			// PaintDivBB() and BaseWriter::write() - and what is drawn on the page it starts on
+			// stays there when the block moves
+			if (!$this->keep_block_together) {
+				$s = $this->PrintTableBackgrounds();
+				if ($this->table_rotate && !$this->processingHeader && !$this->processingFooter) {
+					$this->tablebuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->tablebuffer);
+					if ($level == 1) {
+						$this->tablebuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', " ", $this->tablebuffer);
+					}
+				} elseif ($this->bufferoutput) {
+					$this->headerbuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->headerbuffer);
+					if ($level == 1) {
+						$this->headerbuffer = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', " ", $this->headerbuffer);
+					}
+				} else {
+					$this->pages[$this->page] = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->pages[$this->page]);
+					if ($level == 1) {
+						$this->pages[$this->page] = preg_replace('/(___TABLE___BACKGROUNDS' . $this->uniqstr . ')/', " ", $this->pages[$this->page]);
+					}
 				}
 			}
 			$this->tableBackgrounds = [];
