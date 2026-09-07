@@ -113,11 +113,14 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->imageWriter->writeImages();
 
+		// Shaders are written first so that a Form XObject can name the gradients it paints
+		// with; _putpatterns still needs them resolved before it runs, as it always has
+		$this->backgroundWriter->writeShaders();
+
 		$this->formWriter->writeFormObjects();
 
 		$this->mpdf->writeImportedPagesAndResolvedObjects();
 
-		$this->backgroundWriter->writeShaders();
 		$this->backgroundWriter->writePatterns();
 
 		// Resource dictionary
