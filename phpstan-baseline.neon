@@ -882,29 +882,9 @@ parameters:
 			count: 1
 			path: src/Otl.php
 
-		-
-			message: '#^Variable \$LookupListIndex might not be defined\.$#'
-			identifier: variable.undefined
-			count: 4
-			path: src/Otl.php
 
-		-
-			message: '#^Variable \$PosLookupRecord might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
 
-		-
-			message: '#^Variable \$SequenceIndex might not be defined\.$#'
-			identifier: variable.undefined
-			count: 4
-			path: src/Otl.php
 
-		-
-			message: '#^Variable \$SubstLookupRecord might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Otl.php
 
 		-
 			message: '#^Variable \$Value might not be defined\.$#'
@@ -922,7 +902,7 @@ parameters:
 			message: '#^Variable \$cctr might not be defined\.$#'
 			identifier: variable.undefined
 			count: 3
-			path: src/Otl.php
+			path: src/Bidi.php
 
 		-
 			message: '#^Variable \$ic might not be defined\.$#'
@@ -946,13 +926,8 @@ parameters:
 			message: '#^Variable \$next_level might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
-			path: src/Otl.php
+			path: src/Bidi.php
 
-		-
-			message: '#^Variable \$shift might not be defined\.$#'
-			identifier: variable.undefined
-			count: 6
-			path: src/Otl.php
 
 		-
 			message: '#^Variable \$useGSUBtags might not be defined\.$#'
@@ -960,17 +935,7 @@ parameters:
 			count: 1
 			path: src/Otl.php
 
-		-
-			message: '#^Undefined variable\: \$rtlPUAarr$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/OtlDump.php
 
-		-
-			message: '#^Undefined variable\: \$rtlPUAstr$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/OtlDump.php
 
 		-
 			message: '#^Variable \$GSLookup might not be defined\.$#'
@@ -984,11 +949,6 @@ parameters:
 			count: 1
 			path: src/OtlDump.php
 
-		-
-			message: '#^Variable \$arr might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/OtlDump.php
 
 		-
 			message: '#^Variable \$backtrackGlyphs might not be defined\.$#'
@@ -1008,11 +968,6 @@ parameters:
 			count: 4
 			path: src/OtlDump.php
 
-		-
-			message: '#^Variable \$subRule might not be defined\.$#'
-			identifier: variable.undefined
-			count: 4
-			path: src/OtlDump.php
 
 		-
 			message: '#^Variable \$type might not be defined\.$#'
