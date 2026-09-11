@@ -35,20 +35,43 @@ class Otl
 
 	var $fontkey;
 
-	var $ttfOTLdata;
+	/**
+	 * The table the reader below is currently pointed at: 'GSUB' or 'GPOS'.
+	 *
+	 * Both tables number their offsets from their own start, so the same number means two different
+	 * places depending on which is being applied. Everything that caches by offset has to say which
+	 * table it meant - see $LuDataCache.
+	 *
+	 * @var string
+	 */
+	private $otlTable;
 
 	/**
-	 * The cached GSUB and GPOS tables, as something that can be read
+	 * One reader per table, keyed by tag, each over that table's cached bytes
+	 *
+	 * @var BlobReader[]
+	 */
+	private $readers = [];
+
+	/**
+	 * Whichever of $readers the current phase is reading
 	 *
 	 * @var BlobReader
 	 */
 	private $reader;
 
+	/**
+	 * $LuDataCache's first-level key for the current font and table, as "fontkey/GSUB".
+	 *
+	 * Composed once per phase rather than per lookup, which keeps the cache exactly as deep as it was
+	 * before the two tables had to be told apart. The four memoised readers are called once per glyph
+	 * per rule, so depth there is worth not adding.
+	 *
+	 * @var string
+	 */
+	private $otlCacheKey;
+
 	var $glyphIDtoUni;
-
-	var $GSUB_offset;
-
-	var $GPOS_offset;
 
 	var $MarkAttachmentType;
 
@@ -81,10 +104,12 @@ class Otl
 	/**
 	 * Memoised Coverage and ClassDef tables, for the life of the document.
 	 *
-	 * Keyed [fontkey][reader][offset]. The reader dimension is load-bearing: a font may point both a
-	 * PairPos ClassDef and a chained-context InputClassDef at one table, and _getClassDefinitionTable
-	 * returns class => list of unicodes where _getClasses returns class => map of unicode => 1. Shared
-	 * by offset alone, whichever ran first would hand the other a shape it cannot index, with no error.
+	 * Keyed ["fontkey/GSUB"][reader][offset]. Both parts of that are load-bearing. The reader: a font
+	 * may point both a PairPos ClassDef and a chained-context InputClassDef at one table, and
+	 * _getClassDefinitionTable returns class => list of unicodes where _getClasses returns
+	 * class => map of unicode => 1, so sharing by offset alone would hand one of them a shape it
+	 * cannot index. The table: offsets are relative to their own table, so GSUB offset 0x100 and GPOS
+	 * offset 0x100 are two different places that would otherwise share a key.
 	 */
 	var $LuDataCache;
 
@@ -99,8 +124,6 @@ class Otl
 	var $GPOSLookups;
 
 	var $GSLuCoverage;
-
-	var $GSUB_length;
 
 	var $GSUBLookups;
 
@@ -137,9 +160,6 @@ class Otl
 		if (!isset($this->GDEFdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
 			$font = $this->fontCache->jsonLoad($fontCacheFilename);
 
-			$this->GSUB_offset = $this->GDEFdata[$this->fontkey]['GSUB_offset'] = $font['GSUB_offset'];
-			$this->GPOS_offset = $this->GDEFdata[$this->fontkey]['GPOS_offset'] = $font['GPOS_offset'];
-			$this->GSUB_length = $this->GDEFdata[$this->fontkey]['GSUB_length'] = $font['GSUB_length'];
 			$this->MarkAttachmentType = $this->GDEFdata[$this->fontkey]['MarkAttachmentType'] = $font['MarkAttachmentType'];
 			$this->MarkGlyphSets = $this->GDEFdata[$this->fontkey]['MarkGlyphSets'] = $font['MarkGlyphSets'];
 			$this->GlyphClassMarks = $this->GDEFdata[$this->fontkey]['GlyphClassMarks'] = $font['GlyphClassMarks'];
@@ -147,9 +167,6 @@ class Otl
 			$this->GlyphClassComponents = $this->GDEFdata[$this->fontkey]['GlyphClassComponents'] = $font['GlyphClassComponents'];
 			$this->GlyphClassBases = $this->GDEFdata[$this->fontkey]['GlyphClassBases'] = $font['GlyphClassBases'];
 		} else {
-			$this->GSUB_offset = $this->GDEFdata[$this->fontkey]['GSUB_offset'];
-			$this->GPOS_offset = $this->GDEFdata[$this->fontkey]['GPOS_offset'];
-			$this->GSUB_length = $this->GDEFdata[$this->fontkey]['GSUB_length'];
 			$this->MarkAttachmentType = $this->GDEFdata[$this->fontkey]['MarkAttachmentType'];
 			$this->MarkGlyphSets = $this->GDEFdata[$this->fontkey]['MarkGlyphSets'];
 			$this->GlyphClassMarks = $this->GDEFdata[$this->fontkey]['GlyphClassMarks'];
@@ -327,17 +344,6 @@ class Otl
 			$this->assocLigs = []; // Ligatures[$posarr lpos] => nc
 			$this->assocMarks = [];  // assocMarks[$posarr mpos] => array(compID, ligPos)
 
-			if (!isset($this->GDEFdata[$this->fontkey]['GSUBGPOStables'])) {
-				$this->ttfOTLdata = $this->GDEFdata[$this->fontkey]['GSUBGPOStables'] = $this->fontCache->load($this->fontkey . '.GSUBGPOStables.dat', 'rb');
-				if (!$this->ttfOTLdata) {
-					throw new \Mpdf\MpdfException('Can\'t open file ' . $this->fontCache->tempFilename($this->fontkey . '.GSUBGPOStables.dat'));
-				}
-			} else {
-				$this->ttfOTLdata = $this->GDEFdata[$this->fontkey]['GSUBGPOStables'];
-			}
-
-			$this->reader = new BlobReader($this->ttfOTLdata);
-
 			if ($this->debugOTL) {
 				$this->_dumpproc('BEGIN', '-', '-', '-', '-', -1, '-', 0);
 			}
@@ -363,6 +369,7 @@ class Otl
 			//////////       GSUB          /////////////////////////////////
 			////////////////////////////////////////////////////////////////
 			if (($useOTL & 0xFF) && $GSUBscriptTag && $GSUBlangsys && $GSUBFeatures) {
+				$this->readTable('GSUB');
 				// 4. Load GSUB data, Coverage & Lookups
 				//=================================================================
 
@@ -1022,6 +1029,8 @@ class Otl
 			////////////////////////////////////////////////////////////////
 			////////////////////////////////////////////////////////////////
 			if (($useOTL & 0xFF) && $GPOSscriptTag && $GPOSlangsys && $GPOSFeatures) {
+				$this->readTable('GPOS');
+
 				$this->Entry = [];
 				$this->Exit = [];
 
@@ -1319,7 +1328,7 @@ class Otl
 					// NB Coverage only looks at glyphs for position 1 (esp. 7.3 and 8.3)
 					if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
 						// Get rules from font GSUB subtable
-						$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, ($subtable_offset - $this->GSUB_offset), $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
+						$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
 
 						if ($shift) {
 							break;
@@ -1395,7 +1404,7 @@ class Otl
 						// NB Coverage only looks at glyphs for position 1 (esp. 7.3 and 8.3)
 						if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
 							// Get rules from font GSUB subtable
-							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, ($subtable_offset - $this->GSUB_offset), $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
+							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
 
 							if ($shift) {
 								break 2;
@@ -1455,7 +1464,7 @@ class Otl
 						// NB Coverage only looks at glyphs for position 1 (esp. 7.3 and 8.3)
 						if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
 							// Get rules from font GSUB subtable
-							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, ($subtable_offset - $this->GSUB_offset), $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, 0, $tagInt);
+							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, 0, $tagInt);
 
 							if ($shift) {
 								break;
@@ -1520,7 +1529,7 @@ class Otl
 								continue;
 							}
 							// Get rules from font GSUB subtable
-							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, ($subtable_offset - $this->GSUB_offset), $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, $is_old_spec, $tagInt);
+							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, $is_old_spec, $tagInt);
 
 							if ($shift) {
 								break;
@@ -1546,7 +1555,7 @@ class Otl
 								$nextGID = $this->OTLdata[$ptr + 1]['uni'];
 								if (isset($this->GSLuCoverage[$lu][$c][$nextGID])) {
 									// Get rules from font GSUB subtable
-									$shift = $this->_applyGSUBsubtableSpecial($lu, $c, $ptr, $currGlyph, $currGID, $nextGlyph, $nextGID, ($subtable_offset - $this->GSUB_offset), $Type, $this->GSLuCoverage[$lu][$c]);
+									$shift = $this->_applyGSUBsubtableSpecial($lu, $c, $ptr, $currGlyph, $currGID, $nextGlyph, $nextGID, $subtable_offset, $Type, $this->GSLuCoverage[$lu][$c]);
 
 									if ($shift) {
 										break;
@@ -1587,7 +1596,7 @@ class Otl
 					continue;
 				}
 				// Get rules from font GSUB subtable
-				if ($this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, ($subtable_offset - $this->GSUB_offset), 8, $Flag, $MarkFilteringSet, $coverage[$c], 0, $tag, 0, $tagInt)) {
+				if ($this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, 8, $Flag, $MarkFilteringSet, $coverage[$c], 0, $tag, 0, $tagInt)) {
 					break;
 				}
 			}
@@ -1934,7 +1943,7 @@ class Otl
 								$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 								foreach ($this->GSUBLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-									$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GSUB_offset), $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
+									$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
 									if ($shift) {
 										break;
 									}
@@ -2043,7 +2052,7 @@ class Otl
 									$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 									foreach ($this->GSUBLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-										$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GSUB_offset), $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
+										$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
 										if ($shift) {
 											break;
 										}
@@ -2112,7 +2121,7 @@ class Otl
 						$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 						foreach ($this->GSUBLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-							$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GSUB_offset), $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
+							$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
 							if ($shift) {
 								break;
 							}
@@ -2199,7 +2208,7 @@ class Otl
 							$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 							foreach ($this->GSUBLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-								$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GSUB_offset), $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
+								$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
 								if ($shift) {
 									break;
 								}
@@ -2369,7 +2378,7 @@ class Otl
 									$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 									foreach ($this->GSUBLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-										$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GSUB_offset), $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
+										$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
 										if ($shift) {
 											break;
 										}
@@ -2454,7 +2463,7 @@ class Otl
 						$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 						foreach ($this->GSUBLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-							$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GSUB_offset), $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
+							$shift = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
 							if ($shift) {
 								break;
 							}
@@ -2883,6 +2892,38 @@ class Otl
 	}
 
 	/**
+	 * Point the reader at one of the two layout tables, loading its cached bytes if this is the first
+	 * time this font has needed them.
+	 *
+	 * @param string $tag 'GSUB' or 'GPOS'
+	 */
+	private function readTable($tag)
+	{
+		$this->otlTable = $tag;
+		$this->otlCacheKey = $this->fontkey . '/' . $tag;
+
+		if (isset($this->readers[$this->fontkey][$tag])) {
+			$this->reader = $this->readers[$this->fontkey][$tag];
+			$this->reader->seek(0);
+
+			return;
+		}
+
+		$filename = $this->fontkey . '.' . $tag . '.dat';
+		$bytes = $this->fontCache->has($filename) ? $this->fontCache->load($filename) : false;
+
+		if (!$bytes) {
+			throw new \Mpdf\MpdfException(sprintf(
+				'Cannot read the %s table cached at %s',
+				$tag,
+				$this->fontCache->tempFilename($filename)
+			));
+		}
+
+		$this->reader = $this->readers[$this->fontkey][$tag] = new BlobReader($bytes);
+	}
+
+	/**
 	 * The line-breaking dictionary a registered font package provides for the current shaper, read
 	 * once per Otl instance because it runs to megabytes and applyOTL is called per text chunk.
 	 *
@@ -2926,7 +2967,7 @@ class Otl
 					if (isset($this->LuCoverage[$lu][$c][$currGID])) {
 						// Get rules from font GPOS subtable
 						if (isset($this->OTLdata[$ptr]['bidi_type'])) {  // No need to check bidi_type - just a check that it exists
-							$shift = $this->_applyGPOSsubtable($lu, $c, $ptr, $currGlyph, $currGID, ($subtable_offset - $this->GPOS_offset + $this->GSUB_length), $Type, $Flag, $MarkFilteringSet, $this->LuCoverage[$lu][$c], $tag, 0, $is_old_spec);
+							$shift = $this->_applyGPOSsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->LuCoverage[$lu][$c], $tag, 0, $is_old_spec);
 							if ($shift) {
 								break;
 							}
@@ -3663,7 +3704,7 @@ class Otl
 									$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 									foreach ($this->GPOSLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-										$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GPOS_offset + $this->GSUB_length), $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
+										$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
 										if ($this->debugOTL && $shift) {
 											$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 										}
@@ -3940,7 +3981,7 @@ class Otl
 									$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 									foreach ($this->GPOSLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-										$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GPOS_offset + $this->GSUB_length), $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
+										$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
 										if ($this->debugOTL && $shift) {
 											$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 										}
@@ -4026,7 +4067,7 @@ class Otl
 						$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 						foreach ($this->GPOSLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-							$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GPOS_offset + $this->GSUB_length), $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
+							$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
 							if ($this->debugOTL && $shift) {
 								$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 							}
@@ -4079,7 +4120,7 @@ class Otl
 			$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 			foreach ($this->GPOSLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-				$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, ($lusubtable_offset - $this->GPOS_offset + $this->GSUB_length), $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
+				$shift = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
 				if ($shift) {
 					break;
 				}
@@ -4288,8 +4329,8 @@ class Otl
 
 	private function _getClassDefinitionTable($offset)
 	{
-		if (isset($this->LuDataCache[$this->fontkey]['classDef'][$offset])) {
-			$GlyphByClass = $this->LuDataCache[$this->fontkey]['classDef'][$offset];
+		if (isset($this->LuDataCache[$this->otlCacheKey]['classDef'][$offset])) {
+			$GlyphByClass = $this->LuDataCache[$this->otlCacheKey]['classDef'][$offset];
 		} else {
 			$this->reader->seek($offset);
 			$ClassFormat = $this->reader->readUInt16();
@@ -4318,7 +4359,7 @@ class Otl
 				}
 			}
 			ksort($GlyphByClass);
-			$this->LuDataCache[$this->fontkey]['classDef'][$offset] = $GlyphByClass;
+			$this->LuDataCache[$this->otlCacheKey]['classDef'][$offset] = $GlyphByClass;
 		}
 		return $GlyphByClass;
 	}
@@ -4689,8 +4730,8 @@ class Otl
 		// Need to do this separately to cache separately
 		// Otherwise the same as fn below _getCoverage
 		$offset = $this->reader->tell();
-		if (isset($this->LuDataCache[$this->fontkey]['coverageGID'][$offset])) {
-			$g = $this->LuDataCache[$this->fontkey]['coverageGID'][$offset];
+		if (isset($this->LuDataCache[$this->otlCacheKey]['coverageGID'][$offset])) {
+			$g = $this->LuDataCache[$this->otlCacheKey]['coverageGID'][$offset];
 		} else {
 			$g = [];
 			$CoverageFormat = $this->reader->readUInt16();
@@ -4712,7 +4753,7 @@ class Otl
 					}
 				}
 			}
-			$this->LuDataCache[$this->fontkey]['coverageGID'][$offset] = $g;
+			$this->LuDataCache[$this->otlCacheKey]['coverageGID'][$offset] = $g;
 		}
 		return $g;
 	}
@@ -4720,8 +4761,8 @@ class Otl
 	private function _getCoverage()
 	{
 		$offset = $this->reader->tell();
-		if (isset($this->LuDataCache[$this->fontkey]['coverage'][$offset])) {
-			$g = $this->LuDataCache[$this->fontkey]['coverage'][$offset];
+		if (isset($this->LuDataCache[$this->otlCacheKey]['coverage'][$offset])) {
+			$g = $this->LuDataCache[$this->otlCacheKey]['coverage'][$offset];
 		} else {
 			$g = [];
 			$CoverageFormat = $this->reader->readUInt16();
@@ -4743,15 +4784,15 @@ class Otl
 					}
 				}
 			}
-			$this->LuDataCache[$this->fontkey]['coverage'][$offset] = $g;
+			$this->LuDataCache[$this->otlCacheKey]['coverage'][$offset] = $g;
 		}
 		return $g;
 	}
 
 	private function _getClasses($offset)
 	{
-		if (isset($this->LuDataCache[$this->fontkey]['classes'][$offset])) {
-			$GlyphByClass = $this->LuDataCache[$this->fontkey]['classes'][$offset];
+		if (isset($this->LuDataCache[$this->otlCacheKey]['classes'][$offset])) {
+			$GlyphByClass = $this->LuDataCache[$this->otlCacheKey]['classes'][$offset];
 		} else {
 			$this->reader->seek($offset);
 			$ClassFormat = $this->reader->readUInt16();
@@ -4792,7 +4833,7 @@ class Otl
 					}
 				}
 			}
-			$this->LuDataCache[$this->fontkey]['classes'][$offset] = $GlyphByClass;
+			$this->LuDataCache[$this->otlCacheKey]['classes'][$offset] = $GlyphByClass;
 		}
 		return $GlyphByClass;
 	}

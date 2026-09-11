@@ -76,7 +76,7 @@
                 "Flag": 0,
                 "SubtableCount": 1,
                 "Subtables": [
-                    1936
+                    132
                 ],
                 "MarkFilteringSet": ""
             },
@@ -85,7 +85,7 @@
                 "Flag": 0,
                 "SubtableCount": 1,
                 "Subtables": [
-                    1958
+                    154
                 ],
                 "MarkFilteringSet": ""
             },
@@ -94,7 +94,7 @@
                 "Flag": 0,
                 "SubtableCount": 1,
                 "Subtables": [
-                    1986
+                    182
                 ],
                 "MarkFilteringSet": ""
             },
@@ -103,7 +103,7 @@
                 "Flag": 0,
                 "SubtableCount": 1,
                 "Subtables": [
-                    2010
+                    206
                 ],
                 "MarkFilteringSet": ""
             }
@@ -134,7 +134,7 @@
                 "Flag": 0,
                 "SubtableCount": 1,
                 "Subtables": [
-                    1760
+                    64
                 ],
                 "MarkFilteringSet": ""
             },
@@ -143,7 +143,7 @@
                 "Flag": 0,
                 "SubtableCount": 1,
                 "Subtables": [
-                    1776
+                    80
                 ],
                 "MarkFilteringSet": ""
             }
@@ -155,9 +155,6 @@
     },
     "cache": {
         "GDEFdata.json": {
-            "GSUB_offset": 1804,
-            "GPOS_offset": 1696,
-            "GSUB_length": 218,
             "GlyphClassBases": " 00041| 00042| 00043| 0E000| 0E001| 0E002| 0E003",
             "GlyphClassMarks": "",
             "GlyphClassLigatures": "",
@@ -165,6 +162,7 @@
             "MarkGlyphSets": [],
             "MarkAttachmentType": []
         },
+        "GPOS.dat": "106 bytes, sha256 d7111c68b84c2bf2144f04478e206dd5e82b40079607221c7662f01c65d6d941",
         "GPOSdata.json": [
             [
                 {
@@ -177,7 +175,7 @@
                 }
             ]
         ],
-        "GSUBGPOStables.dat": "324 bytes, sha256 293b7c85accecf5a62c2267a85da6f99b0cd9f5fa00b96b611884d360cf2f130",
+        "GSUB.dat": "218 bytes, sha256 161825ceeda91249c5f613799425bd25217cf802c8e975d09d784f604d3b39a3",
         "GSUBdata.json": [
             [
                 {
