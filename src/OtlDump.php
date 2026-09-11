@@ -133,6 +133,41 @@ class OtlDump extends TTFontFile
 
 	private $language;
 
+	/**
+	 * The detail report as it is built, shared by the writer at both levels so that either can hand
+	 * over what has built up so far.
+	 *
+	 * @var string
+	 */
+	private $report = '';
+
+	/**
+	 * How much report to build up before handing it to WriteHTML, a quarter of what it will accept.
+	 *
+	 * @var int
+	 */
+	private $reportChunkBytes = 0;
+
+	/**
+	 * What the summary report's links should carry to reach a detail report of the same font.
+	 *
+	 * The summary lists every script and language system a font offers and links each to its own
+	 * detail report. Only the caller knows how it named the font it handed over, so it says here,
+	 * and the link gets the script and language appended.
+	 *
+	 * @var array query terms, e.g. ['family' => 'freeserif', 'style' => '']
+	 */
+	public $detailReportQuery = [];
+
+	/**
+	 * What each of GSUB and GPOS had to say when it did not carry the script or language system asked
+	 * for. Two entries means neither table did, which is a mistake in the tag rather than a font that
+	 * only positions or only substitutes.
+	 *
+	 * @var string[]
+	 */
+	private $notOffered = [];
+
 	var $glyphToChar;
 
 	var $fontRevision;
@@ -177,11 +212,12 @@ class OtlDump extends TTFontFile
 		$this->mode = $mode;
 		$this->script = $script;
 		$this->language = $language;
+		$this->notOffered = [];
+		$this->reportChunkBytes = max(1, (int) ((int) ini_get('pcre.backtrack_limit') / 4));
 		$this->useOTL = $useOTL; // mPDF 5.7.1
 		$this->fontkey = $fontkey; // mPDF 5.7.1
 		$this->filename = $file;
 		$this->reader = new FileReader($file);
-
 
 		$this->charWidths = '';
 		$this->glyphPos = [];
@@ -224,28 +260,6 @@ class OtlDump extends TTFontFile
 		$this->extractInfo($debug, $BMPonly, $useOTL);
 		$this->reader->close();
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////////////////////////
@@ -665,6 +679,7 @@ class OtlDump extends TTFontFile
 			$this->_getGDEFtables();
 			list($this->GSUBScriptLang, $this->GSUBFeatures, $this->GSUBLookups, $this->rtlPUAstr, $this->rtlPUAarr) = $this->_getGSUBtables();
 			list($this->GPOSScriptLang, $this->GPOSFeatures, $this->GPOSLookups) = $this->_getGPOStables();
+			$this->failIfNeitherTableOffers();
 			$this->glyphIDtoUni = str_pad('', 256 * 256 * 3, "\x00");
 			foreach ($glyphToChar as $gid => $arr) {
 				if (isset($glyphToChar[$gid][0])) {
@@ -887,12 +902,7 @@ class OtlDump extends TTFontFile
 		} else {
 			$this->mpdf->WriteHTML('<div>GDEF table not defined</div>');
 		}
-
-//echo $this->GlyphClassMarks ; exit;
-//print_r($GlyphClass); exit;
-//print_r($GlyphByClass); exit;
 	}
-
 
 	function _getGSUBtables()
 	{
@@ -933,7 +943,6 @@ class OtlDump extends TTFontFile
 				}
 				$ffeats[$t] = $ls;
 			}
-//print_r($ffeats); exit;
 			// Get FeatureIndexList
 			// LangSys Table - from first listed langsys
 			foreach ($ffeats as $st => $scripts) {
@@ -953,7 +962,6 @@ class OtlDump extends TTFontFile
 					$ffeats[$st][$t] = $FeatureIndex;
 				}
 			}
-//print_r($ffeats); exit;
 			// Feauture List => LookupListIndex es
 			$this->reader->seek($FeatureList_offset);
 			$FeatureCount = $this->reader->readUInt16();
@@ -1001,8 +1009,6 @@ class OtlDump extends TTFontFile
 				}
 			}
 
-//print_r($gsub); exit;
-
 			if ($this->mode == 'summary') {
 				$this->mpdf->WriteHTML('<h3>GSUB Scripts &amp; Languages</h3>');
 				$this->mpdf->WriteHTML('<div class="glyphs">');
@@ -1011,7 +1017,7 @@ class OtlDump extends TTFontFile
 					foreach ($gsub as $st => $g) {
 						$html .= '<h5>' . $st . '</h5>';
 						foreach ($g as $l => $t) {
-							$html .= '<div><a href="font_dump_OTL.php?script=' . $st . '&lang=' . $l . '">' . $l . '</a></b>: ';
+							$html .= '<div><a href="' . $this->detailLink($st, $l) . '">' . $l . '</a></b>: ';
 							foreach ($t as $tag => $o) {
 								$html .= $tag . ' ';
 							}
@@ -1067,7 +1073,6 @@ class OtlDump extends TTFontFile
 				}
 			}
 
-//print_r($GSLookup); exit;
 			//=====================================================================================
 			// Process Whole LookupList - Get LuCoverage = Lookup coverage just for first glyph
 			$this->GSLuCoverage = [];
@@ -1155,7 +1160,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 				}
 			}
 
-//print_r($Lookup); exit;
 			//=====================================================================================
 			// Process (1) Whole LookupList
 			for ($i = 0; $i < $LookupCount; $i++) {
@@ -1403,7 +1407,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 					}
 				}
 			}
-//print_r($Lookup); exit;
 			//=====================================================================================
 			// Process (2) Whole LookupList
 			// Get Coverage tables and prepare preg_replace
@@ -1467,6 +1470,10 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 
 									for ($gl = 0; $gl < $Lookup[$i]['Subtable'][$c]['AlternateSets'][$g]['GlyphCount']; $gl++) {
 										$gid = $Lookup[$i]['Subtable'][$c]['AlternateSets'][$g]['SubstituteGlyphID'][$gl];
+										// A glyph the cmap does not reach has no character to report it by
+										if (!isset($this->glyphToChar[$gid][0])) {
+											continue;
+										}
 										$substitute[] = unicode_hex($this->glyphToChar[$gid][0]);
 									}
 
@@ -1474,10 +1481,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 									//$substitute[] = unicode_hex($this->glyphToChar[$gid][0]);
 
 									$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute];
-								}
-								if ($i == 166) {
-									print_r($Lookup[$i]['Subtable']);
-									exit;
 								}
 							} // LookupType 4: Ligature Substitution Subtable n => 1
 							else {
@@ -1504,6 +1507,9 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 												$replace[] = $rpl;
 											}
 											$gid = $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['LigGlyph'];
+											if (!isset($this->glyphToChar[$gid][0])) {
+												continue;
+											}
 											$substitute[] = unicode_hex($this->glyphToChar[$gid][0]);
 											$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute, 'CompCount' => $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['CompCount']];
 										}
@@ -1773,10 +1779,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 			}
 			ksort($lul); // Order the Lookups in the order they are in the GUSB table, regardless of Feature order
 			$this->_getGSUBarray($Lookup, $lul, $st);
-//print_r($lul); exit;
 		}
-
-//print_r($Lookup); exit;
 
 		// The report says nothing about the RTL Private Use Area mapping the parser builds for Arabic
 		// and Syriac joining, so there is nothing to hand back for it. These were undefined variables.
@@ -1789,7 +1792,13 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 	{
 		// Process (3) LookupList for specific Script-LangSys
 		// Generate preg_replace
-		$html = '';
+		// Level 1 writes the report, level 2 returns its part of it to the rule that nested the
+		// lookup. Both append to one buffer so that a nested lookup's thousands of rows can be handed
+		// over as they are built, rather than arriving at level 1 as one string too long to write.
+		if ($level == 1) {
+			$this->report = '';
+		}
+		$html = &$this->report;
 		if ($level == 1) {
 			$html .= '<bookmark level="0" content="GSUB features">';
 		}
@@ -1831,6 +1840,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 						if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
 							continue;
 						}
+						$this->flushReport($html);
 						$html .= '<div class="substitution">';
 						$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
 						if ($level == 2 && $exB) {
@@ -1861,6 +1871,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 							if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
 								continue;
 							}
+							$this->flushReport($html);
 							$html .= '<div class="substitution">';
 							$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
 							if ($level == 2 && $exB) {
@@ -1891,6 +1902,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 								if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
 									continue;
 								}
+								$this->flushReport($html);
 								$html .= '<div class="substitution">';
 								$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
 								if ($level == 2 && $exB) {
@@ -1929,6 +1941,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 									if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
 										continue;
 									}
+									$this->flushReport($html);
 									$html .= '<div class="substitution">';
 									$html .= '<span class="unicode">' . $this->formatUniArr($inputGlyphs) . '&nbsp;</span> ';
 									if ($level == 2 && $exB) {
@@ -2022,13 +2035,13 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 
 													$inputGlyphs = [];
 
-													$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass];
+													$inputGlyphs[0] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $inputClass);
 
 													if ($rule['InputGlyphCount'] > 1) {
 														//  NB starts at 1
 														for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
 															$classindex = $rule['Input'][$gcl];
-															$inputGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$classindex];
+															$inputGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $classindex);
 														}
 													}
 
@@ -2145,7 +2158,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 										}
 									}
 
-//print_r($Lookup[$i]);
 								} // LookupType 6: Chaining Contextual Substitution Subtable
 								else {
 									if ($Lookup[$i]['Type'] == 6) {
@@ -2259,23 +2271,26 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 
 														$inputGlyphs = [];
 
-														$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass];
+														$inputGlyphs[0] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $inputClass);
 														if ($rule['InputGlyphCount'] > 1) {
 															//  NB starts at 1
 															for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
 																$classindex = $rule['Input'][$gcl];
-																$inputGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$classindex];
+																$inputGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $classindex);
 															}
 														}
-														// Class 0 contains all the glyphs NOT in the other classes
+														// Class 0 contains all the glyphs NOT in the other classes - of its own ClassDef. A chained
+														// context has three of them, so telling the reader a backtrack position is anything but the
+														// input classes named the wrong set. The shaper keeps them apart as $bclass0excl and $lclass0excl.
 														$class0excl = implode('|', $Lookup[$i]['Subtable'][$c]['InputClasses']);
-
+														$bclass0excl = implode('|', $Lookup[$i]['Subtable'][$c]['BacktrackClasses']);
+														$lclass0excl = implode('|', $Lookup[$i]['Subtable'][$c]['LookaheadClasses']);
 														$nInput = $rule['InputGlyphCount'];
 
 														if ($rule['BacktrackGlyphCount']) {
 															for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
 																$classindex = $rule['Backtrack'][$gcl];
-																$backtrackGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['BacktrackClasses'][$classindex];
+																$backtrackGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['BacktrackClasses'], $classindex);
 															}
 														} else {
 															$backtrackGlyphs = [];
@@ -2284,7 +2299,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 														if ($rule['LookaheadGlyphCount']) {
 															for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
 																$classindex = $rule['Lookahead'][$gcl];
-																$lookaheadGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['LookaheadClasses'][$classindex];
+																$lookaheadGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['LookaheadClasses'], $classindex);
 															}
 														} else {
 															$lookaheadGlyphs = [];
@@ -2296,8 +2311,8 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 														$html .= '<div class="context">CONTEXT: ';
 														for ($ff = count($backtrackGlyphs) - 1; $ff >= 0; $ff--) {
 															if (!$backtrackGlyphs[$ff]) {
-																$html .= '<div>Backtrack #' . $ff . ': <span class="unchanged">&nbsp;[NOT ' . $this->formatEntityStr($class0excl) . ']&nbsp;</span></div>';
-																$exampleB[] = '[NOT ' . $this->formatEntityFirst($class0excl) . ']';
+																$html .= '<div>Backtrack #' . $ff . ': <span class="unchanged">&nbsp;[NOT ' . $this->formatEntityStr($bclass0excl) . ']&nbsp;</span></div>';
+																$exampleB[] = '[NOT ' . $this->formatEntityFirst($bclass0excl) . ']';
 															} else {
 																$html .= '<div>Backtrack #' . $ff . ': <span class="unicode">' . $this->formatUniStr($backtrackGlyphs[$ff]) . '</span></div>';
 																$exampleB[] = $this->formatEntityFirst($backtrackGlyphs[$ff]);
@@ -2314,8 +2329,8 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 														}
 														for ($ff = 0; $ff < count($lookaheadGlyphs); $ff++) {
 															if (!$lookaheadGlyphs[$ff]) {
-																$html .= '<div>Lookahead #' . $ff . ': <span class="unchanged">&nbsp;[NOT ' . $this->formatEntityStr($class0excl) . ']&nbsp;</span></div>';
-																$exampleL[] = '[NOT ' . $this->formatEntityFirst($class0excl) . ']';
+																$html .= '<div>Lookahead #' . $ff . ': <span class="unchanged">&nbsp;[NOT ' . $this->formatEntityStr($lclass0excl) . ']&nbsp;</span></div>';
+																$exampleL[] = '[NOT ' . $this->formatEntityFirst($lclass0excl) . ']';
 															} else {
 																$html .= '<div>Lookahead #' . $ff . ': <span class="unicode">' . $this->formatUniStr($lookaheadGlyphs[$ff]) . '</span></div>';
 																$exampleL[] = $this->formatEntityFirst($lookaheadGlyphs[$ff]);
@@ -2375,7 +2390,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 													}
 												}
 
-//print_r($Lookup[$i]['Subtable'][$c]); exit;
 											} // Format 3: Coverage-based Chaining Context Glyph Substitution  p259
 											else {
 												if ($SubstFormat == 3) {
@@ -2469,6 +2483,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 												if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
 													continue;
 												}
+												$this->flushReport($html);
 												$html .= '<div class="substitution">';
 												$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
 												$html .= '<span class="unchanged">&nbsp;' . $this->formatEntity($inputGlyphs[0]) . '</span>';
@@ -2486,13 +2501,14 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 				}
 			}
 			$html .= '</div>';
+			$this->flushReport($html);
 		}
-		if ($level == 1) {
+		if ($level == 1 && $html !== '') {
 			$this->mpdf->WriteHTML($html);
-		} else {
-			return $html;
+			$html = '';
 		}
-//print_r($Lookup); exit;
+
+		return '';
 	}
 
 	//=====================================================================================
@@ -2579,7 +2595,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 	  "REPL"
 
 	  ¦\${1}\${2} ¦\${3}\${4} ¦REPL¦\${5+} \${6+}¦\${7+} \${8+}¦
-
 
 	  INPUT nInput = 5
 	  ============================================================
@@ -2674,7 +2689,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 		return $str;
 	}
 
-
 	//////////////////////////////////////////////////////////////////////////////////
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -2743,7 +2757,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 					$ffeats[$st][$t] = $FeatureIndex;
 				}
 			}
-//print_r($ffeats); exit;
 			// Feauture List => LookupListIndex es
 			$this->reader->seek($FeatureList_offset);
 			$FeatureCount = $this->reader->readUInt16();
@@ -2770,7 +2783,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 					}
 				}
 			}
-//print_r($ffeats); exit;
 			//=====================================================================================
 			$gpos = [];
 			$GPOSScriptLang = [];
@@ -2798,7 +2810,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 					foreach ($gpos as $st => $g) {
 						$html .= '<h5>' . $st . '</h5>';
 						foreach ($g as $l => $t) {
-							$html .= '<div><a href="font_dump_OTL.php?script=' . $st . '&lang=' . $l . '">' . $l . '</a></b>: ';
+							$html .= '<div><a href="' . $this->detailLink($st, $l) . '">' . $l . '</a></b>: ';
 							foreach ($t as $tag => $o) {
 								$html .= $tag . ' ';
 							}
@@ -2870,8 +2882,6 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 			ksort($lul); // Order the Lookups in the order they are in the GUSB table, regardless of Feature order
 			$this->_getGPOSarray($Lookup, $lul, $st);
 
-//print_r($lul); exit;
-
 			return [$GPOSScriptLang, $gpos, $Lookup];
 		} // end if GPOS
 	}
@@ -2885,7 +2895,13 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 	function _getGPOSarray(&$Lookup, $lul, $scripttag, $level = 1, $lcoverage = '', $exB = '', $exL = '')
 	{
 		// Process (3) LookupList for specific Script-LangSys
-		$html = '';
+		// Level 1 writes the report, level 2 returns its part of it to the rule that nested the
+		// lookup. Both append to one buffer so that a nested lookup's thousands of rows can be handed
+		// over as they are built, rather than arriving at level 1 as one string too long to write.
+		if ($level == 1) {
+			$this->report = '';
+		}
+		$html = &$this->report;
 		if ($level == 1) {
 			$html .= '<bookmark level="0" content="GPOS features">';
 		}
@@ -2941,6 +2957,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 								continue;
 							}
 
+							$this->flushReport($html);
 							$html .= '<div class="substitution">';
 							$html .= '<span class="unicode">' . $this->formatUni($glyphs[$g]) . '&nbsp;</span> ';
 							if ($level == 2 && $exB) {
@@ -2993,6 +3010,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 								}
 								$Value = $Values[$g];
 
+								$this->flushReport($html);
 								$html .= '<div class="substitution">';
 								$html .= '<span class="unicode">' . $this->formatUni($glyphs[$g]) . '&nbsp;</span> ';
 								if ($level == 2 && $exB) {
@@ -3159,6 +3177,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 													continue;
 												}
 
+												$this->flushReport($html);
 												$html .= '<div class="substitution">';
 												$html .= '<span class="unicode">' . $this->formatUni($FirstGlyph) . '&nbsp;</span> ';
 												if ($level == 2 && $exB) {
@@ -3583,13 +3602,14 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 				}
 			}
 			$html .= '</div>';
+			$this->flushReport($html);
 		}
-		if ($level == 1) {
+		if ($level == 1 && $html !== '') {
 			$this->mpdf->WriteHTML($html);
-		} else {
-			return $html;
+			$html = '';
 		}
-//print_r($Lookup); exit;
+
+		return '';
 	}
 
 	//=====================================================================================
@@ -3607,17 +3627,82 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 	}
 
 	/**
+	 * Hand over the report so far if it has built up more than WriteHTML will take.
+	 *
+	 * AdjustHTML refuses HTML longer than pcre.backtrack_limit, and one lookup can report tens of
+	 * thousands of rules - a Latin font's GPOS kern lookup runs to ten megabytes on its own, so
+	 * writing per lookup is not enough. Call this only where the report is between rows, so that
+	 * every piece is whole elements; the enclosing div stays open across the calls, which the rest
+	 * of the report does too - the summary opens a div in one call and closes it in another.
+	 *
+	 * @param string $html The report so far, emptied if it was handed over
+	 */
+	private function flushReport(&$html)
+	{
+		if (strlen($html) < $this->reportChunkBytes) {
+			return;
+		}
+
+		$this->mpdf->WriteHTML($html);
+		$html = '';
+	}
+
+	/**
+	 * A link from the summary report to the detail report of one script and language system.
+	 *
+	 * These named font_dump_OTL.php, a spelling the file has never had, so following one 404s on any
+	 * case-sensitive server; and they carried the script and language alone, losing the font the
+	 * summary was of, so the detail report came back for whatever font the tool defaults to.
+	 *
+	 * @return string An href, with its ampersands escaped for HTML
+	 */
+	private function detailLink($script, $language)
+	{
+		$query = $this->detailReportQuery;
+		$query['script'] = trim($script);
+		$query['lang'] = trim($language);
+
+		return 'font_dump_otl.php?' . htmlspecialchars(http_build_query($query), ENT_QUOTES);
+	}
+
+	/**
+	 * The glyphs one class of a ClassDef holds, as the "|" separated string the report prints.
+	 *
+	 * Class 0 is every glyph the ClassDef does not mention, so a ClassDef never lists it and
+	 * _getClasses never returns a key for it. A rule may still name it, and the report already
+	 * renders an empty class as "[NOT <the other classes>]" - so that is what an unlisted class
+	 * returns. Reading the key straight raised a warning per rule and then rendered the same thing
+	 * from null.
+	 *
+	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table
+	 *
+	 * @param array $classes class => glyphs, as _getClasses returns it
+	 * @param int   $class   the class a rule names
+	 *
+	 * @return string
+	 */
+	private function classGlyphs($classes, $class)
+	{
+		return isset($classes[$class]) ? $classes[$class] : '';
+	}
+
+	/**
 	 * The features one script and language system offers in GSUB or GPOS.
 	 *
-	 * Asking for a script the font does not carry used to read straight through a missing key and
-	 * die a few lines later on a null, with no hint that the script tag was the problem.
+	 * A table with nothing for the script, or nothing for that language system within it, is
+	 * reported and skipped rather than fatal. Fonts routinely substitute for a script without
+	 * positioning it, or list a language system in one table only - 96 of the 245 script and
+	 * language systems in the shipped fonts are in one table and not the other - and the half the
+	 * reader asked for is in the other table. Only a script or language system that neither table
+	 * carries is a mistake in the tag, and failIfNeitherTableOffers raises that once both have been
+	 * asked. Before either, a missing script read straight through to a null a few lines later.
 	 *
-	 * @return array feature tag => list of lookup list indexes
+	 * @return array feature tag => list of lookup list indexes, empty if this table offers none
 	 */
 	private function langSys($features, $table)
 	{
 		if (!isset($features[$this->script])) {
-			throw new \Mpdf\MpdfException(sprintf(
+			return $this->noteNotOffered(sprintf(
 				'This font\'s %s table offers no script "%s". It has: %s',
 				$table,
 				trim($this->script),
@@ -3626,7 +3711,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 		}
 
 		if (!isset($features[$this->script][$this->language])) {
-			throw new \Mpdf\MpdfException(sprintf(
+			return $this->noteNotOffered(sprintf(
 				'This font\'s %s script "%s" offers no language system "%s". It has: %s',
 				$table,
 				trim($this->script),
@@ -3636,6 +3721,30 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 		}
 
 		return $features[$this->script][$this->language];
+	}
+
+	/**
+	 * Record, and show in the report, that one table has nothing for the script and language asked.
+	 *
+	 * @return array Always empty, so that the caller reports no lookups for this table
+	 */
+	private function noteNotOffered($message)
+	{
+		$this->notOffered[] = $message;
+		$this->mpdf->WriteHTML('<div class="notoffered">' . $message . '</div>');
+
+		return [];
+	}
+
+	/**
+	 * Fail when neither GSUB nor GPOS carries the script and language system detail mode was asked
+	 * for, naming what each table does carry. Called once both have been asked.
+	 */
+	private function failIfNeitherTableOffers()
+	{
+		if ($this->mode === 'detail' && count($this->notOffered) === 2) {
+			throw new \Mpdf\MpdfException(implode("\n", $this->notOffered));
+		}
 	}
 
 	/**
@@ -3721,11 +3830,7 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 	//////////////////////////////////////////////////////////////////////////////////
 	// Recursively get composite glyphs
 
-
 	//////////////////////////////////////////////////////////////////////////////////
-
-
-
 
 	// CMAP Format 4
 
