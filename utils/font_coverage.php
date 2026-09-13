@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Mpdf\Fonts\FontCache;
+use Mpdf\Fonts\TTFontFileAnalysis;
 
 /**
  * This script prints out the Unicode coverage of all TrueType font files in your font directory.

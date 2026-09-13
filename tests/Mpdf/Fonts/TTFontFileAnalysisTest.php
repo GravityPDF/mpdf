@@ -1,8 +1,9 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\Fonts;
 
-use Mpdf\Fonts\FontCache;
+use Mpdf\Cache;
+use Mpdf\TTFontFile;
 
 /**
  * TTFontFileAnalysis re-walks the table directory by its own route, to answer what a font *is* rather
@@ -54,8 +55,8 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($name) = $this->analyse('NotoSansSinhala-Subset.ttf');
 
-		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/tmp/mpdf/analysis')), 'win');
-		$ttf->getMetrics(__DIR__ . '/../data/ttf/NotoSansSinhala-Subset.ttf', uniqid('', true), 0, false, false, 0xFF);
+		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/analysis')), 'win');
+		$ttf->getMetrics(__DIR__ . '/../../data/ttf/NotoSansSinhala-Subset.ttf', uniqid('', true), 0, false, false, 0xFF);
 
 		$this->assertSame($ttf->familyName, $name);
 	}
@@ -63,11 +64,11 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function analyse($file)
 	{
 		$ttf = new TTFontFileAnalysis(
-			new FontCache(new Cache(__DIR__ . '/tmp/mpdf/analysis')),
+			new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/analysis')),
 			'win'
 		);
 
-		return $ttf->extractCoreInfo(__DIR__ . '/../data/ttf/' . $file);
+		return $ttf->extractCoreInfo(__DIR__ . '/../../data/ttf/' . $file);
 	}
 
 }

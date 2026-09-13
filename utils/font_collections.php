@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Mpdf\Fonts\FontCache;
+use Mpdf\Fonts\TTFontFileAnalysis;
 
 /**
  * This script prints out details of any TrueType collection font files in your font directory.

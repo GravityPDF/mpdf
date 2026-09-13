@@ -1,8 +1,8 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\Fonts;
 
-use Mpdf\Fonts\FileReader;
+use Mpdf\TTFontFile;
 
 class TTFontFileAnalysis extends TTFontFile
 {

@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Mpdf\Fonts\FontCache;
+use Mpdf\Fonts\TTFontFileAnalysis;
 
 /**
  * This script examines your font directory.

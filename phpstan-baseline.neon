@@ -1063,13 +1063,13 @@ parameters:
 			message: '#^Binary operation "&" between '''' and 1 results in an error\.$#'
 			identifier: binaryOp.invalid
 			count: 1
-			path: src/TTFontFileAnalysis.php
+			path: src/Fonts/TTFontFileAnalysis.php
 
 		-
 			message: '#^Binary operation "&" between '''' and 32 results in an error\.$#'
 			identifier: binaryOp.invalid
 			count: 1
-			path: src/TTFontFileAnalysis.php
+			path: src/Fonts/TTFontFileAnalysis.php
 
 		-
 			message: '#^Variable \$TOC_end might not be defined\.$#'
