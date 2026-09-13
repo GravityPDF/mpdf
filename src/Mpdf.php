@@ -4000,6 +4000,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'GPOSFeatures' => [],
 			'GPOSLookups' => [],
 			'rtlPUAstr' => '',
+			'cacheFormat' => 0,
 		];
 
 		$fontCacheFilename = $fontkey . '.mtx.json';
@@ -4032,6 +4033,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->fontDescriptor != $font['fontmetrics']) {
 			$regenerate = true;
 		} // mPDF 6
+
+		// A cache written by a release that laid its files out differently cannot be read by this one
+		$cacheFormat = isset($font['cacheFormat']) ? $font['cacheFormat'] : 0;
+		if ($cacheFormat !== MetricsGenerator::CACHE_FORMAT) {
+			$regenerate = true;
+		}
 
 		$glyphIDtoUni = null;
 		if (empty($font['name']) || $font['originalsize'] != $ttfstat['size'] || $regenerate) {
@@ -6596,9 +6603,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->flowingBlockAttr['blockdir'] = $blockdir;
 		$this->flowingBlockAttr['cOTLdata'] = []; // mPDF 5.7.1
 		$this->flowingBlockAttr['lastBidiText'] = ''; // mPDF 5.7.1
-		if (!empty($this->otl)) {
-			$this->otl->lastBidiStrongType = '';
-		} // *OTL*
 	}
 
 	function finishFlowingBlock($endofblock = false, $next = '')
@@ -6944,7 +6948,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			/* -- OTL -- */
 			// mPDF 6
 			if ($blockdir == 'rtl' || $this->biDirectional) {
-				$this->otl->bidiReorder($chunkorder, $content, $cOTLdata, $blockdir);
+				Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir);
 				// From this point on, $content and $cOTLdata may contain more elements (and re-ordered) compared to
 				// $this->objectbuffer and $font ($chunkorder contains the mapping)
 			}
@@ -8544,7 +8548,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- OTL -- */
 					// mPDF 6
 					if ($blockdir == 'rtl' || $this->biDirectional) {
-						$this->otl->bidiReorder($chunkorder, $content, $cOTLdata, $blockdir);
+						Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir);
 						// From this point on, $content and $cOTLdata may contain more elements (and re-ordered) compared to
 						// $this->objectbuffer and $font ($chunkorder contains the mapping)
 					}
@@ -16219,7 +16223,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (empty($this->otl)) {
 				$this->otl = new Otl($this, $this->fontCache);
 			}
-			$this->otl->bidiPrepare($arrayaux, $blockdir);
+			Bidi::prepare($arrayaux, $blockdir, $this->otl);
 			$array_size = count($arrayaux);
 		}
 
@@ -19503,16 +19507,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			} // rows
 		} // columns
-	}
-
-	function read_short(&$fh)
-	{
-		$s = fread($fh, 2);
-		$a = (ord($s[0]) << 8) + ord($s[1]);
-		if ($a & (1 << 15)) {
-			$a = ($a - (1 << 16));
-		}
-		return $a;
 	}
 
 	function _packCellBorder($cell)
@@ -25554,7 +25548,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$useGPOS = isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0x80);
 
 			// NB Returned $chunk may be a shorter string (with adjusted $cOTLdata) by removal of LRE, RLE etc embedding codes.
-			list($chunk, $rtl_content) = $this->otl->bidiSort($unicode, $chunk, $dir, $chunkOTLdata, $useGPOS);
+			list($chunk, $rtl_content) = Bidi::sort($unicode, $chunk, $dir, $chunkOTLdata, $useGPOS);
 
 			return $rtl_content;
 		}

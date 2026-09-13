@@ -3,23 +3,43 @@
 namespace Mpdf;
 
 use Mpdf\Fonts\FontCache;
+use Mpdf\Fonts\TTFontFileAnalysis;
 
 /**
- * This script examines your font directory.
- * By default this will examine the font directory defined by $mpdf->fontDir
- * You can optionally output just the font samples as a PDF file by setting $pdf=true.
+ * Reports what mPDF makes of every font file it can see, and prints a fonts config for them.
+ *
+ *   php utils/font_names.php [<directory>]
+ *
+ * Also runs over the web, taking the directory from the query string as "dir", and writes the
+ * samples as a PDF instead of HTML when "pdf" is set.
+ *
+ * Without a directory it reads every directory the registered font packages provide.
  */
 
-$pdf = false;
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/font_directories.php';
 
-require_once '../vendor/autoload.php';
+$cli = PHP_SAPI === 'cli';
+$argument = function ($position, $name, $default = '') use ($cli) {
+	global $argv;
+
+	if ($cli) {
+		return isset($argv[$position]) ? $argv[$position] : $default;
+	}
+
+	return isset($_REQUEST[$name]) ? $_REQUEST[$name] : $default;
+};
+
+$pdf = (bool) $argument(2, 'pdf', false);
 
 $mpdf = new Mpdf(['mode' => 's']);
-$fontCache = new FontCache(new Cache($mpdf->fontTempDir));
+$fontCache = new FontCache(new Cache($mpdf->tempDir . '/mpdf/ttfontdata'));
 
 $mpdf->useSubstitutions = true;
 
-$ttfdir = $mpdf->fontDir;
+// Mpdf::$fontDir is private, and fonts ship as packages with a directory each rather than as one
+// folder, so the directories come from the registry that finds them - unless one is named.
+$ttfdirs = fontDirectories($argument(1, 'dir'));
 
 $ttf = new TTFontFileAnalysis($fontCache, $mpdf->getFontDescriptor());
 
@@ -29,9 +49,8 @@ $tempseriffonts = array();
 $tempmonofonts = array();
 $tempfonttrans = array();
 
-$ff = scandir($ttfdir);
-
-foreach ($ff as $f) {
+foreach (fontFilesIn($ttfdirs) as $found) {
+	list($ttfdir, $f) = $found;
 	$ret = array();
 	$isTTC = false;
 	if (strtolower(substr($f, -4, 4)) == '.ttc' || strtolower(substr($f, -5, 5)) == '.ttcf') {    // Mac ttcf
@@ -194,7 +213,7 @@ if (!$pdf) {
 ksort($tempfonttrans);
 $html = '';
 foreach ($tempfonttrans as $on => $mn) {
-	if (!file_exists($ttfdir . '/' . $mpdf->fontdata[$mn]['R'])) {
+	if (!fontFileExists($ttfdirs, $mpdf->fontdata[$mn]['R'])) {
 		continue;
 	}
 	$ond = '"' . $on . '"';

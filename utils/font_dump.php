@@ -4,27 +4,47 @@ namespace Mpdf;
 
 use Mpdf\Fonts\FontCache;
 
-/*
- * This script prints out all characters in a TrueType font file to a PDF document.
+/**
+ * Renders every character a font defines as a PDF, a table per Unicode range.
  *
- * By default this will examine the font directory defined by $mpdf->fontDir
- * By default this will examine the font dejavusanscondensed.
+ *   php utils/font_dump.php <family> [<min>] [<max>] [missing] > dump.pdf
  *
- * You can optionally define an alternative font file to examine by setting
- * the variable below (must be a relative path, or filesystem path):
-*/
+ *   php utils/font_dump.php dejavusanscondensed
+ *   php utils/font_dump.php freeserif 0x0600 0x06FF
+ *
+ * Also runs over the web, taking the same four values from the query string. The bounds are read
+ * with base detection, so 0x0600 and 1536 both work. "missing" draws the ranges the font does not
+ * cover, as a band per row rather than a gap.
+ */
 
-$fontName = 'dejavusanscondensed'; // Use internal mPDF font-name
+require_once __DIR__ . '/../vendor/autoload.php';
 
-$min = 0x0020;         // Minimum Unicode value to show
-$max = 0x2FFFF;        // Maximum Unicode value to show
+$cli = PHP_SAPI === 'cli';
+$argument = function ($position, $name, $default = '') use ($cli) {
+	global $argv;
 
-$showmissing = false;    // Show all missing unicode blocks / characters
+	if ($cli) {
+		return isset($argv[$position]) ? $argv[$position] : $default;
+	}
 
-require_once '../vendor/autoload.php';
+	return isset($_REQUEST[$name]) ? $_REQUEST[$name] : $default;
+};
+
+// Use the internal mPDF font-name, the one the fonts config keys a family under
+$fontName = strtolower($argument(1, 'family', 'dejavusanscondensed'));
+
+$min = $argument(2, 'min', '');
+$max = $argument(3, 'max', '');
+$min = $min === '' ? 0x0020 : intval($min, 0);
+$max = $max === '' ? 0x2FFFF : intval($max, 0);
+
+$showmissing = (bool) $argument(4, 'missing', false);
 
 $mpdf = new Mpdf();
-$fontCache = new FontCache(new Cache($mpdf->tempDir . '/ttfontdata'));
+
+// The renderer's own cache, which is where the metrics this reads back are written - tempDir alone
+// is one level above it, so the loads below all missed and the script died on the first
+$fontCache = new FontCache(new Cache($mpdf->tempDir . '/mpdf/ttfontdata'));
 
 $mpdf->SetDisplayMode('fullpage');
 
@@ -57,7 +77,11 @@ $unicode_ranges = require __DIR__ . '/data/UnicodeRanges.php';
 $cw = $fontCache->load($fontName . '.cw.dat');
 
 if (!$cw) {
-	die("Error - Must be able to read font metrics file: " . $fontCache->tempFilename($fontName . '.cw.dat'));
+	die(sprintf(
+		'Error - no metrics for "%s". Is it a family in the fonts config? Expected: %s' . "\n",
+		$fontName,
+		$fontCache->tempFilename($fontName . '.cw.dat')
+	));
 }
 
 $counter = 0;
@@ -70,6 +94,11 @@ if (isset($font['smp'])) {
 
 $justfinishedblank = false;
 $justfinishedblankinvalid = false;
+
+$rangekey = 0;
+$range = '';
+$rangestart = '';
+$rangeend = '';
 
 foreach ($unicode_ranges as $urk => $ur) {
 	if (0 >= $ur['startdec'] && 0 <= $ur['enddec']) {
