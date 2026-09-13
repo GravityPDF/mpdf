@@ -704,7 +704,7 @@ class Indic
 		if ($scriptblock == Ucdn::SCRIPT_KHMER) {
 			/* KHMER_FIX_2 */
 			/* Move Coeng+RO (Halant,Ra) sequence before base consonant. */
-			for ($i = $base + 1; $i < $end; $i++) {
+			for ($i = $base + 1; $i < $end - 1; $i++) {
 				if (self::is_halant_or_coeng($info[$i]) && self::is_ra($info[$i + 1]['uni'])) {
 					$info[$i]['indic_position'] = self::POS_PRE_C;
 					$info[$i + 1]['indic_position'] = self::POS_PRE_C;
