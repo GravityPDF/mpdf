@@ -6,27 +6,51 @@ use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\TTFontFileAnalysis;
 
 /**
- * This script prints out the Unicode coverage of all TrueType font files in your font directory.
+ * Prints which Unicode ranges each font file covers, as a table per group of ranges.
  *
- * By default this will examine the font directory defined by $mpdf->fontDir
+ *   php utils/font_coverage.php [<directory>] > coverage.html
+ *
+ * Also runs over the web, taking the directory from the query string as "dir".
+ *
+ * Without a directory it reads every directory the registered font packages provide.
  */
 
-require_once '../vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/font_directories.php';
+
+$cli = PHP_SAPI === 'cli';
+$argument = function ($position, $name, $default = '') use ($cli) {
+	global $argv;
+
+	if ($cli) {
+		return isset($argv[$position]) ? $argv[$position] : $default;
+	}
+
+	return isset($_REQUEST[$name]) ? $_REQUEST[$name] : $default;
+};
 
 $mpdf = new Mpdf(['format' => 'A4-L']);
-$fontCache = new FontCache(new Cache($mpdf->fontTempDir));
+$fontCache = new FontCache(new Cache($mpdf->tempDir . '/mpdf/ttfontdata'));
 
 $mpdf->SetDisplayMode('fullpage');
 $mpdf->useSubstitutions = true;
 $mpdf->debug = true;
 $mpdf->simpleTables = true;
 
-$ttfdir = $mpdf->fontDir;
+// Mpdf::$fontDir is private, and fonts ship as packages with a directory each rather than as one
+// folder, so the directories come from the registry that finds them - unless one is named. A named
+// one is registered too, since AddFont below resolves a file name against the finder's list.
+$directory = $argument(1, 'dir');
+$ttfdirs = fontDirectories($directory);
+if ($directory !== '') {
+	$mpdf->AddFontDirectory($directory);
+}
 
 $maxt = 131071;
 
 $unifile = file(__DIR__ . '/data/UnicodeData.txt');
 $unichars = array();
+$rangename = '';
 
 foreach ($unifile as $line) {
 	if (preg_match('/<control>/', $line, $m)) {
@@ -57,16 +81,21 @@ td { font-family: helvetica;font-size:8pt; vertical-align: top;}
 </style></head><body>';
 
 //==============================================================
-$ff = scandir($ttfdir);
 $tempfontdata = array();
 
-foreach ($ff as $f) {
+foreach (fontFilesIn($ttfdirs) as $found) {
+	list($ttfdir, $f) = $found;
 	$ttf = new TTFontFileAnalysis($fontCache, $mpdf->getFontDescriptor());
 	$ret = array();
 	$isTTC = false;
 
 	if (strtolower(substr($f, -4, 4)) === '.ttf' || strtolower(substr($f, -4, 4)) === '.otf') {
-		$ret[] = $ttf->extractCoreInfo($ttfdir . '/' . $f);
+		// A font mPDF cannot use is left out of the table rather than ending the report
+		try {
+			$ret[] = $ttf->extractCoreInfo($ttfdir . '/' . $f);
+		} catch (\Exception $e) {
+			fwrite(STDERR, sprintf('%s skipped: %s' . "\n", $f, $e->getMessage()));
+		}
 	}
 
 	for ($i = 0; $i < count($ret); $i++) {
@@ -127,12 +156,16 @@ for ($urgp = 0; $urgp < $nofgroups; $urgp++) {
 			$cw = $fontCache->load($fname . '.cw.dat');
 		} else {
 			$mpdf->fontdata[$fname]['R'] = $tempfontdata[$fname]['file'];
-			$mpdf->AddFont($fname);
+			try {
+				$mpdf->AddFont($fname);
+			} catch (\Exception $e) {
+				fwrite(STDERR, sprintf('%s skipped: %s' . "\n", $fname, $e->getMessage()));
+				continue;
+			}
 			$cw = $fontCache->load($fname . '.cw.dat');
 		}
 		if (!$cw) {
 			continue;
-			die("Font data not available for $fname");
 		}
 
 		$counter = 0;

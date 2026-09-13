@@ -214,7 +214,10 @@ class TTFontFileAnalysis extends TTFontFile
 		///////////////////////////////////
 		$sFamily = '';
 		$panose = '';
-		$fsSelection = '';
+
+		// Tested with & below, so it has to be an integer: a font with no OS/2 table - an old Mac
+		// TrueType, say - left it as a string and the bold and italic tests became "string & int"
+		$fsSelection = 0;
 		if (isset($this->tables["OS/2"])) {
 			$this->seek_table("OS/2");
 			$this->reader->skip(30);
