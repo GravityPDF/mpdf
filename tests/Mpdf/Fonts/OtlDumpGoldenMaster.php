@@ -89,8 +89,9 @@ class OtlDumpGoldenMaster
 			$report = implode("\n", $mpdf->recordedHtml);
 
 			// Then one script in detail, which is the other half of the tool and the half that walks
-			// every lookup. The font's own script sorts last, after DFLT and the Latin fallbacks.
-			$scripts = array_keys($dump->GSUBScriptLang);
+			// every lookup. The font's own script sorts last, after DFLT and the Latin fallbacks. A font
+			// with no GSUB table at all has no script to ask for, and only the summary is captured.
+			$scripts = $dump->GSUBScriptLang ? array_keys($dump->GSUBScriptLang) : [];
 			if ($scripts) {
 				$script = end($scripts);
 				$languages = explode(' ', trim($dump->GSUBScriptLang[$script]));

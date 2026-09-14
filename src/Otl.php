@@ -1135,7 +1135,7 @@ class Otl
 					for ($i = 0; $i < count($this->OTLdata); $i++) {
 						if (isset($this->Exit[$i]) && isset($this->Exit[$i]['Y']) && $this->Exit[$i]['dir'] == 'LTR') {
 							$nextbase = $i + 1; // Set as next base ignoring marks
-							while (strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
+							while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
 								$nextbase++;
 							}
 							if (isset($this->Entry[$nextbase]) && isset($this->Entry[$nextbase]['Y'])) {
@@ -1708,7 +1708,7 @@ class Otl
 	 */
 	function _applyGSUBsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt)
 	{
-		$ignore = $this->_getGCOMignoreString($Flag, $MarkFilteringSet);
+		$ignore = $this->getGCOMignoreSet($Flag, $MarkFilteringSet);
 
 		$this->reader->seek($subtable_offset);
 		$SubstFormat = $this->reader->readUInt16();
@@ -1948,7 +1948,7 @@ class Otl
 
 				$spos++;
 				//while $this->OTLdata[$spos]['uni'] is an "ignore" =>  spos++
-				while (isset($this->OTLdata[$spos]) && strpos($ignore, $this->OTLdata[$spos]['hex']) !== false) {
+				while (isset($this->OTLdata[$spos]) && isset($ignore[$this->OTLdata[$spos]['uni']])) {
 					$spos++;
 				}
 
@@ -2100,17 +2100,12 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$class0excl = [];
-					for ($gc = 1; $gc <= count($InputClasses); $gc++) {
-						if (is_array($InputClasses[$gc])) {
-							$class0excl = $class0excl + $InputClasses[$gc];
-						}
-					}
+					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
 
 					$backtrackGlyphs = [];
 					$lookaheadGlyphs = [];
 
-					$matched = $this->checkContextMatchMultipleUni($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
+					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
 					if ($matched) {
 						if ($this->debugOTL) {
 							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
@@ -2149,8 +2144,7 @@ class Otl
 		$CoverageInputGlyphs = [];
 		for ($b = 0; $b < $InputGlyphCount; $b++) {
 			$this->reader->seek($CoverageInputOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageInputGlyphs[$b] = implode("|", $glyphs);
+			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
 		}
 
 		// Type 5 is a plain context: it has no backtrack or lookahead sequence
@@ -2317,12 +2311,7 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$class0excl = [];
-					for ($gc = 1; $gc <= count($InputClasses); $gc++) {
-						if (isset($InputClasses[$gc])) {
-							$class0excl = $class0excl + $InputClasses[$gc];
-						}
-					}
+					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
 
 					if ($BacktrackGlyphCount) {
 						for ($gcl = 0; $gcl < $BacktrackGlyphCount; $gcl++) {
@@ -2338,12 +2327,7 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$bclass0excl = [];
-					for ($gc = 1; $gc <= count($BacktrackClasses); $gc++) {
-						if (isset($BacktrackClasses[$gc])) {
-							$bclass0excl = $bclass0excl + $BacktrackClasses[$gc];
-						}
-					}
+					$bclass0excl = $this->getClassZeroExclusions($BacktrackClassDefOffset);
 
 
 					if ($LookaheadGlyphCount) {
@@ -2360,15 +2344,10 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$lclass0excl = [];
-					for ($gc = 1; $gc <= count($LookaheadClasses); $gc++) {
-						if (isset($LookaheadClasses[$gc])) {
-							$lclass0excl = $lclass0excl + $LookaheadClasses[$gc];
-						}
-					}
+					$lclass0excl = $this->getClassZeroExclusions($LookaheadClassDefOffset);
 
 
-					$matched = $this->checkContextMatchMultipleUni($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
+					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
 					if ($matched) {
 						if ($this->debugOTL) {
 							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
@@ -2414,20 +2393,17 @@ class Otl
 		$CoverageBacktrackGlyphs = [];
 		for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
 			$this->reader->seek($CoverageBacktrackOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageBacktrackGlyphs[$b] = implode("|", $glyphs);
+			$CoverageBacktrackGlyphs[$b] = $this->getCoverageUni();
 		}
 		$CoverageInputGlyphs = [];
 		for ($b = 0; $b < $InputGlyphCount; $b++) {
 			$this->reader->seek($CoverageInputOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageInputGlyphs[$b] = implode("|", $glyphs);
+			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
 		}
 		$CoverageLookaheadGlyphs = [];
 		for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
 			$this->reader->seek($CoverageLookaheadOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageLookaheadGlyphs[$b] = implode("|", $glyphs);
+			$CoverageLookaheadGlyphs[$b] = $this->getCoverageUni();
 		}
 
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
@@ -2491,19 +2467,17 @@ class Otl
 		$CoverageBacktrackGlyphs = [];
 		for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
 			$this->reader->seek($CoverageBacktrackOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageBacktrackGlyphs[$b] = implode("|", $glyphs);
+			$CoverageBacktrackGlyphs[$b] = $this->getCoverageUni();
 		}
 		$CoverageLookaheadGlyphs = [];
 		for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
 			$this->reader->seek($CoverageLookaheadOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageLookaheadGlyphs[$b] = implode("|", $glyphs);
+			$CoverageLookaheadGlyphs[$b] = $this->getCoverageUni();
 		}
 
 		// The input sequence is the one glyph at $ptr, which the caller has already matched against
 		// the input Coverage table, so only the backtrack and lookahead sequences are left to check
-		if (!$this->checkContextMatchMultiple([$currGlyph], $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr)) {
+		if (!$this->checkContextMatchMultiple([[$currGID => 1]], $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr)) {
 			return 0;
 		}
 
@@ -3054,7 +3028,7 @@ class Otl
 		// RIGHT_TO_LEFT. Only cursive attachment reads it.
 		$dir = ($Flag & 0x0001) == 1 ? 'RTL' : 'LTR';
 
-		$ignore = $this->_getGCOMignoreString($Flag, $MarkFilteringSet);
+		$ignore = $this->getGCOMignoreSet($Flag, $MarkFilteringSet);
 
 		$this->reader->seek($subtable_offset);
 		$PosFormat = $this->reader->readUInt16();
@@ -3203,7 +3177,7 @@ class Otl
 
 					$checkpos = $ptr;
 					$checkpos++;
-					while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+					while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 						$checkpos++;
 					}
 					if (isset($this->OTLdata[$checkpos]) && $this->OTLdata[$checkpos]['uni'] == $SecondGlyph) {
@@ -3266,7 +3240,7 @@ class Otl
 		$FirstGlyph = $this->OTLdata[$ptr]['uni'];
 		$checkpos = $ptr;
 		$checkpos++;
-		while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+		while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 			$checkpos++;
 		}
 		if (isset($this->OTLdata[$checkpos])) {
@@ -3589,7 +3563,7 @@ class Otl
 		$Mark2Glyphs = implode('|', $this->_getCoverage());
 		$checkpos = $ptr;
 		$checkpos--;
-		while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+		while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 			$checkpos--;
 		}
 		if (isset($this->OTLdata[$checkpos]) && strpos($Mark2Glyphs, $this->OTLdata[$checkpos]['hex']) !== false) {
@@ -3787,17 +3761,12 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$class0excl = [];
-					for ($gc = 1; $gc <= count($InputClasses); $gc++) {
-						if (is_array($InputClasses[$gc])) {
-							$class0excl = $class0excl + $InputClasses[$gc];
-						}
-					}
+					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
 
 					$backtrackGlyphs = [];
 					$lookaheadGlyphs = [];
 
-					$matched = $this->checkContextMatchMultipleUni($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
+					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
 					if ($matched) {
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL && $shift) {
@@ -3836,8 +3805,7 @@ class Otl
 		$CoverageInputGlyphs = [];
 		for ($b = 0; $b < $InputGlyphCount; $b++) {
 			$this->reader->seek($CoverageInputOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageInputGlyphs[$b] = implode("|", $glyphs);
+			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
 		}
 
 		// Type 7 is a plain context: it has no backtrack or lookahead sequence
@@ -4001,12 +3969,7 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$class0excl = [];
-					for ($gc = 1; $gc <= count($InputClasses); $gc++) {
-						if (isset($InputClasses[$gc]) && is_array($InputClasses[$gc])) {
-							$class0excl = $class0excl + $InputClasses[$gc];
-						}
-					}
+					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
 
 					if ($BacktrackGlyphCount) {
 						$backtrackGlyphs = [];
@@ -4023,12 +3986,7 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$bclass0excl = [];
-					for ($gc = 1; $gc <= count($BacktrackClasses); $gc++) {
-						if (isset($BacktrackClasses[$gc]) && is_array($BacktrackClasses[$gc])) {
-							$bclass0excl = $bclass0excl + $BacktrackClasses[$gc];
-						}
-					}
+					$bclass0excl = $this->getClassZeroExclusions($BacktrackClassDefOffset);
 
 					if ($LookaheadGlyphCount) {
 						$lookaheadGlyphs = [];
@@ -4045,14 +4003,9 @@ class Otl
 					}
 
 					// Class 0 contains all the glyphs NOT in the other classes
-					$lclass0excl = [];
-					for ($gc = 1; $gc <= count($LookaheadClasses); $gc++) {
-						if (isset($LookaheadClasses[$gc]) && is_array($LookaheadClasses[$gc])) {
-							$lclass0excl = $lclass0excl + $LookaheadClasses[$gc];
-						}
-					}
+					$lclass0excl = $this->getClassZeroExclusions($LookaheadClassDefOffset);
 
-					$matched = $this->checkContextMatchMultipleUni($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
+					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
 					if ($matched) {
 						$PosCount = $this->reader->readUInt16();
 						$SequenceIndex = [];
@@ -4100,20 +4053,17 @@ class Otl
 		$CoverageBacktrackGlyphs = [];
 		for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
 			$this->reader->seek($CoverageBacktrackOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageBacktrackGlyphs[$b] = implode("|", $glyphs);
+			$CoverageBacktrackGlyphs[$b] = $this->getCoverageUni();
 		}
 		$CoverageInputGlyphs = [];
 		for ($b = 0; $b < $InputGlyphCount; $b++) {
 			$this->reader->seek($CoverageInputOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageInputGlyphs[$b] = implode("|", $glyphs);
+			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
 		}
 		$CoverageLookaheadGlyphs = [];
 		for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
 			$this->reader->seek($CoverageLookaheadOffset[$b]);
-			$glyphs = $this->_getCoverage();
-			$CoverageLookaheadGlyphs[$b] = implode("|", $glyphs);
+			$CoverageLookaheadGlyphs[$b] = $this->getCoverageUni();
 		}
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
@@ -4264,7 +4214,7 @@ class Otl
 		$checkpos = $ptr;
 		for ($i = 0; $i < count($Backtrack); $i++) {
 			$checkpos--;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+			while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 				$checkpos--;
 			}
 			// If outside scope of current syllable - return no match
@@ -4280,7 +4230,7 @@ class Otl
 		$checkpos = $ptr;
 		for ($i = 1; $i < count($Input); $i++) {
 			$checkpos++;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+			while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 				$checkpos++;
 			}
 			// If outside scope of current syllable - return no match
@@ -4296,7 +4246,7 @@ class Otl
 		// LOOKAHEAD
 		for ($i = 0; $i < count($Lookahead); $i++) {
 			$checkpos++;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+			while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 				$checkpos++;
 			}
 			// If outside scope of current syllable - return no match
@@ -4310,13 +4260,28 @@ class Otl
 		return $matched;
 	}
 
-	private function checkContextMatchMultiple($Input, $Backtrack, $Lookahead, $ignore, $ptr, $class0excl = '', $bclass0excl = '', $lclass0excl = '')
+	/**
+	 * Match the glyphs around $ptr against a sequence of sets, one per position.
+	 *
+	 * Every contextual and chaining format that matches more than one glyph at a position comes here -
+	 * GSUB 5.2, 5.3, 6.2, 6.3 and GPOS 7.2, 7.3, 8.2, 8.3 - whether the sets are classes of a ClassDef
+	 * or Coverage tables. Each set is a map of unicode => 1, so a position is one hash lookup; the
+	 * coverage-based formats used to pass their tables as "00641|00642|..." strings and be matched with
+	 * strpos(), which reads from the front of the table for every position of every rule.
+	 *
+	 * Position 0 of $Input is not read - the caller has already matched the glyph at $ptr against it.
+	 *
+	 * @param array $ignore     Characters to walk past at every position, as a map of unicode => 1
+	 * @param array $class0excl The glyphs in every class but 0, which is what a rule naming class 0 at
+	 *                          an input position matches anything but (GSUB 5.2, 6.2, GPOS 7.2, 8.2)
+	 * @param array $bclass0excl Likewise for backtrack positions, $lclass0excl for lookahead
+	 *                           (GSUB 6.2, GPOS 8.2)
+	 *
+	 * @return array|false Position in OTLdata of each glyph of the matched input sequence, false if the
+	 *                     context does not match
+	 */
+	private function checkContextMatchMultiple($Input, $Backtrack, $Lookahead, $ignore, $ptr, $class0excl = [], $bclass0excl = [], $lclass0excl = [])
 	{
-		// Input etc are string/array of glyph strings  - GSUB Format 5.2, 5.3, 6.2, 6.3, GPOS Format 7.2, 7.3, 8.2, 8.3
-		// Input starts with (1=>xxx)
-		// return false if no match, else an array of ptr for matches (0=>0, 1=>3,...)
-		// $class0excl is the string of glyphs in all classes except Class 0 (GSUB 5.2, 6.2, GPOS 7.2, 8.2)
-		// $bclass0excl & $lclass0excl are the same for lookahead and backtrack (GSUB 6.2, GPOS 8.2)
 
 		$current_syllable = (isset($this->OTLdata[$ptr]['syllable']) ? $this->OTLdata[$ptr]['syllable'] : 0);
 
@@ -4324,75 +4289,7 @@ class Otl
 		$checkpos = $ptr;
 		for ($i = 0; $i < count($Backtrack); $i++) {
 			$checkpos--;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
-				$checkpos--;
-			}
-			// If outside scope of current syllable - return no match
-			if ($this->restrictToSyllable && isset($this->OTLdata[$checkpos]['syllable']) && $this->OTLdata[$checkpos]['syllable'] != $current_syllable) {
-				return false;
-			} // If Class 0 specified, matches anything NOT in $bclass0excl
-			elseif (!$Backtrack[$i] && isset($this->OTLdata[$checkpos]) && strpos($bclass0excl, $this->OTLdata[$checkpos]['hex']) !== false) {
-				return false;
-			} elseif (!isset($this->OTLdata[$checkpos]) || strpos($Backtrack[$i], $this->OTLdata[$checkpos]['hex']) === false) {
-				return false;
-			}
-		}
-
-		// INPUT
-		$matched = [0 => $ptr];
-		$checkpos = $ptr;
-		for ($i = 1; $i < count($Input); $i++) { // Start at 1 - already matched the first InputGlyph
-			$checkpos++;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
-				$checkpos++;
-			}
-			// If outside scope of current syllable - return no match
-			if ($this->restrictToSyllable && isset($this->OTLdata[$checkpos]['syllable']) && $this->OTLdata[$checkpos]['syllable'] != $current_syllable) {
-				return false;
-			} // If Input Class 0 specified, matches anything NOT in $class0excl
-			elseif (!$Input[$i] && isset($this->OTLdata[$checkpos]) && strpos($class0excl, $this->OTLdata[$checkpos]['hex']) === false) {
-				$matched[] = $checkpos;
-			} elseif (isset($this->OTLdata[$checkpos]) && strpos($Input[$i], $this->OTLdata[$checkpos]['hex']) !== false) {
-				$matched[] = $checkpos;
-			} else {
-				return false;
-			}
-		}
-
-		// LOOKAHEAD
-		for ($i = 0; $i < count($Lookahead); $i++) {
-			$checkpos++;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
-				$checkpos++;
-			}
-			// If outside scope of current syllable - return no match
-			if ($this->restrictToSyllable && isset($this->OTLdata[$checkpos]['syllable']) && $this->OTLdata[$checkpos]['syllable'] != $current_syllable) {
-				return false;
-			} // If Class 0 specified, matches anything NOT in $lclass0excl
-			elseif (!$Lookahead[$i] && isset($this->OTLdata[$checkpos]) && strpos($lclass0excl, $this->OTLdata[$checkpos]['hex']) !== false) {
-				return false;
-			} elseif (!isset($this->OTLdata[$checkpos]) || strpos($Lookahead[$i], $this->OTLdata[$checkpos]['hex']) === false) {
-				return false;
-			}
-		}
-		return $matched;
-	}
-
-	private function checkContextMatchMultipleUni($Input, $Backtrack, $Lookahead, $ignore, $ptr, $class0excl = [], $bclass0excl = [], $lclass0excl = [])
-	{
-		// Input etc are array of glyphs - GSUB Format 5.2, 5.3, 6.2, 6.3, GPOS Format 7.2, 7.3, 8.2, 8.3
-		// Input starts with (1=>xxx)
-		// return false if no match, else an array of ptr for matches (0=>0, 1=>3,...)
-		// $class0excl is array of glyphs in all classes except Class 0 (GSUB 5.2, 6.2, GPOS 7.2, 8.2)
-		// $bclass0excl & $lclass0excl are the same for lookahead and backtrack (GSUB 6.2, GPOS 8.2)
-
-		$current_syllable = (isset($this->OTLdata[$ptr]['syllable']) ? $this->OTLdata[$ptr]['syllable'] : 0);
-
-		// BACKTRACK
-		$checkpos = $ptr;
-		for ($i = 0; $i < count($Backtrack); $i++) {
-			$checkpos--;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+			while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 				$checkpos--;
 			}
 			// If outside scope of current syllable - return no match
@@ -4411,7 +4308,7 @@ class Otl
 		$checkpos = $ptr;
 		for ($i = 1; $i < count($Input); $i++) { // Start at 1 - already matched the first InputGlyph
 			$checkpos++;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+			while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 				$checkpos++;
 			}
 			// If outside scope of current syllable - return no match
@@ -4430,7 +4327,7 @@ class Otl
 		// LOOKAHEAD
 		for ($i = 0; $i < count($Lookahead); $i++) {
 			$checkpos++;
-			while (isset($this->OTLdata[$checkpos]) && strpos($ignore, $this->OTLdata[$checkpos]['hex']) !== false) {
+			while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 				$checkpos++;
 			}
 			// If outside scope of current syllable - return no match
@@ -4572,10 +4469,43 @@ class Otl
 		return $keep ? ' ' . implode('| ', $keep) : '';
 	}
 
-	private function _getGCOMignoreString($flag, $MarkFilteringSet)
+	/**
+	 * The characters a Lookup's flag says to skip over, as a set keyed by codepoint.
+	 *
+	 * Every position a rule tests is first walked past the characters this names, so the test is made
+	 * for every position of every rule of every subtable offered a glyph. It used to be made with
+	 * strpos() over a "00641|00642|..." string of every mark the font defines - 71 KB of it in Noto
+	 * Sans Duployan - and scanning that was where nearly all the time went in shaping a word of a font
+	 * whose rules run into the thousands.
+	 *
+	 * The set is a property of the flag and of GDEF, so it is built once per flag.
+	 *
+	 * @return array map of unicode => 1
+	 */
+	private function getGCOMignoreSet($flag, $MarkFilteringSet)
 	{
-		// If ignoreFlag set, combine all ignore glyphs into -> "(?:( 0FBA1| 0FBA2| 0FBA3)*)"
-		// else "()"
+		$key = $flag . ':' . $MarkFilteringSet;
+
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['ignore'][$key])) {
+			$set = [];
+			foreach (explode('|', $this->buildGCOMignoreList($flag, $MarkFilteringSet)) as $hex) {
+				if ($hex !== '') {
+					$set[hexdec($hex)] = 1;
+				}
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['ignore'][$key] = $set;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['ignore'][$key];
+	}
+
+	/**
+	 * The characters the flag says to skip over, as the "|" separated hex the GDEF glyph classes are
+	 * kept in. Empty where the flag names nothing to skip.
+	 */
+	private function buildGCOMignoreList($flag, $MarkFilteringSet)
+	{
 		// for Input - set on secondary Lookup table if in Context, and set Backtrack and Lookahead on Context Lookup
 		$str = "";
 		$ignoreflag = 0;
@@ -4621,11 +4551,7 @@ class Otl
 			}
 			$str .= $this->GlyphClassBases;
 		}
-		if ($str) {
-			return "((?:(?:" . $str . "))*)";
-		} else {
-			return "()";
-		}
+		return $str;
 	}
 
 	private function _checkGCOMignore($flag, $glyph, $MarkFilteringSet)
@@ -4870,6 +4796,36 @@ class Otl
 	}
 
 	/**
+	 * The characters a Coverage table covers, as a set keyed by codepoint.
+	 *
+	 * This is what the contextual formats match against, and they match a position against a whole
+	 * Coverage table at a time, so what matters is that one test is one hash lookup. They used to join
+	 * the table into a "00641|00642|..." string and search that with strpos(), which reads the table
+	 * from the front for every position of every rule: for a font whose chaining rules run into the
+	 * thousands and whose Coverage tables name thousands of glyphs, that scanning was most of the time
+	 * spent shaping a word.
+	 *
+	 * Cached apart from _getCoverage above: the same table, projected differently.
+	 *
+	 * @return array map of unicode => 1
+	 */
+	private function getCoverageUni()
+	{
+		$offset = $this->reader->tell();
+
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['coverageUni'][$offset])) {
+			$g = [];
+			foreach (Coverage::glyphs($this->reader) as $glyphID) {
+				$g[$this->glyphToChar($glyphID)] = 1;
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['coverageUni'][$offset] = $g;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['coverageUni'][$offset];
+	}
+
+	/**
 	 * A Class Definition table as a set per class, for testing whether a character is in one.
 	 *
 	 * Class 0 is dropped. The spec makes it the class of every glyph the table does not mention, so a
@@ -4899,6 +4855,44 @@ class Otl
 		}
 
 		return $this->LuDataCache[$this->otlCacheKey]['classes'][$offset];
+	}
+
+	/**
+	 * Every glyph a Class Definition table puts in a class other than 0.
+	 *
+	 * Class 0 is every glyph the table does not name, so a rule that matches class 0 at a position
+	 * matches anything that is not in one of the other classes - and this is the set it is tested
+	 * against. It is a property of the table, so it is worked out once per table and kept beside the
+	 * classes themselves.
+	 *
+	 * Every contextual format that matches by class used to build it again for each rule it read, and
+	 * each build walks every glyph of every class. A class-based chaining subtable of a Nastaliq font
+	 * offers hundreds of rules at a glyph and its classes name thousands of glyphs between them, so
+	 * that was most of the cost of shaping one.
+	 *
+	 * The loop stops at the number of classes rather than at the highest class number, which is how it
+	 * has always read: _getClasses() drops a class whose glyphs no character reaches, so the two are
+	 * not always the same, and a table with a gap in its class numbers leaves the classes above the
+	 * gap out of the set.
+	 *
+	 * @return array map of unicode => 1
+	 */
+	private function getClassZeroExclusions($offset)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset])) {
+			$classes = $this->_getClasses($offset);
+			$excluded = [];
+
+			for ($class = 1; $class <= count($classes); $class++) {
+				if (isset($classes[$class]) && is_array($classes[$class])) {
+					$excluded = $excluded + $classes[$class];
+				}
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset] = $excluded;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset];
 	}
 
 	private function _getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $shaper, $useOTL, $mode)
