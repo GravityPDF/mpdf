@@ -20,6 +20,15 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** U+064E FATHA, a transparent-joining mark */
 	const FATHA = '0064E';
 
+	/** U+0712 SYRIAC LETTER BETH, dual-joining */
+	const BETH = '00712';
+
+	/** U+074F SYRIAC LETTER SOGDIAN FE, dual-joining */
+	const SOGDIAN_FE = '0074F';
+
+	/** U+08AD ARABIC LETTER LOW ALEF, non-joining: it joins nothing on either side */
+	const LOW_ALEF = '008AD';
+
 	/**
 	 * The font's rtlSUB table, as TTFontFile builds it: replacement hex per form, indexed
 	 * 0=isolated 1=final 2=initial 3=medial
@@ -29,6 +38,8 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return [
 			self::BEH => ['B_ISOL', 'B_FINA', 'B_INIT', 'B_MEDI'],
 			self::DAL => ['D_ISOL', 'D_FINA'],
+			self::BETH => ['BE_ISOL', 'BE_FINA', 'BE_INIT', 'BE_MEDI'],
+			self::SOGDIAN_FE => ['F_ISOL', 'F_FINA', 'F_INIT', 'F_MEDI'],
 		];
 	}
 
@@ -88,16 +99,90 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * U+074F SOGDIAN FE is dual-joining, so it joins to the letter before it and that letter takes a
+	 * medial or initial form. One entry of the right-joining table was missing its `=> 1`, which filed
+	 * U+074F as a value under the next free integer key instead of as a key of its own, and left
+	 * SOGDIAN FE joining nothing backwards.
+	 */
+	public function testADualJoiningSyriacLetterPullsTheLetterBeforeItIntoInitialForm()
+	{
+		$forms = $this->shape([self::BETH, self::SOGDIAN_FE], self::ALL_FORMS, 'syrc');
+
+		$this->assertSame([['BE_INIT', 2], ['F_FINA', 1]], $forms);
+	}
+
+	/**
+	 * The key the missing value took was U+08AD, one past the largest key the literal had reached, so
+	 * LOW ALEF read as right-joining. It is joining type U - it joins nothing - and the letter before
+	 * it stays isolated.
+	 */
+	public function testANonJoiningLetterLeavesTheLetterBeforeItIsolated()
+	{
+		$forms = $this->shape([self::BEH, self::LOW_ALEF]);
+
+		$this->assertSame([['B_ISOL', 0], [self::LOW_ALEF, 0]], $forms);
+	}
+
+	/**
+	 * The same character through a real font, which is where the wrong entry showed: Estrangelo Edessa
+	 * carries a BETH for each of the four forms, and the form the shaper asks for is the glyph that
+	 * ends up drawn. A run ending in SOGDIAN FE has to draw the same BETH as a run ending in another
+	 * BETH - both are dual-joining, so both take the letter before them into initial form. The glyphs
+	 * are compared against each other rather than named, because the codepoints they are drawn under
+	 * are assigned as the subset is built.
+	 */
+	public function testSogdianFeDrawsTheSameInitialFormAsAnotherDualJoiningLetter()
+	{
+		$beforeFe = $this->render(self::BETH, self::SOGDIAN_FE);
+		$beforeBeth = $this->render(self::BETH, self::BETH);
+
+		$this->assertSame($beforeBeth, $beforeFe);
+	}
+
+	/**
+	 * Text is drawn in visual order, so the letter written first is the last one drawn.
+	 *
+	 * @return string the glyph the first of the two characters was drawn as
+	 */
+	private function render($first, $second)
+	{
+		$mpdf = new \Mpdf\TextRecordingMpdf();
+		$mpdf->WriteHTML(sprintf(
+			'<p style="font-family:estrangeloedessa">&#x%s;&#x%s;</p>',
+			ltrim($first, '0'),
+			ltrim($second, '0')
+		));
+
+		$drawn = preg_split('//u', $mpdf->drawnText[0], -1, PREG_SPLIT_NO_EMPTY);
+
+		return end($drawn);
+	}
+
+	/**
+	 * Every entry of all three tables is a codepoint mapped to 1, and they are only ever read with
+	 * isset(), so a value that is not 1 is a codepoint that was typed without its `=> 1` and has been
+	 * filed under a key that means nothing.
+	 */
+	public function testEveryJoiningTableEntryIsFiledUnderItsOwnCodepoint()
+	{
+		foreach (['leftJoining', 'rightJoining', 'transparent'] as $table) {
+			$values = array_unique(array_values(Arabic::${$table}));
+
+			$this->assertSame([1], $values, $table . ' has an entry that is not a codepoint => 1');
+		}
+	}
+
+	/**
 	 * @return array one [hex, form] pair per character, in logical order
 	 */
-	private function shape($hexes, $usetags = self::ALL_FORMS)
+	private function shape($hexes, $usetags = self::ALL_FORMS, $scriptTag = 'arab')
 	{
 		$info = [];
 		foreach ($hexes as $hex) {
 			$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
 		}
 
-		Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, $usetags, 'arab');
+		Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, $usetags, $scriptTag);
 
 		$forms = [];
 		foreach ($info as $char) {

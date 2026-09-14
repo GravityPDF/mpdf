@@ -97,10 +97,7 @@ class Arabic
 		0x0719 => 1, 0x071A => 1, 0x071B => 1, 0x071C => 1, 0x071D => 1, 0x071E => 1, 0x071F => 1, 0x0720 => 1,
 		0x0721 => 1, 0x0722 => 1, 0x0723 => 1, 0x0724 => 1, 0x0725 => 1, 0x0726 => 1, 0x0727 => 1, 0x0728 => 1,
 		0x0729 => 1, 0x072A => 1, 0x072B => 1, 0x072C => 1, 0x072D => 1, 0x072E => 1, 0x072F => 1, 0x074D => 1,
-		// 0x074F is missing its => 1, so PHP files it as a *value* under the next free integer key and
-		// U+074F SYRIAC LETTER SOGDIAN FE reads as not right-joining. Kept as it was found; changing it
-		// changes what gets shaped, which is not this series' business. Reported separately.
-		0x074E => 1, 0x074F,
+		0x074E => 1, 0x074F => 1,
 		/* N'Ko */
 		0x07CA => 1, 0x07CB => 1, 0x07CC => 1, 0x07CD => 1, 0x07CE => 1, 0x07CF => 1, 0x07D0 => 1, 0x07D1 => 1,
 		0x07D2 => 1, 0x07D3 => 1, 0x07D4 => 1, 0x07D5 => 1, 0x07D6 => 1, 0x07D7 => 1, 0x07D8 => 1, 0x07D9 => 1,
