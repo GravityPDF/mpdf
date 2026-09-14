@@ -4076,15 +4076,9 @@ class Otl
 	 *
 	 * As 7.3, with backtrack and lookahead, each a Coverage table per position.
 	 *
-	 * Alone among the eight contextual formats, this one applies its nested lookups and then reports
-	 * no shift, so the caller advances a single glyph rather than past the sequence it matched. That
-	 * is how it has always behaved - 8.1, 8.2 and 7.3 all return theirs - and splitting the dispatcher
-	 * is what made it visible. Left as it is, because a shaping change does not belong in a refactor
-	 * whose gate is that output does not move; reported separately.
-	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#chained-context-positioning-subtable-format-3-coverage-based-glyph-contexts
 	 *
-	 * @return null Never reports a shift - see above
+	 * @return int Glyphs to advance by, 0 if the subtable did not apply
 	 */
 	private function _applyGPOSchainContextPosFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
@@ -4128,10 +4122,11 @@ class Otl
 			if ($this->debugOTL && $shift) {
 				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
+
+			return $shift;
 		}
 
-		// $shift is deliberately not returned - see the docblock
-		return null;
+		return 0;
 	}
 
 	/**
