@@ -2173,7 +2173,6 @@ class Otl
 			}
 
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
-			$SubstLookupRecord = [];
 			$shift = $this->_applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt);
 
 			return $shift;
@@ -3716,7 +3715,7 @@ class Otl
 			$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
 			if ($matched) {
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
-				if ($this->debugOTL && $shift) {
+				if ($this->debugOTL) {
 					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 
@@ -3800,7 +3799,7 @@ class Otl
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
 					if ($matched) {
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
-						if ($this->debugOTL && $shift) {
+						if ($this->debugOTL) {
 							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 
@@ -3844,7 +3843,7 @@ class Otl
 		if ($matched) {
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
-			if ($this->debugOTL && $shift) {
+			if ($this->debugOTL) {
 				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 
@@ -3911,7 +3910,7 @@ class Otl
 			if ($matched) {
 				$PosCount = $this->reader->readUInt16();
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
-				if ($this->debugOTL && $shift) {
+				if ($this->debugOTL) {
 					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 
@@ -4039,10 +4038,8 @@ class Otl
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
 					if ($matched) {
 						$PosCount = $this->reader->readUInt16();
-						$SequenceIndex = [];
-						$LookupListIndex = [];
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
-						if ($this->debugOTL && $shift) {
+						if ($this->debugOTL) {
 							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 
@@ -4100,7 +4097,7 @@ class Otl
 		if ($matched) {
 			$this->reader->seek($save_pos); // Return to just after PosCount
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
-			if ($this->debugOTL && $shift) {
+			if ($this->debugOTL) {
 				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 
@@ -4124,6 +4121,12 @@ class Otl
 	 * error; the spec says the index is into the input sequence, and a font that names a longer one
 	 * than it matched is describing a position that does not exist.
 	 *
+	 * Only a subtable whose context matched arrives here, and what is returned is what stops the loop
+	 * over that lookup's subtables - so it starts at 1 rather than 0. A matched context ends its
+	 * lookup whether or not the lookups it names did anything, and returning 0 for one that named no
+	 * records, or whose records did nothing, sent the glyph on to the next subtable to match a
+	 * shorter context and substitute there.
+	 *
 	 * The counterpart for positioning is _applyGPOSlookupRecords. The two are the same shape and
 	 * differ only in which lookup list they index and which applier they call.
 	 *
@@ -4133,8 +4136,8 @@ class Otl
 	 * @param int   $InputGlyphCount The length of the matched input sequence
 	 * @param array $matched         Position in OTLdata of each glyph of the matched input sequence
 	 *
-	 * @return int Glyphs to advance by, from the last nested lookup that shifted anything; 0 if none
-	 *             did, which is also what a subtable naming no records returns
+	 * @return int Glyphs to advance by, from the last nested lookup that shifted anything, and 1
+	 *             where none did
 	 */
 	private function _applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt)
 	{
@@ -4144,7 +4147,8 @@ class Otl
 			$SubstLookupRecord[$p]['LookupListIndex'] = $this->reader->readUInt16();
 		}
 
-		$shift = 0;
+		// The context matched, so this applied: 0 would send the glyph on to the next subtable
+		$shift = 1;
 		for ($p = 0; $p < $SubstCount; $p++) {
 			if ($SubstLookupRecord[$p]['SequenceIndex'] >= $InputGlyphCount) {
 				continue;
@@ -4182,7 +4186,8 @@ class Otl
 	 *     uint16   lookupListIndex     which lookup to apply
 	 *
 	 * The counterpart for substitution is _applyGSUBlookupRecords, which documents why a record
-	 * pointing past the end of the input sequence is skipped rather than treated as an error.
+	 * pointing past the end of the input sequence is skipped rather than treated as an error, and why
+	 * a matched context reports having applied even when nothing it named did anything.
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#chained-sequence-context-positioning-format-3-coverage-based-glyph-contexts
 	 *
@@ -4190,8 +4195,8 @@ class Otl
 	 * @param int   $InputGlyphCount The length of the matched input sequence
 	 * @param array $matched         Position in OTLdata of each glyph of the matched input sequence
 	 *
-	 * @return int Glyphs to advance by, from the last nested lookup that shifted anything; 0 if none
-	 *             did, which is also what a subtable naming no records returns
+	 * @return int Glyphs to advance by, from the last nested lookup that shifted anything, and 1
+	 *             where none did
 	 */
 	private function _applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec)
 	{
@@ -4201,7 +4206,8 @@ class Otl
 			$PosLookupRecord[$p]['LookupListIndex'] = $this->reader->readUInt16();
 		}
 
-		$shift = 0;
+		// The context matched, so this applied: 0 would send the glyph on to the next subtable
+		$shift = 1;
 		for ($p = 0; $p < $PosCount; $p++) {
 			// Apply  $PosLookupRecord[$p]['LookupListIndex']  at   $PosLookupRecord[$p]['SequenceIndex']
 			if ($PosLookupRecord[$p]['SequenceIndex'] >= $InputGlyphCount) {
