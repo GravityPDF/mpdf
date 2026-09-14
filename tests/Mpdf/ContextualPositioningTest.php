@@ -114,4 +114,35 @@ class ContextualPositioningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 		$this->assertSame([], $mpdf->drawnPositions);
 	}
 
+	/**
+	 * Type 8 Format 3 is how most fonts write chained kerning and mark positioning, and a lookup
+	 * commonly holds dozens of subtables whose first input Coverage tables overlap - Taamey David
+	 * CLM's 'mark' lookup 18 has fifty-one. Two of them match a HOLAM followed by a QARNEY PARA and
+	 * a MUNAH, and each names the same single adjustment at the first position. Only the first
+	 * matching subtable of a lookup applies, which the caller decides by whether the subtable it just
+	 * offered the glyph to reports a shift; this format reported none, so the glyph went on to the
+	 * rest of the lookup and was moved twice as far as the font asks.
+	 */
+	public function testAppliesTheNestedLookupOfOnlyTheFirstMatchingChainedContextSubtable()
+	{
+		$mpdf = new PositionRecordingMpdf();
+
+		$mpdf->WriteHTML('<p style="font-family:taameydavidclm">&#x05B9;&#x05AF;&#x0599;</p>');
+
+		$this->assertEquals([[0 => ['XPlacement' => -190]]], $mpdf->drawnPositions);
+	}
+
+	/**
+	 * The same in Padauk, whose 'mark' lookup 22 has two subtables matching a DOT BELOW between a KA
+	 * and an ASAT. The dot was placed at twice the offset, taking it out from under the letter.
+	 */
+	public function testAppliesAMarkAdjustmentFromAChainedContextOnce()
+	{
+		$mpdf = new PositionRecordingMpdf();
+
+		$mpdf->WriteHTML('<p style="font-family:padaukbook">&#x1000;&#x1037;&#x103A;</p>');
+
+		$this->assertEquals(['XPlacement' => -200], $mpdf->drawnPositions[0][1]);
+	}
+
 }
