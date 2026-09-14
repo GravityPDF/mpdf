@@ -2592,6 +2592,9 @@ class Otl
 				} elseif ($this->shaper == 'M') {
 					$newOTLdata[$i]['myanmar_category'] = $this->OTLdata[$pos]['myanmar_category'];
 					$newOTLdata[$i]['myanmar_position'] = $this->OTLdata[$pos]['myanmar_position'];
+				} elseif ($this->shaper == 'E') {
+					$newOTLdata[$i]['sea_category'] = $this->OTLdata[$pos]['sea_category'];
+					$newOTLdata[$i]['sea_position'] = $this->OTLdata[$pos]['sea_position'];
 				}
 				if (isset($this->OTLdata[$pos]['mask'])) {
 					$newOTLdata[$i]['mask'] = $this->OTLdata[$pos]['mask'];
@@ -2784,6 +2787,9 @@ class Otl
 			} elseif ($this->shaper == 'M') {
 				$newOTLdata[0]['myanmar_category'] = $this->OTLdata[$pos]['myanmar_category'];
 				$newOTLdata[0]['myanmar_position'] = $this->OTLdata[$pos]['myanmar_position'];
+			} elseif ($this->shaper == 'E') {
+				$newOTLdata[0]['sea_category'] = $this->OTLdata[$pos]['sea_category'];
+				$newOTLdata[0]['sea_position'] = $this->OTLdata[$pos]['sea_position'];
 			}
 			if (isset($this->OTLdata[$pos]['mask'])) {
 				$newOTLdata[0]['mask'] = $this->OTLdata[$pos]['mask'];

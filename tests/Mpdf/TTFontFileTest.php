@@ -84,6 +84,68 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The Indic pre-pass that indexes 'locl' substitutions by their replacement read ['replace'] on
+	 * every entry tagged 'locl'. A contextual entry keeps its replacements in ['rules'] and has no
+	 * such key, so it read null once per font load.
+	 *
+	 * The subset is the contextual 'locl' of Noto Sans Devanagari 2.005 (OFL 1.1): a chained context
+	 * under the Santali language system whose backtrack is U+0905 or U+0906 and whose nested lookup
+	 * substitutes a Santali nukta for U+093C. Nothing is indexed from it either way, so the
+	 * diagnostic is all there was to fix.
+	 */
+	public function testAContextualLoclEntryIsNotReadForATopLevelReplacement()
+	{
+		$raised = $this->diagnosticsWhileParsing('NotoSansDevanagari-ContextualLocl-Subset.ttf');
+
+		$this->assertSame([], $raised);
+		$this->assertSame('NotoSansDevanagari-Regular', $this->ttf->fullName);
+	}
+
+	/**
+	 * A joining form can be a Multiple Substitution, so the replacement recorded for one can name more
+	 * than one glyph. The whole string was pushed into the Private Use Area list as if it named one,
+	 * and hexdec() raised PHP 8's invalid-characters deprecation on it and returned a number far
+	 * outside the PUA, so every glyph in it was dropped.
+	 *
+	 * The subset is Noto Sans Arabic 2.012 (OFL 1.1) cut down to U+0628 and U+06CC. The Farsi Yeh's
+	 * initial and medial forms are Multiple Substitutions replacing it with the dotless form and the
+	 * pair of dots to draw under it - E007 here, which has no codepoint of its own and is the glyph
+	 * the whole-string push lost.
+	 */
+	public function testAJoiningFormOfMoreThanOneGlyphContributesEachOfThem()
+	{
+		$raised = $this->diagnosticsWhileParsing('NotoSansArabic-MultipleForm-Subset.ttf');
+
+		$this->assertSame([], $raised);
+		$this->assertSame('\x{0E000}-\x{0E003}\x{0E005}-\x{0E007}', $this->ttf->rtlPUAstr);
+	}
+
+	/**
+	 * Parse a font, collecting every diagnostic PHP raised doing it. Deprecations are not converted to
+	 * exceptions, so a handler is what sees them.
+	 *
+	 * @return string[]
+	 */
+	private function diagnosticsWhileParsing($file)
+	{
+		$raised = [];
+
+		set_error_handler(function ($number, $message, $path, $line) use (&$raised) {
+			$raised[] = sprintf('%s in %s:%d', $message, basename($path), $line);
+
+			return true;
+		});
+
+		try {
+			$this->ttf->getMetrics(__DIR__ . '/../data/ttf/' . $file, uniqid('', true), 0, false, false, 0xFF);
+		} finally {
+			restore_error_handler();
+		}
+
+		return $raised;
+	}
+
+	/**
 	 * debugfont mode validates each table's version as it goes, so it walks the byte offsets by a
 	 * different route than normal mode and has its own chance to lose its place
 	 */

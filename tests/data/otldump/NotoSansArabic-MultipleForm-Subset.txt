@@ -1,0 +1,28 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00020; &#x0E000; &#x0E001; &#x0E002; &#x0E003; &#x0E005; </div>
+<h3>Glyph class 3</h3>
+<h5>Mark glyph (non-spacing combining glyph)</h5>
+<div class="glyphs">&#x25cc;&#x0E006; &#x25cc;&#x0E007; </div>
+<h1>Mark Glyph Sets</h1>
+<h3>Mark Glyph Set class: 0</h3>
+<div class="glyphs">&#x25cc;&#x0E007; </div>
+<h3>Mark Glyph Set class: 1</h3>
+<div class="glyphs">&#x25cc;&#x0E006; &#x25cc;&#x0E007; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>arab</h5><div><a href="font_dump_otl.php?script=arab&amp;lang=DFLT">DFLT</a></b>: ccmp init medi fina </div>
+</div>
+<h1>GPOS Tables</h1>
+<h3>GPOS Scripts &amp; Languages</h3>
+<h5>arab</h5><div><a href="font_dump_otl.php?script=arab&amp;lang=DFLT">DFLT</a></b>: mark mkmk </div>
+</div>
+
+=== detail: script arab language DFLT ===
+<h1>GSUB Tables</h1>
+<bookmark level="0" content="GSUB features"><div class="level1"><h5 class="level1"><bookmark level="1" content="ccmp [#0]">Lookup #0 [tag: <span style="color:#000066;">ccmp</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 2: Multiple Substitution Subtable</div><div class="substitution"><span class="unicode">U+0628&nbsp;</span> <span class="unchanged">&nbsp;&#x0628;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE000; &#x25cc;&#xE006;</span>&nbsp; <span class="unicode">M+E000, M+E006</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="init [#1]">Lookup #1 [tag: <span style="color:#000066;">init</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 2: Multiple Substitution Subtable</div><div class="substitution"><span class="unicode">M+E000&nbsp;</span> <span class="unchanged">&nbsp;&#xE000;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE003;</span>&nbsp; <span class="unicode">M+E003</span> </div><div class="substitution"><span class="unicode">U+06CC&nbsp;</span> <span class="unchanged">&nbsp;&#x06CC;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE003; &#x25cc;&#xE007;</span>&nbsp; <span class="unicode">M+E003, M+E007</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="medi [#2]">Lookup #2 [tag: <span style="color:#000066;">medi</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 2: Multiple Substitution Subtable</div><div class="substitution"><span class="unicode">M+E000&nbsp;</span> <span class="unchanged">&nbsp;&#xE000;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE002;</span>&nbsp; <span class="unicode">M+E002</span> </div><div class="substitution"><span class="unicode">U+06CC&nbsp;</span> <span class="unchanged">&nbsp;&#x06CC;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE002; &#x25cc;&#xE007;</span>&nbsp; <span class="unicode">M+E002, M+E007</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="fina [#3]">Lookup #3 [tag: <span style="color:#000066;">fina</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 2: Multiple Substitution Subtable</div><div class="substitution"><span class="unicode">M+E000&nbsp;</span> <span class="unchanged">&nbsp;&#xE000;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE001;</span>&nbsp; <span class="unicode">M+E001</span> </div><div class="substitution"><span class="unicode">U+06CC&nbsp;</span> <span class="unchanged">&nbsp;&#x06CC;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE005;</span>&nbsp; <span class="unicode">M+E005</span> </div></div>
+<h1>GPOS Tables</h1>
+<bookmark level="0" content="GPOS features"><div class="level1"><h5 class="level1"><bookmark level="1" content="mark [#0]">Lookup #0 [tag: <span style="color:#000066;">mark</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 4: MarkToBase attachment </div><div class="glyphs">Marks:  &#x25cc;&#xE006;  &#x25cc;&#xE007; </div><div class="glyphs">Bases:  &#x0020;  &#xE000;  &#xE001;  &#xE002;  &#xE003;  &#xE005; </div><div class="glyphs" style="font-feature-settings:'mark' 1;">Example(s):  &#x0020;&#xE006; &nbsp;  &#xE000;&#xE006; &nbsp;  &#xE001;&#xE006; &nbsp;  &#xE002;&#xE006; &nbsp;  &#xE003;&#xE006; &nbsp;  &#xE005;&#xE006; &nbsp; </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="mkmk [#1]">Lookup #1 [tag: <span style="color:#000066;">mkmk</span>]</h5><div class="ignore">Ignoring: Marks outside Mark Glyph Set[1] </div> <div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 6: MarkToMark attachment </div><div class="glyphs">Marks: <span class="unchanged"> &#x25cc;&#xE006;  &#x25cc;&#xE007; </span></div><div class="glyphs">Bases: <span class="unchanged"> &#x25cc;&#xE006;  &#x25cc;&#xE007; </span></div><div class="glyphs" style="font-feature-settings:'mkmk' 1;">Example(s): <span class="changed"> &#x25cc;&#xE006;&#xE006; &nbsp;  &#x25cc;&#xE007;&#xE006; &nbsp; </span></div></div>

@@ -1313,6 +1313,27 @@ class TTFontFile
 	}
 
 	/**
+	 * Add the Private Use Area glyphs a replacement names to the list magic_reverse_dir reads.
+	 *
+	 * A replacement is one glyph code where the substitution replaces one glyph with one, and a
+	 * space-separated list where it replaces one with several - the dotless form of a letter and the
+	 * dots to draw under it, say.
+	 *
+	 * @param string[] $rtlpua  the list being built
+	 * @param string   $replace one glyph code, or several separated by spaces
+	 */
+	private function addPuaGlyphs(array &$rtlpua, $replace)
+	{
+		foreach (explode(' ', $replace) as $glyph) {
+			// Unanchored: a flattened contextual rule carries its backreferences in the same token as
+			// the glyph code, so '0FB93\2' names 0FB93
+			if (preg_match('/(0[EF][A-F0-9]{3})/', $glyph, $matched)) {
+				$rtlpua[] = $matched[1];
+			}
+		}
+	}
+
+	/**
 	 * GSUB - Glyph Substitution
 	 */
 	function _getGSUBtables()
@@ -2122,7 +2143,9 @@ class TTFontFile
 					foreach ($volt as $v) {
 						// isol fina fin2 fin3 medi med2 for Syriac
 						// ISOLATED FORM :: FINAL :: INITIAL :: MEDIAL :: MED2 :: FIN2 :: FIN3
-						if (strpos('isol fina init medi fin2 fin3 med2', $v['tag']) !== false) {
+						// A contextual entry carries the feature's own tag but keeps its replacements in
+						// ['rules'], so it has no ['replace'] for this branch to read
+						if (strpos('isol fina init medi fin2 fin3 med2', $v['tag']) !== false && !isset($v['context'])) {
 
 							$key = $v['match'];
 							$key = preg_replace('/[\(\)]*/', '', $key);
@@ -2153,7 +2176,7 @@ class TTFontFile
 							if (isset($v['ignore']) && $v['ignore']) {
 								$rtl[$key]['ignore'][$kk] = $v['ignore'];
 							}
-							$rtlpua[] = $sub;
+							$this->addPuaGlyphs($rtlpua, $sub);
 
 						} else { // Add any other glyphs which are in PUA
 							if (isset($v['context']) && $v['context']) {
@@ -2161,23 +2184,12 @@ class TTFontFile
 									$matchCount = count($vs['match']);
 									for ($i = 0; $i < $matchCount; $i++) {
 										if (isset($vs['replace'][$i]) && preg_match('/^0[A-F0-9]{4}$/', $vs['match'][$i])) {
-											if (preg_match('/^0[EF][A-F0-9]{3}$/', $vs['replace'][$i])) {
-												$rtlpua[] = $vs['replace'][$i];
-											}
+											$this->addPuaGlyphs($rtlpua, $vs['replace'][$i]);
 										}
 									}
 								}
 							} else {
-								preg_match_all('/\((0[A-F0-9]{4})\)/', $v['match'], $m);
-								$matchCount = count($m[0]);
-								for ($i = 0; $i < $matchCount; $i++) {
-									$sb = explode(' ', $v['replace']);
-									foreach ($sb as $sbg) {
-										if (preg_match('/(0[EF][A-F0-9]{3})/', $sbg, $mr)) {
-											$rtlpua[] = $mr[1];
-										}
-									}
-								}
+								$this->addPuaGlyphs($rtlpua, $v['replace']);
 							}
 						}
 					}
@@ -2213,9 +2225,11 @@ class TTFontFile
 					}
 
 					// First get 'locl' substitutions (reversed!)
+					// Contextual entries are skipped here as they are above: their replacements are in
+					// ['rules'], not ['replace']
 					$loclsubs = [];
 					foreach ($volt as $v) {
-						if (strpos('locl', $v['tag']) !== false) {
+						if (strpos('locl', $v['tag']) !== false && !isset($v['context'])) {
 							$key = $v['match'];
 							$key = preg_replace('/[\(\)]*/', '', $key);
 							$sub = $v['replace'];
