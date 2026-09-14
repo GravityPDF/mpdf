@@ -1,0 +1,17 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00A15; </div>
+<h3>Glyph class 3</h3>
+<h5>Mark glyph (non-spacing combining glyph)</h5>
+<div class="glyphs">&#x25cc;&#x00951; &#x25cc;&#x00952; &#x25cc;&#x00A02; &#x25cc;&#x0E000; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<div>No entries in GSUB table.</div>
+</div>
+<h1>GPOS Tables</h1>
+<h3>GPOS Scripts &amp; Languages</h3>
+<h5>gur2</h5><div><a href="font_dump_otl.php?script=gur2&amp;lang=DFLT">DFLT</a></b>: abvm dist </div>
+</div>
