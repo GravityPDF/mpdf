@@ -341,6 +341,16 @@ class UcdnTables
 	}
 
 	/**
+	 * The east asian width values, which are the only part of a record the class gives no constant
+	 *
+	 * @return int[]
+	 */
+	public static function widths()
+	{
+		return self::$widths;
+	}
+
+	/**
 	 * The numbers the class already gives its general categories and bidi classes, read from its own
 	 * constants so that the tables and the constants cannot drift apart, and the name of every script
 	 * constant by its number. A general category constant carries the two-letter alias in a comment;
@@ -348,7 +358,7 @@ class UcdnTables
 	 *
 	 * @return array[] [$categories, $bidiClasses, $scriptConstants]
 	 */
-	private function numbersInUse($source)
+	public function numbersInUse($source)
 	{
 		preg_match_all('/const UNICODE_GENERAL_CATEGORY_[A-Z_]+ = (\d+);\s*\/\* (\w\w) \*\//', $source, $m);
 		$categories = array_combine($m[2], array_map('intval', $m[1]));
