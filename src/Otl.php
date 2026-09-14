@@ -1135,7 +1135,7 @@ class Otl
 					for ($i = 0; $i < count($this->OTLdata); $i++) {
 						if (isset($this->Exit[$i]) && isset($this->Exit[$i]['Y']) && $this->Exit[$i]['dir'] == 'LTR') {
 							$nextbase = $i + 1; // Set as next base ignoring marks
-							while (strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
+							while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
 								$nextbase++;
 							}
 							if (isset($this->Entry[$nextbase]) && isset($this->Entry[$nextbase]['Y'])) {
