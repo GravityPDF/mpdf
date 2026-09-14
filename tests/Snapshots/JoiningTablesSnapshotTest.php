@@ -19,10 +19,11 @@ use Mpdf\TextRecordingMpdf;
  * empty and which therefore joins nothing. Both samples are drawn in a Noto subset instead, so that the
  * character the run turns on has a glyph of its own and the reader can see the pair join.
  *
- * The samples are marked dir="rtl". U+08AD was added in Unicode 7.0 and Ucdn's tables stop at 6.1, so
- * it reads as an unassigned codepoint with no direction of its own; in a left-to-right paragraph that
- * lands it to the right of the Beh instead of the left. A right-to-left paragraph resolves the neutral
- * the other way and puts it where it belongs. The stale data is GravityPDF/mpdf#101, not this fix.
+ * The samples are marked dir="rtl", which is the direction they read in. They used to need saying:
+ * U+08AD was added in Unicode 7.0, and while Ucdn's tables stopped at 6.1 it read as an unassigned
+ * codepoint with no direction of its own, which in a left-to-right paragraph landed it to the right of
+ * the Beh instead of the left. GravityPDF/mpdf#101 regenerated those tables and it is a strong Arabic
+ * letter again.
  *
  * @group snapshot
  */

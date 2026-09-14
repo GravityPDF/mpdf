@@ -20,6 +20,12 @@ class BidiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	const ARABIC_ALEF = 0x0627;
 
+	/** U+08AD ARABIC LETTER LOW ALEF, added in Unicode 7.0 */
+	const LOW_ALEF = 0x08AD;
+
+	/** U+0870 ARABIC LETTER ALEF WITH ATTACHED FATHA, added in Unicode 14.0 */
+	const ALEF_WITH_FATHA = 0x0870;
+
 	/**
 	 * L2 with an LTR paragraph level: the Hebrew run is the only sequence above level 0, so it is the
 	 * only one reversed
@@ -52,6 +58,19 @@ class BidiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		list($ordered) = $this->sort([self::ARABIC_ALEF, 0x31, 0x32], 'rtl');
 
 		$this->assertSame([0x31, 0x32, self::ARABIC_ALEF], $ordered);
+	}
+
+	/**
+	 * The same, for two Arabic letters added to Unicode after 6.1. They used to read as unassigned
+	 * codepoints, which are neutral - a run of them took its direction from its neighbours instead of
+	 * setting it, and so was laid out in the order it was typed. See GravityPDF/mpdf#101.
+	 */
+	public function testAnRtlRunOfLettersAddedSinceUnicodeSixOneComesBackReversed()
+	{
+		list($ordered, $strong) = $this->sort([0x41, self::LOW_ALEF, self::ALEF_WITH_FATHA, 0x42], 'ltr');
+
+		$this->assertSame([0x41, self::ALEF_WITH_FATHA, self::LOW_ALEF, 0x42], $ordered);
+		$this->assertSame(3, $strong, 'the chunk carries no strong right-to-left character');
 	}
 
 	public function testLatinOnlyTextIsUntouchedAndReportsOnlyL()
