@@ -421,6 +421,15 @@ class Indic
 		/* broken_cluster: We already inserted dotted-circles, so just call the standalone_cluster. */
 		/* standalone_cluster: We treat NBSP/dotted-circle as if they are consonants, so we should just chain. */
 
+		/* Setup masks now.
+		 *
+		 * Every glyph of the cluster starts with no feature requested of it, before any of the ways
+		 * out of this function: the masked features read the mask of every glyph they are offered,
+		 * and a cluster this shaper declines to reorder is still a cluster they are offered. */
+		for ($i = $start; $i < $end; $i++) {
+			$info[$i]['mask'] = 0;
+		}
+
 		$syllable_type = ($info[$start]['syllable'] & 0x0F);
 		if ($syllable_type == self::NON_INDIC_CLUSTER) {
 			return;
@@ -726,12 +735,6 @@ class Indic
 		  }
 		  }
 		 */
-
-		/* Setup masks now */
-		for ($i = $start; $i < $end; $i++) {
-			$info[$i]['mask'] = 0;
-		}
-
 
 		if ($scriptblock == Ucdn::SCRIPT_KHMER) {
 			/* Find a Coeng+RO (Halant,Ra) sequence and mark it for pre-base processing. */
