@@ -1642,13 +1642,13 @@ class Otl
 		////////////////////////////////////////////////////////////////////////////////
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
 		$NextGlyphPos = $LuCoverage[$nextGID];
-		$LigSetCount = $this->reader->readInt16();
+		$LigSetCount = $this->reader->readUInt16();
 
 		$this->reader->skip($NextGlyphPos * 2);
-		$LigSet = $subtable_offset + $this->reader->readInt16();
+		$LigSet = $subtable_offset + $this->reader->readUInt16();
 
 		$this->reader->seek($LigSet);
-		$LigCount = $this->reader->readInt16();
+		$LigCount = $this->reader->readUInt16();
 		// LigatureSet i.e. all starting with the same Glyph $nextGlyph [Consonant]
 		$LigatureOffset = [];
 		for ($g = 0; $g < $LigCount; $g++) {
@@ -1824,10 +1824,10 @@ class Otl
 		$GlyphPos = $LuCoverage[$currGID];
 		$this->reader->skip(2);
 		$this->reader->skip($GlyphPos * 2);
-		$Sequences = $subtable_offset + $this->reader->readInt16();
+		$Sequences = $subtable_offset + $this->reader->readUInt16();
 
 		$this->reader->seek($Sequences);
-		$GlyphCount = $this->reader->readInt16();
+		$GlyphCount = $this->reader->readUInt16();
 		$SubstituteGlyphs = [];
 		for ($g = 0; $g < $GlyphCount; $g++) {
 			$sgid = $this->reader->readUInt16();
@@ -1861,7 +1861,7 @@ class Otl
 			return 0;
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
-		$AlternateSetCount = $this->reader->readInt16();
+		$AlternateSetCount = $this->reader->readUInt16();
 		///////////////////////////////////////////////////////////////////////////////!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		// Need to set alternate IF set by CSS3 font-feature for a tag
 		// i.e. if this is 'salt' alternate may be set to 2
@@ -1878,10 +1878,10 @@ class Otl
 		$GlyphPos = $LuCoverage[$currGID];
 		$this->reader->skip($GlyphPos * 2);
 
-		$AlternateSets = $subtable_offset + $this->reader->readInt16();
+		$AlternateSets = $subtable_offset + $this->reader->readUInt16();
 		$this->reader->seek($AlternateSets);
 
-		$AlternateGlyphCount = $this->reader->readInt16();
+		$AlternateGlyphCount = $this->reader->readUInt16();
 		if ($alt > $AlternateGlyphCount) {
 			return 0;
 		} // If specified alternate not present, cancel [ or could default $alt = 1 ?]
@@ -1919,13 +1919,13 @@ class Otl
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
 		$FirstGlyphPos = $LuCoverage[$currGID];
 
-		$LigSetCount = $this->reader->readInt16();
+		$LigSetCount = $this->reader->readUInt16();
 
 		$this->reader->skip($FirstGlyphPos * 2);
-		$LigSet = $subtable_offset + $this->reader->readInt16();
+		$LigSet = $subtable_offset + $this->reader->readUInt16();
 
 		$this->reader->seek($LigSet);
-		$LigCount = $this->reader->readInt16();
+		$LigCount = $this->reader->readUInt16();
 		// LigatureSet i.e. all starting with the same first Glyph $currGlyph
 		$LigatureOffset = [];
 		for ($g = 0; $g < $LigCount; $g++) {

@@ -1205,14 +1205,14 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 					else {
 						if ($Lookup[$i]['Type'] == 2) {
 							$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-							$Lookup[$i]['Subtable'][$c]['SequenceCount'] = $SequenceCount = $this->reader->readInt16();
+							$Lookup[$i]['Subtable'][$c]['SequenceCount'] = $SequenceCount = $this->reader->readUInt16();
 							for ($s = 0; $s < $SequenceCount; $s++) {
-								$Lookup[$i]['Subtable'][$c]['Sequences'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readInt16();
+								$Lookup[$i]['Subtable'][$c]['Sequences'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 							}
 							for ($s = 0; $s < $SequenceCount; $s++) {
 								// Sequence Tables
 								$this->reader->seek($Lookup[$i]['Subtable'][$c]['Sequences'][$s]['Offset']);
-								$Lookup[$i]['Subtable'][$c]['Sequences'][$s]['GlyphCount'] = $this->reader->readInt16();
+								$Lookup[$i]['Subtable'][$c]['Sequences'][$s]['GlyphCount'] = $this->reader->readUInt16();
 								for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['Sequences'][$s]['GlyphCount']; $g++) {
 									$Lookup[$i]['Subtable'][$c]['Sequences'][$s]['SubstituteGlyphID'][] = $this->reader->readUInt16();
 								}
@@ -1221,15 +1221,15 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 						else {
 							if ($Lookup[$i]['Type'] == 3) {
 								$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-								$Lookup[$i]['Subtable'][$c]['AlternateSetCount'] = $AlternateSetCount = $this->reader->readInt16();
+								$Lookup[$i]['Subtable'][$c]['AlternateSetCount'] = $AlternateSetCount = $this->reader->readUInt16();
 								for ($s = 0; $s < $AlternateSetCount; $s++) {
-									$Lookup[$i]['Subtable'][$c]['AlternateSets'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readInt16();
+									$Lookup[$i]['Subtable'][$c]['AlternateSets'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 								}
 
 								for ($s = 0; $s < $AlternateSetCount; $s++) {
 									// AlternateSet Tables
 									$this->reader->seek($Lookup[$i]['Subtable'][$c]['AlternateSets'][$s]['Offset']);
-									$Lookup[$i]['Subtable'][$c]['AlternateSets'][$s]['GlyphCount'] = $this->reader->readInt16();
+									$Lookup[$i]['Subtable'][$c]['AlternateSets'][$s]['GlyphCount'] = $this->reader->readUInt16();
 									for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['AlternateSets'][$s]['GlyphCount']; $g++) {
 										$Lookup[$i]['Subtable'][$c]['AlternateSets'][$s]['SubstituteGlyphID'][] = $this->reader->readUInt16();
 									}
@@ -1238,14 +1238,14 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 							else {
 								if ($Lookup[$i]['Type'] == 4) {
 									$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['LigSetCount'] = $LigSetCount = $this->reader->readInt16();
+									$Lookup[$i]['Subtable'][$c]['LigSetCount'] = $LigSetCount = $this->reader->readUInt16();
 									for ($s = 0; $s < $LigSetCount; $s++) {
-										$Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readInt16();
+										$Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 									}
 									for ($s = 0; $s < $LigSetCount; $s++) {
 										// LigatureSet Tables
 										$this->reader->seek($Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Offset']);
-										$Lookup[$i]['Subtable'][$c]['LigSet'][$s]['LigCount'] = $this->reader->readInt16();
+										$Lookup[$i]['Subtable'][$c]['LigSet'][$s]['LigCount'] = $this->reader->readUInt16();
 										for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['LigCount']; $g++) {
 											$Lookup[$i]['Subtable'][$c]['LigSet'][$s]['LigatureOffset'][$g] = $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Offset'] + $this->reader->readUInt16();
 										}
@@ -1267,14 +1267,14 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 										// Format 1: Context Substitution
 										if ($SubstFormat == 1) {
 											$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-											$Lookup[$i]['Subtable'][$c]['SubRuleSetCount'] = $SubRuleSetCount = $this->reader->readInt16();
+											$Lookup[$i]['Subtable'][$c]['SubRuleSetCount'] = $SubRuleSetCount = $this->reader->readUInt16();
 											for ($s = 0; $s < $SubRuleSetCount; $s++) {
-												$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readInt16();
+												$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 											}
 											for ($s = 0; $s < $SubRuleSetCount; $s++) {
 												// SubRuleSet Tables
 												$this->reader->seek($Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset']);
-												$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount'] = $this->reader->readInt16();
+												$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount'] = $this->reader->readUInt16();
 												for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount']; $g++) {
 													$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleOffset'][$g] = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] + $this->reader->readUInt16();
 												}
