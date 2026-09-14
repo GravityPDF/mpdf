@@ -937,29 +937,11 @@ parameters:
 
 
 
-		-
-			message: '#^Variable \$GSLookup might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/OtlDump.php
-
-		-
-			message: '#^Variable \$GSUBScriptLang might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/OtlDump.php
-
 
 		-
 			message: '#^Variable \$backtrackGlyphs might not be defined\.$#'
 			identifier: variable.undefined
 			count: 4
-			path: src/OtlDump.php
-
-		-
-			message: '#^Variable \$gsub might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
 			path: src/OtlDump.php
 
 		-

@@ -909,6 +909,13 @@ class OtlDump extends TTFontFile
 		///////////////////////////////////
 		// GSUB - Glyph Substitution
 		///////////////////////////////////
+		// A font need not carry one, and the return below is outside the branch that reads it, so these
+		// are what the caller list()s into its properties when there is none to read. Stated here rather
+		// than only inside the branch, which is how TTFontFile reports it too.
+		$GSUBScriptLang = [];
+		$gsub = [];
+		$GSLookup = [];
+
 		if (isset($this->tables["GSUB"])) {
 			$this->mpdf->WriteHTML('<h1>GSUB Tables</h1>');
 			$ffeats = [];
@@ -1779,10 +1786,12 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 			}
 			ksort($lul); // Order the Lookups in the order they are in the GUSB table, regardless of Feature order
 			$this->_getGSUBarray($Lookup, $lul, $st);
+		} else {
+			$this->mpdf->WriteHTML('<div>GSUB table not defined</div>');
 		}
 
 		// The report says nothing about the RTL Private Use Area mapping the parser builds for Arabic
-		// and Syriac joining, so there is nothing to hand back for it. These were undefined variables.
+		// and Syriac joining, so there is nothing to hand back for it.
 		return [$GSUBScriptLang, $gsub, $GSLookup, '', []];
 	}
 
@@ -2703,6 +2712,13 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 		///////////////////////////////////
 		// GPOS - Glyph Positioning
 		///////////////////////////////////
+		// As the GSUB reader above: a font need not carry one, and these are what the caller list()s
+		// into its properties when there is none - the returns used to be inside the branch, so a font
+		// without the table answered nothing at all
+		$GPOSScriptLang = [];
+		$gpos = [];
+		$Lookup = [];
+
 		if (isset($this->tables["GPOS"])) {
 			$this->mpdf->WriteHTML('<h1>GPOS Tables</h1>');
 			$ffeats = [];
@@ -2881,9 +2897,11 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 			}
 			ksort($lul); // Order the Lookups in the order they are in the GUSB table, regardless of Feature order
 			$this->_getGPOSarray($Lookup, $lul, $st);
+		} else {
+			$this->mpdf->WriteHTML('<div>GPOS table not defined</div>');
+		}
 
-			return [$GPOSScriptLang, $gpos, $Lookup];
-		} // end if GPOS
+		return [$GPOSScriptLang, $gpos, $Lookup];
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////
