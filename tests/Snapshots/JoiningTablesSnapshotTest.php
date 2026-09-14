@@ -15,11 +15,14 @@ use Mpdf\TextRecordingMpdf;
  * letter before a neighbour of the same joining type, which is the form it has to match, and before
  * nothing, which is the form it was given.
  *
- * Neither font carries a glyph for the character that closes the sample: no shipped font has U+08AD,
- * and of the 85 only FreeSans has U+074F, whose Syriac script list is empty. The blank each leaves is
- * beside the point - it is the letter before it that moves. U+08AD is drawn to the right of the Beh
- * rather than the left of it because the bidirectional data stops at Unicode 6.1 and the character was
- * added in 7.0, so it has no direction of its own; that is GravityPDF/mpdf#99 and not this fix.
+ * No shipped font carries U+08AD, and of the 85 only FreeSans has U+074F, whose Syriac feature list is
+ * empty and which therefore joins nothing. Both samples are drawn in a Noto subset instead, so that the
+ * character the run turns on has a glyph of its own and the reader can see the pair join.
+ *
+ * The samples are marked dir="rtl". U+08AD was added in Unicode 7.0 and Ucdn's tables stop at 6.1, so
+ * it reads as an unassigned codepoint with no direction of its own; in a left-to-right paragraph that
+ * lands it to the right of the Beh instead of the left. A right-to-left paragraph resolves the neutral
+ * the other way and puts it where it belongs. The stale data is GravityPDF/mpdf#101, not this fix.
  *
  * @group snapshot
  */
@@ -60,8 +63,30 @@ class JoiningTablesSnapshotTest extends Snapshot
 	 */
 	public function generatePdf()
 	{
-		$this->mpdf = $this->createMpdf(['mode' => 'utf-8']);
+		$this->mpdf = $this->createMpdf($this->config());
 		$this->mpdf->WriteHTML($this->style() . $this->syriacSamples() . $this->arabicSamples());
+	}
+
+	/**
+	 * Two Noto subsets, each holding the three letters its half of the document draws and every joining
+	 * form of them.
+	 */
+	private function config()
+	{
+		return [
+			'mode' => 'utf-8',
+			'fontDir' => [__DIR__ . '/../data/ttf'],
+			'fontdata' => [
+				'syriacsubset' => [
+					'R' => 'NotoSansSyriac-Joining-Subset.ttf',
+					'useOTL' => 0xFF,
+				],
+				'arabicsubset' => [
+					'R' => 'NotoSansArabic-Joining-Subset.ttf',
+					'useOTL' => 0xFF,
+				],
+			],
+		];
 	}
 
 	private function style()
@@ -72,17 +97,17 @@ class JoiningTablesSnapshotTest extends Snapshot
 			h2 { font-size: 12pt; margin-bottom: 1mm; }
 			p.note { font-size: 9pt; color: #606060; margin-top: 0; }
 			p.label { font-size: 9pt; color: #606060; margin-bottom: 0; }
-			p.sample { font-size: 28pt; margin-top: 0; margin-bottom: 3mm; }
-			p.syriac { font-family: estrangeloedessa; }
-			p.arabic { font-family: lateef; }
+			p.sample { font-size: 28pt; margin-top: 0; margin-bottom: 3mm; text-align: left; }
+			p.syriac { font-family: syriacsubset; }
+			p.arabic { font-family: arabicsubset; }
 		</style>
 
 		<h1>mPDF</h1>
 		<h2>Cursive joining</h2>
 		<p class="note">A letter of a cursive script takes its form from the letters either side of it, so
 			a character read as joining on the wrong side is drawn correctly itself and misshapes its
-			neighbour. Each sample below ends in a character with no glyph in the font; read the letter
-			before it, and compare it with the two samples under it.</p>
+			neighbour. Every sample runs right to left; read the letter on the right of each, and compare
+			it with the two samples under it.</p>
 		<?php
 
 		return ob_get_clean();
@@ -115,43 +140,51 @@ class JoiningTablesSnapshotTest extends Snapshot
 
 	private function sample($script, $label, $text)
 	{
-		return '<p class="label">' . $label . '</p><p class="sample ' . $script . '">' . $text . '</p>';
+		return '<p class="label">' . $label . '</p>'
+			. '<p dir="rtl" class="sample ' . $script . '">' . $text . '</p>';
 	}
 
 	/**
 	 * The document only shows anything if the letter before each of the two characters is drawn as the
-	 * neighbour it is sampled against draws it, and not as the form the wrong key gave it. Both are
-	 * single glyphs out of a subset built as the document is written, so the samples are compared with
-	 * each other by the glyphs they have in common rather than by naming any of them.
+	 * neighbour it is sampled against draws it, and not as the form the wrong key gave it. Every glyph
+	 * is a single character of a subset built as the document is written, so the samples are compared
+	 * with each other rather than by naming any of them.
 	 *
-	 * @return string[] the glyphs the sample was drawn with, in the order they are drawn
+	 * @return string[] the glyphs the sample was drawn with, left to right
 	 */
 	private function glyphsOf($font, $text)
 	{
-		$mpdf = new TextRecordingMpdf(['mode' => 'utf-8']);
-		$mpdf->WriteHTML($this->style() . '<p class="sample ' . $font . '">' . $text . '</p>');
+		$mpdf = new TextRecordingMpdf($this->config());
+		$mpdf->WriteHTML($this->style() . '<p dir="rtl" class="sample ' . $font . '">' . $text . '</p>');
 
 		return preg_split('//u', end($mpdf->drawnText), -1, PREG_SPLIT_NO_EMPTY);
 	}
 
-	private function glyphsInCommon($font, $one, $other)
-	{
-		return array_values(array_intersect($this->glyphsOf($font, $one), $this->glyphsOf($font, $other)));
-	}
-
+	/**
+	 * Sogdian Fe joins on both sides, so the Beth in front of it is the initial Beth that stands in
+	 * front of any other dual-joining letter, and not the isolated one. The Beth is the rightmost
+	 * letter of a run that reads right to left, so it is the last glyph drawn.
+	 */
 	public function testTheSyriacSampleDrawsTheBethSogdianFeAsksForAndNotTheIsolatedOne()
 	{
-		$sample = self::BETH . self::SOGDIAN_FE;
+		$beforeSogdianFe = $this->glyphsOf('syriac', self::BETH . self::SOGDIAN_FE);
+		$beforeSemkath = $this->glyphsOf('syriac', self::BETH . self::SEMKATH);
+		$alone = $this->glyphsOf('syriac', self::BETH);
 
-		$this->assertNotSame([], $this->glyphsInCommon('syriac', $sample, self::BETH . self::SEMKATH), 'the sample draws no letter the dual-joining neighbour draws');
-		$this->assertSame([], $this->glyphsInCommon('syriac', $sample, self::BETH), 'the sample draws the isolated Beth');
+		$this->assertSame(end($beforeSemkath), end($beforeSogdianFe), 'the sample draws a Beth the dual-joining neighbour does not');
+		$this->assertNotSame(end($alone), end($beforeSogdianFe), 'the sample draws the isolated Beth');
 	}
 
+	/**
+	 * Low Alef joins nothing, so it leaves the Beh in front of it exactly as the Beh stands on its own -
+	 * the whole run is the two of them drawn unchanged, and none of it is the Beh that joins an Alef.
+	 */
 	public function testTheArabicSampleDrawsTheBehLowAlefAsksForAndNotTheJoinedOne()
 	{
-		$sample = self::BEH . self::LOW_ALEF;
+		$sample = $this->glyphsOf('arabic', self::BEH . self::LOW_ALEF);
+		$unjoined = array_merge($this->glyphsOf('arabic', self::LOW_ALEF), $this->glyphsOf('arabic', self::BEH));
 
-		$this->assertNotSame([], $this->glyphsInCommon('arabic', $sample, self::BEH), 'the sample draws no letter the Beh on its own draws');
-		$this->assertSame([], $this->glyphsInCommon('arabic', $sample, self::BEH . self::ALEF), 'the sample draws the joined Beh');
+		$this->assertSame($unjoined, $sample, 'the sample draws something other than the Low Alef and the isolated Beh');
+		$this->assertNotSame($this->glyphsOf('arabic', self::BEH . self::ALEF), $sample, 'the sample draws the joined Beh');
 	}
 }
