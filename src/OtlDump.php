@@ -1421,6 +1421,10 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 				for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
 					$SubstFormat = $Lookup[$i]['Subtable'][$c]['Format'];
 
+					// The report below counts what this pass records, and a subtable whose every entry
+					// the Ignore flags turn away has nothing recorded for it
+					$Lookup[$i]['Subtable'][$c]['subs'] = [];
+
 					// LookupType 1: Single Substitution Subtable 1 => 1
 					if ($Lookup[$i]['Type'] == 1) {
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
@@ -1453,10 +1457,14 @@ $MarkAttachmentType = ' . var_export($this->MarkAttachmentType, true) . ';
 								if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
 									continue;
 								}
-								if (!isset($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID']) || count($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID']) == 0) {
-									continue;
-								} // Illegal for GlyphCount to be 0; either error in font, or something has gone wrong - lets carry on for now!
-								foreach ($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID'] as $sub) {
+								// A Sequence of no glyphs is legal - it is how a font deletes the glyph it
+								// covers - so the report shows it substituting nothing rather than passing
+								// over it. TTFontFile skips the same shape, where 'subs' feeds a string
+								// replacement that has no way to say "and nothing in its place"
+								$sequence = isset($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID'])
+									? $Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID']
+									: [];
+								foreach ($sequence as $sub) {
 									$substitute[] = unicode_hex($this->glyphToChar[$sub][0]);
 								}
 								$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute];

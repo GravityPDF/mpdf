@@ -1319,7 +1319,7 @@ class Otl
 			while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
 				$currGlyph = $this->OTLdata[$ptr]['hex'];
 				$currGID = $this->OTLdata[$ptr]['uni'];
-				$shift = 1;
+				$shift = null;
 				foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
 					// The Coverage read for this subtable is the one for input position 0, which is the only
 					// position a match can start at - see where TTFontFile reads it
@@ -1327,15 +1327,12 @@ class Otl
 						// Get rules from font GSUB subtable
 						$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
 
-						if ($shift) {
+						if ($shift !== null) {
 							break;
 						}
 					}
 				}
-				if ($shift == 0) {
-					$shift = 1;
-				}
-				$ptr += $shift;
+				$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 			}
 		}
 	}
@@ -1386,7 +1383,7 @@ class Otl
 			while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
 				$currGlyph = $this->OTLdata[$ptr]['hex'];
 				$currGID = $this->OTLdata[$ptr]['uni'];
-				$shift = 1;
+				$shift = null;
 
 				foreach ($LookupList as $lu => $tag) {
 					$Type = $this->GSUBLookups[$lu]['Type'];
@@ -1404,16 +1401,13 @@ class Otl
 							// Get rules from font GSUB subtable
 							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
 
-							if ($shift) {
+							if ($shift !== null) {
 								break 2;
 							}
 						}
 					}
 				}
-				if ($shift == 0) {
-					$shift = 1;
-				}
-				$ptr += $shift;
+				$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 			}
 		}
 	}
@@ -1457,7 +1451,7 @@ class Otl
 				while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
 					$currGlyph = $this->OTLdata[$ptr]['hex'];
 					$currGID = $this->OTLdata[$ptr]['uni'];
-					$shift = 1;
+					$shift = null;
 					foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
 						// The Coverage read for this subtable is the one for input position 0, which is the only
 						// position a match can start at - see where TTFontFile reads it
@@ -1465,15 +1459,12 @@ class Otl
 							// Get rules from font GSUB subtable
 							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, 0, $tagInt);
 
-							if ($shift) {
+							if ($shift !== null) {
 								break;
 							}
 						}
 					}
-					if ($shift == 0) {
-						$shift = 1;
-					}
-					$ptr += $shift;
+					$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 				}
 			}
 		}
@@ -1520,7 +1511,7 @@ class Otl
 				while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
 					$currGlyph = $this->OTLdata[$ptr]['hex'];
 					$currGID = $this->OTLdata[$ptr]['uni'];
-					$shift = 1;
+					$shift = null;
 					foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
 						// The Coverage read for this subtable is the one for input position 0, which is the only
 						// position a match can start at - see where TTFontFile reads it
@@ -1531,7 +1522,7 @@ class Otl
 							// Get rules from font GSUB subtable
 							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, $is_old_spec, $tagInt);
 
-							if ($shift) {
+							if ($shift !== null) {
 								break;
 							}
 						} // Special case for Indic  ZZZ99S
@@ -1557,17 +1548,14 @@ class Otl
 									// Get rules from font GSUB subtable
 									$shift = $this->_applyGSUBsubtableSpecial($lu, $c, $ptr, $currGlyph, $currGID, $nextGlyph, $nextGID, $subtable_offset, $Type, $this->GSLuCoverage[$lu][$c]);
 
-									if ($shift) {
+									if ($shift !== null) {
 										break;
 									}
 								}
 							}
 						}
 					}
-					if ($shift == 0) {
-						$shift = 1;
-					}
-					$ptr += $shift;
+					$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 				}
 			}
 		}
@@ -1596,7 +1584,7 @@ class Otl
 					continue;
 				}
 				// Get rules from font GSUB subtable
-				if ($this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, 8, $Flag, $MarkFilteringSet, $coverage[$c], 0, $tag, 0, $tagInt)) {
+				if (null !== $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, 8, $Flag, $MarkFilteringSet, $coverage[$c], 0, $tag, 0, $tagInt)) {
 					break;
 				}
 			}
@@ -1622,12 +1610,15 @@ class Otl
 		return isset($masks[$usetag]) ? Indic::FLAG($masks[$usetag]) : 0;
 	}
 
+	/**
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
+	 */
 	function _applyGSUBsubtableSpecial($lookupID, $subtable, $ptr, $currGlyph, $currGID, $nextGlyph, $nextGID, $subtable_offset, $Type, $LuCoverage)
 	{
 		// The same guard the other two entry points make, on the glyph this one is indexed by: the
 		// lookup is on the consonant after the Halant, not on the glyph the cursor is on
 		if (!isset($LuCoverage[$nextGID])) {
-			return 0;
+			return null;
 		}
 
 		// Special case for Indic
@@ -1667,7 +1658,7 @@ class Otl
 			$CompCount = $this->reader->readUInt16();
 
 			if ($CompCount != 2) {
-				return 0;
+				return null;
 			} // Only expecting to work with 2:1 (and no ignore characters in between)
 
 
@@ -1693,7 +1684,8 @@ class Otl
 				}
 			}
 		}
-		return 0;
+
+		return null;
 	}
 
 	/**
@@ -1716,14 +1708,21 @@ class Otl
 	 * redundant: theirs stands ahead of the call, and on a run through Arabic turns away 88,700 of
 	 * 90,000 glyphs - leaning on this guard alone measured 15% slower end to end.
 	 *
+	 * Whether a subtable applied and how far the cursor then moves are separate facts, and separate
+	 * values: null where it did not apply, and otherwise the advance. The advance is not always
+	 * positive - a Multiple Substitution to the empty sequence, which is how a font deletes a glyph,
+	 * applies and moves the cursor by nothing, and one number cannot carry that and "did not apply" at
+	 * once. Zero only ever follows glyphs being taken out, so the loops that add it to a cursor still
+	 * reach the end of the string.
+	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	function _applyGSUBsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt)
 	{
 		if (!isset($LuCoverage[$currGID])) {
-			return 0;
+			return null;
 		}
 
 		$ignore = $this->getGCOMignoreSet($Flag, $MarkFilteringSet);
@@ -1785,13 +1784,13 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#lookuptype-1-single-substitution-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBsingleSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $SubstFormat)
 	{
 		// Flag = Ignore
 		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
-			return 0;
+			return null;
 		}
 		$CoverageOffset = $subtable_offset + $this->reader->readUInt16();
 		$GlyphPos = $LuCoverage[$currGID];
@@ -1813,14 +1812,12 @@ class Otl
 		}
 
 		$substitute = $this->glyphToChar($GlyphID);
-		$shift = $this->GSUBsubstitute($ptr, $substitute, $Type);
-		if ($this->debugOTL && $shift) {
+		$this->GSUBsubstitute($ptr, $substitute, $Type);
+		if ($this->debugOTL) {
 			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
-		if ($shift) {
-			return 1;
-		}
-		return 0;
+
+		return 1;
 	}
 
 	/**
@@ -1828,15 +1825,18 @@ class Otl
 	 *
 	 * One glyph for a sequence of them, as when a precomposed character is decomposed for shaping.
 	 *
+	 * The sequence may be empty, which is how a font deletes a glyph. That applies like any other
+	 * sequence and leaves the cursor where it is, since what stood after the glyph now stands on it.
+	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#lookuptype-2-multiple-substitution-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBmultipleSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $SubstFormat)
 	{
 		// Flag = Ignore
 		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
-			return 0;
+			return null;
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
 		$GlyphPos = $LuCoverage[$currGID];
@@ -1852,14 +1852,13 @@ class Otl
 			$SubstituteGlyphs[] = $this->glyphToChar($sgid);
 		}
 
+		// What it puts there is what the cursor moves by, which for the empty sequence is nothing
 		$shift = $this->GSUBsubstitute($ptr, $SubstituteGlyphs, $Type);
-		if ($this->debugOTL && $shift) {
+		if ($this->debugOTL) {
 			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
-		if ($shift) {
-			return $shift;
-		}
-		return 0;
+
+		return $shift;
 	}
 
 	/**
@@ -1870,13 +1869,13 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#lookuptype-3-alternate-substitution-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBalternateSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $tagInt, $SubstFormat)
 	{
 		// Flag = Ignore
 		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
-			return 0;
+			return null;
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
 		$AlternateSetCount = $this->reader->readUInt16();
@@ -1890,7 +1889,7 @@ class Otl
 		}
 		///////////////////////////////////////////////////////////////////////////////!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		if ($alt == 0) {
-			return 0;
+			return null;
 		} // If specified alternate not present, cancel [ or could default $alt = 1 ?]
 
 		$GlyphPos = $LuCoverage[$currGID];
@@ -1901,21 +1900,19 @@ class Otl
 
 		$AlternateGlyphCount = $this->reader->readUInt16();
 		if ($alt > $AlternateGlyphCount) {
-			return 0;
+			return null;
 		} // If specified alternate not present, cancel [ or could default $alt = 1 ?]
 
 		$this->reader->skip(($alt - 1) * 2);
 		$GlyphID = $this->reader->readUInt16();
 
 		$substitute = $this->glyphToChar($GlyphID);
-		$shift = $this->GSUBsubstitute($ptr, $substitute, $Type);
-		if ($this->debugOTL && $shift) {
+		$this->GSUBsubstitute($ptr, $substitute, $Type);
+		if ($this->debugOTL) {
 			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
-		if ($shift) {
-			return 1;
-		}
-		return 0;
+
+		return 1;
 	}
 
 	/**
@@ -1926,13 +1923,13 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#lookuptype-4-ligature-substitution-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBligatureSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $ignore, $SubstFormat)
 	{
 		// Flag = Ignore
 		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
-			return 0;
+			return null;
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
 		$FirstGlyphPos = $LuCoverage[$currGID];
@@ -1989,7 +1986,8 @@ class Otl
 				}
 			}
 		}
-		return 0;
+
+		return null;
 	}
 
 	/**
@@ -1999,7 +1997,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#51-context-substitution-format-1-simple-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBcontextSubstFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
@@ -2043,13 +2041,11 @@ class Otl
 					if ($this->debugOTL) {
 						$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 					}
-					$shift = $this->_applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt);
-
-					return $shift;
+					return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 				}
 			}
 		}
-		return 0;
+		return null;
 	}
 
 	/**
@@ -2060,7 +2056,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#52-context-substitution-format-2-class-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBcontextSubstFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
@@ -2128,15 +2124,13 @@ class Otl
 						if ($this->debugOTL) {
 							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 						}
-						$shift = $this->_applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt);
-
-						return $shift;
+						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 					}
 				}
 			}
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -2146,7 +2140,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#53-context-substitution-format-3-coverage-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBcontextSubstFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
@@ -2173,12 +2167,10 @@ class Otl
 			}
 
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
-			$shift = $this->_applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt);
-
-			return $shift;
+			return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -2188,7 +2180,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#61-chained-contexts-substitution-format-1-simple-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBchainContextSubstFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
@@ -2234,12 +2226,10 @@ class Otl
 					$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
 				$SubstCount = $this->reader->readUInt16();
-				$shift = $this->_applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt);
-
-				return $shift;
+				return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 			}
 		}
-		return 0;
+		return null;
 	}
 
 	/**
@@ -2249,7 +2239,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#62-chained-contexts-substitution-format-2-class-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBchainContextSubstFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
@@ -2370,15 +2360,13 @@ class Otl
 							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 						}
 						$SubstCount = $this->reader->readUInt16();
-						$shift = $this->_applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt);
-
-						return $shift;
+						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 					}
 				}
 			}
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -2388,7 +2376,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#63-chained-contexts-substitution-format-3-coverage-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBchainContextSubstFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
@@ -2430,12 +2418,10 @@ class Otl
 			}
 
 			$this->reader->seek($save_pos); // Return to just after PosCount
-			$shift = $this->_applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt);
-
-			return $shift;
+			return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -2446,13 +2432,13 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gsub#lookuptype-8-reverse-chaining-contextual-single-substitution-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGSUBreverseChainSingleSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $ignore, $SubstFormat)
 	{
 		// Flag = Ignore
 		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
-			return 0;
+			return null;
 		}
 		//===========
 		// Format 1:
@@ -2478,7 +2464,7 @@ class Otl
 		$save_pos = $this->reader->tell(); // Save the point just after GlyphCount
 		$GlyphPos = $LuCoverage[$currGID];
 		if ($GlyphPos >= $GlyphCount) {
-			return 0;
+			return null;
 		}
 
 		$CoverageBacktrackGlyphs = [];
@@ -2495,18 +2481,18 @@ class Otl
 		// The input sequence is the one glyph at $ptr, which the caller has already matched against
 		// the input Coverage table, so only the backtrack and lookahead sequences are left to check
 		if (!$this->checkContextMatchMultiple([[$currGID => 1]], $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr)) {
-			return 0;
+			return null;
 		}
 
 		$this->reader->seek($save_pos + (2 * $GlyphPos));
 		$substitute = $this->glyphToChar($this->reader->readUInt16());
 
-		$shift = $this->GSUBsubstitute($ptr, $substitute, $Type);
-		if ($this->debugOTL && $shift) {
+		$this->GSUBsubstitute($ptr, $substitute, $Type);
+		if ($this->debugOTL) {
 			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
-		return $shift;
+		return 1;
 	}
 
 	function _updateLigatureMarks($pos, $n)
@@ -2561,6 +2547,18 @@ class Otl
 		}
 	}
 
+	/**
+	 * Put the substitute glyphs in place of the ones at $pos, and carry the ligature and mark
+	 * bookkeeping over the change in length.
+	 *
+	 * The number returned is how many glyphs now stand where the substitution was made - one for the
+	 * 1:1 types, the length of the sequence for a Multiple Substitution, which is 0 where a font
+	 * deletes a glyph by substituting the empty one. The exception is a Ligature Substitution, which
+	 * returns 0 for a ligature it refused to form because its components crossed a syllable, so read
+	 * that one as a yes or no rather than as a count.
+	 *
+	 * @return int
+	 */
 	function GSUBsubstitute($pos, $substitute, $Type, $GlyphPos = null)
 	{
 
@@ -2573,6 +2571,9 @@ class Otl
 			return 1;
 		} // LookupType 2: Multiple Substitution Subtable : 1 to n
 		elseif ($Type == 2) {
+			// A font writes a deletion as a substitution to the empty sequence, and the splice below
+			// then has nothing to put in the glyph's place
+			$newOTLdata = [];
 			for ($i = 0; $i < count($substitute); $i++) {
 				$uni = $substitute[$i];
 				$newOTLdata[$i] = [];
@@ -2620,9 +2621,9 @@ class Otl
 					$newOTLdata[$i]['syllable'] = $this->OTLdata[$pos]['syllable'];
 				}
 			}
-			if ($this->shaper == 'K' || $this->shaper == 'T' || $this->shaper == 'L') {
+			if ($newOTLdata && ($this->shaper == 'K' || $this->shaper == 'T' || $this->shaper == 'L')) {
 				if ($this->OTLdata[$pos]['wordend']) {
-					$newOTLdata[count($substitute) - 1]['wordend'] = true;
+					$newOTLdata[count($newOTLdata) - 1]['wordend'] = true;
 				}
 			}
 
@@ -2930,7 +2931,7 @@ class Otl
 			while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
 				$currGlyph = $this->OTLdata[$ptr]['hex'];
 				$currGID = $this->OTLdata[$ptr]['uni'];
-				$shift = 1;
+				$shift = null;
 				foreach ($this->GPOSLookups[$lu]['Subtables'] as $c => $subtable_offset) {
 					// The Coverage read for this subtable is the one for input position 0, which is the only
 					// position a match can start at - see where TTFontFile reads it
@@ -2938,16 +2939,13 @@ class Otl
 						// Get rules from font GPOS subtable
 						if (isset($this->OTLdata[$ptr]['bidi_type'])) {  // No need to check bidi_type - just a check that it exists
 							$shift = $this->_applyGPOSsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->LuCoverage[$lu][$c], $tag, 0, $is_old_spec);
-							if ($shift) {
+							if ($shift !== null) {
 								break;
 							}
 						}
 					}
 				}
-				if ($shift == 0) {
-					$shift = 1;
-				}
-				$ptr += $shift;
+				$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 			}
 		}
 	}
@@ -3047,12 +3045,12 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSsubtable($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $tag, $level, $is_old_spec)
 	{
 		if (!isset($LuCoverage[$currGID])) {
-			return 0;
+			return null;
 		}
 
 		// RIGHT_TO_LEFT. Only cursive attachment reads it.
@@ -3118,7 +3116,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#lookup-type-1-single-adjustment-positioning-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSsingleAdjustment($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $PosFormat)
 	{
@@ -3156,7 +3154,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#lookup-type-2-pair-adjustment-positioning-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSpairAdjustment($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $ignore, $PosFormat)
 	{
@@ -3185,7 +3183,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#pair-adjustment-positioning-format-1-adjustments-for-glyph-pairs
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSpairAdjustmentFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $ignore, $PosFormat, $ValueFormat1, $ValueFormat2, $sizeOfPair)
 	{
@@ -3239,7 +3237,7 @@ class Otl
 				}
 			}
 		}
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3250,7 +3248,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#pair-adjustment-positioning-format-2-class-pair-adjustment
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSpairAdjustmentFormat2($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $level, $ignore, $PosFormat, $ValueFormat1, $ValueFormat2, $sizeOfPair)
 	{
@@ -3276,7 +3274,7 @@ class Otl
 		if (isset($this->OTLdata[$checkpos])) {
 			$matchedpos = $checkpos;
 		} else {
-			return 0;
+			return null;
 		}
 
 		$SecondGlyph = $this->OTLdata[$matchedpos]['uni'];
@@ -3318,7 +3316,7 @@ class Otl
 				}
 			}
 		}
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3329,7 +3327,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#lookup-type-3-cursive-attachment-positioning-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOScursiveAttachment($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $dir, $PosFormat)
 	{
@@ -3379,7 +3377,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#lookup-type-4-mark-to-base-attachment-positioning-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSmarkToBase($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $is_old_spec, $PosFormat)
 	{
@@ -3461,7 +3459,7 @@ class Otl
 			}
 			return 1;
 		}
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3472,7 +3470,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#lookup-type-5-mark-to-ligature-attachment-positioning-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSmarkToLigature($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $PosFormat)
 	{
@@ -3569,7 +3567,7 @@ class Otl
 				return 1;
 			}
 		}
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3579,7 +3577,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#lookup-type-6-mark-to-mark-attachment-positioning-subtable
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSmarkToMark($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $ignore, $PosFormat)
 	{
@@ -3643,7 +3641,7 @@ class Otl
 			// However IF Mark2 (first in logical order, i.e. being attached to) is not associated with a base, carry on
 			// This happens in Indic when the Mark being attached to e.g. [Halant Ma lig] -> MatraU,  [U+0B4D + U+B2E as E0F5]-> U+0B41 become E135
 			if (isset($this->assocMarks[$matchedpos]) && ($prevLig != $thisLig || $prevComp != $thisComp)) {
-				return 0;
+				return null;
 			}
 
 			if (!isset($this->OTLdata[$matchedpos]['GPOSinfo']['BaseWidth']) || !$this->OTLdata[$matchedpos]['GPOSinfo']['BaseWidth']) {
@@ -3665,7 +3663,7 @@ class Otl
 			}
 			return 1;
 		}
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3675,7 +3673,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#context-positioning-subtable-format-1-simple-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOScontextPosFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
@@ -3688,7 +3686,7 @@ class Otl
 		$this->reader->skip($GlyphPos * 2);
 		$offset = $this->reader->readUInt16();
 		if ($offset == 0x0000) {
-			return 0; // No context begins with this glyph
+			return null; // No context begins with this glyph
 		}
 
 		$PosRuleSet = $subtable_offset + $offset;
@@ -3714,7 +3712,7 @@ class Otl
 			// Type 7 is a plain context: it has no backtrack or lookahead sequence
 			$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
 			if ($matched) {
-				$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
+				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
 					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
@@ -3723,7 +3721,7 @@ class Otl
 			}
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3733,7 +3731,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#context-positioning-subtable-format-2-class-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOScontextPosFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
@@ -3798,7 +3796,7 @@ class Otl
 
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
 					if ($matched) {
-						$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
+						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL) {
 							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
@@ -3809,7 +3807,7 @@ class Otl
 			}
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3819,7 +3817,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#context-positioning-subtable-format-3-coverage-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOScontextPosFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
@@ -3842,7 +3840,7 @@ class Otl
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, [], [], $ignore, $ptr);
 		if ($matched) {
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
-			$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
+			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
 				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
@@ -3850,7 +3848,7 @@ class Otl
 			return $shift;
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3860,7 +3858,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#chained-context-positioning-subtable-format-1-simple-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSchainContextPosFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
@@ -3872,7 +3870,7 @@ class Otl
 		$this->reader->skip($GlyphPos * 2);
 		$offset = $this->reader->readUInt16();
 		if ($offset == 0x0000) {
-			return 0; // No context begins with this glyph
+			return null; // No context begins with this glyph
 		}
 
 		$ChainPosRuleSet = $subtable_offset + $offset;
@@ -3909,7 +3907,7 @@ class Otl
 			$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
 			if ($matched) {
 				$PosCount = $this->reader->readUInt16();
-				$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
+				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
 					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
@@ -3918,7 +3916,7 @@ class Otl
 			}
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -3928,7 +3926,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#chained-context-positioning-subtable-format-2-class-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSchainContextPosFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
@@ -4038,7 +4036,7 @@ class Otl
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
 					if ($matched) {
 						$PosCount = $this->reader->readUInt16();
-						$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
+						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL) {
 							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
@@ -4049,7 +4047,7 @@ class Otl
 			}
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -4059,7 +4057,7 @@ class Otl
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#chained-context-positioning-subtable-format-3-coverage-based-glyph-contexts
 	 *
-	 * @return int Glyphs to advance by, 0 if the subtable did not apply
+	 * @return int|null Glyphs to advance by, null if the subtable did not apply
 	 */
 	private function _applyGPOSchainContextPosFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
@@ -4096,7 +4094,7 @@ class Otl
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
 			$this->reader->seek($save_pos); // Return to just after PosCount
-			$shift = $this->_applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec);
+			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
 				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
@@ -4104,7 +4102,7 @@ class Otl
 			return $shift;
 		}
 
-		return 0;
+		return null;
 	}
 
 	/**
@@ -4121,25 +4119,32 @@ class Otl
 	 * error; the spec says the index is into the input sequence, and a font that names a longer one
 	 * than it matched is describing a position that does not exist.
 	 *
-	 * Only a subtable whose context matched arrives here, and what is returned is what stops the loop
-	 * over that lookup's subtables - so it starts at 1 rather than 0. A matched context ends its
-	 * lookup whether or not the lookups it names did anything, and returning 0 for one that named no
-	 * records, or whose records did nothing, sent the glyph on to the next subtable to match a
-	 * shorter context and substitute there.
+	 * Only a subtable whose context matched arrives here, so this always applied. A matched context
+	 * ends its lookup whether or not the lookups it names did anything, and one that named no records,
+	 * or whose records did nothing, used to read as not having matched and send the glyph on to the
+	 * next subtable to match a shorter context and substitute there.
 	 *
-	 * The counterpart for positioning is _applyGPOSlookupRecords. The two are the same shape and
-	 * differ only in which lookup list they index and which applier they call.
+	 * Where the cursor goes is the end of the matched input, carried through whatever the nested
+	 * lookups add or remove. It is not the advance one of them returned: that counts from the position
+	 * the record named, which is the context's own start only where that is sequence index 0, and the
+	 * last record to shift anything was overwriting what the others left.
+	 *
+	 * A nested lookup that changes the number of glyphs moves the positions the records after it name,
+	 * and where it grew one glyph into several, those several are what the matched sequence holds
+	 * there. Shaping every contextual sequence in the corpus reaches none of that, so it is written
+	 * from HarfBuzz's apply_lookup rather than from anything observed.
+	 *
+	 * The counterpart for positioning is _applyGPOSlookupRecords, which is the same shape without the
+	 * bookkeeping - positioning cannot change the number of glyphs.
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2#sequence-context-format-1-simple-glyph-contexts
 	 *
-	 * @param int   $SubstCount      SubstCount, the number of records to read
-	 * @param int   $InputGlyphCount The length of the matched input sequence
-	 * @param array $matched         Position in OTLdata of each glyph of the matched input sequence
+	 * @param int   $SubstCount SubstCount, the number of records to read
+	 * @param array $matched    Position in OTLdata of each glyph of the matched input sequence
 	 *
-	 * @return int Glyphs to advance by, from the last nested lookup that shifted anything, and 1
-	 *             where none did
+	 * @return int Glyphs to advance by, the length of the matched input
 	 */
-	private function _applyGSUBlookupRecords($SubstCount, $InputGlyphCount, $matched, $currentTag, $is_old_spec, $tagInt)
+	private function _applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt)
 	{
 		$SubstLookupRecord = [];
 		for ($p = 0; $p < $SubstCount; $p++) {
@@ -4147,10 +4152,12 @@ class Otl
 			$SubstLookupRecord[$p]['LookupListIndex'] = $this->reader->readUInt16();
 		}
 
-		// The context matched, so this applied: 0 would send the glyph on to the next subtable
-		$shift = 1;
+		$start = $matched[0];
+		$end = $matched[count($matched) - 1] + 1;
+
 		for ($p = 0; $p < $SubstCount; $p++) {
-			if ($SubstLookupRecord[$p]['SequenceIndex'] >= $InputGlyphCount) {
+			$index = $SubstLookupRecord[$p]['SequenceIndex'];
+			if ($index >= count($matched)) {
 				continue;
 			}
 
@@ -4159,20 +4166,46 @@ class Otl
 			$luFlag = $this->GSUBLookups[$lu]['Flag'];
 			$luMarkFilteringSet = $this->GSUBLookups[$lu]['MarkFilteringSet'];
 
-			$luptr = $matched[$SubstLookupRecord[$p]['SequenceIndex']];
+			$luptr = $matched[$index];
 			$lucurrGlyph = $this->OTLdata[$luptr]['hex'];
 			$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
+			$before = count($this->OTLdata);
 			foreach ($this->GSUBLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-				$applied = $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt);
-				if ($applied) {
-					$shift = $applied;
+				if (null !== $this->_applyGSUBsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->GSLuCoverage[$lu][$luc], 1, $currentTag, $is_old_spec, $tagInt)) {
 					break;
 				}
 			}
+
+			$delta = count($this->OTLdata) - $before;
+			if ($delta === 0) {
+				continue;
+			}
+
+			$end += $delta;
+			if ($end < $luptr) {
+				// It took out everything between here and the end of the match, so there is nothing
+				// left for the records after this one to name
+				$end = $luptr;
+				break;
+			}
+
+			$next = $index + 1;
+			if ($delta > 0) {
+				array_splice($matched, $next, 0, range($luptr + 1, $luptr + $delta));
+				$next += $delta;
+			} else {
+				// Never more entries than the match has left to give up
+				$dropped = min(-$delta, count($matched) - $next);
+				array_splice($matched, $next, $dropped);
+				$delta = -$dropped;
+			}
+			for ($m = $next, $last = count($matched); $m < $last; $m++) {
+				$matched[$m] += $delta;
+			}
 		}
 
-		return $shift;
+		return $end - $start;
 	}
 
 	/**
@@ -4186,19 +4219,21 @@ class Otl
 	 *     uint16   lookupListIndex     which lookup to apply
 	 *
 	 * The counterpart for substitution is _applyGSUBlookupRecords, which documents why a record
-	 * pointing past the end of the input sequence is skipped rather than treated as an error, and why
-	 * a matched context reports having applied even when nothing it named did anything.
+	 * pointing past the end of the input sequence is skipped rather than treated as an error, why a
+	 * matched context reports having applied even when nothing it named did anything, and why the
+	 * cursor goes to the end of the matched input rather than wherever a nested lookup left it.
+	 *
+	 * Nothing here carries the matched positions through a length change as that one does. Positioning
+	 * moves glyphs without adding or removing any, so the match cannot shift under it.
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#chained-sequence-context-positioning-format-3-coverage-based-glyph-contexts
 	 *
-	 * @param int   $PosCount        PosCount, the number of records to read
-	 * @param int   $InputGlyphCount The length of the matched input sequence
-	 * @param array $matched         Position in OTLdata of each glyph of the matched input sequence
+	 * @param int   $PosCount PosCount, the number of records to read
+	 * @param array $matched  Position in OTLdata of each glyph of the matched input sequence
 	 *
-	 * @return int Glyphs to advance by, from the last nested lookup that shifted anything, and 1
-	 *             where none did
+	 * @return int Glyphs to advance by, the length of the matched input
 	 */
-	private function _applyGPOSlookupRecords($PosCount, $InputGlyphCount, $matched, $tag, $is_old_spec)
+	private function _applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec)
 	{
 		$PosLookupRecord = [];
 		for ($p = 0; $p < $PosCount; $p++) { // EACH LOOKUP
@@ -4206,11 +4241,14 @@ class Otl
 			$PosLookupRecord[$p]['LookupListIndex'] = $this->reader->readUInt16();
 		}
 
-		// The context matched, so this applied: 0 would send the glyph on to the next subtable
-		$shift = 1;
+		// Nothing below moves these, so unlike the substitution side they are read once
+		$inputGlyphCount = count($matched);
+		$start = $matched[0];
+		$end = $matched[$inputGlyphCount - 1] + 1;
+
 		for ($p = 0; $p < $PosCount; $p++) {
 			// Apply  $PosLookupRecord[$p]['LookupListIndex']  at   $PosLookupRecord[$p]['SequenceIndex']
-			if ($PosLookupRecord[$p]['SequenceIndex'] >= $InputGlyphCount) {
+			if ($PosLookupRecord[$p]['SequenceIndex'] >= $inputGlyphCount) {
 				continue;
 			}
 			$lu = $PosLookupRecord[$p]['LookupListIndex'];
@@ -4227,15 +4265,13 @@ class Otl
 			$lucurrGID = $this->OTLdata[$luptr]['uni'];
 
 			foreach ($this->GPOSLookups[$lu]['Subtables'] as $luc => $lusubtable_offset) {
-				$applied = $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec);
-				if ($applied) {
-					$shift = $applied;
+				if (null !== $this->_applyGPOSsubtable($lu, $luc, $luptr, $lucurrGlyph, $lucurrGID, $lusubtable_offset, $luType, $luFlag, $luMarkFilteringSet, $this->LuCoverage[$lu][$luc], $tag, 1, $is_old_spec)) {
 					break;
 				}
 			}
 		}
 
-		return $shift;
+		return $end - $start;
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////
