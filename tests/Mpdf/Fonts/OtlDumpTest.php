@@ -22,6 +22,9 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private $mpdf;
 
+	/**
+	 * A fresh recording mPDF per test, since the report is read back off the one the dump wrote to.
+	 */
 	public function set_up()
 	{
 		parent::set_up();
@@ -107,6 +110,113 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertGreaterThan($limit, array_sum(array_map('strlen', $this->mpdf->recordedHtml)));
 		$this->assertLessThan($limit, $longest);
+	}
+
+	/**
+	 * GPOS Lookup Types 7 and 8 are the positioning counterparts of GSUB's 5 and 6: a rule matches a
+	 * run of glyphs and hands named positions within it to other lookups. Until #90 the dump threw
+	 * rather than reporting five of their six formats, which is exactly when you would want to look.
+	 *
+	 * Type 7 Format 1 lists the glyphs of each rule one by one. Noto Sans Gurmukhi UI's `dist` nudges
+	 * the AU matra + addak ligature by a single unit where a TTA and an EE matra follow it -
+	 * ContextualPositioningTest shapes the same rule and sees the same -1.
+	 */
+	public function testAGlyphListContextPositioningIsReported()
+	{
+		$report = implode('', $this->dump('NotoSansGurmukhiUI-GPOS71-Subset', 'guru', 'DFLT'));
+
+		$this->assertStringContainsString('LookupType 7: Context positioning [Format 1]', $report);
+		$this->assertStringContainsString('<div>Input #1: <span class="unchanged">&nbsp;&#x0A1F;&nbsp;</span></div>', $report);
+		$this->assertStringContainsString('<div class="sequenceIndex">Substitution Position: 0</div>', $report);
+		$this->assertStringContainsString('Xpl: -1;', $report);
+	}
+
+	/**
+	 * Format 3 matches a Coverage table per position. The synthetic font #80 built for it covers A
+	 * then B and shifts the second left by 400 units.
+	 */
+	public function testACoverageContextPositioningIsReported()
+	{
+		$report = implode('', $this->dump('NotoSans-GPOS73-Synthetic', 'latn', 'DFLT'));
+
+		$this->assertStringContainsString('LookupType 7: Context positioning [Format 3]', $report);
+		$this->assertStringContainsString('<div>Input #0: <span class="unchanged">&nbsp;&#x0041;&nbsp;</span></div>', $report);
+		$this->assertStringContainsString('<div>Input #1: <span class="unchanged">&nbsp;&#x0042;&nbsp;</span></div>', $report);
+		$this->assertStringContainsString('<div class="sequenceIndex">Substitution Position: 1</div>', $report);
+		$this->assertStringContainsString('Xpl: -400;', $report);
+	}
+
+	/**
+	 * Type 8 puts a backtrack and a lookahead around the input. Noto Sans Takri's `kern` pulls the I
+	 * matra across the KA that follows it only where the anusvara closes the cluster.
+	 */
+	public function testAGlyphListChainedContextPositioningIsReported()
+	{
+		$report = implode('', $this->dump('NotoSansTakri-GPOS81-Subset', 'takr', 'DFLT'));
+
+		$this->assertStringContainsString('LookupType 8: Chained Context positioning [Format 1]', $report);
+		$this->assertStringContainsString('<div>Backtrack #0: <span class="unicode">M+E002</span></div>', $report);
+		$this->assertStringContainsString('<div>Input #0: <span class="unchanged">&nbsp;&#x1168A;&nbsp;</span></div>', $report);
+		$this->assertStringContainsString('Xpl: 107; Xadv: 107', $report);
+	}
+
+	/**
+	 * Format 2 matches classes, with a class definition of its own for each of the three sequences.
+	 * Noto Sans is the only font among the 103 installed that carries one: its `kern` pulls a
+	 * combining mark towards a dotless i where a mark below or a closing bracket follows.
+	 */
+	public function testAClassBasedChainedContextPositioningIsReported()
+	{
+		$report = implode('', $this->dump('NotoSans-Regular', 'latn', 'DFLT'));
+
+		$this->assertStringContainsString('LookupType 8: Chained Context positioning [Format 2]', $report);
+		$this->assertStringContainsString('<div class="lookuptypesub">Format 2: Class-based Chaining Context Positioning</div>', $report);
+		$this->assertStringContainsString('<div>Backtrack #0: <span class="unicode">U+0131</span></div>', $report);
+		$this->assertStringContainsString('<div class="rule">Input Class: 1</div>', $report);
+	}
+
+	/**
+	 * Each of the three sequences of a chained context has a Class Definition of its own, and so a
+	 * class 0 of its own: every glyph that Class Definition leaves unnamed. Noto Sans Devanagari's
+	 * `dist` names class 0 in the backtrack of lookup #21, which read as U+0000 for as long as only
+	 * the input sequence was told what to exclude.
+	 */
+	public function testAChainedContextBacktrackNamingClassZeroIsReportedAsWhatItExcludes()
+	{
+		$report = implode('', $this->dump('NotoSans-Regular', 'dev2', 'DFLT'));
+
+		$this->assertStringContainsString(
+			'<div>Backtrack #0: <span class="unchanged">&nbsp;[NOT &#x25cc;&#x0901; &#x25cc;&#x0902;',
+			$report
+		);
+		$this->assertStringNotContainsString('<div>Backtrack #0: <span class="unicode">U+0000</span></div>', $report);
+	}
+
+	/**
+	 * A format the spec does not define is named rather than reported as nothing, which is the one
+	 * thing the five throws #90 removed were right about.
+	 */
+	public function testAnUnknownContextPositioningFormatIsNamed()
+	{
+		foreach ([7 => 'reportGPOScontextPos', 8 => 'reportGPOSchainContextPos'] as $type => $method) {
+			try {
+				$this->callFormatReport($method);
+				$this->fail(sprintf('An unknown GPOS Type %d format should have thrown', $type));
+			} catch (\Mpdf\Exception\FontException $e) {
+				$this->assertSame(sprintf('GPOS Lookup Type %d, Format "4" not supported.', $type), $e->getMessage());
+			}
+		}
+	}
+
+	/**
+	 * The format dispatchers are private, and refusing a format no font can hold is the only thing
+	 * this needs to reach one of them for.
+	 */
+	private function callFormatReport($method)
+	{
+		$reflected = new \ReflectionMethod(OtlDump::class, $method);
+		$reflected->setAccessible(true);
+		$reflected->invoke($this->dumper(), [], 0, 4, 'kern', 'latn');
 	}
 
 	/**

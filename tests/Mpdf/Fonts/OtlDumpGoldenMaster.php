@@ -16,12 +16,8 @@ use Mpdf\TTFontFile;
  * warnings on every font in the corpus that TTFontFile does not, and those are exactly the
  * disagreements the collapse is meant to resolve.
  */
-class OtlDumpGoldenMaster
+class OtlDumpGoldenMaster extends GoldenMaster
 {
-
-	const FIXTURE_DIR = __DIR__ . '/../../data/otldump';
-
-	const FONT_DIR = __DIR__ . '/../../data/ttf';
 
 	/**
 	 * How much of a detail report to keep verbatim before falling back to size and hash. The dump
@@ -29,37 +25,26 @@ class OtlDumpGoldenMaster
 	 */
 	const DETAIL_BYTES = 8192;
 
-	private $tmpDir;
-
-	public function __construct($tmpDir = null)
+	/**
+	 * @return string The report and the diagnostics raised producing it
+	 */
+	protected function name()
 	{
-		$this->tmpDir = $tmpDir === null ? __DIR__ . '/../tmp/mpdf/otldump' : $tmpDir;
-	}
-
-	public function fonts()
-	{
-		$fonts = [];
-		foreach (glob(self::FONT_DIR . '/*.ttf') as $file) {
-			$name = basename($file, '.ttf');
-			$fonts[$name] = [$name];
-		}
-		ksort($fonts);
-
-		return $fonts;
-	}
-
-	public function fixtureFile($name)
-	{
-		return self::FIXTURE_DIR . '/' . $name . '.txt';
-	}
-
-	public function loadFixture($name)
-	{
-		return file_get_contents($this->fixtureFile($name));
+		return 'otldump';
 	}
 
 	/**
-	 * @return string The report and the diagnostics raised producing it
+	 * @return string The extension its fixtures are written with
+	 */
+	protected function extension()
+	{
+		return 'txt';
+	}
+
+	/**
+	 * @param string $name A font name, as fonts() gives it
+	 *
+	 * @return string Its report, detail by script and language, and the diagnostics raised reading it
 	 */
 	public function capture($name)
 	{
@@ -143,31 +128,6 @@ class OtlDumpGoldenMaster
 		}
 
 		return $capture;
-	}
-
-	public function update($name)
-	{
-		if (!is_dir(self::FIXTURE_DIR)) {
-			mkdir(self::FIXTURE_DIR, 0777, true);
-		}
-
-		$file = $this->fixtureFile($name);
-		file_put_contents($file, $this->capture($name));
-
-		return $file;
-	}
-
-	/**
-	 * A font refused for copyright names itself in the message, as it was passed in - absolute and
-	 * unresolved - and a fixture must carry nothing of the machine that made it. Separators are
-	 * normalised on both sides before the root is cut: Windows resolves its own root with backslashes
-	 * and the caller appended the rest with forward ones, so the message arrives carrying both.
-	 */
-	private function withoutPath($message)
-	{
-		$root = str_replace('\\', '/', realpath(__DIR__ . '/../../..')) . '/';
-
-		return str_replace($root, '', str_replace('\\', '/', $message));
 	}
 
 	/**

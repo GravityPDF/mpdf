@@ -18,8 +18,10 @@
 # Golden master fixtures are compared with the bytes the code produces, which uses "\n"
 # whatever the platform. A CRLF checkout would fail that comparison on Windows without
 # anything about the parser or the font having changed.
-tests/data/fontcache/*.json text eol=lf
-tests/data/otldump/*.txt text eol=lf
+tests/data/fontcache/** text eol=lf
+tests/data/otldump/** text eol=lf
+tests/data/shaping/** text eol=lf
+tests/data/subset/** text eol=lf
 
 # Denote all files that are truly binary and should not be modified.
 *.png binary

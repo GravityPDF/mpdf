@@ -13,6 +13,7 @@
 </div>
 <h1>GPOS Tables</h1>
 <h3>GPOS Scripts &amp; Languages</h3>
+<div class="glyphs">
 <div>No entries in GPOS table.</div>
 </div>
 

@@ -14,6 +14,14 @@ namespace Mpdf;
 class ContextualPositioningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
+	/**
+	 * An mPDF that records positioning, with one font registered and OTL fully on.
+	 *
+	 * @param string $fontkey The name the font is registered and selected under
+	 * @param string $file    Its file name within tests/data/ttf
+	 *
+	 * @return PositionRecordingMpdf
+	 */
 	private function mpdf($fontkey, $file)
 	{
 		return new PositionRecordingMpdf([
@@ -110,6 +118,68 @@ class ContextualPositioningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 		$mpdf = $this->mpdf('context73', 'NotoSans-GPOS73-Synthetic.ttf');
 
 		$mpdf->WriteHTML('<p>CB</p><p>BA</p>');
+
+		$this->assertSame([], $mpdf->drawnPositions);
+	}
+
+	/**
+	 * Type 7 Format 2 matches classes of glyphs rather than naming them, and no font among the 103
+	 * installed carries one either - the last of the six contextual positioning layouts without a
+	 * font - so this fixture is written by hand the same way: Noto Sans cut down to A, B and C, with
+	 * a GPOS of three lookups.
+	 *
+	 *   #0  single positioning, shifting B left by 400 units
+	 *   #1  single positioning, shifting C left by 250
+	 *   #2  the context, whose Class Definition table puts A in class 1 and B in class 2, leaving C
+	 *       in class 0, and whose set of rules for a context beginning with class 1 is
+	 *
+	 *         rule 0   class 1, class 2   run lookup #0 at position 1
+	 *         rule 1   class 1, class 0   run lookup #1 at position 1
+	 *
+	 * `dist` is the only feature, on both DFLT and latn, and it runs lookup #2 alone. Two nested
+	 * lookups rather than one so that the two rules can be told apart by how far the glyph moved.
+	 *
+	 * The first rule is the ordinary case: A then a glyph of class 2, which is B.
+	 */
+	public function testAppliesAClassBasedPlainContextPositioning()
+	{
+		$mpdf = $this->mpdf('context72', 'NotoSans-GPOS72-Synthetic.ttf');
+
+		$mpdf->WriteHTML('<p>AB</p>');
+
+		$this->assertEquals(
+			[[1 => ['XPlacement' => -400, 'XAdvanceL' => -400, 'XAdvanceR' => -400]]],
+			$mpdf->drawnPositions
+		);
+	}
+
+	/**
+	 * The second rule is A then class 0, which the spec makes every glyph the Class Definition table
+	 * does not name. C is the only one of the three, and it is shifted by a different amount so that
+	 * the two rules can be told apart.
+	 */
+	public function testAppliesAClassBasedContextRuleNamingClassZero()
+	{
+		$mpdf = $this->mpdf('context72', 'NotoSans-GPOS72-Synthetic.ttf');
+
+		$mpdf->WriteHTML('<p>AC</p>');
+
+		$this->assertEquals(
+			[[1 => ['XPlacement' => -250, 'XAdvanceL' => -250, 'XAdvanceR' => -250]]],
+			$mpdf->drawnPositions
+		);
+	}
+
+	/**
+	 * AA is what tells class 0 from "anything": the second A is in class 1, so the rule naming class
+	 * 0 does not reach it and neither does the rule naming class 2. CB and BA begin with a glyph no
+	 * rule starts from.
+	 */
+	public function testLeavesAGlyphNoClassBasedRuleReaches()
+	{
+		$mpdf = $this->mpdf('context72', 'NotoSans-GPOS72-Synthetic.ttf');
+
+		$mpdf->WriteHTML('<p>AA</p><p>CB</p><p>BA</p>');
 
 		$this->assertSame([], $mpdf->drawnPositions);
 	}

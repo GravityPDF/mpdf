@@ -835,49 +835,13 @@ parameters:
 			path: src/Otl.php
 
 		-
-			message: '#^Variable \$Backtrack might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
-
-		-
 			message: '#^Variable \$ChainSubRule might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
 			path: src/Otl.php
 
 		-
-			message: '#^Variable \$CoverageBacktrackOffset might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Otl.php
-
-		-
-			message: '#^Variable \$CoverageInputOffset might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Otl.php
-
-		-
-			message: '#^Variable \$CoverageLookaheadOffset might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Otl.php
-
-		-
 			message: '#^Variable \$GlyphID might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
-
-		-
-			message: '#^Variable \$Input might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
-
-		-
-			message: '#^Variable \$Lookahead might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
 			path: src/Otl.php
@@ -888,12 +852,6 @@ parameters:
 
 		-
 			message: '#^Variable \$Value might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
-
-		-
-			message: '#^Variable \$backtrackGlyphs might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
 			path: src/Otl.php
@@ -911,45 +869,15 @@ parameters:
 			path: src/Otl.php
 
 		-
-			message: '#^Variable \$lookaheadGlyphs might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
-
-		-
 			message: '#^Variable \$next_level might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
 			path: src/Bidi.php
 
 
-		-
-			message: '#^Variable \$useGSUBtags might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
 
 
 
-
-		-
-			message: '#^Variable \$backtrackGlyphs might not be defined\.$#'
-			identifier: variable.undefined
-			count: 4
-			path: src/OtlDump.php
-
-		-
-			message: '#^Variable \$lookaheadGlyphs might not be defined\.$#'
-			identifier: variable.undefined
-			count: 4
-			path: src/OtlDump.php
-
-
-		-
-			message: '#^Variable \$type might not be defined\.$#'
-			identifier: variable.undefined
-			count: 3
-			path: src/OtlDump.php
 
 		-
 			message: '#^Variable \$new_reph_pos might not be defined\.$#'
@@ -967,13 +895,7 @@ parameters:
 			message: '#^Undefined variable\: \$fsSelection$#'
 			identifier: variable.undefined
 			count: 1
-			path: src/TTFontFile.php
-
-		-
-			message: '#^Undefined variable\: \$post$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/TTFontFile.php
+			path: src/Fonts/FontSubsetter.php
 
 		-
 			message: '#^Variable \$arr might not be defined\.$#'
@@ -991,19 +913,13 @@ parameters:
 			message: '#^Variable \$format might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
-			path: src/TTFontFile.php
+			path: src/Fonts/FontSubsetter.php
 
 		-
 			message: '#^Variable \$glyphData might not be defined\.$#'
 			identifier: variable.undefined
 			count: 2
-			path: src/TTFontFile.php
-
-		-
-			message: '#^Variable \$head_start might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/TTFontFile.php
+			path: src/Fonts/FontSubsetter.php
 
 		-
 			message: '#^Variable \$kk might not be defined\.$#'
@@ -1027,12 +943,6 @@ parameters:
 			message: '#^Variable \$lookaheadGlyphs might not be defined\.$#'
 			identifier: variable.undefined
 			count: 5
-			path: src/TTFontFile.php
-
-		-
-			message: '#^Variable \$type might not be defined\.$#'
-			identifier: variable.undefined
-			count: 3
 			path: src/TTFontFile.php
 
 		-

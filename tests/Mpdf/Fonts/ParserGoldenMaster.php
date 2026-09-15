@@ -16,19 +16,8 @@ use Mpdf\TTFontFile;
  * Deliberately not get_object_vars() on the parser: ~95% of that is charWidths, glyphIDtoUni and
  * glyphToChar, built from cmap and hmtx, which no OTL work touches, and it runs to megabytes per font.
  */
-class ParserGoldenMaster
+class ParserGoldenMaster extends GoldenMaster
 {
-
-	const FIXTURE_DIR = __DIR__ . '/../../data/fontcache';
-
-	const FONT_DIR = __DIR__ . '/../../data/ttf';
-
-	private $tmpDir;
-
-	public function __construct($tmpDir = null)
-	{
-		$this->tmpDir = $tmpDir === null ? __DIR__ . '/../tmp/mpdf/goldenmaster' : $tmpDir;
-	}
 
 	/**
 	 * Fonts carrying no GDEF table. TTFontFile refuses these outright when OTL is asked for, so that is
@@ -54,19 +43,20 @@ class ParserGoldenMaster
 		return $fonts;
 	}
 
-	public function fixtureFile($name)
+	/**
+	 * @return string What this master pins, as a directory-safe word
+	 */
+	protected function name()
 	{
-		return self::FIXTURE_DIR . '/' . $name . '.json';
+		return 'fontcache';
 	}
 
-	public function hasFixture($name)
+	/**
+	 * @return string The extension its fixtures are written with
+	 */
+	protected function extension()
 	{
-		return file_exists($this->fixtureFile($name));
-	}
-
-	public function loadFixture($name)
-	{
-		return file_get_contents($this->fixtureFile($name));
+		return 'json';
 	}
 
 	/**
@@ -110,28 +100,6 @@ class ParserGoldenMaster
 		return json_encode($capture, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
 	}
 
-	public function update($name)
-	{
-		$capture = $this->capture($name);
-		$file = $this->fixtureFile($name);
-
-		if ($capture === null) {
-			if (file_exists($file)) {
-				unlink($file);
-			}
-
-			return null;
-		}
-
-		if (!is_dir(self::FIXTURE_DIR)) {
-			mkdir(self::FIXTURE_DIR, 0777, true);
-		}
-
-		file_put_contents($file, $capture);
-
-		return $file;
-	}
-
 	/**
 	 * The cache as the shaper will find it: JSON decoded so a diff is readable, the concatenated
 	 * GSUB/GPOS blob by length and hash because it is a copy of the font's own bytes.
@@ -152,6 +120,11 @@ class ParserGoldenMaster
 		return $files;
 	}
 
+	/**
+	 * Empties the scratch directory, so a capture cannot read a file an earlier one left behind.
+	 *
+	 * @param string $dir
+	 */
 	private function clear($dir)
 	{
 		if (!is_dir($dir)) {

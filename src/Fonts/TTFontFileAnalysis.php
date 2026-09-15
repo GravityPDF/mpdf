@@ -7,16 +7,25 @@ use Mpdf\TTFontFile;
 class TTFontFileAnalysis extends TTFontFile
 {
 
-	// Used to get font information from files in directory
+	/**
+	 * Read only what a font browser needs of a font: its names, its metrics, and whether it is a
+	 * collection.
+	 *
+	 * Used to list the fonts in a directory, where reading the character map and the layout tables of
+	 * every file would cost more than the listing is worth.
+	 *
+	 * @param string $file      The font file to read
+	 * @param int    $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
+	 *
+	 * @return array The family name, the four style flags, the file type, the collection index,
+	 *               and the script flags the font browser sorts on
+	 */
 	function extractCoreInfo($file, $TTCfontID = 0)
 	{
-		$this->filename = $file;
-		$this->reader = new FileReader($file);
+		$this->open($file);
 		$this->charWidths = '';
-		$this->glyphPos = [];
 		$this->charToGlyph = [];
 		$this->tables = [];
-		$this->otables = [];
 		$this->ascent = 0;
 		$this->descent = 0;
 		$this->numTTCFonts = 0;
@@ -66,9 +75,7 @@ class TTFontFileAnalysis extends TTFontFile
 		  }
 		  print_r($x); exit;
 		 */
-		///////////////////////////////////
 		// name - Naming table
-		///////////////////////////////////
 
 		/* Test purposes - displays table of names
 		  $name_offset = $this->seek_table("name");
@@ -186,9 +193,7 @@ class TTFontFileAnalysis extends TTFontFile
 			$this->styleName = 'Regular';
 		}
 
-		///////////////////////////////////
 		// head - Font header table
-		///////////////////////////////////
 		$this->seek_table("head");
 		$ver_maj = $this->reader->readUInt16();
 		$ver_min = $this->reader->readUInt16();
@@ -209,9 +214,7 @@ class TTFontFileAnalysis extends TTFontFile
 		$this->reader->skip(4);
 		$indexLocFormat = $this->reader->readInt16();
 
-		///////////////////////////////////
 		// OS/2 - OS/2 and Windows metrics table
-		///////////////////////////////////
 		$sFamily = '';
 		$panose = '';
 
@@ -233,20 +236,14 @@ class TTFontFileAnalysis extends TTFontFile
 			$fsSelection = $this->reader->readInt16();
 		}
 
-		///////////////////////////////////
 		// post - PostScript table
-		///////////////////////////////////
 		$this->seek_table("post");
 		$this->reader->skip(4);
 		$this->italicAngle = $this->reader->readInt16() + $this->reader->readUInt16() / 65536.0;
 		$this->reader->skip(4);
 		$isFixedPitch = $this->reader->readUInt32();
 
-
-
-		///////////////////////////////////
 		// cmap - Character to glyph index mapping table
-		///////////////////////////////////
 		$cmap_offset = $this->seek_table("cmap");
 		$this->reader->skip(2);
 		$cmapTableCount = $this->reader->readUInt16();
@@ -395,7 +392,6 @@ class TTFontFileAnalysis extends TTFontFile
 				}
 			}
 		}
-
 
 		$bold = false;
 		$italic = false;
