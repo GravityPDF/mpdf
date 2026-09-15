@@ -571,13 +571,25 @@ class Otl
 			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
 		}
 
-		Arabic::shape(
+		$multiple = Arabic::shape(
 			$this->OTLdata,
 			$this->GSUBdata[$this->GSUBfont]['rtlSUB'],
 			$this->GlyphClassMarks,
 			$usetags,
 			$GSUBscriptTag
 		);
+
+		// A form the font states as more than one glyph - a base and the marks drawn on it - left only
+		// its first glyph behind above. The rest go in through the same Multiple Substitution path GSUB
+		// uses, which carries the ligature and mark bookkeeping over the run getting longer. Spliced
+		// from the back so that each position is still the one the shaper named when it is reached.
+		foreach (array_reverse($multiple, true) as $pos => $glyphs) {
+			$form = $this->OTLdata[$pos]['form'];
+			$substituted = $this->GSUBsubstitute($pos, $glyphs, 2);
+			for ($i = 0; $i < $substituted; $i++) {
+				$this->OTLdata[$pos + $i]['form'] = $form;
+			}
+		}
 
 		// c. Set Kashida points (after joining occurred - medi, fina, init) but before other substitutions
 		//if ($scriptblock == Ucdn::SCRIPT_ARABIC ) {

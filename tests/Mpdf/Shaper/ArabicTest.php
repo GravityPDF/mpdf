@@ -159,6 +159,39 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A font may write one form as several glyphs - a dotless base and the dots drawn under it, which
+	 * is how the Nastaliq faces write most of their initial and medial forms. Only the first can go
+	 * where the character stood, so the rest are handed back for Otl to splice in; what is handed back
+	 * is the whole form rather than the tail of it, because that is what the Multiple Substitution
+	 * path it goes through replaces the character with.
+	 *
+	 * hexdec() reads '0E01D 0FBB3' as 0xE01D0FBB3 - it stops at nothing and ignores the space - so the
+	 * letter used to come out as a code point of sixty billion. @see \Mpdf\MultipleFormTest
+	 */
+	public function testAFormOfSeveralGlyphsIsHandedBackForTheCallerToSplice()
+	{
+		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
+
+		$multiple = Arabic::shape($info, [self::BEH => ['0E01D 0FBB3']], '', self::ALL_FORMS, 'arab');
+
+		$this->assertSame('0E01D', $info[0]['hex']);
+		$this->assertSame(0xE01D, $info[0]['uni']);
+		$this->assertSame([0 => [0xE01D, 0xFBB3]], $multiple);
+	}
+
+	/**
+	 * A form of one glyph is written straight into the run and nothing is left over, which is every
+	 * form of every font the corpus held before Katibeh.
+	 */
+	public function testAFormOfOneGlyphLeavesNothingToSplice()
+	{
+		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
+
+		$this->assertSame([], Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, self::ALL_FORMS, 'arab'));
+		$this->assertSame('B_ISOL', $info[0]['hex']);
+	}
+
+	/**
 	 * Every entry of all three tables is a codepoint mapped to 1, and they are only ever read with
 	 * isset(), so a value that is not 1 is a codepoint that was typed without its `=> 1` and has been
 	 * filed under a key that means nothing.

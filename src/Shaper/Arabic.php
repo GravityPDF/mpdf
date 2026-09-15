@@ -140,6 +140,24 @@ class Arabic
 		0x0859 => 1, 0x085A => 1, 0x085B => 1,
 		];
 
+	/**
+	 * Put every character of the run into the form its joining calls for.
+	 *
+	 * A form is usually one glyph, and is written straight into $info. It need not be: a font is free
+	 * to state a form as a base glyph and the marks drawn on it - which is how the Nastaliq faces
+	 * write their initial and medial forms - and one character then becomes several. Only the first
+	 * of those can go where the character stood, so the rest are handed back for the caller to splice
+	 * in; it is the caller that holds the mark and ligature bookkeeping a change in length disturbs.
+	 *
+	 * @param array[] $info            The run, by reference: each character's form is written into it
+	 * @param array   $arabGlyphs      The font's rtlSUB table: the glyph for each form of each letter
+	 * @param string  $glyphClassMarks The mark glyphs of GDEF, which join as a vowel does
+	 * @param string  $usetags         Which of the form features the document left switched on
+	 * @param string  $scriptTag       'arab', 'syrc', 'nko ' or 'mand'
+	 *
+	 * @return int[][] The forms that came out as more than one glyph, as the code points to put in
+	 *                 their place, keyed by the position in $info the character has
+	 */
 	public static function shape(&$info, $arabGlyphs, $glyphClassMarks, $usetags, $scriptTag)
 	{
 		// A GDEF mark is transparent to joining just as a vowel is, so the mark class joins the
@@ -203,11 +221,22 @@ class Arabic
 			$nextChar = $crntChar;
 		}
 		$ra = array_reverse($output);
+		$multiple = [];
 		for ($i = 0; $i < count($info); $i++) {
-			$info[$i]['uni'] = hexdec($ra[$i][0]);
-			$info[$i]['hex'] = $ra[$i][0];
+			// A form stated as several glyphs is one space-separated string here, and hexdec() would
+			// read the whole of it as a single enormous code point
+			$glyphs = explode(' ', $ra[$i][0]);
+
+			$info[$i]['uni'] = hexdec($glyphs[0]);
+			$info[$i]['hex'] = $glyphs[0];
 			$info[$i]['form'] = $ra[$i][1]; // Actaul form substituted 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL
+
+			if (count($glyphs) > 1) {
+				$multiple[$i] = array_map('hexdec', $glyphs);
+			}
 		}
+
+		return $multiple;
 	}
 
 	private static function glyphs($char, $type, &$chars, $i, $scriptTag, $usetags, $arabGlyphs)
