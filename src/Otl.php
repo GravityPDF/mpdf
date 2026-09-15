@@ -571,13 +571,20 @@ class Otl
 			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
 		}
 
-		Arabic::shape(
+		$multiple = Arabic::shape(
 			$this->OTLdata,
 			$this->GSUBdata[$this->GSUBfont]['rtlSUB'],
 			$this->GlyphClassMarks,
 			$usetags,
 			$GSUBscriptTag
 		);
+
+		// A form the font states as more than one glyph goes in through the same Multiple Substitution
+		// path GSUB uses, which carries the ligature and mark bookkeeping over the run getting longer.
+		// From the back, so each position is still the one the shaper named when it is reached.
+		foreach (array_reverse($multiple, true) as $pos => $glyphs) {
+			$this->GSUBsubstitute($pos, $glyphs, 2);
+		}
 
 		// c. Set Kashida points (after joining occurred - medi, fina, init) but before other substitutions
 		//if ($scriptblock == Ucdn::SCRIPT_ARABIC ) {
@@ -2620,6 +2627,13 @@ class Otl
 	 */
 	function _updateLigatureMarks($pos, $n)
 	{
+		// Every renumbering below is guarded by one of these two, so with neither recorded the loops
+		// walk the whole run to do nothing. A font that writes its joining forms as several glyphs
+		// substitutes once per letter, which makes that walk quadratic in the length of the run.
+		if (!$this->assocLigs && !$this->assocMarks) {
+			return;
+		}
+
 		if ($n > 0) {
 			// Update position of Ligatures and associated Marks
 			// Foreach lig/assocMarks
@@ -2741,6 +2755,11 @@ class Otl
 				}
 				if (isset($this->OTLdata[$pos]['syllable'])) {
 					$newOTLdata[$i]['syllable'] = $this->OTLdata[$pos]['syllable'];
+				}
+				// Only the Arabic and Syriac runs carry a form, and a glyph expanded out of one is
+				// still in it - a medial form written as a base and its dots is medial throughout
+				if (isset($this->OTLdata[$pos]['form'])) {
+					$newOTLdata[$i]['form'] = $this->OTLdata[$pos]['form'];
 				}
 			}
 			if ($newOTLdata && ($this->shaper == 'K' || $this->shaper == 'T' || $this->shaper == 'L')) {

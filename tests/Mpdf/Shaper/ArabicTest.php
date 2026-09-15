@@ -159,6 +159,31 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A form the font states as several glyphs leaves its base where the character stood and is handed
+	 * back whole, because the whole of it is what replaces the character. @see \Mpdf\MultipleFormTest
+	 */
+	public function testAFormOfSeveralGlyphsIsHandedBackForTheCallerToSubstitute()
+	{
+		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
+
+		$multiple = Arabic::shape($info, [self::BEH => ['0E01D 0FBB3']], ' ' . self::FATHA, self::ALL_FORMS, 'arab');
+
+		$this->assertSame([0 => [0xE01D, 0xFBB3]], $multiple);
+		$this->assertSame('0E01D', $info[0]['hex']);
+	}
+
+	/**
+	 * A form of one glyph is written straight into the run and there is nothing to hand back, which is
+	 * every form of every font in the corpus.
+	 */
+	public function testAFormOfOneGlyphIsHandedBackAsNothing()
+	{
+		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
+
+		$this->assertSame([], Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, self::ALL_FORMS, 'arab'));
+	}
+
+	/**
 	 * Every entry of all three tables is a codepoint mapped to 1, and they are only ever read with
 	 * isset(), so a value that is not 1 is a codepoint that was typed without its `=> 1` and has been
 	 * filed under a key that means nothing.
