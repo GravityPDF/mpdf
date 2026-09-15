@@ -143,11 +143,11 @@ class Arabic
 	/**
 	 * Put every character of the run into the form its joining calls for.
 	 *
-	 * A form is usually one glyph, and is written straight into $info. It need not be: a font is free
-	 * to state a form as a base glyph and the marks drawn on it - which is how the Nastaliq faces
-	 * write their initial and medial forms - and one character then becomes several. Only the first
-	 * of those can go where the character stood, so the rest are handed back for the caller to splice
-	 * in; it is the caller that holds the mark and ligature bookkeeping a change in length disturbs.
+	 * A form is usually one glyph and is written straight into $info. It need not be: a font may state
+	 * one as a base glyph and the marks drawn on it, which is how the Nastaliq faces write their
+	 * initial and medial forms. One character is then several glyphs, and making a run longer is the
+	 * caller's to do - it holds the ligature and mark bookkeeping that a change in length disturbs -
+	 * so such a form is handed back whole for the caller to substitute.
 	 *
 	 * @param array[] $info            The run, by reference: each character's form is written into it
 	 * @param array   $arabGlyphs      The font's rtlSUB table: the glyph for each form of each letter
@@ -155,8 +155,8 @@ class Arabic
 	 * @param string  $usetags         Which of the form features the document left switched on
 	 * @param string  $scriptTag       'arab', 'syrc', 'nko ' or 'mand'
 	 *
-	 * @return int[][] The forms that came out as more than one glyph, as the code points to put in
-	 *                 their place, keyed by the position in $info the character has
+	 * @return int[][] The forms of more than one glyph, as the code points to put in the character's
+	 *                 place, keyed by the position in $info it has
 	 */
 	public static function shape(&$info, $arabGlyphs, $glyphClassMarks, $usetags, $scriptTag)
 	{
@@ -223,8 +223,8 @@ class Arabic
 		$ra = array_reverse($output);
 		$multiple = [];
 		for ($i = 0; $i < count($info); $i++) {
-			// A form stated as several glyphs is one space-separated string here, and hexdec() would
-			// read the whole of it as a single enormous code point
+			// rtlSUB writes a form of several glyphs as one space-separated string, which hexdec()
+			// would read as a single code point
 			$glyphs = explode(' ', $ra[$i][0]);
 
 			$info[$i]['uni'] = hexdec($glyphs[0]);

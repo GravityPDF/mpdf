@@ -3,23 +3,16 @@
 namespace Mpdf;
 
 /**
- * A cursive letter's positional form need not be one glyph. A font is free to state it as a dotless
- * base and the dots to draw under it, and the Nastaliq and Naskh faces - Katibeh, Mirza, Aref Ruqaa,
- * Estedad, Noto Nastaliq Urdu - write most of their initial and medial forms that way.
+ * A cursive letter's positional form need not be one glyph. A font may state it as a dotless base and
+ * the dots to draw on it, and the Nastaliq and Naskh faces - Katibeh, Mirza, Aref Ruqaa, Noto Nastaliq
+ * Urdu - write most of their initial and medial forms that way. rtlSUB holds such a form as one
+ * space-separated string, and Shaper\Arabic read the whole of it through hexdec(), so '0E01D 0FBB3'
+ * became code point 60,160,015,283 and the letter was drawn as that.
  *
- * Arabic and Syriac reach their forms through Shaper\Arabic rather than through GSUB, and it wrote
- * whatever the font named into the one character it stood at:
- *
- *     $info[$i]['uni'] = hexdec($ra[$i][0]);
- *
- * where $ra[$i][0] is '0E01D 0FBB3' for a form of two glyphs. hexdec() stops at nothing and ignores
- * the space, so the character came out as code point 60,160,015,283 - which is no glyph the font
- * has, and which the letter was then drawn as.
- *
- * It cost more than the letter. Every character the shaping ends with goes into the font subset, so
- * a code point of sixty billion became the highest the subset covered, and FontWriter walks the /W
- * array from the first character to that one: a hundred characters of Katibeh spent two and a half
- * minutes in Output() counting to sixty billion (GravityPDF/mpdf#115).
+ * It cost more than the letter. Every character the shaping ends with goes into the font subset, and
+ * FontWriter walks the /W array from the first character to the highest one the subset covers - so a
+ * hundred characters of Katibeh spent two and a half minutes in Output() counting to sixty billion.
+ * That is GravityPDF/mpdf#115, which the second test below pins.
  */
 class MultipleFormTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -38,73 +31,50 @@ class MultipleFormTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * Two dual-joining letters: the first takes an initial form, the last a final one. The initial
-	 * form is two glyphs and the final one is one, so three glyphs are drawn for two characters.
+	 * form is two glyphs and the final one is one, so two characters draw three glyphs.
 	 *
-	 * Before, the base and its dots were read as a single code point and the letter was lost.
+	 * Text is drawn in visual order, which for Arabic is the reverse of the order it is written in.
 	 */
 	public function testAFormOfSeveralGlyphsDrawsAllOfThem()
 	{
+		$mpdf = $this->render([self::FARSI_YEH, self::FARSI_YEH]);
+		$drawn = unpack('N*', mb_convert_encoding($mpdf->drawnText[0], 'UTF-32BE', 'UTF-8'));
+
 		$this->assertSame(
 			[self::YEH_INIT, self::YEH_INIT_DOTS, self::YEH_FINA],
-			$this->drawn([self::FARSI_YEH, self::FARSI_YEH])
+			array_reverse($drawn)
 		);
 	}
 
 	/**
-	 * The subset holds the glyphs that were drawn and nothing above the Private Use Area the parser
-	 * maps the unmapped glyphs into, which is what the /W array is walked to.
+	 * Nothing in the subset is above the Private Use Area the parser maps the unmapped glyphs into,
+	 * which is as far as the /W array is walked.
 	 */
 	public function testTheSubsetHoldsNoCharacterThePdfCannotState()
 	{
-		$mpdf = $this->mpdf();
-		$mpdf->WriteHTML($this->html([self::FARSI_YEH, self::FARSI_YEH]));
-
-		$subset = $mpdf->fonts['multipleform']['subset'];
+		$subset = $this->render([self::FARSI_YEH, self::FARSI_YEH])->fonts['multipleform']['subset'];
 
 		$this->assertLessThanOrEqual(0xF8FF, max($subset));
 		$this->assertContains(self::YEH_INIT_DOTS, $subset);
 	}
 
 	/**
-	 * Text is drawn in visual order, which for Arabic is the reverse of the order it is written in.
+	 * Draw the characters in Noto Sans Arabic cut down to the one letter, whose initial, medial and
+	 * final forms are written as Multiple Substitutions: the first two name two glyphs and the last
+	 * names one, which is the shape the Nastaliq faces have and the corpus otherwise has nowhere.
 	 *
 	 * @param int[] $codepoints
 	 *
-	 * @return int[] the codepoints of the line as it is handed to the drawing code, in logical order
+	 * @return TextRecordingMpdf the document, having drawn them
 	 */
-	private function drawn($codepoints)
-	{
-		$mpdf = $this->mpdf();
-		$mpdf->WriteHTML($this->html($codepoints));
-
-		$drawn = unpack('N*', mb_convert_encoding($mpdf->drawnText[0], 'UTF-32BE', 'UTF-8'));
-
-		return array_reverse(array_values($drawn));
-	}
-
-	/**
-	 * @param int[] $codepoints
-	 *
-	 * @return string them as one paragraph
-	 */
-	private function html($codepoints)
+	private function render($codepoints)
 	{
 		$html = '';
 		foreach ($codepoints as $codepoint) {
 			$html .= sprintf('&#x%04X;', $codepoint);
 		}
 
-		return '<p>' . $html . '</p>';
-	}
-
-	/**
-	 * Noto Sans Arabic cut down to the one letter, with its initial, medial and final forms written
-	 * as Multiple Substitutions: the initial and medial forms name two glyphs and the final one names
-	 * one, which is the shape the Nastaliq faces have and the corpus otherwise has nowhere.
-	 */
-	private function mpdf()
-	{
-		return new TextRecordingMpdf([
+		$mpdf = new TextRecordingMpdf([
 			'mode' => 'utf-8',
 			'fontDir' => [__DIR__ . '/../data/ttf'],
 			'fontdata' => ['multipleform' => [
@@ -113,6 +83,9 @@ class MultipleFormTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			]],
 			'default_font' => 'multipleform',
 		]);
+		$mpdf->WriteHTML('<p>' . $html . '</p>');
+
+		return $mpdf;
 	}
 
 }

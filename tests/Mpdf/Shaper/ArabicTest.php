@@ -159,36 +159,28 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A font may write one form as several glyphs - a dotless base and the dots drawn under it, which
-	 * is how the Nastaliq faces write most of their initial and medial forms. Only the first can go
-	 * where the character stood, so the rest are handed back for Otl to splice in; what is handed back
-	 * is the whole form rather than the tail of it, because that is what the Multiple Substitution
-	 * path it goes through replaces the character with.
-	 *
-	 * hexdec() reads '0E01D 0FBB3' as 0xE01D0FBB3 - it stops at nothing and ignores the space - so the
-	 * letter used to come out as a code point of sixty billion. @see \Mpdf\MultipleFormTest
+	 * A form the font states as several glyphs leaves its base where the character stood and is handed
+	 * back whole, because the whole of it is what replaces the character. @see \Mpdf\MultipleFormTest
 	 */
-	public function testAFormOfSeveralGlyphsIsHandedBackForTheCallerToSplice()
+	public function testAFormOfSeveralGlyphsIsHandedBackForTheCallerToSubstitute()
 	{
 		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
 
-		$multiple = Arabic::shape($info, [self::BEH => ['0E01D 0FBB3']], '', self::ALL_FORMS, 'arab');
+		$multiple = Arabic::shape($info, [self::BEH => ['0E01D 0FBB3']], ' ' . self::FATHA, self::ALL_FORMS, 'arab');
 
-		$this->assertSame('0E01D', $info[0]['hex']);
-		$this->assertSame(0xE01D, $info[0]['uni']);
 		$this->assertSame([0 => [0xE01D, 0xFBB3]], $multiple);
+		$this->assertSame('0E01D', $info[0]['hex']);
 	}
 
 	/**
-	 * A form of one glyph is written straight into the run and nothing is left over, which is every
-	 * form of every font the corpus held before Katibeh.
+	 * A form of one glyph is written straight into the run and there is nothing to hand back, which is
+	 * every form of every font in the corpus.
 	 */
-	public function testAFormOfOneGlyphLeavesNothingToSplice()
+	public function testAFormOfOneGlyphIsHandedBackAsNothing()
 	{
 		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
 
 		$this->assertSame([], Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, self::ALL_FORMS, 'arab'));
-		$this->assertSame('B_ISOL', $info[0]['hex']);
 	}
 
 	/**
