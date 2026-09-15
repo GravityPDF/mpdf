@@ -2,36 +2,29 @@
 
 namespace Mpdf\Fonts;
 
-class OtlDumpGoldenMasterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
+/**
+ * Everything OtlDump reports about every font in tests/data/ttf, plus every diagnostic PHP raised
+ * while it read one.
+ *
+ * The witness for collapsing the dump onto the parser it extends: what it reports has to survive
+ * losing its own copy of the reading.
+ */
+class OtlDumpGoldenMasterTest extends GoldenMasterTestCase
 {
 
 	/**
-	 * @var OtlDumpGoldenMaster
+	 * @return GoldenMaster The master this test asserts against
 	 */
-	private $master;
-
-	public function set_up()
+	protected function newMaster()
 	{
-		parent::set_up();
-
-		$this->master = new OtlDumpGoldenMaster();
+		return new OtlDumpGoldenMaster();
 	}
 
 	/**
-	 * @dataProvider fontProvider
+	 * @return string The composer script that rewrites its fixtures
 	 */
-	public function testTheDumpReportsWhatItReportedBefore($name)
+	protected function updateCommand()
 	{
-		$this->assertSame(
-			$this->master->loadFixture($name),
-			$this->master->capture($name),
-			sprintf('%s dumps differently than its fixture. If the change is intended, run: composer otldump:update %s', $name, $name)
-		);
+		return 'otldump:update';
 	}
-
-	public function fontProvider()
-	{
-		return (new OtlDumpGoldenMaster())->fonts();
-	}
-
 }

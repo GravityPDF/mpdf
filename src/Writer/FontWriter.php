@@ -4,6 +4,7 @@ namespace Mpdf\Writer;
 
 use Mpdf\Strict;
 use Mpdf\Fonts\FontCache;
+use Mpdf\Fonts\FontSubsetter;
 use Mpdf\Mpdf;
 use Mpdf\TTFontFile;
 
@@ -32,6 +33,13 @@ class FontWriter
 	 */
 	private $fontDescriptor;
 
+	/**
+	 * @param Mpdf       $mpdf           The document being written
+	 * @param BaseWriter $writer         Where the PDF objects go
+	 * @param FontCache  $fontCache      Where a parsed font and its width tables are kept
+	 * @param string     $fontDescriptor Which of the font's three sets of vertical metrics to
+	 *                                   believe: 'winTypo', 'mac' or 'win'
+	 */
 	public function __construct(Mpdf $mpdf, BaseWriter $writer, FontCache $fontCache, $fontDescriptor)
 	{
 		$this->mpdf = $mpdf;
@@ -40,6 +48,12 @@ class FontWriter
 		$this->fontDescriptor = $fontDescriptor;
 	}
 
+	/**
+	 * Write every font the document used into the PDF, as a font file object and a descriptor.
+	 *
+	 * A TrueType font is subsetted unless the document asked for it whole, and a font mPDF loaded but
+	 * nothing drew with is skipped.
+	 */
 	public function writeFonts()
 	{
 		foreach ($this->mpdf->FontFiles as $fontkey => $info) {
@@ -76,12 +90,12 @@ class FontWriter
 							$font = $this->fontCache->load($fontkey . '.ps.z');
 							$originalsize = $this->fontCache->jsonLoad($fontkey . '.ps.json');  // sets $originalsize (of repackaged font)
 						} else {
-							$ttf = new TTFontFile($this->fontCache, $this->fontDescriptor);
-							$font = $ttf->repackageTTF($this->mpdf->FontFiles[$fontkey]['ttffile'], $this->mpdf->fonts[$fontkey]['TTCfontID'], $this->mpdf->debugfonts, $this->mpdf->fonts[$fontkey]['useOTL']); // mPDF 5.7.1
+							$subsetter = $this->subsetter();
+							$font = $subsetter->repackageTTF($this->mpdf->FontFiles[$fontkey]['ttffile'], $this->mpdf->fonts[$fontkey]['TTCfontID'], $this->mpdf->debugfonts, $this->mpdf->fonts[$fontkey]['useOTL']); // mPDF 5.7.1
 
 							$originalsize = strlen($font);
 							$font = gzcompress($font);
-							unset($ttf);
+							unset($subsetter);
 
 							$this->fontCache->binaryWrite($fontkey . '.ps.z', $font);
 							$this->fontCache->jsonWrite($fontkey . '.ps.json', $originalsize);
@@ -160,7 +174,7 @@ class FontWriter
 				}
 
 				$ssfaid = 'AA';
-				$ttf = new TTFontFile($this->fontCache, $this->fontDescriptor);
+				$subsetter = $this->subsetter();
 				$subsetCount = count($font['subsetfontids']);
 
 				for ($sfid = 0; $sfid < $subsetCount; $sfid++) {
@@ -181,7 +195,7 @@ class FontWriter
 
 					$subset = $font['subsets'][$sfid];
 					unset($subset[0]);
-					$ttfontstream = $ttf->makeSubsetSIP($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']); // mPDF 5.7.1
+					$ttfontstream = $subsetter->makeSubsetSIP($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']); // mPDF 5.7.1
 					$ttfontsize = strlen($ttfontstream);
 					$fontstream = gzcompress($ttfontstream);
 					$widthstring = '';
@@ -192,7 +206,7 @@ class FontWriter
 						if ($w !== false) {
 							$widthstring .= $w . ' ';
 						} else {
-							$widthstring .= round($ttf->defaultWidth) . ' ';
+							$widthstring .= round($subsetter->defaultWidth) . ' ';
 						}
 						if ($u > 65535) {
 							$utf8 = chr(($u >> 18) + 240) . chr((($u >> 12) & 63) + 128) . chr((($u >> 6) & 63) + 128) . chr(($u & 63) + 128);
@@ -274,7 +288,7 @@ class FontWriter
 					$this->writer->stream($fontstream);
 					$this->writer->write('endobj');
 				} // foreach subset
-				unset($ttf);
+				unset($subsetter);
 
 			} elseif ($type === 'TTF') {  // TrueType embedded SUBSETS or FULL
 
@@ -282,14 +296,14 @@ class FontWriter
 
 				if ($asSubset) {
 					$ssfaid = 'A';
-					$ttf = new TTFontFile($this->fontCache, $this->fontDescriptor);
+					$subsetter = $this->subsetter();
 					$fontname = 'MPDFA' . $ssfaid . '+' . $font['name'];
 					$subset = $font['subset'];
 					unset($subset[0]);
-					$ttfontstream = $ttf->makeSubset($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']);
+					$ttfontstream = $subsetter->makeSubset($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']);
 					$ttfontsize = strlen($ttfontstream);
 					$fontstream = gzcompress($ttfontstream);
-					$codeToGlyph = $ttf->codeToGlyph;
+					$codeToGlyph = $subsetter->codeToGlyph;
 					unset($codeToGlyph[0]);
 				} else {
 					$fontname = $font['name'];
@@ -324,7 +338,7 @@ class FontWriter
 					$w = $this->fontCache->load($font['fontkey'] . '.cw');
 					$this->writer->write($w);
 				} else {
-					$this->writeTTFontWidths($font, $asSubset, ($asSubset ? $ttf->maxUni : 0));
+					$this->writeTTFontWidths($font, $asSubset, ($asSubset ? $subsetter->maxUni : 0));
 				}
 
 				$this->writer->write('/CIDToGIDMap ' . ($this->mpdf->n + 4) . ' 0 R');
@@ -435,7 +449,7 @@ class FontWriter
 					$this->writer->write('>>');
 					$this->writer->stream($fontstream);
 					$this->writer->write('endobj');
-					unset($ttf);
+					unset($subsetter);
 				}
 			} else {
 				throw new \Mpdf\MpdfException(sprintf('Unsupported font type: %s (%s)', $type, $name));
@@ -443,6 +457,26 @@ class FontWriter
 		}
 	}
 
+	/**
+	 * A font program builder, with a parser behind it for the table directory it reads.
+	 *
+	 * @return FontSubsetter
+	 */
+	private function subsetter()
+	{
+		return new FontSubsetter(new TTFontFile($this->fontCache, $this->fontDescriptor));
+	}
+
+	/**
+	 * Write the /W array of a TrueType font: what each character in it is drawn at.
+	 *
+	 * The first 128 characters are the same in every document that uses the font, so their run is
+	 * cached per font and reused rather than measured again.
+	 *
+	 * @param array $font     The font, whose 'cw' holds the widths
+	 * @param bool  $asSubset Whether only the characters the document used are embedded
+	 * @param int   $maxUni   The highest character the font covers, which bounds the array
+	 */
 	private function writeTTFontWidths(&$font, $asSubset, $maxUni) // _putTTfontwidths
 	{
 		$character = [
@@ -544,6 +578,17 @@ class FontWriter
 		}
 	}
 
+	/**
+	 * Render a /W array from character ranges, in whichever of the two forms PDF allows is shorter.
+	 *
+	 * A run of equal widths is written as first, last and the one width; anything else as a list. The
+	 * ranges are merged where they abut first, so a font does not pay for a boundary that says
+	 * nothing.
+	 *
+	 * @param array $range Widths by starting character. Merged in place.
+	 *
+	 * @return string The /W array
+	 */
 	private function writeFontRanges(&$range) // _putfontranges
 	{
 		// optimize ranges
@@ -588,6 +633,12 @@ class FontWriter
 		return '/W [' . $w . ' ]';
 	}
 
+	/**
+	 * Write the /W array of a CJK font, whose widths are held by CID rather than by character.
+	 *
+	 * @param array $font      The font, whose 'cw' holds the widths and 'dw' the default
+	 * @param int   $cidoffset What to subtract from each CID to reach the font's own numbering
+	 */
 	private function writeFontWidths(&$font, $cidoffset = 0) // _putfontwidths
 	{
 		ksort($font['cw']);
@@ -641,7 +692,14 @@ class FontWriter
 		$this->writer->write($this->writeFontRanges($range));
 	}
 
-	// from class PDF_Chinese CJK EXTENSIONS
+	/**
+	 * Write one of the Adobe CJK fonts, which are named in the PDF rather than embedded.
+	 *
+	 * The reader is expected to have the font already, so what goes in is the descendant font, its
+	 * character collection, and the widths - never a font program.
+	 *
+	 * @param array $font The font, as Mpdf::fonts holds it
+	 */
 	public function writeType0(&$font) // _putType0
 	{
 		// Type0

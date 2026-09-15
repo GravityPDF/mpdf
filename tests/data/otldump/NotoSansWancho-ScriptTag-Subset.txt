@@ -10,6 +10,7 @@
 </div>
 <h1>GPOS Tables</h1>
 <h3>GPOS Scripts &amp; Languages</h3>
+<div class="glyphs">
 <h5>wcho</h5><div><a href="font_dump_otl.php?script=wcho&amp;lang=DFLT">DFLT</a></b>: dist </div>
 </div>
 

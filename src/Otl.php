@@ -8,6 +8,7 @@ use Mpdf\Css\TextVars;
 use Mpdf\Fonts\BlobReader;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
+use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\FontCache;
 
 use Mpdf\Shaper\Arabic;
@@ -133,6 +134,10 @@ class Otl
 
 	var $debugOTL = false;
 
+	/**
+	 * @param Mpdf      $mpdf      The document whose current font is being laid out
+	 * @param FontCache $fontCache Where the parsed font and its lookup coverage are kept
+	 */
 	public function __construct(Mpdf $mpdf, FontCache $fontCache)
 	{
 		$this->mpdf = $mpdf;
@@ -144,6 +149,22 @@ class Otl
 		$this->LuDataCache = [];
 	}
 
+	/**
+	 * Lay a string out with the current font's own tables.
+	 *
+	 * The eleven phases below, in order: read GDEF, work out what script each run of the text is in,
+	 * pick a shaper and a script and language for each, substitute with GSUB, shape, read GPOS,
+	 * position with it, resolve cursive attachment, and put the runs back together. A string in more
+	 * than one script is cut into subchunks and each is taken through on its own, because the script
+	 * decides the shaper.
+	 *
+	 * @param string $str    The text, as UTF-8
+	 * @param int    $useOTL Which script groups the document asked to be laid out this way, as a mask.
+	 *                       The low byte says whether the font's own tables are read at all.
+	 *
+	 * @return string The text as the font substituted it, with the positioning left on $this->OTLdata
+	 *                for the drawing code to read
+	 */
 	function applyOTL($str, $useOTL)
 	{
 		$this->OTLdata = [];
@@ -154,31 +175,126 @@ class Otl
 			return $str;
 		}
 
+		// Whether any script at all is to be laid out by the font's own tables. It cannot change
+		// between the phases below or between subchunks, so it is asked here and not in each.
+		$applyTables = (bool) ($useOTL & 0xFF);
+
 		// 1. Load GDEF data
-		//==============================
+		$this->loadGdefData();
+
+		// 2. Prepare string as HEX string and Analyse character properties
+		list($OTLdata, $scriptblocks) = $this->analyseCharacters($str);
+		$subchunk = count($scriptblocks) - 1;
+
+		/* PROCESS EACH SUBCHUNK WITH DIFFERENT SCRIPTS */
+		for ($sch = 0; $sch <= $subchunk; $sch++) {
+			$this->OTLdata = $OTLdata[$sch];
+			$scriptblock = $scriptblocks[$sch];
+
+			// 3. Get Appropriate Scripts, and Shaper engine from analysing text and list of available scripts/langsys in font
+			$this->shaper = $this->selectShaper($scriptblock);
+			list($GSUBscriptTag, $GSUBlangsys, $GPOSscriptTag, $GPOSlangsys, $is_old_spec)
+				= $this->selectScriptAndLanguage($scriptblock, $useOTL);
+
+			if (!$GSUBscriptTag && !$GSUBlangsys && !$GPOSscriptTag && !$GPOSlangsys) {
+				$this->removeJoinControls(false);
+				$this->schOTLdata[$sch] = $this->OTLdata;
+				$this->OTLdata = [];
+				continue;
+			}
+
+			// Don't use MYANMAR shaper unless using v2 scripttag
+			if ($this->shaper == 'M' && $GSUBscriptTag != 'mym2') {
+				$this->shaper = '';
+			}
+
+			$GSUBFeatures = (isset($this->mpdf->CurrentFont['GSUBFeatures'][$GSUBscriptTag][$GSUBlangsys]) ? $this->mpdf->CurrentFont['GSUBFeatures'][$GSUBscriptTag][$GSUBlangsys] : false);
+			$GPOSFeatures = (isset($this->mpdf->CurrentFont['GPOSFeatures'][$GPOSscriptTag][$GPOSlangsys]) ? $this->mpdf->CurrentFont['GPOSFeatures'][$GPOSscriptTag][$GPOSlangsys] : false);
+
+			$this->assocLigs = []; // Ligatures[$posarr lpos] => nc
+			$this->assocMarks = [];  // assocMarks[$posarr mpos] => array(compID, ligPos)
+
+			if ($this->debugOTL) {
+				$this->_dumpproc('BEGIN', '-', '-', '-', '-', -1, '-', 0);
+			}
+
+			$this->markWordBoundaries($scriptblock);
+
+			$useGSUBtags = $applyTables
+				? $this->applyGSUB($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock, $is_old_spec)
+				: '';
+
+			$this->insertWordBoundaries($scriptblock);
+
+			// Shapers - INDIC & ARABIC & KHMER & SINHALA  & MYANMAR - Remove ZWJ and ZWNJ
+			if ($this->shaper == 'I' || $this->shaper == 'S' || $this->shaper == 'A' || $this->shaper == 'K' || $this->shaper == 'M') {
+				$this->removeJoinControls(true);
+			}
+
+			if ($applyTables) {
+				$this->applyGPOS($GPOSscriptTag, $GPOSlangsys, $GPOSFeatures, $scriptblock, $is_old_spec, $useGSUBtags);
+			}
+
+			if ($this->debugOTL) {
+				$this->_dumpproc('END', '-', '-', '-', '-', 0, '-', 0);
+				exit;
+			}
+
+			$this->schOTLdata[$sch] = $this->OTLdata;
+			$this->OTLdata = [];
+		} // END foreach subchunk
+		// 11. Re-assemble and return text string
+		return $this->reassemble($subchunk);
+	}
+
+	/**
+	 * Phase 1: the GDEF table, which says which glyphs are marks, ligatures, bases and components.
+	 *
+	 * Everything downstream asks these rather than the font: the Ignore flags on a lookup are stated
+	 * in terms of them, and so is the group each character is put in. Held per font on the object,
+	 * because a document sets the same font for line after line.
+	 */
+	private function loadGdefData()
+	{
 		$this->fontkey = $this->mpdf->CurrentFont['fontkey'];
 		$this->glyphIDtoUni = $this->mpdf->CurrentFont['glyphIDtoUni'];
+
 		$fontCacheFilename = $this->fontkey . '.GDEFdata.json';
 		if (!isset($this->GDEFdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
 			$font = $this->fontCache->jsonLoad($fontCacheFilename);
 
-			$this->MarkAttachmentType = $this->GDEFdata[$this->fontkey]['MarkAttachmentType'] = $font['MarkAttachmentType'];
-			$this->MarkGlyphSets = $this->GDEFdata[$this->fontkey]['MarkGlyphSets'] = $font['MarkGlyphSets'];
-			$this->GlyphClassMarks = $this->GDEFdata[$this->fontkey]['GlyphClassMarks'] = $font['GlyphClassMarks'];
-			$this->GlyphClassLigatures = $this->GDEFdata[$this->fontkey]['GlyphClassLigatures'] = $font['GlyphClassLigatures'];
-			$this->GlyphClassComponents = $this->GDEFdata[$this->fontkey]['GlyphClassComponents'] = $font['GlyphClassComponents'];
-			$this->GlyphClassBases = $this->GDEFdata[$this->fontkey]['GlyphClassBases'] = $font['GlyphClassBases'];
-		} else {
-			$this->MarkAttachmentType = $this->GDEFdata[$this->fontkey]['MarkAttachmentType'];
-			$this->MarkGlyphSets = $this->GDEFdata[$this->fontkey]['MarkGlyphSets'];
-			$this->GlyphClassMarks = $this->GDEFdata[$this->fontkey]['GlyphClassMarks'];
-			$this->GlyphClassLigatures = $this->GDEFdata[$this->fontkey]['GlyphClassLigatures'];
-			$this->GlyphClassComponents = $this->GDEFdata[$this->fontkey]['GlyphClassComponents'];
-			$this->GlyphClassBases = $this->GDEFdata[$this->fontkey]['GlyphClassBases'];
+			$this->GDEFdata[$this->fontkey] = [
+				'MarkAttachmentType' => $font['MarkAttachmentType'],
+				'MarkGlyphSets' => $font['MarkGlyphSets'],
+				'GlyphClassMarks' => $font['GlyphClassMarks'],
+				'GlyphClassLigatures' => $font['GlyphClassLigatures'],
+				'GlyphClassComponents' => $font['GlyphClassComponents'],
+				'GlyphClassBases' => $font['GlyphClassBases'],
+			];
 		}
 
-		// 2. Prepare string as HEX string and Analyse character properties
-		//=================================================================
+		$gdef = $this->GDEFdata[$this->fontkey];
+		$this->MarkAttachmentType = $gdef['MarkAttachmentType'];
+		$this->MarkGlyphSets = $gdef['MarkGlyphSets'];
+		$this->GlyphClassMarks = $gdef['GlyphClassMarks'];
+		$this->GlyphClassLigatures = $gdef['GlyphClassLigatures'];
+		$this->GlyphClassComponents = $gdef['GlyphClassComponents'];
+		$this->GlyphClassBases = $gdef['GlyphClassBases'];
+	}
+
+	/**
+	 * Phase 2: what each character of the run is, and where the run changes script.
+	 *
+	 * A run can hold more than one script and each is shaped by different rules, so it is cut into
+	 * subchunks at every change and each is shaped on its own. Characters the Unicode data calls
+	 * Common or Inherited - punctuation, spaces, combining marks - carry no script of their own and
+	 * stay with whatever came before them.
+	 *
+	 * @return array [$OTLdata, $scriptblocks]: the characters of each subchunk, and which script
+	 *               each subchunk is
+	 */
+	private function analyseCharacters($str)
+	{
 		$earr = $this->mpdf->UTF8StringToArray($str, false);
 
 		$scriptblock = 0;
@@ -202,7 +318,6 @@ class Otl
 					$scriptblock = $sbl;
 					$scriptblocks[$subchunk] = $scriptblock;
 				} elseif ($scriptblock > 0 && $scriptblock != $sbl) {
-					// *************************************************
 					// NEW (non-common) Script encountered in this chunk. Start a new subchunk
 					$subchunk++;
 					$scriptblock = $sbl;
@@ -237,984 +352,1081 @@ class Otl
 			$charctr++;
 		}
 
-		/* PROCESS EACH SUBCHUNK WITH DIFFERENT SCRIPTS */
-		for ($sch = 0; $sch <= $subchunk; $sch++) {
-			$this->OTLdata = $OTLdata[$sch];
-			$scriptblock = $scriptblocks[$sch];
+		return [$OTLdata, $scriptblocks];
+	}
 
-			// 3. Get Appropriate Scripts, and Shaper engine from analysing text and list of available scripts/langsys in font
-			//==============================
-			// Based on actual script block of text, select shaper (and line-breaking dictionaries)
-			if (Ucdn::SCRIPT_DEVANAGARI <= $scriptblock && $scriptblock <= Ucdn::SCRIPT_MALAYALAM) {
-				$this->shaper = "I";
-			} // INDIC shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_ARABIC || $scriptblock == Ucdn::SCRIPT_SYRIAC) {
-				$this->shaper = "A";
-			} // ARABIC shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_NKO || $scriptblock == Ucdn::SCRIPT_MANDAIC) {
-				$this->shaper = "A";
-			} // ARABIC shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_KHMER) {
-				$this->shaper = "K";
-			} // KHMER shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_THAI) {
-				$this->shaper = "T";
-			} // THAI shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_LAO) {
-				$this->shaper = "L";
-			} // LAO shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_SINHALA) {
-				$this->shaper = "S";
-			} // SINHALA shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_MYANMAR) {
-				$this->shaper = "M";
-			} // MYANMAR shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_NEW_TAI_LUE) {
-				$this->shaper = "E";
-			} // SEA South East Asian shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_CHAM) {
-				$this->shaper = "E";
-			} // SEA South East Asian shaper
-			elseif ($scriptblock == Ucdn::SCRIPT_TAI_THAM) {
-				$this->shaper = "E";
-			} // SEA South East Asian shaper
-			else {
-				$this->shaper = "";
-			}
-			// Get scripttag based on actual text script
-			$scripttag = Ucdn::$uni_scriptblock[$scriptblock];
-
-			$GSUBscriptTag = '';
-			$GSUBlangsys = '';
-			$GPOSscriptTag = '';
-			$GPOSlangsys = '';
-			$is_old_spec = false;
-
-			$ScriptLang = $this->mpdf->CurrentFont['GSUBScriptLang'];
-			if (count($ScriptLang)) {
-				list($GSUBscriptTag, $is_old_spec) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GSUB');
-				if ($this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GSUBscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
-					$GSUBlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
-				} elseif ($GSUBscriptTag && isset($ScriptLang[$GSUBscriptTag]) && $ScriptLang[$GSUBscriptTag] != '') {
-					$GSUBlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GSUBscriptTag]);
+	/**
+	 * Take out the zero-width joiner and non-joiner.
+	 *
+	 * Both are instructions to the shaper - join these two where you would not, keep these two apart
+	 * where you would join them - rather than characters to draw, so once the shaper has read them
+	 * they come out. A font that offers nothing for this script never reads them, and they come out
+	 * just the same.
+	 *
+	 * @param bool $shaped Whether a shaper has run. If it has, the ligature and mark bookkeeping is
+	 *                     tracking positions in this run and has to be shifted along with it.
+	 */
+	private function removeJoinControls($shaped)
+	{
+		for ($i = 0; $i < count($this->OTLdata); $i++) {
+			if ($this->OTLdata[$i]['uni'] == 8204 || $this->OTLdata[$i]['uni'] == 8205) {
+				array_splice($this->OTLdata, $i, 1);
+				if ($shaped) {
+					$this->_updateLigatureMarks($i, -1);
 				}
 			}
-			$ScriptLang = $this->mpdf->CurrentFont['GPOSScriptLang'];
+		}
+	}
 
-			// NB If after GSUB, the same script/lang exist for GPOS, just use these...
-			if ($GSUBscriptTag && $GSUBlangsys && isset($ScriptLang[$GSUBscriptTag]) && strpos($ScriptLang[$GSUBscriptTag], $GSUBlangsys) !== false) {
-				$GPOSlangsys = $GSUBlangsys;
-				$GPOSscriptTag = $GSUBscriptTag;
-			} // else repeat for GPOS
-			// [Font XBRiyaz has GSUB tables for latn, but not GPOS for latn]
-			elseif (count($ScriptLang)) {
-				list($GPOSscriptTag, $dummy) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GPOS');
-				if ($GPOSscriptTag && $this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GPOSscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
-					$GPOSlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
-				} elseif ($GPOSscriptTag && isset($ScriptLang[$GPOSscriptTag]) && $ScriptLang[$GPOSscriptTag] != '') {
-					$GPOSlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GPOSscriptTag]);
+	/**
+	 * Mark where a word could end, for the scripts that do not write spaces.
+	 *
+	 * Khmer, Thai and Lao run their words together, and Tibetan separates syllables rather than
+	 * words, so there is nothing in the text for the line breaker to break at. A dictionary of the
+	 * language is walked over the run instead, and every place a word could end is marked. The marks
+	 * are put in before shaping so that the shaper sees the text as written, and turned into real
+	 * zero-width spaces afterwards by insertWordBoundaries().
+	 */
+	private function markWordBoundaries($scriptblock)
+	{
+		// Both set $this->OTLdata[$i]['wordend'] = true at every possible end of a word
+		if ($this->usesWordBoundaryDictionary()) {
+			$dict = $this->lineBreakDictionary();
+			if ($dict !== null) {
+				LineBreaking::southEastAsian($this->OTLdata, $dict, $this->GlyphClassMarks);
+			}
+		} elseif ($this->usesTibetanWordBoundaries($scriptblock)) {
+			LineBreaking::tibetan($this->OTLdata);
+		}
+	}
+
+	/**
+	 * Whether this run is one of the scripts a dictionary is walked over - Khmer, Thai and Lao, which
+	 * write their words without spaces between them.
+	 */
+	private function usesWordBoundaryDictionary()
+	{
+		return $this->mpdf->useDictionaryLBR
+			&& ($this->shaper == 'K' || $this->shaper == 'T' || $this->shaper == 'L');
+	}
+
+	/**
+	 * Whether this run is Tibetan, which separates syllables rather than words and so needs its own
+	 * rules rather than a dictionary.
+	 */
+	private function usesTibetanWordBoundaries($scriptblock)
+	{
+		return $this->mpdf->useTibetanLBR && $scriptblock == Ucdn::SCRIPT_TIBETAN;
+	}
+
+	/**
+	 * Turn the word boundaries marked before shaping into zero-width spaces.
+	 *
+	 * Asks the same two questions as markWordBoundaries(), which is what set them.
+	 */
+	private function insertWordBoundaries($scriptblock)
+	{
+		if ($this->usesWordBoundaryDictionary() || $this->usesTibetanWordBoundaries($scriptblock)) {
+			// Set up properties to insert a U+200B character
+			$newinfo = [];
+			//$newinfo[0] = array('general_category' => 1, 'bidi_type' => 14, 'group' => 'S', 'uni' => 0x200B, 'hex' => '0200B');
+			$newinfo[0] = [
+			'general_category' => Ucdn::UNICODE_GENERAL_CATEGORY_FORMAT,
+			'bidi_type' => Ucdn::BIDI_CLASS_BN,
+			'group' => 'S', 'uni' => 0x200B, 'hex' => '0200B'];
+			// Then insert U+200B at (after) all word end boundaries
+			for ($i = count($this->OTLdata) - 1; $i > 0; $i--) {
+				// Make sure after GSUB that wordend has not been moved - check next char is not in the same syllable
+				if (isset($this->OTLdata[$i]['wordend']) && $this->OTLdata[$i]['wordend'] &&
+				isset($this->OTLdata[$i + 1]['uni']) && (!isset($this->OTLdata[$i + 1]['syllable']) || !isset($this->OTLdata[$i + 1]['syllable']) || $this->OTLdata[$i + 1]['syllable'] != $this->OTLdata[$i]['syllable'])) {
+					array_splice($this->OTLdata, $i + 1, 0, $newinfo);
+					$this->_updateLigatureMarks($i, 1);
+				} elseif ($this->OTLdata[$i]['uni'] == 0x2e) { // Word end if Full-stop.
+					array_splice($this->OTLdata, $i + 1, 0, $newinfo);
+					$this->_updateLigatureMarks($i, 1);
 				}
 			}
+		}
+	}
 
-			if (!$GSUBscriptTag && !$GSUBlangsys && !$GPOSscriptTag && !$GPOSlangsys) {
-				// Remove ZWJ and ZWNJ
-				for ($i = 0; $i < count($this->OTLdata); $i++) {
-					if ($this->OTLdata[$i]['uni'] == 8204 || $this->OTLdata[$i]['uni'] == 8205) {
-						array_splice($this->OTLdata, $i, 1);
-					}
+	/**
+	 * Phases 4 and 5: substitution.
+	 *
+	 * Loads what this font's GSUB table says for this script and language, then hands the run to the
+	 * shaper the script needs. Every shaper ends in the same place - _applyGSUBrules() walking the
+	 * font's lookups in the order the Lookup table lists them - and what each does first is put the
+	 * characters into the order those lookups expect to find them in.
+	 *
+	 * @return string The feature tags the generic path settled on, which the positioning below reads
+	 *                to tell an OpenType small-caps run from one drawn with synthesised capitals.
+	 *                Empty from the shapers that do not reach that decision, and from a font with
+	 *                nothing to substitute.
+	 */
+	private function applyGSUB($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock, $is_old_spec)
+	{
+		if (!$GSUBscriptTag || !$GSUBlangsys || !$GSUBFeatures) {
+			return '';
+		}
+
+		$this->loadGsubData($GSUBscriptTag, $GSUBlangsys);
+
+		// 5. GSUB - Shaper
+		if ($this->shaper == 'A') {
+			$this->shapeArabic($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock);
+			return '';
+		}
+
+		if ($this->shaper == 'I' || $this->shaper == 'K' || $this->shaper == 'S') {
+			$this->shapeIndic($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock, $is_old_spec);
+			return '';
+		}
+
+		if ($this->shaper == 'M') {
+			$this->shapeMyanmar($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures);
+			return '';
+		}
+
+		if ($this->shaper == 'E') {
+			$this->shapeSouthEastAsian($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock);
+			return '';
+		}
+
+		// Everything else, Thai and Lao and Myanmar v1 and Tibetan among them, is laid out by the
+		// font's own features in the order it lists them
+		return $this->shapeGeneric($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock);
+	}
+
+	/**
+	 * Phase 4: what this font's GSUB table says, for this script and language system.
+	 *
+	 * Three things, cached for the life of the document because a document sets the same font for
+	 * line after line: the derived tables the shapers work from, which the parser builds per script
+	 * and language; the coverage of every lookup, which is how a lookup is passed over without being
+	 * read; and the lookup list itself.
+	 */
+	private function loadGsubData($GSUBscriptTag, $GSUBlangsys)
+	{
+		$this->readTable('GSUB');
+		$this->GSUBfont = $this->fontkey . '.GSUB.' . $GSUBscriptTag . '.' . $GSUBlangsys;
+
+		if (!isset($this->GSUBdata[$this->GSUBfont])) {
+			$fontCacheFilename = $this->GSUBfont . '.json';
+			if ($this->fontCache->jsonHas($fontCacheFilename)) {
+				$font = $this->fontCache->jsonLoad($fontCacheFilename);
+
+				$this->GSUBdata[$this->GSUBfont]['rtlSUB'] = $font['rtlSUB'];
+				$this->GSUBdata[$this->GSUBfont]['finals'] = $font['finals'];
+				if ($this->shaper == 'I') {
+					$this->GSUBdata[$this->GSUBfont]['rphf'] = $font['rphf'];
+					$this->GSUBdata[$this->GSUBfont]['half'] = $font['half'];
+					$this->GSUBdata[$this->GSUBfont]['pref'] = $font['pref'];
+					$this->GSUBdata[$this->GSUBfont]['blwf'] = $font['blwf'];
+					$this->GSUBdata[$this->GSUBfont]['pstf'] = $font['pstf'];
 				}
-				$this->schOTLdata[$sch] = $this->OTLdata;
-				$this->OTLdata = [];
-				continue;
+			} else {
+				$this->GSUBdata[$this->GSUBfont] = ['rtlSUB' => [], 'rphf' => [], 'rphf' => [],
+					'pref' => [], 'blwf' => [], 'pstf' => [], 'finals' => ''
+				];
+			}
+		}
+
+		$fontCacheFilename = $this->fontkey . '.GSUBdata.json';
+		if (!isset($this->GSUBdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
+			$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'] = $this->fontCache->jsonLoad($fontCacheFilename);
+		} else {
+			$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'];
+		}
+
+		$this->GSUBLookups = $this->mpdf->CurrentFont['GSUBLookups'];
+	}
+
+	/**
+	 * Shaper A: Arabic, Syriac, N'Ko and Mandaic.
+	 *
+	 * These scripts join: a letter is written differently depending on whether a letter that joins to
+	 * it stands either side of it. The font states the four forms as the features isol, fina, medi
+	 * and init - Syriac adds fin2, fin3 and med2 - but which of them a letter takes follows from the
+	 * joining classes rather than from a lookup, because the rule is the script's and not the font's.
+	 * Kashida points, where a word may be stretched to justify a line, are set once the joining is
+	 * known and before anything else is substituted.
+	 */
+	private function shapeArabic($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock)
+	{
+		// a. Apply initial GSUB Lookups (in order specified in lookup list but only selecting from certain tags)
+		$tags = 'locl ccmp';
+		$omittags = '';
+		$usetags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
+		}
+		$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
+
+		// b. Apply context-specific forms GSUB Lookups (initial, isolated, medial, final)
+		// Arab and Syriac are the only scripts requiring the special joining - which takes the place of
+		// isol fina medi init rules in GSUB (+ fin2 fin3 med2 in Syriac syrc)
+		$tags = 'isol fina fin2 fin3 medi med2 init';
+		$omittags = '';
+		$usetags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
+		}
+
+		Arabic::shape(
+			$this->OTLdata,
+			$this->GSUBdata[$this->GSUBfont]['rtlSUB'],
+			$this->GlyphClassMarks,
+			$usetags,
+			$GSUBscriptTag
+		);
+
+		// c. Set Kashida points (after joining occurred - medi, fina, init) but before other substitutions
+		//if ($scriptblock == Ucdn::SCRIPT_ARABIC ) {
+		for ($i = 0; $i < count($this->OTLdata); $i++) {
+			// Put the kashida marker on the character BEFORE which is inserted the kashida
+			// Kashida marker is inverse of priority i.e. Priority 1 => 7, Priority 7 => 1.
+			// Priority 1   User-inserted Kashida 0640 = Tatweel
+			// The user entered a Kashida in a position
+			// Position: Before the user-inserted kashida
+			if ($this->OTLdata[$i]['uni'] == 0x0640) {
+				$this->OTLdata[$i]['GPOSinfo']['kashida'] = 8; // Put before the next character
+			} // Priority 2   Seen (0633)  FEB3, FEB4; Sad (0635)  FEBB, FEBC
+			// Initial or medial form
+			// Connecting to the next character
+			// Position: After the character
+			elseif ($this->OTLdata[$i]['uni'] == 0xFEB3 || $this->OTLdata[$i]['uni'] == 0xFEB4 || $this->OTLdata[$i]['uni'] == 0xFEBB || $this->OTLdata[$i]['uni'] == 0xFEBC) {
+				$checkpos = $i + 1;
+				while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
+					$checkpos++;
+				}
+				if (isset($this->OTLdata[$checkpos])) {
+					$this->OTLdata[$checkpos]['GPOSinfo']['kashida'] = 7; // Put after marks on next character
+				}
+			} // Priority 3   Taa Marbutah (0629) FE94; Haa (062D) FEA2; Dal (062F) FEAA
+			// Final form
+			// Connecting to previous character
+			// Position: Before the character
+			elseif ($this->OTLdata[$i]['uni'] == 0xFE94 || $this->OTLdata[$i]['uni'] == 0xFEA2 || $this->OTLdata[$i]['uni'] == 0xFEAA) {
+				$this->OTLdata[$i]['GPOSinfo']['kashida'] = 6;
+			} // Priority 4   Alef (0627) FE8E; Tah (0637) FEC2; Lam (0644) FEDE; Kaf (0643)  FEDA; Gaf (06AF) FB93
+			// Final form
+			// Connecting to previous character
+			// Position: Before the character
+			elseif ($this->OTLdata[$i]['uni'] == 0xFE8E || $this->OTLdata[$i]['uni'] == 0xFEC2 || $this->OTLdata[$i]['uni'] == 0xFEDE || $this->OTLdata[$i]['uni'] == 0xFEDA || $this->OTLdata[$i]['uni'] == 0xFB93) {
+				$this->OTLdata[$i]['GPOSinfo']['kashida'] = 5;
+			} // Priority 5   RA (0631) FEAE; Ya (064A)  FEF2 FEF4; Alef Maqsurah (0649) FEF0 FBE9
+			// Final or Medial form
+			// Connected to preceding medial BAA (0628) = FE92
+			// Position: Before preceding medial Baa
+			// Although not mentioned in spec, added Farsi Yeh (06CC) FBFD FBFF; equivalent to 064A or 0649
+			elseif ($this->OTLdata[$i]['uni'] == 0xFEAE || $this->OTLdata[$i]['uni'] == 0xFEF2 || $this->OTLdata[$i]['uni'] == 0xFEF0 || $this->OTLdata[$i]['uni'] == 0xFEF4 || $this->OTLdata[$i]['uni'] == 0xFBE9 || $this->OTLdata[$i]['uni'] == 0xFBFD || $this->OTLdata[$i]['uni'] == 0xFBFF
+			) {
+				$checkpos = $i - 1;
+				while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
+					$checkpos--;
+				}
+				if (isset($this->OTLdata[$checkpos]) && $this->OTLdata[$checkpos]['uni'] == 0xFE92) {
+					$this->OTLdata[$checkpos]['GPOSinfo']['kashida'] = 4; // Before preceding BAA
+				}
+			} // Priority 6   WAW (0648) FEEE; Ain (0639) FECA; Qaf (0642) FED6; Fa (0641) FED2
+			// Final form
+			// Connecting to previous character
+			// Position: Before the character
+			elseif ($this->OTLdata[$i]['uni'] == 0xFEEE || $this->OTLdata[$i]['uni'] == 0xFECA || $this->OTLdata[$i]['uni'] == 0xFED6 || $this->OTLdata[$i]['uni'] == 0xFED2) {
+				$this->OTLdata[$i]['GPOSinfo']['kashida'] = 3;
 			}
 
-			// Don't use MYANMAR shaper unless using v2 scripttag
-			if ($this->shaper == 'M' && $GSUBscriptTag != 'mym2') {
-				$this->shaper = '';
-			}
+			// Priority 7   Other connecting characters
+			// Final form
+			// Connecting to previous character
+			// Position: Before the character
+			/* This isn't in the spec, but using MS WORD as a basis, give a lower priority to the 3 characters already checked
+			  in (5) above. Test case:
+			  &#x62e;&#x652;&#x631;&#x64e;&#x649;&#x670;
+			  &#x641;&#x64e;&#x62a;&#x64f;&#x630;&#x64e;&#x643;&#x651;&#x650;&#x631;
+			 */
 
-			$GSUBFeatures = (isset($this->mpdf->CurrentFont['GSUBFeatures'][$GSUBscriptTag][$GSUBlangsys]) ? $this->mpdf->CurrentFont['GSUBFeatures'][$GSUBscriptTag][$GSUBlangsys] : false);
-			$GPOSFeatures = (isset($this->mpdf->CurrentFont['GPOSFeatures'][$GPOSscriptTag][$GPOSlangsys]) ? $this->mpdf->CurrentFont['GPOSFeatures'][$GPOSscriptTag][$GPOSlangsys] : false);
-
-			$this->assocLigs = []; // Ligatures[$posarr lpos] => nc
-			$this->assocMarks = [];  // assocMarks[$posarr mpos] => array(compID, ligPos)
-
-			if ($this->debugOTL) {
-				$this->_dumpproc('BEGIN', '-', '-', '-', '-', -1, '-', 0);
-			}
-
-			////////////////////////////////////////////////////////////////
-			/////////  LINE BREAKING FOR KHMER, THAI + LAO /////////////////
-			////////////////////////////////////////////////////////////////
-			// Insert U+200B at word boundaries using dictionaries
-			if ($this->mpdf->useDictionaryLBR && ($this->shaper == "K" || $this->shaper == "T" || $this->shaper == "L")) {
-				// Sets $this->OTLdata[$i]['wordend']=true at possible end of word boundaries
-				$dict = $this->lineBreakDictionary();
-				if ($dict !== null) {
-					LineBreaking::southEastAsian($this->OTLdata, $dict, $this->GlyphClassMarks);
-				}
-			} // Insert U+200B at word boundaries for Tibetan
-			elseif ($this->mpdf->useTibetanLBR && $scriptblock == Ucdn::SCRIPT_TIBETAN) {
-				// Sets $this->OTLdata[$i]['wordend']=true at possible end of word boundaries
-				LineBreaking::tibetan($this->OTLdata);
-			}
-
-
-			////////////////////////////////////////////////////////////////
-			//////////       GSUB          /////////////////////////////////
-			////////////////////////////////////////////////////////////////
-			if (($useOTL & 0xFF) && $GSUBscriptTag && $GSUBlangsys && $GSUBFeatures) {
-				$this->readTable('GSUB');
-				// 4. Load GSUB data, Coverage & Lookups
-				//=================================================================
-
-				$this->GSUBfont = $this->fontkey . '.GSUB.' . $GSUBscriptTag . '.' . $GSUBlangsys;
-
-				if (!isset($this->GSUBdata[$this->GSUBfont])) {
-					$fontCacheFilename = $this->GSUBfont . '.json';
-					if ($this->fontCache->jsonHas($fontCacheFilename)) {
-						$font = $this->fontCache->jsonLoad($fontCacheFilename);
-
-						$this->GSUBdata[$this->GSUBfont]['rtlSUB'] = $font['rtlSUB'];
-						$this->GSUBdata[$this->GSUBfont]['finals'] = $font['finals'];
-						if ($this->shaper == 'I') {
-							$this->GSUBdata[$this->GSUBfont]['rphf'] = $font['rphf'];
-							$this->GSUBdata[$this->GSUBfont]['half'] = $font['half'];
-							$this->GSUBdata[$this->GSUBfont]['pref'] = $font['pref'];
-							$this->GSUBdata[$this->GSUBfont]['blwf'] = $font['blwf'];
-							$this->GSUBdata[$this->GSUBfont]['pstf'] = $font['pstf'];
-						}
-					} else {
-						$this->GSUBdata[$this->GSUBfont] = ['rtlSUB' => [], 'rphf' => [], 'rphf' => [],
-							'pref' => [], 'blwf' => [], 'pstf' => [], 'finals' => ''
-						];
-					}
-				}
-
-				$fontCacheFilename = $this->fontkey . '.GSUBdata.json';
-				if (!isset($this->GSUBdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
-					$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'] = $this->fontCache->jsonLoad($fontCacheFilename);
-				} else {
-					$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'];
-				}
-
-				$this->GSUBLookups = $this->mpdf->CurrentFont['GSUBLookups'];
-
-
-				// 5(A). GSUB - Shaper - ARABIC
-				//==============================
-				if ($this->shaper == 'A') {
-					//-----------------------------------------------------------------------------------
-					// a. Apply initial GSUB Lookups (in order specified in lookup list but only selecting from certain tags)
-					//-----------------------------------------------------------------------------------
-					$tags = 'locl ccmp';
-					$omittags = '';
-					$usetags = $tags;
-					if (!empty($this->mpdf->OTLtags)) {
-						$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
-					}
-					$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
-
-					//-----------------------------------------------------------------------------------
-					// b. Apply context-specific forms GSUB Lookups (initial, isolated, medial, final)
-					//-----------------------------------------------------------------------------------
-					// Arab and Syriac are the only scripts requiring the special joining - which takes the place of
-					// isol fina medi init rules in GSUB (+ fin2 fin3 med2 in Syriac syrc)
-					$tags = 'isol fina fin2 fin3 medi med2 init';
-					$omittags = '';
-					$usetags = $tags;
-					if (!empty($this->mpdf->OTLtags)) {
-						$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
-					}
-
-					Arabic::shape(
-						$this->OTLdata,
-						$this->GSUBdata[$this->GSUBfont]['rtlSUB'],
-						$this->GlyphClassMarks,
-						$usetags,
-						$GSUBscriptTag
-					);
-
-					//-----------------------------------------------------------------------------------
-					// c. Set Kashida points (after joining occurred - medi, fina, init) but before other substitutions
-					//-----------------------------------------------------------------------------------
-					//if ($scriptblock == Ucdn::SCRIPT_ARABIC ) {
-					for ($i = 0; $i < count($this->OTLdata); $i++) {
-						// Put the kashida marker on the character BEFORE which is inserted the kashida
-						// Kashida marker is inverse of priority i.e. Priority 1 => 7, Priority 7 => 1.
-						// Priority 1   User-inserted Kashida 0640 = Tatweel
-						// The user entered a Kashida in a position
-						// Position: Before the user-inserted kashida
-						if ($this->OTLdata[$i]['uni'] == 0x0640) {
-							$this->OTLdata[$i]['GPOSinfo']['kashida'] = 8; // Put before the next character
-						} // Priority 2   Seen (0633)  FEB3, FEB4; Sad (0635)  FEBB, FEBC
-						// Initial or medial form
-						// Connecting to the next character
-						// Position: After the character
-						elseif ($this->OTLdata[$i]['uni'] == 0xFEB3 || $this->OTLdata[$i]['uni'] == 0xFEB4 || $this->OTLdata[$i]['uni'] == 0xFEBB || $this->OTLdata[$i]['uni'] == 0xFEBC) {
-							$checkpos = $i + 1;
-							while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
-								$checkpos++;
-							}
-							if (isset($this->OTLdata[$checkpos])) {
-								$this->OTLdata[$checkpos]['GPOSinfo']['kashida'] = 7; // Put after marks on next character
-							}
-						} // Priority 3   Taa Marbutah (0629) FE94; Haa (062D) FEA2; Dal (062F) FEAA
-						// Final form
-						// Connecting to previous character
-						// Position: Before the character
-						elseif ($this->OTLdata[$i]['uni'] == 0xFE94 || $this->OTLdata[$i]['uni'] == 0xFEA2 || $this->OTLdata[$i]['uni'] == 0xFEAA) {
-							$this->OTLdata[$i]['GPOSinfo']['kashida'] = 6;
-						} // Priority 4   Alef (0627) FE8E; Tah (0637) FEC2; Lam (0644) FEDE; Kaf (0643)  FEDA; Gaf (06AF) FB93
-						// Final form
-						// Connecting to previous character
-						// Position: Before the character
-						elseif ($this->OTLdata[$i]['uni'] == 0xFE8E || $this->OTLdata[$i]['uni'] == 0xFEC2 || $this->OTLdata[$i]['uni'] == 0xFEDE || $this->OTLdata[$i]['uni'] == 0xFEDA || $this->OTLdata[$i]['uni'] == 0xFB93) {
-							$this->OTLdata[$i]['GPOSinfo']['kashida'] = 5;
-						} // Priority 5   RA (0631) FEAE; Ya (064A)  FEF2 FEF4; Alef Maqsurah (0649) FEF0 FBE9
-						// Final or Medial form
-						// Connected to preceding medial BAA (0628) = FE92
-						// Position: Before preceding medial Baa
-						// Although not mentioned in spec, added Farsi Yeh (06CC) FBFD FBFF; equivalent to 064A or 0649
-						elseif ($this->OTLdata[$i]['uni'] == 0xFEAE || $this->OTLdata[$i]['uni'] == 0xFEF2 || $this->OTLdata[$i]['uni'] == 0xFEF0 || $this->OTLdata[$i]['uni'] == 0xFEF4 || $this->OTLdata[$i]['uni'] == 0xFBE9 || $this->OTLdata[$i]['uni'] == 0xFBFD || $this->OTLdata[$i]['uni'] == 0xFBFF
-						) {
-							$checkpos = $i - 1;
-							while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
-								$checkpos--;
-							}
-							if (isset($this->OTLdata[$checkpos]) && $this->OTLdata[$checkpos]['uni'] == 0xFE92) {
-								$this->OTLdata[$checkpos]['GPOSinfo']['kashida'] = 4; // ******* Before preceding BAA
-							}
-						} // Priority 6   WAW (0648) FEEE; Ain (0639) FECA; Qaf (0642) FED6; Fa (0641) FED2
-						// Final form
-						// Connecting to previous character
-						// Position: Before the character
-						elseif ($this->OTLdata[$i]['uni'] == 0xFEEE || $this->OTLdata[$i]['uni'] == 0xFECA || $this->OTLdata[$i]['uni'] == 0xFED6 || $this->OTLdata[$i]['uni'] == 0xFED2) {
-							$this->OTLdata[$i]['GPOSinfo']['kashida'] = 3;
-						}
-
-						// Priority 7   Other connecting characters
-						// Final form
-						// Connecting to previous character
-						// Position: Before the character
-						/* This isn't in the spec, but using MS WORD as a basis, give a lower priority to the 3 characters already checked
-						  in (5) above. Test case:
-						  &#x62e;&#x652;&#x631;&#x64e;&#x649;&#x670;
-						  &#x641;&#x64e;&#x62a;&#x64f;&#x630;&#x64e;&#x643;&#x651;&#x650;&#x631;
-						 */
-
-						if (!isset($this->OTLdata[$i]['GPOSinfo']['kashida'])) {
-							if (strpos($this->GSUBdata[$this->GSUBfont]['finals'], $this->OTLdata[$i]['hex']) !== false) { // ANY OTHER FINAL FORM
-								$this->OTLdata[$i]['GPOSinfo']['kashida'] = 2;
-							} elseif (strpos('0FEAE 0FEF0 0FEF2', $this->OTLdata[$i]['hex']) !== false) { // not already included in 5 above
-								$this->OTLdata[$i]['GPOSinfo']['kashida'] = 1;
-							}
-						}
-					}
-
-					//-----------------------------------------------------------------------------------
-					// d. Apply Presentation Forms GSUB Lookups (+ any discretionary) - Apply one at a time in Feature order
-					//-----------------------------------------------------------------------------------
-					$tags = 'rlig calt liga clig mset';
-
-					$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
-					$usetags = $tags;
-					if (!empty($this->mpdf->OTLtags)) {
-						$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
-					}
-
-					$ts = explode(' ', $usetags);
-					foreach ($ts as $ut) { //  - Apply one at a time in Feature order
-						$this->_applyGSUBrules($ut, $GSUBscriptTag, $GSUBlangsys);
-					}
-					//-----------------------------------------------------------------------------------
-					// e. NOT IN SPEC
-					// If space precedes a mark -> substitute a &nbsp; before the Mark, to prevent line breaking Test:
-					//-----------------------------------------------------------------------------------
-					for ($ptr = 1; $ptr < count($this->OTLdata); $ptr++) {
-						if ($this->OTLdata[$ptr]['general_category'] == Ucdn::UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK && $this->OTLdata[$ptr - 1]['uni'] == 32) {
-							$this->OTLdata[$ptr - 1]['uni'] = 0xa0;
-							$this->OTLdata[$ptr - 1]['hex'] = '000A0';
-						}
-					}
-				} // 5(I). GSUB - Shaper - INDIC and SINHALA and KHMER
-				//===================================
-				elseif ($this->shaper == 'I' || $this->shaper == 'K' || $this->shaper == 'S') {
-					$this->restrictToSyllable = true;
-					//-----------------------------------------------------------------------------------
-					// a. First decompose/compose split mattras
-					// Unicode normalisation is not applied first, so a cluster written with its nukta and
-					// halant in the other order reaches the shaper as written. HarfBuzz normalises here.
-					//-----------------------------------------------------------------------------------
-					for ($ptr = 0; $ptr < count($this->OTLdata); $ptr++) {
-						$char = $this->OTLdata[$ptr]['uni'];
-						$sub = Indic::decompose_indic($char);
-						if ($sub) {
-							$newinfo = [];
-							for ($i = 0; $i < count($sub); $i++) {
-								$newinfo[$i] = [];
-								$ucd_record = Ucdn::get_ucd_record($sub[$i]);
-								$newinfo[$i]['general_category'] = $ucd_record[0];
-								$newinfo[$i]['bidi_type'] = $ucd_record[2];
-								$charasstr = $this->unicode_hex($sub[$i]);
-								if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
-									$newinfo[$i]['group'] = 'M';
-								} else {
-									$newinfo[$i]['group'] = 'C';
-								}
-								$newinfo[$i]['uni'] = $sub[$i];
-								$newinfo[$i]['hex'] = $charasstr;
-							}
-							array_splice($this->OTLdata, $ptr, 1, $newinfo);
-							$ptr += count($sub) - 1;
-						}
-						/* Only Composition-exclusion exceptions that we want to recompose. */
-						if ($this->shaper == 'I') {
-							if ($char == 0x09AF && isset($this->OTLdata[$ptr + 1]) && $this->OTLdata[$ptr + 1]['uni'] == 0x09BC) {
-								$sub = 0x09DF;
-								$newinfo = [];
-								$newinfo[0] = [];
-								$ucd_record = Ucdn::get_ucd_record($sub);
-								$newinfo[0]['general_category'] = $ucd_record[0];
-								$newinfo[0]['bidi_type'] = $ucd_record[2];
-								$newinfo[0]['group'] = 'C';
-								$newinfo[0]['uni'] = $sub;
-								$newinfo[0]['hex'] = $this->unicode_hex($sub);
-								array_splice($this->OTLdata, $ptr, 2, $newinfo);
-							}
-						}
-					}
-					//-----------------------------------------------------------------------------------
-					// b. Analyse characters - group as syllables/clusters (Indic); invalid diacritics; add dotted circle
-					//-----------------------------------------------------------------------------------
-					$indic_category_string = '';
-					foreach ($this->OTLdata as $eid => $c) {
-						Indic::set_indic_properties($this->OTLdata[$eid], $scriptblock); // sets ['indic_category'] and ['indic_position']
-						//$c['general_category']
-						//$c['combining_class']
-						//$c['uni'] =  $char;
-
-						$indic_category_string .= Indic::$indic_category_char[$this->OTLdata[$eid]['indic_category']];
-					}
-
-					$broken_syllables = false;
-					if ($this->shaper == 'I') {
-						Indic::set_syllables($this->OTLdata, $indic_category_string, $broken_syllables);
-					} elseif ($this->shaper == 'S') {
-						Indic::set_syllables_sinhala($this->OTLdata, $indic_category_string, $broken_syllables);
-					} elseif ($this->shaper == 'K') {
-						Indic::set_syllables_khmer($this->OTLdata, $indic_category_string, $broken_syllables);
-					}
-					$indic_category_string = '';
-
-					//-----------------------------------------------------------------------------------
-					// c. Initial Re-ordering (Indic / Khmer / Sinhala)
-					//-----------------------------------------------------------------------------------
-					// Find base consonant
-					// Decompose/compose and reorder Matras
-					// Reorder marks to canonical order
-
-					$indic_config = Indic::$indic_configs[$scriptblock];
-					$dottedcircle = false;
-					if ($broken_syllables) {
-						if ($this->mpdf->_charDefined($this->mpdf->fonts[$this->fontkey]['cw'], 0x25CC)) {
-							$dottedcircle = [];
-							$ucd_record = Ucdn::get_ucd_record(0x25CC);
-							$dottedcircle[0]['general_category'] = $ucd_record[0];
-							$dottedcircle[0]['bidi_type'] = $ucd_record[2];
-							$dottedcircle[0]['group'] = 'C';
-							$dottedcircle[0]['uni'] = 0x25CC;
-							$dottedcircle[0]['indic_category'] = Indic::OT_DOTTEDCIRCLE;
-							$dottedcircle[0]['indic_position'] = Indic::POS_BASE_C;
-
-							$dottedcircle[0]['hex'] = '025CC';  // TEMPORARY *****
-						}
-					}
-					Indic::initial_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $indic_config, $scriptblock, $is_old_spec, $dottedcircle);
-
-					//-----------------------------------------------------------------------------------
-					// d. Apply initial and basic shaping forms GSUB Lookups (one at a time)
-					//-----------------------------------------------------------------------------------
-					if ($this->shaper == 'I' || $this->shaper == 'S') {
-						$tags = 'locl ccmp nukt akhn rphf rkrf pref blwf half pstf vatu cjct';
-					} elseif ($this->shaper == 'K') {
-						$tags = 'locl ccmp pref blwf abvf pstf cfar';
-					}
-					$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
-
-					//-----------------------------------------------------------------------------------
-					// e. Final Re-ordering (Indic / Khmer / Sinhala)
-					//-----------------------------------------------------------------------------------
-					// Reorder matras
-					// Reorder reph
-					// Reorder pre-base reordering consonants:
-
-					Indic::final_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $indic_config, $scriptblock, $is_old_spec);
-
-					//-----------------------------------------------------------------------------------
-					// f. Apply 'init' feature to first syllable in word (indicated by ['mask']) Indic::FLAG(Indic::INIT);
-					//-----------------------------------------------------------------------------------
-					if ($this->shaper == 'I' || $this->shaper == 'S') {
-						$tags = 'init';
-						$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
-					}
-
-					//-----------------------------------------------------------------------------------
-					// g. Apply Presentation Forms GSUB Lookups (+ any discretionary)
-					//-----------------------------------------------------------------------------------
-					$tags = 'pres abvs blws psts haln rlig calt liga clig mset';
-
-					$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
-					$usetags = $tags;
-					if (!empty($this->mpdf->OTLtags)) {
-						$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
-					}
-					if ($this->shaper == 'K') {  // Features are applied one at a time, working through each codepoint
-						$this->_applyGSUBrulesSingly($usetags, $GSUBscriptTag, $GSUBlangsys);
-					} else {
-						$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
-					}
-					$this->restrictToSyllable = false;
-				} // 5(M). GSUB - Shaper - MYANMAR (ONLY mym2)
-				//==============================
-				// NB Old style 'mymr' is left to go through the default shaper
-				elseif ($this->shaper == 'M') {
-					$this->restrictToSyllable = true;
-					//-----------------------------------------------------------------------------------
-					// a. Analyse characters - group as syllables/clusters (Myanmar); invalid diacritics; add dotted circle
-					//-----------------------------------------------------------------------------------
-					$myanmar_category_string = '';
-					foreach ($this->OTLdata as $eid => $c) {
-						Myanmar::set_myanmar_properties($this->OTLdata[$eid]); // sets ['myanmar_category'] and ['myanmar_position']
-						$myanmar_category_string .= Myanmar::$myanmar_category_char[$this->OTLdata[$eid]['myanmar_category']];
-					}
-					$broken_syllables = false;
-					Myanmar::set_syllables($this->OTLdata, $myanmar_category_string, $broken_syllables);
-					$myanmar_category_string = '';
-
-					//-----------------------------------------------------------------------------------
-					// b. Re-ordering (Myanmar mym2)
-					//-----------------------------------------------------------------------------------
-					$dottedcircle = false;
-					if ($broken_syllables) {
-						if ($this->mpdf->_charDefined($this->mpdf->fonts[$this->fontkey]['cw'], 0x25CC)) {
-							$dottedcircle = [];
-							$ucd_record = Ucdn::get_ucd_record(0x25CC);
-							$dottedcircle[0]['general_category'] = $ucd_record[0];
-							$dottedcircle[0]['bidi_type'] = $ucd_record[2];
-							$dottedcircle[0]['group'] = 'C';
-							$dottedcircle[0]['uni'] = 0x25CC;
-							$dottedcircle[0]['myanmar_category'] = Myanmar::OT_DOTTEDCIRCLE;
-							$dottedcircle[0]['myanmar_position'] = Myanmar::POS_BASE_C;
-							$dottedcircle[0]['hex'] = '025CC';
-						}
-					}
-					Myanmar::reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $dottedcircle);
-
-					//-----------------------------------------------------------------------------------
-					// c. Apply initial and basic shaping forms GSUB Lookups (one at a time)
-					//-----------------------------------------------------------------------------------
-
-					$tags = 'locl ccmp rphf pref blwf pstf';
-					$this->_applyGSUBrulesMyanmar($tags, $GSUBscriptTag, $GSUBlangsys);
-
-					//-----------------------------------------------------------------------------------
-					// d. Apply Presentation Forms GSUB Lookups (+ any discretionary)
-					//-----------------------------------------------------------------------------------
-					$tags = 'pres abvs blws psts haln rlig calt liga clig mset';
-					$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
-					$usetags = $tags;
-					if (!empty($this->mpdf->OTLtags)) {
-						$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
-					}
-					$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
-					$this->restrictToSyllable = false;
-				} // 5(E). GSUB - Shaper - SEA South East Asian (New Tai Lue, Cham, Tai Tam)
-				//==============================
-				elseif ($this->shaper == 'E') {
-					/* HarfBuzz says: If the designer designed the font for the 'DFLT' script,
-					 * use the default shaper.  Otherwise, use the SEA shaper.
-					 * Note that for some simple scripts, there may not be *any*
-					 * GSUB/GPOS needed, so there may be no scripts found! */
-
-					$this->restrictToSyllable = true;
-					//-----------------------------------------------------------------------------------
-					// a. Analyse characters - group as syllables/clusters (Indic); invalid diacritics; add dotted circle
-					//-----------------------------------------------------------------------------------
-					$sea_category_string = '';
-					foreach ($this->OTLdata as $eid => $c) {
-						Sea::set_sea_properties($this->OTLdata[$eid], $scriptblock); // sets ['sea_category'] and ['sea_position']
-						//$c['general_category']
-						//$c['combining_class']
-						//$c['uni'] =  $char;
-
-						$sea_category_string .= Sea::$sea_category_char[$this->OTLdata[$eid]['sea_category']];
-					}
-
-					$broken_syllables = false;
-					Sea::set_syllables($this->OTLdata, $sea_category_string, $broken_syllables);
-					$sea_category_string = '';
-
-					//-----------------------------------------------------------------------------------
-					// b. Apply locl and ccmp shaping forms - before initial re-ordering; GSUB Lookups (one at a time)
-					//-----------------------------------------------------------------------------------
-					$tags = 'locl ccmp';
-					$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
-
-					//-----------------------------------------------------------------------------------
-					// c. Initial Re-ordering
-					//-----------------------------------------------------------------------------------
-					// Find base consonant
-					// Decompose/compose and reorder Matras
-					// Reorder marks to canonical order
-
-					$dottedcircle = false;
-					if ($broken_syllables) {
-						if ($this->mpdf->_charDefined($this->mpdf->fonts[$this->fontkey]['cw'], 0x25CC)) {
-							$dottedcircle = [];
-							$ucd_record = Ucdn::get_ucd_record(0x25CC);
-							$dottedcircle[0]['general_category'] = $ucd_record[0];
-							$dottedcircle[0]['bidi_type'] = $ucd_record[2];
-							$dottedcircle[0]['group'] = 'C';
-							$dottedcircle[0]['uni'] = 0x25CC;
-							$dottedcircle[0]['sea_category'] = Sea::OT_GB;
-							$dottedcircle[0]['sea_position'] = Sea::POS_BASE_C;
-
-							$dottedcircle[0]['hex'] = '025CC';  // TEMPORARY *****
-						}
-					}
-					Sea::initial_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $scriptblock, $dottedcircle);
-
-					//-----------------------------------------------------------------------------------
-					// d. Apply basic shaping forms GSUB Lookups (one at a time)
-					//-----------------------------------------------------------------------------------
-					$tags = 'pref abvf blwf pstf';
-					$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
-
-					//-----------------------------------------------------------------------------------
-					// e. Final Re-ordering
-					//-----------------------------------------------------------------------------------
-
-					Sea::final_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $scriptblock);
-
-					//-----------------------------------------------------------------------------------
-					// f. Apply Presentation Forms GSUB Lookups (+ any discretionary)
-					//-----------------------------------------------------------------------------------
-					$tags = 'pres abvs blws psts';
-
-					$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
-					$usetags = $tags;
-					if (!empty($this->mpdf->OTLtags)) {
-						$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
-					}
-					$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
-					$this->restrictToSyllable = false;
-				} // 5(D). GSUB - Shaper - DEFAULT (including THAI and LAO and MYANMAR v1 [mymr] and TIBETAN)
-				//==============================
-				else { // DEFAULT
-					//-----------------------------------------------------------------------------------
-					// a. First decompose/compose in Thai / Lao - Tibetan
-					//-----------------------------------------------------------------------------------
-					// Decomposition for THAI or LAO
-					/* This function implements the shaping logic documented here:
-					 *
-					 *   http://linux.thai.net/~thep/th-otf/shaping.html
-					 *
-					 * The first shaping rule listed there is needed even if the font has Thai
-					 * OpenType tables.
-					 *
-					 *
-					 * The following is NOT specified in the MS OT Thai spec, however, it seems
-					 * to be what Uniscribe and other engines implement.  According to Eric Muller:
-					 *
-					 * When you have a SARA AM, decompose it in NIKHAHIT + SARA AA, *and* move the
-					 * NIKHAHIT backwards over any tone mark (0E48-0E4B).
-					 *
-					 * <0E14, 0E4B, 0E33> -> <0E14, 0E4D, 0E4B, 0E32>
-					 *
-					 * This reordering is legit only when the NIKHAHIT comes from a SARA AM, not
-					 * when it's there to start with. The string <0E14, 0E4B, 0E4D> is probably
-					 * not what a user wanted, but the rendering is nevertheless nikhahit above
-					 * chattawa.
-					 *
-					 * Same for Lao.
-					 *
-					 *          Thai        Lao
-					 * SARA AM:     U+0E33  U+0EB3
-					 * SARA AA:     U+0E32  U+0EB2
-					 * Nikhahit:    U+0E4D  U+0ECD
-					 *
-					 * Testing shows that Uniscribe reorder the following marks:
-					 * Thai:    <0E31,0E34..0E37,0E47..0E4E>
-					 * Lao: <0EB1,0EB4..0EB7,0EC7..0ECE>
-					 *
-					 * Lao versions are the same as Thai + 0x80.
-					 */
-					if ($this->shaper == 'T' || $this->shaper == 'L') {
-						for ($ptr = 0; $ptr < count($this->OTLdata); $ptr++) {
-							$char = $this->OTLdata[$ptr]['uni'];
-							if (($char & ~0x0080) == 0x0E33) { // if SARA_AM (U+0E33 or U+0EB3)
-								$NIKHAHIT = $char + 0x1A;
-								$SARA_AA = $char - 1;
-								$sub = [$SARA_AA, $NIKHAHIT];
-
-								$newinfo = [];
-								$ucd_record = Ucdn::get_ucd_record($sub[0]);
-								$newinfo[0]['general_category'] = $ucd_record[0];
-								$newinfo[0]['bidi_type'] = $ucd_record[2];
-								$charasstr = $this->unicode_hex($sub[0]);
-								if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
-									$newinfo[0]['group'] = 'M';
-								} else {
-									$newinfo[0]['group'] = 'C';
-								}
-								$newinfo[0]['uni'] = $sub[0];
-								$newinfo[0]['hex'] = $charasstr;
-								$this->OTLdata[$ptr] = $newinfo[0]; // Substitute SARA_AM => SARA_AA
-
-								$ntones = 0; // number of (preceding) tone marks
-								// IS_TONE_MARK ((x) & ~0x0080, 0x0E34 - 0x0E37, 0x0E47 - 0x0E4E, 0x0E31)
-								while (isset($this->OTLdata[$ptr - 1 - $ntones]) && (
-								($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) == 0x0E31 ||
-								(($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) >= 0x0E34 &&
-								($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) <= 0x0E37) ||
-								(($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) >= 0x0E47 &&
-								($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) <= 0x0E4E)
-								)
-								) {
-									$ntones++;
-								}
-
-								$newinfo = [];
-								$ucd_record = Ucdn::get_ucd_record($sub[1]);
-								$newinfo[0]['general_category'] = $ucd_record[0];
-								$newinfo[0]['bidi_type'] = $ucd_record[2];
-								$charasstr = $this->unicode_hex($sub[1]);
-								if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
-									$newinfo[0]['group'] = 'M';
-								} else {
-									$newinfo[0]['group'] = 'C';
-								}
-								$newinfo[0]['uni'] = $sub[1];
-								$newinfo[0]['hex'] = $charasstr;
-								// Insert NIKAHIT
-								array_splice($this->OTLdata, $ptr - $ntones, 0, $newinfo);
-
-								$ptr++;
-							}
-						}
-					}
-
-					if ($scriptblock == Ucdn::SCRIPT_TIBETAN) {
-						// =========================
-						// Reordering TIBETAN
-						// =========================
-						// Tibetan does not need to need a shaper generally, as long as characters are presented in the correct order
-						// so we will do one minor change here:
-						// From ICU: If the present character is a number, and the next character is a pre-number combining mark
-						// then the two characters are reordered
-						// From MS OTL spec the following are Digit modifiers (Md): 0F18–0F19, 0F3E–0F3F
-						// Digits: 0F20–0F33
-						// On testing only 0x0F3F (pre-based mark) seems to need re-ordering
-						for ($ptr = 0; $ptr < count($this->OTLdata) - 1; $ptr++) {
-							if (Indic::in_range($this->OTLdata[$ptr]['uni'], 0x0F20, 0x0F33) && $this->OTLdata[$ptr + 1]['uni'] == 0x0F3F) {
-								$tmp = $this->OTLdata[$ptr + 1];
-								$this->OTLdata[$ptr + 1] = $this->OTLdata[$ptr];
-								$this->OTLdata[$ptr] = $tmp;
-							}
-						}
-
-
-						// =========================
-						// Decomposition for TIBETAN
-						// =========================
-						/* Recommended, but does not seem to change anything...
-						  for($ptr=0; $ptr<count($this->OTLdata); $ptr++) {
-						  $char = $this->OTLdata[$ptr]['uni'];
-						  $sub = Indic::decompose_indic($char);
-						  if ($sub) {
-						  $newinfo = array();
-						  for($i=0;$i<count($sub);$i++) {
-						  $newinfo[$i] = array();
-						  $ucd_record = Ucdn::get_ucd_record($sub[$i]);
-						  $newinfo[$i]['general_category'] = $ucd_record[0];
-						  $newinfo[$i]['bidi_type'] = $ucd_record[2];
-						  $charasstr = $this->unicode_hex($sub[$i]);
-						  if (strpos($this->GlyphClassMarks, $charasstr)!==false) { $newinfo[$i]['group'] =  'M'; }
-						  else { $newinfo[$i]['group'] =  'C'; }
-						  $newinfo[$i]['uni'] =  $sub[$i];
-						  $newinfo[$i]['hex'] =  $charasstr;
-						  }
-						  array_splice($this->OTLdata, $ptr, 1, $newinfo);
-						  $ptr += count($sub)-1;
-						  }
-						  }
-						 */
-					}
-
-
-					//-----------------------------------------------------------------------------------
-					// b. Apply all GSUB Lookups (in order specified in lookup list)
-					//-----------------------------------------------------------------------------------
-					$tags = 'locl ccmp pref blwf abvf pstf pres abvs blws psts haln rlig calt liga clig mset  RQD';
-					// pref blwf abvf pstf required for Tibetan
-					// " RQD" is a non-standard tag in Garuda font - presumably intended to be used by default ? "ReQuireD"
-					// Being a 3 letter tag is non-standard, and does not allow it to be set by font-feature-settings
-
-
-					/* ?Add these until shapers witten?
-					  Hangul:   ljmo vjmo tjmo
-					 */
-
-					$omittags = '';
-					$useGSUBtags = $tags;
-					if (!empty($this->mpdf->OTLtags)) {
-						$useGSUBtags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
-					}
-					// APPLY GSUB rules (as long as not Latin + SmallCaps - but not OTL smcp)
-					if (!(($this->mpdf->textvar & TextVars::FC_SMALLCAPS) && $scriptblock == Ucdn::SCRIPT_LATIN && strpos($useGSUBtags, 'smcp') === false)) {
-						$this->_applyGSUBrules($useGSUBtags, $GSUBscriptTag, $GSUBlangsys);
-					}
+			if (!isset($this->OTLdata[$i]['GPOSinfo']['kashida'])) {
+				if (strpos($this->GSUBdata[$this->GSUBfont]['finals'], $this->OTLdata[$i]['hex']) !== false) { // ANY OTHER FINAL FORM
+					$this->OTLdata[$i]['GPOSinfo']['kashida'] = 2;
+				} elseif (strpos('0FEAE 0FEF0 0FEF2', $this->OTLdata[$i]['hex']) !== false) { // not already included in 5 above
+					$this->OTLdata[$i]['GPOSinfo']['kashida'] = 1;
 				}
 			}
+		}
 
-			// Shapers - KHMER & THAI & LAO - Replace Word boundary marker with U+200B
-			// Also TIBETAN (no shaper)
-			// Gated on the same flags as the line breaking above, which is what set the word boundaries
-			//=======================================================
-			if (($this->mpdf->useDictionaryLBR && ($this->shaper == "K" || $this->shaper == "T" || $this->shaper == "L"))
-				|| ($this->mpdf->useTibetanLBR && $scriptblock == Ucdn::SCRIPT_TIBETAN)) {
-				// Set up properties to insert a U+200B character
+		// d. Apply Presentation Forms GSUB Lookups (+ any discretionary) - Apply one at a time in Feature order
+		$tags = 'rlig calt liga clig mset';
+
+		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
+		$usetags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+		}
+
+		$ts = explode(' ', $usetags);
+		foreach ($ts as $ut) { //  - Apply one at a time in Feature order
+			$this->_applyGSUBrules($ut, $GSUBscriptTag, $GSUBlangsys);
+		}
+		// e. NOT IN SPEC
+		// If space precedes a mark -> substitute a &nbsp; before the Mark, to prevent line breaking Test:
+		for ($ptr = 1; $ptr < count($this->OTLdata); $ptr++) {
+			if ($this->OTLdata[$ptr]['general_category'] == Ucdn::UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK && $this->OTLdata[$ptr - 1]['uni'] == 32) {
+				$this->OTLdata[$ptr - 1]['uni'] = 0xa0;
+				$this->OTLdata[$ptr - 1]['hex'] = '000A0';
+			}
+		}
+	}
+
+	/**
+	 * Shaper I: the Indic scripts, and Sinhala and Khmer, which are written the same way.
+	 *
+	 * A syllable is typed in the order it is spoken and drawn in another order, so the run is grouped
+	 * into syllables, each is put into the order the font's lookups expect to find it in, and the
+	 * features are applied one syllable at a time. That is what restrictToSyllable is for, and why
+	 * every rule below is applied inside the loop rather than over the whole run at once.
+	 */
+	private function shapeIndic($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock, $is_old_spec)
+	{
+		$this->restrictToSyllable = true;
+		// a. First decompose/compose split mattras
+		// Unicode normalisation is not applied first, so a cluster written with its nukta and
+		// halant in the other order reaches the shaper as written. HarfBuzz normalises here.
+		for ($ptr = 0; $ptr < count($this->OTLdata); $ptr++) {
+			$char = $this->OTLdata[$ptr]['uni'];
+			$sub = Indic::decompose_indic($char);
+			if ($sub) {
 				$newinfo = [];
-				//$newinfo[0] = array('general_category' => 1, 'bidi_type' => 14, 'group' => 'S', 'uni' => 0x200B, 'hex' => '0200B');
-				$newinfo[0] = [
-					'general_category' => Ucdn::UNICODE_GENERAL_CATEGORY_FORMAT,
-					'bidi_type' => Ucdn::BIDI_CLASS_BN,
-					'group' => 'S', 'uni' => 0x200B, 'hex' => '0200B'];
-				// Then insert U+200B at (after) all word end boundaries
-				for ($i = count($this->OTLdata) - 1; $i > 0; $i--) {
-					// Make sure after GSUB that wordend has not been moved - check next char is not in the same syllable
-					if (isset($this->OTLdata[$i]['wordend']) && $this->OTLdata[$i]['wordend'] &&
-						isset($this->OTLdata[$i + 1]['uni']) && (!isset($this->OTLdata[$i + 1]['syllable']) || !isset($this->OTLdata[$i + 1]['syllable']) || $this->OTLdata[$i + 1]['syllable'] != $this->OTLdata[$i]['syllable'])) {
-						array_splice($this->OTLdata, $i + 1, 0, $newinfo);
-						$this->_updateLigatureMarks($i, 1);
-					} elseif ($this->OTLdata[$i]['uni'] == 0x2e) { // Word end if Full-stop.
-						array_splice($this->OTLdata, $i + 1, 0, $newinfo);
-						$this->_updateLigatureMarks($i, 1);
+				for ($i = 0; $i < count($sub); $i++) {
+					$newinfo[$i] = [];
+					$ucd_record = Ucdn::get_ucd_record($sub[$i]);
+					$newinfo[$i]['general_category'] = $ucd_record[0];
+					$newinfo[$i]['bidi_type'] = $ucd_record[2];
+					$charasstr = $this->unicode_hex($sub[$i]);
+					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
+						$newinfo[$i]['group'] = 'M';
+					} else {
+						$newinfo[$i]['group'] = 'C';
 					}
+					$newinfo[$i]['uni'] = $sub[$i];
+					$newinfo[$i]['hex'] = $charasstr;
+				}
+				array_splice($this->OTLdata, $ptr, 1, $newinfo);
+				$ptr += count($sub) - 1;
+			}
+			/* Only Composition-exclusion exceptions that we want to recompose. */
+			if ($this->shaper == 'I') {
+				if ($char == 0x09AF && isset($this->OTLdata[$ptr + 1]) && $this->OTLdata[$ptr + 1]['uni'] == 0x09BC) {
+					$sub = 0x09DF;
+					$newinfo = [];
+					$newinfo[0] = [];
+					$ucd_record = Ucdn::get_ucd_record($sub);
+					$newinfo[0]['general_category'] = $ucd_record[0];
+					$newinfo[0]['bidi_type'] = $ucd_record[2];
+					$newinfo[0]['group'] = 'C';
+					$newinfo[0]['uni'] = $sub;
+					$newinfo[0]['hex'] = $this->unicode_hex($sub);
+					array_splice($this->OTLdata, $ptr, 2, $newinfo);
+				}
+			}
+		}
+		// b. Analyse characters - group as syllables/clusters (Indic); invalid diacritics; add dotted circle
+		$indic_category_string = '';
+		foreach ($this->OTLdata as $eid => $c) {
+			Indic::set_indic_properties($this->OTLdata[$eid], $scriptblock); // sets ['indic_category'] and ['indic_position']
+			//$c['general_category']
+			//$c['combining_class']
+			//$c['uni'] =  $char;
+
+			$indic_category_string .= Indic::$indic_category_char[$this->OTLdata[$eid]['indic_category']];
+		}
+
+		$broken_syllables = false;
+		if ($this->shaper == 'I') {
+			Indic::set_syllables($this->OTLdata, $indic_category_string, $broken_syllables);
+		} elseif ($this->shaper == 'S') {
+			Indic::set_syllables_sinhala($this->OTLdata, $indic_category_string, $broken_syllables);
+		} elseif ($this->shaper == 'K') {
+			Indic::set_syllables_khmer($this->OTLdata, $indic_category_string, $broken_syllables);
+		}
+		$indic_category_string = '';
+
+		// c. Initial Re-ordering (Indic / Khmer / Sinhala)
+		// Find base consonant
+		// Decompose/compose and reorder Matras
+		// Reorder marks to canonical order
+
+		$indic_config = Indic::$indic_configs[$scriptblock];
+		$dottedcircle = false;
+		if ($broken_syllables) {
+			if ($this->mpdf->_charDefined($this->mpdf->fonts[$this->fontkey]['cw'], 0x25CC)) {
+				$dottedcircle = [];
+				$ucd_record = Ucdn::get_ucd_record(0x25CC);
+				$dottedcircle[0]['general_category'] = $ucd_record[0];
+				$dottedcircle[0]['bidi_type'] = $ucd_record[2];
+				$dottedcircle[0]['group'] = 'C';
+				$dottedcircle[0]['uni'] = 0x25CC;
+				$dottedcircle[0]['indic_category'] = Indic::OT_DOTTEDCIRCLE;
+				$dottedcircle[0]['indic_position'] = Indic::POS_BASE_C;
+
+				$dottedcircle[0]['hex'] = '025CC';  // TEMPORARY
+			}
+		}
+		Indic::initial_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $indic_config, $scriptblock, $is_old_spec, $dottedcircle);
+
+		// d. Apply initial and basic shaping forms GSUB Lookups (one at a time)
+		// Khmer writes its dependent forms round the base rather than reordering them, so it asks for
+		// a different set. Indic and Sinhala are the only other shapers that reach here.
+		$tags = $this->shaper == 'K'
+			? 'locl ccmp pref blwf abvf pstf cfar'
+			: 'locl ccmp nukt akhn rphf rkrf pref blwf half pstf vatu cjct';
+		$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+
+		// e. Final Re-ordering (Indic / Khmer / Sinhala)
+		// Reorder matras
+		// Reorder reph
+		// Reorder pre-base reordering consonants:
+
+		Indic::final_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $indic_config, $scriptblock, $is_old_spec);
+
+		// f. Apply 'init' feature to first syllable in word (indicated by ['mask']) Indic::FLAG(Indic::INIT);
+		if ($this->shaper == 'I' || $this->shaper == 'S') {
+			$tags = 'init';
+			$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+		}
+
+		// g. Apply Presentation Forms GSUB Lookups (+ any discretionary)
+		$tags = 'pres abvs blws psts haln rlig calt liga clig mset';
+
+		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
+		$usetags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+		}
+		if ($this->shaper == 'K') {  // Features are applied one at a time, working through each codepoint
+			$this->_applyGSUBrulesSingly($usetags, $GSUBscriptTag, $GSUBlangsys);
+		} else {
+			$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
+		}
+		$this->restrictToSyllable = false;
+	}
+
+	/**
+	 * Shaper M: Myanmar, and only where the font offers the mym2 tag.
+	 *
+	 * Syllable-based like the Indic shaper, reordered by rules of its own. A font that offers only
+	 * the older mymr tag goes through the generic path instead, which applyOTL settles before this
+	 * is reached.
+	 */
+	private function shapeMyanmar($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures)
+	{
+		$this->restrictToSyllable = true;
+		// a. Analyse characters - group as syllables/clusters (Myanmar); invalid diacritics; add dotted circle
+		$myanmar_category_string = '';
+		foreach ($this->OTLdata as $eid => $c) {
+			Myanmar::set_myanmar_properties($this->OTLdata[$eid]); // sets ['myanmar_category'] and ['myanmar_position']
+			$myanmar_category_string .= Myanmar::$myanmar_category_char[$this->OTLdata[$eid]['myanmar_category']];
+		}
+		$broken_syllables = false;
+		Myanmar::set_syllables($this->OTLdata, $myanmar_category_string, $broken_syllables);
+		$myanmar_category_string = '';
+
+		// b. Re-ordering (Myanmar mym2)
+		$dottedcircle = false;
+		if ($broken_syllables) {
+			if ($this->mpdf->_charDefined($this->mpdf->fonts[$this->fontkey]['cw'], 0x25CC)) {
+				$dottedcircle = [];
+				$ucd_record = Ucdn::get_ucd_record(0x25CC);
+				$dottedcircle[0]['general_category'] = $ucd_record[0];
+				$dottedcircle[0]['bidi_type'] = $ucd_record[2];
+				$dottedcircle[0]['group'] = 'C';
+				$dottedcircle[0]['uni'] = 0x25CC;
+				$dottedcircle[0]['myanmar_category'] = Myanmar::OT_DOTTEDCIRCLE;
+				$dottedcircle[0]['myanmar_position'] = Myanmar::POS_BASE_C;
+				$dottedcircle[0]['hex'] = '025CC';
+			}
+		}
+		Myanmar::reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $dottedcircle);
+
+		// c. Apply initial and basic shaping forms GSUB Lookups (one at a time)
+
+		$tags = 'locl ccmp rphf pref blwf pstf';
+		$this->_applyGSUBrulesMyanmar($tags, $GSUBscriptTag, $GSUBlangsys);
+
+		// d. Apply Presentation Forms GSUB Lookups (+ any discretionary)
+		$tags = 'pres abvs blws psts haln rlig calt liga clig mset';
+		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
+		$usetags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+		}
+		$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
+		$this->restrictToSyllable = false;
+	}
+
+	/**
+	 * Shaper E: the South East Asian scripts - New Tai Lue, Cham and Tai Tham.
+	 *
+	 * Syllable-based, with no reordering. What these need is the invalid clusters found and a dotted
+	 * circle put in front of a mark that has nothing to attach to, so that broken text reads as
+	 * broken rather than as something else.
+	 */
+	private function shapeSouthEastAsian($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock)
+	{
+		/* HarfBuzz says: If the designer designed the font for the 'DFLT' script,
+		 * use the default shaper.  Otherwise, use the SEA shaper.
+		 * Note that for some simple scripts, there may not be *any*
+		 * GSUB/GPOS needed, so there may be no scripts found! */
+
+		$this->restrictToSyllable = true;
+		// a. Analyse characters - group as syllables/clusters (Indic); invalid diacritics; add dotted circle
+		$sea_category_string = '';
+		foreach ($this->OTLdata as $eid => $c) {
+			Sea::set_sea_properties($this->OTLdata[$eid], $scriptblock); // sets ['sea_category'] and ['sea_position']
+			//$c['general_category']
+			//$c['combining_class']
+			//$c['uni'] =  $char;
+
+			$sea_category_string .= Sea::$sea_category_char[$this->OTLdata[$eid]['sea_category']];
+		}
+
+		$broken_syllables = false;
+		Sea::set_syllables($this->OTLdata, $sea_category_string, $broken_syllables);
+		$sea_category_string = '';
+
+		// b. Apply locl and ccmp shaping forms - before initial re-ordering; GSUB Lookups (one at a time)
+		$tags = 'locl ccmp';
+		$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
+
+		// c. Initial Re-ordering
+		// Find base consonant
+		// Decompose/compose and reorder Matras
+		// Reorder marks to canonical order
+
+		$dottedcircle = false;
+		if ($broken_syllables) {
+			if ($this->mpdf->_charDefined($this->mpdf->fonts[$this->fontkey]['cw'], 0x25CC)) {
+				$dottedcircle = [];
+				$ucd_record = Ucdn::get_ucd_record(0x25CC);
+				$dottedcircle[0]['general_category'] = $ucd_record[0];
+				$dottedcircle[0]['bidi_type'] = $ucd_record[2];
+				$dottedcircle[0]['group'] = 'C';
+				$dottedcircle[0]['uni'] = 0x25CC;
+				$dottedcircle[0]['sea_category'] = Sea::OT_GB;
+				$dottedcircle[0]['sea_position'] = Sea::POS_BASE_C;
+
+				$dottedcircle[0]['hex'] = '025CC';  // TEMPORARY
+			}
+		}
+		Sea::initial_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $scriptblock, $dottedcircle);
+
+		// d. Apply basic shaping forms GSUB Lookups (one at a time)
+		$tags = 'pref abvf blwf pstf';
+		$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
+
+		// e. Final Re-ordering
+
+		Sea::final_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $scriptblock);
+
+		// f. Apply Presentation Forms GSUB Lookups (+ any discretionary)
+		$tags = 'pres abvs blws psts';
+
+		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
+		$usetags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+		}
+		$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
+		$this->restrictToSyllable = false;
+	}
+
+	/**
+	 * The generic path: apply the font's features in the order the font lists them.
+	 *
+	 * Most scripts need nothing more. Thai and Lao decompose a few characters first, Tibetan and
+	 * Myanmar v1 arrive here too, and everything else - Latin, Greek, Cyrillic, Hebrew, the CJK
+	 * scripts - is laid out entirely by the lookups the font asks for.
+	 *
+	 * @return string The feature tags applied, which the positioning reads to tell an OpenType
+	 *                small-caps run from one drawn with synthesised capitals
+	 */
+	private function shapeGeneric($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock)
+	{
+		// a. First decompose/compose in Thai / Lao - Tibetan
+		// Decomposition for THAI or LAO
+		/* This function implements the shaping logic documented here:
+		 *
+		 *   http://linux.thai.net/~thep/th-otf/shaping.html
+		 *
+		 * The first shaping rule listed there is needed even if the font has Thai
+		 * OpenType tables.
+		 *
+		 *
+		 * The following is NOT specified in the MS OT Thai spec, however, it seems
+		 * to be what Uniscribe and other engines implement.  According to Eric Muller:
+		 *
+		 * When you have a SARA AM, decompose it in NIKHAHIT + SARA AA, *and* move the
+		 * NIKHAHIT backwards over any tone mark (0E48-0E4B).
+		 *
+		 * <0E14, 0E4B, 0E33> -> <0E14, 0E4D, 0E4B, 0E32>
+		 *
+		 * This reordering is legit only when the NIKHAHIT comes from a SARA AM, not
+		 * when it's there to start with. The string <0E14, 0E4B, 0E4D> is probably
+		 * not what a user wanted, but the rendering is nevertheless nikhahit above
+		 * chattawa.
+		 *
+		 * Same for Lao.
+		 *
+		 *          Thai        Lao
+		 * SARA AM:     U+0E33  U+0EB3
+		 * SARA AA:     U+0E32  U+0EB2
+		 * Nikhahit:    U+0E4D  U+0ECD
+		 *
+		 * Testing shows that Uniscribe reorder the following marks:
+		 * Thai:    <0E31,0E34..0E37,0E47..0E4E>
+		 * Lao: <0EB1,0EB4..0EB7,0EC7..0ECE>
+		 *
+		 * Lao versions are the same as Thai + 0x80.
+		 */
+		if ($this->shaper == 'T' || $this->shaper == 'L') {
+			for ($ptr = 0; $ptr < count($this->OTLdata); $ptr++) {
+				$char = $this->OTLdata[$ptr]['uni'];
+				if (($char & ~0x0080) == 0x0E33) { // if SARA_AM (U+0E33 or U+0EB3)
+					$NIKHAHIT = $char + 0x1A;
+					$SARA_AA = $char - 1;
+					$sub = [$SARA_AA, $NIKHAHIT];
+
+					$newinfo = [];
+					$ucd_record = Ucdn::get_ucd_record($sub[0]);
+					$newinfo[0]['general_category'] = $ucd_record[0];
+					$newinfo[0]['bidi_type'] = $ucd_record[2];
+					$charasstr = $this->unicode_hex($sub[0]);
+					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
+						$newinfo[0]['group'] = 'M';
+					} else {
+						$newinfo[0]['group'] = 'C';
+					}
+					$newinfo[0]['uni'] = $sub[0];
+					$newinfo[0]['hex'] = $charasstr;
+					$this->OTLdata[$ptr] = $newinfo[0]; // Substitute SARA_AM => SARA_AA
+
+					$ntones = 0; // number of (preceding) tone marks
+					// IS_TONE_MARK ((x) & ~0x0080, 0x0E34 - 0x0E37, 0x0E47 - 0x0E4E, 0x0E31)
+					while (isset($this->OTLdata[$ptr - 1 - $ntones]) && (
+					($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) == 0x0E31 ||
+					(($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) >= 0x0E34 &&
+					($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) <= 0x0E37) ||
+					(($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) >= 0x0E47 &&
+					($this->OTLdata[$ptr - 1 - $ntones]['uni'] & ~0x0080) <= 0x0E4E)
+					)
+					) {
+						$ntones++;
+					}
+
+					$newinfo = [];
+					$ucd_record = Ucdn::get_ucd_record($sub[1]);
+					$newinfo[0]['general_category'] = $ucd_record[0];
+					$newinfo[0]['bidi_type'] = $ucd_record[2];
+					$charasstr = $this->unicode_hex($sub[1]);
+					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
+						$newinfo[0]['group'] = 'M';
+					} else {
+						$newinfo[0]['group'] = 'C';
+					}
+					$newinfo[0]['uni'] = $sub[1];
+					$newinfo[0]['hex'] = $charasstr;
+					// Insert NIKAHIT
+					array_splice($this->OTLdata, $ptr - $ntones, 0, $newinfo);
+
+					$ptr++;
+				}
+			}
+		}
+
+		if ($scriptblock == Ucdn::SCRIPT_TIBETAN) {
+			// Reordering TIBETAN
+			// Tibetan does not need to need a shaper generally, as long as characters are presented in the correct order
+			// so we will do one minor change here:
+			// From ICU: If the present character is a number, and the next character is a pre-number combining mark
+			// then the two characters are reordered
+			// From MS OTL spec the following are Digit modifiers (Md): 0F18–0F19, 0F3E–0F3F
+			// Digits: 0F20–0F33
+			// On testing only 0x0F3F (pre-based mark) seems to need re-ordering
+			for ($ptr = 0; $ptr < count($this->OTLdata) - 1; $ptr++) {
+				if (Indic::in_range($this->OTLdata[$ptr]['uni'], 0x0F20, 0x0F33) && $this->OTLdata[$ptr + 1]['uni'] == 0x0F3F) {
+					$tmp = $this->OTLdata[$ptr + 1];
+					$this->OTLdata[$ptr + 1] = $this->OTLdata[$ptr];
+					$this->OTLdata[$ptr] = $tmp;
 				}
 			}
 
+			// Decomposition for TIBETAN
+			/* Recommended, but does not seem to change anything...
+			  for($ptr=0; $ptr<count($this->OTLdata); $ptr++) {
+			  $char = $this->OTLdata[$ptr]['uni'];
+			  $sub = Indic::decompose_indic($char);
+			  if ($sub) {
+			  $newinfo = array();
+			  for($i=0;$i<count($sub);$i++) {
+			  $newinfo[$i] = array();
+			  $ucd_record = Ucdn::get_ucd_record($sub[$i]);
+			  $newinfo[$i]['general_category'] = $ucd_record[0];
+			  $newinfo[$i]['bidi_type'] = $ucd_record[2];
+			  $charasstr = $this->unicode_hex($sub[$i]);
+			  if (strpos($this->GlyphClassMarks, $charasstr)!==false) { $newinfo[$i]['group'] =  'M'; }
+			  else { $newinfo[$i]['group'] =  'C'; }
+			  $newinfo[$i]['uni'] =  $sub[$i];
+			  $newinfo[$i]['hex'] =  $charasstr;
+			  }
+			  array_splice($this->OTLdata, $ptr, 1, $newinfo);
+			  $ptr += count($sub)-1;
+			  }
+			  }
+			 */
+		}
 
-			// Shapers - INDIC & ARABIC & KHMER & SINHALA  & MYANMAR - Remove ZWJ and ZWNJ
-			//=======================================================
-			if ($this->shaper == 'I' || $this->shaper == 'S' || $this->shaper == 'A' || $this->shaper == 'K' || $this->shaper == 'M') {
-				// Remove ZWJ and ZWNJ
-				for ($i = 0; $i < count($this->OTLdata); $i++) {
-					if ($this->OTLdata[$i]['uni'] == 8204 || $this->OTLdata[$i]['uni'] == 8205) {
-						array_splice($this->OTLdata, $i, 1);
-						$this->_updateLigatureMarks($i, -1);
-					}
+		// b. Apply all GSUB Lookups (in order specified in lookup list)
+		$tags = 'locl ccmp pref blwf abvf pstf pres abvs blws psts haln rlig calt liga clig mset  RQD';
+		// pref blwf abvf pstf required for Tibetan
+		// " RQD" is a non-standard tag in Garuda font - presumably intended to be used by default ? "ReQuireD"
+		// Being a 3 letter tag is non-standard, and does not allow it to be set by font-feature-settings
+
+		/* ?Add these until shapers witten?
+		  Hangul:   ljmo vjmo tjmo
+		 */
+
+		$omittags = '';
+		$useGSUBtags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$useGSUBtags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+		}
+		// APPLY GSUB rules (as long as not Latin + SmallCaps - but not OTL smcp)
+		if (!(($this->mpdf->textvar & TextVars::FC_SMALLCAPS) && $scriptblock == Ucdn::SCRIPT_LATIN && strpos($useGSUBtags, 'smcp') === false)) {
+			$this->_applyGSUBrules($useGSUBtags, $GSUBscriptTag, $GSUBlangsys);
+		}
+
+		return $useGSUBtags;
+	}
+
+	/**
+	 * Phases 6 to 10: positioning.
+	 *
+	 * Where substitution changes which glyphs are drawn, this changes where they are drawn: a pair
+	 * kerned together, a mark placed over the base it belongs to, one cursive glyph joined to the
+	 * next. It leaves the text alone and writes into OTLdata's GPOSinfo, which the drawing code
+	 * reads alongside it.
+	 */
+	private function applyGPOS($GPOSscriptTag, $GPOSlangsys, $GPOSFeatures, $scriptblock, $is_old_spec, $useGSUBtags)
+	{
+		if (!$GPOSscriptTag || !$GPOSlangsys || !$GPOSFeatures) {
+			return;
+		}
+
+		$this->readTable('GPOS');
+
+		$this->Entry = [];
+		$this->Exit = [];
+
+		// 6. Load GPOS data, Coverage & Lookups
+		$fontCacheFilename = $this->fontkey . '.GPOSdata.json';
+		if (!isset($this->GPOSdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
+			$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'] = $this->fontCache->jsonLoad($fontCacheFilename);
+		} else {
+			$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'];
+		}
+
+		$this->GPOSLookups = $this->mpdf->CurrentFont['GPOSLookups'];
+
+		// 7. Select Feature tags to use (incl optional)
+		$tags = 'abvm blwm mark mkmk curs cpsp dist requ'; // Default set
+		// 'requ' is not listed in the Microsoft registry of Feature tags
+		// Found in Arial Unicode MS, it repositions the baseline for punctuation in Kannada script
+
+		// ZZZ96
+		// Set kern to be included by default in non-Latin script (? just when shapers used)
+		// Kern is used in some fonts to reposition marks etc. and is essential for correct display
+		//if ($this->shaper) {$tags .= ' kern'; }
+		if ($scriptblock != Ucdn::SCRIPT_LATIN) {
+			$tags .= ' kern';
+		}
+
+		$omittags = '';
+		$usetags = $tags;
+		if (!empty($this->mpdf->OTLtags)) {
+			$usetags = $this->_applyTagSettings($tags, $GPOSFeatures, $omittags, false);
+		}
+
+		// 8. Get GPOS LookupList from Feature tags
+		$LookupList = [];
+		foreach ($GPOSFeatures as $tag => $arr) {
+			if (strpos($usetags, $tag) !== false) {
+				foreach ($arr as $lu) {
+					$LookupList[$lu] = $tag;
 				}
 			}
+		}
+		ksort($LookupList);
 
+		// 9. Apply GPOS Lookups (in order specified in lookup list but selecting from specified tags)
+		// APPLY THE GPOS RULES (as long as not Latin + SmallCaps - but not OTL smcp)
+		if (!(($this->mpdf->textvar & TextVars::FC_SMALLCAPS) && $scriptblock == Ucdn::SCRIPT_LATIN && strpos($useGSUBtags, 'smcp') === false)) {
+			$this->_applyGPOSrules($LookupList, $is_old_spec);
+			// (sets: $this->OTLdata[n]['GPOSinfo'] XPlacement YPlacement XAdvance Entry Exit )
+		}
 
-			////////////////////////////////////////////////////////////////
-			////////////////////////////////////////////////////////////////
-			//////////       GPOS          /////////////////////////////////
-			////////////////////////////////////////////////////////////////
-			////////////////////////////////////////////////////////////////
-			if (($useOTL & 0xFF) && $GPOSscriptTag && $GPOSlangsys && $GPOSFeatures) {
-				$this->readTable('GPOS');
-
-				$this->Entry = [];
-				$this->Exit = [];
-
-				// 6. Load GPOS data, Coverage & Lookups
-				//=================================================================
-				$fontCacheFilename = $this->mpdf->CurrentFont['fontkey'] . '.GPOSdata.json';
-				if (!isset($this->GPOSdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
-					$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'] = $this->fontCache->jsonLoad($fontCacheFilename);
-				} else {
-					$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'];
-				}
-
-				$this->GPOSLookups = $this->mpdf->CurrentFont['GPOSLookups'];
-
-
-				// 7. Select Feature tags to use (incl optional)
-				//==============================
-				$tags = 'abvm blwm mark mkmk curs cpsp dist requ'; // Default set
-				// 'requ' is not listed in the Microsoft registry of Feature tags
-				// Found in Arial Unicode MS, it repositions the baseline for punctuation in Kannada script
-
-				// ZZZ96
-				// Set kern to be included by default in non-Latin script (? just when shapers used)
-				// Kern is used in some fonts to reposition marks etc. and is essential for correct display
-				//if ($this->shaper) {$tags .= ' kern'; }
-				if ($scriptblock != Ucdn::SCRIPT_LATIN) {
-					$tags .= ' kern';
-				}
-
-				$omittags = '';
-				$usetags = $tags;
-				if (!empty($this->mpdf->OTLtags)) {
-					$usetags = $this->_applyTagSettings($tags, $GPOSFeatures, $omittags, false);
-				}
-
-
-
-				// 8. Get GPOS LookupList from Feature tags
-				//==============================
-				$LookupList = [];
-				foreach ($GPOSFeatures as $tag => $arr) {
-					if (strpos($usetags, $tag) !== false) {
-						foreach ($arr as $lu) {
-							$LookupList[$lu] = $tag;
+		// 10. Process cursive text
+		if (count($this->Entry) || count($this->Exit)) {
+			// RTL
+			$incurs = false;
+			for ($i = (count($this->OTLdata) - 1); $i >= 0; $i--) {
+				if (isset($this->Entry[$i]) && isset($this->Entry[$i]['Y']) && $this->Entry[$i]['dir'] == 'RTL') {
+					$nextbase = $i - 1; // Set as next base ignoring marks (next base reading RTL in logical oder
+					while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
+						$nextbase--;
+					}
+					if (isset($this->Exit[$nextbase]) && isset($this->Exit[$nextbase]['Y'])) {
+						$diff = $this->Entry[$i]['Y'] - $this->Exit[$nextbase]['Y'];
+						if ($incurs === false) {
+							$incurs = $diff;
+						} else {
+							$incurs += $diff;
 						}
-					}
-				}
-				ksort($LookupList);
-
-
-				// 9. Apply GPOS Lookups (in order specified in lookup list but selecting from specified tags)
-				//==============================
-				// APPLY THE GPOS RULES (as long as not Latin + SmallCaps - but not OTL smcp)
-				if (!(($this->mpdf->textvar & TextVars::FC_SMALLCAPS) && $scriptblock == Ucdn::SCRIPT_LATIN && strpos($useGSUBtags, 'smcp') === false)) {
-					$this->_applyGPOSrules($LookupList, $is_old_spec);
-					// (sets: $this->OTLdata[n]['GPOSinfo'] XPlacement YPlacement XAdvance Entry Exit )
-				}
-
-				// 10. Process cursive text
-				//==============================
-				if (count($this->Entry) || count($this->Exit)) {
-					// RTL
-					$incurs = false;
-					for ($i = (count($this->OTLdata) - 1); $i >= 0; $i--) {
-						if (isset($this->Entry[$i]) && isset($this->Entry[$i]['Y']) && $this->Entry[$i]['dir'] == 'RTL') {
-							$nextbase = $i - 1; // Set as next base ignoring marks (next base reading RTL in logical oder
-							while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
-								$nextbase--;
-							}
-							if (isset($this->Exit[$nextbase]) && isset($this->Exit[$nextbase]['Y'])) {
-								$diff = $this->Entry[$i]['Y'] - $this->Exit[$nextbase]['Y'];
-								if ($incurs === false) {
-									$incurs = $diff;
-								} else {
-									$incurs += $diff;
-								}
-								for ($j = ($i - 1); $j >= $nextbase; $j--) {
-									if (isset($this->OTLdata[$j]['GPOSinfo']['YPlacement'])) {
-										$this->OTLdata[$j]['GPOSinfo']['YPlacement'] += $incurs;
-									} else {
-										$this->OTLdata[$j]['GPOSinfo']['YPlacement'] = $incurs;
-									}
-								}
-								if (isset($this->Exit[$i]['X']) && isset($this->Entry[$nextbase]['X'])) {
-									$adj = -($this->Entry[$i]['X'] - $this->Exit[$nextbase]['X']);
-									// If XAdvance is aplied - in order for PDF to position the Advance correctly need to place it on:
-									// in RTL - the current glyph or the last of any associated marks
-									if (isset($this->OTLdata[$nextbase + 1]['GPOSinfo']['XAdvance'])) {
-										$this->OTLdata[$nextbase + 1]['GPOSinfo']['XAdvance'] += $adj;
-									} else {
-										$this->OTLdata[$nextbase + 1]['GPOSinfo']['XAdvance'] = $adj;
-									}
-								}
+						for ($j = ($i - 1); $j >= $nextbase; $j--) {
+							if (isset($this->OTLdata[$j]['GPOSinfo']['YPlacement'])) {
+								$this->OTLdata[$j]['GPOSinfo']['YPlacement'] += $incurs;
 							} else {
-								$incurs = false;
+								$this->OTLdata[$j]['GPOSinfo']['YPlacement'] = $incurs;
 							}
-						} elseif (strpos($this->GlyphClassMarks, $this->OTLdata[$i]['hex']) !== false) {
-							continue;
-						} // ignore Marks
-						else {
-							$incurs = false;
 						}
-					}
-					// LTR
-					$incurs = false;
-					for ($i = 0; $i < count($this->OTLdata); $i++) {
-						if (isset($this->Exit[$i]) && isset($this->Exit[$i]['Y']) && $this->Exit[$i]['dir'] == 'LTR') {
-							$nextbase = $i + 1; // Set as next base ignoring marks
-							while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
-								$nextbase++;
-							}
-							if (isset($this->Entry[$nextbase]) && isset($this->Entry[$nextbase]['Y'])) {
-								$diff = $this->Exit[$i]['Y'] - $this->Entry[$nextbase]['Y'];
-								if ($incurs === false) {
-									$incurs = $diff;
-								} else {
-									$incurs += $diff;
-								}
-								for ($j = ($i + 1); $j <= $nextbase; $j++) {
-									if (isset($this->OTLdata[$j]['GPOSinfo']['YPlacement'])) {
-										$this->OTLdata[$j]['GPOSinfo']['YPlacement'] += $incurs;
-									} else {
-										$this->OTLdata[$j]['GPOSinfo']['YPlacement'] = $incurs;
-									}
-								}
-								if (isset($this->Exit[$i]['X']) && isset($this->Entry[$nextbase]['X'])) {
-									$adj = -($this->Exit[$i]['X'] - $this->Entry[$nextbase]['X']);
-									// If XAdvance is aplied - in order for PDF to position the Advance correctly need to place it on:
-									// in LTR - the next glyph, ignoring marks
-									if (isset($this->OTLdata[$nextbase]['GPOSinfo']['XAdvance'])) {
-										$this->OTLdata[$nextbase]['GPOSinfo']['XAdvance'] += $adj;
-									} else {
-										$this->OTLdata[$nextbase]['GPOSinfo']['XAdvance'] = $adj;
-									}
-								}
+						if (isset($this->Exit[$i]['X']) && isset($this->Entry[$nextbase]['X'])) {
+							$adj = -($this->Entry[$i]['X'] - $this->Exit[$nextbase]['X']);
+							// If XAdvance is aplied - in order for PDF to position the Advance correctly need to place it on:
+							// in RTL - the current glyph or the last of any associated marks
+							if (isset($this->OTLdata[$nextbase + 1]['GPOSinfo']['XAdvance'])) {
+								$this->OTLdata[$nextbase + 1]['GPOSinfo']['XAdvance'] += $adj;
 							} else {
-								$incurs = false;
+								$this->OTLdata[$nextbase + 1]['GPOSinfo']['XAdvance'] = $adj;
 							}
-						} elseif (strpos($this->GlyphClassMarks, $this->OTLdata[$i]['hex']) !== false) {
-							continue;
-						} // ignore Marks
-						else {
-							$incurs = false;
 						}
+					} else {
+						$incurs = false;
 					}
+				} elseif (strpos($this->GlyphClassMarks, $this->OTLdata[$i]['hex']) !== false) {
+					continue;
+				} // ignore Marks
+				else {
+					$incurs = false;
 				}
-			} // end GPOS
-
-			if ($this->debugOTL) {
-				$this->_dumpproc('END', '-', '-', '-', '-', 0, '-', 0);
-				exit;
 			}
+			// LTR
+			$incurs = false;
+			for ($i = 0; $i < count($this->OTLdata); $i++) {
+				if (isset($this->Exit[$i]) && isset($this->Exit[$i]['Y']) && $this->Exit[$i]['dir'] == 'LTR') {
+					$nextbase = $i + 1; // Set as next base ignoring marks
+					while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
+						$nextbase++;
+					}
+					if (isset($this->Entry[$nextbase]) && isset($this->Entry[$nextbase]['Y'])) {
+						$diff = $this->Exit[$i]['Y'] - $this->Entry[$nextbase]['Y'];
+						if ($incurs === false) {
+							$incurs = $diff;
+						} else {
+							$incurs += $diff;
+						}
+						for ($j = ($i + 1); $j <= $nextbase; $j++) {
+							if (isset($this->OTLdata[$j]['GPOSinfo']['YPlacement'])) {
+								$this->OTLdata[$j]['GPOSinfo']['YPlacement'] += $incurs;
+							} else {
+								$this->OTLdata[$j]['GPOSinfo']['YPlacement'] = $incurs;
+							}
+						}
+						if (isset($this->Exit[$i]['X']) && isset($this->Entry[$nextbase]['X'])) {
+							$adj = -($this->Exit[$i]['X'] - $this->Entry[$nextbase]['X']);
+							// If XAdvance is aplied - in order for PDF to position the Advance correctly need to place it on:
+							// in LTR - the next glyph, ignoring marks
+							if (isset($this->OTLdata[$nextbase]['GPOSinfo']['XAdvance'])) {
+								$this->OTLdata[$nextbase]['GPOSinfo']['XAdvance'] += $adj;
+							} else {
+								$this->OTLdata[$nextbase]['GPOSinfo']['XAdvance'] = $adj;
+							}
+						}
+					} else {
+						$incurs = false;
+					}
+				} elseif (strpos($this->GlyphClassMarks, $this->OTLdata[$i]['hex']) !== false) {
+					continue;
+				} // ignore Marks
+				else {
+					$incurs = false;
+				}
+			}
+		}
+	}
 
-			$this->schOTLdata[$sch] = $this->OTLdata;
-			$this->OTLdata = [];
-		} // END foreach subchunk
-		// 11. Re-assemble and return text string
-		//==============================
+	/**
+	 * Which shaper a script needs.
+	 *
+	 * Most scripts are laid out by applying the font's features in the order it lists them, which is
+	 * what "" means here. The rest need their own rules run first - a cluster reordered, a joining
+	 * form chosen, a syllable checked - and each of those has a shaper of its own.
+	 *
+	 * @return string One of I (Indic), A (Arabic), K (Khmer), T (Thai), L (Lao), S (Sinhala),
+	 *                M (Myanmar), E (South East Asian) or "" for the generic path
+	 */
+	private function selectShaper($scriptblock)
+	{
+		if (Ucdn::SCRIPT_DEVANAGARI <= $scriptblock && $scriptblock <= Ucdn::SCRIPT_MALAYALAM) {
+			return "I";
+		} // INDIC shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_ARABIC || $scriptblock == Ucdn::SCRIPT_SYRIAC) {
+			return "A";
+		} // ARABIC shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_NKO || $scriptblock == Ucdn::SCRIPT_MANDAIC) {
+			return "A";
+		} // ARABIC shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_KHMER) {
+			return "K";
+		} // KHMER shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_THAI) {
+			return "T";
+		} // THAI shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_LAO) {
+			return "L";
+		} // LAO shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_SINHALA) {
+			return "S";
+		} // SINHALA shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_MYANMAR) {
+			return "M";
+		} // MYANMAR shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_NEW_TAI_LUE) {
+			return "E";
+		} // SEA South East Asian shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_CHAM) {
+			return "E";
+		} // SEA South East Asian shaper
+		elseif ($scriptblock == Ucdn::SCRIPT_TAI_THAM) {
+			return "E";
+		} // SEA South East Asian shaper
+		else {
+			return "";
+		}
+	}
+
+	/**
+	 * Phase 3: which script and language system of the font to lay this run out with.
+	 *
+	 * The script the text is in and the script the font speaks for need not be the same tag - a font
+	 * may offer the older "deva" where the text calls for "dev2", or offer nothing for the script at
+	 * all - so each of GSUB and GPOS is asked separately what it has. GPOS reuses GSUB's answer where
+	 * it can, because a font that offers a script in one usually offers it in the other, and asking
+	 * twice would pick a different language system for the positioning than for the substitution.
+	 *
+	 * @return array [$GSUBscriptTag, $GSUBlangsys, $GPOSscriptTag, $GPOSlangsys, $is_old_spec]:
+	 *               empty tags where the font offers nothing, and whether the script tag chosen is
+	 *               the pre-OpenType-1.6 spelling, which the Indic rules are applied differently for
+	 */
+	private function selectScriptAndLanguage($scriptblock, $useOTL)
+	{
+		// Get scripttag based on actual text script
+		$scripttag = Ucdn::$uni_scriptblock[$scriptblock];
+
+		$GSUBscriptTag = '';
+		$GSUBlangsys = '';
+		$GPOSscriptTag = '';
+		$GPOSlangsys = '';
+		$is_old_spec = false;
+
+		$ScriptLang = $this->mpdf->CurrentFont['GSUBScriptLang'];
+		if (count($ScriptLang)) {
+			list($GSUBscriptTag, $is_old_spec) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GSUB');
+			if ($this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GSUBscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
+				$GSUBlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
+			} elseif ($GSUBscriptTag && isset($ScriptLang[$GSUBscriptTag]) && $ScriptLang[$GSUBscriptTag] != '') {
+				$GSUBlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GSUBscriptTag]);
+			}
+		}
+		$ScriptLang = $this->mpdf->CurrentFont['GPOSScriptLang'];
+
+		// NB If after GSUB, the same script/lang exist for GPOS, just use these...
+		if ($GSUBscriptTag && $GSUBlangsys && isset($ScriptLang[$GSUBscriptTag]) && strpos($ScriptLang[$GSUBscriptTag], $GSUBlangsys) !== false) {
+			$GPOSlangsys = $GSUBlangsys;
+			$GPOSscriptTag = $GSUBscriptTag;
+		} // else repeat for GPOS
+		// [Font XBRiyaz has GSUB tables for latn, but not GPOS for latn]
+		elseif (count($ScriptLang)) {
+			list($GPOSscriptTag, $dummy) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GPOS');
+			if ($GPOSscriptTag && $this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GPOSscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
+				$GPOSlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
+			} elseif ($GPOSscriptTag && isset($ScriptLang[$GPOSscriptTag]) && $ScriptLang[$GPOSscriptTag] != '') {
+				$GPOSlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GPOSscriptTag]);
+			}
+		}
+
+		return [$GSUBscriptTag, $GSUBlangsys, $GPOSscriptTag, $GPOSlangsys, $is_old_spec];
+	}
+
+	/**
+	 * Phase 11: put the subchunks back together into one run.
+	 *
+	 * Each was shaped on its own because each is a different script, and what the drawing code is
+	 * given is one string with one OTLdata beside it: the positioning of every glyph by its place in
+	 * that string, the bidi class and character behind each, and the group - S for a space, M for a
+	 * mark, C for anything else - that line breaking and justification read.
+	 *
+	 * @param int $subchunk The index of the last subchunk, which is one less than how many there are
+	 *
+	 * @return string The shaped text
+	 */
+	private function reassemble($subchunk)
+	{
 		$newGPOSinfo = [];
-		$newOTLdata = [];
 		$newchar_data = [];
 		$newgroup = '';
-		$e = '';
+		$shaped = '';
 		$ectr = 0;
 
 		for ($sch = 0; $sch <= $subchunk; $sch++) {
-			for ($i = 0; $i < count($this->schOTLdata[$sch]); $i++) {
-				if (isset($this->schOTLdata[$sch][$i]['GPOSinfo'])) {
-					$newGPOSinfo[$ectr] = $this->schOTLdata[$sch][$i]['GPOSinfo'];
+			foreach ($this->schOTLdata[$sch] as $char) {
+				if (isset($char['GPOSinfo'])) {
+					$newGPOSinfo[$ectr] = $char['GPOSinfo'];
 				}
-				$newchar_data[$ectr] = ['bidi_class' => $this->schOTLdata[$sch][$i]['bidi_type'], 'uni' => $this->schOTLdata[$sch][$i]['uni']];
-				$newgroup .= $this->schOTLdata[$sch][$i]['group'];
-				$e .= UtfString::code2utf($this->schOTLdata[$sch][$i]['uni']);
+				$newchar_data[$ectr] = ['bidi_class' => $char['bidi_type'], 'uni' => $char['uni']];
+				$newgroup .= $char['group'];
+				$shaped .= UtfString::code2utf($char['uni']);
+
+				// Every character the shaping ended up with has to be in the subset, or the glyph a
+				// substitution reached will not be in the font that gets embedded
 				if (isset($this->mpdf->CurrentFont['subset'])) {
-					$this->mpdf->CurrentFont['subset'][$this->schOTLdata[$sch][$i]['uni']] = $this->schOTLdata[$sch][$i]['uni'];
+					$this->mpdf->CurrentFont['subset'][$char['uni']] = $char['uni'];
 				}
 				$ectr++;
 			}
 		}
+
+		// This leaves OTLdata::GPOSinfo, ::char_data & ::group
 		$this->OTLdata['GPOSinfo'] = $newGPOSinfo;
 		$this->OTLdata['char_data'] = $newchar_data;
 		$this->OTLdata['group'] = $newgroup;
 
-		// This leaves OTLdata::GPOSinfo, ::bidi_type, & ::group
-
-		return $e;
+		return $shaped;
 	}
 
+	/**
+	 * Add the features the document asked for to a default set, and take out the ones it turned off.
+	 *
+	 * font-variant and font-feature-settings both reach here; the first four-letter tag in either is
+	 * matched against what the font actually offers, so asking for a feature the font does not have
+	 * changes nothing.
+	 *
+	 * @param string $tags     The features that would be used by default, space separated
+	 * @param array  $Features The features this font offers for the script and language in hand
+	 * @param string $omittags Features that may not be turned on here whatever the document says,
+	 *                         because the shaper applies them itself
+	 * @param bool   $onlytags Whether the document may only turn off features already in $tags,
+	 *                         rather than add any
+	 *
+	 * @return string The features to apply, space separated
+	 */
 	function _applyTagSettings($tags, $Features, $omittags = '', $onlytags = false)
 	{
 		if (empty($this->mpdf->OTLtags['Plus']) && empty($this->mpdf->OTLtags['Minus']) && empty($this->mpdf->OTLtags['FFPlus']) && empty($this->mpdf->OTLtags['FFMinus'])) {
@@ -1284,6 +1496,16 @@ class Otl
 		return $usetags;
 	}
 
+	/**
+	 * Apply a set of GSUB features, all together, in the order the font's lookup list gives them.
+	 *
+	 * The plain path, for scripts with no shaper of their own.
+	 *
+	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
+	 *                          the alternate it asks for
+	 * @param string $scriptTag The OpenType script the text was assigned to
+	 * @param string $langsys   The OpenType language system under it
+	 */
 	function _applyGSUBrules($usetags, $scriptTag, $langsys)
 	{
 		// Features from all Tags are applied together, in Lookup List order.
@@ -1337,6 +1559,17 @@ class Otl
 		}
 	}
 
+	/**
+	 * Apply a set of GSUB features one feature at a time, each over the whole run before the next.
+	 *
+	 * What the South East Asian shaper asks for, where a later feature is meant to see what an
+	 * earlier one produced.
+	 *
+	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
+	 *                          the alternate it asks for
+	 * @param string $scriptTag The OpenType script the text was assigned to
+	 * @param string $langsys   The OpenType language system under it
+	 */
 	function _applyGSUBrulesSingly($usetags, $scriptTag, $langsys)
 	{
 		// Features are applied one at a time, working through each codepoint
@@ -1412,6 +1645,18 @@ class Otl
 		}
 	}
 
+	/**
+	 * Apply a set of GSUB features one at a time, for Myanmar.
+	 *
+	 * As _applyGSUBrulesSingly, except that a rule may not match across a syllable boundary - the
+	 * shaper has already grouped the text into syllables, and Myanmar's features are defined within
+	 * one.
+	 *
+	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
+	 *                          the alternate it asks for
+	 * @param string $scriptTag The OpenType script the text was assigned to
+	 * @param string $langsys   The OpenType language system under it
+	 */
 	function _applyGSUBrulesMyanmar($usetags, $scriptTag, $langsys)
 	{
 		// $usetags = locl ccmp rphf pref blwf pstf';
@@ -1470,6 +1715,20 @@ class Otl
 		}
 	}
 
+	/**
+	 * Apply a set of GSUB features one at a time, for the Indic scripts.
+	 *
+	 * As the Myanmar path, with one addition: several of these features apply only where the shaper
+	 * marked a character for them - the reph, the pre-base form, the half form - so each glyph is
+	 * tested against the mask the reordering left on it.
+	 *
+	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
+	 *                          the alternate it asks for
+	 * @param string $scriptTag The OpenType script the text was assigned to
+	 * @param string $langsys   The OpenType language system under it
+	 * @param bool   $is_old_spec Whether the font uses the original Indic script tags rather than the
+	 *                            v2 ones, which changes where the features are expected to apply
+	 */
 	function _applyGSUBrulesIndic($usetags, $scriptTag, $langsys, $is_old_spec)
 	{
 		// $usetags = 'locl ccmp nukt akhn rphf rkrf pref blwf half pstf vatu cjct'; then later - init
@@ -1633,9 +1892,7 @@ class Otl
 		// Subtable contains Consonant - Halant
 		// Text string contains Halant ($CurrGlyph) - Consonant ($nextGlyph)
 		// Halant has already been matched, and already checked that $nextGID is in Coverage table
-		////////////////////////////////////////////////////////////////////////////////
 		// Only does: LookupType 4: Ligature Substitution Subtable : n to 1
-		////////////////////////////////////////////////////////////////////////////////
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
 		$NextGlyphPos = $LuCoverage[$nextGID];
 		$LigSetCount = $this->reader->readUInt16();
@@ -1661,7 +1918,6 @@ class Otl
 				return null;
 			} // Only expecting to work with 2:1 (and no ignore characters in between)
 
-
 			$gid = $this->reader->readUInt16();
 			$checkGlyph = $this->glyphToChar($gid); // Other component/input Glyphs starting at position 2 (arrayindex 1)
 
@@ -1675,7 +1931,6 @@ class Otl
 			$GlyphPos = [];
 			$GlyphPos[] = $ptr;
 			$GlyphPos[] = $ptr + 1;
-
 
 			if ($match) {
 				$shift = $this->GSUBsubstitute($ptr, $substitute, 4, $GlyphPos); // GlyphPos contains positions to set null
@@ -1794,17 +2049,14 @@ class Otl
 		}
 		$CoverageOffset = $subtable_offset + $this->reader->readUInt16();
 		$GlyphPos = $LuCoverage[$currGID];
-		//===========
 		// Format 1:
-		//===========
 		if ($SubstFormat == 1) { // Calculated output glyph indices
 			$DeltaGlyphID = $this->reader->readInt16();
 			$this->reader->seek($CoverageOffset);
 			$glyphs = $this->_getCoverageGID();
 			$GlyphID = $glyphs[$GlyphPos] + $DeltaGlyphID;
-		} //===========
+		}
 		// Format 2:
-		//===========
 		elseif ($SubstFormat == 2) { // Specified output glyph indices
 			$GlyphCount = $this->reader->readUInt16();
 			$this->reader->skip($GlyphPos * 2);
@@ -1879,7 +2131,6 @@ class Otl
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
 		$AlternateSetCount = $this->reader->readUInt16();
-		///////////////////////////////////////////////////////////////////////////////!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		// Need to set alternate IF set by CSS3 font-feature for a tag
 		// i.e. if this is 'salt' alternate may be set to 2
 		// default value will be $alt=1 ( === index of 0 in list of alternates)
@@ -1887,7 +2138,6 @@ class Otl
 		if ($tagInt > 1) {
 			$alt = $tagInt;
 		}
-		///////////////////////////////////////////////////////////////////////////////!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		if ($alt == 0) {
 			return null;
 		} // If specified alternate not present, cancel [ or could default $alt = 1 ?]
@@ -1975,7 +2225,6 @@ class Otl
 				}
 			}
 
-
 			if ($match) {
 				$shift = $this->GSUBsubstitute($ptr, $substitute, $Type, $GlyphPos); // GlyphPos contains positions to set null
 				if ($this->debugOTL && $shift) {
@@ -2025,18 +2274,13 @@ class Otl
 			}
 			for ($b = 0; $b < $SubRuleCnt; $b++) {  // EACH RULE
 				$this->reader->seek($SubRule[$b]);
-				$InputGlyphCount = $this->reader->readUInt16();
-				$SubstCount = $this->reader->readUInt16();
+				list($inputGlyphIDs, $SubstCount) = SequenceRule::plain($this->reader);
 
-				$Backtrack = [];
-				$Lookahead = [];
-				$Input = [];
-				$Input[0] = $this->OTLdata[$ptr]['uni'];
-				for ($r = 1; $r < $InputGlyphCount; $r++) {
-					$gid = $this->reader->readUInt16();
-					$Input[$r] = $this->glyphToChar($gid);
-				}
-				$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
+				// Position 0 is the glyph the Coverage table selected this rule set by
+				$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
+
+				// Type 5 is a plain context: it has no backtrack or lookahead sequence
+				$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
 				if ($matched) {
 					if ($this->debugOTL) {
 						$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
@@ -2087,39 +2331,16 @@ class Otl
 
 				for ($b = 0; $b < $SubClassRuleCnt; $b++) {  // EACH RULE
 					$this->reader->seek($SubClassRule[$b]);
-					$InputGlyphCount = $this->reader->readUInt16();
-					$SubstCount = $this->reader->readUInt16();
-					$Input = [];
-					for ($r = 1; $r < $InputGlyphCount; $r++) {
-						$Input[$r] = $this->reader->readUInt16();
-					}
-					
-					// The rule set array is indexed by the class of the first input glyph, so the loop index
-					// over it is that class
-					$inputClass = $s;
+					list($inputClassIndices, $SubstCount) = SequenceRule::plain($this->reader);
 
-					$inputGlyphs = [];
-					$inputGlyphs[0] = $InputClasses[$inputClass];
-
-					if ($InputGlyphCount > 1) {
-						//  NB starts at 1
-						for ($gcl = 1; $gcl < $InputGlyphCount; $gcl++) {
-							$classindex = $Input[$gcl];
-							if (isset($InputClasses[$classindex])) {
-								$inputGlyphs[$gcl] = $InputClasses[$classindex];
-							} else {
-								$inputGlyphs[$gcl] = '';
-							}
-						}
-					}
+					// The rule set array is indexed by the class of the first input glyph, so the loop
+					// index over it is that class, and that class is position 0
+					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
 
 					// Class 0 contains all the glyphs NOT in the other classes
 					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
 
-					$backtrackGlyphs = [];
-					$lookaheadGlyphs = [];
-
-					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
+					$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
 					if ($matched) {
 						if ($this->debugOTL) {
 							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
@@ -2147,17 +2368,10 @@ class Otl
 		// NB Unlike Lookup Type 6 Format 3, the count of substitutions precedes the Coverage table offsets
 		$InputGlyphCount = $this->reader->readUInt16();
 		$SubstCount = $this->reader->readUInt16();
-		$CoverageInputOffset = [];
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$CoverageInputOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
+		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $InputGlyphCount);
 		$save_pos = $this->reader->tell(); // Save the point just after the Coverage table offsets
 
-		$CoverageInputGlyphs = [];
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$this->reader->seek($CoverageInputOffset[$b]);
-			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
-		}
+		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
 
 		// Type 5 is a plain context: it has no backtrack or lookahead sequence
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, [], [], $ignore, $ptr);
@@ -2199,26 +2413,12 @@ class Otl
 
 		for ($s = 0; $s < $ChainSubRuleCount; $s++) {
 			$this->reader->seek($ChainSubRule[$s]);
+			list($backtrackGlyphIDs, $inputGlyphIDs, $lookaheadGlyphIDs) = SequenceRule::chained($this->reader);
 
-			$BacktrackGlyphCount = $this->reader->readUInt16();
-			$Backtrack = [];
-			for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
-				$gid = $this->reader->readUInt16();
-				$Backtrack[] = $this->glyphToChar($gid);
-			}
-			$Input = [];
-			$Input[0] = $this->OTLdata[$ptr]['uni'];
-			$InputGlyphCount = $this->reader->readUInt16();
-			for ($b = 1; $b < $InputGlyphCount; $b++) {
-				$gid = $this->reader->readUInt16();
-				$Input[$b] = $this->glyphToChar($gid);
-			}
-			$LookaheadGlyphCount = $this->reader->readUInt16();
-			$Lookahead = [];
-			for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
-				$gid = $this->reader->readUInt16();
-				$Lookahead[] = $this->glyphToChar($gid);
-			}
+			$Backtrack = $this->charsOf($backtrackGlyphIDs);
+			// Position 0 is the glyph the Coverage table selected this rule set by
+			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
+			$Lookahead = $this->charsOf($lookaheadGlyphIDs);
 
 			$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
 			if ($matched) {
@@ -2276,83 +2476,18 @@ class Otl
 
 				for ($b = 0; $b < $ChainSubClassRuleCnt; $b++) {  // EACH RULE
 					$this->reader->seek($ChainSubClassRule[$b]);
-					$BacktrackGlyphCount = $this->reader->readUInt16();
-					for ($r = 0; $r < $BacktrackGlyphCount; $r++) {
-						$Backtrack[$r] = $this->reader->readUInt16();
-					}
-					$InputGlyphCount = $this->reader->readUInt16();
-					for ($r = 1; $r < $InputGlyphCount; $r++) {
-						$Input[$r] = $this->reader->readUInt16();
-					}
-					$LookaheadGlyphCount = $this->reader->readUInt16();
-					for ($r = 0; $r < $LookaheadGlyphCount; $r++) {
-						$Lookahead[$r] = $this->reader->readUInt16();
-					}
+					list($backtrackClassIndices, $inputClassIndices, $lookaheadClassIndices) = SequenceRule::chained($this->reader);
 
+					// The rule set array is indexed by the class of the first input glyph, so the loop
+					// index over it is that class, and that class is position 0
+					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
+					$backtrackGlyphs = $this->classSets($BacktrackClasses, $backtrackClassIndices);
+					$lookaheadGlyphs = $this->classSets($LookaheadClasses, $lookaheadClassIndices);
 
-					// These contain classes of glyphs as arrays
-					// $InputClasses[(class)] e.g. 0x02E6,0x02E7,0x02E8
-					// $LookaheadClasses[(class)]
-					// $BacktrackClasses[(class)]
-					// These contain arrays of classIndexes
-					// [Backtrack] [Lookahead] and [Input] (Input is from the second position only)
-
-
-					// The rule set array is indexed by the class of the first input glyph, so the loop index
-					// over it is that class
-					$inputClass = $s;
-
-					$inputGlyphs = [];
-					$inputGlyphs[0] = $InputClasses[$inputClass];
-
-					if ($InputGlyphCount > 1) {
-						//  NB starts at 1
-						for ($gcl = 1; $gcl < $InputGlyphCount; $gcl++) {
-							$classindex = $Input[$gcl];
-							if (isset($InputClasses[$classindex])) {
-								$inputGlyphs[$gcl] = $InputClasses[$classindex];
-							} else {
-								$inputGlyphs[$gcl] = '';
-							}
-						}
-					}
-
-					// Class 0 contains all the glyphs NOT in the other classes
+					// Class 0 contains all the glyphs NOT in the other classes, one set per sequence
 					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
-
-					if ($BacktrackGlyphCount) {
-						for ($gcl = 0; $gcl < $BacktrackGlyphCount; $gcl++) {
-							$classindex = $Backtrack[$gcl];
-							if (isset($BacktrackClasses[$classindex])) {
-								$backtrackGlyphs[$gcl] = $BacktrackClasses[$classindex];
-							} else {
-								$backtrackGlyphs[$gcl] = '';
-							}
-						}
-					} else {
-						$backtrackGlyphs = [];
-					}
-
-					// Class 0 contains all the glyphs NOT in the other classes
 					$bclass0excl = $this->getClassZeroExclusions($BacktrackClassDefOffset);
-
-
-					if ($LookaheadGlyphCount) {
-						for ($gcl = 0; $gcl < $LookaheadGlyphCount; $gcl++) {
-							$classindex = $Lookahead[$gcl];
-							if (isset($LookaheadClasses[$classindex])) {
-								$lookaheadGlyphs[$gcl] = $LookaheadClasses[$classindex];
-							} else {
-								$lookaheadGlyphs[$gcl] = '';
-							}
-						}
-					} else {
-						$lookaheadGlyphs = [];
-					}
-
-					// Class 0 contains all the glyphs NOT in the other classes
 					$lclass0excl = $this->getClassZeroExclusions($LookaheadClassDefOffset);
-
 
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
 					if ($matched) {
@@ -2380,36 +2515,18 @@ class Otl
 	 */
 	private function _applyGSUBchainContextSubstFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		$BacktrackGlyphCount = $this->reader->readUInt16();
-		for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
-			$CoverageBacktrackOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
-		$InputGlyphCount = $this->reader->readUInt16();
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$CoverageInputOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
-		$LookaheadGlyphCount = $this->reader->readUInt16();
-		for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
-			$CoverageLookaheadOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
+		// Each of the three sequences is a count and then one Coverage table offset per position.
+		// NB Unlike Lookup Type 5 Format 3, the count of substitutions follows them rather than
+		// preceding them.
+		$CoverageBacktrackOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
+		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
+		$CoverageLookaheadOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
 		$SubstCount = $this->reader->readUInt16();
-		$save_pos = $this->reader->tell(); // Save the point just after PosCount
+		$save_pos = $this->reader->tell(); // Save the point just after SubstCount
 
-		$CoverageBacktrackGlyphs = [];
-		for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
-			$this->reader->seek($CoverageBacktrackOffset[$b]);
-			$CoverageBacktrackGlyphs[$b] = $this->getCoverageUni();
-		}
-		$CoverageInputGlyphs = [];
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$this->reader->seek($CoverageInputOffset[$b]);
-			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
-		}
-		$CoverageLookaheadGlyphs = [];
-		for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
-			$this->reader->seek($CoverageLookaheadOffset[$b]);
-			$CoverageLookaheadGlyphs[$b] = $this->getCoverageUni();
-		}
+		$CoverageBacktrackGlyphs = $this->coverageSets($CoverageBacktrackOffset);
+		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
+		$CoverageLookaheadGlyphs = $this->coverageSets($CoverageLookaheadOffset);
 
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
@@ -2417,7 +2534,7 @@ class Otl
 				$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 			}
 
-			$this->reader->seek($save_pos); // Return to just after PosCount
+			$this->reader->seek($save_pos); // Return to just after SubstCount
 			return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 		}
 
@@ -2440,9 +2557,6 @@ class Otl
 		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
 			return null;
 		}
-		//===========
-		// Format 1:
-		//===========
 		// Format 1 is the only one the specification defines
 		if ($SubstFormat != 1) {
 			throw new \Mpdf\MpdfException("GSUB Lookup Type " . $Type . ", Format " . $SubstFormat . " not supported.");
@@ -2495,6 +2609,15 @@ class Otl
 		return 1;
 	}
 
+	/**
+	 * Move the recorded ligature and mark attachments up, after a substitution made the text longer.
+	 *
+	 * The attachments are held by position, so anything after the substitution has to be renumbered
+	 * or a mark would come out attached to the wrong base.
+	 *
+	 * @param int $pos Where the substitution happened
+	 * @param int $n   How many positions the text grew by
+	 */
 	function _updateLigatureMarks($pos, $n)
 	{
 		if ($n > 0) {
@@ -2579,7 +2702,6 @@ class Otl
 				$newOTLdata[$i] = [];
 				$newOTLdata[$i]['uni'] = $uni;
 				$newOTLdata[$i]['hex'] = $this->unicode_hex($uni);
-
 
 				// Get types of new inserted chars - or replicate type of char being replaced
 				//  $bt = Ucdn::get_bidi_class($uni);
@@ -2818,7 +2940,6 @@ class Otl
 
 			$newOTLdata[0]['is_ligature'] = true;
 
-
 			array_splice($this->OTLdata, $pos, 1, $newOTLdata);
 
 			// GlyphPos contains array of arr_pos to set null - not necessarily contiguous
@@ -2914,9 +3035,17 @@ class Otl
 		return $this->lbdicts[$this->shaper];
 	}
 
-	////////////////////////////////////////////////////////////////
-	//////////       GPOS    ///////////////////////////////////////
-	////////////////////////////////////////////////////////////////
+	/**
+	 * Apply a list of GPOS lookups, in the order the font's lookup list gives them.
+	 *
+	 * Each lookup is walked over the whole run, a glyph at a time. Unlike GSUB, nothing here changes
+	 * what the glyphs are, only where they are drawn.
+	 *
+	 * @param array $LookupList  The lookups to apply, as lookup index => the feature tag that asked
+	 *                           for it
+	 * @param bool  $is_old_spec Whether the font uses the original Indic script tags rather than the
+	 *                           v2 ones
+	 */
 	private function _applyGPOSrules($LookupList, $is_old_spec = false)
 	{
 		foreach ($LookupList as $lu => $tag) {
@@ -2950,18 +3079,16 @@ class Otl
 		}
 	}
 
-	//////////////////////////////////////////////////////////////////////////////////
-	// GPOS Types
-	// Lookup Type 1: Single Adjustment Positioning Subtable        Adjust position of a single glyph
-	// Lookup Type 2: Pair Adjustment Positioning Subtable      Adjust position of a pair of glyphs
-	// Lookup Type 3: Cursive Attachment Positioning Subtable       Attach cursive glyphs
-	// Lookup Type 4: MarkToBase Attachment Positioning Subtable    Attach a combining mark to a base glyph
-	// Lookup Type 5: MarkToLigature Attachment Positioning Subtable    Attach a combining mark to a ligature
-	// Lookup Type 6: MarkToMark Attachment Positioning Subtable    Attach a combining mark to another mark
-	// Lookup Type 7: Contextual Positioning Subtables          Position one or more glyphs in context
-	// Lookup Type 8: Chaining Contextual Positioning Subtable      Position one or more glyphs in chained context
-	// Lookup Type 9: Extension positioning
-	//////////////////////////////////////////////////////////////////////////////////
+	/**
+	 * Apply one value record: move a glyph, or change how far the pen advances past it.
+	 *
+	 * A mark with a width of its own has that width replaced by the advance rather than added to it,
+	 * and a placement applies to the base and to every mark that follows it, so that a cluster moves
+	 * together.
+	 *
+	 * @param int   $basepos The glyph the record was matched at
+	 * @param array $Value   The record, as _getValueRecord read it
+	 */
 	private function _applyGPOSvaluerecord($basepos, $Value)
 	{
 
@@ -3015,8 +3142,17 @@ class Otl
 		}
 	}
 
-	// If XAdvance is aplied to $ptr - in order for PDF to position the Advance correctly need to place it on
-	// the last of any Marks which immediately follow the current glyph
+	/**
+	 * Where an advance has to be recorded for the PDF to draw it in the right place: on the last of
+	 * any marks immediately following the glyph, rather than on the glyph itself.
+	 *
+	 * A mark is not moved past in this way - not every font lists every mark in GDEF, and a mark that
+	 * reaches here is treated as standing on its own.
+	 *
+	 * @param int $pos The glyph the advance was matched at
+	 *
+	 * @return int The glyph to record it on
+	 */
 	private function _getXAdvancePos($pos)
 	{
 		// NB Not all fonts have all marks specified in GlyphClassMarks
@@ -3120,16 +3256,13 @@ class Otl
 	 */
 	private function _applyGPOSsingleAdjustment($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $PosFormat)
 	{
-		//===========
 		// Format 1:
-		//===========
 		if ($PosFormat == 1) {
 			$Coverage = $subtable_offset + $this->reader->readUInt16();
 			$ValueFormat = $this->reader->readUInt16();
 			$Value = $this->_getValueRecord($ValueFormat);
-		} //===========
+		}
 		// Format 2:
-		//===========
 		elseif ($PosFormat == 2) {
 			$Coverage = $subtable_offset + $this->reader->readUInt16();
 			$ValueFormat = $this->reader->readUInt16();
@@ -3162,9 +3295,6 @@ class Otl
 		$ValueFormat1 = $this->reader->readUInt16();
 		$ValueFormat2 = $this->reader->readUInt16();
 		$sizeOfPair = ( 2 * $this->count_bits($ValueFormat1) ) + ( 2 * $this->count_bits($ValueFormat2) );
-		//===========
-		// Format 1:
-		//===========
 
 		switch ($PosFormat) {
 			case 1:
@@ -3405,7 +3535,6 @@ class Otl
 			return;
 		}
 
-
 		// "To identify the base glyph that combines with a mark, the text-processing client must look backward in the glyph string from the mark to the preceding base glyph."
 		while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
 			$checkpos--;
@@ -3483,7 +3612,6 @@ class Otl
 
 		$this->reader->seek($LigatureCoverage);
 		$LigatureGlyphs = implode('|', $this->_getCoverage());
-
 
 		$checkpos = $ptr;
 		$checkpos--;
@@ -3699,15 +3827,10 @@ class Otl
 
 		for ($b = 0; $b < $PosRuleCnt; $b++) {  // EACH RULE
 			$this->reader->seek($PosRule[$b]);
-			$InputGlyphCount = $this->reader->readUInt16();
-			$PosCount = $this->reader->readUInt16();
+			list($inputGlyphIDs, $PosCount) = SequenceRule::plain($this->reader);
 
-			$Input = [];
-			$Input[0] = $this->OTLdata[$ptr]['uni'];
-			for ($r = 1; $r < $InputGlyphCount; $r++) {
-				$gid = $this->reader->readUInt16();
-				$Input[$r] = $this->glyphToChar($gid);
-			}
+			// Position 0 is the glyph the Coverage table selected this rule set by
+			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
 
 			// Type 7 is a plain context: it has no backtrack or lookahead sequence
 			$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
@@ -3762,39 +3885,16 @@ class Otl
 
 				for ($b = 0; $b < $PosClassRuleCnt; $b++) {  // EACH RULE
 					$this->reader->seek($PosClassRule[$b]);
-					$InputGlyphCount = $this->reader->readUInt16();
-					$PosCount = $this->reader->readUInt16();
+					list($inputClassIndices, $PosCount) = SequenceRule::plain($this->reader);
 
-					$Input = [];
-					for ($r = 1; $r < $InputGlyphCount; $r++) {
-						$Input[$r] = $this->reader->readUInt16();
-					}
-					// The rule set array is indexed by the class of the first input glyph, so the loop index
-					// over it is that class
-					$inputClass = $s;
-
-					$inputGlyphs = [];
-					$inputGlyphs[0] = $InputClasses[$inputClass];
-
-					if ($InputGlyphCount > 1) {
-						//  NB starts at 1
-						for ($gcl = 1; $gcl < $InputGlyphCount; $gcl++) {
-							$classindex = $Input[$gcl];
-							if (isset($InputClasses[$classindex])) {
-								$inputGlyphs[$gcl] = $InputClasses[$classindex];
-							} else {
-								$inputGlyphs[$gcl] = '';
-							}
-						}
-					}
+					// The rule set array is indexed by the class of the first input glyph, so the loop
+					// index over it is that class, and that class is position 0
+					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
 
 					// Class 0 contains all the glyphs NOT in the other classes
 					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
 
-					$backtrackGlyphs = [];
-					$lookaheadGlyphs = [];
-
-					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl);
+					$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
 					if ($matched) {
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL) {
@@ -3824,17 +3924,10 @@ class Otl
 		// NB Unlike Lookup Type 8 Format 3, the count of positionings precedes the Coverage table offsets
 		$InputGlyphCount = $this->reader->readUInt16();
 		$PosCount = $this->reader->readUInt16();
-		$CoverageInputOffset = [];
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$CoverageInputOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
+		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $InputGlyphCount);
 		$save_pos = $this->reader->tell(); // Save the point just after the Coverage table offsets
 
-		$CoverageInputGlyphs = [];
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$this->reader->seek($CoverageInputOffset[$b]);
-			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
-		}
+		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
 
 		// Type 7 is a plain context: it has no backtrack or lookahead sequence
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, [], [], $ignore, $ptr);
@@ -3883,26 +3976,12 @@ class Otl
 
 		for ($s = 0; $s < $ChainPosRuleCount; $s++) {  // EACH RULE
 			$this->reader->seek($ChainPosRule[$s]);
+			list($backtrackGlyphIDs, $inputGlyphIDs, $lookaheadGlyphIDs) = SequenceRule::chained($this->reader);
 
-			$BacktrackGlyphCount = $this->reader->readUInt16();
-			$Backtrack = [];
-			for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
-				$gid = $this->reader->readUInt16();
-				$Backtrack[] = $this->glyphToChar($gid);
-			}
-			$Input = [];
-			$Input[0] = $this->OTLdata[$ptr]['uni'];
-			$InputGlyphCount = $this->reader->readUInt16();
-			for ($b = 1; $b < $InputGlyphCount; $b++) {
-				$gid = $this->reader->readUInt16();
-				$Input[$b] = $this->glyphToChar($gid);
-			}
-			$LookaheadGlyphCount = $this->reader->readUInt16();
-			$Lookahead = [];
-			for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
-				$gid = $this->reader->readUInt16();
-				$Lookahead[] = $this->glyphToChar($gid);
-			}
+			$Backtrack = $this->charsOf($backtrackGlyphIDs);
+			// Position 0 is the glyph the Coverage table selected this rule set by
+			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
+			$Lookahead = $this->charsOf($lookaheadGlyphIDs);
 
 			$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
 			if ($matched) {
@@ -3961,76 +4040,17 @@ class Otl
 
 				for ($b = 0; $b < $ChainPosClassRuleCnt; $b++) {  // EACH RULE
 					$this->reader->seek($ChainPosClassRule[$b]);
-					$BacktrackGlyphCount = $this->reader->readUInt16();
-					$Backtrack = [];
-					for ($r = 0; $r < $BacktrackGlyphCount; $r++) {
-						$Backtrack[$r] = $this->reader->readUInt16();
-					}
-					$InputGlyphCount = $this->reader->readUInt16();
-					$Input = [];
-					for ($r = 1; $r < $InputGlyphCount; $r++) {
-						$Input[$r] = $this->reader->readUInt16();
-					}
-					$LookaheadGlyphCount = $this->reader->readUInt16();
-					$Lookahead = [];
-					for ($r = 0; $r < $LookaheadGlyphCount; $r++) {
-						$Lookahead[$r] = $this->reader->readUInt16();
-					}
+					list($backtrackClassIndices, $inputClassIndices, $lookaheadClassIndices) = SequenceRule::chained($this->reader);
 
-					// The rule set array is indexed by the class of the first input glyph, so the loop index
-					// over it is that class
-					$inputClass = $s;
+					// The rule set array is indexed by the class of the first input glyph, so the loop
+					// index over it is that class, and that class is position 0
+					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
+					$backtrackGlyphs = $this->classSets($BacktrackClasses, $backtrackClassIndices);
+					$lookaheadGlyphs = $this->classSets($LookaheadClasses, $lookaheadClassIndices);
 
-					$inputGlyphs = [];
-					$inputGlyphs[0] = $InputClasses[$inputClass];
-
-					if ($InputGlyphCount > 1) {
-						//  NB starts at 1
-						for ($gcl = 1; $gcl < $InputGlyphCount; $gcl++) {
-							$classindex = $Input[$gcl];
-							if (isset($InputClasses[$classindex])) {
-								$inputGlyphs[$gcl] = $InputClasses[$classindex];
-							} else {
-								$inputGlyphs[$gcl] = '';
-							}
-						}
-					}
-
-					// Class 0 contains all the glyphs NOT in the other classes
+					// Class 0 contains all the glyphs NOT in the other classes, one set per sequence
 					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
-
-					if ($BacktrackGlyphCount) {
-						$backtrackGlyphs = [];
-						for ($gcl = 0; $gcl < $BacktrackGlyphCount; $gcl++) {
-							$classindex = $Backtrack[$gcl];
-							if (isset($BacktrackClasses[$classindex])) {
-								$backtrackGlyphs[$gcl] = $BacktrackClasses[$classindex];
-							} else {
-								$backtrackGlyphs[$gcl] = '';
-							}
-						}
-					} else {
-						$backtrackGlyphs = [];
-					}
-
-					// Class 0 contains all the glyphs NOT in the other classes
 					$bclass0excl = $this->getClassZeroExclusions($BacktrackClassDefOffset);
-
-					if ($LookaheadGlyphCount) {
-						$lookaheadGlyphs = [];
-						for ($gcl = 0; $gcl < $LookaheadGlyphCount; $gcl++) {
-							$classindex = $Lookahead[$gcl];
-							if (isset($LookaheadClasses[$classindex])) {
-								$lookaheadGlyphs[$gcl] = $LookaheadClasses[$classindex];
-							} else {
-								$lookaheadGlyphs[$gcl] = '';
-							}
-						}
-					} else {
-						$lookaheadGlyphs = [];
-					}
-
-					// Class 0 contains all the glyphs NOT in the other classes
 					$lclass0excl = $this->getClassZeroExclusions($LookaheadClassDefOffset);
 
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
@@ -4061,36 +4081,19 @@ class Otl
 	 */
 	private function _applyGPOSchainContextPosFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
-		$BacktrackGlyphCount = $this->reader->readUInt16();
-		for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
-			$CoverageBacktrackOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
-		$InputGlyphCount = $this->reader->readUInt16();
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$CoverageInputOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
-		$LookaheadGlyphCount = $this->reader->readUInt16();
-		for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
-			$CoverageLookaheadOffset[] = $subtable_offset + $this->reader->readUInt16(); // in glyph sequence order
-		}
+		// Each of the three sequences is a count and then one Coverage table offset per position.
+		// NB Unlike Lookup Type 7 Format 3, the count of positionings follows them rather than
+		// preceding them.
+		$CoverageBacktrackOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
+		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
+		$CoverageLookaheadOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
 		$PosCount = $this->reader->readUInt16();
 		$save_pos = $this->reader->tell(); // Save the point just after PosCount
 
-		$CoverageBacktrackGlyphs = [];
-		for ($b = 0; $b < $BacktrackGlyphCount; $b++) {
-			$this->reader->seek($CoverageBacktrackOffset[$b]);
-			$CoverageBacktrackGlyphs[$b] = $this->getCoverageUni();
-		}
-		$CoverageInputGlyphs = [];
-		for ($b = 0; $b < $InputGlyphCount; $b++) {
-			$this->reader->seek($CoverageInputOffset[$b]);
-			$CoverageInputGlyphs[$b] = $this->getCoverageUni();
-		}
-		$CoverageLookaheadGlyphs = [];
-		for ($b = 0; $b < $LookaheadGlyphCount; $b++) {
-			$this->reader->seek($CoverageLookaheadOffset[$b]);
-			$CoverageLookaheadGlyphs[$b] = $this->getCoverageUni();
-		}
+		$CoverageBacktrackGlyphs = $this->coverageSets($CoverageBacktrackOffset);
+		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
+		$CoverageLookaheadGlyphs = $this->coverageSets($CoverageLookaheadOffset);
+
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
 			$this->reader->seek($save_pos); // Return to just after PosCount
@@ -4274,9 +4277,22 @@ class Otl
 		return $end - $start;
 	}
 
-	//////////////////////////////////////////////////////////////////////////////////
-	// GPOS / GSUB / GCOM (common) functions
-	//////////////////////////////////////////////////////////////////////////////////
+	/**
+	 * Match a context rule that names its glyphs one by one, against the text at one position.
+	 *
+	 * The three sequences are tested outwards from the input: backtrack walking back from it,
+	 * lookahead forward past it, with the glyphs the lookup's flags skip passed over in each
+	 * direction. Where the shaper works a syllable at a time, a match that would run outside the
+	 * current syllable fails.
+	 *
+	 * @param array  $Input     The input sequence, keyed from 1, as glyph ids
+	 * @param array  $Backtrack The backtrack sequence, nearest first
+	 * @param array  $Lookahead The lookahead sequence, nearest first
+	 * @param array  $ignore    The glyphs the lookup's flags say to skip, keyed by codepoint
+	 * @param int    $ptr       Where in the text to try the match
+	 *
+	 * @return array|false The position each input glyph matched at, or false if the rule did not match
+	 */
 	private function checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr)
 	{
 		// Input etc are single numbers - GSUB Format 6.1
@@ -4445,6 +4461,12 @@ class Otl
 		return $this->LuDataCache[$this->otlCacheKey]['classDef'][$offset];
 	}
 
+	/**
+	 * @param int $n
+	 *
+	 * @return int How many of its bits are set. A value record's format is a bit per field, so this
+	 *             is how many fields the record holds.
+	 */
 	private function count_bits($n)
 	{
 		for ($c = 0; $n; $c++) {
@@ -4453,6 +4475,18 @@ class Otl
 		return $c;
 	}
 
+	/**
+	 * Read one value record: what a positioning rule does to a glyph.
+	 *
+	 * The format is a bit per field, and the fields appear in bit order, so every one has to be read
+	 * past even where nothing here uses it. The vertical adjustments and the four device tables are
+	 * read and dropped: mPDF lays out horizontally, and a device table adjusts for a pixel grid a PDF
+	 * does not have.
+	 *
+	 * @param int $ValueFormat The record's format, from the subtable
+	 *
+	 * @return array Whichever of XPlacement, YPlacement and XAdvance the record states, in font units
+	 */
 	private function _getValueRecord($ValueFormat)
 	{
 	// Common ValueRecord for GPOS
@@ -4493,6 +4527,16 @@ class Otl
 		return $vra;
 	}
 
+	/**
+	 * Read one anchor: the point on a glyph that a mark attaches to, or that joins to a neighbour.
+	 *
+	 * Formats 2 and 3 add a contour point and a device table to the same two coordinates, neither of
+	 * which mPDF can use, so all three read alike here.
+	 *
+	 * @param int $offset Where the anchor table is, or 0 to read from where the file already stands
+	 *
+	 * @return array The x and y coordinates, in font units
+	 */
 	private function _getAnchorTable($offset = 0)
 	{
 		if ($offset) {
@@ -4505,6 +4549,15 @@ class Otl
 		return [$XCoordinate, $YCoordinate];
 	}
 
+	/**
+	 * Read one entry of a mark array: which attachment class a mark belongs to, and where on it the
+	 * base attaches.
+	 *
+	 * @param int $offset  Where the mark array begins
+	 * @param int $MarkPos Which entry of it to read
+	 *
+	 * @return array The mark's class and the x and y of its anchor
+	 */
 	private function _getMarkRecord($offset, $MarkPos)
 	{
 		$this->reader->seek($offset);
@@ -4629,6 +4682,15 @@ class Otl
 		return $str;
 	}
 
+	/**
+	 * Whether a lookup's flags say to skip one glyph.
+	 *
+	 * @param int    $flag             The lookup's flags
+	 * @param string $glyph            The glyph, as hex
+	 * @param int    $MarkFilteringSet The mark glyph set the flags name, where they name one
+	 *
+	 * @return bool Whether the lookup passes over this glyph rather than matching it
+	 */
 	private function _checkGCOMignore($flag, $glyph, $MarkFilteringSet)
 	{
 		$ignore = false;
@@ -4658,6 +4720,18 @@ class Otl
 		return $ignore;
 	}
 
+	/**
+	 * Cut a laid-out run in two, at a line break.
+	 *
+	 * What is left of the run keeps everything up to the cut; what is returned starts at the restart
+	 * position, which is past the cut where the break took a space with it.
+	 *
+	 * @param array      $cOTLdata      The run, truncated in place to the part before the break
+	 * @param int        $OTLcutoffpos  Where the first part ends
+	 * @param int|string $OTLrestartpos Where the second part begins, or '' for the cutoff
+	 *
+	 * @return array The part after the break
+	 */
 	public function splitOTLdata(&$cOTLdata, $OTLcutoffpos, $OTLrestartpos = '')
 	{
 		if (!$OTLrestartpos) {
@@ -4694,6 +4768,15 @@ class Otl
 		return $newOTLdata;
 	}
 
+	/**
+	 * A copy of part of a laid-out run, with the positioning renumbered to start at zero.
+	 *
+	 * @param array $OTLdata The run
+	 * @param int   $pos     Where the part begins
+	 * @param int   $len     How many characters of it to take
+	 *
+	 * @return array The part, as a run of its own
+	 */
 	public function sliceOTLdata($OTLdata, $pos, $len)
 	{
 		// applyOTL() leaves OTLdata empty for a blank string, so every key here is optional
@@ -4762,6 +4845,13 @@ class Otl
 		}
 	}
 
+	/**
+	 * Drop the spaces from the ends of a laid-out run, and the positioning that went with them.
+	 *
+	 * @param array $cOTLdata The run, trimmed in place
+	 * @param bool  $Left     Whether to trim the start
+	 * @param bool  $Right    Whether to trim the end
+	 */
 	public function trimOTLdata(&$cOTLdata, $Left = true, $Right = true)
 	{
 		$len = (!is_array($cOTLdata) || $cOTLdata['char_data'] === null) ? 0 : count($cOTLdata['char_data']);
@@ -4820,15 +4910,22 @@ class Otl
 		}
 	}
 
-	////////////////////////////////////////////////////////////////
-	//////////         GENERAL OTL FUNCTIONS       /////////////////
-	////////////////////////////////////////////////////////////////
-
+	/**
+	 * @param int $gid A glyph id
+	 *
+	 * @return int The character it stands for, from the map the parser built
+	 */
 	private function glyphToChar($gid)
 	{
 		return (ord($this->glyphIDtoUni[$gid * 3]) << 16) + (ord($this->glyphIDtoUni[$gid * 3 + 1]) << 8) + ord($this->glyphIDtoUni[$gid * 3 + 2]);
 	}
 
+	/**
+	 * @param int $unicode_dec A Unicode code point
+	 *
+	 * @return string It as five upper-case hex digits, which is the width every glyph string here is
+	 *                written at so that they compare and concatenate
+	 */
 	private function unicode_hex($unicode_dec)
 	{
 		return (str_pad(strtoupper(dechex($unicode_dec)), 5, '0', STR_PAD_LEFT));
@@ -4901,6 +4998,66 @@ class Otl
 	}
 
 	/**
+	 * The character each glyph of a sequence stands for.
+	 *
+	 * What a Format 1 rule lists is glyph ids, and what the run being shaped holds is characters, so
+	 * every glyph sequence read from a rule is translated before it is matched against anything.
+	 *
+	 * @param int[] $glyphIDs In glyph sequence order
+	 *
+	 * @return int[] One character per position
+	 */
+	private function charsOf(array $glyphIDs)
+	{
+		$chars = [];
+		foreach ($glyphIDs as $glyphID) {
+			$chars[] = $this->glyphToChar($glyphID);
+		}
+
+		return $chars;
+	}
+
+	/**
+	 * The characters each position of a class sequence matches.
+	 *
+	 * A class the table does not define is left empty rather than absent, which is how
+	 * checkContextMatchMultiple reads class 0 - and a class no glyph is in is class 0 in everything
+	 * but name.
+	 *
+	 * @param array $classes      class => map of unicode => 1, as _getClasses returns it
+	 * @param int[] $classIndices The class each position names, in glyph sequence order
+	 *
+	 * @return array One set per position
+	 */
+	private function classSets(array $classes, array $classIndices)
+	{
+		$sets = [];
+		foreach ($classIndices as $i => $class) {
+			$sets[$i] = isset($classes[$class]) ? $classes[$class] : '';
+		}
+
+		return $sets;
+	}
+
+	/**
+	 * The characters each position of a Format 3 sequence matches, by following its Coverage tables.
+	 *
+	 * @param int[] $offsets Absolute, from the start of the file, in glyph sequence order
+	 *
+	 * @return array One set per position
+	 */
+	private function coverageSets(array $offsets)
+	{
+		$sets = [];
+		foreach ($offsets as $i => $offset) {
+			$this->reader->seek($offset);
+			$sets[$i] = $this->getCoverageUni();
+		}
+
+		return $sets;
+	}
+
+	/**
 	 * A Class Definition table as a set per class, for testing whether a character is in one.
 	 *
 	 * Class 0 is dropped. The spec makes it the class of every glyph the table does not mention, so a
@@ -4970,6 +5127,24 @@ class Otl
 		return $this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset];
 	}
 
+	/**
+	 * Pick the OpenType script tag to lay the text out under, from what the font offers.
+	 *
+	 * The tag Unicode implies is only a first choice: a font may offer the v2 Indic tag and not the
+	 * old one or the other way round, may offer nothing for the script and still have a default
+	 * entry, and may offer a script mPDF has no shaper for. This settles all of that, and says which
+	 * Indic specification the chosen tag implies.
+	 *
+	 * @param array  $ScriptLang  The scripts this table offers, and the language systems under each
+	 * @param string $scripttag   The tag the text's Unicode script implies
+	 * @param int    $scriptblock The text's Unicode script
+	 * @param string $shaper      The shaper picked for it, where there is one
+	 * @param int    $useOTL      Which script groups the document asked to be laid out this way
+	 * @param string $mode        'GSUB' or 'GPOS', which may not offer the same scripts
+	 *
+	 * @return array The tag to use, or '' for none, and whether it implies the original Indic
+	 *               specification rather than the v2 one
+	 */
 	private function _getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $shaper, $useOTL, $mode)
 	{
 		// ScriptLang is the array of available script/lang tags supported by the font
@@ -4994,7 +5169,6 @@ class Otl
 		  NB If change for RTL - cf. function magic_reverse_dir in mpdf.php to update
 
 		 */
-
 
 		if ($scriptblock == Ucdn::SCRIPT_LATIN) {
 			if (!($useOTL & 0x01)) {
@@ -5094,7 +5268,18 @@ class Otl
 		return ['', false];
 	}
 
-	// LangSys tags
+	/**
+	 * Pick the OpenType language system tag from the document's language, out of what the script
+	 * offers.
+	 *
+	 * An IETF tag is tried from the most specific part down - the language with its script or region,
+	 * then the language alone - so that a font offering only the broader entry is still matched.
+	 *
+	 * @param string $ietf      The language of the text, as an IETF tag, e.g. 'sr-Cyrl'
+	 * @param string $available The language systems this script offers, space separated
+	 *
+	 * @return string The tag to use, or '' to fall back to the script's default
+	 */
 	private function _getOTLLangTag($ietf, $available)
 	{
 		// http://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
@@ -5145,6 +5330,18 @@ class Otl
 		return $langsys;
 	}
 
+	/**
+	 * Echo the state of the run at one step of shaping, for the debugOTL trace.
+	 *
+	 * @param string $GPOSSUB   'GSUB' or 'GPOS', or a marker for the beginning or end of the run
+	 * @param int    $lookupID  The lookup that applied
+	 * @param int    $subtable  Which of its subtables
+	 * @param int    $Type      The lookup's type
+	 * @param int    $Format    The subtable's format
+	 * @param int    $ptr       Where in the run it applied
+	 * @param string $currGlyph The glyph it applied at, as hex
+	 * @param int    $level     0 for a lookup applied directly, 1 for one nested in a context rule
+	 */
 	private function _dumpproc($GPOSSUB, $lookupID, $subtable, $Type, $Format, $ptr, $currGlyph, $level)
 	{
 		echo '<div style="padding-left: ' . ($level * 2) . 'em;">';

@@ -4,10 +4,9 @@ namespace Mpdf;
 
 use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontCache;
-use Mpdf\Fonts\FontReader;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
-use Mpdf\Fonts\GlyphOperator;
+use Mpdf\Fonts\TableChecksum;
 
 // NOTE*** If you change the defined constants below, be sure to delete all temporary font data files in /ttfontdata/
 // to force mPDF to regenerate cached font files.
@@ -20,18 +19,16 @@ if (!defined('_OTL_OLD_SPEC_COMPAT_2')) {
 // 0x00010000 for Windows
 // Either seems to work for a font embedded in a PDF file
 // when read by Adobe Reader on a Windows PC(!)
-if (!defined('_TTF_MAC_HEADER')) {
-	define('_TTF_MAC_HEADER', false);
-}
-
 // Recalculate correct metadata/profiles when making subset fonts (not SIP/SMP)
 // e.g. xMin, xMax, maxNContours
-if (!defined('_RECALC_PROFILE')) {
-	define('_RECALC_PROFILE', false);
-}
-
 // mPDF 5.7.1
 if (!function_exists('\Mpdf\unicode_hex')) {
+	/**
+	 * @param int $unicode_dec A Unicode code point
+	 *
+	 * @return string It as five upper-case hex digits, which is the width every glyph string in the
+	 *                OTL code is written at so that they compare and concatenate
+	 */
 	function unicode_hex($unicode_dec)
 	{
 		return sprintf("%05s", strtoupper(dechex($unicode_dec)));
@@ -92,8 +89,6 @@ class TTFontFile
 
 	var $useOTL;
 
-	var $maxUni;
-
 	var $sFamilyClass;
 
 	var $sFamilySubClass;
@@ -112,11 +107,7 @@ class TTFontFile
 
 	var $tables;
 
-	var $otables;
-
 	var $filename;
-
-	var $glyphPos;
 
 	var $charToGlyph;
 
@@ -194,10 +185,6 @@ class TTFontFile
 
 	var $hassmallcapsGSUB;
 
-	var $codeToGlyph;
-
-	var $glyphdata;
-
 	var $LuCoverage;
 
 	public $panose;
@@ -218,6 +205,11 @@ class TTFontFile
 
 	public $GSLuCoverage;
 
+	/**
+	 * @param FontCache $fontCache      Where a parsed font is kept
+	 * @param string    $fontDescriptor Which of the font's three sets of vertical metrics to believe:
+	 *                                  'winTypo', 'mac' or 'win'
+	 */
 	public function __construct(FontCache $fontCache, $fontDescriptor)
 	{
 		$this->fontCache = $fontCache;
@@ -227,22 +219,34 @@ class TTFontFile
 		$this->maxStrLenRead = 200000;
 	}
 
+	/**
+	 * Read one font: its table directory, its metrics, its character map, and its layout tables.
+	 *
+	 * Everything a document needs to lay text out with the font. The font program itself is built
+	 * separately, by Fonts\FontSubsetter.
+	 *
+	 * @param string $file      The font file to read
+	 * @param string $fontkey   The name the document registered the font under
+	 * @param int    $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
+	 * @param bool   $debug     Whether to check the font's own tables as they are read
+	 * @param bool   $BMPonly   Whether to stop the character map at the Basic Multilingual Plane
+	 * @param int    $useOTL    Which scripts the document asked to be laid out from the font's own
+	 *                          tables, as a mask over the script groups
+	 *
+	 * @throws \Mpdf\Exception\FontException If the file is not a TrueType font mPDF can embed
+	 */
 	public function getMetrics($file, $fontkey, $TTCfontID = 0, $debug = false, $BMPonly = false, $useOTL = 0)
 	{
 		$this->useOTL = $useOTL;
 		$this->fontkey = $fontkey;
-		$this->filename = $file;
-		$this->reader = new FileReader($file);
-
+		$this->open($file);
 
 		$this->charWidths = '';
-		$this->glyphPos = [];
 		$this->charToGlyph = [];
 		$this->tables = [];
-		$this->otables = [];
 		$this->kerninfo = [];
-		$this->haskernGPOS = [];
-		$this->hassmallcapsGSUB = [];
+		$this->haskernGPOS = false;
+		$this->hassmallcapsGSUB = false;
 		$this->ascent = 0;
 		$this->descent = 0;
 		$this->lineGap = 0;
@@ -262,8 +266,6 @@ class TTFontFile
 		$this->advanceWidthMax = 0;
 		$this->strikeoutSize = 0;
 		$this->strikeoutPosition = 0;
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
 		$this->version = $version = $this->reader->readUInt32();
 		$this->panose = [];
 
@@ -279,18 +281,7 @@ class TTFontFile
 			throw new \Mpdf\Exception\FontException(sprintf('Not a TrueType font: version=%s)', $version));
 		}
 
-		if ($TTCfontID > 0) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000], true)) {
-				throw new \Mpdf\Exception\FontException(sprintf('Error parsing TrueType Collection: version=%s - (%s)', $version, $file));
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-		}
+		$this->selectFont($TTCfontID);
 
 		$this->readTableDirectory($debug);
 		$this->extractInfo($debug, $BMPonly, $useOTL);
@@ -298,6 +289,11 @@ class TTFontFile
 		$this->reader->close();
 	}
 
+	/**
+	 * Read the table directory: where each of the font's tables is and how long it is.
+	 *
+	 * @param bool $debug Whether to check every table against the checksum the directory states
+	 */
 	function readTableDirectory($debug = false)
 	{
 		$this->numTables = $this->reader->readUInt16();
@@ -320,18 +316,73 @@ class TTFontFile
 		}
 	}
 
+	/**
+	 * Start reading one font file.
+	 *
+	 * getMetrics and getCTG open their own; FontSubsetter opens one through here and reads the same
+	 * handle, so that the table directory this parses and the two readers built on it that the
+	 * subsetter borrows are all looking at the font it is building from.
+	 *
+	 * @return FileReader The open file, for a caller that reads it itself
+	 */
+	public function open($file)
+	{
+		$this->filename = $file;
+		$this->reader = new FileReader($file);
+
+		return $this->reader;
+	}
+
+	/**
+	 * Move to the start of one font within a TrueType Collection, having read its header.
+	 *
+	 * A collection is a list of offsets to whole fonts sharing one glyf table, so everything after
+	 * this reads as though the file held only the font asked for. Does nothing for a plain font,
+	 * which is what a TTCfontID of 0 means.
+	 */
+	public function selectFont($TTCfontID)
+	{
+		$this->numTTCFonts = 0;
+		$this->TTCFonts = [];
+
+		if ($TTCfontID <= 0) {
+			return;
+		}
+
+		$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
+		if (!in_array($version, [0x00010000, 0x00020000], true)) {
+			throw new \Mpdf\Exception\FontException(sprintf('Error parsing TrueType Collection: version=%s (%s)', $version, $this->filename));
+		}
+
+		$this->numTTCFonts = $this->reader->readUInt32();
+		for ($i = 1; $i <= $this->numTTCFonts; $i++) {
+			$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
+		}
+
+		$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
+		$this->version = $this->reader->readUInt32(); // TTFont version again now
+	}
+
+	/**
+	 * Check every table against the checksum the table directory states for it.
+	 *
+	 * head is the exception: its own checksum adjustment is part of the bytes being summed, so it is
+	 * subtracted back out before the comparison.
+	 *
+	 * @throws \Mpdf\Exception\FontException On the first table that does not sum to what it claims
+	 */
 	function checksumTables()
 	{
 		// Check the checksums for all tables
 		foreach ($this->tables as $t) {
 			if ($t['length'] > 0 && $t['length'] < $this->maxStrLenRead) { // 1.02
 				$table = $this->reader->bytesAt($t['offset'], $t['length']);
-				$checksum = $this->calcChecksum($table);
+				$checksum = TableChecksum::of($table);
 				if ($t['tag'] === 'head') {
 					$up = unpack('n*', substr($table, 8, 4));
 					$adjustment[0] = $up[1];
 					$adjustment[1] = $up[2];
-					$checksum = $this->sub32($checksum, $adjustment);
+					$checksum = TableChecksum::subtract($checksum, $adjustment);
 				}
 				$xchecksum = $t['checksum'];
 				if ($xchecksum != $checksum) {
@@ -341,49 +392,11 @@ class TTFontFile
 		}
 	}
 
-	function sub32($x, $y)
-	{
-		$xlo = $x[1];
-		$xhi = $x[0];
-		$ylo = $y[1];
-		$yhi = $y[0];
-
-		if ($ylo > $xlo) {
-			$xlo += 1 << 16;
-			++$yhi;
-		}
-		$reslo = $xlo - $ylo;
-		if ($yhi > $xhi) {
-			$xhi += 1 << 16;
-		}
-		$reshi = $xhi - $yhi;
-		$reshi &= 0xFFFF;
-
-		return [$reshi, $reslo];
-	}
-
-	function calcChecksum($data)
-	{
-		if (strlen($data) % 4) {
-			$data .= str_repeat("\0", 4 - (strlen($data) % 4));
-		}
-
-		$len = strlen($data);
-		$hi = 0x0000;
-		$lo = 0x0000;
-
-		for ($i = 0; $i < $len; $i += 4) {
-			$hi += (ord($data[$i]) << 8) + ord($data[$i + 1]);
-			$lo += (ord($data[$i + 2]) << 8) + ord($data[$i + 3]);
-			$hi += ($lo >> 16) & 0xFFFF;
-			$lo &= 0xFFFF;
-		}
-
-		$hi &= 0xFFFF;
-
-		return [$hi, $lo];
-	}
-
+	/**
+	 * @param string $tag A table name, e.g. 'cmap'
+	 *
+	 * @return array Where it is and how long it is, or [0, 0] where the font has no such table
+	 */
 	function get_table_pos($tag)
 	{
 		if (!isset($this->tables[$tag])) {
@@ -408,80 +421,30 @@ class TTFontFile
 		return $pos + $offset_in_table;
 	}
 
-	function splice($stream, $offset, $value)
-	{
-		return substr($stream, 0, $offset) . $value . substr($stream, $offset + strlen($value));
-	}
-
-	function _set_ushort($stream, $offset, $value)
-	{
-		$up = pack("n", $value);
-
-		return $this->splice($stream, $offset, $up);
-	}
-
-	function _set_short($stream, $offset, $val)
-	{
-		if ($val < 0) {
-			$val = abs($val);
-			$val = ~$val;
-			$val += 1;
-		}
-		$up = pack("n", $val);
-
-		return $this->splice($stream, $offset, $up);
-	}
-
 	/**
-	 * @return string One whole table from the font's table directory, or '' if it has none
+	 * Read only the character map of a font, for a font embedded whole rather than subsetted.
+	 *
+	 * @param string $file      The font file to read
+	 * @param int    $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
+	 * @param bool   $debug     Whether to check the font's own tables as they are read
+	 * @param bool   $useOTL    Whether the document laid the font out with the font's own tables,
+	 *                          which brings in the Private Use Area codes given to glyphs the cmap
+	 *                          reaches only through a substitution
+	 *
+	 * @return array Character to glyph id
 	 */
-	function get_table($tag)
-	{
-		list($pos, $length) = $this->get_table_pos($tag);
-
-		if ($length == 0) {
-			return '';
-		}
-
-		return $this->reader->bytesAt($pos, $length);
-	}
-
-	function add($tag, $data)
-	{
-		if ($tag === 'head') {
-			$data = $this->splice($data, 8, "\0\0\0\0");
-		}
-		$this->otables[$tag] = $data;
-	}
-
 	function getCTG($file, $TTCfontID = 0, $debug = false, $useOTL = false)
 	{
 		// Only called if font is not to be used as embedded subset i.e. NOT called for SIP/SMP fonts
 		$this->useOTL = $useOTL; // mPDF 5.7.1
-		$this->filename = $file;
-		$this->reader = new FileReader($file);
-
+		$this->open($file);
 
 		$this->charWidths = '';
-		$this->glyphPos = [];
 		$this->charToGlyph = [];
 		$this->tables = [];
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
 		$this->reader->skip(4);
 
-		if ($TTCfontID > 0) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000], true)) {
-				throw new \Mpdf\Exception\FontException(sprintf("Error parsing TrueType Collection: version=%s (%s)", $version, $file));
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-		}
+		$this->selectFont($TTCfontID);
 		$this->readTableDirectory($debug);
 
 		// cmap - Character to glyph index mapping table
@@ -540,6 +503,14 @@ class TTFontFile
 		return $charToGlyph;
 	}
 
+	/**
+	 * Read the header of a TrueType Collection: how many fonts it holds and where each one starts.
+	 *
+	 * @param string $file The collection to read
+	 *
+	 * @throws \Mpdf\Exception\FontException If the file is not a collection, or is one of a version
+	 *                                        this cannot read
+	 */
 	function getTTCFonts($file)
 	{
 		$this->filename = $file;
@@ -564,6 +535,14 @@ class TTFontFile
 		}
 	}
 
+	/**
+	 * Read everything past the table directory: the names, the metrics, the character map, and the
+	 * layout tables.
+	 *
+	 * @param bool $debug   Whether to check the font's own tables as they are read
+	 * @param bool $BMPonly Whether to stop the character map at the Basic Multilingual Plane
+	 * @param int  $useOTL  Which scripts the document asked to be laid out from the font's own tables
+	 */
 	function extractInfo($debug = false, $BMPonly = false, $useOTL = 0)
 	{
 		// Values are all set to 0 or blank at start of getMetrics
@@ -952,7 +931,7 @@ class TTFontFile
 
 		// Format 12 CMAP does characters above Unicode BMP i.e. some HKCS characters U+20000 and above
 		if ($format == 12 && !$BMPonly) {
-			$this->maxUniChar = 0;
+			$maxUniChar = 0;
 			$this->reader->seek($unicode_cmap_offset + 4);
 			$length = $this->reader->readUInt32();
 			$limit = $unicode_cmap_offset + $length;
@@ -979,7 +958,7 @@ class TTFontFile
 					// ZZZ98
 					if ($unichar < 0x30000) {
 						$charToGlyph[$unichar] = $glyph;
-						$this->maxUniChar = max($unichar, $this->maxUniChar);
+						$maxUniChar = max($unichar, $maxUniChar);
 						$glyphToChar[$glyph][] = $unichar;
 					}
 				}
@@ -987,7 +966,7 @@ class TTFontFile
 		} else {
 			$glyphToChar = [];
 			$charToGlyph = [];
-			$this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
+			$maxUniChar = $this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
 		}
 		$this->sipset = $sipset;
 		$this->smpset = $smpset;
@@ -1021,13 +1000,14 @@ class TTFontFile
 
 					$glyphToChar[$gid][] = $bctr;
 					$charToGlyph[$bctr] = $gid;
-					$this->maxUniChar = max($bctr, $this->maxUniChar);
+					$maxUniChar = max($bctr, $maxUniChar);
 					$bctr++;
 				}
 			}
 		}
 
 		$this->glyphToChar = $glyphToChar;
+		$this->maxUniChar = $maxUniChar;
 
 		$this->GSUBScriptLang = [];
 		$this->rtlPUAstr = '';
@@ -1093,7 +1073,7 @@ class TTFontFile
 		}
 
 		// hmtx - Horizontal metrics table
-		$this->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale);
+		list($this->charWidths, $this->defaultWidth) = $this->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale, $maxUniChar);
 
 		// kern - Kerning pair table
 		// Recognises old form of Kerning table - as required by Windows - Format 0 only
@@ -1123,6 +1103,14 @@ class TTFontFile
 		}
 	}
 
+	/**
+	 * Read GDEF: which glyphs are marks, bases, ligatures and components, which attachment class each
+	 * mark belongs to, and the mark glyph sets a lookup can filter to.
+	 *
+	 * A lookup's flags are read against all of these, so they are parsed before GSUB or GPOS is.
+	 *
+	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gdef
+	 */
 	function _getGDEFtables()
 	{
 		// https://learn.microsoft.com/en-us/typography/opentype/spec/gdef
@@ -1335,179 +1323,66 @@ class TTFontFile
 
 	/**
 	 * GSUB - Glyph Substitution
+	 *
+	 * Returns [$GSUBScriptLang, $gsub, $GSLookup, $rtlPUAstr]: which languages each script offers,
+	 * which lookups each feature of each of them runs, the lookup list itself, and the Private Use
+	 * Area ranges the RTL glyphs were mapped into.
+	 *
+	 * The reading is shared with OtlDump, which reports the same table in HTML and used to carry its
+	 * own copy of 856 lines of it. What it overrides now is the reporting hooks. @see _getGPOStables
 	 */
 	function _getGSUBtables()
 	{
 		if (!isset($this->tables['GSUB'])) {
+			$this->reportTableMissing('GSUB');
+
 			return [[], [], [], ''];
 		}
 
-		$ffeats = [];
-		$gsub_offset = $this->seek_table('GSUB');
-		$this->reader->skip(4); // major minor version
-		$ScriptList_offset = $gsub_offset + $this->reader->readUInt16();
-		$FeatureList_offset = $gsub_offset + $this->reader->readUInt16();
-		$LookupList_offset = $gsub_offset + $this->reader->readUInt16();
+		$this->reportTableRead('GSUB');
 
-		// ScriptList
-		$this->reader->seek($ScriptList_offset);
-		$ScriptCount = $this->reader->readUInt16();
-		for ($i = 0; $i < $ScriptCount; $i++) {
-			$ScriptTag = $this->reader->readTag(); // = "beng", "deva" etc.
-			$ScriptTableOffset = $this->reader->readUInt16();
-			$ffeats[$ScriptTag] = $ScriptList_offset + $ScriptTableOffset;
+		$gsubOffset = $this->seek_table('GSUB');
+		$this->reader->skip(4); // majorVersion, minorVersion
+		$scriptListOffset = $gsubOffset + $this->reader->readUInt16();
+		$featureListOffset = $gsubOffset + $this->reader->readUInt16();
+		$lookupListOffset = $gsubOffset + $this->reader->readUInt16();
+
+		list($GSUBScriptLang, $gsub, $tags) = $this->readScriptsAndFeatures($scriptListOffset, $featureListOffset);
+		$this->hassmallcapsGSUB = isset($tags['smcp']);
+
+		$this->reportScriptList('GSUB', $gsub);
+
+		if (!$this->wantsLookups()) {
+			return [$GSUBScriptLang, $gsub, [], ''];
 		}
 
-		// Script Table
-		foreach ($ffeats as $t => $o) {
-			$ls = [];
-			$this->reader->seek($o);
-			$DefLangSys_offset = $this->reader->readUInt16();
-			if ($DefLangSys_offset > 0) {
-				$ls['DFLT'] = $DefLangSys_offset + $o;
-			}
-			$LangSysCount = $this->reader->readUInt16();
-			for ($i = 0; $i < $LangSysCount; $i++) {
-				$LangTag = $this->reader->readTag(); // =
-				$LangTableOffset = $this->reader->readUInt16();
-				$ls[$LangTag] = $o + $LangTableOffset;
-			}
-			$ffeats[$t] = $ls;
-		}
+		// Lookup Type 7 is GSUB's Extension Substitution, the indirection a subtable past 64KB is
+		// reached through
+		$GSLookup = $this->readLookupList($lookupListOffset, $gsubOffset, 7);
+		$Lookup = $this->readGSUBsubstitutions($GSLookup, $gsubOffset);
 
-		// Get FeatureIndexList
-		// LangSys Table - from first listed langsys
-		foreach ($ffeats as $st => $scripts) {
-			foreach ($scripts as $t => $o) {
-				$FeatureIndex = [];
-				$langsystable_offset = $o;
-				$this->reader->seek($langsystable_offset);
-				$LookUpOrder = $this->reader->readUInt16(); //==NULL
-				$ReqFeatureIndex = $this->reader->readUInt16();
-				if ($ReqFeatureIndex != 0xFFFF) {
-					$FeatureIndex[] = $ReqFeatureIndex;
-				}
-				$FeatureCount = $this->reader->readUInt16();
-				for ($i = 0; $i < $FeatureCount; $i++) {
-					$FeatureIndex[] = $this->reader->readUInt16(); // = index of feature
-				}
-				$ffeats[$st][$t] = $FeatureIndex;
-			}
-		}
+		return [$GSUBScriptLang, $gsub, $GSLookup, $this->useGSUBlookups($Lookup, $gsub, $GSLookup, $gsubOffset)];
+	}
 
-		// Feauture List => LookupListIndex es
-		$this->reader->seek($FeatureList_offset);
-		$FeatureCount = $this->reader->readUInt16();
-		$Feature = [];
-
-		for ($i = 0; $i < $FeatureCount; $i++) {
-			$tag = $this->reader->readTag();
-			if ($tag == 'smcp') {
-				$this->hassmallcapsGSUB = true;
-			}
-			$Feature[$i] = ['tag' => $tag];
-			$Feature[$i]['offset'] = $FeatureList_offset + $this->reader->readUInt16();
-		}
-
-		for ($i = 0; $i < $FeatureCount; $i++) {
-			$this->reader->seek($Feature[$i]['offset']);
-			$this->reader->readUInt16(); // null [FeatureParams]
-			$Feature[$i]['LookupCount'] = $Lookupcount = $this->reader->readUInt16();
-			$Feature[$i]['LookupListIndex'] = [];
-			for ($c = 0; $c < $Lookupcount; $c++) {
-				$Feature[$i]['LookupListIndex'][] = $this->reader->readUInt16();
-			}
-		}
-
-		foreach ($ffeats as $st => $scripts) {
-			foreach ($scripts as $t => $o) {
-				$FeatureIndex = $ffeats[$st][$t];
-				foreach ($FeatureIndex as $k => $fi) {
-					$ffeats[$st][$t][$k] = $Feature[$fi];
-				}
-			}
-		}
-
-		$gsub = [];
-		$GSUBScriptLang = [];
-		foreach ($ffeats as $st => $scripts) {
-			foreach ($scripts as $t => $langsys) {
-				$lg = [];
-				foreach ($langsys as $ft) {
-					$lg[$ft['LookupListIndex'][0]] = $ft;
-				}
-				// list of Lookups in order they need to be run i.e. order listed in Lookup table
-				ksort($lg);
-				foreach ($lg as $ft) {
-					$gsub[$st][$t][$ft['tag']] = $ft['LookupListIndex'];
-				}
-				if (!isset($GSUBScriptLang[$st])) {
-					$GSUBScriptLang[$st] = '';
-				}
-				$GSUBScriptLang[$st] .= $t . ' ';
-			}
-		}
-
-		// Get metadata and offsets for whole Lookup List table
-		$this->reader->seek($LookupList_offset);
-		$LookupCount = $this->reader->readUInt16();
-		$GSLookup = [];
-		$Offsets = [];
-		$SubtableCount = [];
-
-		for ($i = 0; $i < $LookupCount; $i++) {
-			$Offsets[$i] = $LookupList_offset + $this->reader->readUInt16();
-		}
-
-		for ($i = 0; $i < $LookupCount; $i++) {
-
-			$this->reader->seek($Offsets[$i]);
-
-			$GSLookup[$i]['Type'] = $this->reader->readUInt16();
-			$GSLookup[$i]['Flag'] = $flag = $this->reader->readUInt16();
-			$GSLookup[$i]['SubtableCount'] = $SubtableCount[$i] = $this->reader->readUInt16();
-
-			for ($c = 0; $c < $SubtableCount[$i]; $c++) {
-				// Offset16 from the start of this Lookup table. Stored relative to the start of GSUB,
-				// because the shaper reads a copy of GSUB alone and has no idea where in the file it
-				// came from - it used to subtract the table's base back off at all twelve call sites.
-				$GSLookup[$i]['Subtables'][$c] = $Offsets[$i] + $this->reader->readUInt16() - $gsub_offset;
-			}
-
-			// MarkFilteringSet = Index (base 0) into GDEF mark glyph sets structure
-			if (($flag & 0x0010) == 0x0010) {
-				$GSLookup[$i]['MarkFilteringSet'] = $this->reader->readUInt16();
-			} else {
-				$GSLookup[$i]['MarkFilteringSet'] = '';
-			}
-
-			// Lookup Type 7: Extension
-			if ($GSLookup[$i]['Type'] == 7) {
-				// Overwrites new offset (32-bit) for each subtable, and a new lookup Type
-				for ($c = 0; $c < $SubtableCount[$i]; $c++) {
-					$this->reader->seek($gsub_offset + $GSLookup[$i]['Subtables'][$c]);
-					$ExtensionPosFormat = $this->reader->readUInt16();
-					$type = $this->reader->readUInt16();
-					// Offset32 from the start of the extension subtable, so adding it to a GSUB-relative
-					// offset leaves it GSUB-relative
-					$ext_offset = $this->reader->readUInt32();
-					$GSLookup[$i]['Subtables'][$c] = $GSLookup[$i]['Subtables'][$c] + $ext_offset;
-				}
-				$GSLookup[$i]['Type'] = $type;
-			}
-		}
-
-		// Process Whole LookupList - Get LuCoverage = Lookup coverage just for first glyph
+	/**
+	 * Which glyphs each GSUB subtable could match on, cached for the shaper.
+	 *
+	 * The gate the shaper opens a subtable with: it offers the glyph it is standing on and asks
+	 * whether a match could start there. Only useGSUBlookups() calls this, so a dump that reports
+	 * every rule of a lookup rather than gating on the first glyph never reaches it.
+	 */
+	private function cacheGSUBcoverage(array $GSLookup, $gsubOffset)
+	{
 		$this->GSLuCoverage = [];
-		for ($i = 0; $i < $LookupCount; $i++) {
-			for ($c = 0; $c < $GSLookup[$i]['SubtableCount']; $c++) {
-				$subtable_offset = $gsub_offset + $GSLookup[$i]['Subtables'][$c];
+		foreach ($GSLookup as $i => $lookup) {
+			for ($c = 0; $c < $lookup['SubtableCount']; $c++) {
+				$subtable_offset = $gsubOffset + $lookup['Subtables'][$c];
 				$this->reader->seek($subtable_offset);
 				$PosFormat = $this->reader->readUInt16();
 
-				if ($GSLookup[$i]['Type'] == 5 && $PosFormat == 3) {
+				if ($lookup['Type'] == 5 && $PosFormat == 3) {
 					$this->reader->skip(4); // glyphCount + seqLookupCount
-				} elseif ($GSLookup[$i]['Type'] == 6 && $PosFormat == 3) {
+				} elseif ($lookup['Type'] == 6 && $PosFormat == 3) {
 					$BacktrackGlyphCount = $this->reader->readUInt16();
 					$this->reader->skip(2 * $BacktrackGlyphCount + 2); // backtrackCoverageOffsets + inputGlyphCount
 				}
@@ -1518,55 +1393,57 @@ class TTFontFile
 				// for types 1 to 4 and 8 and for formats 1 and 2 of types 5 and 6, and after the counts and
 				// backtrack offsets stepped over above for format 3. Otl::checkContextMatchMultiple starts
 				// its input loop at 1 for the same reason - position 0 is what got it called.
-				$Coverage = $subtable_offset + $this->reader->readUInt16();
-				$this->reader->seek($Coverage);
-				$glyphs = $this->_getCoverage(false, 2);
-				$this->GSLuCoverage[$i][$c] = $glyphs;
+				$this->reader->seek($subtable_offset + $this->reader->readUInt16());
+				$this->GSLuCoverage[$i][$c] = $this->_getCoverage(false, 2);
 			}
 		}
 
-		// $this->GSLuCoverage and $GSLookup
 		$this->fontCache->jsonWrite($this->fontkey . '.GSUBdata.json', $this->GSLuCoverage);
+	}
 
-		// Now repeats as original to get Substitution rules
-		// Get metadata and offsets for whole Lookup List table
-		$this->reader->seek($LookupList_offset);
-		$LookupCount = $this->reader->readUInt16();
+	/**
+	 * Every substitution rule in the GSUB LookupList, read in two passes.
+	 *
+	 * Takes the lookup list the table read already produced rather than reading it again. The two
+	 * want their subtable offsets measured from different places - the shaper reads a cached copy of
+	 * GSUB alone and needs them relative to it, where these passes are reading the file itself - and
+	 * that difference is arithmetic, which is all the second walk of the list ever came to.
+	 *
+	 * @param array $GSLookup   The lookup list, subtable offsets relative to the start of GSUB
+	 * @param int   $gsubOffset Where GSUB starts, from the start of the file
+	 */
+	private function readGSUBsubstitutions(array $GSLookup, $gsubOffset)
+	{
 		$Lookup = [];
-
-		for ($i = 0; $i < $LookupCount; $i++) {
-			$Lookup[$i]['offset'] = $LookupList_offset + $this->reader->readUInt16();
-		}
-
-		for ($i = 0; $i < $LookupCount; $i++) {
-			$this->reader->seek($Lookup[$i]['offset']);
-			$Lookup[$i]['Type'] = $this->reader->readUInt16();
-			$Lookup[$i]['Flag'] = $flag = $this->reader->readUInt16();
-			$Lookup[$i]['SubtableCount'] = $this->reader->readUInt16();
-			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
-				$Lookup[$i]['Subtable'][$c]['Offset'] = $Lookup[$i]['offset'] + $this->reader->readUInt16();
-			}
-			// MarkFilteringSet = Index (base 0) into GDEF mark glyph sets structure
-			if (($flag & 0x0010) == 0x0010) {
-				$Lookup[$i]['MarkFilteringSet'] = $this->reader->readUInt16();
-			} else {
-				$Lookup[$i]['MarkFilteringSet'] = '';
-			}
-
-			// Lookup Type 7: Extension
-			if ($Lookup[$i]['Type'] == 7) {
-				// Overwrites new offset (32-bit) for each subtable, and a new lookup Type
-				for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
-					$this->reader->seek($Lookup[$i]['Subtable'][$c]['Offset']);
-					$ExtensionPosFormat = $this->reader->readUInt16();
-					$type = $this->reader->readUInt16();
-					$Lookup[$i]['Subtable'][$c]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt32();
-				}
-				$Lookup[$i]['Type'] = $type;
+		foreach ($this->absoluteSubtables($GSLookup, $gsubOffset) as $i => $lookup) {
+			$Lookup[$i] = [
+				'Type' => $lookup['Type'],
+				'Flag' => $lookup['Flag'],
+				'SubtableCount' => $lookup['SubtableCount'],
+				'MarkFilteringSet' => $lookup['MarkFilteringSet'],
+			];
+			foreach ($lookup['Subtables'] as $c => $offset) {
+				$Lookup[$i]['Subtable'][$c]['Offset'] = $offset;
 			}
 		}
 
-		// Process (1) Whole LookupList
+		$this->readGSUBsubtables($Lookup);
+		$this->readGSUBrules($Lookup);
+
+		return $Lookup;
+	}
+
+	/**
+	 * Pass one: the shape of every subtable in the GSUB LookupList - its format, and the offsets of
+	 * whatever tables that format hangs off itself.
+	 *
+	 * Shared with OtlDump in full: this is offset arithmetic against the spec and there is nothing in
+	 * it a report would want to do differently.
+	 */
+	private function readGSUBsubtables(array &$Lookup)
+	{
+		$LookupCount = count($Lookup);
+
 		for ($i = 0; $i < $LookupCount; $i++) {
 			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
 				$this->reader->seek($Lookup[$i]['Subtable'][$c]['Offset']);
@@ -1793,12 +1670,27 @@ class TTFontFile
 				}
 			}
 		}
+	}
 
-		// Process (2) Whole LookupList
-		// Get Coverage tables and prepare preg_replace
+	/**
+	 * Pass two: the Coverage and ClassDef tables each subtable points at, resolved into the glyphs
+	 * and the strings of glyphs the rules are matched and replaced with.
+	 *
+	 * Where pass one records the shape of a subtable, this records what it does. Shared with OtlDump
+	 * apart from two decisions about what is worth recording, which are the hooks below.
+	 */
+	private function readGSUBrules(array &$Lookup)
+	{
+		$LookupCount = count($Lookup);
+
 		for ($i = 0; $i < $LookupCount; $i++) {
 			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
 				$SubstFormat = $Lookup[$i]['Subtable'][$c]['Format'];
+
+				// Stated even where nothing is recorded, so that a subtable whose every entry the
+				// Ignore flags turned away reads as empty rather than absent, and the readers below can
+				// count it without asking whether it is there
+				$Lookup[$i]['Subtable'][$c]['subs'] = [];
 
 				// LookupType 1: Single Substitution Subtable 1 => 1
 				if ($Lookup[$i]['Type'] == 1) {
@@ -1831,11 +1723,12 @@ class TTFontFile
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
 							continue;
 						}
-						if (!isset($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID']) || count($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID']) == 0) {
+						$sequence = isset($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID'])
+							? $Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID']
+							: [];
+						$substitute = $this->multipleSubstitutes($sequence);
+						if ($substitute === null) {
 							continue;
-						} // Illegal for GlyphCount to be 0; either error in font, or something has gone wrong - lets carry on for now!
-						foreach ($Lookup[$i]['Subtable'][$c]['Sequences'][$g]['SubstituteGlyphID'] as $sub) {
-							$substitute[] = unicode_hex($this->glyphToChar[$sub][0]);
 						}
 						$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute];
 					}
@@ -1851,11 +1744,10 @@ class TTFontFile
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
 							continue;
 						}
-						$gid = $Lookup[$i]['Subtable'][$c]['AlternateSets'][$g]['SubstituteGlyphID'][0];
-						if (!isset($this->glyphToChar[$gid][0])) {
+						$substitute = $this->alternateSubstitutes($Lookup[$i]['Subtable'][$c]['AlternateSets'][$g]);
+						if ($substitute === null) {
 							continue;
 						}
-						$substitute[] = unicode_hex($this->glyphToChar[$gid][0]);
 						$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute];
 					}
 				} // LookupType 4: Ligature Substitution Subtable n => 1
@@ -2115,7 +2007,26 @@ class TTFontFile
 			}
 		}
 
-		$GSUBScriptLang = [];
+		return $Lookup;
+	}
+
+	/**
+	 * What the parser does with the GSUB rules once it has read them: build, for every script and
+	 * language system the font offers, the derived tables the shaper works from, and cache each one.
+	 *
+	 * OtlDump overrides this to report the rules of the one script it was asked for instead - and so
+	 * never caches the coverage above, which only a shaper has a use for. It is the GSUB counterpart
+	 * of useGPOSlookups(), and the same argument applies: everything above it is reading, and reading
+	 * is what the two are meant not to disagree about.
+	 *
+	 * @return string The Private Use Area ranges every RTL glyph of this font was mapped into, as a
+	 *                regular expression character class for magic_reverse. The report says nothing
+	 *                about that mapping, so the dump returns an empty one.
+	 */
+	protected function useGSUBlookups(array $Lookup, array $gsub, array $GSLookup, $gsubOffset)
+	{
+		$this->cacheGSUBcoverage($GSLookup, $gsubOffset);
+
 		$rtlpua = []; // All glyphs added to PUA [for magic_reverse]
 		foreach ($gsub as $st => $scripts) {
 			foreach ($scripts as $t => $langsys) {
@@ -2329,11 +2240,6 @@ class TTFontFile
 
 					$this->fontCache->jsonWrite($this->fontkey . '.GSUB.' . $st . '.' . $t . '.json', $font);
 				}
-
-				if (!isset($GSUBScriptLang[$st])) {
-					$GSUBScriptLang[$st] = '';
-				}
-				$GSUBScriptLang[$st] .= $t . ' ';
 			}
 		}
 
@@ -2382,11 +2288,20 @@ class TTFontFile
 			}
 		}
 
-		return [$GSUBScriptLang, $gsub, $GSLookup, $rtlPUAstr];
+		return $rtlPUAstr;
 	}
 
-	// GSUB functions
-	function _getGSUBarray(&$Lookup, &$lul, $scripttag)
+	/**
+	 * Turn a list of GSUB lookups into the substitution rules the shaper applies.
+	 *
+	 * @param array  $Lookup    The GSUB lookup list, with subtable offsets already made absolute
+	 * @param array  $lul       The lookups to read, as lookup index => the feature tag that asked for
+	 *                          it
+	 * @param string $scripttag The script the rules are being read for
+	 *
+	 * @return array One entry per subtable, each holding the rules it states
+	 */
+	function _getGSUBarray(array $Lookup, $lul, $scripttag)
 	{
 		// Process (3) LookupList for specific Script-LangSys
 		// Generate preg_replace
@@ -2931,6 +2846,15 @@ class TTFontFile
 		return $volt;
 	}
 
+	/**
+	 * Whether a lookup's flags say to skip one glyph.
+	 *
+	 * @param int    $flag             The lookup's flags
+	 * @param string $glyph            The glyph, as hex
+	 * @param int    $MarkFilteringSet The mark glyph set the flags name, where they name one
+	 *
+	 * @return bool Whether the lookup passes over this glyph rather than matching it
+	 */
 	function _checkGSUBignore($flag, $glyph, $MarkFilteringSet)
 	{
 		$ignore = false;
@@ -2961,24 +2885,20 @@ class TTFontFile
 		return $ignore;
 	}
 
-
-	/**
-	 * UseMarkFilteringSet means "skip every mark except those in the given mark glyph set", so the glyphs to
-	 * ignore are GlyphClassMarks minus that set - not the set itself.
-	 *
-	 * @param string $marks Space-prefixed, "|"-separated glyph list, e.g. " 00DCA| 00DD2"
-	 * @param string $set   The mark glyph set, in the same format
-	 *
-	 * @return string
-	 */
-	/**
-	 * A lookup's MarkFilteringSet indexes GDEF's mark glyph sets. A font naming a set GDEF does not define is
-	 * malformed, and guessing which marks it meant would shape silently wrong, so both callers fail loudly here.
-	 */
 	/**
 	 * The glyphs of one of GDEF's mark glyph sets.
 	 *
+	 * A lookup's MarkFilteringSet indexes those sets. A font naming a set GDEF does not define is
+	 * malformed, and guessing which marks it meant would shape silently wrong, so both callers fail
+	 * loudly here.
+	 *
 	 * protected rather than private because OtlDump reports on the same sets, from the same parse.
+	 *
+	 * @param int $MarkFilteringSet The set a lookup's flags name
+	 *
+	 * @return string Its glyphs, space-prefixed and "|"-separated
+	 *
+	 * @throws \Mpdf\Exception\FontException If GDEF defines no such set
 	 */
 	protected function markGlyphSet($MarkFilteringSet)
 	{
@@ -2989,6 +2909,15 @@ class TTFontFile
 		return $this->MarkGlyphSets[$MarkFilteringSet];
 	}
 
+	/**
+	 * UseMarkFilteringSet means "skip every mark except those in the given mark glyph set", so the
+	 * glyphs to ignore are GlyphClassMarks minus that set - not the set itself.
+	 *
+	 * @param string $marks Space-prefixed, "|"-separated glyph list, e.g. " 00DCA| 00DD2"
+	 * @param string $set   The mark glyph set, in the same format
+	 *
+	 * @return string The marks the set leaves out, in the same format
+	 */
 	private function marksOutsideFilteringSet($marks, $set)
 	{
 		$keep = [];
@@ -3007,6 +2936,18 @@ class TTFontFile
 		return $keep ? ' ' . implode('| ', $keep) : '';
 	}
 
+	/**
+	 * The glyphs a lookup's flags say to skip, as a pattern that matches a run of them.
+	 *
+	 * Skipping is done in the match rather than by walking the text, so every rule the lookup states
+	 * has this dropped between its positions.
+	 *
+	 * @param int $flag             The lookup's flags
+	 * @param int $MarkFilteringSet The mark glyph set the flags name, where they name one
+	 *
+	 * @return string A capturing group matching any run of the skipped glyphs, or "()" where the
+	 *                flags skip nothing
+	 */
 	function _getGSUBignoreString($flag, $MarkFilteringSet)
 	{
 		// If ignoreFlag set, combine all ignore glyphs into -> "((?:(?: FBA1| FBA2| FBA3))*)"
@@ -3092,7 +3033,6 @@ class TTFontFile
 
 	  ¦\${1}\${2} ¦\${3}\${4} ¦REPL¦\${5+} \${6+}¦\${7+} \${8+}¦
 
-
 	  INPUT nInput = 5
 	  ============================================================
 	  ¦(0612)¦(ign) (0613)¦(ign) (0614)¦(ign) (0615)¦(ign) (0615)¦
@@ -3116,6 +3056,19 @@ class TTFontFile
 	  F - "\${1}\${2} \${3}\${4} \${5} REPL\${6}\${8}"
 	 */
 
+	/**
+	 * The input sequence of a context rule, with the nested lookup's own glyphs standing in at the
+	 * positions it applies at.
+	 *
+	 * Says what has to be there for the nested lookup to fire within the context.
+	 *
+	 * @param array  $inputGlyphs  The input sequence, one pipe-joined glyph string per position
+	 * @param string $ignore       The glyphs the lookup's flags say to skip, between positions
+	 * @param array  $lookupGlyphs The nested lookup's own input sequence
+	 * @param int    $seqIndex     Which position of the input sequence the nested lookup applies at
+	 *
+	 * @return string The pattern the sequence matches
+	 */
 	function _makeGSUBcontextInputMatch($inputGlyphs, $ignore, $lookupGlyphs, $seqIndex)
 	{
 		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
@@ -3139,6 +3092,15 @@ class TTFontFile
 		return $str;
 	}
 
+	/**
+	 * The input sequence of a context rule, with the skipped glyphs allowed for between positions.
+	 *
+	 * @param array  $inputGlyphs The input sequence, one pipe-joined glyph string per position
+	 * @param string $ignore The glyphs the lookup's flags say to skip, as a capturing group that
+	 *                       matches a run of them, or "()" where nothing is skipped
+	 *
+	 * @return string The pattern the sequence matches
+	 */
 	function _makeGSUBinputMatch($inputGlyphs, $ignore)
 	{
 		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
@@ -3156,6 +3118,18 @@ class TTFontFile
 		return $str;
 	}
 
+	/**
+	 * The backtrack sequence of a chained context rule, read back into writing order.
+	 *
+	 * A backtrack is stored nearest-first - position 0 is the glyph immediately before the input - so
+	 * it is walked backwards to match against the text as written.
+	 *
+	 * @param array  $backtrackGlyphs The backtrack sequence, one pipe-joined glyph string per position
+	 * @param string $ignore The glyphs the lookup's flags say to skip, as a capturing group that
+	 *                       matches a run of them, or "()" where nothing is skipped
+	 *
+	 * @return string The pattern the sequence matches
+	 */
 	function _makeGSUBbacktrackMatch($backtrackGlyphs, $ignore)
 	{
 		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
@@ -3171,6 +3145,15 @@ class TTFontFile
 		return $str;
 	}
 
+	/**
+	 * The lookahead sequence of a chained context rule, which is already in writing order.
+	 *
+	 * @param array  $lookaheadGlyphs The lookahead sequence, one pipe-joined glyph string per position
+	 * @param string $ignore The glyphs the lookup's flags say to skip, as a capturing group that
+	 *                       matches a run of them, or "()" where nothing is skipped
+	 *
+	 * @return string The pattern the sequence matches
+	 */
 	function _makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore)
 	{
 		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
@@ -3186,6 +3169,25 @@ class TTFontFile
 		return $str;
 	}
 
+	/**
+	 * What a context rule replaces its input sequence with: the nested lookup's output, and a
+	 * backreference for every position the nested lookup did not touch.
+	 *
+	 * The backreferences are what keeps the rest of the context, and the skipped glyphs between its
+	 * positions, where they were - the replacement rewrites the whole match, not just the part that
+	 * changed.
+	 *
+	 * @param int    $nInput   Positions in the input sequence
+	 * @param string $REPL     The nested lookup's replacement
+	 * @param string $ignore   The glyphs the lookup's flags say to skip, or "()" where it skips none
+	 * @param int    $nBsubs   Backreferences the backtrack sequence already used, which the ones here
+	 *                         are numbered after
+	 * @param int    $mLen     Positions the nested lookup matches. Equal to $nInput where there is no
+	 *                         nested lookup.
+	 * @param int    $seqIndex Which position of the input sequence the nested lookup applies at
+	 *
+	 * @return string The replacement, with its backreferences
+	 */
 	function _makeGSUBinputReplacement($nInput, $REPL, $ignore, $nBsubs, $mLen, $seqIndex)
 	{
 		// Returns e.g. "REPL\${6}\${8}" or "\${1}\${2} \${3} REPL\${4}\${6}\${8} \${9}"
@@ -3306,1268 +3308,378 @@ class TTFontFile
 		return $gbc;
 	}
 
+	/**
+	 * GPOS - Glyph Positioning
+	 *
+	 * Returns [$GPOSScriptLang, $gpos, $Lookup]: which languages each script offers, which lookups
+	 * each feature of each of them runs, and the lookup list itself.
+	 *
+	 * The reading is shared with OtlDump, which reports the same table in HTML and used to carry its
+	 * own copy of every offset in it. What it overrides now is the reporting hooks below.
+	 */
 	function _getGPOStables()
 	{
-		///////////////////////////////////
-		// GPOS - Glyph Positioning
-		///////////////////////////////////
-		if (!isset($this->tables["GPOS"])) {
+		if (!isset($this->tables['GPOS'])) {
+			$this->reportTableMissing('GPOS');
+
 			return [[], [], []];
 		}
 
-		$ffeats = [];
-		$gpos_offset = $this->seek_table("GPOS");
-		$this->reader->skip(4);
-		$ScriptList_offset = $gpos_offset + $this->reader->readUInt16();
-		$FeatureList_offset = $gpos_offset + $this->reader->readUInt16();
-		$LookupList_offset = $gpos_offset + $this->reader->readUInt16();
+		$this->reportTableRead('GPOS');
 
-		// ScriptList
-		$this->reader->seek($ScriptList_offset);
-		$ScriptCount = $this->reader->readUInt16();
-		for ($i = 0; $i < $ScriptCount; $i++) {
-			$ScriptTag = $this->reader->readTag(); // = "beng", "deva" etc.
-			$ScriptTableOffset = $this->reader->readUInt16();
-			$ffeats[$ScriptTag] = $ScriptList_offset + $ScriptTableOffset;
+		$gposOffset = $this->seek_table('GPOS');
+		$this->reader->skip(4); // majorVersion, minorVersion
+		$scriptListOffset = $gposOffset + $this->reader->readUInt16();
+		$featureListOffset = $gposOffset + $this->reader->readUInt16();
+		$lookupListOffset = $gposOffset + $this->reader->readUInt16();
+
+		list($GPOSScriptLang, $gpos, $tags) = $this->readScriptsAndFeatures($scriptListOffset, $featureListOffset);
+		$this->haskernGPOS = isset($tags['kern']);
+
+		$this->reportScriptList('GPOS', $gpos);
+
+		if (!$this->wantsLookups()) {
+			return [$GPOSScriptLang, $gpos, []];
 		}
 
-		// Script Table
-		foreach ($ffeats as $t => $o) {
-			$ls = [];
-			$this->reader->seek($o);
-			$DefLangSys_offset = $this->reader->readUInt16();
-			if ($DefLangSys_offset > 0) {
-				$ls['DFLT'] = $DefLangSys_offset + $o;
-			}
-			$LangSysCount = $this->reader->readUInt16();
-			for ($i = 0; $i < $LangSysCount; $i++) {
-				$LangTag = $this->reader->readTag(); // =
-				$LangTableOffset = $this->reader->readUInt16();
-				$ls[$LangTag] = $o + $LangTableOffset;
-			}
-			$ffeats[$t] = $ls;
+		// Lookup Type 9 is GPOS's Extension Positioning, the indirection a subtable past 64KB is
+		// reached through
+		$Lookup = $this->readLookupList($lookupListOffset, $gposOffset, 9);
+
+		$this->useGPOSlookups($Lookup, $gposOffset, $gpos);
+
+		return [$GPOSScriptLang, $gpos, $Lookup];
+	}
+
+	/**
+	 * The ScriptList and FeatureList of a GSUB or GPOS table, which are the same structures in both.
+	 *
+	 * @param int $scriptListOffset  Absolute, from the start of the file
+	 * @param int $featureListOffset Absolute, from the start of the file
+	 *
+	 * @return array [$scriptLang, $features, $tags]: the languages each script offers as one
+	 *               space-separated string, the lookup list indices of every feature of every one of
+	 *               them keyed [script][language][tag], and the set of feature tags the table carries
+	 */
+	private function readScriptsAndFeatures($scriptListOffset, $featureListOffset)
+	{
+		// ScriptList: which scripts the table speaks for, and where each one's Script table is
+		$this->reader->seek($scriptListOffset);
+		$scriptCount = $this->reader->readUInt16();
+		$scripts = [];
+		for ($i = 0; $i < $scriptCount; $i++) {
+			$scriptTag = $this->reader->readTag(); // "beng", "deva" etc.
+			$scripts[$scriptTag] = $scriptListOffset + $this->reader->readUInt16();
 		}
 
-		// Get FeatureIndexList
-		// LangSys Table - from first listed langsys
-		foreach ($ffeats as $st => $scripts) {
-			foreach ($scripts as $t => $o) {
-				$FeatureIndex = [];
-				$langsystable_offset = $o;
-				$this->reader->seek($langsystable_offset);
-				$LookUpOrder = $this->reader->readUInt16(); //==NULL
-				$ReqFeatureIndex = $this->reader->readUInt16();
-				if ($ReqFeatureIndex != 0xFFFF) {
-					$FeatureIndex[] = $ReqFeatureIndex;
+		// Script table: the language systems of one script, the default one first if it has one
+		foreach ($scripts as $scriptTag => $scriptOffset) {
+			$languages = [];
+			$this->reader->seek($scriptOffset);
+			$defaultLangSysOffset = $this->reader->readUInt16();
+			if ($defaultLangSysOffset > 0) {
+				$languages['DFLT'] = $scriptOffset + $defaultLangSysOffset;
+			}
+			$langSysCount = $this->reader->readUInt16();
+			for ($i = 0; $i < $langSysCount; $i++) {
+				$langTag = $this->reader->readTag();
+				$languages[$langTag] = $scriptOffset + $this->reader->readUInt16();
+			}
+			$scripts[$scriptTag] = $languages;
+		}
+
+		// LangSys table: the features one language system asks for, as indices into the FeatureList
+		foreach ($scripts as $scriptTag => $languages) {
+			foreach ($languages as $langTag => $langSysOffset) {
+				$featureIndices = [];
+				$this->reader->seek($langSysOffset);
+				$this->reader->readUInt16(); // lookupOrderOffset, reserved and always NULL
+				$requiredFeatureIndex = $this->reader->readUInt16();
+				if ($requiredFeatureIndex != 0xFFFF) {
+					$featureIndices[] = $requiredFeatureIndex;
 				}
-				$FeatureCount = $this->reader->readUInt16();
-				for ($i = 0; $i < $FeatureCount; $i++) {
-					$FeatureIndex[] = $this->reader->readUInt16(); // = index of feature
+				$featureIndexCount = $this->reader->readUInt16();
+				for ($i = 0; $i < $featureIndexCount; $i++) {
+					$featureIndices[] = $this->reader->readUInt16();
 				}
-				$ffeats[$st][$t] = $FeatureIndex;
+				$scripts[$scriptTag][$langTag] = $featureIndices;
 			}
 		}
-		// Feauture List => LookupListIndex es
-		$this->reader->seek($FeatureList_offset);
-		$FeatureCount = $this->reader->readUInt16();
-		$Feature = [];
-		for ($i = 0; $i < $FeatureCount; $i++) {
+
+		// FeatureList: every feature the table carries, and the lookups each one runs
+		$this->reader->seek($featureListOffset);
+		$featureCount = $this->reader->readUInt16();
+		$features = [];
+		$tags = [];
+		for ($i = 0; $i < $featureCount; $i++) {
 			$tag = $this->reader->readTag();
-			if ($tag === 'kern') {
-				$this->haskernGPOS = true;
-			}
-			$Feature[$i] = ['tag' => $tag];
-			$Feature[$i]['offset'] = $FeatureList_offset + $this->reader->readUInt16();
+			$tags[$tag] = true;
+			$features[$i] = ['tag' => $tag, 'offset' => $featureListOffset + $this->reader->readUInt16()];
 		}
 
-		for ($i = 0; $i < $FeatureCount; $i++) {
-			$this->reader->seek($Feature[$i]['offset']);
-			$this->reader->readUInt16(); // null
-			$Feature[$i]['LookupCount'] = $Lookupcount = $this->reader->readUInt16();
-			$Feature[$i]['LookupListIndex'] = [];
-			for ($c = 0; $c < $Lookupcount; $c++) {
-				$Feature[$i]['LookupListIndex'][] = $this->reader->readUInt16();
+		for ($i = 0; $i < $featureCount; $i++) {
+			$this->reader->seek($features[$i]['offset']);
+			$this->reader->readUInt16(); // featureParamsOffset, NULL for all but a handful of features
+			$features[$i]['LookupCount'] = $lookupIndexCount = $this->reader->readUInt16();
+			$features[$i]['LookupListIndex'] = [];
+			for ($c = 0; $c < $lookupIndexCount; $c++) {
+				$features[$i]['LookupListIndex'][] = $this->reader->readUInt16();
 			}
 		}
 
-		foreach ($ffeats as $st => $scripts) {
-			foreach ($scripts as $t => $o) {
-				$FeatureIndex = $ffeats[$st][$t];
-				foreach ($FeatureIndex as $k => $fi) {
-					$ffeats[$st][$t][$k] = $Feature[$fi];
-				}
-			}
-		}
-
-		$gpos = [];
-		$GPOSScriptLang = [];
-		foreach ($ffeats as $st => $scripts) {
-
-			foreach ($scripts as $t => $langsys) {
-
-				$lg = [];
-				foreach ($langsys as $ft) {
-					if (isset($ft['LookupListIndex'][0])) {
-						$lg[ $ft['LookupListIndex'][0] ] = $ft;
+		$table = [];
+		$scriptLang = [];
+		foreach ($scripts as $scriptTag => $languages) {
+			foreach ($languages as $langTag => $featureIndices) {
+				$byFirstLookup = [];
+				foreach ($featureIndices as $featureIndex) {
+					$feature = $features[$featureIndex];
+					// A feature that runs no lookups has nothing to be ordered by and nothing to do.
+					// The spec permits one; no font in the 183 installed carries one, which is why the
+					// GSUB reader went without this guard for years and the GPOS one grew it.
+					if (isset($feature['LookupListIndex'][0])) {
+						$byFirstLookup[$feature['LookupListIndex'][0]] = $feature;
 					}
 				}
 
-				// list of Lookups in order they need to be run i.e. order listed in Lookup table
-				ksort($lg);
-				foreach ($lg as $ft) {
-					$gpos[$st][$t][$ft['tag']] = $ft['LookupListIndex'];
+				// The order the lookups need to be run in is the order the Lookup table lists them,
+				// not the order the features were asked for
+				ksort($byFirstLookup);
+				foreach ($byFirstLookup as $feature) {
+					$table[$scriptTag][$langTag][$feature['tag']] = $feature['LookupListIndex'];
 				}
-				if (!isset($GPOSScriptLang[$st])) {
-					$GPOSScriptLang[$st] = '';
+
+				if (!isset($scriptLang[$scriptTag])) {
+					$scriptLang[$scriptTag] = '';
 				}
-				$GPOSScriptLang[$st] .= $t . ' ';
+				$scriptLang[$scriptTag] .= $langTag . ' ';
 			}
 		}
 
-		// Get metadata and offsets for whole Lookup List table
-		$this->reader->seek($LookupList_offset);
-		$LookupCount = $this->reader->readUInt16();
-		$Lookup = [];
-		$Offsets = [];
-		$SubtableCount = [];
+		return [$scriptLang, $table, $tags];
+	}
 
-		for ($i = 0; $i < $LookupCount; $i++) {
-			$Offsets[$i] = $LookupList_offset + $this->reader->readUInt16();
+	/**
+	 * The metadata and subtable offsets of a whole GSUB or GPOS LookupList.
+	 *
+	 * @param int $lookupListOffset Absolute, from the start of the file
+	 * @param int $tableOffset      Where GSUB or GPOS starts, which the subtable offsets come back
+	 *                              relative to: the shaper reads a copy of the one table and has no
+	 *                              idea where in the file it came from
+	 * @param int $extensionType    The lookup type that means "the real subtable is elsewhere" - 7 in
+	 *                              GSUB, 9 in GPOS
+	 *
+	 * @return array Keyed by lookup index, each with Type, Flag, SubtableCount, Subtables and
+	 *               MarkFilteringSet
+	 */
+	private function readLookupList($lookupListOffset, $tableOffset, $extensionType)
+	{
+		$this->reader->seek($lookupListOffset);
+		$lookupCount = $this->reader->readUInt16();
+
+		$offsets = [];
+		for ($i = 0; $i < $lookupCount; $i++) {
+			$offsets[$i] = $lookupListOffset + $this->reader->readUInt16();
 		}
 
-		for ($i = 0; $i < $LookupCount; $i++) {
-			$this->reader->seek($Offsets[$i]);
-			$Lookup[$i]['Type'] = $this->reader->readUInt16();
-			$Lookup[$i]['Flag'] = $flag = $this->reader->readUInt16();
-			$Lookup[$i]['SubtableCount'] = $SubtableCount[$i] = $this->reader->readUInt16();
-			for ($c = 0; $c < $SubtableCount[$i]; $c++) {
-				// Offset16 from the start of this Lookup table, stored relative to the start of GPOS.
-				// See _getGSUBtables().
-				$Lookup[$i]['Subtables'][$c] = $Offsets[$i] + $this->reader->readUInt16() - $gpos_offset;
-			}
-			// MarkFilteringSet = Index (base 0) into GDEF mark glyph sets structure
-			if (($flag & 0x0010) === 0x0010) {
-				$Lookup[$i]['MarkFilteringSet'] = $this->reader->readUInt16();
-			} else {
-				$Lookup[$i]['MarkFilteringSet'] = '';
+		$lookups = [];
+		for ($i = 0; $i < $lookupCount; $i++) {
+			$this->reader->seek($offsets[$i]);
+			$lookups[$i]['Type'] = $this->reader->readUInt16();
+			$lookups[$i]['Flag'] = $flag = $this->reader->readUInt16();
+			$lookups[$i]['SubtableCount'] = $subtableCount = $this->reader->readUInt16();
+
+			for ($c = 0; $c < $subtableCount; $c++) {
+				// Offset16 from the start of this Lookup table, stored relative to the start of the
+				// GSUB or GPOS table it belongs to
+				$lookups[$i]['Subtables'][$c] = $offsets[$i] + $this->reader->readUInt16() - $tableOffset;
 			}
 
-			// Lookup Type 9: Extension
-			if ($Lookup[$i]['Type'] == 9) {
-				// Overwrites new offset (32-bit) for each subtable, and a new lookup Type
-				for ($c = 0; $c < $SubtableCount[$i]; $c++) {
-					$this->reader->seek($gpos_offset + $Lookup[$i]['Subtables'][$c]);
-					$ExtensionPosFormat = $this->reader->readUInt16();
-					$type = $this->reader->readUInt16();
-					// Offset32 from the start of the extension subtable, so this stays GPOS-relative
-					$Lookup[$i]['Subtables'][$c] = $Lookup[$i]['Subtables'][$c] + $this->reader->readUInt32();
+			// MarkFilteringSet = index (base 0) into the GDEF mark glyph sets structure
+			$lookups[$i]['MarkFilteringSet'] = ($flag & 0x0010) === 0x0010 ? $this->reader->readUInt16() : '';
+
+			if ($lookups[$i]['Type'] == $extensionType) {
+				// Each subtable is really a stub naming the type and holding an Offset32 to the real
+				// one. Overwrite both: the offset is measured from the start of the stub, so adding it
+				// to a table-relative offset leaves the result table-relative. The type comes back
+				// once per subtable and the spec requires them all to agree, so the last one read
+				// stands for the lookup - and a lookup with no subtables keeps the type it had rather
+				// than whatever the lookup before it resolved to, which is what the two copies of this
+				// did before they became one.
+				for ($c = 0; $c < $subtableCount; $c++) {
+					$this->reader->seek($tableOffset + $lookups[$i]['Subtables'][$c]);
+					$this->reader->readUInt16(); // extensionLookupFormat, always 1
+					$lookups[$i]['Type'] = $this->reader->readUInt16();
+					$lookups[$i]['Subtables'][$c] += $this->reader->readUInt32();
 				}
-				$Lookup[$i]['Type'] = $type;
 			}
 		}
 
-		// Process Whole LookupList - Get LuCoverage = Lookup coverage just for first glyph
+		return $lookups;
+	}
+
+	/**
+	 * The same lookup list with its subtable offsets measured from the start of the file rather than
+	 * from the start of the table they belong to.
+	 *
+	 * readLookupList() stores them table-relative because the shaper reads a cached copy of the one
+	 * table and has no idea where in the file it came from. Anything still holding the file open -
+	 * the rule readers below, and the dump's reporters - wants them absolute, and that is the whole
+	 * of the difference between the two.
+	 */
+	protected function absoluteSubtables(array $lookups, $tableOffset)
+	{
+		foreach ($lookups as $i => $lookup) {
+			foreach ($lookup['Subtables'] as $c => $offset) {
+				$lookups[$i]['Subtables'][$c] = $tableOffset + $offset;
+			}
+		}
+
+		return $lookups;
+	}
+
+	/**
+	 * What the parser does with a GPOS lookup list once it has read it: work out which glyphs each
+	 * subtable could match on, and cache that for the shaper.
+	 *
+	 * OtlDump overrides this to report the lookups instead. It is a hook rather than code in
+	 * _getGPOStables() because it is the whole of the difference between the two: everything above it
+	 * is reading, and reading is what the two are meant not to disagree about.
+	 */
+	protected function useGPOSlookups(array $Lookup, $gposOffset, array $features)
+	{
 		$this->LuCoverage = [];
-		for ($i = 0; $i < $LookupCount; $i++) {
-			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
-				$subtable_offset = $gpos_offset + $Lookup[$i]['Subtables'][$c];
-				$this->reader->seek($subtable_offset);
-				$PosFormat = $this->reader->readUInt16();
+		foreach ($Lookup as $i => $lookup) {
+			for ($c = 0; $c < $lookup['SubtableCount']; $c++) {
+				$subtableOffset = $gposOffset + $lookup['Subtables'][$c];
+				$this->reader->seek($subtableOffset);
+				$posFormat = $this->reader->readUInt16();
 
-				if ($Lookup[$i]['Type'] == 7 && $PosFormat == 3) {
-					$this->reader->skip(4);
-				} elseif ($Lookup[$i]['Type'] == 8 && $PosFormat == 3) {
-					$BacktrackGlyphCount = $this->reader->readUInt16();
-					$this->reader->skip(2 * $BacktrackGlyphCount + 2);
+				if ($lookup['Type'] == 7 && $posFormat == 3) {
+					$this->reader->skip(4); // glyphCount, seqLookupCount
+				} elseif ($lookup['Type'] == 8 && $posFormat == 3) {
+					$backtrackGlyphCount = $this->reader->readUInt16();
+					$this->reader->skip(2 * $backtrackGlyphCount + 2); // backtrackCoverageOffsets, inputGlyphCount
 				}
+
 				// Reading position 0's Coverage is the whole of what the gate needs. The shaper offers a
 				// subtable the glyph it is standing on and asks whether a match could start there, and every
 				// format puts the Coverage of the first position right here: straight after the format for
 				// types 1 to 6 and for formats 1 and 2 of types 7 and 8, and after the counts and backtrack
 				// offsets stepped over above for format 3. For types 4, 5 and 6 that Coverage is the mark's,
 				// which is the right gate - those lookups are applied standing on the mark.
-				$Coverage = $subtable_offset + $this->reader->readUInt16();
-				$this->reader->seek($Coverage);
-				$glyphs = $this->_getCoverage(false, 2);
-				$this->LuCoverage[$i][$c] = $glyphs;
+				$this->reader->seek($subtableOffset + $this->reader->readUInt16());
+				$this->LuCoverage[$i][$c] = $this->_getCoverage(false, 2);
 			}
 		}
 
 		$this->fontCache->jsonWrite($this->fontkey . '.GPOSdata.json', $this->LuCoverage);
-
-		return [$GPOSScriptLang, $gpos, $Lookup];
 	}
 
-	function makeSubset($file, &$subset, $TTCfontID = 0, $debug = false, $useOTL = false)
+	/**
+	 * What a Multiple Substitution puts in place of the glyph it covers.
+	 *
+	 * A Sequence of no glyphs is how a font deletes one, and is legal: the spec allows it, HarfBuzz
+	 * honours it, and since #110 so does the shaper, which reads it from GSUBLookups rather than from
+	 * here. The parser passes over it because 'subs' feeds _getGSUBarray(), whose derived tables -
+	 * rtlSUB and finals for Arabic and Syriac joining, rphf/half/pref/blwf/pstf for Indic, rtlPUAstr
+	 * for magic_reverse - have no way to spell "and nothing in its place", and whose readers drop an
+	 * empty replacement anyway. Recording one here would push it into a regex-driven path that no
+	 * font in the corpus can demonstrate the result of. OtlDump reports it, because a report that
+	 * omitted a rule the font carries would be lying about the font.
+	 *
+	 * @return array|null The replacement glyphs as hex, or null to record nothing for this one
+	 */
+	protected function multipleSubstitutes(array $sequence)
 	{
-		$this->useOTL = $useOTL;
-		$this->filename = $file;
-		$this->reader = new FileReader($file);
-
-
-		$this->charWidths = '';
-		$this->glyphPos = [];
-		$this->charToGlyph = [];
-		$this->tables = [];
-		$this->otables = [];
-		$this->ascent = 0;
-		$this->descent = 0;
-		$this->strikeoutSize = 0;
-		$this->strikeoutPosition = 0;
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
-		$this->reader->skip(4);
-		$this->maxUni = 0;
-
-		if ($TTCfontID > 0) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000], true)) {
-				throw new \Mpdf\Exception\FontException(sprintf('Error parsing TrueType Collection: version=%s - %s', $version, $file));
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-		}
-		$this->readTableDirectory($debug);
-
-		// head - Font header table
-		$this->seek_table('head');
-		$this->reader->skip(50);
-		$indexToLocFormat = $this->reader->readUInt16();
-		$glyphDataFormat = $this->reader->readUInt16();
-
-		// hhea - Horizontal header table
-		$this->seek_table('hhea');
-		$this->reader->skip(32);
-		$metricDataFormat = $this->reader->readUInt16();
-		$orignHmetrics = $numberOfHMetrics = $this->reader->readUInt16();
-
-		// maxp - Maximum profile table
-		$this->seek_table('maxp');
-		$this->reader->skip(4);
-		$numGlyphs = $this->reader->readUInt16();
-
-		// cmap - Character to glyph index mapping table
-		$cmap_offset = $this->seek_table('cmap');
-		$this->reader->skip(2);
-		$cmapTableCount = $this->reader->readUInt16();
-		$unicode_cmap_offset = 0;
-		for ($i = 0; $i < $cmapTableCount; $i++) {
-			$platformID = $this->reader->readUInt16();
-			$encodingID = $this->reader->readUInt16();
-			$offset = $this->reader->readUInt32();
-			$save_pos = $this->reader->tell();
-			if (($platformID == 3 && $encodingID == 1) || $platformID == 0) { // Microsoft, Unicode
-				$format = $this->reader->uint16At($cmap_offset + $offset);
-				if ($format == 4) {
-					$unicode_cmap_offset = $cmap_offset + $offset;
-					break;
-				}
-			}
-			$this->reader->seek($save_pos);
+		if (!$sequence) {
+			return null;
 		}
 
-		if (!$unicode_cmap_offset) {
-			throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have Unicode cmap (platform 3, encoding 1, format 4, or platform 0 [any encoding] format 4)', $this->filename));
+		$substitute = [];
+		foreach ($sequence as $sub) {
+			$substitute[] = unicode_hex($this->glyphToChar[$sub][0]);
 		}
 
-		$glyphToChar = [];
-		$charToGlyph = [];
-		$this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
-
-		// Map Unmapped glyphs - from $numGlyphs
-		if ($useOTL) {
-			$bctr = 0xE000;
-			for ($gid = 1; $gid < $numGlyphs; $gid++) {
-				if (!isset($glyphToChar[$gid])) {
-					while (isset($charToGlyph[$bctr])) {
-						$bctr++;
-					} // Avoid overwriting a glyph already mapped in PUA
-					if ($bctr > 0xF8FF) {
-						throw new \Mpdf\Exception\FontException($file . " : WARNING - Font cannot map all included glyphs into Private Use Area U+E000 - U+F8FF; cannot use useOTL on this font");
-					}
-					$glyphToChar[$gid][] = $bctr;
-					$charToGlyph[$bctr] = $gid;
-					$bctr++;
-				}
-			}
-		}
-
-		$this->charToGlyph = $charToGlyph;
-		$this->glyphToChar = $glyphToChar;
-
-		// hmtx - Horizontal metrics table
-		$scale = 1; // not used
-		$this->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale);
-
-		// loca - Index to location
-		$this->getLOCA($indexToLocFormat, $numGlyphs);
-
-		$subsetglyphs = [0 => 0, 1 => 1, 2 => 2];
-		$subsetCharToGlyph = [];
-		foreach ($subset as $code) {
-			if (isset($this->charToGlyph[$code])) {
-				$subsetglyphs[$this->charToGlyph[$code]] = $code; // Old Glyph ID => Unicode
-				$subsetCharToGlyph[$code] = $this->charToGlyph[$code]; // Unicode to old GlyphID
-			}
-			$this->maxUni = max($this->maxUni, $code);
-		}
-
-		list($start, $dummy) = $this->get_table_pos('glyf');
-
-		$glyphSet = [];
-		ksort($subsetglyphs);
-		$n = 0;
-		$fsLastCharIndex = 0; // maximum Unicode index (character code) in this font, according to the cmap subtable for platform ID 3 and platform- specific encoding ID 0 or 1.
-		foreach ($subsetglyphs as $originalGlyphIdx => $uni) {
-			$fsLastCharIndex = max($fsLastCharIndex, $uni);
-			$glyphSet[$originalGlyphIdx] = $n; // old glyphID to new glyphID
-			$n++;
-		}
-
-		$codeToGlyph = [];
-		ksort($subsetCharToGlyph);
-		foreach ($subsetCharToGlyph as $uni => $originalGlyphIdx) {
-			$codeToGlyph[$uni] = $glyphSet[$originalGlyphIdx];
-		}
-		$this->codeToGlyph = $codeToGlyph;
-
-		ksort($subsetglyphs);
-		foreach ($subsetglyphs as $originalGlyphIdx => $uni) {
-			$this->getGlyphs($originalGlyphIdx, $start, $glyphSet, $subsetglyphs);
-		}
-
-		$numGlyphs = $numberOfHMetrics = count($subsetglyphs);
-
-		// name - table copied from the original
-		// MS spec says that "Platform and encoding ID's in the name table should be consistent with those in the cmap table.
-		// If they are not, the font will not load in Windows"
-		// Doesn't seem to be a problem?
-		$this->add('name', $this->get_table('name'));
-
-		// tables copied from the original
-		$tags = ['cvt ', 'fpgm', 'prep', 'gasp'];
-		foreach ($tags as $tag) {
-			if (isset($this->tables[$tag])) {
-				$this->add($tag, $this->get_table($tag));
-			}
-		}
-
-		// post - PostScript
-		if (isset($this->tables['post'])) {
-			$opost = $this->get_table('post');
-			$post = "\x00\x03\x00\x00" . substr($opost, 4, 12) . "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-			$this->add('post', $post);
-		}
-
-		// Sort CID2GID map into segments of contiguous codes
-		ksort($codeToGlyph);
-		unset($codeToGlyph[0]);
-
-		$rangeid = 0;
-		$range = [];
-		$prevcid = -2;
-		$prevglidx = -1;
-
-		// for each character
-		foreach ($codeToGlyph as $cid => $glidx) {
-			if ($cid == ($prevcid + 1) && $glidx == ($prevglidx + 1)) {
-				$range[$rangeid][] = $glidx;
-			} else {
-				// new range
-				$rangeid = $cid;
-				$range[$rangeid] = [];
-				$range[$rangeid][] = $glidx;
-			}
-			$prevcid = $cid;
-			$prevglidx = $glidx;
-		}
-
-		// cmap - Character to glyph mapping
-		$segCount = count($range) + 1; // + 1 Last segment has missing character 0xFFFF
-		$searchRange = 1;
-		$entrySelector = 0;
-
-		while ($searchRange * 2 <= $segCount) {
-			$searchRange *= 2;
-			++$entrySelector;
-		}
-
-		$searchRange *= 2;
-		$rangeShift = $segCount * 2 - $searchRange;
-		$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
-		$cmap = [
-			0, 3, // Index : version, number of encoding subtables
-			0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
-			0, 28, // Encoding Subtable : offset (hi,lo)
-			0, 3, // Encoding Subtable : platform (UNI=0), encoding 3
-			0, 28, // Encoding Subtable : offset (hi,lo)
-			3, 1, // Encoding Subtable : platform (MS=3), encoding 1
-			0, 28, // Encoding Subtable : offset (hi,lo)
-			4, $length, 0, // Format 4 Mapping subtable: format, length, language
-			$segCount * 2,
-			$searchRange,
-			$entrySelector,
-			$rangeShift,
-		];
-
-		// endCode(s)
-		foreach ($range as $start => $subrange) {
-			$endCode = $start + (count($subrange) - 1);
-			$cmap[] = $endCode; // endCode(s)
-		}
-
-		$cmap[] = 0xFFFF; // endCode of last Segment
-		$cmap[] = 0; // reservedPad
-
-		// startCode(s)
-		foreach ($range as $start => $subrange) {
-			$cmap[] = $start; // startCode(s)
-		}
-
-		$cmap[] = 0xFFFF; // startCode of last Segment
-
-		// idDelta(s)
-		foreach ($range as $start => $subrange) {
-			$idDelta = -($start - $subrange[0]);
-			$n += count($subrange);
-			$cmap[] = $idDelta; // idDelta(s)
-		}
-
-		$cmap[] = 1; // idDelta of last Segment
-		// idRangeOffset(s)
-
-		foreach ($range as $subrange) {
-			$cmap[] = 0; // idRangeOffset[segCount]  	Offset in bytes to glyph indexArray, or 0
-		}
-
-		$cmap[] = 0; // idRangeOffset of last Segment
-		foreach ($range as $subrange) {
-			foreach ($subrange as $glidx) {
-				$cmap[] = $glidx;
-			}
-		}
-
-		$cmap[] = 0; // Mapping for last character
-		$cmapstr = '';
-
-		foreach ($cmap as $cm) {
-			$cmapstr .= pack('n', $cm);
-		}
-		$this->add('cmap', $cmapstr);
-
-		// glyf - Glyph data
-		list($glyfOffset, $glyfLength) = $this->get_table_pos('glyf');
-		if ($glyfLength < $this->maxStrLenRead) {
-			$glyphData = $this->get_table('glyf');
-		}
-
-		$offsets = [];
-		$glyf = '';
-		$pos = 0;
-		$hmtxstr = '';
-		$xMinT = 0;
-		$yMinT = 0;
-		$xMaxT = 0;
-		$yMaxT = 0;
-		$advanceWidthMax = 0;
-		$minLeftSideBearing = 0;
-		$minRightSideBearing = 0;
-		$xMaxExtent = 0;
-		$maxPoints = 0; // points in non-compound glyph
-		$maxContours = 0; // contours in non-compound glyph
-		$maxComponentPoints = 0; // points in compound glyph
-		$maxComponentContours = 0; // contours in compound glyph
-		$maxComponentElements = 0; // number of glyphs referenced at top level
-		$maxComponentDepth = 0; // levels of recursion, set to 0 if font has only simple glyphs
-		$this->glyphdata = [];
-
-		foreach ($subsetglyphs as $originalGlyphIdx => $uni) {
-			// hmtx - Horizontal Metrics
-			$hm = $this->getHMetric($orignHmetrics, $originalGlyphIdx);
-			$hmtxstr .= $hm;
-
-			$offsets[] = $pos;
-			$glyphPos = $this->glyphPos[$originalGlyphIdx];
-			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
-			if ($glyfLength < $this->maxStrLenRead) {
-				$data = substr($glyphData, $glyphPos, $glyphLen);
-			} else {
-				if ($glyphLen > 0) {
-					$data = $this->reader->bytesAt($glyfOffset + $glyphPos, $glyphLen);
-				} else {
-					$data = '';
-				}
-			}
-
-			if ($glyphLen > 0) {
-				if (_RECALC_PROFILE) {
-					$xMin = FontReader::int16(substr($data, 2, 2));
-					$yMin = FontReader::int16(substr($data, 4, 2));
-					$xMax = FontReader::int16(substr($data, 6, 2));
-					$yMax = FontReader::int16(substr($data, 8, 2));
-					$xMinT = min($xMinT, $xMin);
-					$yMinT = min($yMinT, $yMin);
-					$xMaxT = max($xMaxT, $xMax);
-					$yMaxT = max($yMaxT, $yMax);
-					$aw = FontReader::int16(substr($hm, 0, 2));
-					$lsb = FontReader::int16(substr($hm, 2, 2));
-					$advanceWidthMax = max($advanceWidthMax, $aw);
-					$minLeftSideBearing = min($minLeftSideBearing, $lsb);
-					$minRightSideBearing = min($minRightSideBearing, ($aw - $lsb - ($xMax - $xMin)));
-					$xMaxExtent = max($xMaxExtent, ($lsb + ($xMax - $xMin)));
-				}
-				$up = unpack("n", substr($data, 0, 2));
-			}
-			if ($glyphLen > 2 && ($up[1] & (1 << 15))) { // If number of contours <= -1 i.e. composiste glyph
-				$pos_in_glyph = 10;
-				$flags = GlyphOperator::MORE;
-				$nComponentElements = 0;
-				while ($flags & GlyphOperator::MORE) {
-					$nComponentElements += 1; // number of glyphs referenced at top level
-					$up = unpack("n", substr($data, $pos_in_glyph, 2));
-					$flags = $up[1];
-					$up = unpack("n", substr($data, $pos_in_glyph + 2, 2));
-					$glyphIdx = $up[1];
-					$this->glyphdata[$originalGlyphIdx]['compGlyphs'][] = $glyphIdx;
-					$data = $this->_set_ushort($data, $pos_in_glyph + 2, $glyphSet[$glyphIdx]);
-					$pos_in_glyph += 4;
-					if ($flags & GlyphOperator::WORDS) {
-						$pos_in_glyph += 4;
-					} else {
-						$pos_in_glyph += 2;
-					}
-					if ($flags & GlyphOperator::SCALE) {
-						$pos_in_glyph += 2;
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$pos_in_glyph += 4;
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$pos_in_glyph += 8;
-					}
-				}
-				$maxComponentElements = max($maxComponentElements, $nComponentElements);
-
-			} // Simple Glyph
-			elseif (_RECALC_PROFILE && $glyphLen > 2 && $up[1] < (1 << 15) && $up[1] > 0) {  // Number of contours > 0 simple glyph
-				$nContours = $up[1];
-				$this->glyphdata[$originalGlyphIdx]['nContours'] = $nContours;
-				$maxContours = max($maxContours, $nContours);
-
-				// Count number of points in simple glyph
-				$pos_in_glyph = 10 + ($nContours * 2) - 2; // Last endContourPoint
-				$up = unpack("n", substr($data, $pos_in_glyph, 2));
-				$points = $up[1] + 1;
-				$this->glyphdata[$originalGlyphIdx]['nPoints'] = $points;
-				$maxPoints = max($maxPoints, $points);
-			}
-
-			$glyf .= $data;
-			$pos += $glyphLen;
-			if ($pos % 4 != 0) {
-				$padding = 4 - ($pos % 4);
-				$glyf .= str_repeat("\0", $padding);
-				$pos += $padding;
-			}
-		}
-
-		if (_RECALC_PROFILE) {
-			foreach ($this->glyphdata as $originalGlyphIdx => $val) {
-				$maxdepth = $depth = -1;
-				$points = 0;
-				$contours = 0;
-				$this->getGlyphData($originalGlyphIdx, $maxdepth, $depth, $points, $contours);
-				$maxComponentDepth = max($maxComponentDepth, $maxdepth);
-				$maxComponentPoints = max($maxComponentPoints, $points);
-				$maxComponentContours = max($maxComponentContours, $contours);
-			}
-		}
-
-		$offsets[] = $pos;
-		$this->add('glyf', $glyf);
-
-		// hmtx - Horizontal Metrics
-		$this->add('hmtx', $hmtxstr);
-
-		// loca - Index to location
-		$locastr = '';
-		if ((($pos + 1) >> 1) > 0xFFFF) {
-			$indexToLocFormat = 1; // long format
-			foreach ($offsets as $offset) {
-				$locastr .= pack("N", $offset);
-			}
-		} else {
-			$indexToLocFormat = 0; // short format
-			foreach ($offsets as $offset) {
-				$locastr .= pack("n", ($offset / 2));
-			}
-		}
-		$this->add('loca', $locastr);
-
-		// head - Font header
-		$head = $this->get_table('head');
-		$head = $this->_set_ushort($head, 50, $indexToLocFormat);
-
-		if (_RECALC_PROFILE) {
-			$head = $this->_set_short($head, 36, $xMinT); // for all glyph bounding boxes
-			$head = $this->_set_short($head, 38, $yMinT); // for all glyph bounding boxes
-			$head = $this->_set_short($head, 40, $xMaxT); // for all glyph bounding boxes
-			$head = $this->_set_short($head, 42, $yMaxT); // for all glyph bounding boxes
-			$head[17] = chr($head[17] & ~(1 << 4)); // Unset Bit 4 (as hdmx/LTSH tables not included)
-		}
-
-		$this->add('head', $head);
-
-		// hhea - Horizontal Header
-		$hhea = $this->get_table('hhea');
-		$hhea = $this->_set_ushort($hhea, 34, $numberOfHMetrics);
-		if (_RECALC_PROFILE) {
-			$hhea = $this->_set_ushort($hhea, 10, $advanceWidthMax);
-			$hhea = $this->_set_short($hhea, 12, $minLeftSideBearing);
-			$hhea = $this->_set_short($hhea, 14, $minRightSideBearing);
-			$hhea = $this->_set_short($hhea, 16, $xMaxExtent);
-		}
-		$this->add('hhea', $hhea);
-
-		// maxp - Maximum Profile
-		$maxp = $this->get_table('maxp');
-		$maxp = $this->_set_ushort($maxp, 4, $numGlyphs);
-		if (_RECALC_PROFILE) {
-			$maxp = $this->_set_ushort($maxp, 6, $maxPoints); // points in non-compound glyph
-			$maxp = $this->_set_ushort($maxp, 8, $maxContours); // contours in non-compound glyph
-			$maxp = $this->_set_ushort($maxp, 10, $maxComponentPoints); // points in compound glyph
-			$maxp = $this->_set_ushort($maxp, 12, $maxComponentContours); // contours in compound glyph
-			$maxp = $this->_set_ushort($maxp, 28, $maxComponentElements); // number of glyphs referenced at top level
-			$maxp = $this->_set_ushort($maxp, 30, $maxComponentDepth); // levels of recursion, set to 0 if font has only simple glyphs
-		}
-		$this->add('maxp', $maxp);
-
-		// OS/2 - OS/2
-		if (isset($this->tables['OS/2'])) {
-			$os2_offset = $this->seek_table("OS/2");
-			if (_RECALC_PROFILE) {
-				$fsSelection = $this->reader->uint16At($os2_offset + 62);
-				$fsSelection = ($fsSelection & ~(1 << 6)); // 2-byte bit field containing information concerning the nature of the font patterns
-				// bit#0 = Italic; bit#5=Bold
-				// Match name table's font subfamily string
-				// Clear bit#6 used for 'Regular' and optional
-			}
-
-			// NB Currently this method never subsets characters above BMP
-			// Could set nonBMP bit according to $this->maxUni
-			$nonBMP = $this->reader->uint16At($os2_offset + 46);
-			$nonBMP = ($nonBMP & ~(1 << 9)); // Unset Bit 57 (indicates non-BMP) - for interactive forms
-
-			$os2 = $this->get_table('OS/2');
-			if (_RECALC_PROFILE) {
-				$os2 = $this->_set_ushort($os2, 62, $fsSelection);
-				$os2 = $this->_set_ushort($os2, 66, $fsLastCharIndex);
-				$os2 = $this->_set_ushort($os2, 42, 0x0000); // ulCharRange (ulUnicodeRange) bits 24-31 | 16-23
-				$os2 = $this->_set_ushort($os2, 44, 0x0000); // ulCharRange (Unicode ranges) bits  8-15 |  0-7
-				$os2 = $this->_set_ushort($os2, 46, $nonBMP); // ulCharRange (Unicode ranges) bits 56-63 | 48-55
-				$os2 = $this->_set_ushort($os2, 48, 0x0000); // ulCharRange (Unicode ranges) bits 40-47 | 32-39
-				$os2 = $this->_set_ushort($os2, 50, 0x0000); // ulCharRange (Unicode ranges) bits  88-95 | 80-87
-				$os2 = $this->_set_ushort($os2, 52, 0x0000); // ulCharRange (Unicode ranges) bits  72-79 | 64-71
-				$os2 = $this->_set_ushort($os2, 54, 0x0000); // ulCharRange (Unicode ranges) bits  120-127 | 112-119
-				$os2 = $this->_set_ushort($os2, 56, 0x0000); // ulCharRange (Unicode ranges) bits  104-111 | 96-103
-			}
-			$os2 = $this->_set_ushort($os2, 46, $nonBMP); // Unset Bit 57 (indicates non-BMP) - for interactive forms
-
-			$this->add('OS/2', $os2);
-		}
-
-		$this->reader->close();
-
-		// Put the TTF file together
-		$stm = '';
-		$this->endTTFile($stm);
-
-		return $stm;
+		return $substitute;
 	}
 
-	function makeSubsetSIP($file, &$subset, $TTCfontID = 0, $debug = false, $useOTL = 0)
+	/**
+	 * What an Alternate Substitution puts in place of the glyph it covers.
+	 *
+	 * The parser takes the first alternate and stops: mPDF has no way for a document to ask for the
+	 * others, so a rule it cannot reach is a rule it does not need. OtlDump reports all of them,
+	 * which is most of what makes an `aalt` lookup worth looking at.
+	 *
+	 * @return array|null The replacement glyph as hex in a list of one, or null where the font's
+	 *                    first alternate is a glyph the cmap does not reach
+	 */
+	protected function alternateSubstitutes(array $alternateSet)
 	{
-		$this->reader = new FileReader($file);
+		$gid = $alternateSet['SubstituteGlyphID'][0];
 
-
-		$this->filename = $file;
-		$this->useOTL = $useOTL; // mPDF 5.7.1
-		$this->charWidths = '';
-		$this->glyphPos = [];
-		$this->charToGlyph = [];
-		$this->tables = [];
-		$this->otables = [];
-		$this->ascent = 0;
-		$this->descent = 0;
-		$this->strikeoutSize = 0;
-		$this->strikeoutPosition = 0;
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
-		$this->reader->skip(4);
-
-		if ($TTCfontID > 0) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000])) {
-				throw new \Mpdf\Exception\FontException("ERROR - Error parsing TrueType Collection: version=" . $version . " - " . $file);
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-		}
-		$this->readTableDirectory($debug);
-
-		// head - Font header table
-		$this->seek_table('head');
-		$this->reader->skip(50);
-		$indexToLocFormat = $this->reader->readUInt16();
-		$glyphDataFormat = $this->reader->readUInt16();
-
-		// hhea - Horizontal header table
-		$this->seek_table('hhea');
-		$this->reader->skip(32);
-		$metricDataFormat = $this->reader->readUInt16();
-		$orignHmetrics = $numberOfHMetrics = $this->reader->readUInt16();
-
-		// maxp - Maximum profile table
-		$this->seek_table('maxp');
-		$this->reader->skip(4);
-		$numGlyphs = $this->reader->readUInt16();
-
-		// cmap - Character to glyph index mapping table
-		$cmap_offset = $this->seek_table('cmap');
-		$this->reader->skip(2);
-		$cmapTableCount = $this->reader->readUInt16();
-		$unicode_cmap_offset = 0;
-		for ($i = 0; $i < $cmapTableCount; $i++) {
-
-			$platformID = $this->reader->readUInt16();
-			$encodingID = $this->reader->readUInt16();
-			$offset = $this->reader->readUInt32();
-			$save_pos = $this->reader->tell();
-
-			if (($platformID == 3 && $encodingID == 10) || $platformID == 0) { // Microsoft, Unicode Format 12 table HKCS
-				$format = $this->reader->uint16At($cmap_offset + $offset);
-				if ($format == 12) {
-					$unicode_cmap_offset = $cmap_offset + $offset;
-					break;
-				}
-			}
-
-			if (($platformID == 3 && $encodingID == 1) || $platformID == 0) { // Microsoft, Unicode
-				$format = $this->reader->uint16At($cmap_offset + $offset);
-				if ($format == 4) {
-					$unicode_cmap_offset = $cmap_offset + $offset;
-				}
-			}
-
-			$this->reader->seek($save_pos);
+		if (!isset($this->glyphToChar[$gid][0])) {
+			return null;
 		}
 
-		if (!$unicode_cmap_offset) {
-			throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)', $file));
-		}
-
-		// Format 12 CMAP does characters above Unicode BMP i.e. some HKCS characters U+20000 and above
-		if ($format == 12) {
-			$this->maxUniChar = 0;
-			$this->reader->seek($unicode_cmap_offset + 4);
-			$length = $this->reader->readUInt32();
-			$limit = $unicode_cmap_offset + $length;
-			$this->reader->skip(4);
-
-			$nGroups = $this->reader->readUInt32();
-
-			$glyphToChar = [];
-			$charToGlyph = [];
-			for ($i = 0; $i < $nGroups; $i++) {
-				$startCharCode = $this->reader->readUInt32();
-				$endCharCode = $this->reader->readUInt32();
-				$startGlyphCode = $this->reader->readUInt32();
-				$offset = 0;
-				for ($unichar = $startCharCode; $unichar <= $endCharCode; $unichar++) {
-					$glyph = $startGlyphCode + $offset;
-					$offset++;
-					// ZZZ98
-					if ($unichar < 0x30000) {
-						$charToGlyph[$unichar] = $glyph;
-						$this->maxUniChar = max($unichar, $this->maxUniChar);
-						$glyphToChar[$glyph][] = $unichar;
-					}
-				}
-			}
-		} else {
-			$glyphToChar = [];
-			$charToGlyph = [];
-			$this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
-		}
-
-		// Map Unmapped glyphs - from $numGlyphs
-		if ($useOTL) {
-			$bctr = 0xE000;
-			for ($gid = 1; $gid < $numGlyphs; $gid++) {
-				if (!isset($glyphToChar[$gid])) {
-					while (isset($charToGlyph[$bctr])) {
-						$bctr++;
-					} // Avoid overwriting a glyph already mapped in PUA
-					// ZZZ98
-					if ($bctr > 0xF8FF && $bctr < 0x2CEB0) {
-						$bctr = 0x2CEB0;
-						while (isset($charToGlyph[$bctr])) {
-							$bctr++;
-						}
-					}
-					$glyphToChar[$gid][] = $bctr;
-					$charToGlyph[$bctr] = $gid;
-					$this->maxUniChar = max($bctr, $this->maxUniChar);
-					$bctr++;
-				}
-			}
-		}
-
-		// hmtx - Horizontal metrics table
-		$scale = 1; // not used here
-		$this->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale);
-
-		// loca - Index to location
-		$this->getLOCA($indexToLocFormat, $numGlyphs);
-
-		$glyphMap = [0 => 0];
-		$glyphSet = [0 => 0];
-		$codeToGlyph = [];
-
-		// Set a substitute if ASCII characters do not have glyphs
-		if (isset($charToGlyph[0x3F])) {
-			$subs = $charToGlyph[0x3F];
-		} else { // Question mark
-			$subs = $charToGlyph[32];
-		}
-
-		foreach ($subset as $code) {
-			if (isset($charToGlyph[$code])) {
-				$originalGlyphIdx = $charToGlyph[$code];
-			} elseif ($code < 128) {
-				$originalGlyphIdx = $subs;
-			} else {
-				$originalGlyphIdx = 0;
-			}
-			if (!isset($glyphSet[$originalGlyphIdx])) {
-				$glyphSet[$originalGlyphIdx] = count($glyphMap);
-				$glyphMap[] = $originalGlyphIdx;
-			}
-			$codeToGlyph[$code] = $glyphSet[$originalGlyphIdx];
-		}
-
-		list($start, $dummy) = $this->get_table_pos('glyf');
-
-		$n = 0;
-		while ($n < count($glyphMap)) {
-			$originalGlyphIdx = $glyphMap[$n];
-			$glyphPos = $this->glyphPos[$originalGlyphIdx];
-			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
-			++$n;
-			if (!$glyphLen) {
-				continue;
-			}
-			$this->reader->seek($start + $glyphPos);
-			$numberOfContours = $this->reader->readInt16();
-			if ($numberOfContours < 0) {
-				$this->reader->skip(8);
-				$flags = GlyphOperator::MORE;
-				while ($flags & GlyphOperator::MORE) {
-					$flags = $this->reader->readUInt16();
-					$glyphIdx = $this->reader->readUInt16();
-					if (!isset($glyphSet[$glyphIdx])) {
-						$glyphSet[$glyphIdx] = count($glyphMap);
-						$glyphMap[] = $glyphIdx;
-					}
-					if ($flags & GlyphOperator::WORDS) {
-						$this->reader->skip(4);
-					} else {
-						$this->reader->skip(2);
-					}
-					if ($flags & GlyphOperator::SCALE) {
-						$this->reader->skip(2);
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$this->reader->skip(4);
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$this->reader->skip(8);
-					}
-				}
-			}
-		}
-
-		$numGlyphs = $n = count($glyphMap);
-		$numberOfHMetrics = $n;
-
-		// MS spec says that "Platform and encoding ID's in the name table should be consistent with those in the cmap table.
-		// If they are not, the font will not load in Windows"
-		// Doesn't seem to be a problem?
-		// Needs to have a name entry in 3,0 (e.g. symbol) - original font will be 3,1 (i.e. Unicode)
-		$name = $this->get_table('name');
-		$name_offset = $this->seek_table("name");
-		$format = $this->reader->readUInt16();
-		$numRecords = $this->reader->readUInt16();
-		$string_data_offset = $name_offset + $this->reader->readUInt16();
-		for ($i = 0; $i < $numRecords; $i++) {
-			$platformId = $this->reader->readUInt16();
-			$encodingId = $this->reader->readUInt16();
-			if ($platformId == 3 && $encodingId == 1) {
-				$pos = 6 + ($i * 12) + 2;
-				$name = $this->_set_ushort($name, $pos, 0x00); // Change encoding to 3,0 rather than 3,1
-			}
-			$this->reader->skip(8);
-		}
-		$this->add('name', $name);
-
-		// OS/2
-		if (isset($this->tables['OS/2'])) {
-			$os2 = $this->get_table('OS/2');
-			$os2 = $this->_set_ushort($os2, 42, 0x00); // ulCharRange (Unicode ranges)
-			$os2 = $this->_set_ushort($os2, 44, 0x00); // ulCharRange (Unicode ranges)
-			$os2 = $this->_set_ushort($os2, 46, 0x00); // ulCharRange (Unicode ranges)
-			$os2 = $this->_set_ushort($os2, 48, 0x00); // ulCharRange (Unicode ranges)
-
-			$os2 = $this->_set_ushort($os2, 50, 0x00); // ulCharRange (Unicode ranges)
-			$os2 = $this->_set_ushort($os2, 52, 0x00); // ulCharRange (Unicode ranges)
-			$os2 = $this->_set_ushort($os2, 54, 0x00); // ulCharRange (Unicode ranges)
-			$os2 = $this->_set_ushort($os2, 56, 0x00); // ulCharRange (Unicode ranges)
-			// Set Symbol character only in ulCodePageRange
-			$os2 = $this->_set_ushort($os2, 78, 0x8000); // ulCodePageRange = Bit #31 Symbol ****  78 = Bit 16-31
-			$os2 = $this->_set_ushort($os2, 80, 0x0000); // ulCodePageRange = Bit #31 Symbol ****  80 = Bit 0-15
-			$os2 = $this->_set_ushort($os2, 82, 0x0000); // ulCodePageRange = Bit #32- Symbol **** 82 = Bits 48-63
-			$os2 = $this->_set_ushort($os2, 84, 0x0000); // ulCodePageRange = Bit #32- Symbol **** 84 = Bits 32-47
-
-			$os2 = $this->_set_ushort($os2, 64, 0x01); // FirstCharIndex
-			$os2 = $this->_set_ushort($os2, 66, count($subset)); // LastCharIndex
-			// Set PANOSE first bit to 5 for Symbol
-			$os2 = $this->splice($os2, 32, chr(5) . chr(0) . chr(1) . chr(0) . chr(1) . chr(0) . chr(0) . chr(0) . chr(0) . chr(0));
-			$this->add('OS/2', $os2);
-		}
-
-		//tables copied from the original
-		$tags = ['cvt ', 'fpgm', 'prep', 'gasp'];
-		foreach ($tags as $tag) {  // 1.02
-			if (isset($this->tables[$tag])) {
-				$this->add($tag, $this->get_table($tag));
-			}
-		}
-
-		// post - PostScript
-		if (isset($this->tables['post'])) {
-			$opost = $this->get_table('post');
-			$post = "\x00\x03\x00\x00" . substr($opost, 4, 12) . "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-		}
-		$this->add('post', $post);
-
-		// hhea - Horizontal Header
-		$hhea = $this->get_table('hhea');
-		$hhea = $this->_set_ushort($hhea, 34, $numberOfHMetrics);
-		$this->add('hhea', $hhea);
-
-		// maxp - Maximum Profile
-		$maxp = $this->get_table('maxp');
-		$maxp = $this->_set_ushort($maxp, 4, $numGlyphs);
-		$this->add('maxp', $maxp);
-
-		// CMap table Formats [1,0,]6 and [3,0,]4
-		// Sort CID2GID map into segments of contiguous codes
-		$rangeid = 0;
-		$range = [];
-		$prevcid = -2;
-		$prevglidx = -1;
-
-		// for each character
-		foreach ($subset as $cid => $code) {
-			$glidx = $codeToGlyph[$code];
-			if ($cid == ($prevcid + 1) && $glidx == ($prevglidx + 1)) {
-				$range[$rangeid][] = $glidx;
-			} else {
-				// new range
-				$rangeid = $cid;
-				$range[$rangeid] = [];
-				$range[$rangeid][] = $glidx;
-			}
-			$prevcid = $cid;
-			$prevglidx = $glidx;
-		}
-
-		// cmap - Character to glyph mapping
-		$segCount = count($range) + 1; // + 1 Last segment has missing character 0xFFFF
-		$searchRange = 1;
-		$entrySelector = 0;
-
-		while ($searchRange * 2 <= $segCount) {
-			$searchRange = $searchRange * 2;
-			$entrySelector = $entrySelector + 1;
-		}
-
-		$searchRange = $searchRange * 2;
-		$rangeShift = $segCount * 2 - $searchRange;
-		$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
-		$cmap = [
-			4, $length, 0, // Format 4 Mapping subtable: format, length, language
-			$segCount * 2,
-			$searchRange,
-			$entrySelector,
-			$rangeShift,
-		];
-
-		// endCode(s)
-		foreach ($range as $start => $subrange) {
-			$endCode = $start + (count($subrange) - 1);
-			$cmap[] = $endCode; // endCode(s)
-		}
-		$cmap[] = 0xFFFF; // endCode of last Segment
-		$cmap[] = 0; // reservedPad
-
-		// startCode(s)
-		foreach ($range as $start => $subrange) {
-			$cmap[] = $start; // startCode(s)
-		}
-		$cmap[] = 0xFFFF; // startCode of last Segment
-
-		// idDelta(s)
-		foreach ($range as $start => $subrange) {
-			$idDelta = -($start - $subrange[0]);
-			$n += count($subrange);
-			$cmap[] = $idDelta; // idDelta(s)
-		}
-		$cmap[] = 1; // idDelta of last Segment
-
-		// idRangeOffset(s)
-		foreach ($range as $subrange) {
-			$cmap[] = 0; // idRangeOffset[segCount]  	Offset in bytes to glyph indexArray, or 0
-		}
-
-		$cmap[] = 0; // idRangeOffset of last Segment
-		foreach ($range as $subrange) {
-			foreach ($subrange as $glidx) {
-				$cmap[] = $glidx;
-			}
-		}
-
-		$cmap[] = 0; // Mapping for last character
-		$cmapstr4 = '';
-		foreach ($cmap as $cm) {
-			$cmapstr4 .= pack("n", $cm);
-		}
-
-		// cmap - Character to glyph mapping
-		$entryCount = count($subset);
-		$length = 10 + $entryCount * 2;
-
-		$off = 20 + $length;
-		$hoff = $off >> 16;
-		$loff = $off & 0xFFFF;
-
-		$cmap = [
-			0, 2, // Index : version, number of subtables
-			1, 0, // Subtable : platform, encoding
-			0, 20, // offset (hi,lo)
-			3, 0, // Subtable : platform, encoding	// See note above for 'name'
-			$hoff, $loff, // offset (hi,lo)
-			6, $length, // Format 6 Mapping table: format, length
-			0, 1, // language, First char code
-			$entryCount,
-		];
-
-		$cmapstr = '';
-		foreach ($subset as $code) {
-			$cmap[] = $codeToGlyph[$code];
-		}
-
-		foreach ($cmap as $cm) {
-			$cmapstr .= pack("n", $cm);
-		}
-
-		$cmapstr .= $cmapstr4;
-		$this->add('cmap', $cmapstr);
-
-		// hmtx - Horizontal Metrics
-		$hmtxstr = '';
-		for ($n = 0; $n < $numGlyphs; $n++) {
-			$originalGlyphIdx = $glyphMap[$n];
-			$hm = $this->getHMetric($orignHmetrics, $originalGlyphIdx);
-			$hmtxstr .= $hm;
-		}
-		$this->add('hmtx', $hmtxstr);
-
-		// glyf - Glyph data
-		list($glyfOffset, $glyfLength) = $this->get_table_pos('glyf');
-		if ($glyfLength < $this->maxStrLenRead) {
-			$glyphData = $this->get_table('glyf');
-		}
-
-		$offsets = [];
-		$glyf = '';
-		$pos = 0;
-		for ($n = 0; $n < $numGlyphs; $n++) {
-
-			$offsets[] = $pos;
-			$originalGlyphIdx = $glyphMap[$n];
-			$glyphPos = $this->glyphPos[$originalGlyphIdx];
-			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
-
-			if ($glyfLength < $this->maxStrLenRead) {
-				$data = substr($glyphData, $glyphPos, $glyphLen);
-			} else {
-				if ($glyphLen > 0) {
-					$data = $this->reader->bytesAt($glyfOffset + $glyphPos, $glyphLen);
-				} else {
-					$data = '';
-				}
-			}
-
-			if ($glyphLen > 0) {
-				$up = unpack('n', substr($data, 0, 2));
-			}
-
-			if ($glyphLen > 2 && ($up[1] & (1 << 15))) {
-
-				$pos_in_glyph = 10;
-				$flags = GlyphOperator::MORE;
-
-				while ($flags & GlyphOperator::MORE) {
-					$up = unpack('n', substr($data, $pos_in_glyph, 2));
-					$flags = $up[1];
-					$up = unpack('n', substr($data, $pos_in_glyph + 2, 2));
-					$glyphIdx = $up[1];
-					$data = $this->_set_ushort($data, $pos_in_glyph + 2, $glyphSet[$glyphIdx]);
-					$pos_in_glyph += 4;
-
-					if ($flags & GlyphOperator::WORDS) {
-						$pos_in_glyph += 4;
-					} else {
-						$pos_in_glyph += 2;
-					}
-
-					if ($flags & GlyphOperator::SCALE) {
-						$pos_in_glyph += 2;
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$pos_in_glyph += 4;
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$pos_in_glyph += 8;
-					}
-				}
-			}
-
-			$glyf .= $data;
-			$pos += $glyphLen;
-
-			if ($pos % 4 != 0) {
-				$padding = 4 - ($pos % 4);
-				$glyf .= str_repeat("\0", $padding);
-				$pos += $padding;
-			}
-		}
-
-		$offsets[] = $pos;
-		$this->add('glyf', $glyf);
-
-		// loca - Index to location
-		$locastr = '';
-		if ((($pos + 1) >> 1) > 0xFFFF) {
-			$indexToLocFormat = 1;        // long format
-			foreach ($offsets as $offset) {
-				$locastr .= pack("N", $offset);
-			}
-		} else {
-			$indexToLocFormat = 0;        // short format
-			foreach ($offsets as $offset) {
-				$locastr .= pack("n", ($offset / 2));
-			}
-		}
-
-		$this->add('loca', $locastr);
-
-		// head - Font header
-		$head = $this->get_table('head');
-		$head = $this->_set_ushort($head, 50, $indexToLocFormat);
-		$this->add('head', $head);
-
-		$this->reader->close();
-
-		$stm = '';
-		$this->endTTFile($stm);
-
-		return $stm;
+		return [unicode_hex($this->glyphToChar[$gid][0])];
 	}
 
-	function getGlyphData($originalGlyphIdx, &$maxdepth, &$depth, &$points, &$contours)
+	/**
+	 * Whether the caller wants the lookup list read at all.
+	 *
+	 * The parser always does - the lookups are what it is for. OtlDump's summary mode stops at the
+	 * scripts and languages, which is the whole of what that page reports.
+	 */
+	protected function wantsLookups()
 	{
-		$depth++;
-		$maxdepth = max($maxdepth, $depth);
-
-		if (count($this->glyphdata[$originalGlyphIdx]['compGlyphs'])) {
-			foreach ($this->glyphdata[$originalGlyphIdx]['compGlyphs'] as $glyphIdx) {
-				$this->getGlyphData($glyphIdx, $maxdepth, $depth, $points, $contours);
-			}
-		} elseif (($this->glyphdata[$originalGlyphIdx]['nContours'] > 0) && $depth > 0) { // simple
-			$contours += $this->glyphdata[$originalGlyphIdx]['nContours'];
-			$points += $this->glyphdata[$originalGlyphIdx]['nPoints'];
-		}
-
-		$depth--;
+		return true;
 	}
 
-	function getGlyphs($originalGlyphIdx, &$start, &$glyphSet, &$subsetglyphs)
+	/**
+	 * Reporting hooks. The parser reads silently; OtlDump writes HTML as it goes, and these are where
+	 * it gets to. @see OtlDump
+	 */
+	protected function reportTableRead($tag)
 	{
-		$glyphPos = $this->glyphPos[$originalGlyphIdx];
-		$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
-
-		if (!$glyphLen) {
-			return;
-		}
-
-		$this->reader->seek($start + $glyphPos);
-		$numberOfContours = $this->reader->readInt16();
-
-		if ($numberOfContours < 0) {
-			$this->reader->skip(8);
-			$flags = GlyphOperator::MORE;
-			while ($flags & GlyphOperator::MORE) {
-				$flags = $this->reader->readUInt16();
-				$glyphIdx = $this->reader->readUInt16();
-				if (!isset($glyphSet[$glyphIdx])) {
-					$glyphSet[$glyphIdx] = count($subsetglyphs); // old glyphID to new glyphID
-					$subsetglyphs[$glyphIdx] = true;
-				}
-				$savepos = $this->reader->tell();
-				$this->getGlyphs($glyphIdx, $start, $glyphSet, $subsetglyphs);
-				$this->reader->seek($savepos);
-				if ($flags & GlyphOperator::WORDS) {
-					$this->reader->skip(4);
-				} else {
-					$this->reader->skip(2);
-				}
-				if ($flags & GlyphOperator::SCALE) {
-					$this->reader->skip(2);
-				} elseif ($flags & GlyphOperator::XYSCALE) {
-					$this->reader->skip(4);
-				} elseif ($flags & GlyphOperator::TWOBYTWO) {
-					$this->reader->skip(8);
-				}
-			}
-		}
 	}
 
-	function getHMTX($numberOfHMetrics, $numGlyphs, &$glyphToChar, $scale)
+	/**
+	 * @param string $tag A layout table this font does not have, 'GSUB' or 'GPOS'
+	 */
+	protected function reportTableMissing($tag)
+	{
+	}
+
+	/**
+	 * @param string $tag      The layout table being read, 'GSUB' or 'GPOS'
+	 * @param array  $features Its scripts, each language system under them, and the feature tags that
+	 *                         language system asks for
+	 */
+	protected function reportScriptList($tag, array $features)
+	{
+	}
+
+	/**
+	 * The width of every character the font maps, and the width to draw one it does not.
+	 *
+	 * @param int   $maxUniChar The highest character the cmap reached, which sizes the width table
+	 *
+	 * @return array [$charWidths, $defaultWidth]
+	 */
+	function getHMTX($numberOfHMetrics, $numGlyphs, &$glyphToChar, $scale, $maxUniChar)
 	{
 		$start = $this->seek_table('hmtx');
 		$aw = 0;
-		$this->charWidths = str_pad('', 256 * 256 * 2, "\x00");
+		$defaultWidth = 0;
+		$charWidths = str_pad('', 256 * 256 * 2, "\x00");
 
-		if ($this->maxUniChar > 65536) {
-			$this->charWidths .= str_pad('', 256 * 256 * 2, "\x00");
+		if ($maxUniChar > 65536) {
+			$charWidths .= str_pad('', 256 * 256 * 2, "\x00");
 		} // Plane 1 SMP
 
-		if ($this->maxUniChar > 131072) {
-			$this->charWidths .= str_pad('', 256 * 256 * 2, "\x00");
+		if ($maxUniChar > 131072) {
+			$charWidths .= str_pad('', 256 * 256 * 2, "\x00");
 		} // Plane 2 SMP
 
 		$nCharWidths = 0;
@@ -4594,7 +3706,7 @@ class TTFontFile
 				// 1.03 Some (arabic) fonts have -ve values for width
 				// although should be unsigned value - comes out as e.g. 65108 (intended -50)
 				if ($glyph === 0) {
-					$this->defaultWidth = $scale * $aw;
+					$defaultWidth = $scale * $aw;
 					continue;
 				}
 
@@ -4605,8 +3717,8 @@ class TTFontFile
 							$w = 65535;
 						}
 						if ($char < 196608) {
-							$this->charWidths[$char * 2] = chr($w >> 8);
-							$this->charWidths[$char * 2 + 1] = chr($w & 0xFF);
+							$charWidths[$char * 2] = chr($w >> 8);
+							$charWidths[$char * 2 + 1] = chr($w & 0xFF);
 							$nCharWidths++;
 						}
 					}
@@ -4627,8 +3739,8 @@ class TTFontFile
 				foreach ($glyphToChar[$glyph] as $char) {
 					if ($char != 0 && $char != 65535) {
 						if ($char < 196608) {
-							$this->charWidths[$char * 2] = chr($w >> 8);
-							$this->charWidths[$char * 2 + 1] = chr($w & 0xFF);
+							$charWidths[$char * 2] = chr($w >> 8);
+							$charWidths[$char * 2 + 1] = chr($w & 0xFF);
 							$nCharWidths++;
 						}
 					}
@@ -4638,53 +3750,20 @@ class TTFontFile
 
 		// NB 65535 is a set width of 0
 		// First bytes define number of chars in font
-		$this->charWidths[0] = chr($nCharWidths >> 8);
-		$this->charWidths[1] = chr($nCharWidths & 0xFF);
-	}
+		$charWidths[0] = chr($nCharWidths >> 8);
+		$charWidths[1] = chr($nCharWidths & 0xFF);
 
-	function getHMetric($numberOfHMetrics, $gid)
-	{
-		$start = $this->seek_table("hmtx");
-		if ($gid < $numberOfHMetrics) {
-			$this->reader->seek($start + ($gid * 4));
-			$hm = $this->reader->read(4);
-		} else {
-			$this->reader->seek($start + (($numberOfHMetrics - 1) * 4));
-			$hm = $this->reader->read(2);
-			$this->reader->seek($start + ($numberOfHMetrics * 2) + ($gid * 2));
-			$hm .= $this->reader->read(2);
-		}
-
-		return $hm;
-	}
-
-	function getLOCA($indexToLocFormat, $numGlyphs)
-	{
-		$start = $this->seek_table('loca');
-		$this->glyphPos = [];
-		if ($indexToLocFormat == 0) {
-			$data = $this->reader->bytesAt($start, ($numGlyphs * 2) + 2);
-			$arr = unpack("n*", $data);
-			for ($n = 0; $n <= $numGlyphs; $n++) {
-				$this->glyphPos[] = ($arr[$n + 1] * 2);
-			}
-		} elseif ($indexToLocFormat == 1) {
-			$data = $this->reader->bytesAt($start, ($numGlyphs * 4) + 4);
-			$arr = unpack("N*", $data);
-			for ($n = 0; $n <= $numGlyphs; $n++) {
-				$this->glyphPos[] = ($arr[$n + 1]);
-			}
-		} else {
-			throw new \Mpdf\Exception\FontException('Unknown location table format ' . $indexToLocFormat);
-		}
+		return [$charWidths, $defaultWidth];
 	}
 
 	/**
 	 * CMAP Format 4
+	 *
+	 * @return int The highest character the subtable covers, which getHMTX sizes its width table from
 	 */
 	function getCMAP4($unicode_cmap_offset, &$glyphToChar, &$charToGlyph)
 	{
-		$this->maxUniChar = 0;
+		$maxUniChar = 0;
 		$this->reader->seek($unicode_cmap_offset + 2);
 		$length = $this->reader->readUInt16();
 		$limit = $unicode_cmap_offset + $length;
@@ -4737,255 +3816,13 @@ class TTFontFile
 				}
 				$charToGlyph[$unichar] = $glyph;
 				if ($unichar < 196608) {
-					$this->maxUniChar = max($unichar, $this->maxUniChar);
+					$maxUniChar = max($unichar, $maxUniChar);
 				}
 				$glyphToChar[$glyph][] = $unichar;
 			}
 		}
+
+		return $maxUniChar;
 	}
 
-	function endTTFile(&$stm)
-	{
-		$stm = '';
-		$numTables = count($this->otables);
-		$searchRange = 1;
-		$entrySelector = 0;
-		while ($searchRange * 2 <= $numTables) {
-			$searchRange *= 2;
-			$entrySelector += 1;
-		}
-		$searchRange *= 16;
-		$rangeShift = $numTables * 16 - $searchRange;
-
-		// Header
-		if (_TTF_MAC_HEADER) {
-			$stm .= pack('Nnnnn', 0x74727565, $numTables, $searchRange, $entrySelector, $rangeShift); // Mac
-		} else {
-			$stm .= pack('Nnnnn', 0x00010000, $numTables, $searchRange, $entrySelector, $rangeShift); // Windows
-		}
-
-		// Table directory
-		$tables = $this->otables;
-		ksort($tables);
-		$offset = 12 + $numTables * 16;
-		foreach ($tables as $tag => $data) {
-			if ($tag === 'head') {
-				$head_start = $offset;
-			}
-			$stm .= $tag;
-			$checksum = $this->calcChecksum($data);
-			$stm .= pack('nn', $checksum[0], $checksum[1]);
-			$stm .= pack('NN', $offset, strlen($data));
-			$paddedLength = (strlen($data) + 3) & ~3;
-			$offset += $paddedLength;
-		}
-
-		// Table data
-		foreach ($tables as $tag => $data) {
-			$data .= "\0\0\0";
-			$stm .= substr($data, 0, (strlen($data) & ~3));
-		}
-
-		$checksum = $this->calcChecksum($stm);
-		$checksum = $this->sub32([0xB1B0, 0xAFBA], $checksum);
-		$chk = pack("nn", $checksum[0], $checksum[1]);
-		$stm = $this->splice($stm, ($head_start + 8), $chk);
-
-		return $stm;
-	}
-
-	function repackageTTF($file, $TTCfontID = 0, $debug = false, $useOTL = false)
-	{
-		$this->useOTL = $useOTL;
-		$this->filename = $file;
-		$this->reader = new FileReader($file);
-
-
-		$this->charWidths = '';
-		$this->glyphPos = [];
-		$this->charToGlyph = [];
-		$this->tables = [];
-		$this->otables = [];
-		$this->ascent = 0;
-		$this->descent = 0;
-		$this->strikeoutSize = 0;
-		$this->strikeoutPosition = 0;
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
-		$this->reader->skip(4);
-		$this->maxUni = 0;
-
-		if ($TTCfontID > 0) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000], true)) {
-				throw new \Mpdf\Exception\FontException(sprintf('Error parsing TrueType Collection: version=%s - %s', $version, $file));
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-		}
-
-		$this->readTableDirectory($debug);
-		$tags = ['OS/2', 'glyf', 'head', 'hhea', 'hmtx', 'loca', 'maxp', 'name', 'post', 'cvt ', 'fpgm', 'gasp', 'prep'];
-
-		foreach ($tags as $tag) {
-			if (isset($this->tables[$tag])) {
-				$this->add($tag, $this->get_table($tag));
-			}
-		}
-
-		if ($useOTL) {
-
-			// maxp - Maximum profile table
-			$this->seek_table('maxp');
-			$this->reader->skip(4);
-			$numGlyphs = $this->reader->readUInt16();
-
-			// cmap - Character to glyph index mapping table
-			$cmap_offset = $this->seek_table('cmap');
-			$this->reader->skip(2);
-			$cmapTableCount = $this->reader->readUInt16();
-			$unicode_cmap_offset = 0;
-			for ($i = 0; $i < $cmapTableCount; $i++) {
-				$platformID = $this->reader->readUInt16();
-				$encodingID = $this->reader->readUInt16();
-				$offset = $this->reader->readUInt32();
-				$save_pos = $this->reader->tell();
-				if (($platformID == 3 && $encodingID == 1) || $platformID == 0) { // Microsoft, Unicode
-					$format = $this->reader->uint16At($cmap_offset + $offset);
-					if ($format == 4) {
-						$unicode_cmap_offset = $cmap_offset + $offset;
-						break;
-					}
-				}
-				$this->reader->seek($save_pos);
-			}
-
-			if (!$unicode_cmap_offset) {
-				throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)', $this->filename));
-			}
-
-			$glyphToChar = [];
-			$charToGlyph = [];
-			$this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
-
-			// Map Unmapped glyphs - from $numGlyphs
-			$bctr = 0xE000;
-			for ($gid = 1; $gid < $numGlyphs; $gid++) {
-				if (!isset($glyphToChar[$gid])) {
-					while (isset($charToGlyph[$bctr])) {
-						$bctr++;
-					} // Avoid overwriting a glyph already mapped in PUA (6,400)
-					if ($bctr > 0xF8FF) {
-						throw new \Mpdf\Exception\FontException("Problem. Trying to repackage TF file; not enough space for unmapped glyphs");
-					}
-					$glyphToChar[$gid][] = $bctr;
-					$charToGlyph[$bctr] = $gid;
-					$bctr++;
-				}
-			}
-
-			// Sort CID2GID map into segments of contiguous codes
-			unset($charToGlyph[65535]);
-			unset($charToGlyph[0]);
-
-			ksort($charToGlyph);
-			$rangeid = 0;
-			$range = [];
-			$prevcid = -2;
-			$prevglidx = -1;
-
-			// for each character
-			foreach ($charToGlyph as $cid => $glidx) {
-				if ($cid == ($prevcid + 1) && $glidx == ($prevglidx + 1)) {
-					$range[$rangeid][] = $glidx;
-				} else {
-					// new range
-					$rangeid = $cid;
-					$range[$rangeid] = [];
-					$range[$rangeid][] = $glidx;
-				}
-				$prevcid = $cid;
-				$prevglidx = $glidx;
-			}
-
-			// CMap table
-			// cmap - Character to glyph mapping
-			$segCount = count($range) + 1; // + 1 Last segment has missing character 0xFFFF
-			$searchRange = 1;
-			$entrySelector = 0;
-
-			while ($searchRange * 2 <= $segCount) {
-				$searchRange *= 2;
-				++$entrySelector;
-			}
-
-			$searchRange *= 2;
-			$rangeShift = $segCount * 2 - $searchRange;
-			$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
-			$cmap = [0, 3, // Index : version, number of encoding subtables
-				0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
-				0, 28, // Encoding Subtable : offset (hi,lo)
-				0, 3, // Encoding Subtable : platform (UNI=0), encoding 3
-				0, 28, // Encoding Subtable : offset (hi,lo)
-				3, 1, // Encoding Subtable : platform (MS=3), encoding 1
-				0, 28, // Encoding Subtable : offset (hi,lo)
-				4, $length, 0, // Format 4 Mapping subtable: format, length, language
-				$segCount * 2,
-				$searchRange,
-				$entrySelector,
-				$rangeShift];
-
-			// endCode(s)
-			foreach ($range as $start => $subrange) {
-				$endCode = $start + (count($subrange) - 1);
-				$cmap[] = $endCode; // endCode(s)
-			}
-			$cmap[] = 0xFFFF; // endCode of last Segment
-			$cmap[] = 0; // reservedPad
-
-			// startCode(s)
-			foreach ($range as $start => $subrange) {
-				$cmap[] = $start; // startCode(s)
-			}
-			$cmap[] = 0xFFFF; // startCode of last Segment
-
-			// idDelta(s)
-			foreach ($range as $start => $subrange) {
-				$idDelta = -($start - $subrange[0]);
-				$cmap[] = $idDelta; // idDelta(s)
-			}
-
-			$cmap[] = 1; // idDelta of last Segment
-			// idRangeOffset(s)
-			foreach ($range as $subrange) {
-				$cmap[] = 0; // idRangeOffset[segCount] Offset in bytes to glyph indexArray, or 0
-			}
-
-			$cmap[] = 0; // idRangeOffset of last Segment
-			foreach ($range as $subrange) {
-				foreach ($subrange as $glidx) {
-					$cmap[] = $glidx;
-				}
-			}
-			$cmap[] = 0; // Mapping for last character
-			$cmapstr = '';
-			foreach ($cmap as $cm) {
-				$cmapstr .= pack('n', $cm);
-			}
-
-			$this->add('cmap', $cmapstr);
-		} else {
-			$this->add('cmap', $this->get_table('cmap'));
-		}
-
-		$this->reader->close();
-		$stm = '';
-		$this->endTTFile($stm);
-
-		return $stm;
-	}
 }

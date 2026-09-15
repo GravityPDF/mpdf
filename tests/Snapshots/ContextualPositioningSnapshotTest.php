@@ -11,7 +11,9 @@ namespace Snapshots;
  * same without the chain: Noto Sans Gurmukhi UI's `dist` nudges the AU matra + addak ligature where a TTA and
  * an EE matra follow it. Type 7 Format 3 matches each position against a Coverage table instead, and no font
  * of the 701 surveyed for GravityPDF/mpdf#80 has one, so its fixture is written by hand - a plain context
- * covering A then B, shifting the B 400 units left.
+ * covering A then B, shifting the B 400 units left. Type 7 Format 2 matches classes, and no font has one of
+ * those either: its fixture puts A in class 1 and B in class 2, leaving C in class 0, and shifts the second
+ * glyph by 400 or by 250 depending on which of the two the rule matched.
  *
  * Positioning moves glyphs rather than replacing them, so what changes here is the offsets between the
  * operands of each TJ, not the operands themselves.
@@ -52,6 +54,10 @@ class ContextualPositioningSnapshotTest extends Snapshot
 					'R' => 'NotoSans-GPOS73-Synthetic.ttf',
 					'useOTL' => 0xFF,
 				],
+				'context72' => [
+					'R' => 'NotoSans-GPOS72-Synthetic.ttf',
+					'useOTL' => 0xFF,
+				],
 			],
 			'default_font' => 'takrigpos',
 			'default_font_size' => 30,
@@ -68,5 +74,9 @@ class ContextualPositioningSnapshotTest extends Snapshot
 
 		// Type 7 Format 3: both Bs move, and neither the B after a C nor the B before an A does
 		$this->mpdf->WriteHTML('<div style="font-family: context73">ABAB CB BA</div>');
+
+		// Type 7 Format 2: the B moves by 400 and the C by 250, and the second A - which is in a class the
+		// rules name, so class 0 does not reach it - by nothing
+		$this->mpdf->WriteHTML('<div style="font-family: context72">AB AC AA</div>');
 	}
 }
