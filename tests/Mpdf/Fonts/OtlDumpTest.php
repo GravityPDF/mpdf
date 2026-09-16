@@ -264,6 +264,52 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame([], $this->substLookupRecords(['SubstCount' => 0]));
 	}
 
+	/**
+	 * The report names the classes a lookup's flags skip. Noto Sans Takri's GDEF defines mark glyph sets
+	 * 0 and 1 and a mark attachment class 1, which is enough to name each of the five.
+	 */
+	public function testTheClassesALookupSkipsAreNamed()
+	{
+		$dump = $this->dumper();
+		$dump->getMetrics(self::FONT_DIR . '/NotoSansTakri-GSUB53-Subset.ttf', 'takri', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('', $this->skippedClassNames($dump, 0, ''));
+		$this->assertSame('Mark Glyphs ', $this->skippedClassNames($dump, 0x0008, ''));
+		$this->assertSame('Marks outside Mark Glyph Set[1] ', $this->skippedClassNames($dump, 0x0010, 1));
+		$this->assertSame('MarkAttachmentType[1] |Ligature Glyphs |Base Glyphs ', $this->skippedClassNames($dump, 0x0106, ''));
+
+		try {
+			$this->skippedClassNames($dump, 0x0010, 9);
+			$this->fail('Naming a mark glyph set GDEF does not define should have thrown');
+		} catch (\Mpdf\Exception\FontException $e) {
+			$this->assertSame('Font "takri" uses mark filtering set 9, which GDEF does not define', $e->getMessage());
+		}
+	}
+
+	/**
+	 * The dump reports a lookup's rules and never matches them, so it has no pattern of its own to
+	 * build: asked for one, it builds the parser's, capture groups and all.
+	 */
+	public function testTheDumpBuildsTheParsersMatchPatterns()
+	{
+		$dump = $this->dumper();
+		$dump->getMetrics(self::FONT_DIR . '/NotoSansTakri-GSUB53-Subset.ttf', 'takri', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('(0061|0062)() (0063)', $dump->_makeGSUBinputMatch(['0061|0062', '0063'], '()'));
+		$this->assertSame('(0063)() (0061)', $dump->_makeGSUBcontextInputMatch(['0061|0062', '0063'], '()', ['0063', '0061'], 0));
+		$this->assertSame('(0062)() (0061)() ', $dump->_makeGSUBbacktrackMatch(['0061', '0062'], '()'));
+		$this->assertSame('() (0061)() (0062)', $dump->_makeGSUBlookaheadMatch(['0061', '0062'], '()'));
+		$this->assertSame('()', $dump->_getGSUBignoreString(0, ''));
+	}
+
+	private function skippedClassNames(OtlDump $dump, $flag, $markFilteringSet)
+	{
+		$reflected = new \ReflectionMethod(OtlDump::class, 'skippedClassNames');
+		$reflected->setAccessible(true);
+
+		return $reflected->invoke($dump, $flag, $markFilteringSet);
+	}
+
 	private function substLookupRecords(array $rule)
 	{
 		$reflected = new \ReflectionMethod(OtlDump::class, 'substLookupRecords');
