@@ -1135,8 +1135,10 @@ class FontSubsetter
 	/**
 	 * Total the points and contours one glyph costs, and how deeply it nests, for maxp's maxima.
 	 *
-	 * Reads what getGlyphs() recorded rather than the font again, and is called only when
-	 * _RECALC_PROFILE asks for the profile to be worked out from the subset.
+	 * Reads what recalculatedProfile() recorded rather than the font again, and is called only when
+	 * _RECALC_PROFILE asks for the profile to be worked out from the subset. Only a compound glyph
+	 * records compGlyphs and only a simple glyph with an outline records nContours; an empty glyph
+	 * reached as a component records nothing at all.
 	 *
 	 * @param int $originalGlyphIdx The glyph to total, by its id in the original font
 	 * @param int $maxdepth         The deepest composition seen, raised
@@ -1149,11 +1151,11 @@ class FontSubsetter
 		$depth++;
 		$maxdepth = max($maxdepth, $depth);
 
-		if (count($this->glyphdata[$originalGlyphIdx]['compGlyphs'])) {
+		if (!empty($this->glyphdata[$originalGlyphIdx]['compGlyphs'])) {
 			foreach ($this->glyphdata[$originalGlyphIdx]['compGlyphs'] as $glyphIdx) {
 				$this->getGlyphData($glyphIdx, $maxdepth, $depth, $points, $contours);
 			}
-		} elseif (($this->glyphdata[$originalGlyphIdx]['nContours'] > 0) && $depth > 0) { // simple
+		} elseif ($depth > 0 && !empty($this->glyphdata[$originalGlyphIdx]['nContours'])) {
 			$contours += $this->glyphdata[$originalGlyphIdx]['nContours'];
 			$points += $this->glyphdata[$originalGlyphIdx]['nPoints'];
 		}
