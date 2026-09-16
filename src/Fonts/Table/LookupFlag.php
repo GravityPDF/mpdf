@@ -61,13 +61,11 @@ class LookupFlag
 	/**
 	 * Which classes of glyph a lookup flag says to skip.
 	 *
-	 * At most one of the three mark classes, since each is a subset of the marks and they would
-	 * otherwise have to be reconciled:
-	 *
-	 * - IgnoreMarks gives way to a mark attachment class. The spec reads the bits as independent, which
-	 *   skips every mark, but mPDF has always let the class win (see #175); no font in tests/data/ttf
-	 *   sets both.
-	 * - A mark filtering set wins over a mark attachment class, as HarfBuzz has it.
+	 * At most one of the three mark classes, since each is a subset of the marks. The spec settles
+	 * which: "If a mark filtering set is specified, this supersedes any mark attachment class
+	 * indication in the lookup flag. If the IGNORE_MARKS bit is set, this supersedes any mark
+	 * filtering set or mark attachment class indications." HarfBuzz's check_glyph_property() reads
+	 * them in that order too.
 	 *
 	 * @param int $flag The lookup's LookupFlag
 	 *
@@ -77,7 +75,7 @@ class LookupFlag
 	{
 		$skipped = [];
 
-		if (($flag & self::IGNORE_MARKS) && !($flag & self::MARK_ATTACHMENT_CLASS_FILTER)) {
+		if ($flag & self::IGNORE_MARKS) {
 			$skipped[] = self::MARKS;
 		} elseif ($flag & self::USE_MARK_FILTERING_SET) {
 			$skipped[] = self::MARKS_OUTSIDE_FILTERING_SET;
