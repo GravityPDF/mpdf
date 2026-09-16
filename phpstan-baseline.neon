@@ -916,12 +916,6 @@ parameters:
 			path: src/Fonts/FontSubsetter.php
 
 		-
-			message: '#^Variable \$glyphData might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Fonts/FontSubsetter.php
-
-		-
 			message: '#^Variable \$kk might not be defined\.$#'
 			identifier: variable.undefined
 			count: 4

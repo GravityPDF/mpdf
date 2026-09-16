@@ -139,6 +139,35 @@ class FontSubsetter
 	}
 
 	/**
+	 * What both subsetters read from the font's headers before anything else.
+	 *
+	 * @return int[] head's indexToLocFormat, hhea's numberOfHMetrics and maxp's numGlyphs
+	 */
+	private function readHeaders()
+	{
+		$this->seekTable('head');
+		$this->reader->skip(50);
+		$indexToLocFormat = $this->reader->readUInt16();
+
+		$this->seekTable('hhea');
+		$this->reader->skip(34);
+		$numberOfHMetrics = $this->reader->readUInt16();
+
+		return [$indexToLocFormat, $numberOfHMetrics, $this->readNumGlyphs()];
+	}
+
+	/**
+	 * @return int maxp's glyph count
+	 */
+	private function readNumGlyphs()
+	{
+		$this->seekTable('maxp');
+		$this->reader->skip(4);
+
+		return $this->reader->readUInt16();
+	}
+
+	/**
 	 * Where the font's Unicode cmap subtable starts.
 	 *
 	 * A cmap holds one subtable per platform and encoding, and the one wanted is format 4 - segmented
@@ -202,23 +231,7 @@ class FontSubsetter
 	public function makeSubset($file, array $subset, $TTCfontID = 0, $debug = false, $useOTL = false)
 	{
 		$this->open($file, $TTCfontID, $debug);
-
-		// head - Font header table
-		$this->seekTable('head');
-		$this->reader->skip(50);
-		$indexToLocFormat = $this->reader->readUInt16();
-		$glyphDataFormat = $this->reader->readUInt16();
-
-		// hhea - Horizontal header table
-		$this->seekTable('hhea');
-		$this->reader->skip(32);
-		$metricDataFormat = $this->reader->readUInt16();
-		$orignHmetrics = $numberOfHMetrics = $this->reader->readUInt16();
-
-		// maxp - Maximum profile table
-		$this->seekTable('maxp');
-		$this->reader->skip(4);
-		$numGlyphs = $this->reader->readUInt16();
+		list($indexToLocFormat, $numberOfHMetrics, $numGlyphs) = $this->readHeaders();
 
 		// cmap - Character to glyph index mapping table
 		$unicode_cmap_offset = $this->seekUnicodeCmap();
@@ -288,222 +301,22 @@ class FontSubsetter
 			$this->getGlyphs($originalGlyphIdx, $start, $glyphSet, $subsetglyphs);
 		}
 
-		$numGlyphs = $numberOfHMetrics = count($subsetglyphs);
+		$glyphMap = array_keys($subsetglyphs);
 
-		// name - table copied from the original
 		// MS spec says that "Platform and encoding ID's in the name table should be consistent with those in the cmap table.
 		// If they are not, the font will not load in Windows"
 		// Doesn't seem to be a problem?
 		$this->writer->add('name', $this->get_table('name'));
+		$this->copyTables(['cvt ', 'fpgm', 'prep', 'gasp']);
+		$this->addPost();
 
-		// tables copied from the original
-		$tags = ['cvt ', 'fpgm', 'prep', 'gasp'];
-		foreach ($tags as $tag) {
-			if ($this->font->hasTable($tag)) {
-				$this->writer->add($tag, $this->get_table($tag));
-			}
-		}
-
-		// post - PostScript
-		if ($this->font->hasTable('post')) {
-			$opost = $this->get_table('post');
-			$post = "\x00\x03\x00\x00" . substr($opost, 4, 12) . "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-			$this->writer->add('post', $post);
-		}
-
-		// cmap - Character to glyph mapping
 		ksort($codeToGlyph);
 		unset($codeToGlyph[0]);
 
 		$this->writer->add('cmap', $this->unicodeCmap($codeToGlyph));
 
-		// glyf - Glyph data
-		list($glyfOffset, $glyfLength) = $this->font->getTablePosition('glyf');
-		if ($glyfLength < $this->font->getMaxStrLenRead()) {
-			$glyphData = $this->get_table('glyf');
-		}
-
-		$offsets = [];
-		$glyf = '';
-		$pos = 0;
-		$hmtxstr = '';
-		$xMinT = 0;
-		$yMinT = 0;
-		$xMaxT = 0;
-		$yMaxT = 0;
-		$advanceWidthMax = 0;
-		$minLeftSideBearing = 0;
-		$minRightSideBearing = 0;
-		$xMaxExtent = 0;
-		$maxPoints = 0; // points in non-compound glyph
-		$maxContours = 0; // contours in non-compound glyph
-		$maxComponentPoints = 0; // points in compound glyph
-		$maxComponentContours = 0; // contours in compound glyph
-		$maxComponentElements = 0; // number of glyphs referenced at top level
-		$maxComponentDepth = 0; // levels of recursion, set to 0 if font has only simple glyphs
-		$this->glyphdata = [];
-
-		foreach ($subsetglyphs as $originalGlyphIdx => $uni) {
-			// hmtx - Horizontal Metrics
-			$hm = $this->getHMetric($orignHmetrics, $originalGlyphIdx);
-			$hmtxstr .= $hm;
-
-			$offsets[] = $pos;
-			$glyphPos = $this->glyphPos[$originalGlyphIdx];
-			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
-			if ($glyfLength < $this->font->getMaxStrLenRead()) {
-				$data = substr($glyphData, $glyphPos, $glyphLen);
-			} else {
-				if ($glyphLen > 0) {
-					$data = $this->reader->bytesAt($glyfOffset + $glyphPos, $glyphLen);
-				} else {
-					$data = '';
-				}
-			}
-
-			if ($glyphLen > 0) {
-				if (_RECALC_PROFILE) {
-					$xMin = FontReader::int16(substr($data, 2, 2));
-					$yMin = FontReader::int16(substr($data, 4, 2));
-					$xMax = FontReader::int16(substr($data, 6, 2));
-					$yMax = FontReader::int16(substr($data, 8, 2));
-					$xMinT = min($xMinT, $xMin);
-					$yMinT = min($yMinT, $yMin);
-					$xMaxT = max($xMaxT, $xMax);
-					$yMaxT = max($yMaxT, $yMax);
-					$aw = FontReader::int16(substr($hm, 0, 2));
-					$lsb = FontReader::int16(substr($hm, 2, 2));
-					$advanceWidthMax = max($advanceWidthMax, $aw);
-					$minLeftSideBearing = min($minLeftSideBearing, $lsb);
-					$minRightSideBearing = min($minRightSideBearing, ($aw - $lsb - ($xMax - $xMin)));
-					$xMaxExtent = max($xMaxExtent, ($lsb + ($xMax - $xMin)));
-				}
-				$up = unpack("n", substr($data, 0, 2));
-			}
-			if ($glyphLen > 2 && ($up[1] & (1 << 15))) { // If number of contours <= -1 i.e. composiste glyph
-				$pos_in_glyph = 10;
-				$flags = GlyphOperator::MORE;
-				$nComponentElements = 0;
-				while ($flags & GlyphOperator::MORE) {
-					$nComponentElements += 1; // number of glyphs referenced at top level
-					$up = unpack("n", substr($data, $pos_in_glyph, 2));
-					$flags = $up[1];
-					$up = unpack("n", substr($data, $pos_in_glyph + 2, 2));
-					$glyphIdx = $up[1];
-					$this->glyphdata[$originalGlyphIdx]['compGlyphs'][] = $glyphIdx;
-					$data = TableWriter::setUInt16($data, $pos_in_glyph + 2, $glyphSet[$glyphIdx]);
-					$pos_in_glyph += 4;
-					if ($flags & GlyphOperator::WORDS) {
-						$pos_in_glyph += 4;
-					} else {
-						$pos_in_glyph += 2;
-					}
-					if ($flags & GlyphOperator::SCALE) {
-						$pos_in_glyph += 2;
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$pos_in_glyph += 4;
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$pos_in_glyph += 8;
-					}
-				}
-				$maxComponentElements = max($maxComponentElements, $nComponentElements);
-
-			} // Simple Glyph
-			elseif (_RECALC_PROFILE && $glyphLen > 2 && $up[1] < (1 << 15) && $up[1] > 0) {  // Number of contours > 0 simple glyph
-				$nContours = $up[1];
-				$this->glyphdata[$originalGlyphIdx]['nContours'] = $nContours;
-				$maxContours = max($maxContours, $nContours);
-
-				// Count number of points in simple glyph
-				$pos_in_glyph = 10 + ($nContours * 2) - 2; // Last endContourPoint
-				$up = unpack("n", substr($data, $pos_in_glyph, 2));
-				$points = $up[1] + 1;
-				$this->glyphdata[$originalGlyphIdx]['nPoints'] = $points;
-				$maxPoints = max($maxPoints, $points);
-			}
-
-			$glyf .= $data;
-			$pos += $glyphLen;
-			if ($pos % 4 != 0) {
-				$padding = 4 - ($pos % 4);
-				$glyf .= str_repeat("\0", $padding);
-				$pos += $padding;
-			}
-		}
-
-		if (_RECALC_PROFILE) {
-			foreach ($this->glyphdata as $originalGlyphIdx => $val) {
-				$maxdepth = $depth = -1;
-				$points = 0;
-				$contours = 0;
-				$this->getGlyphData($originalGlyphIdx, $maxdepth, $depth, $points, $contours);
-				$maxComponentDepth = max($maxComponentDepth, $maxdepth);
-				$maxComponentPoints = max($maxComponentPoints, $points);
-				$maxComponentContours = max($maxComponentContours, $contours);
-			}
-		}
-
-		$offsets[] = $pos;
-		$this->writer->add('glyf', $glyf);
-
-		// hmtx - Horizontal Metrics
-		$this->writer->add('hmtx', $hmtxstr);
-
-		// loca - Index to location
-		$locastr = '';
-		if ((($pos + 1) >> 1) > 0xFFFF) {
-			$indexToLocFormat = 1; // long format
-			foreach ($offsets as $offset) {
-				$locastr .= TableWriter::uint32($offset);
-			}
-		} else {
-			$indexToLocFormat = 0; // short format
-			foreach ($offsets as $offset) {
-				$locastr .= TableWriter::uint16($offset / 2);
-			}
-		}
-		$this->writer->add('loca', $locastr);
-
-		// head - Font header
-		$head = $this->get_table('head');
-		$head = TableWriter::setUInt16($head, 50, $indexToLocFormat);
-
-		if (_RECALC_PROFILE) {
-			$head = TableWriter::setInt16($head, 36, $xMinT); // for all glyph bounding boxes
-			$head = TableWriter::setInt16($head, 38, $yMinT); // for all glyph bounding boxes
-			$head = TableWriter::setInt16($head, 40, $xMaxT); // for all glyph bounding boxes
-			$head = TableWriter::setInt16($head, 42, $yMaxT); // for all glyph bounding boxes
-			// Unset flags bit 4, which says the font has hdmx and LTSH tables, because this does not.
-			// Written through ord(): the & was applied to the one-character string, which is a TypeError
-			// from PHP 8 - this whole branch is off unless the host defines _RECALC_PROFILE.
-			$head[17] = chr(ord($head[17]) & ~(1 << 4));
-		}
-
-		$this->writer->add('head', $head);
-
-		// hhea - Horizontal Header
-		$hhea = $this->get_table('hhea');
-		$hhea = TableWriter::setUInt16($hhea, 34, $numberOfHMetrics);
-		if (_RECALC_PROFILE) {
-			$hhea = TableWriter::setUInt16($hhea, 10, $advanceWidthMax);
-			$hhea = TableWriter::setInt16($hhea, 12, $minLeftSideBearing);
-			$hhea = TableWriter::setInt16($hhea, 14, $minRightSideBearing);
-			$hhea = TableWriter::setInt16($hhea, 16, $xMaxExtent);
-		}
-		$this->writer->add('hhea', $hhea);
-
-		// maxp - Maximum Profile
-		$maxp = $this->get_table('maxp');
-		$maxp = TableWriter::setUInt16($maxp, 4, $numGlyphs);
-		if (_RECALC_PROFILE) {
-			$maxp = TableWriter::setUInt16($maxp, 6, $maxPoints); // points in non-compound glyph
-			$maxp = TableWriter::setUInt16($maxp, 8, $maxContours); // contours in non-compound glyph
-			$maxp = TableWriter::setUInt16($maxp, 10, $maxComponentPoints); // points in compound glyph
-			$maxp = TableWriter::setUInt16($maxp, 12, $maxComponentContours); // contours in compound glyph
-			$maxp = TableWriter::setUInt16($maxp, 28, $maxComponentElements); // number of glyphs referenced at top level
-			$maxp = TableWriter::setUInt16($maxp, 30, $maxComponentDepth); // levels of recursion, set to 0 if font has only simple glyphs
-		}
-		$this->writer->add('maxp', $maxp);
+		$profile = _RECALC_PROFILE ? $this->recalculatedProfile($glyphMap, $numberOfHMetrics) : null;
+		$this->addGlyphTables($glyphMap, $glyphSet, $numberOfHMetrics, $profile);
 
 		// OS/2 - OS/2
 		if ($this->font->hasTable('OS/2')) {
@@ -566,23 +379,7 @@ class FontSubsetter
 	public function makeSubsetSIP($file, array $subset, $TTCfontID = 0, $debug = false, $useOTL = 0)
 	{
 		$this->open($file, $TTCfontID, $debug);
-
-		// head - Font header table
-		$this->seekTable('head');
-		$this->reader->skip(50);
-		$indexToLocFormat = $this->reader->readUInt16();
-		$glyphDataFormat = $this->reader->readUInt16();
-
-		// hhea - Horizontal header table
-		$this->seekTable('hhea');
-		$this->reader->skip(32);
-		$metricDataFormat = $this->reader->readUInt16();
-		$orignHmetrics = $numberOfHMetrics = $this->reader->readUInt16();
-
-		// maxp - Maximum profile table
-		$this->seekTable('maxp');
-		$this->reader->skip(4);
-		$numGlyphs = $this->reader->readUInt16();
+		list($indexToLocFormat, $numberOfHMetrics, $numGlyphs) = $this->readHeaders();
 
 		// cmap - Character to glyph index mapping table
 		$cmap_offset = $this->seekTable('cmap');
@@ -747,9 +544,6 @@ class FontSubsetter
 			}
 		}
 
-		$numGlyphs = $n = count($glyphMap);
-		$numberOfHMetrics = $n;
-
 		// MS spec says that "Platform and encoding ID's in the name table should be consistent with those in the cmap table.
 		// If they are not, the font will not load in Windows"
 		// Doesn't seem to be a problem?
@@ -795,31 +589,8 @@ class FontSubsetter
 			$this->writer->add('OS/2', $os2);
 		}
 
-		//tables copied from the original
-		$tags = ['cvt ', 'fpgm', 'prep', 'gasp'];
-		foreach ($tags as $tag) {  // 1.02
-			if ($this->font->hasTable($tag)) {
-				$this->writer->add($tag, $this->get_table($tag));
-			}
-		}
-
-		// post - PostScript. Written only where the font has one to rewrite, as makeSubset does: a
-		// font without one used to get a post table built out of an undefined variable.
-		if ($this->font->hasTable('post')) {
-			$opost = $this->get_table('post');
-			$post = "\x00\x03\x00\x00" . substr($opost, 4, 12) . "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-			$this->writer->add('post', $post);
-		}
-
-		// hhea - Horizontal Header
-		$hhea = $this->get_table('hhea');
-		$hhea = TableWriter::setUInt16($hhea, 34, $numberOfHMetrics);
-		$this->writer->add('hhea', $hhea);
-
-		// maxp - Maximum Profile
-		$maxp = $this->get_table('maxp');
-		$maxp = TableWriter::setUInt16($maxp, 4, $numGlyphs);
-		$this->writer->add('maxp', $maxp);
+		$this->copyTables(['cvt ', 'fpgm', 'prep', 'gasp']);
+		$this->addPost();
 
 		// CMap table Formats [1,0,]6 and [3,0,]4
 		$cidToGlyph = [];
@@ -848,107 +619,7 @@ class FontSubsetter
 
 		$this->writer->add('cmap', $cmapstr);
 
-		// hmtx - Horizontal Metrics
-		$hmtxstr = '';
-		for ($n = 0; $n < $numGlyphs; $n++) {
-			$originalGlyphIdx = $glyphMap[$n];
-			$hm = $this->getHMetric($orignHmetrics, $originalGlyphIdx);
-			$hmtxstr .= $hm;
-		}
-		$this->writer->add('hmtx', $hmtxstr);
-
-		// glyf - Glyph data
-		list($glyfOffset, $glyfLength) = $this->font->getTablePosition('glyf');
-		if ($glyfLength < $this->font->getMaxStrLenRead()) {
-			$glyphData = $this->get_table('glyf');
-		}
-
-		$offsets = [];
-		$glyf = '';
-		$pos = 0;
-		for ($n = 0; $n < $numGlyphs; $n++) {
-
-			$offsets[] = $pos;
-			$originalGlyphIdx = $glyphMap[$n];
-			$glyphPos = $this->glyphPos[$originalGlyphIdx];
-			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
-
-			if ($glyfLength < $this->font->getMaxStrLenRead()) {
-				$data = substr($glyphData, $glyphPos, $glyphLen);
-			} else {
-				if ($glyphLen > 0) {
-					$data = $this->reader->bytesAt($glyfOffset + $glyphPos, $glyphLen);
-				} else {
-					$data = '';
-				}
-			}
-
-			if ($glyphLen > 0) {
-				$up = unpack('n', substr($data, 0, 2));
-			}
-
-			if ($glyphLen > 2 && ($up[1] & (1 << 15))) {
-
-				$pos_in_glyph = 10;
-				$flags = GlyphOperator::MORE;
-
-				while ($flags & GlyphOperator::MORE) {
-					$up = unpack('n', substr($data, $pos_in_glyph, 2));
-					$flags = $up[1];
-					$up = unpack('n', substr($data, $pos_in_glyph + 2, 2));
-					$glyphIdx = $up[1];
-					$data = TableWriter::setUInt16($data, $pos_in_glyph + 2, $glyphSet[$glyphIdx]);
-					$pos_in_glyph += 4;
-
-					if ($flags & GlyphOperator::WORDS) {
-						$pos_in_glyph += 4;
-					} else {
-						$pos_in_glyph += 2;
-					}
-
-					if ($flags & GlyphOperator::SCALE) {
-						$pos_in_glyph += 2;
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$pos_in_glyph += 4;
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$pos_in_glyph += 8;
-					}
-				}
-			}
-
-			$glyf .= $data;
-			$pos += $glyphLen;
-
-			if ($pos % 4 != 0) {
-				$padding = 4 - ($pos % 4);
-				$glyf .= str_repeat("\0", $padding);
-				$pos += $padding;
-			}
-		}
-
-		$offsets[] = $pos;
-		$this->writer->add('glyf', $glyf);
-
-		// loca - Index to location
-		$locastr = '';
-		if ((($pos + 1) >> 1) > 0xFFFF) {
-			$indexToLocFormat = 1;        // long format
-			foreach ($offsets as $offset) {
-				$locastr .= TableWriter::uint32($offset);
-			}
-		} else {
-			$indexToLocFormat = 0;        // short format
-			foreach ($offsets as $offset) {
-				$locastr .= TableWriter::uint16($offset / 2);
-			}
-		}
-
-		$this->writer->add('loca', $locastr);
-
-		// head - Font header
-		$head = $this->get_table('head');
-		$head = TableWriter::setUInt16($head, 50, $indexToLocFormat);
-		$this->writer->add('head', $head);
+		$this->addGlyphTables($glyphMap, $glyphSet, $numberOfHMetrics, null);
 
 		$this->reader->close();
 
@@ -975,20 +646,10 @@ class FontSubsetter
 	public function repackageTTF($file, $TTCfontID = 0, $debug = false, $useOTL = false)
 	{
 		$this->open($file, $TTCfontID, $debug);
-		$tags = ['OS/2', 'glyf', 'head', 'hhea', 'hmtx', 'loca', 'maxp', 'name', 'post', 'cvt ', 'fpgm', 'gasp', 'prep'];
-
-		foreach ($tags as $tag) {
-			if ($this->font->hasTable($tag)) {
-				$this->writer->add($tag, $this->get_table($tag));
-			}
-		}
+		$this->copyTables(['OS/2', 'glyf', 'head', 'hhea', 'hmtx', 'loca', 'maxp', 'name', 'post', 'cvt ', 'fpgm', 'gasp', 'prep']);
 
 		if ($useOTL) {
-
-			// maxp - Maximum profile table
-			$this->seekTable('maxp');
-			$this->reader->skip(4);
-			$numGlyphs = $this->reader->readUInt16();
+			$numGlyphs = $this->readNumGlyphs();
 
 			// cmap - Character to glyph index mapping table
 			$unicode_cmap_offset = $this->seekUnicodeCmap();
@@ -1107,6 +768,299 @@ class FontSubsetter
 		}
 
 		return TableWriter::setUInt16($subtable, 2, $length);
+	}
+
+	/**
+	 * Copy tables the program keeps as the font has them, those of them the font has.
+	 *
+	 * @param string[] $tags
+	 */
+	private function copyTables(array $tags)
+	{
+		foreach ($tags as $tag) {
+			if ($this->font->hasTable($tag)) {
+				$this->writer->add($tag, $this->get_table($tag));
+			}
+		}
+	}
+
+	/**
+	 * A version 3 post table, which names no glyphs, where the font has a post table to take the
+	 * italic angle, underline and fixed pitch from.
+	 */
+	private function addPost()
+	{
+		if (!$this->font->hasTable('post')) {
+			return;
+		}
+
+		// version, then italicAngle through isFixedPitch as the font has them, then the four memory usage fields zeroed
+		$this->writer->add('post', "\x00\x03\x00\x00" . substr($this->get_table('post'), 4, 12) . str_repeat("\x00", 16));
+	}
+
+	/**
+	 * Write the tables that hold the glyphs or count them - glyf, loca, hmtx, head, hhea and maxp - for
+	 * the glyphs a program keeps.
+	 *
+	 * @param int[]      $glyphMap         Original glyph id by id in the program, the order they are written in
+	 * @param int[]      $glyphSet         Id in the program by original glyph id, to renumber the components
+	 *                                     of a compound glyph by
+	 * @param int        $numberOfHMetrics hhea's count of full metric records in the original font
+	 * @param array|null $profile          recalculatedProfile() of the same glyphs, to write over the bounds
+	 *                                     and maxima the font states; null to keep the font's own
+	 */
+	private function addGlyphTables(array $glyphMap, array $glyphSet, $numberOfHMetrics, $profile)
+	{
+		$numGlyphs = count($glyphMap);
+
+		$hmtx = '';
+		foreach ($glyphMap as $originalGlyphIdx) {
+			$hmtx .= $this->getHMetric($numberOfHMetrics, $originalGlyphIdx);
+		}
+		$this->writer->add('hmtx', $hmtx);
+
+		list($glyf, $offsets) = $this->glyfTable($glyphMap, $glyphSet);
+		$this->writer->add('glyf', $glyf);
+
+		// The short format stores each offset halved, so it reaches no further than 0x1FFFE
+		$end = end($offsets);
+		$loca = '';
+		if ((($end + 1) >> 1) > 0xFFFF) {
+			$indexToLocFormat = 1;
+			foreach ($offsets as $offset) {
+				$loca .= TableWriter::uint32($offset);
+			}
+		} else {
+			$indexToLocFormat = 0;
+			foreach ($offsets as $offset) {
+				$loca .= TableWriter::uint16($offset / 2);
+			}
+		}
+		$this->writer->add('loca', $loca);
+
+		$head = TableWriter::setUInt16($this->get_table('head'), 50, $indexToLocFormat);
+		$hhea = TableWriter::setUInt16($this->get_table('hhea'), 34, $numGlyphs); // numberOfHMetrics
+		$maxp = TableWriter::setUInt16($this->get_table('maxp'), 4, $numGlyphs);
+
+		if ($profile !== null) {
+			$head = TableWriter::setInt16($head, 36, $profile['xMin']);
+			$head = TableWriter::setInt16($head, 38, $profile['yMin']);
+			$head = TableWriter::setInt16($head, 40, $profile['xMax']);
+			$head = TableWriter::setInt16($head, 42, $profile['yMax']);
+			// Unset flags bit 4, which says the font has hdmx and LTSH tables, because this does not.
+			// Written through ord(): the & was applied to the one-character string, which is a TypeError
+			// from PHP 8 - this whole branch is off unless the host defines _RECALC_PROFILE.
+			$head[17] = chr(ord($head[17]) & ~(1 << 4));
+
+			$hhea = TableWriter::setUInt16($hhea, 10, $profile['advanceWidthMax']);
+			$hhea = TableWriter::setInt16($hhea, 12, $profile['minLeftSideBearing']);
+			$hhea = TableWriter::setInt16($hhea, 14, $profile['minRightSideBearing']);
+			$hhea = TableWriter::setInt16($hhea, 16, $profile['xMaxExtent']);
+
+			$maxp = TableWriter::setUInt16($maxp, 6, $profile['maxPoints']);
+			$maxp = TableWriter::setUInt16($maxp, 8, $profile['maxContours']);
+			$maxp = TableWriter::setUInt16($maxp, 10, $profile['maxComponentPoints']);
+			$maxp = TableWriter::setUInt16($maxp, 12, $profile['maxComponentContours']);
+			$maxp = TableWriter::setUInt16($maxp, 28, $profile['maxComponentElements']);
+			$maxp = TableWriter::setUInt16($maxp, 30, $profile['maxComponentDepth']);
+		}
+
+		$this->writer->add('head', $head);
+		$this->writer->add('hhea', $hhea);
+		$this->writer->add('maxp', $maxp);
+	}
+
+	/**
+	 * The glyf table for the glyphs a program keeps, each padded to a multiple of four bytes.
+	 *
+	 * @param int[] $glyphMap Original glyph id by id in the program
+	 * @param int[] $glyphSet Id in the program by original glyph id
+	 *
+	 * @return array [$glyf, $offsets]: the table, and where each glyph starts in it with one past the
+	 *               end appended, which is what loca holds
+	 */
+	private function glyfTable(array $glyphMap, array $glyphSet)
+	{
+		list($glyfOffset, $glyfLength) = $this->font->getTablePosition('glyf');
+		$inMemory = $glyfLength < $this->font->getMaxStrLenRead();
+
+		if ($inMemory) {
+			$glyphData = $this->get_table('glyf');
+		}
+
+		$offsets = [];
+		$glyf = '';
+		$pos = 0;
+
+		foreach ($glyphMap as $originalGlyphIdx) {
+			$offsets[] = $pos;
+			$glyphPos = $this->glyphPos[$originalGlyphIdx];
+			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
+
+			if ($inMemory) {
+				$data = substr($glyphData, $glyphPos, $glyphLen);
+			} elseif ($glyphLen > 0) {
+				$data = $this->reader->bytesAt($glyfOffset + $glyphPos, $glyphLen);
+			} else {
+				$data = '';
+			}
+
+			if ($glyphLen > 0) {
+				$up = unpack('n', substr($data, 0, 2));
+			}
+
+			// A compound glyph, whose negative numberOfContours is followed by the ids of the glyphs it
+			// is built from, which the program has renumbered
+			if ($glyphLen > 2 && ($up[1] & (1 << 15))) {
+				$pos_in_glyph = 10;
+				$flags = GlyphOperator::MORE;
+
+				while ($flags & GlyphOperator::MORE) {
+					$up = unpack('n', substr($data, $pos_in_glyph, 2));
+					$flags = $up[1];
+					$up = unpack('n', substr($data, $pos_in_glyph + 2, 2));
+					$glyphIdx = $up[1];
+					$data = TableWriter::setUInt16($data, $pos_in_glyph + 2, $glyphSet[$glyphIdx]);
+					$pos_in_glyph += 4;
+
+					if ($flags & GlyphOperator::WORDS) {
+						$pos_in_glyph += 4;
+					} else {
+						$pos_in_glyph += 2;
+					}
+
+					if ($flags & GlyphOperator::SCALE) {
+						$pos_in_glyph += 2;
+					} elseif ($flags & GlyphOperator::XYSCALE) {
+						$pos_in_glyph += 4;
+					} elseif ($flags & GlyphOperator::TWOBYTWO) {
+						$pos_in_glyph += 8;
+					}
+				}
+			}
+
+			$glyf .= $data;
+			$pos += $glyphLen;
+
+			if ($pos % 4 != 0) {
+				$padding = 4 - ($pos % 4);
+				$glyf .= str_repeat("\0", $padding);
+				$pos += $padding;
+			}
+		}
+
+		$offsets[] = $pos;
+
+		return [$glyf, $offsets];
+	}
+
+	/**
+	 * Work out, from the glyphs a subset keeps, the bounds and maxima head, hhea and maxp state of the
+	 * whole font.
+	 *
+	 * @param int[] $glyphMap         Original glyph id by id in the subset
+	 * @param int   $numberOfHMetrics hhea's count of full metric records in the original font
+	 *
+	 * @return array What addGlyphTables() writes, by field name
+	 */
+	private function recalculatedProfile(array $glyphMap, $numberOfHMetrics)
+	{
+		$profile = [
+			'xMin' => 0,
+			'yMin' => 0,
+			'xMax' => 0,
+			'yMax' => 0,
+			'advanceWidthMax' => 0,
+			'minLeftSideBearing' => 0,
+			'minRightSideBearing' => 0,
+			'xMaxExtent' => 0,
+			'maxPoints' => 0, // points in a simple glyph
+			'maxContours' => 0, // contours in a simple glyph
+			'maxComponentPoints' => 0, // points in a compound glyph
+			'maxComponentContours' => 0, // contours in a compound glyph
+			'maxComponentElements' => 0, // glyphs a compound glyph references at its top level
+			'maxComponentDepth' => 0, // levels of recursion, 0 if the font has only simple glyphs
+		];
+
+		list($glyfOffset) = $this->font->getTablePosition('glyf');
+		$this->glyphdata = [];
+
+		foreach ($glyphMap as $originalGlyphIdx) {
+			$glyphPos = $this->glyphPos[$originalGlyphIdx];
+			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
+
+			if ($glyphLen <= 0) {
+				continue;
+			}
+
+			$hm = $this->getHMetric($numberOfHMetrics, $originalGlyphIdx);
+			$aw = FontReader::int16(substr($hm, 0, 2));
+			$lsb = FontReader::int16(substr($hm, 2, 2));
+
+			$this->reader->seek($glyfOffset + $glyphPos);
+			$numberOfContours = $this->reader->readInt16();
+			$xMin = $this->reader->readInt16();
+			$yMin = $this->reader->readInt16();
+			$xMax = $this->reader->readInt16();
+			$yMax = $this->reader->readInt16();
+
+			$profile['xMin'] = min($profile['xMin'], $xMin);
+			$profile['yMin'] = min($profile['yMin'], $yMin);
+			$profile['xMax'] = max($profile['xMax'], $xMax);
+			$profile['yMax'] = max($profile['yMax'], $yMax);
+			$profile['advanceWidthMax'] = max($profile['advanceWidthMax'], $aw);
+			$profile['minLeftSideBearing'] = min($profile['minLeftSideBearing'], $lsb);
+			$profile['minRightSideBearing'] = min($profile['minRightSideBearing'], ($aw - $lsb - ($xMax - $xMin)));
+			$profile['xMaxExtent'] = max($profile['xMaxExtent'], ($lsb + ($xMax - $xMin)));
+
+			if ($glyphLen <= 2) {
+				continue;
+			}
+
+			if ($numberOfContours < 0) {
+				$nComponentElements = 0;
+				$flags = GlyphOperator::MORE;
+				while ($flags & GlyphOperator::MORE) {
+					$nComponentElements += 1;
+					$flags = $this->reader->readUInt16();
+					$this->glyphdata[$originalGlyphIdx]['compGlyphs'][] = $this->reader->readUInt16();
+					if ($flags & GlyphOperator::WORDS) {
+						$this->reader->skip(4);
+					} else {
+						$this->reader->skip(2);
+					}
+					if ($flags & GlyphOperator::SCALE) {
+						$this->reader->skip(2);
+					} elseif ($flags & GlyphOperator::XYSCALE) {
+						$this->reader->skip(4);
+					} elseif ($flags & GlyphOperator::TWOBYTWO) {
+						$this->reader->skip(8);
+					}
+				}
+				$profile['maxComponentElements'] = max($profile['maxComponentElements'], $nComponentElements);
+			} elseif ($numberOfContours > 0) {
+				$this->glyphdata[$originalGlyphIdx]['nContours'] = $numberOfContours;
+				$profile['maxContours'] = max($profile['maxContours'], $numberOfContours);
+
+				// One more point than the last contour's end point index
+				$this->reader->skip(($numberOfContours - 1) * 2);
+				$points = $this->reader->readUInt16() + 1;
+				$this->glyphdata[$originalGlyphIdx]['nPoints'] = $points;
+				$profile['maxPoints'] = max($profile['maxPoints'], $points);
+			}
+		}
+
+		foreach ($this->glyphdata as $originalGlyphIdx => $val) {
+			$maxdepth = $depth = -1;
+			$points = 0;
+			$contours = 0;
+			$this->getGlyphData($originalGlyphIdx, $maxdepth, $depth, $points, $contours);
+			$profile['maxComponentDepth'] = max($profile['maxComponentDepth'], $maxdepth);
+			$profile['maxComponentPoints'] = max($profile['maxComponentPoints'], $points);
+			$profile['maxComponentContours'] = max($profile['maxComponentContours'], $contours);
+		}
+
+		return $profile;
 	}
 
 	/**
