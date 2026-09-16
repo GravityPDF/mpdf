@@ -72,4 +72,19 @@ class ClassDefTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(0xBEEF, $reader->readUInt16());
 	}
 
+	/**
+	 * Grouped by class, lowest first, and within a class in the order the table names the glyphs -
+	 * which is how PairPos finds a glyph's place in its class
+	 */
+	public function testGlyphsByClassGroupsInTableOrderWithTheLowestClassFirst()
+	{
+		$table = pack('n*', 2, 3, 50, 51, 2, 40, 41, 0, 45, 45, 2);
+
+		$this->assertSame(
+			[0 => [40, 41], 2 => [50, 51, 45]],
+			ClassDef::glyphsByClass(new BlobReader($table))
+		);
+		$this->assertSame([], ClassDef::glyphsByClass(new BlobReader(pack('n*', 2, 0))));
+	}
+
 }
