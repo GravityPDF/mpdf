@@ -5,9 +5,8 @@ namespace Mpdf\Fonts;
 use Mpdf\TTFontFile;
 
 /**
- * The one home for the hex strings the OTL code compares characters as. The parser, the dump and the
- * shaper each had their own, and the shaper's reached the same answer by str_pad() where the other
- * two used sprintf(), so the width is worth pinning rather than assuming.
+ * The OTL code compares and concatenates these strings as text, so their width is the contract, and
+ * is pinned here rather than assumed.
  */
 class GlyphStringTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {

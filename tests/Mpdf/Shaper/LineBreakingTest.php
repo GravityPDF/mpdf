@@ -2,6 +2,8 @@
 
 namespace Mpdf\Shaper;
 
+use Mpdf\Fonts\GlyphString;
+
 class LineBreakingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
@@ -115,7 +117,7 @@ class LineBreakingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$info = [];
 		foreach ($unicode as $char) {
-			$info[] = ['uni' => $char, 'hex' => sprintf('%05X', $char)];
+			$info[] = ['uni' => $char, 'hex' => GlyphString::of($char)];
 		}
 
 		return $info;

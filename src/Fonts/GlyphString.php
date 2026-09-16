@@ -23,7 +23,7 @@ class GlyphString
 	 */
 	public static function of($codepoint)
 	{
-		return sprintf('%05s', strtoupper(dechex($codepoint)));
+		return str_pad(strtoupper(dechex($codepoint)), 5, '0', STR_PAD_LEFT);
 	}
 
 }
