@@ -390,14 +390,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $docTemplateContinue;
 	var $docTemplateContinue2pages;
 
-	var $arabGlyphs;
-	var $arabHex;
-	var $persianGlyphs;
-	var $persianHex;
-	var $arabVowels;
-	var $arabPrevLink;
-	var $arabNextLink;
-
 	var $formobjects; // array of Form Objects for WMF
 	var $InlineProperties;
 	var $InlineAnnots;
