@@ -52,6 +52,51 @@ class LineBreakHyphenTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Where the first part of the broken word already ends in a hyphen, mpdf/mpdf#1831 puts the
+	 * hyphenation hyphen on the next line rather than doubling it up. It is drawn there, once.
+	 * See GravityPDF/mpdf#136.
+	 */
+	public function testAHyphenMovedToTheNextLineIsDrawnOnlyThere()
+	{
+		$html = '<div dir="rtl" style="font-family: dejavusanscondensed; font-size: 12pt; hyphens: auto">'
+			. 'Paul-Sorge-Strasse</div>';
+
+		$lines = $this->drawnLines($html, [44, 100]);
+
+		$this->assertSame(['Paul-', '-Sorge-', 'Strass', 'e'], $lines);
+	}
+
+	/**
+	 * Bidi::reorder() rebuilds a line's text from its char_data, so the two have to describe the
+	 * same characters. Several page widths, because which of them a hyphen lands on moves with the
+	 * line breaks.
+	 */
+	public function testEveryDrawnLineHasOneCharDataEntryPerCharacter()
+	{
+		foreach ([34, 38, 40, 44] as $width) {
+			foreach (['ltr', 'rtl'] as $dir) {
+				$mpdf = new TextRecordingMpdf(['mode' => 'utf-8', 'format' => [$width, 100]]);
+				$mpdf->WriteHTML('<div dir="' . $dir . '" style="font-family: dejavusanscondensed; font-size: 12pt; hyphens: auto">'
+					. self::HEBREW_WORD . ' Paul-Sorge-Strasse</div>');
+
+				foreach ($mpdf->drawnText as $ix => $line) {
+					$OTLdata = $mpdf->drawnOTLdata[$ix];
+					if (empty($OTLdata['char_data'])) {
+						continue;
+					}
+					$this->assertSame(
+						mb_strlen($line, 'UTF-8'),
+						count($OTLdata['char_data']),
+						sprintf('"%s" at %dmm, %s', $line, $width, $dir)
+					);
+				}
+
+				$mpdf->cleanup();
+			}
+		}
+	}
+
+	/**
 	 * @return string[] the text of each line, in the order it is drawn in
 	 */
 	private function drawnLines($html, $format)

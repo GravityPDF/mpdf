@@ -4839,6 +4839,26 @@ class Otl
 	}
 
 	/**
+	 * Put one character at the front of a laid-out run, moving the rest of it along by one.
+	 *
+	 * @param array  $cOTLdata The run
+	 * @param array  $charData The character's entry, as Bidi::prepare() would have left it
+	 * @param string $group    Its class in the run's group string
+	 */
+	public function prependOTLchar(&$cOTLdata, $charData, $group)
+	{
+		$cOTLdata['group'] = $group . $cOTLdata['group'];
+
+		$newGPOSinfo = [];
+		foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
+			$newGPOSinfo[$k + 1] = $val;
+		}
+		$cOTLdata['GPOSinfo'] = $newGPOSinfo;
+
+		array_unshift($cOTLdata['char_data'], $charData);
+	}
+
+	/**
 	 * Remove one or more occurrences of $char (single character) from $txt and adjust OTLdata
 	 */
 	public function removeChar(&$txt, &$cOTLdata, $char)

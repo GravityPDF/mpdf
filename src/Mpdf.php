@@ -8399,18 +8399,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if ($type === 'hyphen') {
-						$hyphen = in_array(mb_substr($currContent, -1), ['-', '–', '—'], true);
-						if (!$hyphen) {
-							$currContent .= '-';
-						} else {
-							$savedPreContent[count($savedPreContent) - 1] = '-' . $savedPreContent[count($savedPreContent) - 1];
-						}
 						$lastChunk = count($cOTLdata) - 1;
-						if (!empty($cOTLdata[$lastChunk])) {
-							$charCount = count($cOTLdata[$lastChunk]['char_data']);
-							$previous = $charCount ? $cOTLdata[$lastChunk]['char_data'][$charCount - 1] : [];
-							$cOTLdata[$lastChunk]['char_data'][] = $this->breakHyphenCharData($previous, $blockdir);
-							$cOTLdata[$lastChunk]['group'] .= 'C';
+						$charCount = empty($cOTLdata[$lastChunk]) ? 0 : count($cOTLdata[$lastChunk]['char_data']);
+						$previous = $charCount ? $cOTLdata[$lastChunk]['char_data'][$charCount - 1] : [];
+						$charData = $this->breakHyphenCharData($previous, $blockdir);
+
+						if (!in_array(mb_substr($currContent, -1), ['-', '–', '—'], true)) {
+							$currContent .= '-';
+							if (!empty($cOTLdata[$lastChunk])) {
+								$cOTLdata[$lastChunk]['char_data'][] = $charData;
+								$cOTLdata[$lastChunk]['group'] .= 'C';
+							}
+						} else {
+							// mpdf/mpdf#1831 - the line already ends in a hyphen, so this one starts the next
+							// line instead. Its char_data has to go with it: a bidi paragraph rebuilds each
+							// line's text from char_data alone, so an entry left behind draws as a hyphen.
+							$next = count($savedPreContent) - 1;
+							$savedPreContent[$next] = '-' . $savedPreContent[$next];
+							if (!empty($savedPreOTLdata[$next])) {
+								$this->otl->prependOTLchar($savedPreOTLdata[$next], $charData, 'C');
+							}
 						}
 					}
 
