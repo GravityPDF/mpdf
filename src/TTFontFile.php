@@ -1337,22 +1337,24 @@ class TTFontFile
 
 		$GlyphByClass = [];
 
-		foreach (ClassDef::pairs($this->reader) as $pair) {
-			list($glyphID, $class) = $pair;
+		foreach (ClassDef::glyphsByClass($this->reader) as $class => $glyphIDs) {
+			$glyphs = [];
+			foreach ($glyphIDs as $glyphID) {
+				// Several fonts (dejavu..., FreeSerif) carry a MarkAttachClassDef Format 1 with startGlyphID
+				// 0 and glyphCount 1, which does not seem to mean anything useful, and FreeSerif has no
+				// glyphToChar[0] to go with it
+				if (isset($this->glyphToChar[$glyphID][0])) {
+					$glyphs[] = GlyphString::of($this->glyphToChar[$glyphID][0]);
+				}
+			}
 
-			// Several fonts (dejavu..., FreeSerif) carry a MarkAttachClassDef Format 1 with startGlyphID
-			// 0 and glyphCount 1, which does not seem to mean anything useful, and FreeSerif has no
-			// glyphToChar[0] to go with it
-			if (isset($this->glyphToChar[$glyphID][0])) {
-				$GlyphByClass[$class][] = GlyphString::of($this->glyphToChar[$glyphID][0]);
+			// A class none of whose glyphs a character reaches is left out, not kept empty: GDEF would
+			// otherwise make a mark attachment class of it
+			if ($glyphs) {
+				sort($glyphs, SORT_STRING); // easier to read in development; order is not significant
+				$GlyphByClass[$class] = $glyphs;
 			}
 		}
-
-		foreach ($GlyphByClass as $class => $glyphs) {
-			sort($GlyphByClass[$class], SORT_STRING); // easier to read in development; order is not significant
-		}
-
-		ksort($GlyphByClass);
 
 		return $GlyphByClass;
 	}

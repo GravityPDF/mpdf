@@ -5,7 +5,10 @@ namespace Mpdf;
 use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\GlyphString;
+use Mpdf\Fonts\Table\Anchor;
+use Mpdf\Fonts\Table\MarkArray;
 use Mpdf\Fonts\Table\SequenceRule;
+use Mpdf\Fonts\Table\ValueRecord;
 
 /**
  * A readable report of the OpenType layout tables in a font, for working on OTL support.
@@ -1619,7 +1622,7 @@ class OtlDump extends TTFontFile
 					if ($PosFormat == 1) {
 						$Coverage = $subtable_offset + $this->reader->readUInt16();
 						$ValueFormat = $this->reader->readUInt16();
-						$Value = $this->_getValueRecord($ValueFormat);
+						$Value = $this->valueRecord($ValueFormat);
 
 						$this->reader->seek($Coverage);
 						$glyphs = $this->_getCoverage(); // Array of Hex Glyphs
@@ -1668,7 +1671,7 @@ class OtlDump extends TTFontFile
 							$ValueCount = $this->reader->readUInt16();
 							$Values = [];
 							for ($v = 0; $v < $ValueCount; $v++) {
-								$Values[] = $this->_getValueRecord($ValueFormat);
+								$Values[] = $this->valueRecord($ValueFormat);
 							}
 
 							$this->reader->seek($Coverage);
@@ -1746,8 +1749,8 @@ class OtlDump extends TTFontFile
 									//PairValueRecord
 									$gid = $this->reader->readUInt16();
 									$SecondGlyph = GlyphString::of($this->glyphToChar[$gid][0]);
-									$Value1 = $this->_getValueRecord($ValueFormat1);
-									$Value2 = $this->_getValueRecord($ValueFormat2);
+									$Value1 = $this->valueRecord($ValueFormat1);
+									$Value2 = $this->valueRecord($ValueFormat2);
 
 									// If RTL pairs, GPOS declares a XPlacement e.g. -180 for an XAdvance of -180 to take
 									// account of direction. mPDF does not need the XPlacement adjustment
@@ -1797,7 +1800,7 @@ class OtlDump extends TTFontFile
 								$Class1Count = $this->reader->readUInt16();
 								$Class2Count = $this->reader->readUInt16();
 
-								$sizeOfPair = (2 * $this->count_bits($ValueFormat1)) + (2 * $this->count_bits($ValueFormat2));
+								$sizeOfPair = ValueRecord::size($ValueFormat1) + ValueRecord::size($ValueFormat2);
 								$sizeOfValueRecords = $Class1Count * $Class2Count * $sizeOfPair;
 
 								// NB Class1Count includes Class 0 even though it is not defined by $ClassDef1
@@ -1809,8 +1812,8 @@ class OtlDump extends TTFontFile
 
 								for ($i = 0; $i < $Class1Count; $i++) {
 									for ($j = 0; $j < $Class2Count; $j++) {
-										$Value1 = $this->_getValueRecord($ValueFormat1);
-										$Value2 = $this->_getValueRecord($ValueFormat2);
+										$Value1 = $this->valueRecord($ValueFormat1);
+										$Value2 = $this->valueRecord($ValueFormat2);
 
 										// If RTL pairs, GPOS declares a XPlacement e.g. -180 for an XAdvance of -180
 										// of direction. mPDF does not need the XPlacement adjustment
@@ -1915,7 +1918,7 @@ class OtlDump extends TTFontFile
 
 								if ($EntryAnchor != 0) {
 									$EntryAnchor += $subtable_offset;
-									list($x, $y) = $this->_getAnchorTable($EntryAnchor);
+									list($x, $y) = Anchor::coordinates($this->reader, $EntryAnchor);
 									if ($dir == 'RTL') {
 										if (round($pdfWidth) == round($x * 1000 / $this->unitsPerEm)) {
 											$x = 0;
@@ -1927,7 +1930,7 @@ class OtlDump extends TTFontFile
 								}
 								if ($ExitAnchor != 0) {
 									$ExitAnchor += $subtable_offset;
-									list($x, $y) = $this->_getAnchorTable($ExitAnchor);
+									list($x, $y) = Anchor::coordinates($this->reader, $ExitAnchor);
 									if ($dir == 'LTR') {
 										if (round($pdfWidth) == round($x * 1000 / $this->unitsPerEm)) {
 											$x = 0;
@@ -2012,7 +2015,7 @@ class OtlDump extends TTFontFile
 											}
 										}
 										// Get the relevant MarkRecord
-										$MarkRecord[$i] = $this->_getMarkRecord($MarkArray, $i);
+										$MarkRecord[$i] = MarkArray::record($this->reader, $MarkArray, $i);
 										//Mark Class is = $MarkRecord[$i]['Class']
 										$html .= ' ' . $this->formatEntity($MarkGlyphs[$i]) . ' ';
 									}
@@ -2697,21 +2700,6 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
-	 * @param int $n
-	 *
-	 * @return int How many of its bits are set. A value record's format is a bit per field, so this
-	 *             is how many fields the record holds.
-	 */
-	function count_bits($n)
-	{
-		for ($c = 0; $n; $c++) {
-			$n &= $n - 1; // clear the least significant bit set
-		}
-
-		return $c;
-	}
-
-	/**
 	 * Hand over the report so far if it has built up more than WriteHTML will take.
 	 *
 	 * AdjustHTML refuses HTML longer than pcre.backtrack_limit, and one lookup can report tens of
@@ -2833,99 +2821,16 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
-	 * ValueRecord, per the GPOS common table formats.
+	 * A value record with all three of the fields mPDF uses present, zero where the format leaves
+	 * one out.
 	 *
-	 * A ValueFormat is a bitfield naming which of eight fields follow, in this order, so the record is
-	 * only as long as the flags say. mPDF uses three of them and steps over the rest.
-	 *
-	 * The three it uses are always present in the returned array, zero where the font omitted them.
-	 * Otl checks each with isset; the report reads all six of a pair unconditionally to decide what to
-	 * print, and asking for absent keys raised tens of thousands of warnings on a single font.
-	 *
-	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/gpos#value-record
+	 * The shaper tells an absent field from a zero one, so ValueRecord::read() leaves it absent. The
+	 * report reads all six of a pair unconditionally to decide what to print, and asking for absent
+	 * keys raised tens of thousands of warnings on a single font.
 	 */
-	function _getValueRecord($ValueFormat)
+	private function valueRecord($ValueFormat)
 	{
-		$vra = ['XPlacement' => 0, 'YPlacement' => 0, 'XAdvance' => 0];
-		// Horizontal adjustment for placement-in design units
-		if (($ValueFormat & 0x0001) == 0x0001) {
-			$vra['XPlacement'] = $this->reader->readInt16();
-		}
-		// Vertical adjustment for placement-in design units
-		if (($ValueFormat & 0x0002) == 0x0002) {
-			$vra['YPlacement'] = $this->reader->readInt16();
-		}
-		// Horizontal adjustment for advance-in design units (only used for horizontal writing)
-		if (($ValueFormat & 0x0004) == 0x0004) {
-			$vra['XAdvance'] = $this->reader->readInt16();
-		}
-		// Vertical adjustment for advance-in design units (only used for vertical writing)
-		if (($ValueFormat & 0x0008) == 0x0008) {
-			$this->reader->readInt16();
-		}
-		// Offset to Device table for horizontal placement-measured from beginning of PosTable (may be NULL)
-		if (($ValueFormat & 0x0010) == 0x0010) {
-			$this->reader->readUInt16();
-		}
-		// Offset to Device table for vertical placement-measured from beginning of PosTable (may be NULL)
-		if (($ValueFormat & 0x0020) == 0x0020) {
-			$this->reader->readUInt16();
-		}
-		// Offset to Device table for horizontal advance-measured from beginning of PosTable (may be NULL)
-		if (($ValueFormat & 0x0040) == 0x0040) {
-			$this->reader->readUInt16();
-		}
-		// Offset to Device table for vertical advance-measured from beginning of PosTable (may be NULL)
-		if (($ValueFormat & 0x0080) == 0x0080) {
-			$this->reader->readUInt16();
-		}
-
-		return $vra;
-	}
-
-	/**
-	 * Read one anchor: the point on a glyph that a mark is attached to, or that joins to a neighbour.
-	 *
-	 * Formats 2 and 3 add a contour point and a device table to the same two coordinates, neither of
-	 * which the report says anything about, so all three read alike here.
-	 *
-	 * @param int $offset Where the anchor table is, or 0 to read from where the file already stands
-	 *
-	 * @return array The x and y coordinates, in font units
-	 */
-	function _getAnchorTable($offset = 0)
-	{
-		if ($offset) {
-			$this->reader->seek($offset);
-		}
-		$AnchorFormat = $this->reader->readUInt16();
-		$XCoordinate = $this->reader->readInt16();
-		$YCoordinate = $this->reader->readInt16();
-
-		// Format 2 specifies additional link to contour point; Format 3 additional Device table
-		return [$XCoordinate, $YCoordinate];
-	}
-
-	/**
-	 * Read one entry of a mark array: which attachment class a mark belongs to, and where on it the
-	 * base attaches.
-	 *
-	 * @param int $offset  Where the mark array begins
-	 * @param int $MarkPos Which entry of it to read
-	 *
-	 * @return array The mark's class and the x and y of its anchor
-	 */
-	function _getMarkRecord($offset, $MarkPos)
-	{
-		$this->reader->seek($offset);
-		$MarkCount = $this->reader->readUInt16();
-		$this->reader->skip($MarkPos * 4);
-		$Class = $this->reader->readUInt16();
-		$MarkAnchor = $offset + $this->reader->readUInt16();  // = Offset to anchor table
-		list($x, $y) = $this->_getAnchorTable($MarkAnchor);
-		$MarkRecord = ['Class' => $Class, 'AnchorX' => $x, 'AnchorY' => $y];
-
-		return $MarkRecord;
+		return array_merge(['XPlacement' => 0, 'YPlacement' => 0, 'XAdvance' => 0], ValueRecord::read($this->reader, $ValueFormat));
 	}
 
 	/**

@@ -75,4 +75,26 @@ class ClassDef
 
 		return $pairs;
 	}
+
+	/**
+	 * Read a Class Definition table from wherever the reader is, as the glyphs of each class.
+	 *
+	 * For a caller that needs a glyph's place within its class and not only its membership: GPOS
+	 * pair positioning indexes into a class by position, and GDEF's glyph and mark attachment
+	 * classes are kept as one list per class. Class 0 is kept where the table states it, as pairs()
+	 * keeps it.
+	 *
+	 * @return array[] class => glyph IDs in table order, lowest class first
+	 */
+	public static function glyphsByClass(FontReader $reader)
+	{
+		$glyphsByClass = [];
+		foreach (self::pairs($reader) as $pair) {
+			$glyphsByClass[$pair[1]][] = $pair[0];
+		}
+
+		ksort($glyphsByClass);
+
+		return $glyphsByClass;
+	}
 }
