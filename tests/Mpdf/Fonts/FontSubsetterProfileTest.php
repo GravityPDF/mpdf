@@ -95,27 +95,21 @@ class FontSubsetterProfileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	{
 		$tables = $this->tables(file_get_contents($file));
 
-		// Poppins' loca is the short format, offsets stored halved, and every glyph is padded to an even length
-		$offsets = [];
-		foreach (str_split($tables['loca'], 2) as $halved) {
-			$offsets[] = 2 * (new BlobReader($halved))->readUInt16();
+		// Poppins' loca is the short format, offsets stored halved
+		$offsets = array_values(unpack('n*', $tables['loca']));
+		$start = 2 * $offsets[$glyphIdx];
+		$halvedLength = $offsets[$glyphIdx + 1] - $offsets[$glyphIdx];
+		for ($i = $glyphIdx + 1; $i < count($offsets); $i++) {
+			$offsets[$i] -= $halvedLength;
 		}
-
-		$glyf = '';
-		$loca = '';
-		for ($i = 0; $i < count($offsets) - 1; $i++) {
-			$loca .= TableWriter::uint16(strlen($glyf) / 2);
-			if ($i !== $glyphIdx) {
-				$glyf .= substr($tables['glyf'], $offsets[$i], $offsets[$i + 1] - $offsets[$i]);
-			}
-		}
-		$loca .= TableWriter::uint16(strlen($glyf) / 2);
-
-		$tables['glyf'] = $glyf;
-		$tables['loca'] = $loca;
 
 		$writer = new TableWriter();
 		foreach ($tables as $tag => $bytes) {
+			if ($tag === 'glyf') {
+				$bytes = substr($bytes, 0, $start) . substr($bytes, $start + 2 * $halvedLength);
+			} elseif ($tag === 'loca') {
+				$bytes = TableWriter::uint16s($offsets);
+			}
 			$writer->add($tag, $bytes);
 		}
 
