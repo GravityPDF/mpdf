@@ -1295,7 +1295,7 @@ class TTFontFile
 				for ($i = 0; $i < $MarkSetCount; $i++) {
 					// Coverage offsets are relative to the MarkGlyphSetsDef table, not the file
 					$this->reader->seek($gdef_offset + $MarkGlyphSetsDef_offset + $MarkSetOffset[$i]);
-					$glyphs = $this->_getCoverage();
+					$glyphs = $this->coverageHex();
 					$this->MarkGlyphSets[$i] = ' ' . implode('| ', $glyphs);
 				}
 			} else {
@@ -1471,7 +1471,7 @@ class TTFontFile
 				// backtrack offsets stepped over above for format 3. Otl::checkContextMatchMultiple starts
 				// its input loop at 1 for the same reason - position 0 is what got it called.
 				$this->reader->seek($subtable_offset + $this->reader->readUInt16());
-				$this->GSLuCoverage[$i][$c] = $this->_getCoverage(false, 2);
+				$this->GSLuCoverage[$i][$c] = $this->coverageIndexByChar();
 			}
 		}
 
@@ -1736,7 +1736,7 @@ class TTFontFile
 				// LookupType 1: Single Substitution Subtable 1 => 1
 				if ($Lookup[$i]['Type'] == 1) {
 					$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-					$glyphs = $this->_getCoverage(false);
+					$glyphs = Coverage::glyphs($this->reader);
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
 						$replace[] = GlyphString::of($this->glyphToChar[$glyphs[$g]][0]);
@@ -1760,7 +1760,7 @@ class TTFontFile
 				} // LookupType 2: Multiple Substitution Subtable 1 => n
 				elseif ($Lookup[$i]['Type'] == 2) {
 					$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-					$glyphs = $this->_getCoverage();
+					$glyphs = $this->coverageHex();
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
 						$replace[] = $glyphs[$g];
@@ -1780,7 +1780,7 @@ class TTFontFile
 				} // LookupType 3: Alternate Forms 1 => 1 (only first alternate form is used)
 				elseif ($Lookup[$i]['Type'] == 3) {
 					$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-					$glyphs = $this->_getCoverage();
+					$glyphs = $this->coverageHex();
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
 						$replace[] = $glyphs[$g];
@@ -1797,7 +1797,7 @@ class TTFontFile
 				} // LookupType 4: Ligature Substitution Subtable n => 1
 				elseif ($Lookup[$i]['Type'] == 4) {
 					$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-					$glyphs = $this->_getCoverage();
+					$glyphs = $this->coverageHex();
 					$LigSetCount = $Lookup[$i]['Subtable'][$c]['LigSetCount'];
 					for ($s = 0; $s < $LigSetCount; $s++) {
 						for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['LigCount']; $g++) {
@@ -1829,7 +1829,7 @@ class TTFontFile
 					// Format 1: Context Substitution
 					if ($SubstFormat == 1) {
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->_getCoverage();
+						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->coverageHex();
 
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['SubRuleSetCount']; $s++) {
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['FirstGlyph'] = $CoverageGlyphs[$s];
@@ -1840,7 +1840,7 @@ class TTFontFile
 					} // Format 2: Class-based Context Glyph Substitution
 					elseif ($SubstFormat == 2) {
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->_getCoverage();
+						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->coverageHex();
 
 						$InputClasses = $this->_getClasses($Lookup[$i]['Subtable'][$c]['ClassDefOffset']);
 						$Lookup[$i]['Subtable'][$c]['InputClasses'] = $InputClasses;
@@ -1864,7 +1864,7 @@ class TTFontFile
 					elseif ($SubstFormat == 3) {
 						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['InputGlyphCount']; $b++) {
 							$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageInput'][$b]);
-							$glyphs = $this->_getCoverage();
+							$glyphs = $this->coverageHex();
 							$Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'][] = implode("|", $glyphs);
 						}
 					}
@@ -1873,7 +1873,7 @@ class TTFontFile
 					// Format 1: Simple Chaining Context Glyph Substitution  p255
 					if ($SubstFormat == 1) {
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->_getCoverage();
+						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->coverageHex();
 
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount']; $s++) {
 							foreach (SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s]) as $r => $ruleOffset) {
@@ -1895,7 +1895,7 @@ class TTFontFile
 					} // Format 2: Class-based Chaining Context Glyph Substitution  p257
 					elseif ($SubstFormat == 2) {
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->_getCoverage();
+						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->coverageHex();
 
 						$BacktrackClasses = $this->_getClasses($Lookup[$i]['Subtable'][$c]['BacktrackClassDefOffset']);
 						$Lookup[$i]['Subtable'][$c]['BacktrackClasses'] = $BacktrackClasses;
@@ -1931,25 +1931,25 @@ class TTFontFile
 					elseif ($SubstFormat == 3) {
 						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']; $b++) {
 							$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageBacktrack'][$b]);
-							$glyphs = $this->_getCoverage();
+							$glyphs = $this->coverageHex();
 							$Lookup[$i]['Subtable'][$c]['CoverageBacktrackGlyphs'][] = implode("|", $glyphs);
 						}
 						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['InputGlyphCount']; $b++) {
 							$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageInput'][$b]);
-							$glyphs = $this->_getCoverage();
+							$glyphs = $this->coverageHex();
 							$Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'][] = implode("|", $glyphs);
 							// Don't use above value as these are ordered numerically not as need to process
 						}
 						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount']; $b++) {
 							$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageLookahead'][$b]);
-							$glyphs = $this->_getCoverage();
+							$glyphs = $this->coverageHex();
 							$Lookup[$i]['Subtable'][$c]['CoverageLookaheadGlyphs'][] = implode("|", $glyphs);
 						}
 					}
 				} // LookupType 8: Reverse Chaining Contextual Single Substitution 1 => 1
 				elseif ($Lookup[$i]['Type'] == 8) {
 					$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
-					$glyphs = $this->_getCoverage();
+					$glyphs = $this->coverageHex();
 					$Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'] = [implode("|", $glyphs)];
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
@@ -1969,12 +1969,12 @@ class TTFontFile
 					}
 					for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']; $b++) {
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageBacktrack'][$b]);
-						$glyphs = $this->_getCoverage();
+						$glyphs = $this->coverageHex();
 						$Lookup[$i]['Subtable'][$c]['CoverageBacktrackGlyphs'][] = implode("|", $glyphs);
 					}
 					for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount']; $b++) {
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageLookahead'][$b]);
-						$glyphs = $this->_getCoverage();
+						$glyphs = $this->coverageHex();
 						$Lookup[$i]['Subtable'][$c]['CoverageLookaheadGlyphs'][] = implode("|", $glyphs);
 					}
 				}
@@ -3136,6 +3136,9 @@ class TTFontFile
 	/**
 	 * A Coverage table, in whichever of three shapes the caller needs.
 	 *
+	 * Each shape has a name of its own - coverageHex(), coverageIndexByChar() and Coverage::glyphs() -
+	 * and those are what mPDF calls. This keeps the public signature answering as it always has.
+	 *
 	 * @param bool $convert2hex Return the covered characters as hex strings
 	 * @param int  $mode        2 returns unicode => Coverage Index, which is what indexes a
 	 *                          subtable's parallel array of substitutions. Anything else, with
@@ -3143,26 +3146,55 @@ class TTFontFile
 	 */
 	function _getCoverage($convert2hex = true, $mode = 1)
 	{
-		$glyphs = Coverage::glyphs($this->reader);
-
-		if (!$convert2hex && $mode != 2) {
-			return $glyphs;
+		if ($convert2hex) {
+			return $this->coverageHex();
 		}
 
-		$g = [];
-		foreach ($glyphs as $index => $glyphID) {
-			// A Coverage table may name a glyph no character reaches, and the position of every glyph
-			// after it in the table still has to line up with the rules that index it
-			$uni = isset($this->glyphToChar[$glyphID][0]) ? $this->glyphToChar[$glyphID][0] : 0;
+		return $mode == 2 ? $this->coverageIndexByChar() : Coverage::glyphs($this->reader);
+	}
 
-			if ($convert2hex) {
-				$g[] = GlyphString::of($uni);
-			} else {
-				$g[$uni] = $index;
-			}
+	/**
+	 * The characters a Coverage table covers, as hex strings, which is the form the cached GSUB data
+	 * and the GDEF classes carry.
+	 *
+	 * @return string[] In coverage order, so the index is each one's Coverage Index
+	 */
+	protected function coverageHex()
+	{
+		$hex = [];
+		foreach (Coverage::glyphs($this->reader) as $glyphID) {
+			$hex[] = GlyphString::of($this->charOf($glyphID));
 		}
 
-		return $g;
+		return $hex;
+	}
+
+	/**
+	 * Which Coverage Index each covered character has, which is what indexes a subtable's parallel
+	 * array of substitutions. Where two glyphs stand for one character, the later one's index is kept.
+	 *
+	 * @return int[] unicode => Coverage Index
+	 */
+	protected function coverageIndexByChar()
+	{
+		$indexes = [];
+		foreach (Coverage::glyphs($this->reader) as $index => $glyphID) {
+			$indexes[$this->charOf($glyphID)] = $index;
+		}
+
+		return $indexes;
+	}
+
+	/**
+	 * A Coverage table may name a glyph no character reaches, and the position of every glyph after it
+	 * in the table still has to line up with the rules that index it, so such a glyph stands for 0
+	 * rather than being dropped.
+	 *
+	 * @return int
+	 */
+	private function charOf($glyphID)
+	{
+		return isset($this->glyphToChar[$glyphID][0]) ? $this->glyphToChar[$glyphID][0] : 0;
 	}
 
 	/**
@@ -3458,7 +3490,7 @@ class TTFontFile
 				// offsets stepped over above for format 3. For types 4, 5 and 6 that Coverage is the mark's,
 				// which is the right gate - those lookups are applied standing on the mark.
 				$this->reader->seek($subtableOffset + $this->reader->readUInt16());
-				$this->LuCoverage[$i][$c] = $this->_getCoverage(false, 2);
+				$this->LuCoverage[$i][$c] = $this->coverageIndexByChar();
 			}
 		}
 

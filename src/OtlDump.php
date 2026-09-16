@@ -760,7 +760,7 @@ class OtlDump extends TTFontFile
 				for ($i = 0; $i < $MarkSetCount; $i++) {
 					// Coverage offsets are relative to the MarkGlyphSetsDef table, not the file
 					$this->reader->seek($gdef_offset + $MarkGlyphSetsDef_offset + $MarkSetOffset[$i]);
-					$glyphs = $this->_getCoverage();
+					$glyphs = $this->coverageHex();
 					$this->MarkGlyphSets[$i] = $this->formatClassArr($glyphs);
 					if ($this->mode == 'summary') {
 						$this->mpdf->WriteHTML('<h3>Mark Glyph Set class: ' . $i . '</h3>');
@@ -1591,7 +1591,7 @@ class OtlDump extends TTFontFile
 						$Value = $this->valueRecord($ValueFormat);
 
 						$this->reader->seek($Coverage);
-						$glyphs = $this->_getCoverage(); // Array of Hex Glyphs
+						$glyphs = $this->coverageHex(); // Array of Hex Glyphs
 						for ($g = 0; $g < count($glyphs); $g++) {
 							if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $glyphs[$g])) {
 								continue;
@@ -1641,7 +1641,7 @@ class OtlDump extends TTFontFile
 							}
 
 							$this->reader->seek($Coverage);
-							$glyphs = $this->_getCoverage(); // Array of Hex Glyphs
+							$glyphs = $this->coverageHex(); // Array of Hex Glyphs
 
 							for ($g = 0; $g < count($glyphs); $g++) {
 								if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $glyphs[$g])) {
@@ -1698,7 +1698,7 @@ class OtlDump extends TTFontFile
 								$PairSetOffset[] = $subtable_offset + $this->reader->readUInt16();
 							}
 							$this->reader->seek($Coverage);
-							$glyphs = $this->_getCoverage(); // Array of Hex Glyphs
+							$glyphs = $this->coverageHex(); // Array of Hex Glyphs
 							for ($p = 0; $p < $PairSetCount; $p++) {
 								if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $glyphs[$p])) {
 									continue;
@@ -1872,7 +1872,7 @@ class OtlDump extends TTFontFile
 							}
 
 							$this->reader->seek($Coverage);
-							$Glyphs = $this->_getCoverage();
+							$Glyphs = $this->coverageHex();
 							for ($i = 0; $i < $EntryExitCount; $i++) {
 								// Need default XAdvance for glyph
 								$pdfWidth = $this->mpdf->_getCharWidth($this->mpdf->fonts[$this->fontkey]['cw'], hexdec($Glyphs[$i]));
@@ -1918,10 +1918,10 @@ class OtlDump extends TTFontFile
 								$BaseCoverage = $subtable_offset + $this->reader->readUInt16();
 
 								$this->reader->seek($MarkCoverage);
-								$MarkGlyphs = $this->_getCoverage();
+								$MarkGlyphs = $this->coverageHex();
 
 								$this->reader->seek($BaseCoverage);
-								$BaseGlyphs = $this->_getCoverage();
+								$BaseGlyphs = $this->coverageHex();
 
 								$firstMark = '';
 								$html .= '<div class="glyphs">Marks: ';
@@ -1965,9 +1965,9 @@ class OtlDump extends TTFontFile
 									$LigatureArray = $subtable_offset + $this->reader->readUInt16(); // Offset to LigatureArray table
 
 									$this->reader->seek($MarkCoverage);
-									$MarkGlyphs = $this->_getCoverage();
+									$MarkGlyphs = $this->coverageHex();
 									$this->reader->seek($LigatureCoverage);
-									$LigatureGlyphs = $this->_getCoverage();
+									$LigatureGlyphs = $this->coverageHex();
 
 									$firstMark = '';
 									$html .= '<div class="glyphs">Marks: <span class="unchanged">';
@@ -2036,9 +2036,9 @@ class OtlDump extends TTFontFile
 										$Mark2Coverage = $subtable_offset + $this->reader->readUInt16(); // Base Mark
 										$ClassCount = $this->reader->readUInt16(); // Number of classes defined for marks = No. of Combining mark1 glyphs in the MarkCoverage table
 										$this->reader->seek($Mark1Coverage);
-										$Mark1Glyphs = $this->_getCoverage();
+										$Mark1Glyphs = $this->coverageHex();
 										$this->reader->seek($Mark2Coverage);
-										$Mark2Glyphs = $this->_getCoverage();
+										$Mark2Glyphs = $this->coverageHex();
 
 										$firstMark = '';
 										$html .= '<div class="glyphs">Marks: <span class="unchanged">';
@@ -2140,7 +2140,7 @@ class OtlDump extends TTFontFile
 		}
 
 		$this->reader->seek($CoverageTableOffset);
-		$CoverageGlyphs = $this->_getCoverage();
+		$CoverageGlyphs = $this->coverageHex();
 
 		for ($s = 0; $s < $PosRuleSetCount; $s++) {
 			// A PosRuleSet offset of 0 means no context begins with that glyph
@@ -2285,7 +2285,7 @@ class OtlDump extends TTFontFile
 		}
 
 		$this->reader->seek($CoverageTableOffset);
-		$CoverageGlyphs = $this->_getCoverage();
+		$CoverageGlyphs = $this->coverageHex();
 
 		for ($s = 0; $s < $ChainPosRuleSetCount; $s++) {
 			if (!$ChainPosRuleSetOffset[$s]) {
@@ -2616,7 +2616,7 @@ class OtlDump extends TTFontFile
 		$glyphs = [];
 		foreach ($offsets as $b => $offset) {
 			$this->reader->seek($offset);
-			$glyphs[$b] = implode('|', $this->_getCoverage());
+			$glyphs[$b] = implode('|', $this->coverageHex());
 		}
 
 		return $glyphs;
