@@ -2,7 +2,6 @@
 
 namespace Mpdf;
 
-use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\Anchor;
@@ -107,680 +106,112 @@ class OtlDump extends TTFontFile
 		$this->language = $language;
 		$this->notOffered = [];
 		$this->reportChunkBytes = max(1, (int) ((int) ini_get('pcre.backtrack_limit') / 4));
-		$this->useOTL = $useOTL; // mPDF 5.7.1
-		$this->fontkey = $fontkey; // mPDF 5.7.1
-		$this->filename = $file;
-		$this->reader = new FileReader($file);
 
-		$this->charWidths = '';
-		$this->charToGlyph = [];
-		$this->tables = [];
-		$this->kerninfo = [];
-		$this->ascent = 0;
-		$this->descent = 0;
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
-		$this->version = $version = $this->reader->readUInt32();
-		$this->panose = [];
+		parent::getMetrics($file, $fontkey, $TTCfontID, $debug, $BMPonly, $useOTL);
 
-		if ($version == 0x4F54544F) {
-			throw new \Mpdf\Exception\FontException(sprintf('Fonts with postscript outlines are not supported (%s)', $file));
+		// A font whose OS/2 fsType forbids embedding is not reported on. The parser records that
+		// rather than refusing, so the refusal waits until the read is done and the file closed
+		global $overrideTTFFontRestriction;
+		if ($this->restrictedUse && !$overrideTTFFontRestriction) {
+			throw new \Mpdf\Exception\FontException('Font file ' . $this->filename . ' cannot be embedded due to copyright restrictions.');
 		}
 
-		if ($version == 0x74746366 && !$TTCfontID) {
-			throw new \Mpdf\Exception\FontException("TTCfontID for a TrueType Collection has to be defined in ttfontdata configuration key (" . $file . ")");
-		}
-
-		if (!in_array($version, [0x00010000, 0x74727565]) && !$TTCfontID) {
-			throw new \Mpdf\Exception\FontException("Not a TrueType font: version=" . $version);
-		}
-
-		if ($TTCfontID > 0) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000])) {
-				throw new \Mpdf\Exception\FontException("Error parsing TrueType Collection: version=" . $version . " - " . $file);
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-		}
-		$this->readTableDirectory($debug);
-		$this->extractInfo($debug, $BMPonly, $useOTL);
-		$this->reader->close();
+		$this->failIfNeitherTableOffers();
 	}
 
 	/**
-	 * Read the font's metrics, character map and layout tables, reporting each table as it is read.
+	 * The report's own format, "U+0300, U+0301", rather than the parser's.
 	 *
-	 * The parser's own extractInfo does the same reading silently; this is that walk with the report
-	 * written alongside it.
-	 *
-	 * @param bool $debug   Whether to check the font's own tables as they are read
-	 * @param bool $BMPonly Whether to stop the character map at the Basic Multilingual Plane
-	 * @param int  $useOTL  Which scripts the document asked to be laid out from the font's own tables
+	 * LookupFlag searches these strings for a glyph's hex, and never finds one in this format, so
+	 * GSUB substitutions whose input a lookup's flags skip are reported where the parser drops them.
+	 * See #187.
 	 */
-	function extractInfo($debug = false, $BMPonly = false, $useOTL = 0)
+	protected function glyphClassString(array $glyphs)
 	{
-		$this->panose = [];
-		$this->sFamilyClass = 0;
-		$this->sFamilySubClass = 0;
-		// name - Naming table
-		$name_offset = $this->seek_table("name");
-		$format = $this->reader->readUInt16();
-		if ($format != 0 && $format != 1) {
-			throw new \Mpdf\Exception\FontException("Error loading font: Unknown name table format " . $format);
+		return $this->formatClassArr($glyphs);
+	}
+
+	/**
+	 * A font without GDEF still has GSUB and GPOS to report, so the dump says so and reads on.
+	 */
+	protected function missingGDEF()
+	{
+		$this->reportTableMissing('GDEF');
+	}
+
+	/**
+	 * Nothing is cached. The classes read are in the report's format rather than the parser's, and the
+	 * cache the dump is handed can be the one the shaper reads the same font key back from.
+	 */
+	protected function cacheLayoutTables()
+	{
+	}
+
+	protected function reportGlyphClasses(array $glyphByClass)
+	{
+		if ($this->mode != 'summary') {
+			return;
 		}
-		$numRecords = $this->reader->readUInt16();
-		$string_data_offset = $name_offset + $this->reader->readUInt16();
-		$names = [1 => '', 2 => '', 3 => '', 4 => '', 6 => ''];
-		$K = array_keys($names);
-		$nameCount = count($names);
-		for ($i = 0; $i < $numRecords; $i++) {
-			$platformId = $this->reader->readUInt16();
-			$encodingId = $this->reader->readUInt16();
-			$languageId = $this->reader->readUInt16();
-			$nameId = $this->reader->readUInt16();
-			$length = $this->reader->readUInt16();
-			$offset = $this->reader->readUInt16();
-			if (!in_array($nameId, $K)) {
+
+		$this->mpdf->WriteHTML('<h1>GDEF table</h1>');
+		$this->mpdf->WriteHTML('<h2>Glyph classes</h2>');
+
+		$descriptions = [
+			1 => 'Base glyph (single character, spacing glyph)',
+			2 => 'Ligature glyph (multiple character, spacing glyph)',
+			3 => 'Mark glyph (non-spacing combining glyph)',
+			4 => 'Component glyph (part of single character, spacing glyph)',
+		];
+
+		foreach ($descriptions as $class => $description) {
+			if (empty($glyphByClass[$class])) {
 				continue;
 			}
-			$N = '';
-			if ($platformId == 3 && $encodingId == 1 && $languageId == 0x409) { // Microsoft, Unicode, US English, PS Name
-				$opos = $this->reader->tell();
-				$this->reader->seek($string_data_offset + $offset);
-				if ($length % 2 != 0) {
-					throw new \Mpdf\Exception\FontException("Error loading font: PostScript name is UTF-16BE string of odd length");
-				}
-				$length /= 2;
-				$N = '';
-				while ($length > 0) {
-					$char = $this->reader->readUInt16();
-					$N .= (chr($char));
-					$length -= 1;
-				}
-				$this->reader->seek($opos);
-			} else {
-				if ($platformId == 1 && $encodingId == 0 && $languageId == 0) { // Macintosh, Roman, English, PS Name
-					$opos = $this->reader->tell();
-					$N = $this->reader->bytesAt($string_data_offset + $offset, $length);
-					$this->reader->seek($opos);
-				}
-			}
-			if ($N && $names[$nameId] == '') {
-				$names[$nameId] = $N;
-				$nameCount -= 1;
-				if ($nameCount == 0) {
-					break;
-				}
-			}
+
+			$this->mpdf->WriteHTML('<h3>Glyph class ' . $class . '</h3>');
+			$this->mpdf->WriteHTML('<h5>' . $description . '</h5>');
+			$this->mpdf->WriteHTML($this->glyphList($glyphByClass[$class], $class === 3));
 		}
-		if ($names[6]) {
-			$psName = $names[6];
-		} else {
-			if ($names[4]) {
-				$psName = preg_replace('/ /', '-', $names[4]);
-			} else {
-				if ($names[1]) {
-					$psName = preg_replace('/ /', '-', $names[1]);
-				} else {
-					$psName = '';
-				}
-			}
-		}
-		if (!$psName) {
-			throw new \Mpdf\Exception\FontException("Error loading font: Could not find PostScript font name: " . $this->filename);
-		}
-		if ($debug) {
-			for ($i = 0; $i < count($psName); $i++) {
-				$c = $psName[$i];
-				$oc = ord($c);
-				if ($oc > 126 || strpos(' [](){}<>/%', $c) !== false) {
-					throw new \Mpdf\Exception\FontException("psName=" . $psName . " contains invalid character " . $c . " ie U+" . ord($c));
-				}
-			}
-		}
-		$this->name = $psName;
-		if ($names[1]) {
-			$this->familyName = $names[1];
-		} else {
-			$this->familyName = $psName;
-		}
-		if ($names[2]) {
-			$this->styleName = $names[2];
-		} else {
-			$this->styleName = 'Regular';
-		}
-		if ($names[4]) {
-			$this->fullName = $names[4];
-		} else {
-			$this->fullName = $psName;
-		}
-		if ($names[3]) {
-			$this->uniqueFontID = $names[3];
-		} else {
-			$this->uniqueFontID = $psName;
+	}
+
+	protected function reportMarkAttachmentTypes(array $markAttachmentTypes)
+	{
+		if ($this->mode != 'summary') {
+			return;
 		}
 
-		if ($names[6]) {
-			$this->fullName = $names[6];
+		$this->mpdf->WriteHTML('<h1>Mark Attachment Types</h1>');
+		foreach ($markAttachmentTypes as $class => $glyphs) {
+			$this->mpdf->WriteHTML('<h3>Mark Attachment Type: ' . $class . '</h3>');
+			$this->mpdf->WriteHTML($this->glyphList($glyphs, true));
+		}
+	}
+
+	protected function reportMarkGlyphSets(array $markGlyphSets)
+	{
+		if ($this->mode != 'summary') {
+			return;
 		}
 
-		// head - Font header table
-		$this->seek_table("head");
-		if ($debug) {
-			$ver_maj = $this->reader->readUInt16();
-			$ver_min = $this->reader->readUInt16();
-			if ($ver_maj != 1) {
-				throw new \Mpdf\Exception\FontException('Error loading font: Unknown head table version ' . $ver_maj . '.' . $ver_min);
-			}
-			$this->fontRevision = $this->reader->readUInt16() . $this->reader->readUInt16();
-
-			$this->reader->skip(4);
-			$magic = $this->reader->readUInt32();
-			if ($magic != 0x5F0F3CF5) {
-				throw new \Mpdf\Exception\FontException('Error loading font: Invalid head table magic ' . $magic);
-			}
-			$this->reader->skip(2);
-		} else {
-			$this->reader->skip(18);
+		$this->mpdf->WriteHTML('<h1>Mark Glyph Sets</h1>');
+		foreach ($markGlyphSets as $set => $glyphs) {
+			$this->mpdf->WriteHTML('<h3>Mark Glyph Set class: ' . $set . '</h3>');
+			$this->mpdf->WriteHTML($this->glyphList($glyphs, true));
 		}
-		$this->unitsPerEm = $unitsPerEm = $this->reader->readUInt16();
-		$scale = 1000 / $unitsPerEm;
-		$this->reader->skip(16);
-		$xMin = $this->reader->readInt16();
-		$yMin = $this->reader->readInt16();
-		$xMax = $this->reader->readInt16();
-		$yMax = $this->reader->readInt16();
-		$this->bbox = [($xMin * $scale), ($yMin * $scale), ($xMax * $scale), ($yMax * $scale)];
-		$this->reader->skip(3 * 2);
-		$indexToLocFormat = $this->reader->readUInt16();
-		$glyphDataFormat = $this->reader->readUInt16();
-		if ($glyphDataFormat != 0) {
-			throw new \Mpdf\Exception\FontException('Error loading font: Unknown glyph data format ' . $glyphDataFormat);
-		}
-
-		// hhea metrics table
-		// ttf2t1 seems to use this value rather than the one in OS/2 - so put in for compatibility
-		if (isset($this->tables["hhea"])) {
-			$this->seek_table("hhea");
-			$this->reader->skip(4);
-			$hheaAscender = $this->reader->readInt16();
-			$hheaDescender = $this->reader->readInt16();
-			$this->ascent = ($hheaAscender * $scale);
-			$this->descent = ($hheaDescender * $scale);
-		}
-
-		// OS/2 - OS/2 and Windows metrics table
-		if (isset($this->tables["OS/2"])) {
-			$this->seek_table("OS/2");
-			$version = $this->reader->readUInt16();
-			$this->reader->skip(2);
-			$usWeightClass = $this->reader->readUInt16();
-			$this->reader->skip(2);
-			$fsType = $this->reader->readUInt16();
-			if ($fsType == 0x0002 || ($fsType & 0x0300) != 0) {
-				global $overrideTTFFontRestriction;
-				if (!$overrideTTFFontRestriction) {
-					throw new \Mpdf\Exception\FontException('Font file ' . $this->filename . ' cannot be embedded due to copyright restrictions.');
-				}
-				$this->restrictedUse = true;
-			}
-			$this->reader->skip(20);
-			$sF = $this->reader->readInt16();
-			$this->sFamilyClass = ($sF >> 8);
-			$this->sFamilySubClass = ($sF & 0xFF);
-			// PANOSE, 10 bytes, per the OS/2 table
-			$panose = $this->reader->read(10);
-			$this->panose = [];
-			for ($p = 0; $p < strlen($panose); $p++) {
-				$this->panose[] = ord($panose[$p]);
-			}
-			$this->reader->skip(26);
-			$sTypoAscender = $this->reader->readInt16();
-			$sTypoDescender = $this->reader->readInt16();
-			if (!$this->ascent) {
-				$this->ascent = ($sTypoAscender * $scale);
-			}
-			if (!$this->descent) {
-				$this->descent = ($sTypoDescender * $scale);
-			}
-			if ($version > 1) {
-				$this->reader->skip(16);
-				$sCapHeight = $this->reader->readInt16();
-				$this->capHeight = ($sCapHeight * $scale);
-			} else {
-				$this->capHeight = $this->ascent;
-			}
-		} else {
-			$usWeightClass = 500;
-			if (!$this->ascent) {
-				$this->ascent = ($yMax * $scale);
-			}
-			if (!$this->descent) {
-				$this->descent = ($yMin * $scale);
-			}
-			$this->capHeight = $this->ascent;
-		}
-		$this->stemV = 50 + intval(pow(($usWeightClass / 65.0), 2));
-
-		// post - PostScript table
-		$this->seek_table("post");
-		if ($debug) {
-			$ver_maj = $this->reader->readUInt16();
-			$ver_min = $this->reader->readUInt16();
-			if ($ver_maj < 1 || $ver_maj > 4) {
-				throw new \Mpdf\Exception\FontException('Error loading font: Unknown post table version ' . $ver_maj);
-			}
-		} else {
-			$this->reader->skip(4);
-		}
-		$this->italicAngle = $this->reader->readInt16() + $this->reader->readUInt16() / 65536.0;
-		$this->underlinePosition = $this->reader->readInt16() * $scale;
-		$this->underlineThickness = $this->reader->readInt16() * $scale;
-		$isFixedPitch = $this->reader->readUInt32();
-
-		$this->flags = 4;
-
-		if ($this->italicAngle != 0) {
-			$this->flags = $this->flags | 64;
-		}
-		if ($usWeightClass >= 600) {
-			$this->flags = $this->flags | 262144;
-		}
-		if ($isFixedPitch) {
-			$this->flags = $this->flags | 1;
-		}
-
-		// hhea - Horizontal header table
-		$this->seek_table("hhea");
-		if ($debug) {
-			$ver_maj = $this->reader->readUInt16();
-			$ver_min = $this->reader->readUInt16();
-			if ($ver_maj != 1) {
-				throw new \Mpdf\Exception\FontException(sprintf('Error loading font: Unknown hhea table version %s', $ver_maj));
-			}
-			$this->reader->skip(28);
-		} else {
-			$this->reader->skip(32);
-		}
-		$metricDataFormat = $this->reader->readUInt16();
-		if ($metricDataFormat != 0) {
-			throw new \Mpdf\Exception\FontException('Error loading font: Unknown horizontal metric data format ' . $metricDataFormat);
-		}
-		$numberOfHMetrics = $this->reader->readUInt16();
-		if ($numberOfHMetrics == 0) {
-			throw new \Mpdf\Exception\FontException('Error loading font: Number of horizontal metrics is 0');
-		}
-
-		// maxp - Maximum profile table
-		$this->seek_table("maxp");
-		if ($debug) {
-			$ver_maj = $this->reader->readUInt16();
-			$ver_min = $this->reader->readUInt16();
-			if ($ver_maj != 1) {
-				throw new \Mpdf\Exception\FontException('Error loading font: Unknown maxp table version ' . $ver_maj);
-			}
-		} else {
-			$this->reader->skip(4);
-		}
-		$numGlyphs = $this->reader->readUInt16();
-
-		// cmap - Character to glyph index mapping table
-		$cmap_offset = $this->seek_table("cmap");
-		$this->reader->skip(2);
-		$cmapTableCount = $this->reader->readUInt16();
-		$unicode_cmap_offset = 0;
-		for ($i = 0; $i < $cmapTableCount; $i++) {
-			$platformID = $this->reader->readUInt16();
-			$encodingID = $this->reader->readUInt16();
-			$offset = $this->reader->readUInt32();
-			$save_pos = $this->reader->tell();
-			if (($platformID == 3 && $encodingID == 1) || $platformID == 0) { // Microsoft, Unicode
-				$format = $this->reader->uint16At($cmap_offset + $offset);
-				if ($format == 4) {
-					if (!$unicode_cmap_offset) {
-						$unicode_cmap_offset = $cmap_offset + $offset;
-					}
-					if ($BMPonly) {
-						break;
-					}
-				}
-			} // Microsoft, Unicode Format 12 table HKCS
-			else {
-				if ((($platformID == 3 && $encodingID == 10) || $platformID == 0) && !$BMPonly) {
-					$format = $this->reader->uint16At($cmap_offset + $offset);
-					if ($format == 12) {
-						$unicode_cmap_offset = $cmap_offset + $offset;
-						break;
-					}
-				}
-			}
-			$this->reader->seek($save_pos);
-		}
-
-		if (!$unicode_cmap_offset) {
-			throw new \Mpdf\Exception\FontException('Font (' . $this->filename . ') does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)');
-		}
-
-		$sipset = false;
-		$smpset = false;
-
-		// mPDF 5.7.1
-		$this->GSUBScriptLang = [];
-		$this->rtlPUAstr = '';
-		$this->GSUBFeatures = [];
-		$this->GSUBLookups = [];
-		$this->GPOSScriptLang = [];
-		$this->GPOSFeatures = [];
-		$this->GPOSLookups = [];
-		$this->glyphIDtoUni = '';
-
-		// Format 12 CMAP does characters above Unicode BMP i.e. some HKCS characters U+20000 and above
-		if ($format == 12 && !$BMPonly) {
-			$maxUniChar = 0;
-			$this->reader->seek($unicode_cmap_offset + 4);
-			$length = $this->reader->readUInt32();
-			$limit = $unicode_cmap_offset + $length;
-			$this->reader->skip(4);
-
-			$nGroups = $this->reader->readUInt32();
-
-			$glyphToChar = [];
-			$charToGlyph = [];
-			for ($i = 0; $i < $nGroups; $i++) {
-				$startCharCode = $this->reader->readUInt32();
-				$endCharCode = $this->reader->readUInt32();
-				$startGlyphCode = $this->reader->readUInt32();
-				if ($endCharCode > 0x20000 && $endCharCode < 0x2FFFF) {
-					$sipset = true;
-				} else {
-					if ($endCharCode > 0x10000 && $endCharCode < 0x1FFFF) {
-						$smpset = true;
-					}
-				}
-				$offset = 0;
-				for ($unichar = $startCharCode; $unichar <= $endCharCode; $unichar++) {
-					$glyph = $startGlyphCode + $offset;
-					$offset++;
-					if ($unichar < 0x30000) {
-						$charToGlyph[$unichar] = $glyph;
-						$maxUniChar = max($unichar, $maxUniChar);
-						$glyphToChar[$glyph][] = $unichar;
-					}
-				}
-			}
-		} else {
-			$glyphToChar = [];
-			$charToGlyph = [];
-			$maxUniChar = $this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
-		}
-		$this->sipset = $sipset;
-		$this->smpset = $smpset;
-
-		// mPDF 5.7.1
-		// Map Unmapped glyphs - from $numGlyphs
-		if ($this->useOTL) {
-			$bctr = 0xE000;
-			for ($gid = 1; $gid < $numGlyphs; $gid++) {
-				if (!isset($glyphToChar[$gid])) {
-					while (isset($charToGlyph[$bctr])) {
-						$bctr++;
-					} // Avoid overwriting a glyph already mapped in PUA
-					if (($bctr > 0xF8FF) && ($bctr < 0x2CEB0)) {
-						if (!$BMPonly) {
-							$bctr = 0x2CEB0;  // Use unassigned area 0x2CEB0 to 0x2F7FF (space for 10,000 characters)
-							$this->sipset = $sipset = true; // forces subsetting; also ensure charwidths are saved
-							while (isset($charToGlyph[$bctr])) {
-								$bctr++;
-							}
-						} else {
-							throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)', $this->filename));
-						}
-					}
-					$glyphToChar[$gid][] = $bctr;
-					$charToGlyph[$bctr] = $gid;
-					$maxUniChar = max($bctr, $maxUniChar);
-					$bctr++;
-				}
-			}
-		}
-		$this->glyphToChar = $glyphToChar;
-		$this->charToGlyph = $charToGlyph;
-		$this->maxUniChar = $maxUniChar;
-		// mPDF 5.7.1	OpenType Layout tables
-		$this->GSUBScriptLang = [];
-		$this->rtlPUAstr = '';
-		if ($useOTL) {
-			$this->_getGDEFtables();
-			list($this->GSUBScriptLang, $this->GSUBFeatures, $this->GSUBLookups, $this->rtlPUAstr) = $this->_getGSUBtables();
-			list($this->GPOSScriptLang, $this->GPOSFeatures, $this->GPOSLookups) = $this->_getGPOStables();
-			$this->failIfNeitherTableOffers();
-			$this->glyphIDtoUni = str_pad('', 256 * 256 * 3, "\x00");
-			foreach ($glyphToChar as $gid => $arr) {
-				if (isset($glyphToChar[$gid][0])) {
-					$char = $glyphToChar[$gid][0];
-					if ($char != 0 && $char != 65535) {
-						$this->glyphIDtoUni[$gid * 3] = chr($char >> 16);
-						$this->glyphIDtoUni[$gid * 3 + 1] = chr(($char >> 8) & 0xFF);
-						$this->glyphIDtoUni[$gid * 3 + 2] = chr($char & 0xFF);
-					}
-				}
-			}
-		}
-		// hmtx - Horizontal metrics table
-		list($this->charWidths, $this->defaultWidth) = $this->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale, $maxUniChar);
 	}
 
 	/**
-	 * Read GDEF and report what it says: which glyphs are marks, bases, ligatures and components,
-	 * which marks belong to which attachment class, and which mark glyph sets a lookup can filter to.
+	 * @param string[] $glyphs As hex
+	 * @param bool     $marks  Whether to draw each on a dotted circle, as a mark is
 	 */
-	function _getGDEFtables()
+	private function glyphList(array $glyphs, $marks)
 	{
-		// GDEF - Glyph Definition
-		// https://learn.microsoft.com/en-us/typography/opentype/spec/gdef
-		if (isset($this->tables["GDEF"])) {
-			if ($this->mode == 'summary') {
-				$this->mpdf->WriteHTML('<h1>GDEF table</h1>');
-			}
-			$gdef_offset = $this->seek_table("GDEF");
-			// ULONG Version of the GDEF table-currently 0x00010000
-			$ver_maj = $this->reader->readUInt16();
-			$ver_min = $this->reader->readUInt16();
-			$GlyphClassDef_offset = $this->reader->readUInt16();
-			$AttachList_offset = $this->reader->readUInt16();
-			$LigCaretList_offset = $this->reader->readUInt16();
-			$MarkAttachClassDef_offset = $this->reader->readUInt16();
-
-			// GDEF 1.2 added the MarkGlyphSetsDef offset; 1.3 keeps it and appends an ItemVarStore after it
-			if ($ver_min >= 2) {
-				$MarkGlyphSetsDef_offset = $this->reader->readUInt16();
-			}
-
-			// GlyphClassDef
-			$this->reader->seek($gdef_offset + $GlyphClassDef_offset);
-			/*
-			  1	Base glyph (single character, spacing glyph)
-			  2	Ligature glyph (multiple character, spacing glyph)
-			  3	Mark glyph (non-spacing combining glyph)
-			  4	Component glyph (part of single character, spacing glyph)
-			 */
-			$GlyphByClass = $this->_getClassDefinitionTable();
-
-			if ($this->mode == 'summary') {
-				$this->mpdf->WriteHTML('<h2>Glyph classes</h2>');
-			}
-
-			if (isset($GlyphByClass[1]) && count($GlyphByClass[1]) > 0) {
-				$this->GlyphClassBases = $this->formatClassArr($GlyphByClass[1]);
-				if ($this->mode == 'summary') {
-					$this->mpdf->WriteHTML('<h3>Glyph class 1</h3>');
-					$this->mpdf->WriteHTML('<h5>Base glyph (single character, spacing glyph)</h5>');
-					$html = '';
-					$html .= '<div class="glyphs">';
-					foreach ($GlyphByClass[1] as $g) {
-						$html .= '&#x' . $g . '; ';
-					}
-					$html .= '</div>';
-					$this->mpdf->WriteHTML($html);
-				}
-			} else {
-				$this->GlyphClassBases = '';
-			}
-			if (isset($GlyphByClass[2]) && count($GlyphByClass[2]) > 0) {
-				$this->GlyphClassLigatures = $this->formatClassArr($GlyphByClass[2]);
-				if ($this->mode == 'summary') {
-					$this->mpdf->WriteHTML('<h3>Glyph class 2</h3>');
-					$this->mpdf->WriteHTML('<h5>Ligature glyph (multiple character, spacing glyph)</h5>');
-					$html = '';
-					$html .= '<div class="glyphs">';
-					foreach ($GlyphByClass[2] as $g) {
-						$html .= '&#x' . $g . '; ';
-					}
-					$html .= '</div>';
-					$this->mpdf->WriteHTML($html);
-				}
-			} else {
-				$this->GlyphClassLigatures = '';
-			}
-			if (isset($GlyphByClass[3]) && count($GlyphByClass[3]) > 0) {
-				$this->GlyphClassMarks = $this->formatClassArr($GlyphByClass[3]);
-				if ($this->mode == 'summary') {
-					$this->mpdf->WriteHTML('<h3>Glyph class 3</h3>');
-					$this->mpdf->WriteHTML('<h5>Mark glyph (non-spacing combining glyph)</h5>');
-					$html = '';
-					$html .= '<div class="glyphs">';
-					foreach ($GlyphByClass[3] as $g) {
-						$html .= '&#x25cc;&#x' . $g . '; ';
-					}
-					$html .= '</div>';
-					$this->mpdf->WriteHTML($html);
-				}
-			} else {
-				$this->GlyphClassMarks = '';
-			}
-			if (isset($GlyphByClass[4]) && count($GlyphByClass[4]) > 0) {
-				$this->GlyphClassComponents = $this->formatClassArr($GlyphByClass[4]);
-				if ($this->mode == 'summary') {
-					$this->mpdf->WriteHTML('<h3>Glyph class 4</h3>');
-					$this->mpdf->WriteHTML('<h5>Component glyph (part of single character, spacing glyph)</h5>');
-					$html = '';
-					$html .= '<div class="glyphs">';
-					foreach ($GlyphByClass[4] as $g) {
-						$html .= '&#x' . $g . '; ';
-					}
-					$html .= '</div>';
-					$this->mpdf->WriteHTML($html);
-				}
-			} else {
-				$this->GlyphClassComponents = '';
-			}
-
-			// to use for MarkAttachmentType. A font need not define any mark glyphs, and the parser
-			// already allows for that; this copy did not
-			$Marks = isset($GlyphByClass[3]) ? $GlyphByClass[3] : [];
-
-			/* Required for GPOS
-			  // Attachment List
-			  if ($AttachList_offset) {
-			  $this->reader->seek($gdef_offset+$AttachList_offset );
-			  }
-			  The Attachment Point List table (AttachmentList) identifies all the attachment points defined in the GPOS table and their associated glyphs so a client can quickly access coordinates for each glyph's attachment points. As a result, the client can cache coordinates for attachment points along with glyph bitmaps and avoid recalculating the attachment points each time it displays a glyph. Without this table, processing speed would be slower because the client would have to decode the GPOS lookups that define attachment points and compile the points in a list.
-
-			  The Attachment List table (AttachList) may be used to cache attachment point coordinates along with glyph bitmaps.
-
-			  The table consists of an offset to a Coverage table (Coverage) listing all glyphs that define attachment points in the GPOS table, a count of the glyphs with attachment points (GlyphCount), and an array of offsets to AttachPoint tables (AttachPoint). The array lists the AttachPoint tables, one for each glyph in the Coverage table, in the same order as the Coverage Index.
-			  AttachList table
-			  Type 	Name 	Description
-			  Offset 	Coverage 	Offset to Coverage table - from beginning of AttachList table
-			  uint16 	GlyphCount 	Number of glyphs with attachment points
-			  Offset 	AttachPoint[GlyphCount] 	Array of offsets to AttachPoint tables-from beginning of AttachList table-in Coverage Index order
-
-			  An AttachPoint table consists of a count of the attachment points on a single glyph (PointCount) and an array of contour indices of those points (PointIndex), listed in increasing numerical order.
-
-			  AttachPoint table
-			  Type 	Name 	Description
-			  uint16 	PointCount 	Number of attachment points on this glyph
-			  uint16 	PointIndex[PointCount] 	Array of contour point indices -in increasing numerical order
-
-			  See Example 3 - https://learn.microsoft.com/en-us/typography/opentype/spec/gdef
-			 */
-
-			// Ligature Caret List
-			// The Ligature Caret List table (LigCaretList) defines caret positions for all the ligatures in a font.
-			// Not required for mDPF
-			// MarkAttachmentType
-			if ($MarkAttachClassDef_offset) {
-				if ($this->mode == 'summary') {
-					$this->mpdf->WriteHTML('<h1>Mark Attachment Types</h1>');
-				}
-				$this->reader->seek($gdef_offset + $MarkAttachClassDef_offset);
-				$MarkAttachmentTypes = $this->_getClassDefinitionTable();
-				foreach ($MarkAttachmentTypes as $class => $glyphs) {
-					if (is_array($Marks) && count($Marks)) {
-						$mat = array_diff($Marks, $MarkAttachmentTypes[$class]);
-						sort($mat, SORT_STRING);
-					} else {
-						$mat = [];
-					}
-
-					$this->MarkAttachmentType[$class] = $this->formatClassArr($mat);
-
-					if ($this->mode == 'summary') {
-						$this->mpdf->WriteHTML('<h3>Mark Attachment Type: ' . $class . '</h3>');
-						$html = '';
-						$html .= '<div class="glyphs">';
-						foreach ($glyphs as $g) {
-							$html .= '&#x25cc;&#x' . $g . '; ';
-						}
-						$html .= '</div>';
-						$this->mpdf->WriteHTML($html);
-					}
-				}
-			} else {
-				$this->MarkAttachmentType = [];
-			}
-
-			// MarkGlyphSets in Version 0x00010002 of GDEF and later
-			if ($ver_min >= 2 && $MarkGlyphSetsDef_offset) {
-				if ($this->mode == 'summary') {
-					$this->mpdf->WriteHTML('<h1>Mark Glyph Sets</h1>');
-				}
-				$this->reader->seek($gdef_offset + $MarkGlyphSetsDef_offset);
-				$MarkSetTableFormat = $this->reader->readUInt16();
-				$MarkSetCount = $this->reader->readUInt16();
-				$MarkSetOffset = [];
-				for ($i = 0; $i < $MarkSetCount; $i++) {
-					$MarkSetOffset[] = $this->reader->readUInt32();
-				}
-				for ($i = 0; $i < $MarkSetCount; $i++) {
-					// Coverage offsets are relative to the MarkGlyphSetsDef table, not the file
-					$this->reader->seek($gdef_offset + $MarkGlyphSetsDef_offset + $MarkSetOffset[$i]);
-					$glyphs = $this->coverageHex();
-					$this->MarkGlyphSets[$i] = $this->formatClassArr($glyphs);
-					if ($this->mode == 'summary') {
-						$this->mpdf->WriteHTML('<h3>Mark Glyph Set class: ' . $i . '</h3>');
-						$html = '';
-						$html .= '<div class="glyphs">';
-						foreach ($glyphs as $g) {
-							$html .= '&#x25cc;&#x' . $g . '; ';
-						}
-						$html .= '</div>';
-						$this->mpdf->WriteHTML($html);
-					}
-				}
-			} else {
-				$this->MarkGlyphSets = [];
-			}
-		} else {
-			$this->mpdf->WriteHTML('<div>GDEF table not defined</div>');
+		$html = '<div class="glyphs">';
+		foreach ($glyphs as $g) {
+			$html .= ($marks ? '&#x25cc;' : '') . '&#x' . $g . '; ';
 		}
 
-		$this->lookupFlag = new LookupFlag($this->fontkey, $this->gdefClasses());
+		return $html . '</div>';
 	}
 
 	/**
