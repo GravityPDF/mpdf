@@ -12,10 +12,17 @@ use Mpdf\TTFontFile;
  * whether it is right: a wrong value is as stable as a right one. #140 was a field short by the whole
  * of glyphIdArray, which no PDF reader ever opens - a subsetted font is embedded as Type0/Identity-H
  * and glyphs are resolved through the CIDToGIDMap beside it - and which every font tool refuses.
- * #150 was that same array standing a repackaged subtable past anything the field can hold.
+ * #150 was that same array standing a repackaged subtable past anything the field can hold, and #156
+ * the two subset builders writing it as well.
  */
 class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
+
+	/**
+	 * Where the run fontOfOneSegmentPerCharacter maps begins. It starts at the space so that the font
+	 * maps one, which makeSubsetSIP substitutes for an ASCII character the cmap does not reach.
+	 */
+	const FIRST_CODE = 0x20;
 
 	/**
 	 * Where the parser caches what it reads. Mpdf\Cache creates it.
@@ -25,46 +32,59 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private $tmpDir = __DIR__ . '/../tmp/mpdf/subsetter-cmap';
 
 	/**
-	 * @dataProvider fontProvider
+	 * @dataProvider builderProvider
 	 */
-	public function testMakeSubsetDeclaresTheLengthItWrote($font)
+	public function testDeclaresTheLengthItWrote($font, $method)
 	{
-		$this->assertDeclaredLength($this->subsetter()->makeSubset($this->file($font), $this->pangram($font), 0, false, false));
+		$cmap = $this->table($this->build($font, $method), 'cmap');
+		$this->assertNotNull($cmap, 'The font program carries no cmap table');
+
+		$subtable = $this->format4Subtable($cmap);
+		$this->assertNotNull($subtable, 'The cmap carries no format 4 subtable');
+
+		list($offset, $end) = $subtable;
+
+		$reader = new BlobReader($cmap);
+		$reader->seek($offset + 2);
+
+		$this->assertSame($end - $offset, $reader->readUInt16());
 	}
 
 	/**
-	 * @dataProvider fontProvider
-	 */
-	public function testMakeSubsetSipDeclaresTheLengthItWrote($font)
-	{
-		$this->assertDeclaredLength($this->subsetter()->makeSubsetSIP($this->file($font), $this->pangram($font), 0, false, 0));
-	}
-
-	/**
-	 * repackageTTF rewrites the whole font rather than a subset, so it takes no character list. It
-	 * only builds a cmap of its own under useOTL; without it the original table is copied over.
+	 * All three builders state an idRangeOffset of 0 for every segment, which resolves its glyphs
+	 * through idDelta, so the glyphIdArray that followed was bytes no reader could reach.
 	 *
-	 * @dataProvider fontProvider
+	 * @dataProvider builderProvider
 	 */
-	public function testRepackageTtfDeclaresTheLengthItWrote($font)
+	public function testWritesNoGlyphIdArray($font, $method)
 	{
-		$this->assertDeclaredLength($this->subsetter()->repackageTTF($this->file($font), 0, false, true));
-	}
-
-	/**
-	 * repackageTTF states an idRangeOffset of 0 for every segment, which resolves its glyphs through
-	 * idDelta, so the glyphIdArray that followed was bytes no reader could reach.
-	 *
-	 * @dataProvider fontProvider
-	 */
-	public function testRepackageTtfWritesNoGlyphIdArray($font)
-	{
-		$cmap = $this->table($this->subsetter()->repackageTTF($this->file($font), 0, false, true), 'cmap');
-		list($offset, $end, $segCount) = $this->format4Subtable($cmap);
+		list($offset, $end, $segCount) = $this->format4Subtable($this->table($this->build($font, $method), 'cmap'));
 
 		// format, length, language, segCountX2, searchRange, entrySelector, rangeShift and reservedPad,
 		// then endCode, startCode, idDelta and idRangeOffset once per segment
 		$this->assertSame(16 + 8 * $segCount, $end - $offset);
+	}
+
+	/**
+	 * The field runs out at 8,189 segments and the widest font in the corpus subsets into 824, so the
+	 * only way to stand either builder's subtable past it is to build a font for the purpose.
+	 */
+	public function testMakeSubsetRefusesASubtableLongerThanItsLengthFieldCanState()
+	{
+		$this->expectException(\Mpdf\Exception\FontException::class);
+		$this->expectExceptionMessage('subsets into a format 4 cmap subtable of 80024 bytes, more than its length field can state');
+
+		$characters = 10000;
+		$this->subsetter()->makeSubset($this->fontOfOneSegmentPerCharacter($characters), $this->charactersItMaps($characters));
+	}
+
+	public function testMakeSubsetSipRefusesASubtableLongerThanItsLengthFieldCanState()
+	{
+		$this->expectException(\Mpdf\Exception\FontException::class);
+		$this->expectExceptionMessage('subsets into a format 4 cmap subtable of 80024 bytes, more than its length field can state');
+
+		$characters = 10000;
+		$this->subsetter()->makeSubsetSIP($this->fontOfOneSegmentPerCharacter($characters), $this->charactersItMaps($characters));
 	}
 
 	/**
@@ -80,30 +100,36 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The whole corpus, as the golden masters take it, so that a font added to tests/data/ttf is
-	 * measured here too.
+	 * Every builder over the whole corpus, as the golden masters take it, so that a font added to
+	 * tests/data/ttf is measured here too.
 	 */
-	public function fontProvider()
+	public function builderProvider()
 	{
 		$master = new SubsetGoldenMaster();
 
-		return $master->fonts();
+		$cases = [];
+		foreach (array_keys($master->fonts()) as $font) {
+			foreach (['makeSubset', 'makeSubsetSIP', 'repackageTTF'] as $method) {
+				$cases[$font . ' ' . $method] = [$font, $method];
+			}
+		}
+
+		return $cases;
 	}
 
-	private function assertDeclaredLength($program)
+	/**
+	 * repackageTTF rewrites the whole font rather than a subset, so it takes no character list. It
+	 * only builds a cmap of its own under useOTL; without it the original table is copied over.
+	 *
+	 * @return string The font program the builder emits
+	 */
+	private function build($font, $method)
 	{
-		$cmap = $this->table($program, 'cmap');
-		$this->assertNotNull($cmap, 'The font program carries no cmap table');
+		$subsetter = $this->subsetter();
 
-		$subtable = $this->format4Subtable($cmap);
-		$this->assertNotNull($subtable, 'The cmap carries no format 4 subtable');
-
-		list($offset, $end) = $subtable;
-
-		$reader = new BlobReader($cmap);
-		$reader->seek($offset + 2);
-
-		$this->assertSame($end - $offset, $reader->readUInt16());
+		return $method === 'repackageTTF'
+			? $subsetter->repackageTTF($this->file($font), 0, false, true)
+			: $subsetter->$method($this->file($font), $this->pangram($font), 0, false, false);
 	}
 
 	/**
@@ -203,7 +229,15 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @return string A cmap of one format 4 subtable, mapping $characters codes from U+0100 onto glyph 1
+	 * @return int[] The characters fontOfOneSegmentPerCharacter maps, as Unicode code points
+	 */
+	private function charactersItMaps($characters)
+	{
+		return range(self::FIRST_CODE, self::FIRST_CODE + $characters - 1);
+	}
+
+	/**
+	 * @return string A cmap of one format 4 subtable, mapping $characters codes from FIRST_CODE onto glyph 1
 	 */
 	private function cmapOfOneGlyph($characters)
 	{
@@ -211,8 +245,8 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$subtable = TableWriter::uint16s(array_merge(
 			[4, 0, 0, 4, 4, 1, 0], // format, length (set below), language, segCountX2, searchRange, entrySelector, rangeShift
-			[0x0100 + $characters - 1, 0xFFFF, 0], // endCode, then reservedPad
-			[0x0100, 0xFFFF], // startCode
+			[self::FIRST_CODE + $characters - 1, 0xFFFF, 0], // endCode, then reservedPad
+			[self::FIRST_CODE, 0xFFFF], // startCode
 			[0, 1], // idDelta
 			[4, 0], // idRangeOffset: the glyphIdArray begins two segments past this field
 			array_fill(0, $characters, 1) // glyphIdArray
