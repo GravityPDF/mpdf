@@ -2686,7 +2686,7 @@ class Svg
 
 			if ($this->mpdf->useKerning) {
 
-				if ($this->mpdf->CurrentFont['haskernGPOS']) {
+				if (!empty($this->mpdf->CurrentFont['haskernGPOS'])) {
 
 					if (isset($this->mpdf->OTLtags['Plus'])) {
 						$this->mpdf->OTLtags['Plus'] .= ' kern';

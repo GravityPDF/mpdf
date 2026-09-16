@@ -461,7 +461,7 @@ class DirectWrite
 		$this->mpdf->OTLtags = [];
 
 		if ($this->mpdf->useKerning) {
-			if ($this->mpdf->CurrentFont['haskernGPOS']) {
+			if (!empty($this->mpdf->CurrentFont['haskernGPOS'])) {
 				$this->mpdf->OTLtags['Plus'] .= ' kern';
 			} else {
 				$textvar |= TextVars::FC_KERNING;
