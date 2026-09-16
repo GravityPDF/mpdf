@@ -23,43 +23,26 @@ class TTFontFileAnalysis extends TTFontFile
 	function extractCoreInfo($file, $TTCfontID = 0)
 	{
 		$this->open($file);
-		$this->charWidths = '';
-		$this->charToGlyph = [];
-		$this->tables = [];
-		$this->ascent = 0;
-		$this->descent = 0;
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
-		$this->version = $version = $this->reader->readUInt32();
-		$this->panose = []; // mPDF 5.0
 
-		if ($version == 0x4F54544F) {
-			throw new \Mpdf\Exception\FontException(sprintf('Fonts with postscript outlines are not supported (%s)', $file));
+		// Closed however the read ends: see getMetrics. Listing a directory reaches this once per file,
+		// so a handle kept by every font it could not read is a lock on each of those files
+		try {
+			$this->readHeader($TTCfontID);
+
+			return $this->readCoreInfo($file, $TTCfontID);
+		} finally {
+			$this->reader->close();
 		}
+	}
 
-		if ($version == 0x74746366) {
-			if ($TTCfontID > 0) {
-				$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-				if (!in_array($version, [0x00010000, 0x00020000])) {
-					throw new \Mpdf\MpdfException("ERROR - NOT ADDED as Error parsing TrueType Collection: version=" . $version . " - " . $file);
-				}
-			} else {
-				throw new \Mpdf\MpdfException("ERROR - Error parsing TrueType Collection - " . $file);
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-			$this->readTableDirectory(false);
-		} else {
-			if (!in_array($version, [0x00010000, 0x74727565])) {
-				throw new \Mpdf\MpdfException("ERROR - NOT ADDED as Not a TrueType font: version=" . $version . " - " . $file);
-			}
-			$this->readTableDirectory(false);
-		}
-
+	/**
+	 * @param string $file      The font file being read, for the messages
+	 * @param int    $TTCfontID Which font of a TrueType Collection, handed back in the result
+	 *
+	 * @return array See extractCoreInfo
+	 */
+	private function readCoreInfo($file, $TTCfontID)
+	{
 		/* Included for testing...
 		  $cmap_offset = $this->seek_table("cmap");
 		  $this->reader->skip(2);
@@ -443,7 +426,27 @@ class TTFontFileAnalysis extends TTFontFile
 			}
 		}
 
-		$this->reader->close();
 		return [$this->familyName, $bold, $italic, $ftype, $TTCfontID, $rtl, $indic, $cjk, $sip, $smp, $puaag, $pua, $unAGlyphs];
+	}
+
+	/**
+	 * The browser's own wording for the three header complaints. A caller listing a directory prints
+	 * each as a line of the listing, which is why they name the file and say it was not added where
+	 * the parser's say only what was wrong. Kept as they were, class and all, for anything outside the
+	 * library that already lists fonts with this.
+	 */
+	protected function collectionWithoutFontId()
+	{
+		return new \Mpdf\MpdfException("ERROR - Error parsing TrueType Collection - " . $this->filename);
+	}
+
+	protected function unreadableCollection($version)
+	{
+		return new \Mpdf\MpdfException("ERROR - NOT ADDED as Error parsing TrueType Collection: version=" . $version . " - " . $this->filename);
+	}
+
+	protected function notATrueTypeFont($version)
+	{
+		return new \Mpdf\MpdfException("ERROR - NOT ADDED as Not a TrueType font: version=" . $version . " - " . $this->filename);
 	}
 }

@@ -4,6 +4,7 @@ namespace Mpdf;
 
 use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontCache;
+use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\SequenceRule;
 
 /**
@@ -17,104 +18,12 @@ use Mpdf\Fonts\Table\SequenceRule;
 class OtlDump extends TTFontFile
 {
 
-	var $GPOSFeatures; // mPDF 5.7.1
-
-	var $GPOSLookups;  // mPDF 5.7.1
-
-	var $GPOSScriptLang; // mPDF 5.7.1
-
-	var $ignoreStrings; // mPDF 5.7.1
-
-	var $MarkAttachmentType; // mPDF 5.7.1
-
-	var $MarkGlyphSets; // mPDF 7.5.1
-
-	var $GlyphClassMarks; // mPDF 5.7.1
-
-	var $GlyphClassLigatures; // mPDF 5.7.1
-
-	var $GlyphClassBases; // mPDF 5.7.1
-
-	var $GlyphClassComponents; // mPDF 5.7.1
-
-	var $GSUBScriptLang; // mPDF 5.7.1
-
-	var $rtlPUAstr; // mPDF 5.7.1
-
-	var $fontkey; // mPDF 5.7.1
-
-	var $useOTL; // mPDF 5.7.1
-
-	var $panose;
-
-	var $maxUni;
-
-	var $sFamilyClass;
-
-	var $sFamilySubClass;
-
-	var $sipset;
-
-	var $smpset;
-
-	var $numTables;
-
-	var $searchRange;
-
-	var $entrySelector;
-
-	var $rangeShift;
-
-	var $tables;
-
-	var $filename;
-
-	var $charToGlyph;
-
-	var $ascent;
-
-	var $descent;
-
-	var $name;
-
-	var $familyName;
-
-	var $styleName;
-
-	var $fullName;
-
-	var $uniqueFontID;
-
-	var $unitsPerEm;
-
-	var $bbox;
-
-	var $capHeight;
-
-	var $stemV;
-
-	var $italicAngle;
-
-	var $flags;
-
-	var $underlinePosition;
-
-	var $underlineThickness;
-
-	var $charWidths;
-
-	var $defaultWidth;
-
-	var $maxStrLenRead;
-
-	var $numTTCFonts;
-
-	var $TTCFonts;
-
-	var $maxUniChar;
-
-	var $kerninfo;
-
+	/**
+	 * Which report to build: 'summary' lists the scripts, languages and features the font offers,
+	 * 'detail' reports one script and language system's lookups in full.
+	 *
+	 * @var string
+	 */
 	var $mode;
 
 	/**
@@ -162,26 +71,6 @@ class OtlDump extends TTFontFile
 	 * @var string[]
 	 */
 	private $notOffered = [];
-
-	var $glyphToChar;
-
-	var $fontRevision;
-
-	var $glyphdata;
-
-	var $glyphIDtoUn;
-
-	var $restrictedUse;
-
-	var $GSUBFeatures;
-
-	var $GSUBLookups;
-
-	var $glyphIDtoUni;
-
-	var $GSLuCoverage;
-
-	var $version;
 
 	private $mpdf;
 
@@ -896,7 +785,7 @@ class OtlDump extends TTFontFile
 	{
 		$substitute = [];
 		foreach ($sequence as $sub) {
-			$substitute[] = unicode_hex($this->glyphToChar[$sub][0]);
+			$substitute[] = GlyphString::of($this->glyphToChar[$sub][0]);
 		}
 
 		return $substitute;
@@ -913,7 +802,7 @@ class OtlDump extends TTFontFile
 			$gid = $alternateSet['SubstituteGlyphID'][$gl];
 			// A glyph the cmap does not reach has no character to report it by
 			if (isset($this->glyphToChar[$gid][0])) {
-				$substitute[] = unicode_hex($this->glyphToChar[$gid][0]);
+				$substitute[] = GlyphString::of($this->glyphToChar[$gid][0]);
 			}
 		}
 
@@ -1856,7 +1745,7 @@ class OtlDump extends TTFontFile
 								for ($pv = 0; $pv < $PairValueCount; $pv++) {
 									//PairValueRecord
 									$gid = $this->reader->readUInt16();
-									$SecondGlyph = unicode_hex($this->glyphToChar[$gid][0]);
+									$SecondGlyph = GlyphString::of($this->glyphToChar[$gid][0]);
 									$Value1 = $this->_getValueRecord($ValueFormat1);
 									$Value2 = $this->_getValueRecord($ValueFormat2);
 
@@ -2804,7 +2693,7 @@ class OtlDump extends TTFontFile
 	 */
 	private function glyphHex($glyphID)
 	{
-		return isset($this->glyphToChar[$glyphID][0]) ? unicode_hex($this->glyphToChar[$glyphID][0]) : '';
+		return isset($this->glyphToChar[$glyphID][0]) ? GlyphString::of($this->glyphToChar[$glyphID][0]) : '';
 	}
 
 	/**
