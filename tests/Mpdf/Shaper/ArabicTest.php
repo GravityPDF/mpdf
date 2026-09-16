@@ -20,8 +20,20 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** U+064E FATHA, a transparent-joining mark */
 	const FATHA = '0064E';
 
+	/** U+0710 SYRIAC LETTER ALAPH, right-joining, and the only letter with fin2, fin3 and med2 forms */
+	const ALAPH = '00710';
+
 	/** U+0712 SYRIAC LETTER BETH, dual-joining */
 	const BETH = '00712';
+
+	/** U+0715 SYRIAC LETTER DALATH, right-joining */
+	const DALATH = '00715';
+
+	/** U+0716 SYRIAC LETTER DOTLESS DALATH RISH, right-joining */
+	const DOTLESS_DALATH_RISH = '00716';
+
+	/** U+072A SYRIAC LETTER RISH, right-joining */
+	const RISH = '0072A';
 
 	/** U+074F SYRIAC LETTER SOGDIAN FE, dual-joining */
 	const SOGDIAN_FE = '0074F';
@@ -31,13 +43,16 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * The font's rtlSUB table, as TTFontFile builds it: replacement hex per form, indexed
-	 * 0=isolated 1=final 2=initial 3=medial
+	 * 0=isolated 1=final 2=initial 3=medial, and for Alaph 4=med2 5=fin2 6=fin3.
+	 *
+	 * Alaph is given the forms Estrangelo Edessa states for it, which is every one but the isolated.
 	 */
 	private function glyphs()
 	{
 		return [
 			self::BEH => ['B_ISOL', 'B_FINA', 'B_INIT', 'B_MEDI'],
 			self::DAL => ['D_ISOL', 'D_FINA'],
+			self::ALAPH => [1 => 'A_FINA', 4 => 'A_MED2', 5 => 'A_FIN2', 6 => 'A_FIN3'],
 			self::BETH => ['BE_ISOL', 'BE_FINA', 'BE_INIT', 'BE_MEDI'],
 			self::SOGDIAN_FE => ['F_ISOL', 'F_FINA', 'F_INIT', 'F_MEDI'],
 		];
@@ -124,6 +139,72 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * fin3 is the Alaph a Syriac font draws at the end of a word after DALATH, DOTLESS DALATH RISH or
+	 * RISH. Those three are right-joining, so the Alaph after one of them stands apart from it - which
+	 * is why the form exists, and why the test the form sat behind, that the letter before it joins
+	 * forwards, could never be true. GravityPDF/mpdf#132.
+	 */
+	public function testAnAlaphEndingAWordAfterDalathOrRishTakesFin3()
+	{
+		foreach ([self::DALATH, self::DOTLESS_DALATH_RISH, self::RISH] as $preceding) {
+			$forms = $this->shape([$preceding, self::ALAPH], self::ALL_FORMS, 'syrc');
+
+			$this->assertSame(['A_FIN3', 6], $forms[1], $preceding . ' before the Alaph');
+		}
+	}
+
+	/**
+	 * fin2 is the same position after a letter that does join forwards, and it is what every Alaph
+	 * ending a word was taking
+	 */
+	public function testAnAlaphEndingAWordAfterADualJoiningLetterTakesFin2()
+	{
+		$forms = $this->shape([self::BETH, self::ALAPH], self::ALL_FORMS, 'syrc');
+
+		$this->assertSame([['BE_INIT', 2], ['A_FIN2', 5]], $forms);
+	}
+
+	/**
+	 * med2 is the Alaph inside a word after a letter that joins forwards, and it is reached by the same
+	 * guard as fin2
+	 */
+	public function testAnAlaphInsideAWordAfterADualJoiningLetterTakesMed2()
+	{
+		$forms = $this->shape([self::BETH, self::ALAPH, self::BETH], self::ALL_FORMS, 'syrc');
+
+		$this->assertSame(['A_MED2', 4], $forms[1]);
+	}
+
+	/**
+	 * The three letters only call for fin3 at the end of the word. Inside one the Alaph is left as it
+	 * came in, because Estrangelo Edessa - like every Syriac font in the corpus - states no isolated
+	 * form for it.
+	 */
+	public function testAnAlaphInsideAWordAfterDalathOrRishIsLeftAlone()
+	{
+		$forms = $this->shape([self::RISH, self::ALAPH, self::BETH], self::ALL_FORMS, 'syrc');
+
+		$this->assertSame([self::ALAPH, 0], $forms[1]);
+	}
+
+	/**
+	 * Through a real font: Estrangelo Edessa carries a fin3 Alaph and nothing could ask for it, so the
+	 * nominal U+0710 was what got drawn. It is a glyph of its own - not the fin2 the same Alaph takes
+	 * after a dual-joining letter - and the same one after all three letters.
+	 */
+	public function testAnAlaphAfterDalathOrRishDrawsTheFormTheFontStatesForIt()
+	{
+		$afterDalath = $this->render(self::DALATH, self::ALAPH);
+		$afterDotless = $this->render(self::DOTLESS_DALATH_RISH, self::ALAPH);
+		$afterRish = $this->render(self::RISH, self::ALAPH);
+
+		$this->assertSame($afterDalath[1], $afterDotless[1]);
+		$this->assertSame($afterDalath[1], $afterRish[1]);
+		$this->assertNotSame(\Mpdf\Utils\UtfString::codeHex2utf(self::ALAPH), $afterDalath[1]);
+		$this->assertNotSame($this->render(self::BETH, self::ALAPH)[1], $afterDalath[1]);
+	}
+
+	/**
 	 * The same character through a real font, which is where the wrong entry showed: Estrangelo Edessa
 	 * carries a BETH for each of the four forms, and the form the shaper asks for is the glyph that
 	 * ends up drawn. A run ending in SOGDIAN FE has to draw the same BETH as a run ending in another
@@ -136,13 +217,13 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$beforeFe = $this->render(self::BETH, self::SOGDIAN_FE);
 		$beforeBeth = $this->render(self::BETH, self::BETH);
 
-		$this->assertSame($beforeBeth, $beforeFe);
+		$this->assertSame($beforeBeth[0], $beforeFe[0]);
 	}
 
 	/**
 	 * Text is drawn in visual order, so the letter written first is the last one drawn.
 	 *
-	 * @return string the glyph the first of the two characters was drawn as
+	 * @return string[] the glyph each of the two characters was drawn as, in the order they were written
 	 */
 	private function render($first, $second)
 	{
@@ -153,9 +234,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			ltrim($second, '0')
 		));
 
-		$drawn = preg_split('//u', $mpdf->drawnText[0], -1, PREG_SPLIT_NO_EMPTY);
-
-		return end($drawn);
+		return array_reverse(preg_split('//u', $mpdf->drawnText[0], -1, PREG_SPLIT_NO_EMPTY));
 	}
 
 	/**
