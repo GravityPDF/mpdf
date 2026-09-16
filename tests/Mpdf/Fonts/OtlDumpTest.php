@@ -5,6 +5,7 @@ namespace Mpdf\Fonts;
 use Mpdf\Cache;
 use Mpdf\HtmlRecordingMpdf;
 use Mpdf\OtlDump;
+use Mpdf\TTFontFile;
 
 /**
  * What the dump does with a request it cannot fully answer.
@@ -300,6 +301,29 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('(0062)() (0061)() ', $dump->_makeGSUBbacktrackMatch(['0061', '0062'], '()'));
 		$this->assertSame('() (0061)() (0062)', $dump->_makeGSUBlookaheadMatch(['0061', '0062'], '()'));
 		$this->assertSame('()', $dump->_getGSUBignoreString(0, ''));
+	}
+
+	/**
+	 * The parser caches GDEF and the raw GSUB and GPOS for the shaper to read back by font key. The
+	 * dump holds GDEF in its report's format, and utils/font_dump_otl.php hands it the shaper's own
+	 * cache, so it writes nothing there.
+	 */
+	public function testTheDumpLeavesTheShapersCacheAlone()
+	{
+		$cache = new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/otldump/cache-' . getmypid()));
+		$file = self::FONT_DIR . '/NotoSansTakri-GSUB53-Subset.ttf';
+
+		$dump = new OtlDump($this->mpdf, $cache, 'win');
+		$dump->getMetrics($file, 'dumped', 0, false, false, 0xFF, 'summary');
+
+		$parser = new TTFontFile($cache, 'win');
+		$parser->getMetrics($file, 'parsed', 0, false, false, 0xFF);
+
+		foreach (['GDEFdata.json', 'GSUB.dat', 'GPOS.dat'] as $suffix) {
+			$this->assertFalse($cache->has('dumped.' . $suffix), 'dumped.' . $suffix);
+			$this->assertTrue($cache->has('parsed.' . $suffix), 'parsed.' . $suffix);
+			$cache->remove('parsed.' . $suffix);
+		}
 	}
 
 	private function skippedClassNames(OtlDump $dump, $flag, $markFilteringSet)

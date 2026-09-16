@@ -3,6 +3,8 @@
 namespace Mpdf\Fonts;
 
 use Mpdf\Cache;
+use Mpdf\HtmlRecordingMpdf;
+use Mpdf\OtlDump;
 use Mpdf\TTFontFile;
 
 /**
@@ -221,6 +223,8 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * Whether each class gave up on the file with the complaint expected, and let go of it.
 	 *
+	 * OtlDump reads through the parser's getMetrics(), so it gives up with the parser's complaint.
+	 *
 	 * Letting go is read from each reader rather than inferred from the unlink() at the end: POSIX
 	 * removes a file that is still open without complaint, so that unlink() only ever failed on
 	 * Windows, and a handle left open has to fail this everywhere.
@@ -229,7 +233,9 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$parser = new TTFontFile($this->cache(), 'win');
 		$browser = new TTFontFileAnalysis($this->cache(), 'win');
+		$dump = new OtlDump(new HtmlRecordingMpdf(['mode' => 'utf-8', 'tempDir' => __DIR__ . '/../tmp/mpdf/analysis']), $this->cache(), 'win');
 
+		$expected['dump'] = $expected['parser'];
 		$raised = array_filter([
 			'parser' => $this->raisedBy($file, function () use ($parser, $file, $TTCfontID) {
 				$parser->getMetrics($file, uniqid('', true), $TTCfontID);
@@ -237,11 +243,15 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'browser' => $this->raisedBy($file, function () use ($browser, $file, $TTCfontID) {
 				$browser->extractCoreInfo($file, $TTCfontID);
 			}),
+			'dump' => $this->raisedBy($file, function () use ($dump, $file, $TTCfontID) {
+				$dump->getMetrics($file, uniqid('', true), $TTCfontID, false, false, 0xFF, 'summary');
+			}),
 		]);
 
 		$stillOpen = array_keys(array_filter([
 			'parser' => $this->holdsFileOpen($parser),
 			'browser' => $this->holdsFileOpen($browser),
+			'dump' => $this->holdsFileOpen($dump),
 		]));
 
 		unlink($file);

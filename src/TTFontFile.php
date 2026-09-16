@@ -277,6 +277,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->advanceWidthMax = 0;
 		$this->strikeoutSize = 0;
 		$this->strikeoutPosition = 0;
+		$this->restrictedUse = false;
 
 		$this->open($file);
 
@@ -817,7 +818,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$this->reader->skip(2); // usWidthClass
 			$fsType = $this->reader->readUInt16();
 			if ($fsType == 0x0002 || ($fsType & 0x0300) != 0) {
-				$this->restrictedUse = true;
+				$this->restrictedFont();
 			}
 
 			$this->reader->skip(16); // ySubscript and ySuperscript, 2 x 4 x short
@@ -1243,23 +1244,25 @@ class TTFontFile implements Fonts\FontSourceInterface
 				$GlyphByClass = [];
 			}
 
+			$this->reportGlyphClasses($GlyphByClass);
+
 			if (isset($GlyphByClass[1]) && count($GlyphByClass[1]) > 0) {
-				$this->GlyphClassBases = ' ' . implode('| ', $GlyphByClass[1]);
+				$this->GlyphClassBases = $this->glyphClassString($GlyphByClass[1]);
 			} else {
 				$this->GlyphClassBases = '';
 			}
 			if (isset($GlyphByClass[2]) && count($GlyphByClass[2]) > 0) {
-				$this->GlyphClassLigatures = ' ' . implode('| ', $GlyphByClass[2]);
+				$this->GlyphClassLigatures = $this->glyphClassString($GlyphByClass[2]);
 			} else {
 				$this->GlyphClassLigatures = '';
 			}
 			if (isset($GlyphByClass[3]) && count($GlyphByClass[3]) > 0) {
-				$this->GlyphClassMarks = ' ' . implode('| ', $GlyphByClass[3]);
+				$this->GlyphClassMarks = $this->glyphClassString($GlyphByClass[3]);
 			} else {
 				$this->GlyphClassMarks = '';
 			}
 			if (isset($GlyphByClass[4]) && count($GlyphByClass[4]) > 0) {
-				$this->GlyphClassComponents = ' ' . implode('| ', $GlyphByClass[4]);
+				$this->GlyphClassComponents = $this->glyphClassString($GlyphByClass[4]);
 			} else {
 				$this->GlyphClassComponents = '';
 			}
@@ -1303,6 +1306,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 			if ($MarkAttachClassDef_offset) {
 				$this->reader->seek($gdef_offset + $MarkAttachClassDef_offset);
 				$MarkAttachmentTypes = $this->_getClassDefinitionTable();
+				$this->reportMarkAttachmentTypes($MarkAttachmentTypes);
 				foreach ($MarkAttachmentTypes as $class => $glyphs) {
 					if (is_array($Marks) && count($Marks)) {
 						$mat = array_diff($Marks, $MarkAttachmentTypes[$class]);
@@ -1311,7 +1315,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 						$mat = [];
 					}
 
-					$this->MarkAttachmentType[$class] = ' ' . implode('| ', $mat);
+					$this->MarkAttachmentType[$class] = $this->glyphClassString($mat);
 				}
 			} else {
 				$this->MarkAttachmentType = [];
@@ -1326,22 +1330,64 @@ class TTFontFile implements Fonts\FontSourceInterface
 				for ($i = 0; $i < $MarkSetCount; $i++) {
 					$MarkSetOffset[] = $this->reader->readUInt32();
 				}
+				$markGlyphSets = [];
 				for ($i = 0; $i < $MarkSetCount; $i++) {
 					// Coverage offsets are relative to the MarkGlyphSetsDef table, not the file
 					$this->reader->seek($gdef_offset + $MarkGlyphSetsDef_offset + $MarkSetOffset[$i]);
-					$glyphs = $this->coverageHex();
-					$this->MarkGlyphSets[$i] = ' ' . implode('| ', $glyphs);
+					$markGlyphSets[$i] = $this->coverageHex();
+					$this->MarkGlyphSets[$i] = $this->glyphClassString($markGlyphSets[$i]);
 				}
+				$this->reportMarkGlyphSets($markGlyphSets);
 			} else {
 				$this->MarkGlyphSets = [];
 			}
 		} else {
-			throw new \Mpdf\Exception\FontException(sprintf('Unable to set font "%s" to use OTL as it does not include OTL tables (or at least not a GDEF table).', $this->filename));
+			$this->missingGDEF();
 		}
 
-		// The shaper reads GSUB and GPOS from here rather than from the font, so each is cached whole,
-		// one file per table. They used to share one file, GSUB first, which is the only reason a GPOS
-		// offset ever had to have the length of GSUB added to it.
+		$this->cacheLayoutTables();
+		$this->lookupFlag = new LookupFlag($this->fontkey, $this->gdefClasses());
+	}
+
+	/**
+	 * The font's OS/2 fsType restricts embedding. The parser records it and reads on.
+	 */
+	protected function restrictedFont()
+	{
+		$this->restrictedUse = true;
+	}
+
+	/**
+	 * GDEF's glyph lists as the parser keeps them: space-prefixed, "|"-separated hex, " 00641| 00642",
+	 * which is what LookupFlag and the shaper search.
+	 *
+	 * @param string[] $glyphs One class, as hex
+	 *
+	 * @return string
+	 */
+	protected function glyphClassString(array $glyphs)
+	{
+		return ' ' . implode('| ', $glyphs);
+	}
+
+	/**
+	 * Without GDEF there is no telling marks from bases, and every lookup flag would be read against
+	 * nothing, so a font asked to use OTL has to carry one.
+	 *
+	 * @throws \Mpdf\Exception\FontException
+	 */
+	protected function missingGDEF()
+	{
+		throw new \Mpdf\Exception\FontException(sprintf('Unable to set font "%s" to use OTL as it does not include OTL tables (or at least not a GDEF table).', $this->filename));
+	}
+
+	/**
+	 * The shaper reads GSUB and GPOS from here rather than from the font, so each is cached whole,
+	 * one file per table, beside the GDEF classes just read. They used to share one file, GSUB first,
+	 * which is the only reason a GPOS offset ever had to have the length of GSUB added to it.
+	 */
+	protected function cacheLayoutTables()
+	{
 		foreach (['GSUB', 'GPOS'] as $tag) {
 			if (!isset($this->tables[$tag])) {
 				continue;
@@ -1352,7 +1398,28 @@ class TTFontFile implements Fonts\FontSourceInterface
 		}
 
 		$this->fontCache->jsonWrite($this->fontkey . '.GDEFdata.json', $this->gdefClasses());
-		$this->lookupFlag = new LookupFlag($this->fontkey, $this->gdefClasses());
+	}
+
+	/**
+	 * @param array $glyphByClass GDEF glyph class (1 base, 2 ligature, 3 mark, 4 component) => its
+	 *                            glyphs as hex; empty where GDEF has no GlyphClassDef
+	 */
+	protected function reportGlyphClasses(array $glyphByClass)
+	{
+	}
+
+	/**
+	 * @param array $markAttachmentTypes Mark attachment class => the marks in it, as hex
+	 */
+	protected function reportMarkAttachmentTypes(array $markAttachmentTypes)
+	{
+	}
+
+	/**
+	 * @param array $markGlyphSets Mark glyph set => the marks in it, as hex
+	 */
+	protected function reportMarkGlyphSets(array $markGlyphSets)
+	{
 	}
 
 	/**
