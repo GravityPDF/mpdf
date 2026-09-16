@@ -20,6 +20,7 @@ use Mpdf\Shaper\Arabic;
 use Mpdf\Shaper\Indic;
 use Mpdf\Shaper\LineBreaking;
 use Mpdf\Shaper\Myanmar;
+use Mpdf\Shaper\OtlTags;
 use Mpdf\Shaper\Sea;
 
 use Mpdf\Utils\UtfString;
@@ -1354,11 +1355,11 @@ class Otl
 
 		$ScriptLang = $this->mpdf->CurrentFont['GSUBScriptLang'];
 		if (count($ScriptLang)) {
-			list($GSUBscriptTag, $is_old_spec) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GSUB');
+			list($GSUBscriptTag, $is_old_spec) = OtlTags::script($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL);
 			if ($this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GSUBscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
 				$GSUBlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
 			} elseif ($GSUBscriptTag && isset($ScriptLang[$GSUBscriptTag]) && $ScriptLang[$GSUBscriptTag] != '') {
-				$GSUBlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GSUBscriptTag]);
+				$GSUBlangsys = OtlTags::language($this->mpdf->currentLang, $ScriptLang[$GSUBscriptTag]);
 			}
 		}
 		$ScriptLang = $this->mpdf->CurrentFont['GPOSScriptLang'];
@@ -1370,11 +1371,11 @@ class Otl
 		} // else repeat for GPOS
 		// [Font XBRiyaz has GSUB tables for latn, but not GPOS for latn]
 		elseif (count($ScriptLang)) {
-			list($GPOSscriptTag, $dummy) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GPOS');
+			list($GPOSscriptTag, $dummy) = OtlTags::script($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL);
 			if ($GPOSscriptTag && $this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GPOSscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
 				$GPOSlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
 			} elseif ($GPOSscriptTag && isset($ScriptLang[$GPOSscriptTag]) && $ScriptLang[$GPOSscriptTag] != '') {
-				$GPOSlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GPOSscriptTag]);
+				$GPOSlangsys = OtlTags::language($this->mpdf->currentLang, $ScriptLang[$GPOSscriptTag]);
 			}
 		}
 
@@ -4932,209 +4933,6 @@ class Otl
 		}
 
 		return $this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset];
-	}
-
-	/**
-	 * Pick the OpenType script tag to lay the text out under, from what the font offers.
-	 *
-	 * The tag Unicode implies is only a first choice: a font may offer the v2 Indic tag and not the
-	 * old one or the other way round, may offer nothing for the script and still have a default
-	 * entry, and may offer a script mPDF has no shaper for. This settles all of that, and says which
-	 * Indic specification the chosen tag implies.
-	 *
-	 * @param array  $ScriptLang  The scripts this table offers, and the language systems under each
-	 * @param string $scripttag   The tag the text's Unicode script implies
-	 * @param int    $scriptblock The text's Unicode script
-	 * @param string $shaper      The shaper picked for it, where there is one
-	 * @param int    $useOTL      Which script groups the document asked to be laid out this way
-	 * @param string $mode        'GSUB' or 'GPOS', which may not offer the same scripts
-	 *
-	 * @return array The tag to use, or '' for none, and whether it implies the original Indic
-	 *               specification rather than the v2 one
-	 */
-	private function _getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $shaper, $useOTL, $mode)
-	{
-		// ScriptLang is the array of available script/lang tags supported by the font
-		// $scriptblock is the (number/code) for the script of the actual text string based on Unicode properties (Ucdn::$uni_scriptblock)
-		// $scripttag is the default tag derived from $scriptblock
-		/*
-		  https://learn.microsoft.com/en-us/typography/opentype/spec/ttoreg
-		  https://learn.microsoft.com/en-us/typography/opentype/spec/scripttags
-
-		  Values for useOTL
-
-		  Bit   dn  hn  Value
-		  1 1   0x0001  GSUB/GPOS - Latin scripts
-		  2 2   0x0002  GSUB/GPOS - Cyrillic scripts
-		  3 4   0x0004  GSUB/GPOS - Greek scripts
-		  4 8   0x0008  GSUB/GPOS - CJK scripts (excluding Hangul-Jamo)
-		  5 16  0x0010  (Reserved)
-		  6 32  0x0020  (Reserved)
-		  7 64  0x0040  (Reserved)
-		  8 128 0x0080  GSUB/GPOS - All other scripts (including all RTL scripts, complex scripts with shapers etc)
-
-		  NB If change for RTL - cf. function magic_reverse_dir in mpdf.php to update
-
-		 */
-
-		if ($scriptblock == Ucdn::SCRIPT_LATIN) {
-			if (!($useOTL & 0x01)) {
-				return ['', false];
-			}
-		} elseif ($scriptblock == Ucdn::SCRIPT_CYRILLIC) {
-			if (!($useOTL & 0x02)) {
-				return ['', false];
-			}
-		} elseif ($scriptblock == Ucdn::SCRIPT_GREEK) {
-			if (!($useOTL & 0x04)) {
-				return ['', false];
-			}
-		} elseif ($scriptblock >= Ucdn::SCRIPT_HIRAGANA && $scriptblock <= Ucdn::SCRIPT_YI) {
-			if (!($useOTL & 0x08)) {
-				return ['', false];
-			}
-		} else {
-			if (!($useOTL & 0x80)) {
-				return ['', false];
-			}
-		}
-
-		//  If availabletags includes scripttag - choose
-		if (isset($ScriptLang[$scripttag])) {
-			return [$scripttag, false];
-		}
-
-		//  If INDIC (or Myanmar) and available tag not includes new version, check if includes old version & choose old version
-		if ($shaper) {
-			switch ($scripttag) {
-				case 'bng2':
-					if (isset($ScriptLang['beng'])) {
-						return ['beng', true];
-					}
-					// fallthrough
-				case 'dev2':
-					if (isset($ScriptLang['deva'])) {
-						return ['deva', true];
-					}
-					// fallthrough
-				case 'gjr2':
-					if (isset($ScriptLang['gujr'])) {
-						return ['gujr', true];
-					}
-					// fallthrough
-				case 'gur2':
-					if (isset($ScriptLang['guru'])) {
-						return ['guru', true];
-					}
-					// fallthrough
-				case 'knd2':
-					if (isset($ScriptLang['knda'])) {
-						return ['knda', true];
-					}
-					// fallthrough
-				case 'mlm2':
-					if (isset($ScriptLang['mlym'])) {
-						return ['mlym', true];
-					}
-					// fallthrough
-				case 'ory2':
-					if (isset($ScriptLang['orya'])) {
-						return ['orya', true];
-					}
-					// fallthrough
-				case 'tml2':
-					if (isset($ScriptLang['taml'])) {
-						return ['taml', true];
-					}
-					// fallthrough
-				case 'tel2':
-					if (isset($ScriptLang['telu'])) {
-						return ['telu', true];
-					}
-					// fallthrough
-				case 'mym2':
-					if (isset($ScriptLang['mymr'])) {
-						return ['mymr', true];
-					}
-			}
-		}
-
-		//  choose DFLT if present
-		if (isset($ScriptLang['DFLT'])) {
-			return ['DFLT', false];
-		}
-		//  else choose dflt if present
-		if (isset($ScriptLang['dflt'])) {
-			return ['dflt', false];
-		}
-		//  else return no scriptTag
-		if (isset($ScriptLang['latn'])) {
-			return ['latn', false];
-		}
-		//  else return no scriptTag
-		return ['', false];
-	}
-
-	/**
-	 * Pick the OpenType language system tag from the document's language, out of what the script
-	 * offers.
-	 *
-	 * An IETF tag is tried from the most specific part down - the language with its script or region,
-	 * then the language alone - so that a font offering only the broader entry is still matched.
-	 *
-	 * @param string $ietf      The language of the text, as an IETF tag, e.g. 'sr-Cyrl'
-	 * @param string $available The language systems this script offers, space separated
-	 *
-	 * @return string The tag to use, or '' to fall back to the script's default
-	 */
-	private function _getOTLLangTag($ietf, $available)
-	{
-		// http://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
-		// https://learn.microsoft.com/en-us/typography/opentype/spec/languagetags
-		// IETF tag = e.g. en-US, und-Arab, sr-Cyrl cf. class LangToFont
-		if ($available == '') {
-			return '';
-		}
-
-		$tags = $ietf
-			? preg_split('/-/', $ietf)
-			: [];
-
-		$lang = '';
-		$country = '';
-		$script = '';
-
-		$lang = isset($tags[0])
-			? strtolower($tags[0])
-			: '';
-
-		if (isset($tags[1]) && $tags[1]) {
-			if (strlen($tags[1]) == 2) {
-				$country = strtolower($tags[1]);
-			}
-		}
-
-		if (isset($tags[2]) && $tags[2]) {
-			$country = strtolower($tags[2]);
-		}
-
-		if ($lang != '' && isset(Ucdn::$ot_languages[$lang])) {
-			$langsys = Ucdn::$ot_languages[$lang];
-		} elseif ($lang != '' && $country != '' && isset(Ucdn::$ot_languages[$lang . '' . $country])) {
-			$langsys = Ucdn::$ot_languages[$lang . '' . $country];
-		} else {
-			$langsys = "DFLT";
-		}
-
-		if (strpos($available, $langsys) === false) {
-			if (strpos($available, "DFLT") !== false) {
-				return "DFLT";
-			} else {
-				return '';
-			}
-		}
-
-		return $langsys;
 	}
 
 	/**
