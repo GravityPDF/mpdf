@@ -117,15 +117,81 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The three builders share one format 4 subtable, so its bytes are pinned here directly rather
+	 * than only through the golden masters' hashes of whole programs.
+	 *
+	 * @dataProvider format4SubtableProvider
+	 */
+	public function testPacksAFormat4Subtable(array $codeToGlyph, array $expected)
+	{
+		$this->assertSame(bin2hex(TableWriter::uint16s($expected)), bin2hex($this->packFormat4Subtable($codeToGlyph)));
+	}
+
+	public function format4SubtableProvider()
+	{
+		return [
+			'one run of codes and glyphs' => [
+				[0x41 => 5, 0x42 => 6, 0x43 => 7],
+				[
+					4, 32, 0, // format, length, language
+					4, 4, 1, 0, // segCountX2, searchRange, entrySelector, rangeShift
+					0x43, 0xFFFF, 0, // endCode, reservedPad
+					0x41, 0xFFFF, // startCode
+					5 - 0x41, 1, // idDelta
+					0, 0, // idRangeOffset
+				],
+			],
+			'a run broken by a code, then by a glyph' => [
+				[0x20 => 1, 0x21 => 2, 0x23 => 3, 0x24 => 5, 0x25 => 6, 0x30 => 9],
+				[
+					4, 56, 0,
+					10, 8, 2, 2,
+					0x21, 0x23, 0x25, 0x30, 0xFFFF, 0,
+					0x20, 0x23, 0x24, 0x30, 0xFFFF,
+					1 - 0x20, 3 - 0x23, 5 - 0x24, 9 - 0x30, 1,
+					0, 0, 0, 0, 0,
+				],
+			],
+			'no characters' => [
+				[],
+				[4, 24, 0, 2, 2, 0, 0, 0xFFFF, 0, 0xFFFF, 1, 0],
+			],
+		];
+	}
+
+	/**
+	 * 16 bytes of header and reservedPad and 8 a segment, counting the one at 0xFFFF, puts the last
+	 * length the field holds at 8,188 segments.
+	 */
+	public function testPacksTheLongestFormat4SubtableItsLengthFieldCanState()
+	{
+		$subtable = $this->packFormat4Subtable($this->segmentsOfOneCode(8188));
+
+		$reader = new BlobReader($subtable);
+		$reader->skip(2); // format
+
+		$this->assertSame(65528, strlen($subtable));
+		$this->assertSame(65528, $reader->readUInt16());
+	}
+
+	public function testRefusesAFormat4SubtableOneSegmentLonger()
+	{
+		$this->expectException(\Mpdf\Exception\FontException::class);
+		$this->expectExceptionMessage('needs a format 4 cmap subtable of 65536 bytes, more than its length field can state');
+
+		$this->packFormat4Subtable($this->segmentsOfOneCode(8189));
+	}
+
+	/**
 	 * repackageTTF maps the glyphs the cmap does not reach into the Private Use Area as well, so it
 	 * takes one segment more than the subset builders do.
 	 */
 	public function overflowProvider()
 	{
 		return [
-			'makeSubset' => ['makeSubset', 'subsets into a format 4 cmap subtable of 80024 bytes'],
-			'makeSubsetSIP' => ['makeSubsetSIP', 'subsets into a format 4 cmap subtable of 80024 bytes'],
-			'repackageTTF' => ['repackageTTF', 'repackages into a format 4 cmap subtable of 80032 bytes'],
+			'makeSubset' => ['makeSubset', 'needs a format 4 cmap subtable of 80024 bytes'],
+			'makeSubsetSIP' => ['makeSubsetSIP', 'needs a format 4 cmap subtable of 80024 bytes'],
+			'repackageTTF' => ['repackageTTF', 'needs a format 4 cmap subtable of 80032 bytes'],
 		];
 	}
 
@@ -160,6 +226,22 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return $method === 'repackageTTF'
 			? $subsetter->repackageTTF($file, 0, false, true)
 			: $subsetter->$method($file, $subset, 0, false, false);
+	}
+
+	private function packFormat4Subtable(array $codeToGlyph)
+	{
+		$reflected = new \ReflectionMethod(FontSubsetter::class, 'format4Subtable');
+		$reflected->setAccessible(true);
+
+		return $reflected->invoke($this->subsetter(), $codeToGlyph);
+	}
+
+	/**
+	 * @return int[] Every other code on glyph 1, so that no two run on together
+	 */
+	private function segmentsOfOneCode($segments)
+	{
+		return array_fill_keys(range(0, 2 * ($segments - 1), 2), 1);
 	}
 
 	/**
