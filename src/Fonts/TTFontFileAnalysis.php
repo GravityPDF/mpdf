@@ -22,43 +22,13 @@ class TTFontFileAnalysis extends TTFontFile
 	 */
 	function extractCoreInfo($file, $TTCfontID = 0)
 	{
-		$this->open($file);
 		$this->charWidths = '';
 		$this->charToGlyph = [];
-		$this->tables = [];
 		$this->ascent = 0;
 		$this->descent = 0;
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
-		$this->version = $version = $this->reader->readUInt32();
-		$this->panose = []; // mPDF 5.0
+		$this->panose = [];
 
-		if ($version == 0x4F54544F) {
-			throw new \Mpdf\Exception\FontException(sprintf('Fonts with postscript outlines are not supported (%s)', $file));
-		}
-
-		if ($version == 0x74746366) {
-			if ($TTCfontID > 0) {
-				$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-				if (!in_array($version, [0x00010000, 0x00020000])) {
-					throw new \Mpdf\MpdfException("ERROR - NOT ADDED as Error parsing TrueType Collection: version=" . $version . " - " . $file);
-				}
-			} else {
-				throw new \Mpdf\MpdfException("ERROR - Error parsing TrueType Collection - " . $file);
-			}
-			$this->numTTCFonts = $this->reader->readUInt32();
-			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
-			}
-			$this->reader->seek($this->TTCFonts[$TTCfontID]['offset']);
-			$this->version = $version = $this->reader->readUInt32(); // TTFont version again now
-			$this->readTableDirectory(false);
-		} else {
-			if (!in_array($version, [0x00010000, 0x74727565])) {
-				throw new \Mpdf\MpdfException("ERROR - NOT ADDED as Not a TrueType font: version=" . $version . " - " . $file);
-			}
-			$this->readTableDirectory(false);
-		}
+		$this->openAndReadTableDirectory($file, $TTCfontID);
 
 		/* Included for testing...
 		  $cmap_offset = $this->seek_table("cmap");
@@ -445,5 +415,37 @@ class TTFontFileAnalysis extends TTFontFile
 
 		$this->reader->close();
 		return [$this->familyName, $bold, $italic, $ftype, $TTCfontID, $rtl, $indic, $cjk, $sip, $smp, $puaag, $pua, $unAGlyphs];
+	}
+
+	/**
+	 * A file this cannot read is one line of a directory listing, not the end of the run, so the
+	 * caller prints the message and carries on to the next file. That is why these say what the file
+	 * was and that it was not added, where the parser's say only what was wrong with it.
+	 *
+	 * @return \Exception
+	 */
+	protected function collectionWithoutFontId()
+	{
+		return new \Mpdf\MpdfException("ERROR - Error parsing TrueType Collection - " . $this->filename);
+	}
+
+	/**
+	 * @param int $version The TrueType Collection header version the file states
+	 *
+	 * @return \Exception
+	 */
+	protected function unreadableCollection($version)
+	{
+		return new \Mpdf\MpdfException("ERROR - NOT ADDED as Error parsing TrueType Collection: version=" . $version . " - " . $this->filename);
+	}
+
+	/**
+	 * @param int $version The font version the file states
+	 *
+	 * @return \Exception
+	 */
+	protected function notATrueTypeFont($version)
+	{
+		return new \Mpdf\MpdfException("ERROR - NOT ADDED as Not a TrueType font: version=" . $version . " - " . $this->filename);
 	}
 }

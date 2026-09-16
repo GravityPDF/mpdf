@@ -5,7 +5,6 @@ namespace Mpdf\Fonts;
 use Mpdf\Cache;
 use Mpdf\HtmlRecordingMpdf;
 use Mpdf\OtlDump;
-use Mpdf\TTFontFile;
 
 /**
  * Captures everything OtlDump reports about a font, plus every diagnostic PHP raised while it read it.
@@ -48,12 +47,6 @@ class OtlDumpGoldenMaster extends GoldenMaster
 	 */
 	public function capture($name)
 	{
-		// TTFontFile.php and OtlDump.php both declare Mpdf\unicode_hex() behind function_exists, so a
-		// diagnostic raised inside it is attributed to whichever file was loaded first. Load the one the
-		// renderer always loads, so the fixture does not depend on test order. The collapse removes the
-		// second declaration and with it the need for this.
-		class_exists(TTFontFile::class);
-
 		$diagnostics = [];
 		set_error_handler(function ($number, $string, $file, $line) use (&$diagnostics) {
 			// Attributed to the method, not the line: a fixture keyed on line numbers churns on every

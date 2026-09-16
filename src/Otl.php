@@ -6,6 +6,7 @@ use Mpdf\Strict;
 
 use Mpdf\Css\TextVars;
 use Mpdf\Fonts\BlobReader;
+use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
 use Mpdf\Fonts\Table\SequenceRule;
@@ -116,8 +117,6 @@ class Otl
 	 */
 	var $LuDataCache;
 
-	var $current_fh;
-
 	var $Entry;
 
 	var $Exit;
@@ -142,8 +141,6 @@ class Otl
 	{
 		$this->mpdf = $mpdf;
 		$this->fontCache = $fontCache;
-
-		$this->current_fh = '';
 
 		$this->lbdicts = [];
 		$this->LuDataCache = [];
@@ -336,7 +333,7 @@ class Otl
 			//$OTLdata[$subchunk][$charctr]['normalization_check'] = $ucd_record[5];
 			//$OTLdata[$subchunk][$charctr]['script'] = $ucd_record[6];
 
-			$charasstr = $this->unicode_hex($char);
+			$charasstr = GlyphString::of($char);
 
 			if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
 				$OTLdata[$subchunk][$charctr]['group'] = 'M';
@@ -708,7 +705,7 @@ class Otl
 					$ucd_record = Ucdn::get_ucd_record($sub[$i]);
 					$newinfo[$i]['general_category'] = $ucd_record[0];
 					$newinfo[$i]['bidi_type'] = $ucd_record[2];
-					$charasstr = $this->unicode_hex($sub[$i]);
+					$charasstr = GlyphString::of($sub[$i]);
 					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
 						$newinfo[$i]['group'] = 'M';
 					} else {
@@ -731,7 +728,7 @@ class Otl
 					$newinfo[0]['bidi_type'] = $ucd_record[2];
 					$newinfo[0]['group'] = 'C';
 					$newinfo[0]['uni'] = $sub;
-					$newinfo[0]['hex'] = $this->unicode_hex($sub);
+					$newinfo[0]['hex'] = GlyphString::of($sub);
 					array_splice($this->OTLdata, $ptr, 2, $newinfo);
 				}
 			}
@@ -1006,7 +1003,7 @@ class Otl
 					$ucd_record = Ucdn::get_ucd_record($sub[0]);
 					$newinfo[0]['general_category'] = $ucd_record[0];
 					$newinfo[0]['bidi_type'] = $ucd_record[2];
-					$charasstr = $this->unicode_hex($sub[0]);
+					$charasstr = GlyphString::of($sub[0]);
 					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
 						$newinfo[0]['group'] = 'M';
 					} else {
@@ -1033,7 +1030,7 @@ class Otl
 					$ucd_record = Ucdn::get_ucd_record($sub[1]);
 					$newinfo[0]['general_category'] = $ucd_record[0];
 					$newinfo[0]['bidi_type'] = $ucd_record[2];
-					$charasstr = $this->unicode_hex($sub[1]);
+					$charasstr = GlyphString::of($sub[1]);
 					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
 						$newinfo[0]['group'] = 'M';
 					} else {
@@ -1078,7 +1075,7 @@ class Otl
 			  $ucd_record = Ucdn::get_ucd_record($sub[$i]);
 			  $newinfo[$i]['general_category'] = $ucd_record[0];
 			  $newinfo[$i]['bidi_type'] = $ucd_record[2];
-			  $charasstr = $this->unicode_hex($sub[$i]);
+			  $charasstr = GlyphString::of($sub[$i]);
 			  if (strpos($this->GlyphClassMarks, $charasstr)!==false) { $newinfo[$i]['group'] =  'M'; }
 			  else { $newinfo[$i]['group'] =  'C'; }
 			  $newinfo[$i]['uni'] =  $sub[$i];
@@ -2706,7 +2703,7 @@ class Otl
 		// LookupType 8: Reverse Chaining Contextual Single Substitution : 1 to 1
 		if ($Type == 1 || $Type == 3 || $Type == 8) {
 			$this->OTLdata[$pos]['uni'] = $substitute;
-			$this->OTLdata[$pos]['hex'] = $this->unicode_hex($substitute);
+			$this->OTLdata[$pos]['hex'] = GlyphString::of($substitute);
 			return 1;
 		} // LookupType 2: Multiple Substitution Subtable : 1 to n
 		elseif ($Type == 2) {
@@ -2717,7 +2714,7 @@ class Otl
 				$uni = $substitute[$i];
 				$newOTLdata[$i] = [];
 				$newOTLdata[$i]['uni'] = $uni;
-				$newOTLdata[$i]['hex'] = $this->unicode_hex($uni);
+				$newOTLdata[$i]['hex'] = GlyphString::of($uni);
 
 				// Get types of new inserted chars - or replicate type of char being replaced
 				//  $bt = Ucdn::get_bidi_class($uni);
@@ -2914,7 +2911,7 @@ class Otl
 			$bt = $this->OTLdata[$pos]['bidi_type'];
 			//  }
 
-			if (strpos($this->GlyphClassMarks, $this->unicode_hex($substitute)) !== false) {
+			if (strpos($this->GlyphClassMarks, GlyphString::of($substitute)) !== false) {
 				$gp = 'M';
 			} elseif ($substitute == 32) {
 				$gp = 'S';
@@ -2940,7 +2937,7 @@ class Otl
 			}
 
 			$newOTLdata[0]['uni'] = $substitute;
-			$newOTLdata[0]['hex'] = $this->unicode_hex($substitute);
+			$newOTLdata[0]['hex'] = GlyphString::of($substitute);
 
 			if ($this->shaper == 'I' || $this->shaper == 'K' || $this->shaper == 'S') {
 				$newOTLdata[0]['indic_category'] = $this->OTLdata[$pos]['indic_category'];
@@ -4980,17 +4977,6 @@ class Otl
 	}
 
 	/**
-	 * @param int $unicode_dec A Unicode code point
-	 *
-	 * @return string It as five upper-case hex digits, which is the width every glyph string here is
-	 *                written at so that they compare and concatenate
-	 */
-	private function unicode_hex($unicode_dec)
-	{
-		return (str_pad(strtoupper(dechex($unicode_dec)), 5, '0', STR_PAD_LEFT));
-	}
-
-	/**
 	 * The glyph IDs a Coverage table covers, for a Single Substitution Format 1, which adds a delta
 	 * to a glyph ID rather than naming a replacement.
 	 *
@@ -5017,7 +5003,7 @@ class Otl
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['coverage'][$offset])) {
 			$g = [];
 			foreach (Coverage::glyphs($this->reader) as $glyphID) {
-				$g[] = $this->unicode_hex($this->glyphToChar($glyphID));
+				$g[] = GlyphString::of($this->glyphToChar($glyphID));
 			}
 
 			$this->LuDataCache[$this->otlCacheKey]['coverage'][$offset] = $g;

@@ -4,6 +4,7 @@ namespace Mpdf;
 
 use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontCache;
+use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
 use Mpdf\Fonts\TableChecksum;
@@ -21,17 +22,20 @@ if (!defined('_OTL_OLD_SPEC_COMPAT_2')) {
 // when read by Adobe Reader on a Windows PC(!)
 // Recalculate correct metadata/profiles when making subset fonts (not SIP/SMP)
 // e.g. xMin, xMax, maxNContours
-// mPDF 5.7.1
 if (!function_exists('\Mpdf\unicode_hex')) {
 	/**
-	 * @param int $unicode_dec A Unicode code point
+	 * A Unicode code point as the five upper-case hex digits the OTL code writes characters at.
 	 *
-	 * @return string It as five upper-case hex digits, which is the width every glyph string in the
-	 *                OTL code is written at so that they compare and concatenate
+	 * Fonts\GlyphString is where this lives now. It stays declared here, and here rather than
+	 * anywhere tidier, because it has been a public function of the Mpdf namespace since 5.7.1 and
+	 * upstream still declares it in this file: anything outside the library that calls
+	 * \Mpdf\unicode_hex() keeps working.
+	 *
+	 * @deprecated Use Mpdf\Fonts\GlyphString::of()
 	 */
 	function unicode_hex($unicode_dec)
 	{
-		return sprintf("%05s", strtoupper(dechex($unicode_dec)));
+		return GlyphString::of($unicode_dec);
 	}
 }
 
@@ -239,11 +243,9 @@ class TTFontFile
 	{
 		$this->useOTL = $useOTL;
 		$this->fontkey = $fontkey;
-		$this->open($file);
 
 		$this->charWidths = '';
 		$this->charToGlyph = [];
-		$this->tables = [];
 		$this->kerninfo = [];
 		$this->haskernGPOS = false;
 		$this->hassmallcapsGSUB = false;
@@ -266,27 +268,78 @@ class TTFontFile
 		$this->advanceWidthMax = 0;
 		$this->strikeoutSize = 0;
 		$this->strikeoutPosition = 0;
+
+		$this->openAndReadTableDirectory($file, $TTCfontID, $debug);
+		$this->extractInfo($debug, $BMPonly, $useOTL);
+
+		$this->reader->close();
+	}
+
+	/**
+	 * Open a font file and read enough of it that seek_table can find any of its tables: the version,
+	 * the font within a collection if that is what it is, and the table directory.
+	 *
+	 * @param string $file      The font file to read
+	 * @param int    $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
+	 * @param bool   $debug     Whether to check every table against the checksum the directory states
+	 *
+	 * @throws \Exception If the file is not a TrueType font this can read. Which exception that is
+	 *                    comes from collectionWithoutFontId, unreadableCollection and
+	 *                    notATrueTypeFont, so that a subclass can complain in its own terms
+	 */
+	protected function openAndReadTableDirectory($file, $TTCfontID = 0, $debug = false)
+	{
+		$this->open($file);
+
+		$this->tables = [];
+		$this->numTTCFonts = 0;
+		$this->TTCFonts = [];
 		$this->version = $version = $this->reader->readUInt32();
-		$this->panose = [];
 
 		if ($version === 0x4F54544F) {
 			throw new \Mpdf\Exception\FontException(sprintf('Fonts with postscript outlines are not supported (%s)', $file));
 		}
 
-		if ($version === 0x74746366 && !$TTCfontID) {
-			throw new \Mpdf\Exception\FontException(sprintf('TTCfontID for a TrueType Collection is not defined in mPDF "fontdata" configuration (%s)', $file));
-		}
+		if ($version === 0x74746366) {
+			if (!$TTCfontID) {
+				throw $this->collectionWithoutFontId();
+			}
 
-		if (!in_array($version, [0x00010000, 0x74727565], true) && !$TTCfontID) {
-			throw new \Mpdf\Exception\FontException(sprintf('Not a TrueType font: version=%s)', $version));
+			$this->selectFont($TTCfontID);
+		} elseif (!in_array($version, [0x00010000, 0x74727565], true)) {
+			throw $this->notATrueTypeFont($version);
 		}
-
-		$this->selectFont($TTCfontID);
 
 		$this->readTableDirectory($debug);
-		$this->extractInfo($debug, $BMPonly, $useOTL);
+	}
 
-		$this->reader->close();
+	/**
+	 * @return \Exception Because the file is a TrueType Collection and nothing said which font of it
+	 *                    to read
+	 */
+	protected function collectionWithoutFontId()
+	{
+		return new \Mpdf\Exception\FontException(sprintf('TTCfontID for a TrueType Collection is not defined in mPDF "fontdata" configuration (%s)', $this->filename));
+	}
+
+	/**
+	 * @param int $version The TrueType Collection header version the file states
+	 *
+	 * @return \Exception Because that is not a version of the format this reads
+	 */
+	protected function unreadableCollection($version)
+	{
+		return new \Mpdf\Exception\FontException(sprintf('Error parsing TrueType Collection: version=%s (%s)', $version, $this->filename));
+	}
+
+	/**
+	 * @param int $version The font version the file states
+	 *
+	 * @return \Exception Because that is not a version of the format this reads
+	 */
+	protected function notATrueTypeFont($version)
+	{
+		return new \Mpdf\Exception\FontException(sprintf('Not a TrueType font: version=%s)', $version));
 	}
 
 	/**
@@ -351,7 +404,7 @@ class TTFontFile
 
 		$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
 		if (!in_array($version, [0x00010000, 0x00020000], true)) {
-			throw new \Mpdf\Exception\FontException(sprintf('Error parsing TrueType Collection: version=%s (%s)', $version, $this->filename));
+			throw $this->unreadableCollection($version);
 		}
 
 		$this->numTTCFonts = $this->reader->readUInt32();
@@ -1287,7 +1340,7 @@ class TTFontFile
 			// 0 and glyphCount 1, which does not seem to mean anything useful, and FreeSerif has no
 			// glyphToChar[0] to go with it
 			if (isset($this->glyphToChar[$glyphID][0])) {
-				$GlyphByClass[$class][] = unicode_hex($this->glyphToChar[$glyphID][0]);
+				$GlyphByClass[$class][] = GlyphString::of($this->glyphToChar[$glyphID][0]);
 			}
 		}
 
@@ -1698,7 +1751,7 @@ class TTFontFile
 					$glyphs = $this->_getCoverage(false);
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
-						$replace[] = unicode_hex($this->glyphToChar[$glyphs[$g]][0]);
+						$replace[] = GlyphString::of($this->glyphToChar[$glyphs[$g]][0]);
 						// Flag = Ignore
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
 							continue;
@@ -1768,7 +1821,7 @@ class TTFontFile
 							}
 							for ($l = 1; $l < $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['CompCount']; $l++) {
 								$gid = $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['GlyphID'][$l];
-								$rpl = unicode_hex($this->glyphToChar[$gid][0]);
+								$rpl = GlyphString::of($this->glyphToChar[$gid][0]);
 								// Flag = Ignore
 								if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $rpl, $Lookup[$i]['MarkFilteringSet'])) {
 									continue 2;
@@ -1797,7 +1850,7 @@ class TTFontFile
 								$GlyphCount = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['GlyphCount'];
 								for ($g = 1; $g < $GlyphCount; $g++) {
 									$glyphID = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['Input'][$g];
-									$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['InputGlyphs'][$g] = unicode_hex($this->glyphToChar[$glyphID][0]);
+									$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['InputGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
 								}
 							}
 						}
@@ -1873,19 +1926,19 @@ class TTFontFile
 								$BacktrackGlyphCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['BacktrackGlyphCount'] = $this->reader->readUInt16();
 								for ($g = 0; $g < $BacktrackGlyphCount; $g++) {
 									$glyphID = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['BacktrackGlyphs'][$g] = unicode_hex($this->glyphToChar[$glyphID][0]);
+									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['BacktrackGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
 								}
 
 								$InputGlyphCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['InputGlyphCount'] = $this->reader->readUInt16();
 								for ($g = 1; $g < $InputGlyphCount; $g++) {
 									$glyphID = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['InputGlyphs'][$g] = unicode_hex($this->glyphToChar[$glyphID][0]);
+									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['InputGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
 								}
 
 								$LookaheadGlyphCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['LookaheadGlyphCount'] = $this->reader->readUInt16();
 								for ($g = 0; $g < $LookaheadGlyphCount; $g++) {
 									$glyphID = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['LookaheadGlyphs'][$g] = unicode_hex($this->glyphToChar[$glyphID][0]);
+									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['LookaheadGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
 								}
 
 								$SubstCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['SubstCount'] = $this->reader->readUInt16();
@@ -3289,7 +3342,7 @@ class TTFontFile
 			$uni = isset($this->glyphToChar[$glyphID][0]) ? $this->glyphToChar[$glyphID][0] : 0;
 
 			if ($convert2hex) {
-				$g[] = unicode_hex($uni);
+				$g[] = GlyphString::of($uni);
 			} else {
 				$g[$uni] = $index;
 			}
@@ -3316,7 +3369,7 @@ class TTFontFile
 			list($glyphID, $class) = $pair;
 
 			if (isset($this->glyphToChar[$glyphID][0])) {
-				$GlyphByClass[$class][] = unicode_hex($this->glyphToChar[$glyphID][0]);
+				$GlyphByClass[$class][] = GlyphString::of($this->glyphToChar[$glyphID][0]);
 			}
 		}
 
@@ -3620,7 +3673,7 @@ class TTFontFile
 
 		$substitute = [];
 		foreach ($sequence as $sub) {
-			$substitute[] = unicode_hex($this->glyphToChar[$sub][0]);
+			$substitute[] = GlyphString::of($this->glyphToChar[$sub][0]);
 		}
 
 		return $substitute;
@@ -3643,7 +3696,7 @@ class TTFontFile
 			return null;
 		}
 
-		return [unicode_hex($this->glyphToChar[$gid][0])];
+		return [GlyphString::of($this->glyphToChar[$gid][0])];
 	}
 
 	/**
