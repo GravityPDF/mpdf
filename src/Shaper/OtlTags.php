@@ -77,7 +77,8 @@ class OtlTags
 	 * @param string $ietf      The language of the text as an IETF tag, e.g. 'sr-Cyrl' or 'zh-Hant-HK'
 	 * @param string $available The language systems the script offers, as one string of tags
 	 *
-	 * @return string The tag, 'DFLT' where the script offers that and not the language, or '' for neither
+	 * @return string The first of the language's tags the script offers, 'DFLT' where it offers none of
+	 *                them and offers that, or '' for neither
 	 */
 	public static function language($ietf, $available)
 	{
@@ -85,35 +86,67 @@ class OtlTags
 			return '';
 		}
 
-		$tags = $ietf ? explode('-', $ietf) : [];
+		$subtags = $ietf ? explode('-', strtolower($ietf)) : [];
 
-		$lang = isset($tags[0]) ? strtolower($tags[0]) : '';
-
-		// The region, where the second subtag is one; a third subtag always is, the second being
-		// the script
-		$country = '';
-		if (isset($tags[1]) && strlen($tags[1]) == 2) {
-			$country = strtolower($tags[1]);
-		}
-		if (isset($tags[2]) && $tags[2]) {
-			$country = strtolower($tags[2]);
-		}
-
-		$region = $lang . '-' . $country;
-
-		if ($lang != '' && isset(Ucdn::$ot_languages[$lang])) {
-			$langsys = Ucdn::$ot_languages[$lang];
-		} elseif ($lang != '' && $country != '' && isset(Ucdn::$ot_languages[$region])) {
-			$langsys = Ucdn::$ot_languages[$region];
+		if (isset($subtags[0]) && $subtags[0] == 'zh') {
+			$candidates = self::chinese($subtags);
+		} elseif (isset($subtags[0]) && isset(Ucdn::$ot_languages[$subtags[0]])) {
+			$candidates = [Ucdn::$ot_languages[$subtags[0]]];
 		} else {
-			$langsys = 'DFLT';
+			$candidates = [];
 		}
 
-		if (strpos($available, $langsys) !== false) {
-			return $langsys;
+		foreach ($candidates as $langsys) {
+			if (strpos($available, $langsys) !== false) {
+				return $langsys;
+			}
 		}
 
 		return strpos($available, 'DFLT') !== false ? 'DFLT' : '';
+	}
+
+	/**
+	 * The language systems for Chinese, in the order HarfBuzz tries them
+	 * (hb_ot_tags_from_complex_language() in hb-ot-tag-table.hh).
+	 *
+	 * The script subtag outranks the region, so zh-Hans-HK is Simplified, except that Traditional
+	 * Chinese in Hong Kong or Macao keeps its region's tag. Macao has its own ZHTM, and where a font
+	 * lacks it takes Hong Kong's ZHH before the default. A tag with neither is Simplified.
+	 *
+	 * The zh- keys of Ucdn::$ot_languages are not read: they hold one tag per region, and nothing for
+	 * the script or for zh alone.
+	 *
+	 * @param string[] $subtags The lower-cased subtags of a tag whose language is zh
+	 *
+	 * @return string[]
+	 */
+	private static function chinese(array $subtags)
+	{
+		$regions = [
+			'hk' => ['ZHH '],
+			'mo' => ['ZHTM', 'ZHH '],
+			'tw' => ['ZHT '],
+		];
+
+		$script = isset($subtags[1]) ? $subtags[1] : '';
+
+		if ($script == 'hant' && isset($subtags[2]) && ($subtags[2] == 'hk' || $subtags[2] == 'mo')) {
+			return $regions[$subtags[2]];
+		}
+		if ($script == 'hans') {
+			return ['ZHS '];
+		}
+		if ($script == 'hant') {
+			return ['ZHT '];
+		}
+
+		foreach ($regions as $region => $langsys) {
+			if (in_array($region, $subtags, true)) {
+				return $langsys;
+			}
+		}
+
+		return ['ZHS '];
 	}
 
 	/**
