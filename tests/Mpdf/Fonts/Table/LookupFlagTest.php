@@ -42,16 +42,16 @@ class LookupFlagTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The combination the dump used to disagree on. The parser and the shaper let IgnoreMarks give way
-	 * to the attachment class and the dump did not; see GravityPDF/mpdf#175 for why the spec would
-	 * rather it did not.
+	 * IgnoreMarks supersedes a mark attachment class and a mark filtering set, as the spec says, so a
+	 * mark inside the class or the set is skipped with the rest
 	 */
-	public function testIgnoreMarksGivesWayToAMarkAttachmentClass()
+	public function testIgnoreMarksSupersedesAMarkAttachmentClassAndAMarkFilteringSet()
 	{
-		$this->assertSame([LookupFlag::MARKS_OUTSIDE_ATTACHMENT_CLASS], LookupFlag::skipped(0x0108));
-		$this->assertSame(' 00300| 00302', $this->lookupFlag->glyphs(0x0108, ''));
-		$this->assertTrue($this->lookupFlag->skips(0x0108, '00300', ''));
-		$this->assertFalse($this->lookupFlag->skips(0x0108, '00301', ''));
+		$this->assertSame([LookupFlag::MARKS], LookupFlag::skipped(0x0108));
+		$this->assertSame([LookupFlag::MARKS], LookupFlag::skipped(0x0118));
+		$this->assertSame(' 00300| 00301| 00302', $this->lookupFlag->glyphs(0x0108, ''));
+		$this->assertTrue($this->lookupFlag->skips(0x0108, '00301', ''));
+		$this->assertTrue($this->lookupFlag->skips(0x0018, '00301', 0));
 	}
 
 	/**
@@ -91,7 +91,7 @@ class LookupFlagTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'MarkGlyphSets' => [0 => ' 00300| 00301'],
 		]);
 
-		$this->assertSame([LookupFlag::MARKS_OUTSIDE_FILTERING_SET], LookupFlag::skipped(0x0118));
+		$this->assertSame([LookupFlag::MARKS_OUTSIDE_FILTERING_SET], LookupFlag::skipped(0x0110));
 		$this->assertSame(' 00302', $lookupFlag->glyphs(0x0110, 0));
 		$this->assertFalse($lookupFlag->skips(0x0110, '00300', 0));
 		$this->assertTrue($lookupFlag->skips(0x0110, '00302', 0));
