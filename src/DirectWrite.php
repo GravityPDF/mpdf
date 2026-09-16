@@ -3,7 +3,6 @@
 namespace Mpdf;
 
 use Mpdf\Color\ColorConverter;
-use Mpdf\Css\TextVars;
 
 class DirectWrite
 {
@@ -456,17 +455,9 @@ class DirectWrite
 			$this->mpdf->biDirectional = true;
 		} // *RTL*
 
-		$textvar = 0;
 		$save_OTLtags = $this->mpdf->OTLtags;
-		$this->mpdf->OTLtags = [];
+		$textvar = $this->mpdf->startTextRunFeatures();
 
-		if ($this->mpdf->useKerning) {
-			if (!empty($this->mpdf->CurrentFont['haskernGPOS'])) {
-				$this->mpdf->OTLtags['Plus'] .= ' kern';
-			} else {
-				$textvar |= TextVars::FC_KERNING;
-			}
-		}
 		// Use OTL OpenType Table Layout - GSUB & GPOS
 		if (!empty($this->mpdf->CurrentFont['useOTL'])) {
 			$text = $this->otl->applyOTL($text, $this->mpdf->CurrentFont['useOTL']);

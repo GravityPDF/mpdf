@@ -154,31 +154,4 @@ class CoreFontKerningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return $pages[0];
 	}
 
-	/**
-	 * Draw into a document with kerning on - the combination the reads are behind - and assert it
-	 * said nothing. PHPUnit turns a warning into a failure, but a handler names the read that raised
-	 * it and catches the notice PHP 5 raises for the same miss.
-	 *
-	 * @param callable $draw
-	 * @param array $config
-	 */
-	private function assertDrawsSilently($draw, $config = [])
-	{
-		$raised = [];
-		set_error_handler(static function ($errno, $message, $file, $line) use (&$raised) {
-			$raised[] = sprintf('%s in %s:%d', $message, basename($file), $line);
-			return true;
-		});
-
-		try {
-			$mpdf = $this->mpdf($config + ['useKerning' => true]);
-			call_user_func($draw, $mpdf);
-			$this->output($mpdf);
-		} finally {
-			restore_error_handler();
-		}
-
-		$this->assertSame([], $raised);
-	}
-
 }
