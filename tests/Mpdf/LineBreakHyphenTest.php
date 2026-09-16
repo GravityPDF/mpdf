@@ -68,32 +68,31 @@ class LineBreakHyphenTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * Bidi::reorder() rebuilds a line's text from its char_data, so the two have to describe the
-	 * same characters. Several page widths, because which of them a hyphen lands on moves with the
-	 * line breaks.
+	 * same characters. Read off lines the reordering left alone: the ones it rewrites it rebuilds
+	 * without char_data, leaving nothing to compare.
+	 *
+	 * @dataProvider pageWidths
 	 */
-	public function testEveryDrawnLineHasOneCharDataEntryPerCharacter()
+	public function testEveryDrawnLineHasOneCharDataEntryPerCharacter($width)
 	{
-		foreach ([34, 38, 40, 44] as $width) {
-			foreach (['ltr', 'rtl'] as $dir) {
-				$mpdf = new TextRecordingMpdf(['mode' => 'utf-8', 'format' => [$width, 100]]);
-				$mpdf->WriteHTML('<div dir="' . $dir . '" style="font-family: dejavusanscondensed; font-size: 12pt; hyphens: auto">'
-					. self::HEBREW_WORD . ' Paul-Sorge-Strasse</div>');
+		$html = '<div style="font-family: dejavusanscondensed; font-size: 12pt; hyphens: auto">Paul-Sorge-Strasse</div>';
 
-				foreach ($mpdf->drawnText as $ix => $line) {
-					$OTLdata = $mpdf->drawnOTLdata[$ix];
-					if (empty($OTLdata['char_data'])) {
-						continue;
-					}
-					$this->assertSame(
-						mb_strlen($line, 'UTF-8'),
-						count($OTLdata['char_data']),
-						sprintf('"%s" at %dmm, %s', $line, $width, $dir)
-					);
-				}
+		$mpdf = $this->render($html, [$width, 100]);
 
-				$mpdf->cleanup();
-			}
+		$this->assertNotEmpty($mpdf->drawnText);
+		foreach ($mpdf->drawnText as $ix => $line) {
+			$this->assertSame(mb_strlen($line, $mpdf->mb_enc), count($mpdf->drawnOTLdata[$ix]['char_data']), $line);
 		}
+
+		$mpdf->cleanup();
+	}
+
+	/**
+	 * Which line a hyphen lands on moves with the line breaks, so more than one page width.
+	 */
+	public function pageWidths()
+	{
+		return [[34], [38], [40], [44]];
 	}
 
 	/**
@@ -101,12 +100,22 @@ class LineBreakHyphenTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function drawnLines($html, $format)
 	{
-		$mpdf = new TextRecordingMpdf(['mode' => 'utf-8', 'format' => $format]);
-		$mpdf->WriteHTML($html);
+		$mpdf = $this->render($html, $format);
 		$lines = $mpdf->drawnText;
 		$mpdf->cleanup();
 
 		return $lines;
+	}
+
+	/**
+	 * @return TextRecordingMpdf the document, still open, with everything it drew recorded
+	 */
+	private function render($html, $format)
+	{
+		$mpdf = new TextRecordingMpdf(['mode' => 'utf-8', 'format' => $format]);
+		$mpdf->WriteHTML($html);
+
+		return $mpdf;
 	}
 
 	private function reverse($text)
