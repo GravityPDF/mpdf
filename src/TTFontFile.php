@@ -7,6 +7,7 @@ use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
+use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\TableChecksum;
 
@@ -2844,99 +2845,24 @@ class TTFontFile
 	 */
 	function _checkGSUBignore($flag, $glyph, $MarkFilteringSet)
 	{
-		$ignore = false;
-		// Flag & 0x0008 = Ignore Marks - (unless already done with MarkAttachmentType)
-		if ((($flag & 0x0008) == 0x0008 && ($flag & 0xFF00) == 0) && strpos($this->GlyphClassMarks, $glyph)) {
-			$ignore = true;
-		}
-		if ((($flag & 0x0004) == 0x0004) && strpos($this->GlyphClassLigatures, $glyph)) {
-			$ignore = true;
-		}
-		if ((($flag & 0x0002) == 0x0002) && strpos($this->GlyphClassBases, $glyph)) {
-			$ignore = true;
-		}
-		// Flag & 0xFF?? = MarkAttachmentType
-		if ($flag & 0xFF00) {
-			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			if (strpos($this->marksOutsideAttachmentClass($flag >> 8), $glyph)) {
-				$ignore = true;
-			}
-		}
-		// Flag & 0x0010 = UseMarkFilteringSet: skip every mark *except* those in the set
-		if (($flag & 0x0010) && strpos($this->GlyphClassMarks, $glyph)
-				&& !strpos($this->markGlyphSet($MarkFilteringSet), $glyph)) {
-			$ignore = true;
-		}
-
-		return $ignore;
+		return $this->lookupFlag()->skips($flag, $glyph, $MarkFilteringSet);
 	}
 
 	/**
-	 * The glyphs of one of GDEF's mark glyph sets.
+	 * Made each time it is asked for rather than kept, because the GDEF classes it reads are filled in
+	 * by _getGDEFtables() - and by OtlDump's own, in its own format.
 	 *
-	 * A lookup's MarkFilteringSet indexes those sets. A font naming a set GDEF does not define is
-	 * malformed, and guessing which marks it meant would shape silently wrong, so both callers fail
-	 * loudly here.
-	 *
-	 * protected rather than private because OtlDump reports on the same sets, from the same parse.
-	 *
-	 * @param int $MarkFilteringSet The set a lookup's flags name
-	 *
-	 * @return string Its glyphs, space-prefixed and "|"-separated
-	 *
-	 * @throws \Mpdf\Exception\FontException If GDEF defines no such set
+	 * @return LookupFlag
 	 */
-	protected function markGlyphSet($MarkFilteringSet)
+	protected function lookupFlag()
 	{
-		if (!isset($this->MarkGlyphSets[$MarkFilteringSet])) {
-			throw new \Mpdf\Exception\FontException(sprintf('Font "%s" uses mark filtering set %s, which GDEF does not define', $this->fontkey, $MarkFilteringSet));
-		}
-
-		return $this->MarkGlyphSets[$MarkFilteringSet];
-	}
-
-	/**
-	 * UseMarkFilteringSet means "skip every mark except those in the given mark glyph set", so the
-	 * glyphs to ignore are GlyphClassMarks minus that set - not the set itself.
-	 *
-	 * @param string $marks Space-prefixed, "|"-separated glyph list, e.g. " 00DCA| 00DD2"
-	 * @param string $set   The mark glyph set, in the same format
-	 *
-	 * @return string The marks the set leaves out, in the same format
-	 */
-	private function marksOutsideFilteringSet($marks, $set)
-	{
-		$keep = [];
-		$inSet = [];
-		foreach (explode('|', $set) as $glyph) {
-			$inSet[trim($glyph)] = true;
-		}
-
-		foreach (explode('|', $marks) as $glyph) {
-			$glyph = trim($glyph);
-			if ($glyph !== '' && !isset($inSet[$glyph])) {
-				$keep[] = $glyph;
-			}
-		}
-
-		return $keep ? ' ' . implode('| ', $keep) : '';
-	}
-
-	/**
-	 * The marks a lookup naming a mark attachment class skips: every mark outside that class, which
-	 * is what _getGDEFtables() keeps MarkAttachmentType as.
-	 *
-	 * A font may name a class GDEF does not define - Carlito and NATS set the flag without a
-	 * MarkAttachClassDef table at all - and then no mark is in the class, so the lookup skips every
-	 * one of them.
-	 *
-	 * @param int $class The mark attachment class the lookup's flags name
-	 *
-	 * @return string Its glyphs, space-prefixed and "|"-separated
-	 */
-	private function marksOutsideAttachmentClass($class)
-	{
-		return isset($this->MarkAttachmentType[$class]) ? $this->MarkAttachmentType[$class] : $this->GlyphClassMarks;
+		return new LookupFlag($this->fontkey, [
+			'GlyphClassMarks' => $this->GlyphClassMarks,
+			'GlyphClassLigatures' => $this->GlyphClassLigatures,
+			'GlyphClassBases' => $this->GlyphClassBases,
+			'MarkAttachmentType' => $this->MarkAttachmentType,
+			'MarkGlyphSets' => $this->MarkGlyphSets,
+		]);
 	}
 
 	/**
@@ -2953,48 +2879,8 @@ class TTFontFile
 	 */
 	function _getGSUBignoreString($flag, $MarkFilteringSet)
 	{
-		// If ignoreFlag set, combine all ignore glyphs into -> "((?:(?: FBA1| FBA2| FBA3))*)"
-		// else "()"
-		// for Input - set on secondary Lookup table if in Context, and set Backtrack and Lookahead on Context Lookup
-		$str = "";
-		$ignoreflag = 0;
+		$str = $this->lookupFlag()->glyphs($flag, $MarkFilteringSet);
 
-		// Flag & 0xFF?? = MarkAttachmentType
-		if ($flag & 0xFF00) {
-			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			$ignoreflag = $flag;
-			$str = $this->marksOutsideAttachmentClass($flag >> 8);
-		}
-
-		// Flag & 0x0010 = UseMarkFilteringSet
-		if ($flag & 0x0010) {
-			$ignoreflag = $flag;
-			$str = $this->marksOutsideFilteringSet($this->GlyphClassMarks, $this->markGlyphSet($MarkFilteringSet));
-		}
-
-		// If Ignore Marks set, supercedes any above
-		// Flag & 0x0008 = Ignore Marks - (unless already done with MarkAttachmentType)
-		if (($flag & 0x0008) == 0x0008 && ($flag & 0xFF00) == 0) {
-			$ignoreflag = 8;
-			$str = $this->GlyphClassMarks;
-		}
-
-		// Flag & 0x0004 = Ignore Ligatures
-		if (($flag & 0x0004) == 0x0004) {
-			$ignoreflag += 4;
-			if ($str) {
-				$str .= "|";
-			}
-			$str .= $this->GlyphClassLigatures;
-		}
-		// Flag & 0x0002 = Ignore BaseGlyphs
-		if (($flag & 0x0002) == 0x0002) {
-			$ignoreflag += 2;
-			if ($str) {
-				$str .= "|";
-			}
-			$str .= $this->GlyphClassBases;
-		}
 		if ($str) {
 			// This originally returned e.g. ((?:(?:[IGNORE8]))*) when NOT specific to a Lookup e.g. rtlSub in
 			// arabictypesetting.GSUB.arab.DFLT.php

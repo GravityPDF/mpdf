@@ -10,6 +10,7 @@ use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\Anchor;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
+use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\MarkArray;
 use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\Table\ValueRecord;
@@ -91,6 +92,13 @@ class Otl
 	var $GlyphClassBases;
 
 	var $GlyphClassComponents;
+
+	/**
+	 * Which glyphs a lookup skips, for the current font
+	 *
+	 * @var LookupFlag
+	 */
+	private $lookupFlag;
 
 	var $Ignores;
 
@@ -280,6 +288,7 @@ class Otl
 		$this->GlyphClassLigatures = $gdef['GlyphClassLigatures'];
 		$this->GlyphClassComponents = $gdef['GlyphClassComponents'];
 		$this->GlyphClassBases = $gdef['GlyphClassBases'];
+		$this->lookupFlag = new LookupFlag($this->fontkey, $gdef);
 	}
 
 	/**
@@ -2051,7 +2060,7 @@ class Otl
 	private function _applyGSUBsingleSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $SubstFormat)
 	{
 		// Flag = Ignore
-		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
+		if ($this->lookupFlag->skips($Flag, $currGlyph, $MarkFilteringSet)) {
 			return null;
 		}
 		$CoverageOffset = $subtable_offset + $this->reader->readUInt16();
@@ -2096,7 +2105,7 @@ class Otl
 	private function _applyGSUBmultipleSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $SubstFormat)
 	{
 		// Flag = Ignore
-		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
+		if ($this->lookupFlag->skips($Flag, $currGlyph, $MarkFilteringSet)) {
 			return null;
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
@@ -2135,7 +2144,7 @@ class Otl
 	private function _applyGSUBalternateSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $tagInt, $SubstFormat)
 	{
 		// Flag = Ignore
-		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
+		if ($this->lookupFlag->skips($Flag, $currGlyph, $MarkFilteringSet)) {
 			return null;
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
@@ -2187,7 +2196,7 @@ class Otl
 	private function _applyGSUBligatureSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $ignore, $SubstFormat)
 	{
 		// Flag = Ignore
-		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
+		if ($this->lookupFlag->skips($Flag, $currGlyph, $MarkFilteringSet)) {
 			return null;
 		}
 		$Coverage = $subtable_offset + $this->reader->readUInt16();
@@ -2563,7 +2572,7 @@ class Otl
 	private function _applyGSUBreverseChainSingleSubst($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $LuCoverage, $level, $ignore, $SubstFormat)
 	{
 		// Flag = Ignore
-		if ($this->_checkGCOMignore($Flag, $currGlyph, $MarkFilteringSet)) {
+		if ($this->lookupFlag->skips($Flag, $currGlyph, $MarkFilteringSet)) {
 			return null;
 		}
 		// Format 1 is the only one the specification defines
@@ -4475,50 +4484,6 @@ class Otl
 	}
 
 	/**
-	 * UseMarkFilteringSet means "skip every mark except those in the given mark glyph set", so the glyphs to
-	 * ignore are GlyphClassMarks minus that set - not the set itself.
-	 *
-	 * @param string $marks Space-prefixed, "|"-separated glyph list, e.g. " 00DCA| 00DD2"
-	 * @param string $set   The mark glyph set, in the same format
-	 *
-	 * @return string
-	 */
-	private function marksOutsideFilteringSet($marks, $set)
-	{
-		$keep = [];
-		$inSet = [];
-		foreach (explode('|', $set) as $glyph) {
-			$inSet[trim($glyph)] = true;
-		}
-
-		foreach (explode('|', $marks) as $glyph) {
-			$glyph = trim($glyph);
-			if ($glyph !== '' && !isset($inSet[$glyph])) {
-				$keep[] = $glyph;
-			}
-		}
-
-		return $keep ? ' ' . implode('| ', $keep) : '';
-	}
-
-	/**
-	 * The marks a lookup naming a mark attachment class skips: every mark outside that class, which is
-	 * what the parser keeps MarkAttachmentType as.
-	 *
-	 * A font may name a class GDEF does not define - Carlito and NATS set the flag without a
-	 * MarkAttachClassDef table at all - and then no mark is in the class, so the lookup skips every one
-	 * of them.
-	 *
-	 * @param int $class The mark attachment class the lookup's flags name
-	 *
-	 * @return string Its glyphs, space-prefixed and "|"-separated
-	 */
-	private function marksOutsideAttachmentClass($class)
-	{
-		return isset($this->MarkAttachmentType[$class]) ? $this->MarkAttachmentType[$class] : $this->GlyphClassMarks;
-	}
-
-	/**
 	 * The characters a Lookup's flag says to skip over, as a set keyed by codepoint.
 	 *
 	 * Every position a rule tests is first walked past the characters this names, so the test is made
@@ -4537,7 +4502,7 @@ class Otl
 
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['ignore'][$key])) {
 			$set = [];
-			foreach (explode('|', $this->buildGCOMignoreList($flag, $MarkFilteringSet)) as $hex) {
+			foreach (explode('|', $this->lookupFlag->glyphs($flag, $MarkFilteringSet)) as $hex) {
 				if ($hex !== '') {
 					$set[hexdec($hex)] = 1;
 				}
@@ -4547,95 +4512,6 @@ class Otl
 		}
 
 		return $this->LuDataCache[$this->otlCacheKey]['ignore'][$key];
-	}
-
-	/**
-	 * The characters the flag says to skip over, as the "|" separated hex the GDEF glyph classes are
-	 * kept in. Empty where the flag names nothing to skip.
-	 */
-	private function buildGCOMignoreList($flag, $MarkFilteringSet)
-	{
-		// for Input - set on secondary Lookup table if in Context, and set Backtrack and Lookahead on Context Lookup
-		$str = "";
-		$ignoreflag = 0;
-
-		// Flag & 0xFF?? = MarkAttachmentType
-		if ($flag & 0xFF00) {
-			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			$ignoreflag = $flag;
-			$str = $this->marksOutsideAttachmentClass($flag >> 8);
-		}
-
-		// Flag & 0x0010 = UseMarkFilteringSet
-		if ($flag & 0x0010) {
-			if ($MarkFilteringSet === '' || !isset($this->MarkGlyphSets[$MarkFilteringSet])) {
-				throw new \Mpdf\MpdfException("This font [" . $this->fontkey . "] contains MarkGlyphSets - but MarkFilteringSet not set");
-			}
-			$ignoreflag = $flag;
-			$str = $this->marksOutsideFilteringSet($this->GlyphClassMarks, $this->MarkGlyphSets[$MarkFilteringSet]);
-		}
-
-		// If Ignore Marks set, supercedes any above
-		// Flag & 0x0008 = Ignore Marks - (unless already done with MarkAttachmentType)
-		if (($flag & 0x0008) == 0x0008 && ($flag & 0xFF00) == 0) {
-			$ignoreflag = 8;
-			$str = $this->GlyphClassMarks;
-		}
-
-		// Flag & 0x0004 = Ignore Ligatures
-		if (($flag & 0x0004) == 0x0004) {
-			$ignoreflag += 4;
-			if ($str) {
-				$str .= "|";
-			}
-			$str .= $this->GlyphClassLigatures;
-		}
-		// Flag & 0x0002 = Ignore BaseGlyphs
-		if (($flag & 0x0002) == 0x0002) {
-			$ignoreflag += 2;
-			if ($str) {
-				$str .= "|";
-			}
-			$str .= $this->GlyphClassBases;
-		}
-		return $str;
-	}
-
-	/**
-	 * Whether a lookup's flags say to skip one glyph.
-	 *
-	 * @param int    $flag             The lookup's flags
-	 * @param string $glyph            The glyph, as hex
-	 * @param int    $MarkFilteringSet The mark glyph set the flags name, where they name one
-	 *
-	 * @return bool Whether the lookup passes over this glyph rather than matching it
-	 */
-	private function _checkGCOMignore($flag, $glyph, $MarkFilteringSet)
-	{
-		$ignore = false;
-		// Flag & 0x0008 = Ignore Marks - (unless already done with MarkAttachmentType)
-		if (($flag & 0x0008 && ($flag & 0xFF00) == 0) && strpos($this->GlyphClassMarks, $glyph)) {
-			$ignore = true;
-		}
-		if (($flag & 0x0004) && strpos($this->GlyphClassLigatures, $glyph)) {
-			$ignore = true;
-		}
-		if (($flag & 0x0002) && strpos($this->GlyphClassBases, $glyph)) {
-			$ignore = true;
-		}
-		// Flag & 0xFF?? = MarkAttachmentType
-		if ($flag & 0xFF00) {
-			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			if (strpos($this->marksOutsideAttachmentClass($flag >> 8), $glyph)) {
-				$ignore = true;
-			}
-		}
-		// Flag & 0x0010 = UseMarkFilteringSet: skip every mark *except* those in the set
-		if (($flag & 0x0010) && strpos($this->GlyphClassMarks, $glyph)
-				&& !strpos($this->MarkGlyphSets[$MarkFilteringSet], $glyph)) {
-			$ignore = true;
-		}
-		return $ignore;
 	}
 
 	/**
