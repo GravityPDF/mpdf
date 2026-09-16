@@ -123,4 +123,37 @@ class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		];
 	}
 
+	/**
+	 * @dataProvider chineseRegions
+	 */
+	public function testAChineseRegionSelectsItsLanguageSystem($ietf, $expected)
+	{
+		$this->assertSame($expected, OtlTags::language($ietf, 'DFLT ZHH ZHS ZHT '));
+	}
+
+	public function chineseRegions()
+	{
+		return [
+			'Hong Kong' => ['zh-HK', 'ZHH '],
+			'Hong Kong, after the script' => ['zh-Hant-HK', 'ZHH '],
+			'Taiwan' => ['zh-TW', 'ZHT '],
+			'Macao' => ['zh-MO', 'ZHT '],
+			'China' => ['zh-CN', 'ZHS '],
+			'Singapore' => ['zh-SG', 'ZHS '],
+			'lower case' => ['zh-tw', 'ZHT '],
+			'a region the table has no entry for' => ['zh-US', 'DFLT'],
+		];
+	}
+
+	/**
+	 * Pins #201 as it stands: without a region, Chinese has no language system, where HarfBuzz
+	 * takes ZHS for zh and zh-Hans and ZHT for zh-Hant.
+	 */
+	public function testChineseWithoutARegionHasNoLanguageSystem()
+	{
+		$this->assertSame('DFLT', OtlTags::language('zh', 'DFLT ZHH ZHS ZHT '));
+		$this->assertSame('DFLT', OtlTags::language('zh-Hant', 'DFLT ZHH ZHS ZHT '));
+		$this->assertSame('DFLT', OtlTags::language('zh-Hans', 'DFLT ZHH ZHS ZHT '));
+	}
+
 }
