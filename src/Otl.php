@@ -4847,15 +4847,19 @@ class Otl
 	 */
 	public function prependOTLchar(&$cOTLdata, $charData, $group)
 	{
+		// applyOTL() leaves OTLdata empty for a blank string, so every key here is optional
+		$cOTLdata += ['group' => '', 'char_data' => [], 'GPOSinfo' => []];
+
 		$cOTLdata['group'] = $group . $cOTLdata['group'];
-
-		$newGPOSinfo = [];
-		foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-			$newGPOSinfo[$k + 1] = $val;
-		}
-		$cOTLdata['GPOSinfo'] = $newGPOSinfo;
-
 		array_unshift($cOTLdata['char_data'], $charData);
+
+		if ($cOTLdata['GPOSinfo']) {
+			$newGPOSinfo = [];
+			foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
+				$newGPOSinfo[$k + 1] = $val;
+			}
+			$cOTLdata['GPOSinfo'] = $newGPOSinfo;
+		}
 	}
 
 	/**

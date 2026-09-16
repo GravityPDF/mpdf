@@ -8310,8 +8310,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$breakfound = [$cutcontentctr, $cutcharctr, $cutcontentctr, $cutcharctr, 'cut'];
 						$content[$contentctr] = mb_substr($content[$contentctr], 0, $charctr, $this->mb_enc) . '-' . mb_substr($content[$contentctr], $charctr + 1, mb_strlen($content[$contentctr]), $this->mb_enc);
 						if (!empty($cOTLdata[$contentctr])) {
-							$previous = $charctr > 0 ? $cOTLdata[$contentctr]['char_data'][$charctr - 1] : [];
-							$cOTLdata[$contentctr]['char_data'][$charctr] = $this->breakHyphenCharData($previous, $blockdir);
+							$cOTLdata[$contentctr]['char_data'][$charctr] = $this->breakHyphenCharData($cOTLdata[$contentctr], $blockdir, $charctr);
 							$cOTLdata[$contentctr]['group'][$charctr] = 'C';
 						}
 					} elseif (isset($this->textparam['hyphens']) && $this->textparam['hyphens'] != 2 && $this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats' && $prevchar == chr(173)) {
@@ -8400,9 +8399,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					if ($type === 'hyphen') {
 						$lastChunk = count($cOTLdata) - 1;
-						$charCount = empty($cOTLdata[$lastChunk]) ? 0 : count($cOTLdata[$lastChunk]['char_data']);
-						$previous = $charCount ? $cOTLdata[$lastChunk]['char_data'][$charCount - 1] : [];
-						$charData = $this->breakHyphenCharData($previous, $blockdir);
+						$charData = $this->breakHyphenCharData($cOTLdata[$lastChunk], $blockdir);
 
 						if (!in_array(mb_substr($currContent, -1), ['-', '–', '—'], true)) {
 							$currContent .= '-';
@@ -8411,9 +8408,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$cOTLdata[$lastChunk]['group'] .= 'C';
 							}
 						} else {
-							// mpdf/mpdf#1831 - the line already ends in a hyphen, so this one starts the next
-							// line instead. Its char_data has to go with it: a bidi paragraph rebuilds each
-							// line's text from char_data alone, so an entry left behind draws as a hyphen.
+							// mpdf/mpdf#1831 - this hyphen starts the next line, and a bidi paragraph rebuilds
+							// a line's text from its char_data alone, so the entry has to travel with it. The
+							// chunk that starts that line is the last one pushed; $savedPreOTLdata carries a
+							// further entry past it that nothing reads.
 							$next = count($savedPreContent) - 1;
 							$savedPreContent[$next] = '-' . $savedPreContent[$next];
 							if (!empty($savedPreOTLdata[$next])) {
@@ -8963,13 +8961,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * paragraph before the lines are established, and this hyphen was not there to be resolved. It
 	 * belongs to the word it breaks, so it takes what that word's last character resolved to.
 	 *
-	 * @param array  $previous
-	 * @param string $blockdir The paragraph direction, 'rtl' or 'ltr'
+	 * @param array    $run      The chunk's OTL data, or empty if it has none
+	 * @param string   $blockdir The paragraph direction, 'rtl' or 'ltr'
+	 * @param int|null $pos      Where in the run the hyphen goes, or null for the end of it
 	 *
 	 * @return array
 	 */
-	private function breakHyphenCharData($previous, $blockdir)
+	private function breakHyphenCharData($run, $blockdir, $pos = null)
 	{
+		$chars = isset($run['char_data']) ? $run['char_data'] : [];
+		if ($pos === null) {
+			$pos = count($chars);
+		}
+		$previous = isset($chars[$pos - 1]) ? $chars[$pos - 1] : [];
+
 		$paragraph = $blockdir === 'rtl'
 			? ['type' => Ucdn::BIDI_CLASS_R, 'level' => 1]
 			: ['type' => Ucdn::BIDI_CLASS_L, 'level' => 0];
