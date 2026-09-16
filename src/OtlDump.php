@@ -85,6 +85,15 @@ class OtlDump extends TTFontFile
 	 */
 	private $notOffered = [];
 
+	/**
+	 * GDEF's marks, keyed by hex without leading zeros, for deciding which glyphs the report draws on a
+	 * dotted circle. The parser's GlyphClassMarks can only be searched, and a search for one glyph's hex
+	 * finds it inside another's: 0030 inside 00300, D165 inside 1D165.
+	 *
+	 * @var true[]
+	 */
+	private $marks = [];
+
 	private $mpdf;
 
 	/**
@@ -135,16 +144,17 @@ class OtlDump extends TTFontFile
 		parent::restrictedFont();
 	}
 
-	/**
-	 * The report's own format, "U+0300, U+0301", rather than the parser's.
-	 *
-	 * LookupFlag searches these strings for a glyph's hex, and never finds one in this format, so
-	 * GSUB substitutions whose input a lookup's flags skip are reported where the parser drops them.
-	 * See #187.
-	 */
-	protected function glyphClassString(array $glyphs)
+	function _getGDEFtables()
 	{
-		return $this->formatClassArr($glyphs);
+		parent::_getGDEFtables();
+
+		$this->marks = [];
+		foreach (explode('|', (string) $this->GlyphClassMarks) as $glyph) {
+			$glyph = trim($glyph);
+			if ($glyph !== '') {
+				$this->marks[ltrim($glyph, '0')] = true;
+			}
+		}
 	}
 
 	/**
@@ -156,8 +166,8 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
-	 * Nothing is cached. The classes read are in the report's format rather than the parser's, and the
-	 * cache the dump is handed can be the one the shaper reads the same font key back from.
+	 * Nothing is cached. The cache the dump is handed can be the one the shaper reads the same font key
+	 * back from.
 	 */
 	protected function cacheLayoutTables()
 	{
@@ -1870,6 +1880,14 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
+	 * @param string $glyph As hex, with or without leading zeros
+	 */
+	private function isMark($glyph)
+	{
+		return isset($this->marks[ltrim($glyph, '0')]);
+	}
+
+	/**
 	 * @param string $char         A character as hex
 	 * @param bool   $allowjoining Whether a mark may be shown on its own. A mark otherwise gets a
 	 *                             dotted circle to sit on, so that it renders where a base would be.
@@ -1880,7 +1898,7 @@ class OtlDump extends TTFontFile
 	{
 		$char = preg_replace('/^[0]/', '', $char);
 		$x = '&#x' . $char . ';';
-		if (strpos($this->GlyphClassMarks, $char) !== false) {
+		if ($this->isMark($char)) {
 			if (!$allowjoining) {
 				$x = '&#x25cc;' . $x;
 			}
@@ -1923,7 +1941,7 @@ class OtlDump extends TTFontFile
 		foreach ($arr as $c) {
 			$c = preg_replace('/^[0]/', '', $c);
 			$x = '&#x' . $c . ';';
-			if (strpos($this->GlyphClassMarks, $c) !== false) {
+			if ($this->isMark($c)) {
 				$x = '&#x25cc;' . $x;
 			}
 			$s[] = $x;
@@ -1992,7 +2010,7 @@ class OtlDump extends TTFontFile
 		foreach ($arr as $c) {
 			$c = preg_replace('/^[0]/', '', $c);
 			$x = '&#x' . $c . ';';
-			if (strpos($this->GlyphClassMarks, $c) !== false) {
+			if ($this->isMark($c)) {
 				$x = '&#x25cc;' . $x;
 			}
 			$s[] = $x;
@@ -2012,7 +2030,7 @@ class OtlDump extends TTFontFile
 		$arr = explode('|', $str);
 		$char = preg_replace('/^[0]/', '', $arr[0]);
 		$x = '&#x' . $char . ';';
-		if (strpos($this->GlyphClassMarks, $char) !== false) {
+		if ($this->isMark($char)) {
 			$x = '&#x25cc;' . $x;
 		}
 
