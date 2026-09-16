@@ -2042,7 +2042,7 @@ class TTFontFile
 				$volt = $this->_getGSUBarray($Lookup, $lul, $st);
 
 				// Interrogate $volt
-				// isol, fin, medi, init(arab syrc) into $rtlSUB for use in ArabJoin
+				// isol, fin, medi, init(arab syrc) into $rtlSUB for use in Shaper\Arabic::shape()
 				// but also identify all RTL chars in PUA for magic_reverse (arab syrc hebr thaa nko  samr)
 				// identify reph, matras, vatu, half forms etc for Indic for final re-ordering
 				$rtl = [];
