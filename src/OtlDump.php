@@ -1144,7 +1144,6 @@ class OtlDump extends TTFontFile
 												}
 												$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['FirstGlyph'];
 												ksort($inputGlyphs);
-												$nInput = count($inputGlyphs);
 
 												$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), [], $inputGlyphs, [], '', '', '', $tag, $scripttag);
 											}
@@ -1183,8 +1182,6 @@ class OtlDump extends TTFontFile
 												$html .= '<div class="lookuptypesub">Format 3: Coverage-based Context Glyph Substitution  </div>';
 												// IgnoreMarks flag set on main Lookup table
 												$inputGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'];
-												$CoverageInputGlyphs = implode('|', $inputGlyphs);
-												$nInput = $Lookup[$i]['Subtable'][$c]['InputGlyphCount'];
 
 												$this->reportGSUBrule($Lookup, $this->substLookupRecords($Lookup[$i]['Subtable'][$c]), [], $inputGlyphs, [], '', '', '', $tag, $scripttag);
 											}
@@ -1210,7 +1207,6 @@ class OtlDump extends TTFontFile
 													}
 													$inputGlyphs[0] = $firstInputGlyph;
 													ksort($inputGlyphs);
-													$nInput = count($inputGlyphs);
 
 													if ($rule['BacktrackGlyphCount']) {
 														$backtrackGlyphs = $rule['BacktrackGlyphs'];
@@ -1260,7 +1256,6 @@ class OtlDump extends TTFontFile
 														$class0excl = implode('|', $Lookup[$i]['Subtable'][$c]['InputClasses']);
 														$bclass0excl = implode('|', $Lookup[$i]['Subtable'][$c]['BacktrackClasses']);
 														$lclass0excl = implode('|', $Lookup[$i]['Subtable'][$c]['LookaheadClasses']);
-														$nInput = $rule['InputGlyphCount'];
 
 														// Built fresh per rule: the rules of a set can name fewer positions than the one before,
 														// and a kept array would leave the earlier rule's extra positions in the sequence
@@ -1284,8 +1279,6 @@ class OtlDump extends TTFontFile
 													$html .= '<div class="lookuptypesub">Format 3: Coverage-based Chaining Context Glyph Substitution  </div>';
 													// IgnoreMarks flag set on main Lookup table
 													$inputGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'];
-													$CoverageInputGlyphs = implode('|', $inputGlyphs);
-													$nInput = $Lookup[$i]['Subtable'][$c]['InputGlyphCount'];
 
 													if ($Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']) {
 														$backtrackGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageBacktrackGlyphs'];
@@ -2709,9 +2702,11 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
-	 * reportGPOSrule() for a substitution rule, whose parameters it takes and documents.
+	 * One context rule: the sequences it matches, and every lookup it hands a position within them.
 	 *
 	 * @param array $SubstLookupRecord As substLookupRecords() normalised them
+	 *
+	 * @see reportGPOSrule() for the rest of the parameters, which are the same ones
 	 */
 	private function reportGSUBrule(array $Lookup, array $SubstLookupRecord, array $backtrackGlyphs, array $inputGlyphs, array $lookaheadGlyphs, $class0excl, $bclass0excl, $lclass0excl, $tag, $scripttag)
 	{
@@ -2724,19 +2719,19 @@ class OtlDump extends TTFontFile
 
 			$this->report .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
-			// Level 2 is handed the glyphs the position holds, e.g. 00636|00645|00656, and reports
-			// only the rules whose first 'Replace' glyph is one of them
+			// The position's own glyphs, e.g. 00636|00645|00656, are what level 2 filters its rules on
 			$this->_getGSUBarray($Lookup, [$record['LookupListIndex'] => $tag], $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
 		}
 	}
 
 	/**
-	 * The lookup records of one context rule, in the one shape reportGSUBrule() reads.
+	 * The lookup records of one context rule, whichever of the two shapes the parser wrote them in:
+	 * an array of records, or a SequenceIndex array and a LookupListIndex array side by side.
 	 *
-	 * A format either lists them as records, or as a SequenceIndex array and a LookupListIndex array
-	 * side by side; and where a subtable holds a single rule, they are the subtable's own.
+	 * @param array $rule The rule, or the subtable itself for a format whose subtable is its own
+	 *                    only rule and keeps the records
 	 *
-	 * @param array $rule The rule, or the subtable that is its own only rule
+	 * @see \Mpdf\Fonts\Table\SequenceRule::lookupRecords() for the shape both are read as
 	 */
 	private function substLookupRecords(array $rule)
 	{
@@ -2746,9 +2741,9 @@ class OtlDump extends TTFontFile
 
 		$records = [];
 		for ($b = 0; $b < $rule['SubstCount']; $b++) {
-			$records[$b] = [
+			$records[] = [
 				'SequenceIndex' => $rule['SequenceIndex'][$b],
-				'LookupListIndex' => $rule['LookupListIndex'][$b]
+				'LookupListIndex' => $rule['LookupListIndex'][$b],
 			];
 		}
 
