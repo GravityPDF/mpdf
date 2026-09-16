@@ -23,6 +23,18 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** U+0710 SYRIAC LETTER ALAPH, right-joining, and the only letter with fin2, fin3 and med2 forms */
 	const ALAPH = '00710';
 
+	/** U+0730 SYRIAC PTHAHA ABOVE, a transparent-joining vowel, and ordinary in pointed Syriac */
+	const PTHAHA = '00730';
+
+	/** U+0733 SYRIAC ZQAPHA ABOVE */
+	const ZQAPHA = '00733';
+
+	/** U+0736 SYRIAC RBASA ABOVE */
+	const RBASA = '00736';
+
+	/** U+073A SYRIAC HBASA ABOVE */
+	const HBASA = '0073A';
+
 	/** U+0712 SYRIAC LETTER BETH, dual-joining */
 	const BETH = '00712';
 
@@ -40,6 +52,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/** U+08AD ARABIC LETTER LOW ALEF, non-joining: it joins nothing on either side */
 	const LOW_ALEF = '008AD';
+
+	/** U+0300 COMBINING GRAVE ACCENT, outside the Transparent-Joining table and in GDEF's mark class */
+	const COMBINING_GRAVE = '00300';
 
 	/**
 	 * The font's rtlSUB table, as TTFontFile builds it: replacement hex per form, indexed
@@ -194,14 +209,95 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAnAlaphAfterDalathOrRishDrawsTheFormTheFontStatesForIt()
 	{
-		$afterDalath = $this->render(self::DALATH, self::ALAPH);
-		$afterDotless = $this->render(self::DOTLESS_DALATH_RISH, self::ALAPH);
-		$afterRish = $this->render(self::RISH, self::ALAPH);
+		$afterDalath = $this->render([self::DALATH, self::ALAPH]);
+		$afterDotless = $this->render([self::DOTLESS_DALATH_RISH, self::ALAPH]);
+		$afterRish = $this->render([self::RISH, self::ALAPH]);
 
 		$this->assertSame($afterDalath[1], $afterDotless[1]);
 		$this->assertSame($afterDalath[1], $afterRish[1]);
 		$this->assertNotSame(\Mpdf\Utils\UtfString::codeHex2utf(self::ALAPH), $afterDalath[1]);
-		$this->assertNotSame($this->render(self::BETH, self::ALAPH)[1], $afterDalath[1]);
+		$this->assertNotSame($this->render([self::BETH, self::ALAPH])[1], $afterDalath[1]);
+	}
+
+	/**
+	 * A vowel between the base and the Alaph is transparent to joining, so the base is still what the
+	 * Alaph's form follows from. The form was read off the character immediately before the Alaph
+	 * instead, which in pointed text is the vowel, and a vowel joins nothing. GravityPDF/mpdf#142.
+	 */
+	public function testAVowelBeforeTheAlaphLeavesItTheFormOfTheBaseBeforeThat()
+	{
+		$fin2 = $this->shape([self::BETH, self::PTHAHA, self::ALAPH], self::ALL_FORMS, 'syrc');
+		$fin3 = $this->shape([self::DALATH, self::PTHAHA, self::ALAPH], self::ALL_FORMS, 'syrc');
+		$med2 = $this->shape([self::BETH, self::PTHAHA, self::ALAPH, self::BETH], self::ALL_FORMS, 'syrc');
+
+		$this->assertSame(['A_FIN2', 5], $fin2[2]);
+		$this->assertSame(['A_FIN3', 6], $fin3[2]);
+		$this->assertSame(['A_MED2', 4], $med2[2]);
+	}
+
+	/**
+	 * Pointed Syriac stacks more than one mark on a letter, and nothing limits how many, so the walk
+	 * has to carry on rather than step once
+	 */
+	public function testSeveralVowelsBeforeTheAlaphLeaveItTheFormOfTheBaseBeforeThem()
+	{
+		$run = [self::BETH, self::PTHAHA, self::ZQAPHA, self::RBASA, self::HBASA, self::ALAPH];
+
+		$this->assertSame(['A_FIN2', 5], $this->shape($run, self::ALL_FORMS, 'syrc')[5]);
+	}
+
+	/**
+	 * The lookback reads the Transparent-Joining table together with GDEF's mark class, the way the
+	 * rest of the shaper does, so a font that files a mark of its own is followed as well.
+	 */
+	public function testAGdefMarkBeforeTheAlaphLeavesItTheFormOfTheBaseBeforeIt()
+	{
+		$forms = $this->shape([self::BETH, self::COMBINING_GRAVE, self::ALAPH], self::ALL_FORMS, 'syrc', self::COMBINING_GRAVE);
+
+		$this->assertSame(['A_FIN2', 5], $forms[2]);
+	}
+
+	/**
+	 * The word-end test read the character after the Alaph raw, so a vowel on the Alaph itself counted
+	 * as a letter following it: fin2 became med2, and fin3 was refused altogether.
+	 */
+	public function testAVowelAfterTheAlaphStillLeavesItEndingTheWord()
+	{
+		$fin2 = $this->shape([self::BETH, self::ALAPH, self::PTHAHA], self::ALL_FORMS, 'syrc');
+		$fin3 = $this->shape([self::DALATH, self::ALAPH, self::PTHAHA], self::ALL_FORMS, 'syrc');
+
+		$this->assertSame(['A_FIN2', 5], $fin2[1]);
+		$this->assertSame(['A_FIN3', 6], $fin3[1]);
+	}
+
+	/**
+	 * A letter after the vowel is still a letter, and the Alaph is still inside the word
+	 */
+	public function testAVowelOnTheAlaphInsideAWordLeavesItMed2()
+	{
+		$forms = $this->shape([self::BETH, self::ALAPH, self::PTHAHA, self::BETH], self::ALL_FORMS, 'syrc');
+
+		$this->assertSame(['A_MED2', 4], $forms[1]);
+	}
+
+	/**
+	 * Through a real font, either side of the Alaph: a vowel is drawn where it was written and changes
+	 * nothing about the letters around it, so the pointed word has to draw the Alaph the unpointed one
+	 * draws. Estrangelo Edessa states no isolated Alaph, so what a lost form left behind was the
+	 * nominal U+0710.
+	 */
+	public function testAPointedWordDrawsTheSameAlaphAsTheUnpointedWord()
+	{
+		// BETH reaches fin2 and DALATH fin3; what the other two right-joining letters draw is already
+		// asserted against DALATH above
+		foreach ([self::BETH, self::DALATH] as $base) {
+			$unpointed = $this->render([$base, self::ALAPH]);
+			$beforeAlaph = $this->render([$base, self::PTHAHA, self::ALAPH]);
+			$afterAlaph = $this->render([$base, self::ALAPH, self::PTHAHA]);
+
+			$this->assertSame($unpointed[1], $beforeAlaph[2], $base . ' with the vowel before the Alaph');
+			$this->assertSame($unpointed[1], $afterAlaph[1], $base . ' with the vowel after the Alaph');
+		}
 	}
 
 	/**
@@ -214,8 +310,8 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testSogdianFeDrawsTheSameInitialFormAsAnotherDualJoiningLetter()
 	{
-		$beforeFe = $this->render(self::BETH, self::SOGDIAN_FE);
-		$beforeBeth = $this->render(self::BETH, self::BETH);
+		$beforeFe = $this->render([self::BETH, self::SOGDIAN_FE]);
+		$beforeBeth = $this->render([self::BETH, self::BETH]);
 
 		$this->assertSame($beforeBeth[0], $beforeFe[0]);
 	}
@@ -223,16 +319,17 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * Text is drawn in visual order, so the letter written first is the last one drawn.
 	 *
-	 * @return string[] the glyph each of the two characters was drawn as, in the order they were written
+	 * @return string[] the glyph each character was drawn as, in the order they were written
 	 */
-	private function render($first, $second)
+	private function render($hexes)
 	{
+		$entities = '';
+		foreach ($hexes as $hex) {
+			$entities .= sprintf('&#x%s;', ltrim($hex, '0'));
+		}
+
 		$mpdf = new \Mpdf\TextRecordingMpdf();
-		$mpdf->WriteHTML(sprintf(
-			'<p style="font-family:estrangeloedessa">&#x%s;&#x%s;</p>',
-			ltrim($first, '0'),
-			ltrim($second, '0')
-		));
+		$mpdf->WriteHTML('<p style="font-family:estrangeloedessa">' . $entities . '</p>');
 
 		return array_reverse(preg_split('//u', $mpdf->drawnText[0], -1, PREG_SPLIT_NO_EMPTY));
 	}
@@ -284,14 +381,14 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * @return array one [hex, form] pair per character, in logical order
 	 */
-	private function shape($hexes, $usetags = self::ALL_FORMS, $scriptTag = 'arab')
+	private function shape($hexes, $usetags = self::ALL_FORMS, $scriptTag = 'arab', $glyphClassMarks = self::FATHA)
 	{
 		$info = [];
 		foreach ($hexes as $hex) {
 			$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
 		}
 
-		Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, $usetags, $scriptTag);
+		Arabic::shape($info, $this->glyphs(), ' ' . $glyphClassMarks, $usetags, $scriptTag);
 
 		$forms = [];
 		foreach ($info as $char) {
