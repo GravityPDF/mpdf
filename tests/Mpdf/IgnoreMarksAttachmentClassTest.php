@@ -45,6 +45,7 @@ class IgnoreMarksAttachmentClassTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 			$html .= sprintf('&#x%04X;', $codepoint);
 		}
 
+		// The parsed font is cached under its key, so the two fonts must not share one
 		$fontkey = strtolower(str_replace('-', '', $font));
 		$mpdf = new TextRecordingMpdf([
 			'fontDir' => [__DIR__ . '/../data/ttf'],
