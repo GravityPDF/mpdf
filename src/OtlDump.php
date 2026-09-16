@@ -434,14 +434,6 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
-	 * The dump reads each class-based rule's positions fresh, where the parser does not (#170).
-	 */
-	protected function keepsEarlierRulePositions()
-	{
-		return false;
-	}
-
-	/**
 	 * One substitution, as a row of the report.
 	 *
 	 * At level 2 only the substitutions the nesting position can hold are reported, each shown inside

@@ -1,0 +1,27 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00020; &#x00627; &#x008AD; &#x0E000; &#x0E001; &#x0E002; &#x0E003; &#x0E004; </div>
+<h3>Glyph class 3</h3>
+<h5>Mark glyph (non-spacing combining glyph)</h5>
+<div class="glyphs">&#x25cc;&#x0E005; </div>
+<h1>Mark Glyph Sets</h1>
+<h3>Mark Glyph Set class: 0</h3>
+<div class="glyphs">&#x25cc;&#x0E005; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>DFLT</h5><div><a href="font_dump_otl.php?script=DFLT&amp;lang=DFLT">DFLT</a></b>: fina </div><h5>arab</h5><div><a href="font_dump_otl.php?script=arab&amp;lang=DFLT">DFLT</a></b>: fina </div>
+</div>
+<h1>GPOS Tables</h1>
+<h3>GPOS Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>DFLT</h5><div><a href="font_dump_otl.php?script=DFLT&amp;lang=DFLT">DFLT</a></b>: mark mkmk </div><h5>arab</h5><div><a href="font_dump_otl.php?script=arab&amp;lang=DFLT">DFLT</a></b>: mark mkmk </div><h5>cyrl</h5><div><a href="font_dump_otl.php?script=cyrl&amp;lang=DFLT">DFLT</a></b>: mark mkmk </div><h5>dev2</h5><div><a href="font_dump_otl.php?script=dev2&amp;lang=DFLT">DFLT</a></b>: mark mkmk </div><h5>grek</h5><div><a href="font_dump_otl.php?script=grek&amp;lang=DFLT">DFLT</a></b>: mark mkmk </div><h5>latn</h5><div><a href="font_dump_otl.php?script=latn&amp;lang=DFLT">DFLT</a></b>: mark mkmk </div>
+</div>
+
+=== detail: script arab language DFLT ===
+<h1>GSUB Tables</h1>
+<bookmark level="0" content="GSUB features"><div class="level1"><h5 class="level1"><bookmark level="1" content="fina [#0]">Lookup #0 [tag: <span style="color:#000066;">fina</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 6: Chaining Contextual Substitution Subtable</div><div class="lookuptypesub">Format 2: Class-based Chaining Context Glyph Substitution  </div><div class="rule">Input Class: 1</div><div class="rule">Rule: 0</div><div class="context">CONTEXT: <div>Backtrack #1: <span class="unicode">U+0627</span></div><div>Backtrack #0: <span class="unicode">U+0628</span></div><div>Input #0: <span class="unchanged">&nbsp;&#x0627;&nbsp;</span></div><div>Lookahead #0: <span class="unicode">U+08AD</span></div><div>Lookahead #1: <span class="unicode">U+08AD</span></div></div><div class="sequenceIndex">Substitution Position: 0</div><div class="level2"><h5 class="level2">Lookup #1 [tag: <span style="color:#000066;">fina</span>]</h5><div class="subtable">Subtable #0</div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+0627&nbsp;</span> <span class="backtrack">&#x0627;&#x200d;&#x0628;</span><span class="unchanged">&nbsp;&#x0627;</span><span class="lookahead">&#x08AD;&#x200d;&#x08AD;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="backtrack">&#x0627;&#x200d;&#x0628;</span><span class="changed">&nbsp;&#xE000;</span><span class="lookahead">&#x08AD;&#x200d;&#x08AD;</span>&nbsp; <span class="unicode">M+E000</span> </div></div><div class="rule">Input Class: 2</div><div class="rule">Rule: 0</div><div class="context">CONTEXT: <div>Backtrack #0: <span class="unicode">U+0628</span></div><div>Input #0: <span class="unchanged">&nbsp;&#x0628;&nbsp;</span></div><div>Lookahead #0: <span class="unicode">U+08AD</span></div></div><div class="sequenceIndex">Substitution Position: 0</div><div class="level2"><h5 class="level2">Lookup #1 [tag: <span style="color:#000066;">fina</span>]</h5><div class="subtable">Subtable #0</div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+0628&nbsp;</span> <span class="backtrack">&#x0628;</span><span class="unchanged">&nbsp;&#x0628;</span><span class="lookahead">&#x08AD;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="backtrack">&#x0628;</span><span class="changed">&nbsp;&#xE002;</span><span class="lookahead">&#x08AD;</span>&nbsp; <span class="unicode">M+E002</span> </div></div></div>
+<h1>GPOS Tables</h1>
+<bookmark level="0" content="GPOS features"><div class="level1"><h5 class="level1"><bookmark level="1" content="mark [#0]">Lookup #0 [tag: <span style="color:#000066;">mark</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 4: MarkToBase attachment </div><div class="glyphs">Marks:  &#x25cc;&#xE005; </div><div class="glyphs">Bases:  &#x0020;  &#x0627;  &#xE000;  &#xE001;  &#xE002;  &#xE003;  &#xE004;  &#x08AD; </div><div class="glyphs" style="font-feature-settings:'mark' 1;">Example(s):  &#x0020;&#xE005; &nbsp;  &#x0627;&#xE005; &nbsp;  &#xE000;&#xE005; &nbsp;  &#xE001;&#xE005; &nbsp;  &#xE002;&#xE005; &nbsp;  &#xE003;&#xE005; &nbsp;  &#xE004;&#xE005; &nbsp;  &#x08AD;&#xE005; &nbsp; </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="mkmk [#1]">Lookup #1 [tag: <span style="color:#000066;">mkmk</span>]</h5><div class="ignore">Ignoring: Marks outside Mark Glyph Set[0] </div> <div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 6: MarkToMark attachment </div><div class="glyphs">Marks: <span class="unchanged"> &#x25cc;&#xE005; </span></div><div class="glyphs">Bases: <span class="unchanged"> &#x25cc;&#xE005; </span></div><div class="glyphs" style="font-feature-settings:'mkmk' 1;">Example(s): <span class="changed"> &#x25cc;&#xE005;&#xE005; &nbsp; </span></div></div>

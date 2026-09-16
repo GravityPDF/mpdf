@@ -2412,8 +2412,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 	{
 		$volt = [];
 
-		// Kept across rules and lookups rather than read fresh for each: see keepsEarlierRulePositions().
-		// A Type 5 Format 1 or 2 rule hands whatever these last held to the Arabic shaper (#189).
+		// A Type 5 Format 1 or 2 rule reads these without setting them, so hands whatever the last
+		// chained rule left in them to the Arabic shaper (#189).
 		$backtrackGlyphs = [];
 		$lookaheadGlyphs = [];
 
@@ -2544,16 +2544,12 @@ class TTFontFile implements Fonts\FontSourceInterface
 						for ($cscrule = 0; $cscrule < $cscs['ChainSubClassRuleCnt']; $cscrule++) {
 							$rule = $cscs['ChainSubClassRule'][$cscrule];
 
-							if (!$rule['BacktrackGlyphCount'] || !$this->keepsEarlierRulePositions()) {
-								$backtrackGlyphs = [];
-							}
+							$backtrackGlyphs = [];
 							for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
 								$backtrackGlyphs[$gcl] = $this->classGlyphs($subtable['BacktrackClasses'], $rule['Backtrack'][$gcl]);
 							}
 
-							if (!$rule['LookaheadGlyphCount'] || !$this->keepsEarlierRulePositions()) {
-								$lookaheadGlyphs = [];
-							}
+							$lookaheadGlyphs = [];
 							for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
 								$lookaheadGlyphs[$gcl] = $this->classGlyphs($subtable['LookaheadClasses'], $rule['Lookahead'][$gcl]);
 							}
@@ -2677,18 +2673,6 @@ class TTFontFile implements Fonts\FontSourceInterface
 		foreach ($entries as $entry) {
 			$volt[] = $entry;
 		}
-	}
-
-	/**
-	 * Whether a class-based chained rule (Type 6 Format 2) that names fewer backtrack or lookahead
-	 * positions than the rule read before it keeps that rule's extra positions.
-	 *
-	 * The parser does, which is #170: the extra positions end up in the rule's matchback and counts,
-	 * and in what an Arabic joining form hands the shaper. Fixing it is returning false here.
-	 */
-	protected function keepsEarlierRulePositions()
-	{
-		return true;
 	}
 
 	/**
