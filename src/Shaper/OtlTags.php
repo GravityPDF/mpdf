@@ -31,6 +31,15 @@ class OtlTags
 	];
 
 	/**
+	 * The Chinese regions with language systems of their own, in the order HarfBuzz looks for them.
+	 */
+	private static $chineseRegions = [
+		'hk' => ['ZHH '],
+		'mo' => ['ZHTM', 'ZHH '],
+		'tw' => ['ZHT '],
+	];
+
+	/**
 	 * The script tag a run is laid out with, out of what the table offers.
 	 *
 	 * The tag Unicode implies is only a first choice: a font may offer the v2 Indic tag and not the
@@ -88,12 +97,11 @@ class OtlTags
 
 		$subtags = $ietf ? explode('-', strtolower($ietf)) : [];
 
+		$candidates = [];
 		if (isset($subtags[0]) && $subtags[0] == 'zh') {
 			$candidates = self::chinese($subtags);
 		} elseif (isset($subtags[0]) && isset(Ucdn::$ot_languages[$subtags[0]])) {
 			$candidates = [Ucdn::$ot_languages[$subtags[0]]];
-		} else {
-			$candidates = [];
 		}
 
 		foreach ($candidates as $langsys) {
@@ -122,25 +130,18 @@ class OtlTags
 	 */
 	private static function chinese(array $subtags)
 	{
-		$regions = [
-			'hk' => ['ZHH '],
-			'mo' => ['ZHTM', 'ZHH '],
-			'tw' => ['ZHT '],
-		];
-
 		$script = isset($subtags[1]) ? $subtags[1] : '';
 
-		if ($script == 'hant' && isset($subtags[2]) && ($subtags[2] == 'hk' || $subtags[2] == 'mo')) {
-			return $regions[$subtags[2]];
-		}
 		if ($script == 'hans') {
 			return ['ZHS '];
 		}
 		if ($script == 'hant') {
-			return ['ZHT '];
+			$region = isset($subtags[2]) ? $subtags[2] : '';
+
+			return $region == 'hk' || $region == 'mo' ? self::$chineseRegions[$region] : ['ZHT '];
 		}
 
-		foreach ($regions as $region => $langsys) {
+		foreach (self::$chineseRegions as $region => $langsys) {
 			if (in_array($region, $subtags, true)) {
 				return $langsys;
 			}
