@@ -24,9 +24,9 @@ class FontSubsetterFileHandleTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 	/**
 	 * @dataProvider buildProvider
 	 */
-	public function testTheSubsetterLetsGoOfTheFontItBuiltFrom($method, $variant, $argument, $subset, $TTCfontID, $expected)
+	public function testTheSubsetterLetsGoOfTheFontItBuiltFrom($method, $font, $TTCfontID, $expected)
 	{
-		list($file, $written) = $this->$variant($argument);
+		$file = $this->$font();
 		$subsetter = new FontSubsetter(new TTFontFile(new FontCache(new Cache($this->tmpDir)), 'win'));
 
 		$raised = null;
@@ -34,7 +34,8 @@ class FontSubsetterFileHandleTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 			if ($method === 'repackageTTF') {
 				$subsetter->repackageTTF($file, $TTCfontID, false, true);
 			} else {
-				$subsetter->$method($file, $this->$subset($file), $TTCfontID, false, true);
+				$subset = $font === 'wideCmap' ? $this->everyThirdCharacter($file) : $this->pangram();
+				$subsetter->$method($file, $subset, $TTCfontID, false, true);
 			}
 		} catch (\Exception $e) {
 			$raised = get_class($e) . ': ' . str_replace($file, '<font>', $e->getMessage());
@@ -42,9 +43,7 @@ class FontSubsetterFileHandleTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 
 		$stillOpen = $this->holdsFileOpen($subsetter);
 
-		if ($written) {
-			unlink($file);
-		}
+		unlink($file);
 
 		$this->assertSame($expected, $raised);
 		$this->assertFalse($stillOpen, 'still holding open the file it read');
@@ -55,25 +54,25 @@ class FontSubsetterFileHandleTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		$collection = 'Mpdf\Exception\FontException: Error parsing TrueType Collection: version=196608 (<font>)';
 
 		return [
-			'makeSubset, built' => ['makeSubset', 'corpusFont', 'NotoSansSinhala-Subset', 'pangram', 0, null],
-			'makeSubsetSIP, built' => ['makeSubsetSIP', 'corpusFont', 'NotoSansSinhala-Subset', 'pangram', 0, null],
-			'repackageTTF, built' => ['repackageTTF', 'corpusFont', 'NotoSansSinhala-Subset', null, 0, null],
+			'makeSubset, built' => ['makeSubset', 'readable', 0, null],
+			'makeSubsetSIP, built' => ['makeSubsetSIP', 'readable', 0, null],
+			'repackageTTF, built' => ['repackageTTF', 'readable', 0, null],
 
-			'makeSubset, a collection of a version it cannot read' => ['makeSubset', 'withHeader', "ttcf\x00\x03\x00\x00", 'pangram', 1, $collection],
-			'makeSubsetSIP, a collection of a version it cannot read' => ['makeSubsetSIP', 'withHeader', "ttcf\x00\x03\x00\x00", 'pangram', 1, $collection],
-			'repackageTTF, a collection of a version it cannot read' => ['repackageTTF', 'withHeader', "ttcf\x00\x03\x00\x00", null, 1, $collection],
+			'makeSubset, a collection of a version it cannot read' => ['makeSubset', 'unreadableCollection', 1, $collection],
+			'makeSubsetSIP, a collection of a version it cannot read' => ['makeSubsetSIP', 'unreadableCollection', 1, $collection],
+			'repackageTTF, a collection of a version it cannot read' => ['repackageTTF', 'unreadableCollection', 1, $collection],
 
-			'makeSubset, more glyphs than the Private Use Area holds' => ['makeSubset', 'withGlyphCount', 0xFFFF, 'pangram', 0,
+			'makeSubset, more glyphs than the Private Use Area holds' => ['makeSubset', 'tooManyGlyphs', 0,
 				'Mpdf\Exception\FontException: <font> : WARNING - Font cannot map all included glyphs into Private Use Area U+E000 - U+F8FF; cannot use useOTL on this font',
 			],
 			// Thrown from writing the cmap, after every glyph has been read
-			'makeSubset, more segments than a format 4 subtable can state' => ['makeSubset', 'corpusFont', 'Blank-WideCmap-Synthetic', 'everyThirdCharacter', 0,
+			'makeSubset, more segments than a format 4 subtable can state' => ['makeSubset', 'wideCmap', 0,
 				'Mpdf\Exception\FontException: Font "<font>" needs a format 4 cmap subtable of 174704 bytes, more than its length field can state',
 			],
-			'makeSubsetSIP, no Unicode cmap' => ['makeSubsetSIP', 'withoutCmapSubtables', 'NotoSansSinhala-Subset', 'pangram', 0,
+			'makeSubsetSIP, no Unicode cmap' => ['makeSubsetSIP', 'noUnicodeCmap', 0,
 				'Mpdf\Exception\FontException: Font "<font>" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)',
 			],
-			'repackageTTF, more glyphs than the Private Use Area holds' => ['repackageTTF', 'withGlyphCount', 0xFFFF, null, 0,
+			'repackageTTF, more glyphs than the Private Use Area holds' => ['repackageTTF', 'tooManyGlyphs', 0,
 				'Mpdf\Exception\FontException: Problem. Trying to repackage TF file; not enough space for unmapped glyphs',
 			],
 		];
@@ -96,45 +95,47 @@ class FontSubsetterFileHandleTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		return $handle() !== null;
 	}
 
-	/**
-	 * @return array The font's path, and false for a file that is not to be deleted
-	 */
-	private function corpusFont($font)
+	private function readable()
 	{
-		return [GoldenMaster::FONT_DIR . '/' . $font . '.ttf', false];
+		return $this->write($this->read('NotoSansSinhala-Subset'));
+	}
+
+	private function wideCmap()
+	{
+		return $this->write($this->read('Blank-WideCmap-Synthetic'));
 	}
 
 	/**
-	 * Overwrites the start of the file. A collection's version follows its tag, so a TTCfontID of 1
-	 * has the header read give up before the table directory.
+	 * A collection's version follows its tag, so read with a TTCfontID of 1 the header gives up before
+	 * the table directory
 	 */
-	private function withHeader($header)
+	private function unreadableCollection()
 	{
 		$font = $this->read('NotoSansSinhala-Subset');
 
-		return $this->write(substr_replace($font, $header, 0, strlen($header)));
+		return $this->write(TableWriter::replace($font, 0, "ttcf\x00\x03\x00\x00"));
 	}
 
 	/**
-	 * Overwrites the glyph count maxp states. Under useOTL every glyph up to it that the cmap does not
-	 * reach is given a Private Use Area code, and the area holds 6,400.
+	 * maxp states 65,535 glyphs. Under useOTL every glyph up to that count the cmap does not reach is
+	 * given a Private Use Area code, and the area holds 6,400.
 	 */
-	private function withGlyphCount($numGlyphs)
+	private function tooManyGlyphs()
 	{
 		$font = $this->read('NotoSansSinhala-Subset');
 
-		return $this->write(substr_replace($font, pack('n', $numGlyphs), $this->tableOffset($font, 'maxp') + 4, 2));
+		return $this->write(TableWriter::setUInt16($font, $this->tableOffset($font, 'maxp') + 4, 0xFFFF));
 	}
 
 	/**
-	 * States that the cmap holds no subtables, leaving the table directory and every other table as
-	 * they were
+	 * The cmap states it holds no subtables, leaving the table directory and every other table as they
+	 * were
 	 */
-	private function withoutCmapSubtables($font)
+	private function noUnicodeCmap()
 	{
-		$font = $this->read($font);
+		$font = $this->read('NotoSansSinhala-Subset');
 
-		return $this->write(substr_replace($font, pack('n', 0), $this->tableOffset($font, 'cmap') + 2, 2));
+		return $this->write(TableWriter::setUInt16($font, $this->tableOffset($font, 'cmap') + 2, 0));
 	}
 
 	private function read($font)
@@ -144,7 +145,7 @@ class FontSubsetterFileHandleTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 
 	private function write($font)
 	{
-		return [(new Cache($this->tmpDir))->write(uniqid('font-', true) . '.ttf', $font), true];
+		return (new Cache($this->tmpDir))->write(uniqid('font-', true) . '.ttf', $font);
 	}
 
 	/**
