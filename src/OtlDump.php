@@ -868,7 +868,7 @@ class OtlDump extends TTFontFile
 				$html .= '<bookmark level="1" content="' . $tag . ' [#' . $i . ']">';
 			}
 			$html .= 'Lookup #' . $i . ' [tag: <span style="color:#000066;">' . $tag . '</span>]</h5>';
-			$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
+			$ignore = $this->skippedClassNames($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
 			if ($ignore) {
 				$html .= '<div class="ignore">Ignoring: ' . $ignore . '</div> ';
 			}
@@ -1232,17 +1232,17 @@ class OtlDump extends TTFontFile
 	/**
 	 * What a lookup's flags say to skip, in words, for the report to show above its rules.
 	 *
-	 * The parser's copy returns the glyphs themselves, as a pattern; here the classes are named
-	 * instead, a list of every mark in the font being no use to a reader. A font whose
-	 * MarkFilteringSet GDEF never defined still fails here rather than being reported as if it were
-	 * well formed.
+	 * The parser's _getGSUBignoreString() projects the same LookupFlag::skipped() answer into a
+	 * pattern of every glyph skipped; a list of every mark in the font is no use to a reader, so the
+	 * classes are named instead. A font whose MarkFilteringSet GDEF never defined still fails here
+	 * rather than being reported as if it were well formed.
 	 *
 	 * @param int $flag             The lookup's flags
 	 * @param int $MarkFilteringSet The mark glyph set the flags name, where they name one
 	 *
 	 * @return string The classes skipped, named and "|"-separated, or "" where the flags skip nothing
 	 */
-	function _getGSUBignoreString($flag, $MarkFilteringSet)
+	private function skippedClassNames($flag, $MarkFilteringSet)
 	{
 		$this->lookupFlag->checkMarkFilteringSet($flag, $MarkFilteringSet);
 
@@ -1260,162 +1260,6 @@ class OtlDump extends TTFontFile
 		}
 
 		return implode('|', $skipped);
-	}
-
-	// GSUB Patterns
-
-	/*
-	  BACKTRACK                        INPUT                   LOOKAHEAD
-	  ==================================  ==================  ==================================
-	  (FEEB|FEEC)(ign) ¦(FD12|FD13)(ign) ¦(0612)¦(ign) (0613)¦(ign) (FD12|FD13)¦(ign) (FEEB|FEEC)
-	  ----------------  ----------------  -----  ------------  ---------------   ---------------
-	  Backtrack 1       Backtrack 2     Input 1   Input 2       Lookahead 1      Lookahead 2
-	  --------   ---    ---------  ---    ----   ---   ----   ---   ---------   ---    -------
-	  \${1}  \${2}     \${3}   \${4}                      \${5+}  \${6+}    \${7+}  \${8+}
-
-	  nBacktrack = 2               nInput = 2                 nLookahead = 2
-
-	  nBsubs = 2xnBack          nIsubs = (nBsubs+)    nLsubs = (nBsubs+nIsubs+) 2xnLookahead
-	  "\${1}\${2} "                 (nInput*2)-1               "\${5+} \${6+}"
-	  "REPL"
-
-	  ¦\${1}\${2} ¦\${3}\${4} ¦REPL¦\${5+} \${6+}¦\${7+} \${8+}¦
-
-	  INPUT nInput = 5
-	  ============================================================
-	  ¦(0612)¦(ign) (0613)¦(ign) (0614)¦(ign) (0615)¦(ign) (0615)¦
-	  \${1}  \${2}  \${3}  \${4} \${5} \${6}  \${7} \${8}  \${9} (All backreference numbers are + nBsubs)
-	  -----  ------------ ------------ ------------ ------------
-	  Input 1   Input 2      Input 3      Input 4      Input 5
-
-	  A======  SequenceIndex=1 ; Lookup match nGlyphs=1
-	  B===================  SequenceIndex=1 ; Lookup match nGlyphs=2
-	  C===============================  SequenceIndex=1 ; Lookup match nGlyphs=3
-	  D=======================  SequenceIndex=2 ; Lookup match nGlyphs=2
-	  E=====================================  SequenceIndex=2 ; Lookup match nGlyphs=3
-	  F======================  SequenceIndex=4 ; Lookup match nGlyphs=2
-
-	  All backreference numbers are + nBsubs
-	  A - "REPL\${2} \${3}\${4} \${5}\${6} \${7}\${8} \${9}"
-	  B - "REPL\${2}\${4} \${5}\${6} \${7}\${8} \${9}"
-	  C - "REPL\${2}\${4}\${6} \${7}\${8} \${9}"
-	  D - "\${1} REPL\${2}\${4}\${6} \${7}\${8} \${9}"
-	  E - "\${1} REPL\${2}\${4}\${6}\${8} \${9}"
-	  F - "\${1}\${2} \${3}\${4} \${5} REPL\${6}\${8}"
-	 */
-
-	/**
-	 * The input sequence of a context rule, with the nested lookup's own glyphs standing in at the
-	 * positions it applies at.
-	 *
-	 * Says what the nested lookup matches within the context, which is what its part of the report is
-	 * filtered by.
-	 *
-	 * @param array  $inputGlyphs  The input sequence, one pipe-joined glyph string per position
-	 * @param string $ignore       The glyphs the lookup's flags say to skip, between positions
-	 * @param array  $lookupGlyphs The nested lookup's own input sequence
-	 * @param int    $seqIndex     Which position of the input sequence the nested lookup applies at
-	 *
-	 * @return string The sequence, position by position
-	 */
-	function _makeGSUBcontextInputMatch($inputGlyphs, $ignore, $lookupGlyphs, $seqIndex)
-	{
-		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
-		// Returns e.g. ¦(0612)¦(ignore) (0613)¦(ignore) (0614)¦
-		// $inputGlyphs = array of glyphs(glyphstrings) making up Input sequence in Context
-		// $lookupGlyphs = array of glyphs (single Glyphs) making up Lookup Input sequence
-		$mLen = count($lookupGlyphs);  // nGlyphs in the secondary Lookup match
-		$nInput = count($inputGlyphs); // nGlyphs in the Primary Input sequence
-		$str = "";
-		for ($i = 0; $i < $nInput; $i++) {
-			if ($i > 0) {
-				$str .= $ignore . " ";
-			}
-			if ($i >= $seqIndex && $i < ($seqIndex + $mLen)) {
-				$str .= "" . $lookupGlyphs[($i - $seqIndex)] . "";
-			} else {
-				$str .= "" . $inputGlyphs[($i)] . "";
-			}
-		}
-
-		return $str;
-	}
-
-	/**
-	 * The input sequence of a context rule, with the skipped glyphs allowed for between positions.
-	 *
-	 * @param array  $inputGlyphs The input sequence, one pipe-joined glyph string per position
-	 * @param string $ignore The glyphs the lookup's flags say to skip, as a group that matches a run
-	 *                       of them, or "()" where nothing is skipped
-	 *
-	 * @return string The sequence, position by position
-	 */
-	function _makeGSUBinputMatch($inputGlyphs, $ignore)
-	{
-		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
-		// Returns e.g. ¦(0612)¦(ignore) (0613)¦(ignore) (0614)¦
-		// $inputGlyphs = array of glyphs(glyphstrings) making up Input sequence in Context
-		// $lookupGlyphs = array of glyphs making up Lookup Input sequence - if applicable
-		$str = "";
-		for ($i = 1; $i <= count($inputGlyphs); $i++) {
-			if ($i > 1) {
-				$str .= $ignore . " ";
-			}
-			$str .= "" . $inputGlyphs[($i - 1)] . "";
-		}
-
-		return $str;
-	}
-
-	/**
-	 * The backtrack sequence of a chained context rule, read back into writing order.
-	 *
-	 * A backtrack is stored nearest-first - position 0 is the glyph immediately before the input - so
-	 * it is walked backwards to come out in the order the text is written in.
-	 *
-	 * @param array  $backtrackGlyphs The backtrack sequence, one pipe-joined glyph string per position
-	 * @param string $ignore The glyphs the lookup's flags say to skip, as a group that matches a run
-	 *                       of them, or "()" where nothing is skipped
-	 *
-	 * @return string The sequence, position by position
-	 */
-	function _makeGSUBbacktrackMatch($backtrackGlyphs, $ignore)
-	{
-		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
-		// Returns e.g. ¦(FEEB|FEEC)(ignore) ¦(FD12|FD13)(ignore) ¦
-		// $backtrackGlyphs = array of glyphstrings making up Backtrack sequence
-		// 3  2  1  0
-		// each item being e.g. E0AD|E0AF|F1FD
-		$str = "";
-		for ($i = (count($backtrackGlyphs) - 1); $i >= 0; $i--) {
-			$str .= "" . $backtrackGlyphs[$i] . " " . $ignore . " ";
-		}
-
-		return $str;
-	}
-
-	/**
-	 * The lookahead sequence of a chained context rule, which is already in writing order.
-	 *
-	 * @param array  $lookaheadGlyphs The lookahead sequence, one pipe-joined glyph string per position
-	 * @param string $ignore The glyphs the lookup's flags say to skip, as a group that matches a run
-	 *                       of them, or "()" where nothing is skipped
-	 *
-	 * @return string The sequence, position by position
-	 */
-	function _makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore)
-	{
-		// $ignore = "((?:(?: FBA1| FBA2| FBA3))*)" or "()"
-		// Returns e.g. ¦(ignore) (FD12|FD13)¦(ignore) (FEEB|FEEC)¦
-		// $lookaheadGlyphs = array of glyphstrings making up Lookahead sequence
-		// 0  1  2  3
-		// each item being e.g. E0AD|E0AF|F1FD
-		$str = "";
-		for ($i = 0; $i < count($lookaheadGlyphs); $i++) {
-			$str .= $ignore . " " . $lookaheadGlyphs[$i] . "";
-		}
-
-		return $str;
 	}
 
 	/**
@@ -1556,7 +1400,7 @@ class OtlDump extends TTFontFile
 				$html .= '<bookmark level="1" content="' . $tag . ' [#' . $luli . ']">';
 			}
 			$html .= 'Lookup #' . $luli . ' [tag: <span style="color:#000066;">' . $tag . '</span>]</h5>';
-			$ignore = $this->_getGSUBignoreString($Lookup[$luli]['Flag'], $Lookup[$luli]['MarkFilteringSet']);
+			$ignore = $this->skippedClassNames($Lookup[$luli]['Flag'], $Lookup[$luli]['MarkFilteringSet']);
 			if ($ignore) {
 				$html .= '<div class="ignore">Ignoring: ' . $ignore . '</div> ';
 			}
