@@ -191,6 +191,14 @@ class LookupFlag
 		}
 	}
 
+	/**
+	 * @return true[] GDEF's marks, as GlyphString::set() gives them
+	 */
+	public function marks()
+	{
+		return $this->setOf(self::MARKS, 0, '');
+	}
+
 	private function setOf($class, $flag, $markFilteringSet)
 	{
 		if ($class === self::MARKS_OUTSIDE_FILTERING_SET) {
@@ -221,10 +229,7 @@ class LookupFlag
 		}
 
 		$keep = [];
-		$inSet = [];
-		foreach (explode('|', $this->gdef['MarkGlyphSets'][$markFilteringSet]) as $glyph) {
-			$inSet[trim($glyph)] = true;
-		}
+		$inSet = GlyphString::set($this->gdef['MarkGlyphSets'][$markFilteringSet]);
 
 		foreach (explode('|', $this->gdef['GlyphClassMarks']) as $glyph) {
 			$glyph = trim($glyph);
