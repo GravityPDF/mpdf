@@ -224,7 +224,7 @@ class Otl
 			$this->assocMarks = [];  // assocMarks[$posarr mpos] => array(compID, ligPos)
 
 			if ($this->debugOTL) {
-				$this->_dumpproc('BEGIN', '-', '-', '-', '-', -1, '-', 0);
+				echo OtlDump::shapingStep($this->OTLdata, 'BEGIN', '-', '-', '-', '-', -1, '-', 0);
 			}
 
 			$this->markWordBoundaries($scriptblock);
@@ -245,7 +245,7 @@ class Otl
 			}
 
 			if ($this->debugOTL) {
-				$this->_dumpproc('END', '-', '-', '-', '-', 0, '-', 0);
+				echo OtlDump::shapingStep($this->OTLdata, 'END', '-', '-', '-', '-', 0, '-', 0);
 				exit;
 			}
 
@@ -2085,7 +2085,7 @@ class Otl
 		$substitute = $this->glyphToChar($GlyphID);
 		$this->GSUBsubstitute($ptr, $substitute, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return 1;
@@ -2126,7 +2126,7 @@ class Otl
 		// What it puts there is what the cursor moves by, which for the empty sequence is nothing
 		$shift = $this->GSUBsubstitute($ptr, $SubstituteGlyphs, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return $shift;
@@ -2178,7 +2178,7 @@ class Otl
 		$substitute = $this->glyphToChar($GlyphID);
 		$this->GSUBsubstitute($ptr, $substitute, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return 1;
@@ -2247,7 +2247,7 @@ class Otl
 			if ($match) {
 				$shift = $this->GSUBsubstitute($ptr, $substitute, $Type, $GlyphPos); // GlyphPos contains positions to set null
 				if ($this->debugOTL && $shift) {
-					$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
 				if ($shift) {
 					return ($spos - $ptr + 1 - ($CompCount - 1));
@@ -2302,7 +2302,7 @@ class Otl
 				$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
 				if ($matched) {
 					if ($this->debugOTL) {
-						$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+						echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 					}
 					return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 				}
@@ -2362,7 +2362,7 @@ class Otl
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
 					if ($matched) {
 						if ($this->debugOTL) {
-							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 						}
 						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 					}
@@ -2396,7 +2396,7 @@ class Otl
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, [], [], $ignore, $ptr);
 		if ($matched) {
 			if ($this->debugOTL) {
-				$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 			}
 
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
@@ -2442,7 +2442,7 @@ class Otl
 			$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
 			if ($matched) {
 				if ($this->debugOTL) {
-					$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
 				$SubstCount = $this->reader->readUInt16();
 				return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
@@ -2511,7 +2511,7 @@ class Otl
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
 					if ($matched) {
 						if ($this->debugOTL) {
-							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 						}
 						$SubstCount = $this->reader->readUInt16();
 						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
@@ -2550,7 +2550,7 @@ class Otl
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
 			if ($this->debugOTL) {
-				$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 			}
 
 			$this->reader->seek($save_pos); // Return to just after SubstCount
@@ -2622,7 +2622,7 @@ class Otl
 
 		$this->GSUBsubstitute($ptr, $substitute, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return 1;
@@ -3304,7 +3304,7 @@ class Otl
 		}
 		$this->_applyGPOSvaluerecord($ptr, $Value);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 		}
 		return 1;
 	}
@@ -3384,12 +3384,12 @@ class Otl
 						if ($ValueFormat2) {
 							$this->_applyGPOSvaluerecord($matchedpos, $Value2);
 							if ($this->debugOTL) {
-								$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+								echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 							}
 							return $matchedpos - $ptr + 1;
 						}
 						if ($this->debugOTL) {
-							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 						return $matchedpos - $ptr;
 					} else {
@@ -3464,12 +3464,12 @@ class Otl
 							if ($ValueFormat2) {
 								$this->_applyGPOSvaluerecord($matchedpos, $Value2);
 								if ($this->debugOTL) {
-									$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+									echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 								}
 								return $matchedpos - $ptr + 1;
 							}
 							if ($this->debugOTL) {
-								$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+								echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 							}
 							return $matchedpos - $ptr;
 						}
@@ -3526,7 +3526,7 @@ class Otl
 			$this->Exit[$ptr] = ['X' => $x, 'Y' => $y, 'dir' => $dir];
 		}
 		if ($this->debugOTL) {
-			$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 		}
 		return 1;
 	}
@@ -3615,7 +3615,7 @@ class Otl
 			$this->OTLdata[$ptr]['GPOSinfo']['XPlacement'] = $prevXPlacement + $BaseRecord['AnchorX'] - $MarkRecord['AnchorX'];
 			$this->OTLdata[$ptr]['GPOSinfo']['YPlacement'] = $prevYPlacement + $BaseRecord['AnchorY'] - $MarkRecord['AnchorY'];
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 			return 1;
 		}
@@ -3721,7 +3721,7 @@ class Otl
 				$this->OTLdata[$ptr]['GPOSinfo']['XPlacement'] = $prevXPlacement + $LigatureRecord['AnchorX'] - $MarkRecord['AnchorX'];
 				$this->OTLdata[$ptr]['GPOSinfo']['YPlacement'] = $prevYPlacement + $LigatureRecord['AnchorY'] - $MarkRecord['AnchorY'];
 				if ($this->debugOTL) {
-					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 				return 1;
 			}
@@ -3818,7 +3818,7 @@ class Otl
 			$this->OTLdata[$ptr]['GPOSinfo']['XPlacement'] = $prevXPlacement + $Mark2Record['AnchorX'] - $Mark1Record['AnchorX'];
 			$this->OTLdata[$ptr]['GPOSinfo']['YPlacement'] = $prevYPlacement + $Mark2Record['AnchorY'] - $Mark1Record['AnchorY'];
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 			return 1;
 		}
@@ -3868,7 +3868,7 @@ class Otl
 			if ($matched) {
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
-					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 
 				return $shift;
@@ -3929,7 +3929,7 @@ class Otl
 					if ($matched) {
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL) {
-							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 
 						return $shift;
@@ -3966,7 +3966,7 @@ class Otl
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 
 			return $shift;
@@ -4019,7 +4019,7 @@ class Otl
 				$PosCount = $this->reader->readUInt16();
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
-					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 
 				return $shift;
@@ -4089,7 +4089,7 @@ class Otl
 						$PosCount = $this->reader->readUInt16();
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL) {
-							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 
 						return $shift;
@@ -4130,7 +4130,7 @@ class Otl
 			$this->reader->seek($save_pos); // Return to just after PosCount
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 
 			return $shift;
@@ -4933,60 +4933,5 @@ class Otl
 		}
 
 		return $this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset];
-	}
-
-	/**
-	 * Echo the state of the run at one step of shaping, for the debugOTL trace.
-	 *
-	 * @param string $GPOSSUB   'GSUB' or 'GPOS', or a marker for the beginning or end of the run
-	 * @param int    $lookupID  The lookup that applied
-	 * @param int    $subtable  Which of its subtables
-	 * @param int    $Type      The lookup's type
-	 * @param int    $Format    The subtable's format
-	 * @param int    $ptr       Where in the run it applied
-	 * @param string $currGlyph The glyph it applied at, as hex
-	 * @param int    $level     0 for a lookup applied directly, 1 for one nested in a context rule
-	 */
-	private function _dumpproc($GPOSSUB, $lookupID, $subtable, $Type, $Format, $ptr, $currGlyph, $level)
-	{
-		echo '<div style="padding-left: ' . ($level * 2) . 'em;">';
-		echo $GPOSSUB . ' LookupID #' . $lookupID . ' Subtable#' . $subtable . ' Type: ' . $Type . ' Format: ' . $Format . '<br />';
-		echo '<div style="font-family:monospace">';
-		echo 'Glyph position: ' . $ptr . ' Current Glyph: ' . $currGlyph . '<br />';
-
-		for ($i = 0; $i < count($this->OTLdata); $i++) {
-			if ($i == $ptr) {
-				echo '<b>';
-			}
-			echo $this->OTLdata[$i]['hex'] . ' ';
-			if ($i == $ptr) {
-				echo '</b>';
-			}
-		}
-		echo '<br />';
-
-		for ($i = 0; $i < count($this->OTLdata); $i++) {
-			if ($i == $ptr) {
-				echo '<b>';
-			}
-			echo str_pad($this->OTLdata[$i]['uni'], 5) . ' ';
-			if ($i == $ptr) {
-				echo '</b>';
-			}
-		}
-		echo '<br />';
-
-		if ($GPOSSUB == 'GPOS') {
-			for ($i = 0; $i < count($this->OTLdata); $i++) {
-				if (!empty($this->OTLdata[$i]['GPOSinfo'])) {
-					echo $this->OTLdata[$i]['hex'] . ' &#x' . $this->OTLdata[$i]['hex'] . '; ';
-					print_r($this->OTLdata[$i]['GPOSinfo']);
-					echo ' ';
-				}
-			}
-		}
-
-		echo '</div>';
-		echo '</div>';
 	}
 }
