@@ -16,28 +16,12 @@ use Mpdf\TTFontFile;
 class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
-	const FONT_DIR = __DIR__ . '/../../data/ttf';
-
 	/**
-	 * Where the parser's cached metrics go, so the measurement does not depend on what ran before it
+	 * Where the parser caches what it reads. Mpdf\Cache creates it.
 	 *
 	 * @var string
 	 */
-	private $tmpDir;
-
-	public function set_up()
-	{
-		parent::set_up();
-
-		$this->tmpDir = __DIR__ . '/../tmp/mpdf/subsetter-cmap';
-		if (!is_dir($this->tmpDir)) {
-			mkdir($this->tmpDir, 0777, true);
-		}
-
-		foreach (glob($this->tmpDir . '/*') as $file) {
-			unlink($file);
-		}
-	}
+	private $tmpDir = __DIR__ . '/../tmp/mpdf/subsetter-cmap';
 
 	/**
 	 * @dataProvider fontProvider
@@ -67,61 +51,74 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Fonts wide enough to segment the subtable several ways, while staying inside the uint16 the
-	 * length field is written as - repackaging a font of more than 32,768 mapped characters overflows
-	 * it, which is a defect of its own.
+	 * The whole corpus, as the golden masters take it, so that a font added to tests/data/ttf is
+	 * measured here too.
 	 */
 	public function fontProvider()
 	{
-		return [
-			'NotoSans-Regular' => ['NotoSans-Regular'],
-			'Poppins-Regular' => ['Poppins-Regular'],
-			'Manjari-Regular' => ['Manjari-Regular'],
-			'angerthas' => ['angerthas'],
-			'NotoSansMono-GDEF13-Subset' => ['NotoSansMono-GDEF13-Subset'],
-		];
+		$master = new SubsetGoldenMaster();
+
+		return $master->fonts();
 	}
 
-	/**
-	 * Read the length out of the emitted subtable's header and compare it against the bytes between
-	 * the subtable and whatever follows it.
-	 */
 	private function assertDeclaredLength($program)
 	{
 		$cmap = $this->table($program, 'cmap');
 		$this->assertNotNull($cmap, 'The font program carries no cmap table');
 
-		$subtable = $this->format4Offset($cmap);
+		$subtable = $this->format4Subtable($cmap);
 		$this->assertNotNull($subtable, 'The cmap carries no format 4 subtable');
 
 		list($offset, $end) = $subtable;
 
-		$this->assertSame($end - $offset, $this->uint16($cmap, $offset + 2));
+		if ($end - $offset > 0xFFFF) {
+			$this->markTestSkipped(sprintf('#150: the subtable is %d bytes, more than its uint16 length can state', $end - $offset));
+		}
+
+		$reader = new BlobReader($cmap);
+		$reader->seek($offset + 2);
+
+		$this->assertSame($end - $offset, $reader->readUInt16());
 	}
 
 	/**
 	 * @return array|null The format 4 subtable's start and end within the cmap, or null if there is none
 	 */
-	private function format4Offset($cmap)
+	private function format4Subtable($cmap)
 	{
+		$reader = new BlobReader($cmap);
+		$reader->skip(2); // version
+		$subtableCount = $reader->readUInt16();
+
 		$offsets = [];
-		for ($i = 0; $i < $this->uint16($cmap, 2); $i++) {
-			$offsets[] = $this->uint32($cmap, 4 + 8 * $i + 4);
+		for ($i = 0; $i < $subtableCount; $i++) {
+			$reader->skip(4); // platform, encoding
+			$offsets[] = FontReader::uint32($reader->read(4));
 		}
 
-		// The builders point several encoding records at one subtable, and write the subtables in the
-		// order the records list them
-		$offsets = array_unique($offsets);
-		sort($offsets);
-		$offsets[] = strlen($cmap);
-
-		for ($i = 0; $i < count($offsets) - 1; $i++) {
-			if ($this->uint16($cmap, $offsets[$i]) === 4) {
-				return [$offsets[$i], $offsets[$i + 1]];
+		$start = null;
+		foreach ($offsets as $offset) {
+			$reader->seek($offset);
+			if ($reader->readUInt16() === 4) {
+				$start = $offset;
+				break;
 			}
 		}
 
-		return null;
+		if ($start === null) {
+			return null;
+		}
+
+		// The builders point three encoding records at the one subtable, so the end is the nearest
+		// offset past it rather than the next one listed
+		$end = strlen($cmap);
+		foreach ($offsets as $offset) {
+			if ($offset > $start && $offset < $end) {
+				$end = $offset;
+			}
+		}
+
+		return [$start, $end];
 	}
 
 	/**
@@ -129,33 +126,28 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function table($program, $tag)
 	{
-		for ($i = 0; $i < $this->uint16($program, 4); $i++) {
-			$record = 12 + 16 * $i;
-			if (substr($program, $record, 4) === $tag) {
-				return substr($program, $this->uint32($program, $record + 8), $this->uint32($program, $record + 12));
+		$reader = new BlobReader($program);
+		$reader->skip(4); // sfntVersion
+		$tableCount = $reader->readUInt16();
+		$reader->skip(6); // searchRange, entrySelector, rangeShift
+
+		for ($i = 0; $i < $tableCount; $i++) {
+			$wanted = $reader->read(4) === $tag;
+			$reader->skip(4); // checksum
+			$offset = FontReader::uint32($reader->read(4));
+			$length = FontReader::uint32($reader->read(4));
+
+			if ($wanted) {
+				return substr($program, $offset, $length);
 			}
 		}
 
 		return null;
 	}
 
-	private function uint16($bytes, $offset)
-	{
-		$read = unpack('n', substr($bytes, $offset, 2));
-
-		return $read[1];
-	}
-
-	private function uint32($bytes, $offset)
-	{
-		$read = unpack('N', substr($bytes, $offset, 4));
-
-		return $read[1];
-	}
-
 	/**
-	 * A space, the digits and both cases of the alphabet: 63 characters in four contiguous runs, which
-	 * is what a pangram asks a text font for.
+	 * A space, the digits and both cases of the alphabet - four contiguous runs, so the subtable
+	 * segments several ways rather than collapsing to one.
 	 *
 	 * @return int[] Those of them the font maps, as Unicode code points
 	 */
@@ -168,7 +160,7 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	private function file($font)
 	{
-		return self::FONT_DIR . '/' . $font . '.ttf';
+		return GoldenMaster::FONT_DIR . '/' . $font . '.ttf';
 	}
 
 	private function subsetter()
