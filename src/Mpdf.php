@@ -4646,7 +4646,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$save_OTLtags = $this->OTLtags;
 		$this->OTLtags = [];
 		if ($this->useKerning) {
-			if ($this->CurrentFont['haskernGPOS']) {
+			if (!empty($this->CurrentFont['haskernGPOS'])) {
 				$this->OTLtags['Plus'] .= ' kern';
 			} else {
 				$textvar = ($textvar | TextVars::FC_KERNING);
@@ -4686,7 +4686,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$save_OTLtags = $this->OTLtags;
 		$this->OTLtags = [];
 		if ($this->useKerning) {
-			if ($this->CurrentFont['haskernGPOS']) {
+			if (!empty($this->CurrentFont['haskernGPOS'])) {
 				$this->OTLtags['Plus'] .= ' kern';
 			} else {
 				$textvar = ($textvar | TextVars::FC_KERNING);
@@ -10765,7 +10765,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$save_OTLtags = $this->OTLtags;
 		$this->OTLtags = [];
 		if ($this->useKerning) {
-			if ($this->CurrentFont['haskernGPOS']) {
+			if (!empty($this->CurrentFont['haskernGPOS'])) {
 				$this->OTLtags['Plus'] .= ' kern';
 			} else {
 				$textvar = ($textvar | TextVars::FC_KERNING);
@@ -18705,7 +18705,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				case 'FONT-KERNING':
 					if (strtoupper($v) == 'NORMAL' || (strtoupper($v) == 'AUTO' && $this->useKerning)) {
 						/* -- OTL -- */
-						if ($this->CurrentFont['haskernGPOS']) {
+						if (!empty($this->CurrentFont['haskernGPOS'])) {
 							if (isset($this->OTLtags['Plus'])) {
 								$this->OTLtags['Plus'] .= ' kern';
 							} else {
@@ -25493,7 +25493,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->OTLtags = [];
 
 		if ($this->useKerning) {
-			if ($this->CurrentFont['haskernGPOS']) {
+			if (!empty($this->CurrentFont['haskernGPOS'])) {
 				$this->OTLtags['Plus'] .= ' kern';
 			} else {
 				$textvar = ($textvar | TextVars::FC_KERNING);
