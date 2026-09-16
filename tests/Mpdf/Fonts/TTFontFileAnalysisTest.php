@@ -145,6 +145,85 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * getCTG opens the file for itself, after getMetrics has closed it, to read the character map of a
+	 * font that is embedded whole. It can give up from the header, like getMetrics, or from having
+	 * more unmapped glyphs than the Private Use Area has codes to give them.
+	 *
+	 * @dataProvider characterMapProvider
+	 */
+	public function testTheParserLetsGoOfAFontOnceItHasReadItsCharacterMap($variant, $TTCfontID, $expected)
+	{
+		$file = call_user_func_array([$this, $variant[0]], array_slice($variant, 1));
+
+		$this->assertLetsGoOf(new TTFontFile($this->cache(), 'win'), $file, $expected, function (TTFontFile $ttf) use ($file, $TTCfontID) {
+			$ttf->getCTG($file, $TTCfontID, false, true);
+		});
+	}
+
+	public function characterMapProvider()
+	{
+		return [
+			'a font it can read' => [['withHeader', 'NotoSansSinhala-Subset.ttf', "\x00\x01\x00\x00"], 0, null],
+			'a collection of a version it cannot read' => [['withHeader', 'NotoSansSinhala-Subset.ttf', "ttcf\x00\x03\x00\x00"], 1,
+				'Mpdf\Exception\FontException: Error parsing TrueType Collection: version=196608 (<font>)',
+			],
+			'more glyphs than the Private Use Area holds' => [['withGlyphCount', 'NotoSansSinhala-Subset.ttf', 0xFFFF], 0,
+				'Mpdf\Exception\FontException: Font "<font>" cannot map all included glyphs into Private Use Area U+E000-U+F8FF; cannot use useOTL on this font',
+			],
+		];
+	}
+
+	/**
+	 * The font browser reads a collection's header through getTTCFonts before reading each font of it
+	 * with extractCoreInfo, and nothing it does in between needs the file open. So it is let go of
+	 * when the header reads as well as when it does not.
+	 *
+	 * @dataProvider collectionHeaderProvider
+	 */
+	public function testTheBrowserLetsGoOfACollectionOnceItHasReadItsHeader($header, $expected, $fonts)
+	{
+		$file = $this->withHeader('NotoSansSinhala-Subset.ttf', $header);
+		$browser = new TTFontFileAnalysis($this->cache(), 'win');
+
+		$this->assertLetsGoOf($browser, $file, $expected, function (TTFontFile $ttf) use ($file) {
+			$ttf->getTTCFonts($file);
+		});
+
+		$this->assertSame($fonts, $browser->TTCFonts);
+	}
+
+	public function collectionHeaderProvider()
+	{
+		return [
+			'not a collection' => ["\x00\x01\x00\x00", 'Mpdf\Exception\FontException: Not a TrueType Collection: version=65536 (<font>)', []],
+			'a collection of a version it cannot read' => ["ttcf\x00\x03\x00\x00", 'Mpdf\Exception\FontException: Error parsing TrueType Collection: version=196608 (<font>)', []],
+			// ttcf, version 1.0, two fonts, and their offsets
+			'a collection it can read' => ['ttcf' . pack('NNNN', 0x00010000, 2, 20, 40), null, [1 => ['offset' => 20], 2 => ['offset' => 40]]],
+		];
+	}
+
+	/**
+	 * @param string|null $expected The complaint, as describe() gives it, or null for none
+	 */
+	private function assertLetsGoOf(TTFontFile $ttf, $file, $expected, \Closure $read)
+	{
+		$raised = null;
+
+		try {
+			$read($ttf);
+		} catch (\Exception $e) {
+			$raised = $this->describe($e, $file);
+		}
+
+		$stillOpen = $this->holdsFileOpen($ttf);
+
+		unlink($file);
+
+		$this->assertSame($expected, $raised);
+		$this->assertFalse($stillOpen, 'still holding open the file it read');
+	}
+
+	/**
 	 * Whether each class gave up on the file with the complaint expected, and let go of it.
 	 *
 	 * Letting go is read from each reader rather than inferred from the unlink() at the end: POSIX
@@ -233,6 +312,27 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		);
 
 		return $this->writeFontVariant($font, 'header');
+	}
+
+	/**
+	 * Overwrites the glyph count maxp states. getCTG gives a Private Use Area code to every glyph up to
+	 * it that the cmap does not reach, and reads nothing else by it.
+	 */
+	private function withGlyphCount($file, $numGlyphs)
+	{
+		$font = file_get_contents(__DIR__ . '/../../data/ttf/' . $file);
+
+		$tables = unpack('n', substr($font, 4, 2));
+		for ($i = 0; $i < $tables[1]; $i++) {
+			$record = 12 + $i * 16;
+			if (substr($font, $record, 4) === 'maxp') {
+				$offset = unpack('N', substr($font, $record + 8, 4));
+				$font = substr_replace($font, pack('n', $numGlyphs), $offset[1] + 4, 2);
+				break;
+			}
+		}
+
+		return $this->writeFontVariant($font, 'glyph-count');
 	}
 
 	/**

@@ -376,9 +376,9 @@ class TTFontFile
 	/**
 	 * Start reading one font file.
 	 *
-	 * getMetrics and getCTG open their own; FontSubsetter opens one through here and reads the same
-	 * handle, so that the table directory this parses and the two readers built on it that the
-	 * subsetter borrows are all looking at the font it is building from.
+	 * getMetrics, getCTG and getTTCFonts open their own; FontSubsetter opens one through here and reads
+	 * the same handle, so that the table directory this parses and the two readers built on it that
+	 * the subsetter borrows are all looking at the font it is building from.
 	 *
 	 * @return FileReader The open file, for a caller that reads it itself
 	 */
@@ -496,6 +496,19 @@ class TTFontFile
 		$this->useOTL = $useOTL; // mPDF 5.7.1
 		$this->open($file);
 
+		// Closed however the read ends: see getMetrics
+		try {
+			return $this->readCharToGlyph($file, $TTCfontID, $debug, $useOTL);
+		} finally {
+			$this->reader->close();
+		}
+	}
+
+	/**
+	 * @return array See getCTG
+	 */
+	private function readCharToGlyph($file, $TTCfontID, $debug, $useOTL)
+	{
 		$this->charWidths = '';
 		$this->charToGlyph = [];
 		$this->tables = [];
@@ -555,8 +568,6 @@ class TTFontFile
 			}
 		}
 
-		$this->reader->close();
-
 		return $charToGlyph;
 	}
 
@@ -570,25 +581,29 @@ class TTFontFile
 	 */
 	function getTTCFonts($file)
 	{
-		$this->filename = $file;
+		$this->open($file);
 
-		$this->reader = new FileReader($file);
-
-		$this->numTTCFonts = 0;
-		$this->TTCFonts = [];
-		$this->version = $version = $this->reader->readUInt32();
-		if ($version === 0x74746366) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000], true)) {
-				throw new \Mpdf\Exception\FontException(sprintf("Error parsing TrueType Collection: version=%s (%s)", $version, $file));
+		// Closed on success too: the caller goes on to read each font of the collection, and opens the
+		// file again for every one of them
+		try {
+			$this->numTTCFonts = 0;
+			$this->TTCFonts = [];
+			$this->version = $version = $this->reader->readUInt32();
+			if ($version === 0x74746366) {
+				$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
+				if (!in_array($version, [0x00010000, 0x00020000], true)) {
+					throw new \Mpdf\Exception\FontException(sprintf("Error parsing TrueType Collection: version=%s (%s)", $version, $file));
+				}
+			} else {
+				throw new \Mpdf\Exception\FontException(sprintf("Not a TrueType Collection: version=%s (%s)", $version, $file));
 			}
-		} else {
-			throw new \Mpdf\Exception\FontException(sprintf("Not a TrueType Collection: version=%s (%s)", $version, $file));
-		}
 
-		$this->numTTCFonts = $this->reader->readUInt32();
-		for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-			$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
+			$this->numTTCFonts = $this->reader->readUInt32();
+			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
+				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
+			}
+		} finally {
+			$this->reader->close();
 		}
 	}
 
