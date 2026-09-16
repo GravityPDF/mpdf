@@ -117,11 +117,10 @@ class FontSubsetter
 	/**
 	 * Start reading one font, and start a font program to write.
 	 *
-	 * The three builders below opened the file and reset the same state in the same twenty lines
-	 * each. The parser is handed the reader so that the table directory it reads, and the two
-	 * readers built on it that this borrows, are reading the file this is subsetting.
+	 * The parser is handed the reader so that the table directory it reads, and the two readers built
+	 * on it that this borrows, are reading the file this is subsetting.
 	 */
-	private function open($file, $TTCfontID, $debug)
+	private function open($file)
 	{
 		$this->file = $file;
 		$this->reader = $this->font->open($file);
@@ -132,7 +131,16 @@ class FontSubsetter
 		$this->maxUniChar = 0;
 		$this->defaultWidth = 0;
 		$this->codeToGlyph = [];
+	}
 
+	/**
+	 * Read the table directory of the font asked for, past a collection's header where there is one.
+	 *
+	 * @param int  $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
+	 * @param bool $debug     Whether to check every table against the checksum the directory states
+	 */
+	private function readTableDirectory($TTCfontID, $debug)
+	{
 		$this->reader->skip(4); // sfntVersion, which getMetrics checks and this does not
 		$this->font->selectFont($TTCfontID);
 		$this->font->readTableDirectory($debug);
@@ -230,7 +238,25 @@ class FontSubsetter
 	 */
 	public function makeSubset($file, array $subset, $TTCfontID = 0, $debug = false, $useOTL = false)
 	{
-		$this->open($file, $TTCfontID, $debug);
+		$this->open($file);
+
+		// Closed however the build ends, so that a font it gives up on is not held open for as long as
+		// the subsetter lives: on Windows a file still open cannot be deleted or replaced. finally
+		// rather than catch, because it releases on an Error under PHP 7 as well.
+		try {
+			$this->readTableDirectory($TTCfontID, $debug);
+
+			return $this->buildSubset($subset, $useOTL);
+		} finally {
+			$this->reader->close();
+		}
+	}
+
+	/**
+	 * @return string See makeSubset
+	 */
+	private function buildSubset(array $subset, $useOTL)
+	{
 		list($indexToLocFormat, $numberOfHMetrics, $numGlyphs) = $this->readHeaders();
 
 		// cmap - Character to glyph index mapping table
@@ -249,7 +275,7 @@ class FontSubsetter
 						$bctr++;
 					} // Avoid overwriting a glyph already mapped in PUA
 					if ($bctr > 0xF8FF) {
-						throw new \Mpdf\Exception\FontException($file . " : WARNING - Font cannot map all included glyphs into Private Use Area U+E000 - U+F8FF; cannot use useOTL on this font");
+						throw new \Mpdf\Exception\FontException($this->file . " : WARNING - Font cannot map all included glyphs into Private Use Area U+E000 - U+F8FF; cannot use useOTL on this font");
 					}
 					$glyphToChar[$gid][] = $bctr;
 					$charToGlyph[$bctr] = $gid;
@@ -352,8 +378,6 @@ class FontSubsetter
 			$this->writer->add('OS/2', $os2);
 		}
 
-		$this->reader->close();
-
 		// Put the TTF file together
 		return $this->writer->program();
 	}
@@ -378,7 +402,23 @@ class FontSubsetter
 	 */
 	public function makeSubsetSIP($file, array $subset, $TTCfontID = 0, $debug = false, $useOTL = 0)
 	{
-		$this->open($file, $TTCfontID, $debug);
+		$this->open($file);
+
+		// Closed however the build ends: see makeSubset
+		try {
+			$this->readTableDirectory($TTCfontID, $debug);
+
+			return $this->buildSubsetSIP($subset, $useOTL);
+		} finally {
+			$this->reader->close();
+		}
+	}
+
+	/**
+	 * @return string See makeSubsetSIP
+	 */
+	private function buildSubsetSIP(array $subset, $useOTL)
+	{
 		list($indexToLocFormat, $numberOfHMetrics, $numGlyphs) = $this->readHeaders();
 
 		// cmap - Character to glyph index mapping table
@@ -412,7 +452,7 @@ class FontSubsetter
 		}
 
 		if (!$unicode_cmap_offset) {
-			throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)', $file));
+			throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)', $this->file));
 		}
 
 		// Format 12 CMAP does characters above Unicode BMP i.e. some HKCS characters U+20000 and above
@@ -610,8 +650,6 @@ class FontSubsetter
 
 		$this->addGlyphTables($glyphMap, $glyphSet, $numberOfHMetrics, null);
 
-		$this->reader->close();
-
 		return $this->writer->program();
 	}
 
@@ -634,7 +672,23 @@ class FontSubsetter
 	 */
 	public function repackageTTF($file, $TTCfontID = 0, $debug = false, $useOTL = false)
 	{
-		$this->open($file, $TTCfontID, $debug);
+		$this->open($file);
+
+		// Closed however the build ends: see makeSubset
+		try {
+			$this->readTableDirectory($TTCfontID, $debug);
+
+			return $this->buildRepackagedTTF($useOTL);
+		} finally {
+			$this->reader->close();
+		}
+	}
+
+	/**
+	 * @return string See repackageTTF
+	 */
+	private function buildRepackagedTTF($useOTL)
+	{
 		$this->copyTables(['OS/2', 'glyf', 'head', 'hhea', 'hmtx', 'loca', 'maxp', 'name', 'post', 'cvt ', 'fpgm', 'gasp', 'prep']);
 
 		if ($useOTL) {
@@ -673,7 +727,6 @@ class FontSubsetter
 			$this->writer->add('cmap', $this->get_table('cmap'));
 		}
 
-		$this->reader->close();
 		return $this->writer->program();
 	}
 
