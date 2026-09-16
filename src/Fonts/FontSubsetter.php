@@ -1042,17 +1042,29 @@ class FontSubsetter
 			$yMax = $this->reader->readInt16();
 
 			$lsb = FontReader::int16(substr($hm, 2, 2));
-			$rsb = $aw - $lsb - ($xMax - $xMin);
 			$extent = $lsb + ($xMax - $xMin);
+			$rsb = $aw - $extent;
 
-			$profile['xMin'] = $outlineSeen ? min($profile['xMin'], $xMin) : $xMin;
-			$profile['yMin'] = $outlineSeen ? min($profile['yMin'], $yMin) : $yMin;
-			$profile['xMax'] = $outlineSeen ? max($profile['xMax'], $xMax) : $xMax;
-			$profile['yMax'] = $outlineSeen ? max($profile['yMax'], $yMax) : $yMax;
-			$profile['minLeftSideBearing'] = $outlineSeen ? min($profile['minLeftSideBearing'], $lsb) : $lsb;
-			$profile['minRightSideBearing'] = $outlineSeen ? min($profile['minRightSideBearing'], $rsb) : $rsb;
-			$profile['xMaxExtent'] = $outlineSeen ? max($profile['xMaxExtent'], $extent) : $extent;
-			$outlineSeen = true;
+			if (!$outlineSeen) {
+				$profile = array_merge($profile, [
+					'xMin' => $xMin,
+					'yMin' => $yMin,
+					'xMax' => $xMax,
+					'yMax' => $yMax,
+					'minLeftSideBearing' => $lsb,
+					'minRightSideBearing' => $rsb,
+					'xMaxExtent' => $extent,
+				]);
+				$outlineSeen = true;
+			}
+
+			$profile['xMin'] = min($profile['xMin'], $xMin);
+			$profile['yMin'] = min($profile['yMin'], $yMin);
+			$profile['xMax'] = max($profile['xMax'], $xMax);
+			$profile['yMax'] = max($profile['yMax'], $yMax);
+			$profile['minLeftSideBearing'] = min($profile['minLeftSideBearing'], $lsb);
+			$profile['minRightSideBearing'] = min($profile['minRightSideBearing'], $rsb);
+			$profile['xMaxExtent'] = max($profile['xMaxExtent'], $extent);
 
 			if ($glyphLen <= 2) {
 				continue;
@@ -1068,7 +1080,7 @@ class FontSubsetter
 					$this->reader->skip(self::componentArgumentsLength($flags));
 				}
 				$profile['maxComponentElements'] = max($profile['maxComponentElements'], $nComponentElements);
-			} elseif ($numberOfContours > 0) {
+			} else {
 				$this->glyphdata[$originalGlyphIdx]['nContours'] = $numberOfContours;
 				$profile['maxContours'] = max($profile['maxContours'], $numberOfContours);
 
