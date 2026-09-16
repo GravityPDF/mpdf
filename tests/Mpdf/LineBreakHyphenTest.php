@@ -14,9 +14,14 @@ namespace Mpdf;
 class LineBreakHyphenTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
-	const SHY = "\xc2\xad";
+	const SHY = "\xc2\xad"; // U+00AD SOFT HYPHEN
 
-	const HEBREW_WORD = "\u{05D0}\u{05D1}\u{05D2}\u{05D3}\u{05D4}\u{05D5}\u{05D6}\u{05D7}\u{05D8}\u{05D9}";
+	/**
+	 * U+05D0 to U+05D9, the first ten letters of the Hebrew alphabet - a plain right-to-left run,
+	 * with nothing that joins or reorders. Spelt out in bytes because the \u{} escape needs PHP 7.0
+	 * and this suite still runs on 5.6.
+	 */
+	const HEBREW_WORD = "\xD7\x90\xD7\x91\xD7\x92\xD7\x93\xD7\x94\xD7\x95\xD7\x96\xD7\x97\xD7\x98\xD7\x99";
 
 	/**
 	 * A soft hyphen broken at becomes a hard one, at the end of a right-to-left line - which is its
