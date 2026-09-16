@@ -3,13 +3,15 @@
 namespace Mpdf;
 
 /**
- * AddFont() gives every font it registers a haskernGPOS, but a core font never goes through it:
- * SetFont() builds the entry for the core fourteen out of CoreFonts, and a Type1 font that carries
- * no OpenType tables states nothing about a kern feature. Seven reads asked for the key anyway,
- * each of them behind useKerning, so every core-font run raised a diagnostic. GravityPDF/mpdf#141.
+ * AddFont() gives every font it registers a haskernGPOS, and it is the only producer of a font entry
+ * that does. SetFont() builds the entry for the core fourteen out of CoreFonts and AddCIDFont() builds
+ * the Adobe CJK ones, and neither states anything about a kern feature the font has not got. Seven
+ * reads asked for the key anyway, each of them behind useKerning. GravityPDF/mpdf#141.
  */
 class CoreFontKerningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
+
+	use PageStreams;
 
 	const TEXT = 'Kerning AV Wa To';
 
@@ -18,7 +20,7 @@ class CoreFontKerningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testACoreFontIsRegisteredWithoutTheKey()
 	{
-		$mpdf = $this->core();
+		$mpdf = $this->mpdf();
 		$mpdf->SetFont('helvetica', '', 12);
 
 		$this->assertArrayNotHasKey('haskernGPOS', $mpdf->CurrentFont);
@@ -31,11 +33,8 @@ class CoreFontKerningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testHtmlInACoreFontRaisesNoDiagnostic()
 	{
-		$this->assertSilent(function () {
-			$mpdf = $this->core();
+		$this->assertDrawsSilently(function ($mpdf) {
 			$mpdf->WriteHTML('<div style="font-family:helvetica;">' . self::TEXT . '</div>');
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
 		});
 	}
 
@@ -45,98 +44,77 @@ class CoreFontKerningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testHtmlFallingBackToACoreFontRaisesNoDiagnostic()
 	{
-		$this->assertSilent(function () {
-			$mpdf = new Mpdf(['useKerning' => true, 'default_font' => 'chelvetica']);
+		$this->assertDrawsSilently(function ($mpdf) {
 			$mpdf->WriteHTML('<div>' . self::TEXT . '</div>');
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
-		});
+		}, ['mode' => 'utf-8', 'default_font' => 'chelvetica']);
 	}
 
 	/**
-	 * Mpdf::WriteText()
+	 * An Adobe CJK font is registered by AddCIDFont(), which states no more about a kern feature
+	 * than the core branch does.
 	 */
+	public function testAnAdobeCjkFontRaisesNoDiagnostic()
+	{
+		$this->assertDrawsSilently(function ($mpdf) {
+			$mpdf->WriteHTML('<div style="font-family:big5;">' . self::TEXT . '</div>');
+		}, ['mode' => 'utf-8']);
+	}
+
 	public function testWriteTextInACoreFontRaisesNoDiagnostic()
 	{
-		$this->assertSilent(function () {
-			$mpdf = $this->core();
+		$this->assertDrawsSilently(function ($mpdf) {
 			$mpdf->SetFont('helvetica', '', 12);
 			$mpdf->WriteText(20, 40, self::TEXT);
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
 		});
 	}
 
-	/**
-	 * Mpdf::WriteCell()
-	 */
 	public function testWriteCellInACoreFontRaisesNoDiagnostic()
 	{
-		$this->assertSilent(function () {
-			$mpdf = $this->core();
+		$this->assertDrawsSilently(function ($mpdf) {
 			$mpdf->SetFont('helvetica', '', 12);
 			$mpdf->WriteCell(0, 5, self::TEXT);
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
+		});
+	}
+
+	public function testAutosizeTextInACoreFontRaisesNoDiagnostic()
+	{
+		$this->assertDrawsSilently(function ($mpdf) {
+			$mpdf->AutosizeText(self::TEXT, 100, 'helvetica', '', 20);
 		});
 	}
 
 	/**
-	 * Mpdf::watermark()
+	 * Mpdf::watermark(), which the text and the flag between them turn on
 	 */
 	public function testWatermarkInACoreFontRaisesNoDiagnostic()
 	{
-		$this->assertSilent(function () {
-			$mpdf = $this->core();
+		$this->assertDrawsSilently(function ($mpdf) {
 			$mpdf->SetWatermarkText(self::TEXT);
 			$mpdf->showWatermarkText = true;
 			$mpdf->WriteHTML('Body');
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
 		});
 	}
 
 	/**
-	 * Mpdf::AutosizeText()
-	 */
-	public function testAutosizeTextInACoreFontRaisesNoDiagnostic()
-	{
-		$this->assertSilent(function () {
-			$mpdf = $this->core();
-			$mpdf->SetFont('helvetica', '', 12);
-			$mpdf->AutosizeText(self::TEXT, 100, 'helvetica', '', 20);
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
-		});
-	}
-
-	/**
-	 * DirectWrite::Shaded_box()
+	 * DirectWrite::Shaded_box(), which keeps its own copy of the decision
 	 */
 	public function testShadedBoxInACoreFontRaisesNoDiagnostic()
 	{
-		$this->assertSilent(function () {
-			$mpdf = $this->core();
-			$mpdf->SetFont('helvetica', '', 12);
+		$this->assertDrawsSilently(function ($mpdf) {
 			$mpdf->Shaded_box(self::TEXT, 'helvetica', '', 12);
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
 		});
 	}
 
 	/**
-	 * Image\Svg, which draws the text of an SVG through the same decision
+	 * Image\Svg, which keeps the third copy
 	 */
 	public function testSvgTextInACoreFontRaisesNoDiagnostic()
 	{
 		$svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50">'
 			. '<text x="5" y="30" font-family="helvetica" font-size="16">' . self::TEXT . '</text></svg>';
 
-		$this->assertSilent(function () use ($svg) {
-			$mpdf = $this->core();
+		$this->assertDrawsSilently(function ($mpdf) use ($svg) {
 			$mpdf->WriteHTML('<img src="data:image/svg+xml;base64,' . base64_encode($svg) . '" width="200" />');
-			$mpdf->Output('', 'S');
-			$mpdf->cleanup();
 		});
 	}
 
@@ -146,21 +124,10 @@ class CoreFontKerningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAFontThatStatesAKernFeatureStillKerns()
 	{
-		$on = $this->firstPage($this->trueType(true));
-		$off = $this->firstPage($this->trueType(false));
+		$kerned = '/\[\(.*?\)\d+\(.*?\)\d+.*?\] TJ/';
 
-		$this->assertMatchesRegularExpression('/\[\(.*?\)\d+\(.*?\)\d+.*?\] TJ/', $on);
-		$this->assertNotSame($off, $on);
-	}
-
-	/**
-	 * A document of the core fourteen only, with kerning on - the combination the reads are behind
-	 *
-	 * @return Mpdf
-	 */
-	private function core()
-	{
-		return new Mpdf(['mode' => 'c', 'useKerning' => true]);
+		$this->assertMatchesRegularExpression($kerned, $this->trueType(true));
+		$this->assertDoesNotMatchRegularExpression($kerned, $this->trueType(false));
 	}
 
 	/**
@@ -168,54 +135,45 @@ class CoreFontKerningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @param bool $useKerning
 	 *
-	 * @return string the document
+	 * @return string the page the text is drawn on
 	 */
 	private function trueType($useKerning)
 	{
-		$mpdf = new Mpdf([
+		$mpdf = $this->mpdf([
 			'mode' => 'utf-8',
 			'fontDir' => [__DIR__ . '/../data/ttf'],
 			'fontdata' => ['kerning' => ['R' => 'NotoSans-Regular.ttf', 'useOTL' => 0xFF]],
 			'default_font' => 'kerning',
 			'useKerning' => $useKerning,
 		]);
-		$mpdf->compress = false;
 		$mpdf->WriteHTML('<p>AV Wa To LT VA Ty</p>');
 		$this->assertTrue($mpdf->fonts['kerning']['haskernGPOS']);
-		$pdf = $mpdf->Output('', 'S');
-		$mpdf->cleanup();
 
-		return $pdf;
+		$pages = $this->pages($this->output($mpdf));
+
+		return $pages[0];
 	}
 
 	/**
-	 * @param string $pdf
+	 * Draw into a document with kerning on - the combination the reads are behind - and assert it
+	 * said nothing. PHPUnit turns a warning into a failure, but a handler names the read that raised
+	 * it and catches the notice PHP 5 raises for the same miss.
 	 *
-	 * @return string the content stream of the first page
+	 * @param callable $draw
+	 * @param array $config
 	 */
-	private function firstPage($pdf)
-	{
-		preg_match('/\d+ 0 obj\s*<<\/Length \d+>>\s*stream\n(.*?)\nendstream/s', $pdf, $matches);
-
-		return $matches[1];
-	}
-
-	/**
-	 * PHPUnit turns a warning into a failure, but a handler says which read raised it and catches
-	 * the notice PHP 5 raises for the same miss.
-	 *
-	 * @param callable $render
-	 */
-	private function assertSilent($render)
+	private function assertDrawsSilently($draw, $config = [])
 	{
 		$raised = [];
-		set_error_handler(function ($errno, $message, $file, $line) use (&$raised) {
-			$raised[] = sprintf('%s in %s on line %d', $message, basename($file), $line);
+		set_error_handler(static function ($errno, $message, $file, $line) use (&$raised) {
+			$raised[] = sprintf('%s in %s:%d', $message, basename($file), $line);
 			return true;
 		});
 
 		try {
-			call_user_func($render);
+			$mpdf = $this->mpdf($config + ['useKerning' => true]);
+			call_user_func($draw, $mpdf);
+			$this->output($mpdf);
 		} finally {
 			restore_error_handler();
 		}
