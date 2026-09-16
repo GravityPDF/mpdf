@@ -109,14 +109,20 @@ class OtlDump extends TTFontFile
 
 		parent::getMetrics($file, $fontkey, $TTCfontID, $debug, $BMPonly, $useOTL);
 
-		// A font whose OS/2 fsType forbids embedding is not reported on. The parser records that
-		// rather than refusing, so the refusal waits until the read is done and the file closed
+		$this->failIfNeitherTableOffers();
+	}
+
+	/**
+	 * A font whose licence forbids embedding is not reported on, unless the caller overrides that.
+	 */
+	protected function restrictedFont()
+	{
 		global $overrideTTFFontRestriction;
-		if ($this->restrictedUse && !$overrideTTFFontRestriction) {
+		if (!$overrideTTFFontRestriction) {
 			throw new \Mpdf\Exception\FontException('Font file ' . $this->filename . ' cannot be embedded due to copyright restrictions.');
 		}
 
-		$this->failIfNeitherTableOffers();
+		parent::restrictedFont();
 	}
 
 	/**

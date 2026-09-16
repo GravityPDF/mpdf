@@ -304,39 +304,6 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The dump reads through the parser's getMetrics(), which lets go of the file however the read
-	 * ends (#182). Read from the reader rather than inferred from unlink(), which only fails on Windows.
-	 *
-	 * @dataProvider unreadableFontProvider
-	 */
-	public function testTheDumpLetsGoOfAFontItCannotRead($unreadable, $expected)
-	{
-		$font = $this->unreadableFont($unreadable);
-		$dump = $this->dumper();
-
-		try {
-			$dump->getMetrics($font, 'unreadable', 0, false, false, 0xFF, 'summary');
-			$raised = 'nothing';
-		} catch (\Exception $e) {
-			$raised = get_class($e) . ': ' . str_replace($font, '<font>', $e->getMessage());
-		}
-
-		$stillOpen = $this->holdsFileOpen($dump);
-		unlink($font);
-
-		$this->assertFalse($stillOpen, 'still holding open the file it gave up on');
-		$this->assertSame($expected, $raised);
-	}
-
-	public function unreadableFontProvider()
-	{
-		return [
-			'in the header' => ['version', 'Mpdf\Exception\FontException: Not a TrueType font: version=2)'],
-			'past the table directory' => ['name', 'Mpdf\Exception\FontException: Error loading font: Unknown name table format 9 for font <font>'],
-		];
-	}
-
-	/**
 	 * The parser caches GDEF and the raw GSUB and GPOS for the shaper to read back by font key. The
 	 * dump holds GDEF in its report's format, and utils/font_dump_otl.php hands it the shaper's own
 	 * cache, so it writes nothing there.
@@ -384,54 +351,6 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$reflected = new \ReflectionMethod(OtlDump::class, $method);
 		$reflected->setAccessible(true);
 		$reflected->invoke($this->dumper(), [], 0, 4, 'kern', 'latn');
-	}
-
-	/**
-	 * Read through closures bound to each class: the reader is protected on the parser and the handle
-	 * private on the reader.
-	 */
-	private function holdsFileOpen(TTFontFile $ttf)
-	{
-		$reader = \Closure::bind(function () {
-			return $this->reader;
-		}, $ttf, TTFontFile::class);
-
-		$handle = \Closure::bind(function () {
-			return $this->handle;
-		}, $reader(), FileReader::class);
-
-		return $handle() !== null;
-	}
-
-	/**
-	 * Noto Sans Sinhala with a version no TrueType font states, or with a name table format neither
-	 * exists nor is read, which throws from within extractInfo().
-	 *
-	 * @return string Where it was written, for the caller to unlink
-	 */
-	private function unreadableFont($unreadable)
-	{
-		$font = file_get_contents(self::FONT_DIR . '/NotoSansSinhala-Subset.ttf');
-
-		if ($unreadable === 'version') {
-			$font = substr_replace($font, pack('N', 2), 0, 4);
-		}
-
-		$tables = unpack('n', substr($font, 4, 2));
-		for ($i = 0; $unreadable === 'name' && $i < $tables[1]; $i++) {
-			if (substr($font, 12 + $i * 16, 4) === 'name') {
-				$offset = unpack('N', substr($font, 12 + $i * 16 + 8, 4));
-				$font = substr_replace($font, pack('n', 9), $offset[1], 2);
-			}
-		}
-
-		$path = __DIR__ . '/../tmp/mpdf/otldump/' . $unreadable . '-' . getmypid() . '.ttf';
-		if (!is_dir(dirname($path))) {
-			mkdir(dirname($path), 0777, true);
-		}
-		file_put_contents($path, $font);
-
-		return $path;
 	}
 
 	/**

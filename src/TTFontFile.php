@@ -818,7 +818,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$this->reader->skip(2); // usWidthClass
 			$fsType = $this->reader->readUInt16();
 			if ($fsType == 0x0002 || ($fsType & 0x0300) != 0) {
-				$this->restrictedUse = true;
+				$this->restrictedFont();
 			}
 
 			$this->reader->skip(16); // ySubscript and ySuperscript, 2 x 4 x short
@@ -1347,6 +1347,14 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 		$this->cacheLayoutTables();
 		$this->lookupFlag = new LookupFlag($this->fontkey, $this->gdefClasses());
+	}
+
+	/**
+	 * The font's OS/2 fsType restricts embedding. The parser records it and reads on.
+	 */
+	protected function restrictedFont()
+	{
+		$this->restrictedUse = true;
 	}
 
 	/**
