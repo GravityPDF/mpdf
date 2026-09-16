@@ -253,21 +253,23 @@ class Arabic
 			// if there is a preceding (base?) character *** should search back to previous base - ignoring vowels and change $n
 			// set $n as the position of the last base; for now we'll just do this:
 			$n = $i - 1;
-			// if the preceding (base) character cannot be joined to
-			// not in self::$leftJoining i.e. not a char which can join to the next one
-			if (isset($chars[$n]) && isset(self::$leftJoining[hexdec($chars[$n])])) {
-				// if in the middle of Syriac words
-				if (isset($chars[$i + 1]) && preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf(hexdec($chars[$n]))) && preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf(hexdec($chars[$i + 1]))) && isset($arabGlyphs[$char][4])) {
-					$retk = 4;
-				} // if at the end of Syriac words
-				elseif (!isset($chars[$i + 1]) || !preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf(hexdec($chars[$i + 1])))) {
-					// if preceding base character IS (00715|00716|0072A)
-					if (strpos('0715|0716|072A', $chars[$n]) !== false && isset($arabGlyphs[$char][6])) {
-						$retk = 6;
-					} // elseif preceding base character is NOT (00715|00716|0072A)
-					elseif (isset($arabGlyphs[$char][5])) {
+			if (isset($chars[$n])) {
+				$prev = hexdec($chars[$n]);
+				// the Alaph ends the word: nothing follows it, or what follows is not Syriac
+				$wordEnd = !isset($chars[$i + 1]) || !preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf(hexdec($chars[$i + 1])));
+
+				// med2 and fin2 are the Alaph drawn joined to the letter before it, so that letter has to
+				// be one that joins to what follows it
+				if (isset(self::$leftJoining[$prev])) {
+					if (!$wordEnd && preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf($prev)) && isset($arabGlyphs[$char][4])) {
+						$retk = 4;
+					} elseif ($wordEnd && isset($arabGlyphs[$char][5])) {
 						$retk = 5;
 					}
+				} elseif ($wordEnd && ($prev === 0x0715 || $prev === 0x0716 || $prev === 0x072A) && isset($arabGlyphs[$char][6])) {
+					// DALATH, DOTLESS DALATH RISH and RISH are right-joining, so an Alaph ending the word
+					// after one of them stands apart from it, and fin3 is the form drawn for that
+					$retk = 6;
 				}
 			}
 			if ($retk != -1) {
