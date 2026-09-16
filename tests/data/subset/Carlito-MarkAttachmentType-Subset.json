@@ -117,16 +117,16 @@
             "defaultWidth": 1038
         },
         "repackageTTF": {
-            "bytes": 5228,
-            "sha256": "59460b095a4056d571765a5823bd9276600fde7f88848b86cea41dcd9ceecc0f",
+            "bytes": 5200,
+            "sha256": "8483de45604dea9b6d0e3f803299f94468218fd8fb3aec83914e598f519d1602",
             "tables": {
                 "OS/2": "96 bytes, checksum 0x78D79A16, sha256 fd5f0101bc702aa5db66a77d6e7c85900cc984770e380f38af3db363c459e218",
-                "cmap": "134 bytes, checksum 0xE3D3C1AA, sha256 2b2bb4aa40c41efa3fe3175bbf4eaf4953b80342e060e54875a044eca78b8442",
+                "cmap": "108 bytes, checksum 0xE3B2C163, sha256 5a7f034801de06f13817a0e27f4592da983cce777dc2ea18f674909961a6b2df",
                 "cvt ": "56 bytes, checksum 0x25FE01C2, sha256 e3db322ed3df4de6b36549931ce7f6d0935bacdc92a6821bf6e3c2a670046610",
                 "fpgm": "2677 bytes, checksum 0xDBB62E8C, sha256 3714687bfb8520386d0219ded888a94f719555081ce5c58fe6c86524202cf458",
                 "gasp": "8 bytes, checksum 0x00000010, sha256 4ca731f86ad506ac0e320283dc9461926346de3c4d91d539ea7f6620d3826940",
                 "glyf": "1224 bytes, checksum 0x4CA9D281, sha256 70b9e2281ef31ba5098f76fcc9106a9e48b39c6be98db67f15b72d6f7a311cbe",
-                "head": "54 bytes, checksum 0x0B117750, sha256 18fe09b9d309ff45d96c9fa9d846ddfb29a5b5324b42f294bf4def82384f7ff7",
+                "head": "54 bytes, checksum 0x0B117750, sha256 b6ea66b92312f409d668341e1fb98526a7f9f4d53af576ebe4acf53da5c10144",
                 "hhea": "36 bytes, checksum 0x0CE600A3, sha256 0b205b836c82a46e063393e057eac95fa9834e7ef3383141b559db65266461ab",
                 "hmtx": "52 bytes, checksum 0x1D850245, sha256 e1c3c5eac66ce3b48f052b0a0c47a8a98c26f70e1cdaba80f37de1221a3cb1f6",
                 "loca": "28 bytes, checksum 0x0708089A, sha256 3c76f17baead2d341af2bb63328f428045ddb091108e3c0d96b6eb060f7a293d",
