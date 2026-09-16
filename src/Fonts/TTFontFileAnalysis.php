@@ -22,14 +22,27 @@ class TTFontFileAnalysis extends TTFontFile
 	 */
 	function extractCoreInfo($file, $TTCfontID = 0)
 	{
-		$this->charWidths = '';
-		$this->charToGlyph = [];
-		$this->ascent = 0;
-		$this->descent = 0;
-		$this->panose = [];
+		$this->open($file);
 
-		$this->openAndReadTableDirectory($file, $TTCfontID);
+		// Closed however the read ends: see getMetrics. Listing a directory reaches this once per file,
+		// so a handle kept by every font it could not read is a lock on each of those files
+		try {
+			$this->readHeader($TTCfontID);
 
+			return $this->readCoreInfo($file, $TTCfontID);
+		} finally {
+			$this->reader->close();
+		}
+	}
+
+	/**
+	 * @param string $file      The font file being read, for the messages
+	 * @param int    $TTCfontID Which font of a TrueType Collection, handed back in the result
+	 *
+	 * @return array See extractCoreInfo
+	 */
+	private function readCoreInfo($file, $TTCfontID)
+	{
 		/* Included for testing...
 		  $cmap_offset = $this->seek_table("cmap");
 		  $this->reader->skip(2);
@@ -413,37 +426,25 @@ class TTFontFileAnalysis extends TTFontFile
 			}
 		}
 
-		$this->reader->close();
 		return [$this->familyName, $bold, $italic, $ftype, $TTCfontID, $rtl, $indic, $cjk, $sip, $smp, $puaag, $pua, $unAGlyphs];
 	}
 
 	/**
-	 * A file this cannot read is one line of a directory listing, not the end of the run, so the
-	 * caller prints the message and carries on to the next file. That is why these say what the file
-	 * was and that it was not added, where the parser's say only what was wrong with it.
-	 *
-	 * @return \Exception
+	 * The browser's own wording for the three header complaints. A caller listing a directory prints
+	 * each as a line of the listing, which is why they name the file and say it was not added where
+	 * the parser's say only what was wrong. Kept as they were, class and all, for anything outside the
+	 * library that already lists fonts with this.
 	 */
 	protected function collectionWithoutFontId()
 	{
 		return new \Mpdf\MpdfException("ERROR - Error parsing TrueType Collection - " . $this->filename);
 	}
 
-	/**
-	 * @param int $version The TrueType Collection header version the file states
-	 *
-	 * @return \Exception
-	 */
 	protected function unreadableCollection($version)
 	{
 		return new \Mpdf\MpdfException("ERROR - NOT ADDED as Error parsing TrueType Collection: version=" . $version . " - " . $this->filename);
 	}
 
-	/**
-	 * @param int $version The font version the file states
-	 *
-	 * @return \Exception
-	 */
 	protected function notATrueTypeFont($version)
 	{
 		return new \Mpdf\MpdfException("ERROR - NOT ADDED as Not a TrueType font: version=" . $version . " - " . $this->filename);

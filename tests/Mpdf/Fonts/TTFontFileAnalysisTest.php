@@ -55,7 +55,7 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($name) = $this->analyse('NotoSansSinhala-Subset.ttf');
 
-		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/analysis')), 'win');
+		$ttf = new TTFontFile($this->cache(), 'win');
 		$ttf->getMetrics(__DIR__ . '/../../data/ttf/NotoSansSinhala-Subset.ttf', uniqid('', true), 0, false, false, 0xFF);
 
 		$this->assertSame($ttf->familyName, $name);
@@ -74,10 +74,7 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$file = $this->withoutOsTwoTable('NotoSansSinhala-Subset.ttf');
 
-		$ttf = new TTFontFileAnalysis(
-			new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/analysis')),
-			'win'
-		);
+		$ttf = new TTFontFileAnalysis($this->cache(), 'win');
 		list($name, $bold, $italic) = $ttf->extractCoreInfo($file);
 
 		unlink($file);
@@ -97,28 +94,7 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testEachClassComplainsInItsOwnTermsAboutAHeaderNeitherCanRead($header, $TTCfontID, $expected)
 	{
-		$file = $this->withHeader('NotoSansSinhala-Subset.ttf', $header);
-		$cache = new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/analysis'));
-
-		$raised = [];
-
-		try {
-			$parser = new TTFontFile($cache, 'win');
-			$parser->getMetrics($file, uniqid('', true), $TTCfontID);
-		} catch (\Exception $e) {
-			$raised['parser'] = get_class($e) . ': ' . str_replace($file, '<font>', $e->getMessage());
-		}
-
-		try {
-			$browser = new TTFontFileAnalysis($cache, 'win');
-			$browser->extractCoreInfo($file, $TTCfontID);
-		} catch (\Exception $e) {
-			$raised['browser'] = get_class($e) . ': ' . str_replace($file, '<font>', $e->getMessage());
-		}
-
-		unlink($file);
-
-		$this->assertSame($expected, $raised);
+		$this->assertBothGiveUpOn($this->withHeader('NotoSansSinhala-Subset.ttf', $header), $TTCfontID, $expected);
 	}
 
 	public function unreadableHeaderProvider()
@@ -144,6 +120,85 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Past the header the throw comes from each class's own reader, extractInfo or extractCoreInfo,
+	 * and for a collection from after selectFont has moved into the file. The handle has to be let go
+	 * of from there as well as from the header.
+	 *
+	 * @dataProvider unreadableNameTableProvider
+	 */
+	public function testEachClassLetsGoOfAFontItCouldReadOnlyPartOf($asCollection, $TTCfontID, $expected)
+	{
+		$this->assertBothGiveUpOn($this->withUnreadableNameTable('NotoSansSinhala-Subset.ttf', $asCollection), $TTCfontID, $expected);
+	}
+
+	public function unreadableNameTableProvider()
+	{
+		$expected = [
+			'parser' => 'Mpdf\Exception\FontException: Error loading font: Unknown name table format 9 for font <font>',
+			'browser' => 'Mpdf\MpdfException: ERROR - NOT ADDED as Unknown name table format 9 - <font>',
+		];
+
+		return [
+			'a plain font' => [false, 0, $expected],
+			'the one font of a collection' => [true, 1, $expected],
+		];
+	}
+
+	/**
+	 * Whether each class gave up on the file with the complaint expected, and let go of it.
+	 *
+	 * Letting go is read from each reader rather than inferred from the unlink() at the end: POSIX
+	 * removes a file that is still open without complaint, so that unlink() only ever failed on
+	 * Windows, and a handle left open has to fail this everywhere.
+	 */
+	private function assertBothGiveUpOn($file, $TTCfontID, $expected)
+	{
+		$parser = new TTFontFile($this->cache(), 'win');
+		$browser = new TTFontFileAnalysis($this->cache(), 'win');
+
+		$raised = [];
+
+		try {
+			$parser->getMetrics($file, uniqid('', true), $TTCfontID);
+		} catch (\Exception $e) {
+			$raised['parser'] = $this->describe($e, $file);
+		}
+
+		try {
+			$browser->extractCoreInfo($file, $TTCfontID);
+		} catch (\Exception $e) {
+			$raised['browser'] = $this->describe($e, $file);
+		}
+
+		$stillOpen = array_keys(array_filter([
+			'parser' => $this->holdsFileOpen($parser),
+			'browser' => $this->holdsFileOpen($browser),
+		]));
+
+		unlink($file);
+
+		$this->assertSame($expected, $raised);
+		$this->assertSame([], $stillOpen, 'still holding open the file it gave up on');
+	}
+
+	/**
+	 * Read through a closure bound to each class, because the reader is protected on the parser and
+	 * the handle private on the reader, and neither wants to be public for a test's sake
+	 */
+	private function holdsFileOpen(TTFontFile $ttf)
+	{
+		$reader = \Closure::bind(function () {
+			return $this->reader;
+		}, $ttf, TTFontFile::class);
+
+		$handle = \Closure::bind(function () {
+			return $this->handle;
+		}, $reader(), FileReader::class);
+
+		return $handle() !== null;
+	}
+
+	/**
 	 * Renames the OS/2 entry in the table directory rather than removing it, so that every other
 	 * table stays where its own entry says it is. The parser looks the table up by tag, so a tag it
 	 * never asks for is a font that does not carry one.
@@ -161,13 +216,7 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			}
 		}
 
-		$path = __DIR__ . '/../tmp/mpdf/analysis/no-os2-' . getmypid() . '.ttf';
-		if (!is_dir(dirname($path))) {
-			mkdir(dirname($path), 0777, true);
-		}
-		file_put_contents($path, $font);
-
-		return $path;
+		return $this->writeFontVariant($font, 'no-os2');
 	}
 
 	/**
@@ -183,7 +232,45 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			strlen($header)
 		);
 
-		$path = __DIR__ . '/../tmp/mpdf/analysis/header-' . getmypid() . '.ttf';
+		return $this->writeFontVariant($font, 'header');
+	}
+
+	/**
+	 * A font whose header reads but whose name table states a format neither class reads, so that the
+	 * throw comes from past the table directory. Asked to, it wraps the font as the one font of a
+	 * TrueType Collection, which moves every table 16 bytes on to make room for the collection header.
+	 */
+	private function withUnreadableNameTable($file, $asCollection)
+	{
+		$font = file_get_contents(__DIR__ . '/../../data/ttf/' . $file);
+		$shift = $asCollection ? 16 : 0;
+
+		$tables = unpack('n', substr($font, 4, 2));
+		for ($i = 0; $i < $tables[1]; $i++) {
+			$record = 12 + $i * 16;
+			$offset = unpack('N', substr($font, $record + 8, 4));
+
+			if (substr($font, $record, 4) === 'name') {
+				$font = substr_replace($font, pack('n', 9), $offset[1], 2);
+			}
+
+			$font = substr_replace($font, pack('N', $offset[1] + $shift), $record + 8, 4);
+		}
+
+		if ($asCollection) {
+			// ttcf, version 1.0, one font, and that font's offset
+			$font = 'ttcf' . pack('NNN', 0x00010000, 1, 16) . $font;
+		}
+
+		return $this->writeFontVariant($font, $asCollection ? 'name-ttc' : 'name');
+	}
+
+	/**
+	 * @return string Where the altered font was written, for the caller to read and then unlink
+	 */
+	private function writeFontVariant($font, $prefix)
+	{
+		$path = __DIR__ . '/../tmp/mpdf/analysis/' . $prefix . '-' . getmypid() . '.ttf';
 		if (!is_dir(dirname($path))) {
 			mkdir(dirname($path), 0777, true);
 		}
@@ -192,12 +279,23 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return $path;
 	}
 
+	/**
+	 * @return string The exception's class and message, with the temporary path taken back out so
+	 *                that the expectation can be written down
+	 */
+	private function describe(\Exception $e, $file)
+	{
+		return get_class($e) . ': ' . str_replace($file, '<font>', $e->getMessage());
+	}
+
+	private function cache()
+	{
+		return new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/analysis'));
+	}
+
 	private function analyse($file)
 	{
-		$ttf = new TTFontFileAnalysis(
-			new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/analysis')),
-			'win'
-		);
+		$ttf = new TTFontFileAnalysis($this->cache(), 'win');
 
 		return $ttf->extractCoreInfo(__DIR__ . '/../../data/ttf/' . $file);
 	}

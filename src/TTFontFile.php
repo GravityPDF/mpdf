@@ -26,10 +26,9 @@ if (!function_exists('\Mpdf\unicode_hex')) {
 	/**
 	 * A Unicode code point as the five upper-case hex digits the OTL code writes characters at.
 	 *
-	 * Fonts\GlyphString is where this lives now. It stays declared here, and here rather than
-	 * anywhere tidier, because it has been a public function of the Mpdf namespace since 5.7.1 and
-	 * upstream still declares it in this file: anything outside the library that calls
-	 * \Mpdf\unicode_hex() keeps working.
+	 * Kept, and kept here behind the same guard, because it has been a public function of the Mpdf
+	 * namespace since 5.7.1 and upstream declares it in this file. A caller outside the library gets
+	 * it exactly as before: once this file has loaded, since PHP autoloads classes and not functions.
 	 *
 	 * @deprecated Use Mpdf\Fonts\GlyphString::of()
 	 */
@@ -269,35 +268,39 @@ class TTFontFile
 		$this->strikeoutSize = 0;
 		$this->strikeoutPosition = 0;
 
-		$this->openAndReadTableDirectory($file, $TTCfontID, $debug);
-		$this->extractInfo($debug, $BMPonly, $useOTL);
+		$this->open($file);
 
-		$this->reader->close();
+		// Closed however the read ends. A font that turns out to be unreadable would otherwise keep its
+		// file open for as long as this object lives, and on Windows an open file cannot be deleted or
+		// replaced. finally rather than catch, so that an Error on PHP 7 releases it too
+		try {
+			$this->readHeader($TTCfontID, $debug);
+			$this->extractInfo($debug, $BMPonly, $useOTL);
+		} finally {
+			$this->reader->close();
+		}
 	}
 
 	/**
-	 * Open a font file and read enough of it that seek_table can find any of its tables: the version,
-	 * the font within a collection if that is what it is, and the table directory.
+	 * Read enough of the open font file that seek_table can find any of its tables: the version, the
+	 * font within a collection if that is what it is, and the table directory.
 	 *
-	 * @param string $file      The font file to read
-	 * @param int    $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
-	 * @param bool   $debug     Whether to check every table against the checksum the directory states
+	 * @param int  $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
+	 * @param bool $debug     Whether to check every table against the checksum the directory states
 	 *
 	 * @throws \Exception If the file is not a TrueType font this can read. Which exception that is
 	 *                    comes from collectionWithoutFontId, unreadableCollection and
 	 *                    notATrueTypeFont, so that a subclass can complain in its own terms
 	 */
-	protected function openAndReadTableDirectory($file, $TTCfontID = 0, $debug = false)
+	protected function readHeader($TTCfontID = 0, $debug = false)
 	{
-		$this->open($file);
-
 		$this->tables = [];
 		$this->numTTCFonts = 0;
 		$this->TTCFonts = [];
 		$this->version = $version = $this->reader->readUInt32();
 
 		if ($version === 0x4F54544F) {
-			throw new \Mpdf\Exception\FontException(sprintf('Fonts with postscript outlines are not supported (%s)', $file));
+			throw new \Mpdf\Exception\FontException(sprintf('Fonts with postscript outlines are not supported (%s)', $this->filename));
 		}
 
 		if ($version === 0x74746366) {
@@ -325,7 +328,7 @@ class TTFontFile
 	/**
 	 * @param int $version The TrueType Collection header version the file states
 	 *
-	 * @return \Exception Because that is not a version of the format this reads
+	 * @return \Exception Because no version of the collection format but 1.0 and 2.0 is read
 	 */
 	protected function unreadableCollection($version)
 	{
@@ -335,7 +338,7 @@ class TTFontFile
 	/**
 	 * @param int $version The font version the file states
 	 *
-	 * @return \Exception Because that is not a version of the format this reads
+	 * @return \Exception Because it is neither of the two versions a TrueType font states
 	 */
 	protected function notATrueTypeFont($version)
 	{
