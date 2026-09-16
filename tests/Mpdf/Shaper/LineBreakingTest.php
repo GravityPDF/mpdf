@@ -54,6 +54,18 @@ class LineBreakingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame([1], $this->southEastAsian($dict, [0x0E17, 0x0E14, 0x0E2A, 0x0E2D]));
 	}
 
+	/**
+	 * A word does not end before a mark GDEF classes, and a character whose hex is only part of a
+	 * mark's is not one: 00E2A is inside 100E2A
+	 */
+	public function testAWordDoesNotEndBeforeAMark()
+	{
+		$dict = $this->linear([0x17, 0x14]) . chr(0x04);
+
+		$this->assertSame([], $this->southEastAsian($dict, [0x0E17, 0x0E14, 0x0E2A, 0x0E2D], GlyphString::set(' 00E2A')));
+		$this->assertSame([1], $this->southEastAsian($dict, [0x0E17, 0x0E14, 0x0E2A, 0x0E2D], GlyphString::set(' 100E2A')));
+	}
+
 	public function testTextThatIsNotInTheDictionaryEndsNoWord()
 	{
 		$dict = $this->linear([0x17, 0x14]) . chr(0x04);
@@ -105,10 +117,10 @@ class LineBreakingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * @return array the indexes marked as ending a word
 	 */
-	private function southEastAsian($dict, $unicode)
+	private function southEastAsian($dict, $unicode, $marks = [])
 	{
 		$info = $this->info($unicode);
-		LineBreaking::southEastAsian($info, $dict, '');
+		LineBreaking::southEastAsian($info, $dict, $marks);
 
 		return $this->wordEnds($info);
 	}

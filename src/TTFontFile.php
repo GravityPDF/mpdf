@@ -1359,7 +1359,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 	/**
 	 * GDEF's glyph lists as the parser keeps them: space-prefixed, "|"-separated hex, " 00641| 00642",
-	 * which is what LookupFlag and the shaper search.
+	 * which is what LookupFlag and the shaper read.
 	 *
 	 * @param string[] $glyphs One class, as hex
 	 *
@@ -2762,7 +2762,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 					$lookupGlyphs = $luss['Replace'];
 
 					// Only where the nested lookup's (first) glyph is one the rule's position can hold
-					if (strpos($rule['input'][$seqIndex], $lookupGlyphs[0]) === false) {
+					if (!GlyphString::inList($rule['input'][$seqIndex], $lookupGlyphs[0])) {
 						continue;
 					}
 

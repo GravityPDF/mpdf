@@ -2,6 +2,8 @@
 
 namespace Mpdf\Fonts\Table;
 
+use Mpdf\Fonts\GlyphString;
+
 class LookupFlagTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
@@ -107,6 +109,27 @@ class LookupFlagTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectExceptionMessage('Font "test" uses mark filtering set 3, which GDEF does not define');
 
 		$this->lookupFlag->skips(0x0018, '00041', 3);
+	}
+
+	/**
+	 * GlyphString::of() writes a plane 16 glyph six digits wide, and the five-digit glyph its hex ends
+	 * with is not skipped with it
+	 */
+	public function testAGlyphWhoseHexEndsAPlaneSixteenMarksIsNotSkippedWithIt()
+	{
+		$marks = ' ' . implode('| ', [GlyphString::of(0x100300)]);
+		$flag = new LookupFlag('demo', [
+			'GlyphClassBases' => '',
+			'GlyphClassMarks' => $marks,
+			'GlyphClassLigatures' => '',
+			'GlyphClassComponents' => '',
+			'MarkGlyphSets' => [],
+			'MarkAttachmentType' => [],
+		]);
+
+		$this->assertFalse($flag->skips(LookupFlag::IGNORE_MARKS, GlyphString::of(0x0300), ''));
+		$this->assertFalse($flag->skips(LookupFlag::IGNORE_MARKS, GlyphString::of(0x0301), ''));
+		$this->assertTrue($flag->skips(LookupFlag::IGNORE_MARKS, GlyphString::of(0x100300), ''));
 	}
 
 	/**

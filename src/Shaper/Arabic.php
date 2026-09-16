@@ -2,6 +2,7 @@
 
 namespace Mpdf\Shaper;
 
+use Mpdf\Fonts\GlyphString;
 use Mpdf\Utils\UtfString;
 
 /**
@@ -306,13 +307,13 @@ class Arabic
 				foreach ($arabGlyphs[$char]['prel'][$retk] as $k => $v) { // $k starts 0, 1...
 					if (!isset($chars[$i - $ig - $k])) {
 						$match = false;
-					} elseif (strpos($v, $chars[$i - $ig - $k]) === false) {
-						while (strpos($arabGlyphs[$char]['ignore'][$retk], $chars[$i - $ig - $k]) !== false) {  // ignore
+					} elseif (!GlyphString::inList($v, $chars[$i - $ig - $k])) {
+						while (GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i - $ig - $k])) {  // ignore
 							$ig++;
 						}
 						if (!isset($chars[$i - $ig - $k])) {
 							$match = false;
-						} elseif (strpos($v, $chars[$i - $ig - $k]) === false) {
+						} elseif (!GlyphString::inList($v, $chars[$i - $ig - $k])) {
 							$match = false;
 						}
 					}
@@ -323,13 +324,13 @@ class Arabic
 				foreach ($arabGlyphs[$char]['postl'][$retk] as $k => $v) { // $k starts 0, 1...
 					if (!isset($chars[$i + $ig + $k])) {
 						$match = false;
-					} elseif (strpos($v, $chars[$i + $ig + $k]) === false) {
-						while (strpos($arabGlyphs[$char]['ignore'][$retk], $chars[$i + $ig + $k]) !== false) {  // ignore
+					} elseif (!GlyphString::inList($v, $chars[$i + $ig + $k])) {
+						while (GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i + $ig + $k])) {  // ignore
 							$ig++;
 						}
 						if (!isset($chars[$i + $ig + $k])) {
 							$match = false;
-						} elseif (strpos($v, $chars[$i + $ig + $k]) === false) {
+						} elseif (!GlyphString::inList($v, $chars[$i + $ig + $k])) {
 							$match = false;
 						}
 					}
