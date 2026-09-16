@@ -174,18 +174,20 @@ class Arabic
 			$chars[] = $info[$i]['hex'];
 		}
 
-		// The run is walked backwards, and a transparent-joining character continues without writing
-		// $nextChar, so it holds what joining sees in front of the position: the base past the marks
 		$nextChar = null;
 		$output = [];
 		$max = count($chars);
 		for ($i = $max - 1; $i >= 0; $i--) {
 			$crntChar = $chars[$i];
-			// joining sees the base a mark is written on, however many marks the base carries
+			// joining sees the base a mark is written on, however many marks the base carries: behind
+			// the position that means walking over them, and in front it means $nextChar, which a
+			// transparent-joining character continues without writing
 			$n = self::skipTransparent($chars, $i, -1, $transparentJoin);
 			$prevChar = isset($chars[$n]) ? hexdec($chars[$n]) : null;
+			$joinedToPrevious = $prevChar && isset(self::$leftJoining[$prevChar]);
+			$joinedToNext = $nextChar && isset(self::$rightJoining[hexdec($nextChar)]);
 			if ($crntChar && isset($transparentJoin[hexdec($crntChar)])) {
-				if ($nextChar && isset(self::$rightJoining[hexdec($nextChar)]) && $prevChar && isset(self::$leftJoining[$prevChar])) {
+				if ($joinedToPrevious && $joinedToNext) {
 					$output[] = self::glyphs($crntChar, 1, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin); // <final> form
 				} else {
 					$output[] = self::glyphs($crntChar, 0, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);  // <isolated> form
@@ -199,10 +201,10 @@ class Arabic
 			}
 			// 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL
 			$form = 0;
-			if ($prevChar && isset(self::$leftJoining[$prevChar])) {
+			if ($joinedToPrevious) {
 				$form++;
 			}
-			if ($nextChar && isset(self::$rightJoining[hexdec($nextChar)])) {
+			if ($joinedToNext) {
 				$form += 2;
 			}
 			$output[] = self::glyphs($crntChar, $form, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);
