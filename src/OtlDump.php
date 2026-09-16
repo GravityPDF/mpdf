@@ -6,6 +6,7 @@ use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\Anchor;
+use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\MarkArray;
 use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\Table\ValueRecord;
@@ -778,6 +779,8 @@ class OtlDump extends TTFontFile
 		} else {
 			$this->mpdf->WriteHTML('<div>GDEF table not defined</div>');
 		}
+
+		$this->lookupFlag = new LookupFlag($this->fontkey, $this->gdefClasses());
 	}
 
 	/**
@@ -1241,59 +1244,22 @@ class OtlDump extends TTFontFile
 	 */
 	function _getGSUBignoreString($flag, $MarkFilteringSet)
 	{
-		// If ignoreFlag set, combine all ignore glyphs into -> "((?:(?: FBA1| FBA2| FBA3))*)"
-		// else "()"
-		// for Input - set on secondary Lookup table if in Context, and set Backtrack and Lookahead on Context Lookup
-		$str = "";
-		$ignoreflag = 0;
+		$this->lookupFlag->checkMarkFilteringSet($flag, $MarkFilteringSet);
 
-		// Flag & 0xFF?? = MarkAttachmentType
-		if ($flag & 0xFF00) {
-			$MarkAttachmentType = $flag >> 8;
-			$ignoreflag = $flag;
-			//$str = $this->MarkAttachmentType[$MarkAttachmentType];
-			$str = "MarkAttachmentType[" . $MarkAttachmentType . "] ";
-		}
+		$names = [
+			LookupFlag::MARKS => 'Mark Glyphs ',
+			LookupFlag::MARKS_OUTSIDE_FILTERING_SET => 'Marks outside Mark Glyph Set[' . $MarkFilteringSet . '] ',
+			LookupFlag::MARKS_OUTSIDE_ATTACHMENT_CLASS => 'MarkAttachmentType[' . LookupFlag::attachmentClass($flag) . '] ',
+			LookupFlag::LIGATURES => 'Ligature Glyphs ',
+			LookupFlag::BASES => 'Base Glyphs ',
+		];
 
-		// Flag & 0x0010 = UseMarkFilteringSet
-		if ($flag & 0x0010) {
-			// Fail here rather than dump a lookup whose filtering set GDEF never defined
-			$this->markGlyphSet($MarkFilteringSet);
-			$ignoreflag = $flag;
-			$str = "Marks outside Mark Glyph Set[" . $MarkFilteringSet . "] ";
+		$skipped = [];
+		foreach (LookupFlag::skipped($flag) as $class) {
+			$skipped[] = $names[$class];
 		}
 
-		// If Ignore Marks set, supercedes any above
-		// Flag & 0x0008 = Ignore Marks
-		if (($flag & 0x0008) == 0x0008) {
-			$ignoreflag = 8;
-			//$str = $this->GlyphClassMarks;
-			$str = "Mark Glyphs ";
-		}
-
-		// Flag & 0x0004 = Ignore Ligatures
-		if (($flag & 0x0004) == 0x0004) {
-			$ignoreflag += 4;
-			if ($str) {
-				$str .= "|";
-			}
-			//$str .= $this->GlyphClassLigatures;
-			$str .= "Ligature Glyphs ";
-		}
-		// Flag & 0x0002 = Ignore BaseGlyphs
-		if (($flag & 0x0002) == 0x0002) {
-			$ignoreflag += 2;
-			if ($str) {
-				$str .= "|";
-			}
-			//$str .= $this->GlyphClassBases;
-			$str .= "Base Glyphs ";
-		}
-		if ($str) {
-			return $str;
-		} else {
-			return "";
-		}
+		return implode('|', $skipped);
 	}
 
 	// GSUB Patterns
