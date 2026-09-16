@@ -983,16 +983,17 @@ class FontSubsetter
 
 		// Here the subtable is the whole of what was built, so its length field is the second uint16
 		$cmapstr4 = TableWriter::uint16s($cmap);
+		$subtableLength = strlen($cmapstr4);
 
-		if (strlen($cmapstr4) > 0xFFFF) {
+		if ($subtableLength > 0xFFFF) {
 			throw new \Mpdf\Exception\FontException(sprintf(
 				'Font "%s" subsets into a format 4 cmap subtable of %d bytes, more than its length field can state',
 				$this->font->filename,
-				strlen($cmapstr4)
+				$subtableLength
 			));
 		}
 
-		$cmapstr4 = TableWriter::setUInt16($cmapstr4, 2, strlen($cmapstr4));
+		$cmapstr4 = TableWriter::setUInt16($cmapstr4, 2, $subtableLength);
 
 		// cmap - Character to glyph mapping
 		$entryCount = count($subset);
