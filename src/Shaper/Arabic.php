@@ -302,13 +302,17 @@ class Arabic
 		if ($retk != -1) {
 			$match = true;
 			// If GSUB includes a Backtrack or Lookahead condition (e.g. font ArabicTypesetting)
+			// Walking over the glyphs the lookup ignores stops at the edge of the run, and a position the
+			// walk runs out of glyphs before reaching is one the context does not hold, as in HarfBuzz's
+			// match_backtrack() and match_lookahead(). Past the edge the glyph read is null, which from
+			// PHP 8 inList() finds in any ignore pattern, so without the isset() the walk never ends.
 			if (isset($arabGlyphs[$char]['prel'][$retk]) && $arabGlyphs[$char]['prel'][$retk]) {
 				$ig = 1;
 				foreach ($arabGlyphs[$char]['prel'][$retk] as $k => $v) { // $k starts 0, 1...
 					if (!isset($chars[$i - $ig - $k])) {
 						$match = false;
 					} elseif (!GlyphString::inList($v, $chars[$i - $ig - $k])) {
-						while (GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i - $ig - $k])) {  // ignore
+						while (isset($chars[$i - $ig - $k]) && GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i - $ig - $k])) {
 							$ig++;
 						}
 						if (!isset($chars[$i - $ig - $k])) {
@@ -325,7 +329,7 @@ class Arabic
 					if (!isset($chars[$i + $ig + $k])) {
 						$match = false;
 					} elseif (!GlyphString::inList($v, $chars[$i + $ig + $k])) {
-						while (GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i + $ig + $k])) {  // ignore
+						while (isset($chars[$i + $ig + $k]) && GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i + $ig + $k])) {
 							$ig++;
 						}
 						if (!isset($chars[$i + $ig + $k])) {

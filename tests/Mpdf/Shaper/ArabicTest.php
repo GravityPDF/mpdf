@@ -513,6 +513,93 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A chained rule's backtrack or lookahead is found by walking over the glyphs its lookup ignores,
+	 * and a run that ends in those glyphs ends the walk. The walk read past the edge: on PHP 7 that was
+	 * a notice for each glyph it read there, and from PHP 8 it never returned (#204), which is why
+	 * testAFormsContextWalkReturnsAtTheEdgeOfTheRun() runs the same cases in a process of its own.
+	 * Here the notice is what fails, so a regression cannot hang the suite.
+	 *
+	 * @dataProvider dataContextWalkedToTheEdgeOfTheRun
+	 */
+	public function testAFormsContextWalkReadsNothingPastTheEdgeOfTheRun($hexes, $glyphs, $expected)
+	{
+		set_error_handler(function ($number, $message, $file, $line) {
+			throw new \ErrorException($message, 0, $number, $file, $line);
+		});
+
+		try {
+			$forms = $this->shape($hexes, self::ALL_FORMS, 'arab', self::FATHA, $glyphs);
+		} finally {
+			restore_error_handler();
+		}
+
+		$this->assertSame($expected, $forms);
+	}
+
+	/**
+	 * The time limit is the child's own rather than a `timeout` around it, so it holds on Windows too,
+	 * and the child reports nothing short of a fatal error, so a walk warning on every step cannot fill
+	 * the stderr pipe and leave it blocked instead of timed out.
+	 *
+	 * @dataProvider dataContextWalkedToTheEdgeOfTheRun
+	 */
+	public function testAFormsContextWalkReturnsAtTheEdgeOfTheRun($hexes, $glyphs, $expected)
+	{
+		// base64, because Windows argument quoting does not survive the JSON's double quotes
+		$case = base64_encode(json_encode([$hexes, $glyphs, self::ALL_FORMS, ' ' . self::FATHA]));
+		$command = escapeshellarg(PHP_BINARY) . ' -d display_errors=stderr '
+			. escapeshellarg(__DIR__ . '/../Fixtures/arabic-shape.php') . ' ' . $case;
+
+		$process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
+		$output = stream_get_contents($pipes[1]);
+		$errors = stream_get_contents($pipes[2]);
+		fclose($pipes[1]);
+		fclose($pipes[2]);
+		$this->assertSame(0, proc_close($process), $errors);
+
+		$forms = [];
+		foreach (json_decode($output, true) as $char) {
+			$forms[] = [$char['hex'], $char['form']];
+		}
+		$this->assertSame($expected, $forms);
+	}
+
+	public function dataContextWalkedToTheEdgeOfTheRun()
+	{
+		// The forms are the presentation forms rather than names, because the run is left holding them
+		// and shape() reads each back as hex
+		$ignoreFatha = '((?:(?: ' . self::FATHA . '))*)';
+
+		return [
+			'a backtrack that runs out at the start of the run' => [
+				[self::FATHA, self::DAL],
+				[self::DAL => ['0FEA9', '0FEAA', 'prel' => [0 => [self::BEH]], 'ignore' => [0 => $ignoreFatha]]],
+				[[self::FATHA, 0], [self::DAL, 0]],
+			],
+			'a lookahead that runs out at the end of the run' => [
+				[self::BEH, self::FATHA],
+				[self::BEH => ['0FE8F', 'postl' => [0 => [self::DAL]], 'ignore' => [0 => $ignoreFatha]]],
+				[[self::BEH, 0], [self::FATHA, 0]],
+			],
+			'a lookahead whose second position runs out after the first is met' => [
+				[self::BEH, self::FATHA, self::DAL, self::FATHA],
+				[self::BEH => ['0FE8F', '0FE90', '0FE91', 'postl' => [2 => [self::DAL, self::DAL]], 'ignore' => [2 => $ignoreFatha]]],
+				[[self::BEH, 0], [self::FATHA, 0], [self::DAL, 0], [self::FATHA, 0]],
+			],
+			'a backtrack met past the ignored glyphs' => [
+				[self::BEH, self::FATHA, self::DAL],
+				[self::DAL => ['0FEA9', '0FEAA', 'prel' => [1 => [self::BEH]], 'ignore' => [1 => $ignoreFatha]]],
+				[[self::BEH, 0], [self::FATHA, 0], ['0FEAA', 1]],
+			],
+			'a lookahead met past the ignored glyphs' => [
+				[self::BEH, self::FATHA, self::DAL],
+				[self::BEH => ['0FE8F', '0FE90', '0FE91', 'postl' => [2 => [self::DAL]], 'ignore' => [2 => $ignoreFatha]]],
+				[['0FE91', 2], [self::FATHA, 0], [self::DAL, 0]],
+			],
+		];
+	}
+
+	/**
 	 * @return array one [hex, form] pair per character, in logical order
 	 */
 	private function shape($hexes, $usetags = self::ALL_FORMS, $scriptTag = 'arab', $glyphClassMarks = self::FATHA, $glyphs = null)
