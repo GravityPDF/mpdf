@@ -57,8 +57,9 @@ class OtlTags
 
 		// Only the run's own original tag: another Indic script's lookups and reordering are no fit
 		// for it, and a font offering nothing for the script is laid out by its default entry
-		if ($shaper && isset(self::$originalIndicTags[$scripttag], $ScriptLang[self::$originalIndicTags[$scripttag]])) {
-			return [self::$originalIndicTags[$scripttag], true];
+		$original = isset(self::$originalIndicTags[$scripttag]) ? self::$originalIndicTags[$scripttag] : '';
+		if ($shaper && $original && isset($ScriptLang[$original])) {
+			return [$original, true];
 		}
 
 		foreach (['DFLT', 'dflt', 'latn'] as $fallback) {

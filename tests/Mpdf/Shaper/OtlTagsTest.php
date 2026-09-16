@@ -55,14 +55,14 @@ class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @dataProvider otherIndicScripts
+	 * @dataProvider originalTagFallbacks
 	 */
 	public function testAV2TagFallsBackToItsOwnOriginalTagAndNoOtherScriptsOriginalTag(array $offered, $scripttag, $scriptblock, array $expected)
 	{
 		$this->assertSame($expected, OtlTags::script($offered, $scripttag, $scriptblock, 'I', 0xFF));
 	}
 
-	public function otherIndicScripts()
+	public function originalTagFallbacks()
 	{
 		return [
 			'Bengali, where the font offers deva' => [['deva' => 'DFLT', 'DFLT' => 'DFLT'], 'bng2', Ucdn::SCRIPT_BENGALI, ['DFLT', false]],
