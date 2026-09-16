@@ -3,7 +3,6 @@
 namespace Mpdf\Image;
 
 use Mpdf\Color\ColorConverter;
-use Mpdf\Css\TextVars;
 use Mpdf\CssManager;
 use Mpdf\Language\LanguageToFontInterface;
 use Mpdf\Language\ScriptToLanguageInterface;
@@ -2680,24 +2679,8 @@ class Svg
 				$this->mpdf->biDirectional = true;
 			}
 
-			$textvar = 0;
 			$save_OTLtags = $this->mpdf->OTLtags;
-			$this->mpdf->OTLtags = [];
-
-			if ($this->mpdf->useKerning) {
-
-				if (!empty($this->mpdf->CurrentFont['haskernGPOS'])) {
-
-					if (isset($this->mpdf->OTLtags['Plus'])) {
-						$this->mpdf->OTLtags['Plus'] .= ' kern';
-					} else {
-						$this->mpdf->OTLtags['Plus'] = ' kern';
-					}
-
-				} else {
-					$textvar = ($textvar | TextVars::FC_KERNING);
-				}
-			}
+			$textvar = $this->mpdf->startTextRunFeatures();
 
 			// Use OTL OpenType Table Layout - GSUB & GPOS
 			if (isset($this->mpdf->CurrentFont['useOTL']) && $this->mpdf->CurrentFont['useOTL']) {

@@ -4624,6 +4624,31 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write($s);
 	}
 
+	/**
+	 * Clears the feature set and states how a run of text drawn outside the HTML flow is kerned.
+	 *
+	 * Nothing has resolved font-kerning for such a run, so the set starts empty and 'Plus' is
+	 * assigned rather than appended to as it is in setCSS(), where the cascade may already have
+	 * put something there. Callers save OTLtags before this and restore it once the run is shaped.
+	 *
+	 * @return int the flags the run starts with
+	 */
+	public function startTextRunFeatures()
+	{
+		$this->OTLtags = [];
+		$textvar = 0;
+
+		if ($this->useKerning) {
+			if (!empty($this->CurrentFont['haskernGPOS'])) {
+				$this->OTLtags['Plus'] = ' kern';
+			} else {
+				$textvar |= TextVars::FC_KERNING;
+			}
+		}
+
+		return $textvar;
+	}
+
 	/* -- DIRECTW -- */
 
 	function WriteText($x, $y, $txt)
@@ -4642,16 +4667,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->biDirectional = true;
 		} // *OTL*
 
-		$textvar = 0;
 		$save_OTLtags = $this->OTLtags;
-		$this->OTLtags = [];
-		if ($this->useKerning) {
-			if (!empty($this->CurrentFont['haskernGPOS'])) {
-				$this->OTLtags['Plus'] .= ' kern';
-			} else {
-				$textvar = ($textvar | TextVars::FC_KERNING);
-			}
-		}
+		$textvar = $this->startTextRunFeatures();
 
 		/* -- OTL -- */
 		// Use OTL OpenType Table Layout - GSUB & GPOS
@@ -4682,16 +4699,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->biDirectional = true;
 		} // *OTL*
 
-		$textvar = 0;
 		$save_OTLtags = $this->OTLtags;
-		$this->OTLtags = [];
-		if ($this->useKerning) {
-			if (!empty($this->CurrentFont['haskernGPOS'])) {
-				$this->OTLtags['Plus'] .= ' kern';
-			} else {
-				$textvar = ($textvar | TextVars::FC_KERNING);
-			}
-		}
+		$textvar = $this->startTextRunFeatures();
 
 		/* -- OTL -- */
 		// Use OTL OpenType Table Layout - GSUB & GPOS
@@ -10774,16 +10783,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->biDirectional = true;
 		} // *OTL*
 
-		$textvar = 0;
 		$save_OTLtags = $this->OTLtags;
-		$this->OTLtags = [];
-		if ($this->useKerning) {
-			if (!empty($this->CurrentFont['haskernGPOS'])) {
-				$this->OTLtags['Plus'] .= ' kern';
-			} else {
-				$textvar = ($textvar | TextVars::FC_KERNING);
-			}
-		}
+		$textvar = $this->startTextRunFeatures();
 
 		/* -- OTL -- */
 		// Use OTL OpenType Table Layout - GSUB & GPOS
@@ -25501,17 +25502,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->biDirectional = true;
 		}
 
-		$textvar = 0;
 		$save_OTLtags = $this->OTLtags;
-		$this->OTLtags = [];
-
-		if ($this->useKerning) {
-			if (!empty($this->CurrentFont['haskernGPOS'])) {
-				$this->OTLtags['Plus'] .= ' kern';
-			} else {
-				$textvar = ($textvar | TextVars::FC_KERNING);
-			}
-		}
+		$textvar = $this->startTextRunFeatures();
 
 		/* -- OTL -- */
 		// Use OTL OpenType Table Layout - GSUB & GPOS
