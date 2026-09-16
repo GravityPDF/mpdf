@@ -174,6 +174,8 @@ class Arabic
 			$chars[] = $info[$i]['hex'];
 		}
 
+		// The run is walked backwards, and a transparent-joining character continues without writing
+		// $nextChar, so it holds what joining sees in front of the position: the base past the marks
 		$nextChar = null;
 		$output = [];
 		$max = count($chars);
@@ -183,8 +185,7 @@ class Arabic
 			$n = self::skipTransparent($chars, $i, -1, $transparentJoin);
 			$prevChar = isset($chars[$n]) ? hexdec($chars[$n]) : null;
 			if ($crntChar && isset($transparentJoin[hexdec($crntChar)])) {
-				// If next_char = RightJoining && prev_char = LeftJoining:
-				if (isset($chars[$i + 1]) && $chars[$i + 1] && isset(self::$rightJoining[hexdec($chars[$i + 1])]) && $prevChar && isset(self::$leftJoining[$prevChar])) {
+				if ($nextChar && isset(self::$rightJoining[hexdec($nextChar)]) && $prevChar && isset(self::$leftJoining[$prevChar])) {
 					$output[] = self::glyphs($crntChar, 1, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin); // <final> form
 				} else {
 					$output[] = self::glyphs($crntChar, 0, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);  // <isolated> form
