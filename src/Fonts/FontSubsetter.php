@@ -305,104 +305,11 @@ class FontSubsetter
 			$this->writer->add('post', $post);
 		}
 
-		// Sort CID2GID map into segments of contiguous codes
+		// cmap - Character to glyph mapping
 		ksort($codeToGlyph);
 		unset($codeToGlyph[0]);
 
-		$rangeid = 0;
-		$range = [];
-		$prevcid = -2;
-		$prevglidx = -1;
-
-		// for each character
-		foreach ($codeToGlyph as $cid => $glidx) {
-			if ($cid == ($prevcid + 1) && $glidx == ($prevglidx + 1)) {
-				$range[$rangeid][] = $glidx;
-			} else {
-				// new range
-				$rangeid = $cid;
-				$range[$rangeid] = [];
-				$range[$rangeid][] = $glidx;
-			}
-			$prevcid = $cid;
-			$prevglidx = $glidx;
-		}
-
-		// cmap - Character to glyph mapping
-		$segCount = count($range) + 1; // + 1 Last segment has missing character 0xFFFF
-		$searchRange = 1;
-		$entrySelector = 0;
-
-		while ($searchRange * 2 <= $segCount) {
-			$searchRange *= 2;
-			++$entrySelector;
-		}
-
-		$searchRange *= 2;
-		$rangeShift = $segCount * 2 - $searchRange;
-		$cmap = [
-			0, 3, // Index : version, number of encoding subtables
-			0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
-			0, 28, // Encoding Subtable : offset (hi,lo)
-			0, 3, // Encoding Subtable : platform (UNI=0), encoding 3
-			0, 28, // Encoding Subtable : offset (hi,lo)
-			3, 1, // Encoding Subtable : platform (MS=3), encoding 1
-			0, 28, // Encoding Subtable : offset (hi,lo)
-			4, 0, 0, // Format 4 Mapping subtable: format, length (reserved, set below), language
-			$segCount * 2,
-			$searchRange,
-			$entrySelector,
-			$rangeShift,
-		];
-
-		// endCode(s)
-		foreach ($range as $start => $subrange) {
-			$endCode = $start + (count($subrange) - 1);
-			$cmap[] = $endCode; // endCode(s)
-		}
-
-		$cmap[] = 0xFFFF; // endCode of last Segment
-		$cmap[] = 0; // reservedPad
-
-		// startCode(s)
-		foreach ($range as $start => $subrange) {
-			$cmap[] = $start; // startCode(s)
-		}
-
-		$cmap[] = 0xFFFF; // startCode of last Segment
-
-		// idDelta(s)
-		foreach ($range as $start => $subrange) {
-			$idDelta = -($start - $subrange[0]);
-			$cmap[] = $idDelta; // idDelta(s)
-		}
-
-		$cmap[] = 1; // idDelta of last Segment
-		// idRangeOffset(s)
-
-		foreach ($range as $subrange) {
-			$cmap[] = 0; // idRangeOffset[segCount]  	Offset in bytes to glyph indexArray, or 0
-		}
-
-		$cmap[] = 0; // idRangeOffset of last Segment
-
-		// No glyphIdArray follows: every segment states an idRangeOffset of 0, which resolves it
-		// through idDelta, so nothing could reach one.
-
-		// The subtable states a size only known once it is written. It starts at 28, where the three
-		// encoding records point, and its length is the uint16 after the format.
-		$table = TableWriter::uint16s($cmap);
-		$length = strlen($table) - 28;
-
-		if ($length > 0xFFFF) {
-			throw new \Mpdf\Exception\FontException(sprintf(
-				'Font "%s" subsets into a format 4 cmap subtable of %d bytes, more than its length field can state',
-				$this->font->filename,
-				$length
-			));
-		}
-
-		$this->writer->add('cmap', TableWriter::setUInt16($table, 30, $length));
+		$this->writer->add('cmap', $this->unicodeCmap($codeToGlyph));
 
 		// glyf - Glyph data
 		list($glyfOffset, $glyfLength) = $this->font->get_table_pos('glyf');
@@ -909,91 +816,12 @@ class FontSubsetter
 		$this->writer->add('maxp', $maxp);
 
 		// CMap table Formats [1,0,]6 and [3,0,]4
-		// Sort CID2GID map into segments of contiguous codes
-		$rangeid = 0;
-		$range = [];
-		$prevcid = -2;
-		$prevglidx = -1;
-
-		// for each character
+		$cidToGlyph = [];
 		foreach ($subset as $cid => $code) {
-			$glidx = $codeToGlyph[$code];
-			if ($cid == ($prevcid + 1) && $glidx == ($prevglidx + 1)) {
-				$range[$rangeid][] = $glidx;
-			} else {
-				// new range
-				$rangeid = $cid;
-				$range[$rangeid] = [];
-				$range[$rangeid][] = $glidx;
-			}
-			$prevcid = $cid;
-			$prevglidx = $glidx;
+			$cidToGlyph[$cid] = $codeToGlyph[$code];
 		}
 
-		// cmap - Character to glyph mapping
-		$segCount = count($range) + 1; // + 1 Last segment has missing character 0xFFFF
-		$searchRange = 1;
-		$entrySelector = 0;
-
-		while ($searchRange * 2 <= $segCount) {
-			$searchRange = $searchRange * 2;
-			$entrySelector = $entrySelector + 1;
-		}
-
-		$searchRange = $searchRange * 2;
-		$rangeShift = $segCount * 2 - $searchRange;
-		$cmap = [
-			4, 0, 0, // Format 4 Mapping subtable: format, length (reserved, set below), language
-			$segCount * 2,
-			$searchRange,
-			$entrySelector,
-			$rangeShift,
-		];
-
-		// endCode(s)
-		foreach ($range as $start => $subrange) {
-			$endCode = $start + (count($subrange) - 1);
-			$cmap[] = $endCode; // endCode(s)
-		}
-		$cmap[] = 0xFFFF; // endCode of last Segment
-		$cmap[] = 0; // reservedPad
-
-		// startCode(s)
-		foreach ($range as $start => $subrange) {
-			$cmap[] = $start; // startCode(s)
-		}
-		$cmap[] = 0xFFFF; // startCode of last Segment
-
-		// idDelta(s)
-		foreach ($range as $start => $subrange) {
-			$idDelta = -($start - $subrange[0]);
-			$cmap[] = $idDelta; // idDelta(s)
-		}
-		$cmap[] = 1; // idDelta of last Segment
-
-		// idRangeOffset(s)
-		foreach ($range as $subrange) {
-			$cmap[] = 0; // idRangeOffset[segCount]  	Offset in bytes to glyph indexArray, or 0
-		}
-
-		$cmap[] = 0; // idRangeOffset of last Segment
-
-		// No glyphIdArray follows: every segment states an idRangeOffset of 0, which resolves it
-		// through idDelta, so nothing could reach one.
-
-		// Here the subtable is the whole of what was built, so its length field is the second uint16
-		$cmapstr4 = TableWriter::uint16s($cmap);
-		$subtableLength = strlen($cmapstr4);
-
-		if ($subtableLength > 0xFFFF) {
-			throw new \Mpdf\Exception\FontException(sprintf(
-				'Font "%s" subsets into a format 4 cmap subtable of %d bytes, more than its length field can state',
-				$this->font->filename,
-				$subtableLength
-			));
-		}
-
-		$cmapstr4 = TableWriter::setUInt16($cmapstr4, 2, $subtableLength);
+		$cmapstr4 = $this->format4Subtable($cidToGlyph);
 
 		// cmap - Character to glyph mapping
 		$format6Length = 10 + 2 * count($subset);
@@ -1005,18 +833,10 @@ class FontSubsetter
 			// so leave (1,0) out rather than refuse a font the format 4 subtable maps whole.
 			$cmapstr = TableWriter::uint16s([0, 1, 3, 0]) . TableWriter::uint32(12) . $cmapstr4;
 		} else {
-			$cmap = [
-				6, $format6Length, 0, 1, // Format 6 Mapping subtable: format, length, language, firstCode
-				count($subset), // entryCount
-			];
-
-			foreach ($subset as $code) {
-				$cmap[] = $codeToGlyph[$code];
-			}
-
 			$cmapstr = TableWriter::uint16s([0, 2, 1, 0]) . TableWriter::uint32(20)
 				. TableWriter::uint16s([3, 0]) . TableWriter::uint32(20 + $format6Length)
-				. TableWriter::uint16s($cmap)
+				. TableWriter::uint16s([6, $format6Length, 0, 1, count($subset)]) // format, length, language, firstCode, entryCount
+				. TableWriter::uint16s($cidToGlyph)
 				. $cmapstr4;
 		}
 
@@ -1192,102 +1012,95 @@ class FontSubsetter
 			unset($charToGlyph[0]);
 
 			ksort($charToGlyph);
-			$rangeid = 0;
-			$range = [];
-			$prevcid = -2;
-			$prevglidx = -1;
-
-			// for each character
-			foreach ($charToGlyph as $cid => $glidx) {
-				if ($cid == ($prevcid + 1) && $glidx == ($prevglidx + 1)) {
-					$range[$rangeid][] = $glidx;
-				} else {
-					// new range
-					$rangeid = $cid;
-					$range[$rangeid] = [];
-					$range[$rangeid][] = $glidx;
-				}
-				$prevcid = $cid;
-				$prevglidx = $glidx;
-			}
-
-			// CMap table
-			// cmap - Character to glyph mapping
-			$segCount = count($range) + 1; // + 1 Last segment has missing character 0xFFFF
-			$searchRange = 1;
-			$entrySelector = 0;
-
-			while ($searchRange * 2 <= $segCount) {
-				$searchRange *= 2;
-				++$entrySelector;
-			}
-
-			$searchRange *= 2;
-			$rangeShift = $segCount * 2 - $searchRange;
-			$cmap = [0, 3, // Index : version, number of encoding subtables
-				0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
-				0, 28, // Encoding Subtable : offset (hi,lo)
-				0, 3, // Encoding Subtable : platform (UNI=0), encoding 3
-				0, 28, // Encoding Subtable : offset (hi,lo)
-				3, 1, // Encoding Subtable : platform (MS=3), encoding 1
-				0, 28, // Encoding Subtable : offset (hi,lo)
-				4, 0, 0, // Format 4 Mapping subtable: format, length (reserved, set below), language
-				$segCount * 2,
-				$searchRange,
-				$entrySelector,
-				$rangeShift];
-
-			// endCode(s)
-			foreach ($range as $start => $subrange) {
-				$endCode = $start + (count($subrange) - 1);
-				$cmap[] = $endCode; // endCode(s)
-			}
-			$cmap[] = 0xFFFF; // endCode of last Segment
-			$cmap[] = 0; // reservedPad
-
-			// startCode(s)
-			foreach ($range as $start => $subrange) {
-				$cmap[] = $start; // startCode(s)
-			}
-			$cmap[] = 0xFFFF; // startCode of last Segment
-
-			// idDelta(s)
-			foreach ($range as $start => $subrange) {
-				$idDelta = -($start - $subrange[0]);
-				$cmap[] = $idDelta; // idDelta(s)
-			}
-
-			$cmap[] = 1; // idDelta of last Segment
-			// idRangeOffset(s)
-			foreach ($range as $subrange) {
-				$cmap[] = 0; // idRangeOffset[segCount] Offset in bytes to glyph indexArray, or 0
-			}
-
-			$cmap[] = 0; // idRangeOffset of last Segment
-
-			// No glyphIdArray follows: every segment states an idRangeOffset of 0, which resolves it
-			// through idDelta, so nothing could reach one.
-
-			// The subtable states a size only known once it is written. It starts at 28, where the
-			// three encoding records point, and its length is the uint16 after the format.
-			$table = TableWriter::uint16s($cmap);
-			$length = strlen($table) - 28;
-
-			if ($length > 0xFFFF) {
-				throw new \Mpdf\Exception\FontException(sprintf(
-					'Font "%s" repackages into a format 4 cmap subtable of %d bytes, more than its length field can state',
-					$this->font->filename,
-					$length
-				));
-			}
-
-			$this->writer->add('cmap', TableWriter::setUInt16($table, 30, $length));
+			$this->writer->add('cmap', $this->unicodeCmap($charToGlyph));
 		} else {
 			$this->writer->add('cmap', $this->get_table('cmap'));
 		}
 
 		$this->reader->close();
 		return $this->writer->program();
+	}
+
+	/**
+	 * A cmap holding one format 4 subtable, listed under both Unicode encodings and Microsoft's.
+	 *
+	 * @param int[] $codeToGlyph Glyph id by character code, sorted by code
+	 *
+	 * @return string The packed cmap table
+	 */
+	private function unicodeCmap(array $codeToGlyph)
+	{
+		return TableWriter::uint16s([
+			0, 3, // version, number of encoding records
+			0, 0, 0, 28, // platform (Unicode), encoding 0, offset
+			0, 3, 0, 28, // platform (Unicode), encoding 3, offset
+			3, 1, 0, 28, // platform (Microsoft), encoding 1, offset
+		]) . $this->format4Subtable($codeToGlyph);
+	}
+
+	/**
+	 * A format 4 cmap subtable mapping each code to its glyph, with its length field set.
+	 *
+	 * Codes are segmented in the order given, so the caller sorts them. A run of codes whose glyphs
+	 * run on with them is one segment, resolved through idDelta alone: every segment states an
+	 * idRangeOffset of 0, so no glyphIdArray follows the segment arrays - nothing could reach one.
+	 *
+	 * @param int[] $codeToGlyph Glyph id by character code
+	 *
+	 * @return string The packed subtable
+	 *
+	 * @throws \Mpdf\Exception\FontException Where the segments take more bytes than the subtable's
+	 *                                       uint16 length field can state
+	 */
+	private function format4Subtable(array $codeToGlyph)
+	{
+		$endCodes = [];
+		$idDeltas = [];
+		$start = 0;
+		$prevCode = -2;
+		$prevGlyph = -1;
+
+		foreach ($codeToGlyph as $code => $glyph) {
+			if ($code != ($prevCode + 1) || $glyph != ($prevGlyph + 1)) {
+				$start = $code;
+				$idDeltas[$start] = $glyph - $code;
+			}
+			$endCodes[$start] = $code;
+			$prevCode = $code;
+			$prevGlyph = $glyph;
+		}
+
+		$segCount = count($endCodes) + 1; // + 1 for the segment at 0xFFFF the subtable must end with
+		$searchRange = 1;
+		$entrySelector = 0;
+
+		while ($searchRange * 2 <= $segCount) {
+			$searchRange *= 2;
+			++$entrySelector;
+		}
+
+		$searchRange *= 2;
+
+		// Packed a section at a time, since uint16s copies its argument and the sections of a wide cmap
+		// merged into one list would be held several times over
+		$subtable = TableWriter::uint16s([4, 0, 0]) // format, length (set below), language
+			. TableWriter::uint16s([$segCount * 2, $searchRange, $entrySelector, $segCount * 2 - $searchRange]) // segCountX2, searchRange, entrySelector, rangeShift
+			. TableWriter::uint16s($endCodes) . TableWriter::uint16s([0xFFFF, 0]) // endCode, then reservedPad
+			. TableWriter::uint16s(array_keys($endCodes)) . TableWriter::uint16s([0xFFFF]) // startCode
+			. TableWriter::uint16s($idDeltas) . TableWriter::uint16s([1]) // idDelta
+			. str_repeat("\x00\x00", $segCount); // idRangeOffset
+
+		$length = strlen($subtable);
+
+		if ($length > 0xFFFF) {
+			throw new \Mpdf\Exception\FontException(sprintf(
+				'Font "%s" needs a format 4 cmap subtable of %d bytes, more than its length field can state',
+				$this->font->filename,
+				$length
+			));
+		}
+
+		return TableWriter::setUInt16($subtable, 2, $length);
 	}
 
 	/**
