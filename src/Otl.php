@@ -20,6 +20,7 @@ use Mpdf\Shaper\Arabic;
 use Mpdf\Shaper\Indic;
 use Mpdf\Shaper\LineBreaking;
 use Mpdf\Shaper\Myanmar;
+use Mpdf\Shaper\OtlData;
 use Mpdf\Shaper\OtlTags;
 use Mpdf\Shaper\Sea;
 
@@ -4516,217 +4517,51 @@ class Otl
 	}
 
 	/**
-	 * Cut a laid-out run in two, at a line break.
-	 *
-	 * What is left of the run keeps everything up to the cut; what is returned starts at the restart
-	 * position, which is past the cut where the break took a space with it.
-	 *
-	 * @param array      $cOTLdata      The run, truncated in place to the part before the break
-	 * @param int        $OTLcutoffpos  Where the first part ends
-	 * @param int|string $OTLrestartpos Where the second part begins, or '' for the cutoff
-	 *
-	 * @return array The part after the break
+	 * @deprecated Use Mpdf\Shaper\OtlData::split()
 	 */
 	public function splitOTLdata(&$cOTLdata, $OTLcutoffpos, $OTLrestartpos = '')
 	{
-		if (!$OTLrestartpos) {
-			$OTLrestartpos = $OTLcutoffpos;
-		}
-		$newOTLdata = ['GPOSinfo' => [], 'char_data' => []];
-		$newOTLdata['group'] = substr($cOTLdata['group'], $OTLrestartpos);
-		$cOTLdata['group'] = substr($cOTLdata['group'], 0, $OTLcutoffpos);
-
-		if (isset($cOTLdata['GPOSinfo']) && $cOTLdata['GPOSinfo']) {
-			foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-				if ($k >= $OTLrestartpos) {
-					$newOTLdata['GPOSinfo'][($k - $OTLrestartpos)] = $val;
-				}
-				if ($k >= $OTLcutoffpos) {
-					unset($cOTLdata['GPOSinfo'][$k]);
-					//$cOTLdata['GPOSinfo'][$k] = array();
-				}
-			}
-		}
-		if (isset($cOTLdata['char_data'])) {
-			$newOTLdata['char_data'] = array_slice($cOTLdata['char_data'], $OTLrestartpos);
-			array_splice($cOTLdata['char_data'], $OTLcutoffpos);
-		}
-
-		// Not necessary - easier to debug
-		if (isset($cOTLdata['GPOSinfo'])) {
-			ksort($cOTLdata['GPOSinfo']);
-		}
-		if (isset($newOTLdata['GPOSinfo'])) {
-			ksort($newOTLdata['GPOSinfo']);
-		}
-
-		return $newOTLdata;
+		return OtlData::split($cOTLdata, $OTLcutoffpos, $OTLrestartpos);
 	}
 
 	/**
-	 * A copy of part of a laid-out run, with the positioning renumbered to start at zero.
-	 *
-	 * @param array $OTLdata The run
-	 * @param int   $pos     Where the part begins
-	 * @param int   $len     How many characters of it to take
-	 *
-	 * @return array The part, as a run of its own
+	 * @deprecated Use Mpdf\Shaper\OtlData::slice()
 	 */
 	public function sliceOTLdata($OTLdata, $pos, $len)
 	{
-		// applyOTL() leaves OTLdata empty for a blank string, so every key here is optional
-		$newOTLdata = ['GPOSinfo' => [], 'char_data' => []];
-		$newOTLdata['group'] = isset($OTLdata['group']) ? substr($OTLdata['group'], $pos, $len) : '';
-
-		if (!empty($OTLdata['GPOSinfo'])) {
-			foreach ($OTLdata['GPOSinfo'] as $k => $val) {
-				if ($k >= $pos && $k < ($pos + $len)) {
-					$newOTLdata['GPOSinfo'][($k - $pos)] = $val;
-				}
-			}
-		}
-
-		if (isset($OTLdata['char_data'])) {
-			$newOTLdata['char_data'] = array_slice($OTLdata['char_data'], $pos, $len);
-		}
-
-		// Not necessary - easier to debug
-		if ($newOTLdata['GPOSinfo']) {
-			ksort($newOTLdata['GPOSinfo']);
-		}
-
-		return $newOTLdata;
+		return OtlData::slice($OTLdata, $pos, $len);
 	}
 
 	/**
-	 * Put one character at the front of a laid-out run, moving the rest of it along by one.
-	 *
-	 * @param array  $cOTLdata The run
-	 * @param array  $charData The character's entry, as Bidi::prepare() would have left it
-	 * @param string $group    Its class in the run's group string
+	 * @deprecated Use Mpdf\Shaper\OtlData::prependChar()
 	 */
 	public function prependOTLchar(&$cOTLdata, $charData, $group)
 	{
-		// applyOTL() leaves OTLdata empty for a blank string, so every key here is optional
-		$cOTLdata += ['group' => '', 'char_data' => [], 'GPOSinfo' => []];
-
-		$cOTLdata['group'] = $group . $cOTLdata['group'];
-		array_unshift($cOTLdata['char_data'], $charData);
-
-		if ($cOTLdata['GPOSinfo']) {
-			$newGPOSinfo = [];
-			foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-				$newGPOSinfo[$k + 1] = $val;
-			}
-			$cOTLdata['GPOSinfo'] = $newGPOSinfo;
-		}
+		OtlData::prependChar($cOTLdata, $charData, $group);
 	}
 
 	/**
-	 * Remove one or more occurrences of $char (single character) from $txt and adjust OTLdata
+	 * @deprecated Use Mpdf\Shaper\OtlData::removeChar()
 	 */
 	public function removeChar(&$txt, &$cOTLdata, $char)
 	{
-		while (mb_strpos($txt, $char, 0, $this->mpdf->mb_enc) !== false) {
-			$pos = mb_strpos($txt, $char, 0, $this->mpdf->mb_enc);
-			$newGPOSinfo = [];
-			$cOTLdata['group'] = substr_replace($cOTLdata['group'], '', $pos, 1);
-			if ($cOTLdata['GPOSinfo']) {
-				foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-					if ($k > $pos) {
-						$newGPOSinfo[($k - 1)] = $val;
-					} elseif ($k != $pos) {
-						$newGPOSinfo[$k] = $val;
-					}
-				}
-				$cOTLdata['GPOSinfo'] = $newGPOSinfo;
-			}
-			if (isset($cOTLdata['char_data'])) {
-				array_splice($cOTLdata['char_data'], $pos, 1);
-			}
-
-			$txt = preg_replace("/" . $char . "/", '', $txt, 1);
-		}
+		OtlData::removeChar($txt, $cOTLdata, $char, $this->mpdf->mb_enc);
 	}
 
 	/**
-	 * Remove one or more occurrences of $char (single character) from $txt and adjust OTLdata
+	 * @deprecated Use Mpdf\Shaper\OtlData::nbspToSpace()
 	 */
 	public function replaceSpace(&$txt, &$cOTLdata)
 	{
-		$char = chr(194) . chr(160); // NBSP
-		while (mb_strpos($txt, $char, 0, $this->mpdf->mb_enc) !== false) {
-			$pos = mb_strpos($txt, $char, 0, $this->mpdf->mb_enc);
-			if ($cOTLdata['char_data'][$pos]['uni'] == 160) {
-				$cOTLdata['char_data'][$pos]['uni'] = 32;
-			}
-			$txt = preg_replace("/" . $char . "/", ' ', $txt, 1);
-		}
+		OtlData::nbspToSpace($txt, $cOTLdata, $this->mpdf->mb_enc);
 	}
 
 	/**
-	 * Drop the spaces from the ends of a laid-out run, and the positioning that went with them.
-	 *
-	 * @param array $cOTLdata The run, trimmed in place
-	 * @param bool  $Left     Whether to trim the start
-	 * @param bool  $Right    Whether to trim the end
+	 * @deprecated Use Mpdf\Shaper\OtlData::trim()
 	 */
 	public function trimOTLdata(&$cOTLdata, $Left = true, $Right = true)
 	{
-		$len = (!is_array($cOTLdata) || $cOTLdata['char_data'] === null) ? 0 : count($cOTLdata['char_data']);
-		$nLeft = 0;
-		$nRight = 0;
-		for ($i = 0; $i < $len; $i++) {
-			if ($cOTLdata['char_data'][$i]['uni'] == 32 || $cOTLdata['char_data'][$i]['uni'] == 12288) {
-				$nLeft++;
-			} // 12288 = 0x3000 = CJK space
-			else {
-				break;
-			}
-		}
-		for ($i = ($len - 1); $i >= 0; $i--) {
-			if ($cOTLdata['char_data'][$i]['uni'] == 32 || $cOTLdata['char_data'][$i]['uni'] == 12288) {
-				$nRight++;
-			} // 12288 = 0x3000 = CJK space
-			else {
-				break;
-			}
-		}
-
-		// Trim Right
-		if ($Right && $nRight) {
-			$cOTLdata['group'] = substr($cOTLdata['group'], 0, strlen($cOTLdata['group']) - $nRight);
-			if ($cOTLdata['GPOSinfo']) {
-				foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-					if ($k >= $len - $nRight) {
-						unset($cOTLdata['GPOSinfo'][$k]);
-					}
-				}
-			}
-			if (isset($cOTLdata['char_data'])) {
-				for ($i = 0; $i < $nRight; $i++) {
-					array_pop($cOTLdata['char_data']);
-				}
-			}
-		}
-		// Trim Left
-		if ($Left && $nLeft) {
-			$cOTLdata['group'] = substr($cOTLdata['group'], $nLeft);
-			if ($cOTLdata['GPOSinfo']) {
-				$newPOSinfo = [];
-				foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-					if ($k >= $nLeft) {
-						$newPOSinfo[$k - $nLeft] = $cOTLdata['GPOSinfo'][$k];
-					}
-				}
-				$cOTLdata['GPOSinfo'] = $newPOSinfo;
-			}
-			if (isset($cOTLdata['char_data'])) {
-				for ($i = 0; $i < $nLeft; $i++) {
-					array_shift($cOTLdata['char_data']);
-				}
-			}
-		}
+		OtlData::trim($cOTLdata, $Left, $Right);
 	}
 
 	/**

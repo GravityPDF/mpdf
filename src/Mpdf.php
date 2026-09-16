@@ -13,6 +13,7 @@ use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Output\Destination;
 use Mpdf\PsrLogAwareTrait\MpdfPsrLogAwareTrait;
 use Mpdf\QrCode;
+use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
@@ -6141,8 +6142,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					/* -- OTL -- */
 					if (isset($OTLdata)) {
-						$tmpOTLdata = $this->otl->sliceOTLdata($OTLdata, $j, $i - $j);
-						$this->otl->trimOTLdata($tmpOTLdata, false, true);
+						$tmpOTLdata = OtlData::slice($OTLdata, $j, $i - $j);
+						OtlData::trim($tmpOTLdata, false, true);
 						$this->magic_reverse_dir($tmp, $directionality, $tmpOTLdata);
 					}
 					/* -- END OTL -- */
@@ -6191,8 +6192,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 						/* -- OTL -- */
 						if (isset($OTLdata)) {
-							$tmpOTLdata = $this->otl->sliceOTLdata($OTLdata, $j, $i - $j);
-							$this->otl->trimOTLdata($tmpOTLdata, false, true);
+							$tmpOTLdata = OtlData::slice($OTLdata, $j, $i - $j);
+							OtlData::trim($tmpOTLdata, false, true);
 							$this->magic_reverse_dir($tmp, $directionality, $tmpOTLdata);
 						}
 						/* -- END OTL -- */
@@ -6206,8 +6207,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 						/* -- OTL -- */
 						if (isset($OTLdata)) {
-							$tmpOTLdata = $this->otl->sliceOTLdata($OTLdata, $j, $sep - $j);
-							$this->otl->trimOTLdata($tmpOTLdata, false, true);
+							$tmpOTLdata = OtlData::slice($OTLdata, $j, $sep - $j);
+							OtlData::trim($tmpOTLdata, false, true);
 						}
 						/* -- END OTL -- */
 
@@ -6382,8 +6383,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			/* -- OTL -- */
 			if (isset($OTLdata)) {
-				$tmpOTLdata = $this->otl->sliceOTLdata($OTLdata, $j, $i - $j);
-				$this->otl->trimOTLdata($tmpOTLdata, false, true);
+				$tmpOTLdata = OtlData::slice($OTLdata, $j, $i - $j);
+				OtlData::trim($tmpOTLdata, false, true);
 				$this->magic_reverse_dir($tmp, $directionality, $tmpOTLdata);
 			}
 			/* -- END OTL -- */
@@ -6646,7 +6647,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$content[count($content) - 1] = substr($content[count($content) - 1], 0, (strlen($content[count($content) - 1]) - $strip));
 			/* -- OTL -- */
 			if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
-				$this->otl->trimOTLdata($cOTLdata[count($cOTLdata) - 1], false, true);
+				OtlData::trim($cOTLdata[count($cOTLdata) - 1], false, true);
 			}
 			/* -- END OTL -- */
 		}
@@ -6735,9 +6736,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- OTL -- */
 					// mPDF 5.7.1
 					if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
-						$this->otl->removeChar($chunk, $cOTLdata[$k], "\xc2\xad");
-						$this->otl->removeChar($chunk, $cOTLdata[$k], "\xe2\x80\x8b");
-						$this->otl->replaceSpace($chunk, $cOTLdata[$k]);
+						OtlData::removeChar($chunk, $cOTLdata[$k], "\xc2\xad", $this->mb_enc);
+						OtlData::removeChar($chunk, $cOTLdata[$k], "\xe2\x80\x8b", $this->mb_enc);
+						OtlData::nbspToSpace($chunk, $cOTLdata[$k], $this->mb_enc);
 						$content[$k] = $chunk;
 					} /* -- END OTL -- */ else {  // *OTL*
 						$content[$k] = $chunk = str_replace("\xc2\xad", '', $chunk);
@@ -8381,7 +8382,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$savedPreFont[] = $font[$cutcontentctr];
 					/* -- OTL -- */
 					if (!empty($sOTLdata)) {
-						$savedPreOTLdata[] = $this->otl->splitOTLdata($cOTLdata[$cutcontentctr], $cutcharctr, $cutcharctr);
+						$savedPreOTLdata[] = OtlData::split($cOTLdata[$cutcontentctr], $cutcharctr, $cutcharctr);
 					}
 					/* -- END OTL -- */
 
@@ -8402,7 +8403,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if (!empty($sOTLdata)) {
-						$savedPreOTLdata[] = $this->otl->splitOTLdata($cOTLdata[(count($cOTLdata) - 1)], mb_strlen($currContent, $this->mb_enc));
+						$savedPreOTLdata[] = OtlData::split($cOTLdata[(count($cOTLdata) - 1)], mb_strlen($currContent, $this->mb_enc));
 					}
 
 					if (strpos($contentB[(count($contentB) - 1)], 'R') !== false) {   // ???
@@ -8427,7 +8428,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$next = count($savedPreContent) - 1;
 							$savedPreContent[$next] = '-' . $savedPreContent[$next];
 							if (!empty($savedPreOTLdata[$next])) {
-								$this->otl->prependOTLchar($savedPreOTLdata[$next], $charData, 'C');
+								OtlData::prependChar($savedPreOTLdata[$next], $charData, 'C');
 							}
 						}
 					}
@@ -8445,7 +8446,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (!is_array($breakfound)) {
 					$savedFont = $this->saveFont();
 					if (!empty($sOTLdata)) {
-						$savedOTLdata = $this->otl->splitOTLdata($cOTLdata[(count($cOTLdata) - 1)], mb_strlen($currContent, $this->mb_enc));
+						$savedOTLdata = OtlData::split($cOTLdata[(count($cOTLdata) - 1)], mb_strlen($currContent, $this->mb_enc));
 					}
 				}
 
@@ -8465,7 +8466,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				} // *CJK-FONTS*
 				/* -- OTL -- */
 				if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
-					$this->otl->trimOTLdata($cOTLdata[count($cOTLdata) - 1], false, true); // NB also does U+3000
+					OtlData::trim($cOTLdata[count($cOTLdata) - 1], false, true); // NB also does U+3000
 				}
 				/* -- END OTL -- */
 
@@ -8515,9 +8516,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if (!$this->usingCoreFont) {
 							/* -- OTL -- */
 							if ((isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) || !empty($sOTLdata)) {
-								$this->otl->removeChar($chunk, $cOTLdata[$k], "\xc2\xad");
-								$this->otl->removeChar($chunk, $cOTLdata[$k], "\xe2\x80\x8b");
-								$this->otl->replaceSpace($chunk, $cOTLdata[$k]); // NBSP -> space
+								OtlData::removeChar($chunk, $cOTLdata[$k], "\xc2\xad", $this->mb_enc);
+								OtlData::removeChar($chunk, $cOTLdata[$k], "\xe2\x80\x8b", $this->mb_enc);
+								OtlData::nbspToSpace($chunk, $cOTLdata[$k], $this->mb_enc); // NBSP -> space
 								if (preg_match("/([" . $this->pregCURSchars . "])/u", $chunk)) {
 									$inclCursive = true;
 								}
@@ -8938,7 +8939,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if ($this->checkCJK && $currContent == "\xe3\x80\x80") {
 					$currContent = '';
 					if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
-						$this->otl->trimOTLdata($cOTLdata[count($cOTLdata) - 1], true, false); // left trim U+3000
+						OtlData::trim($cOTLdata[count($cOTLdata) - 1], true, false); // left trim U+3000
 					}
 				}
 				/* -- END CJK-FONTS -- */
@@ -13734,7 +13735,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 						$e = $this->otl->applyOTL($e, $this->CurrentFont['useOTL']);
 						$this->OTLdata = $this->otl->OTLdata;
-						$this->otl->removeChar($e, $this->OTLdata, "\xef\xbb\xbf"); // Remove ZWNBSP (also Byte order mark FEFF)
+						OtlData::removeChar($e, $this->OTLdata, "\xef\xbb\xbf", $this->mb_enc); // Remove ZWNBSP (also Byte order mark FEFF)
 					} /* -- END OTL -- */
 					else {
 						// removes U+200E/U+200F LTR and RTL mark and U+200C/U+200D Zero-width Joiner and Non-joiner
@@ -13758,7 +13759,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if ($this->specialcontent == "type=select") {
 						$e = ltrim($e);
 						if (!empty($this->OTLdata)) {
-							$this->otl->trimOTLdata($this->OTLdata, true, false);
+							OtlData::trim($this->OTLdata, true, false);
 						} // *OTL*
 						$stringwidth = $this->GetStringWidth($e);
 						if (!isset($this->selectoption['MAXWIDTH']) || $stringwidth > $this->selectoption['MAXWIDTH']) {
@@ -13796,7 +13797,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if (($this->ignorefollowingspaces) && !$this->ispre) {
 							$e = ltrim($e);
 							if (!empty($this->OTLdata)) {
-								$this->otl->trimOTLdata($this->OTLdata, true, false);
+								OtlData::trim($this->OTLdata, true, false);
 							} // *OTL*
 						}
 						if ($e || $e === '0') {
@@ -13862,7 +13863,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if ($this->ignorefollowingspaces && !$this->ispre) {
 						$e = ltrim($e);
 						if (!empty($this->OTLdata)) {
-							$this->otl->trimOTLdata($this->OTLdata, true, false);
+							OtlData::trim($this->OTLdata, true, false);
 						} // *OTL*
 					}
 					if ($e || $e === '0') {
@@ -16259,10 +16260,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// mPDF 6
 		// Process bidirectional text ready for bidi-re-ordering (which is done after line-breaks are established in WriteFlowingBlock etc.)
 		if (($blockdir == 'rtl' || $this->biDirectional) && !$table_draft) {
-			if (empty($this->otl)) {
-				$this->otl = new Otl($this, $this->fontCache);
-			}
-			Bidi::prepare($arrayaux, $blockdir, $this->otl);
+			Bidi::prepare($arrayaux, $blockdir, $this->mb_enc);
 			$array_size = count($arrayaux);
 		}
 
@@ -16310,7 +16308,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($i == 0 && $vetor[0] != "\n" && ! $this->ispre) {
 				$vetor[0] = ltrim($vetor[0]);
 				if (!empty($vetor[18])) {
-					$this->otl->trimOTLdata($vetor[18], true, false);
+					OtlData::trim($vetor[18], true, false);
 				} // *OTL*
 			}
 
@@ -17055,7 +17053,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$legend = $this->blk[$blvl]['border_legend']; // Same structure array as textbuffer
 				$txt = $legend[0] = ltrim($legend[0]);
 				if (!empty($legend[18])) {
-					$this->otl->trimOTLdata($legend[18], true, false);
+					OtlData::trim($legend[18], true, false);
 				} // *OTL*
 				// Set font, size, style, color
 				$this->SetFont($legend[4], $legend[2], $legend[11]);
@@ -19207,7 +19205,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			$line = trim($line);
 			if (!empty($OTLdata)) {
-				$this->otl->trimOTLdata($OTLdata, true, true);
+				OtlData::trim($OTLdata, true, true);
 			} // *OTL*
 			// SET FONT SIZE/STYLE from $chunk[n]
 			// FONTSIZE
