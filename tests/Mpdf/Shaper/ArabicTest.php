@@ -20,6 +20,15 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** U+064E FATHA, a transparent-joining mark */
 	const FATHA = '0064E';
 
+	/** U+0651 SHADDA, a transparent-joining mark, and stacked with a vowel in ordinary pointed Arabic */
+	const SHADDA = '00651';
+
+	/** U+06E7 ARABIC SMALL HIGH YEH, a transparent-joining mark Zawgyi-One states a final form for */
+	const SMALL_HIGH_YEH = '006E7';
+
+	/** U+06EB ARABIC EMPTY CENTRE HIGH STOP, another */
+	const EMPTY_CENTRE_HIGH_STOP = '006EB';
+
 	/** U+0710 SYRIAC LETTER ALAPH, right-joining, and the only letter with fin2, fin3 and med2 forms */
 	const ALAPH = '00710';
 
@@ -64,12 +73,15 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * 0=isolated 1=final 2=initial 3=medial, and for Alaph 4=med2 5=fin2 6=fin3.
 	 *
 	 * Alaph is given the forms Estrangelo Edessa states for it, which is every one but the isolated.
+	 * SHADDA is given a final form and no isolated one, which is how Zawgyi-One states the forms of a
+	 * mark - and is what makes the difference between the two visible.
 	 */
 	private function glyphs()
 	{
 		return [
 			self::BEH => ['B_ISOL', 'B_FINA', 'B_INIT', 'B_MEDI'],
 			self::DAL => ['D_ISOL', 'D_FINA'],
+			self::SHADDA => [1 => 'SH_FINA'],
 			self::ALAPH => [1 => 'A_FINA', 4 => 'A_MED2', 5 => 'A_FIN2', 6 => 'A_FIN3'],
 			self::BETH => ['BE_ISOL', 'BE_FINA', 'BE_INIT', 'BE_MEDI'],
 			self::SOGDIAN_FE => ['F_ISOL', 'F_FINA', 'F_INIT', 'F_MEDI'],
@@ -118,6 +130,23 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$forms = $this->shape([self::BEH, self::FATHA, self::BEH]);
 
 		$this->assertSame([['B_INIT', 2], [self::FATHA, 0], ['B_FINA', 1]], $forms);
+	}
+
+	/**
+	 * A mark's own form follows from the two letters around it, and every mark of a stack stands
+	 * between the same two. The character in front of a mark was read raw rather than past the rest of
+	 * the stack, so the first mark saw the second; a mark is in neither joining table, and the form
+	 * fell to isolated while the same mark alone took its final form. GravityPDF/mpdf#162.
+	 */
+	public function testEveryMarkOfAStackTakesTheFormTheLettersAroundItCallFor()
+	{
+		$alone = $this->shape([self::BEH, self::SHADDA, self::BEH]);
+		$underAVowel = $this->shape([self::BEH, self::SHADDA, self::FATHA, self::BEH]);
+		$doubled = $this->shape([self::BEH, self::SHADDA, self::SHADDA, self::BEH]);
+
+		$this->assertSame(['SH_FINA', 1], $alone[1]);
+		$this->assertSame(['SH_FINA', 1], $underAVowel[1]);
+		$this->assertSame([['SH_FINA', 1], ['SH_FINA', 1]], [$doubled[1], $doubled[2]]);
 	}
 
 	/**
@@ -353,6 +382,26 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Through a real font: Zawgyi-One is the one font in the bundle whose rtlSUB states positional
+	 * forms for a transparent-joining character, and U+06E7 and U+06EB each carry a final one. A mark
+	 * has to draw the same glyph whether it stands alone between two Behs or heads a stack between the
+	 * same two, and what the lost form left behind was the nominal U+06E7. The letters are asserted
+	 * beside it because joining is what the two halves of the test disagreed about, and it is the
+	 * letters that would show it reaching further than the mark.
+	 */
+	public function testAStackedMarkDrawsTheFormTheFontStatesForItLikeTheSameMarkAlone()
+	{
+		$alone = $this->render([self::BEH, self::SMALL_HIGH_YEH, self::BEH], 'zawgyi-one');
+		$underAnother = $this->render([self::BEH, self::SMALL_HIGH_YEH, self::EMPTY_CENTRE_HIGH_STOP, self::BEH], 'zawgyi-one');
+		$doubled = $this->render([self::BEH, self::SMALL_HIGH_YEH, self::SMALL_HIGH_YEH, self::BEH], 'zawgyi-one');
+
+		$this->assertNotSame(\Mpdf\Utils\UtfString::codeHex2utf(self::SMALL_HIGH_YEH), $alone[1]);
+		$this->assertSame($alone[1], $underAnother[1]);
+		$this->assertSame([$alone[1], $alone[1]], [$doubled[1], $doubled[2]]);
+		$this->assertSame([$alone[0], $alone[2]], [$underAnother[0], $underAnother[3]]);
+	}
+
+	/**
 	 * The same character through a real font, which is where the wrong entry showed: Estrangelo Edessa
 	 * carries a BETH for each of the four forms, and the form the shaper asks for is the glyph that
 	 * ends up drawn. A run ending in SOGDIAN FE has to draw the same BETH as a run ending in another
@@ -373,7 +422,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @return string[] the glyph each character was drawn as, in the order they were written
 	 */
-	private function render($hexes)
+	private function render($hexes, $family = 'estrangeloedessa')
 	{
 		$entities = '';
 		foreach ($hexes as $hex) {
@@ -381,7 +430,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		$mpdf = new \Mpdf\TextRecordingMpdf();
-		$mpdf->WriteHTML('<p style="font-family:estrangeloedessa">' . $entities . '</p>');
+		$mpdf->WriteHTML('<p style="font-family:' . $family . '">' . $entities . '</p>');
 
 		return array_reverse(preg_split('//u', $mpdf->drawnText[0], -1, PREG_SPLIT_NO_EMPTY));
 	}
