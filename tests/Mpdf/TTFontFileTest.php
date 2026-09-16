@@ -12,18 +12,19 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	protected $ttf;
 
 	/**
+	 * @var FontCache
+	 */
+	protected $fontCache;
+
+	/**
 	 * @throws MpdfException
 	 */
 	public function set_up()
 	{
 		parent::set_up();
 
-		$this->ttf = new TTFontFile(
-			new FontCache(
-				new Cache(__DIR__ . '/tmp/mpdf/ttfontdata')
-			),
-			'win'
-		);
+		$this->fontCache = new FontCache(new Cache(__DIR__ . '/tmp/mpdf/ttfontdata'));
+		$this->ttf = new TTFontFile($this->fontCache, 'win');
 	}
 
 	/**
@@ -121,6 +122,26 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * \Mpdf\Otl looks one glyph up in the kashida `finals` string, so a final form of several glyphs
+	 * belongs in it as the base alone. Held whole, an entry put its marks in as final forms of their
+	 * own and hid its first glyph from the exclusion list beside it, which is tested the same way:
+	 * U+06CC's form here begins with U+FEAE, one of the fifteen, and all four codes went in.
+	 *
+	 * @see \Mpdf\KashidaFinalFormTest, for what the shaper then made of them
+	 */
+	public function testAFinalFormOfMoreThanOneGlyphContributesOnlyTheBaseItIsDrawnOn()
+	{
+		$fontkey = uniqid('', true);
+		$this->ttf->getMetrics(__DIR__ . '/../data/ttf/NotoSansArabic-MultipleFinal-Subset.ttf', $fontkey, 0, false, false, 0xFF);
+
+		$gsub = $this->fontCache->jsonLoad($fontkey . '.GSUB.arab.DFLT.json');
+
+		$this->assertSame('0E001 0E005', $gsub['rtlSUB']['00628'][1]);
+		$this->assertSame('0FEAE 0E006', $gsub['rtlSUB']['006CC'][1]);
+		$this->assertSame('0E001 ', $gsub['finals']);
+	}
+
+	/**
 	 * Parse a font, collecting every diagnostic PHP raised doing it. Deprecations are not converted to
 	 * exceptions, so a handler is what sees them.
 	 *
@@ -191,7 +212,7 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function metrics($file, $debug)
 	{
-		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/tmp/mpdf/ttfontdata')), 'win');
+		$ttf = new TTFontFile($this->fontCache, 'win');
 		$ttf->getMetrics(__DIR__ . '/../data/ttf/' . $file, uniqid('', true), 0, $debug, false, 0xFF);
 
 		$vars = get_object_vars($ttf);
