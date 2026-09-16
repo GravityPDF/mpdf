@@ -1146,24 +1146,7 @@ class OtlDump extends TTFontFile
 												ksort($inputGlyphs);
 												$nInput = count($inputGlyphs);
 
-												list(, $exampleI) = $this->reportContext([], $inputGlyphs, []);
-
-												for ($b = 0; $b < $rule['SubstCount']; $b++) {
-													$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
-													$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
-
-													list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
-
-													$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
-
-													$lul2 = [$lup => $tag];
-
-													// Only apply if the (first) 'Replace' glyph from the
-													// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-													// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
-													// to level 2 and only apply if first Replace glyph is in this list
-													$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL);
-												}
+												$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), [], $inputGlyphs, [], '', '', '', $tag, $scripttag);
 											}
 										}
 									} // Format 2: Class-based Context Glyph Substitution
@@ -1191,24 +1174,7 @@ class OtlDump extends TTFontFile
 													// Class 0 contains all the glyphs NOT in the other classes
 													$class0excl = implode('|', $Lookup[$i]['Subtable'][$c]['InputClasses']);
 
-													list(, $exampleI) = $this->reportContext([], $inputGlyphs, [], $class0excl);
-
-													for ($b = 0; $b < $rule['SubstCount']; $b++) {
-														$lup = $rule['LookupListIndex'][$b];
-														$seqIndex = $rule['SequenceIndex'][$b];
-
-														list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
-
-														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
-
-														$lul2 = [$lup => $tag];
-
-														// Only apply if the (first) 'Replace' glyph from the
-														// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-														// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
-														// to level 2 and only apply if first Replace glyph is in this list
-														$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
-													}
+													$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), [], $inputGlyphs, [], $class0excl, '', '', $tag, $scripttag);
 												}
 											}
 										} // Format 3: Coverage-based Context Glyph Substitution  p259
@@ -1220,24 +1186,7 @@ class OtlDump extends TTFontFile
 												$CoverageInputGlyphs = implode('|', $inputGlyphs);
 												$nInput = $Lookup[$i]['Subtable'][$c]['InputGlyphCount'];
 
-												list(, $exampleI) = $this->reportContext([], $inputGlyphs, []);
-
-												for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
-													$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
-													$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
-
-													list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
-
-													$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
-
-													$lul2 = [$lup => $tag];
-
-													// Only apply if the (first) 'Replace' glyph from the
-													// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-													// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
-													// to level 2 and only apply if first Replace glyph is in this list
-													$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL);
-												}
+												$this->reportGSUBrule($Lookup, $this->substLookupRecords($Lookup[$i]['Subtable'][$c]), [], $inputGlyphs, [], '', '', '', $tag, $scripttag);
 											}
 										}
 									}
@@ -1275,24 +1224,7 @@ class OtlDump extends TTFontFile
 														$lookaheadGlyphs = [];
 													}
 
-													list($exampleB, $exampleI, $exampleL) = $this->reportContext($backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs);
-
-													for ($b = 0; $b < $rule['SubstCount']; $b++) {
-														$lup = $rule['LookupListIndex'][$b];
-														$seqIndex = $rule['SequenceIndex'][$b];
-
-														list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
-
-														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
-
-														$lul2 = [$lup => $tag];
-
-														// Only apply if the (first) 'Replace' glyph from the
-														// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-														// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
-														// to level 2 and only apply if first Replace glyph is in this list
-														$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL);
-													}
+													$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), $backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, '', '', '', $tag, $scripttag);
 												}
 											}
 										} // Format 2: Class-based Chaining Context Glyph Substitution  p257
@@ -1342,24 +1274,7 @@ class OtlDump extends TTFontFile
 															$lookaheadGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['LookaheadClasses'], $rule['Lookahead'][$gcl]);
 														}
 
-														list($exampleB, $exampleI, $exampleL) = $this->reportContext($backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, $class0excl, $bclass0excl, $lclass0excl);
-
-														for ($b = 0; $b < $rule['SubstCount']; $b++) {
-															$lup = $rule['LookupListIndex'][$b];
-															$seqIndex = $rule['SequenceIndex'][$b];
-
-															list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
-
-															$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
-
-															$lul2 = [$lup => $tag];
-
-															// Only apply if the (first) 'Replace' glyph from the
-															// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-															// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
-															// to level 2 and only apply if first Replace glyph is in this list
-															$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
-														}
+														$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), $backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, $class0excl, $bclass0excl, $lclass0excl, $tag, $scripttag);
 													}
 												}
 
@@ -1384,24 +1299,7 @@ class OtlDump extends TTFontFile
 														$lookaheadGlyphs = [];
 													}
 
-													list($exampleB, $exampleI, $exampleL) = $this->reportContext($backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs);
-
-													for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
-														$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
-														$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
-
-														list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
-
-														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
-
-														$lul2 = [$lup => $tag];
-
-														// Only apply if the (first) 'Replace' glyph from the
-														// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-														// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
-														// to level 2 and only apply if first Replace glyph is in this list
-														$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL);
-													}
+													$this->reportGSUBrule($Lookup, $this->substLookupRecords($Lookup[$i]['Subtable'][$c]), $backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, '', '', '', $tag, $scripttag);
 												}
 											}
 										}
@@ -2808,6 +2706,53 @@ class OtlDump extends TTFontFile
 
 			$this->_getGPOSarray($Lookup, [$record['LookupListIndex'] => $tag], $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
 		}
+	}
+
+	/**
+	 * reportGPOSrule() for a substitution rule, whose parameters it takes and documents.
+	 *
+	 * @param array $SubstLookupRecord As substLookupRecords() normalised them
+	 */
+	private function reportGSUBrule(array $Lookup, array $SubstLookupRecord, array $backtrackGlyphs, array $inputGlyphs, array $lookaheadGlyphs, $class0excl, $bclass0excl, $lclass0excl, $tag, $scripttag)
+	{
+		list($exampleB, $exampleI, $exampleL) = $this->reportContext($backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, $class0excl, $bclass0excl, $lclass0excl);
+
+		foreach ($SubstLookupRecord as $record) {
+			$seqIndex = $record['SequenceIndex'];
+
+			list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
+
+			$this->report .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
+
+			// Level 2 is handed the glyphs the position holds, e.g. 00636|00645|00656, and reports
+			// only the rules whose first 'Replace' glyph is one of them
+			$this->_getGSUBarray($Lookup, [$record['LookupListIndex'] => $tag], $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
+		}
+	}
+
+	/**
+	 * The lookup records of one context rule, in the one shape reportGSUBrule() reads.
+	 *
+	 * A format either lists them as records, or as a SequenceIndex array and a LookupListIndex array
+	 * side by side; and where a subtable holds a single rule, they are the subtable's own.
+	 *
+	 * @param array $rule The rule, or the subtable that is its own only rule
+	 */
+	private function substLookupRecords(array $rule)
+	{
+		if (isset($rule['SubstLookupRecord'])) {
+			return $rule['SubstLookupRecord'];
+		}
+
+		$records = [];
+		for ($b = 0; $b < $rule['SubstCount']; $b++) {
+			$records[$b] = [
+				'SequenceIndex' => $rule['SequenceIndex'][$b],
+				'LookupListIndex' => $rule['LookupListIndex'][$b]
+			];
+		}
+
+		return $records;
 	}
 
 	/**
