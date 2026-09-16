@@ -45,6 +45,19 @@ class SequenceRuleTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(1, $reader->readUInt16(), 'the reader is left at seqLookupCount');
 	}
 
+	/**
+	 * A rule set at byte 4 holding two rules, 6 and 10 bytes into the set. Wherever the reader was
+	 * left, the set is read from where it starts.
+	 */
+	public function testRuleOffsetsAreMadeAbsoluteFromTheRuleSet()
+	{
+		$reader = new BlobReader(pack('n*', 99, 99, 2, 6, 10));
+		$reader->readUInt16();
+
+		$this->assertSame([10, 14], SequenceRule::ruleOffsets($reader, 4));
+		$this->assertSame([], SequenceRule::ruleOffsets(new BlobReader(pack('n*', 0)), 0));
+	}
+
 	public function testCoverageOffsetsAreMadeAbsoluteFromTheSubtable()
 	{
 		$reader = new BlobReader(pack('n*', 12, 20));

@@ -110,12 +110,27 @@ class SequenceRule
 	 */
 	public static function coverageOffsets(FontReader $reader, $base, $count)
 	{
-		$offsets = [];
-		for ($i = 0; $i < $count; $i++) {
-			$offsets[] = $base + $reader->readUInt16();
-		}
+		return self::offsets($reader, $base, $count);
+	}
 
-		return $offsets;
+	/**
+	 * Where each rule of a rule set starts. SequenceRuleSet and ChainedSequenceRuleSet - SubRuleSet,
+	 * SubClassSet, ChainSubRuleSet and ChainSubClassSet, and their Pos twins - are laid out alike:
+	 *
+	 *     uint16   ruleCount
+	 *     Offset16 ruleOffsets[ruleCount]     from the start of the rule set
+	 *
+	 * The offsets are measured from the set, not from the subtable that points at it.
+	 *
+	 * @param int $ruleSetOffset From the start of the file
+	 *
+	 * @return int[] From the start of the file, one per rule
+	 */
+	public static function ruleOffsets(FontReader $reader, $ruleSetOffset)
+	{
+		$reader->seek($ruleSetOffset);
+
+		return self::offsets($reader, $ruleSetOffset, $reader->readUInt16());
 	}
 
 	/**
@@ -139,5 +154,15 @@ class SequenceRule
 		}
 
 		return $records;
+	}
+
+	private static function offsets(FontReader $reader, $base, $count)
+	{
+		$offsets = [];
+		for ($i = 0; $i < $count; $i++) {
+			$offsets[] = $base + $reader->readUInt16();
+		}
+
+		return $offsets;
 	}
 }

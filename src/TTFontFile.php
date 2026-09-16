@@ -1598,7 +1598,7 @@ class TTFontFile
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 						}
 						for ($s = 0; $s < $SubRuleSetCount; $s++) {
-							$ruleOffsets = $this->ruleOffsets($Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset']);
+							$ruleOffsets = SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset']);
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount'] = count($ruleOffsets);
 							foreach ($ruleOffsets as $g => $ruleOffset) {
 								$this->reader->seek($ruleOffset);
@@ -1660,11 +1660,12 @@ class TTFontFile
 						}
 					} // Format 3: Coverage-based Chaining Context Glyph Substitution  p259
 					elseif ($SubstFormat == 3) {
-						$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'] = SequenceRule::coverageOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['Offset'], $this->reader->readUInt16());
+						$base = $Lookup[$i]['Subtable'][$c]['Offset'];
+						$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
 						$Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageBacktrack']);
-						$Lookup[$i]['Subtable'][$c]['CoverageInput'] = SequenceRule::coverageOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['Offset'], $this->reader->readUInt16());
+						$Lookup[$i]['Subtable'][$c]['CoverageInput'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
 						$Lookup[$i]['Subtable'][$c]['InputGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageInput']);
-						$Lookup[$i]['Subtable'][$c]['CoverageLookahead'] = SequenceRule::coverageOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['Offset'], $this->reader->readUInt16());
+						$Lookup[$i]['Subtable'][$c]['CoverageLookahead'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
 						$Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageLookahead']);
 						$Lookup[$i]['Subtable'][$c]['SubstCount'] = $this->reader->readUInt16();
 						$Lookup[$i]['Subtable'][$c]['SubstLookupRecord'] = SequenceRule::lookupRecords($this->reader, $Lookup[$i]['Subtable'][$c]['SubstCount']);
@@ -1676,9 +1677,10 @@ class TTFontFile
 						throw new \Mpdf\Exception\FontException("GSUB Lookup Type " . $Lookup[$i]['Type'] . ", Format " . $SubstFormat . " not supported.");
 					}
 					$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-					$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'] = SequenceRule::coverageOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['Offset'], $this->reader->readUInt16());
+					$base = $Lookup[$i]['Subtable'][$c]['Offset'];
+					$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
 					$Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageBacktrack']);
-					$Lookup[$i]['Subtable'][$c]['CoverageLookahead'] = SequenceRule::coverageOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['Offset'], $this->reader->readUInt16());
+					$Lookup[$i]['Subtable'][$c]['CoverageLookahead'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
 					$Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageLookahead']);
 					// One substitute glyph per glyph in the Coverage table - the substitution is written into the
 					// subtable itself rather than delegated to a Lookup, as every other contextual type does
@@ -1824,7 +1826,7 @@ class TTFontFile
 						$Lookup[$i]['Subtable'][$c]['InputClasses'] = $InputClasses;
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['SubClassSetCnt']; $s++) {
 							if ($Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s] > 0) {
-								$ruleOffsets = $this->ruleOffsets($Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s]);
+								$ruleOffsets = SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s]);
 								$Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRuleCnt'] = count($ruleOffsets);
 								foreach ($ruleOffsets as $b => $ruleOffset) {
 									$this->reader->seek($ruleOffset);
@@ -1854,7 +1856,7 @@ class TTFontFile
 						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->_getCoverage();
 
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount']; $s++) {
-							foreach ($this->ruleOffsets($Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s]) as $r => $ruleOffset) {
+							foreach (SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s]) as $r => $ruleOffset) {
 								$this->reader->seek($ruleOffset);
 								list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
 								$SubstCount = $this->reader->readUInt16();
@@ -1886,7 +1888,7 @@ class TTFontFile
 
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubClassSetCnt']; $s++) {
 							if ($Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s] > 0) {
-								$ruleOffsets = $this->ruleOffsets($Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s]);
+								$ruleOffsets = SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s]);
 								$Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRuleCnt'] = count($ruleOffsets);
 								foreach ($ruleOffsets as $b => $ruleOffset) {
 									$this->reader->seek($ruleOffset);
@@ -1960,28 +1962,6 @@ class TTFontFile
 		}
 
 		return $Lookup;
-	}
-
-	/**
-	 * Where each rule of a rule set starts. SubRuleSet, SubClassSet, ChainSubRuleSet and
-	 * ChainSubClassSet are laid out alike - a count, then that many Offset16s - and measure the offsets
-	 * from the start of the set, not of the subtable that points at it.
-	 *
-	 * @param int $ruleSetOffset From the start of the file
-	 *
-	 * @return int[] From the start of the file
-	 */
-	private function ruleOffsets($ruleSetOffset)
-	{
-		$this->reader->seek($ruleSetOffset);
-		$count = $this->reader->readUInt16();
-
-		$offsets = [];
-		for ($r = 0; $r < $count; $r++) {
-			$offsets[] = $ruleSetOffset + $this->reader->readUInt16();
-		}
-
-		return $offsets;
 	}
 
 	/**
