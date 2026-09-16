@@ -142,6 +142,78 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The parser's half of the modulo the spec adds a Single Substitution Format 1 delta by. Adding
+	 * without it lands outside glyphToChar, and unicode_hex() made U+0000 of the null that came back,
+	 * so the rule named the null character. @see DeltaGlyphIdTest for the shaper's half and for the
+	 * fonts that wrap.
+	 *
+	 * The synthetic covers glyph 32770 and adds 32767, so the sum is 65537 and the substitute is glyph
+	 * 1 - the only glyph in the font with no character of its own, which is why it is the only one in
+	 * the Private Use Area. A font can only spell a wrap with tens of thousands of glyphs: an int16
+	 * delta cannot carry a sum past either end from anywhere closer.
+	 */
+	public function testASingleSubstitutionDeltaIsAddedModulo65536()
+	{
+		$raised = $this->diagnosticsWhileParsing('NotoSansArabic-GSUB11Wrap-Synthetic.ttf');
+
+		$this->assertSame([], $raised);
+		$this->assertSame('\x{0E000}', $this->ttf->rtlPUAstr);
+	}
+
+	/**
+	 * A lookup flag naming a mark attachment class says to skip every mark outside that class. A font
+	 * may name a class GDEF does not define - Carlito and NATS both set the flag without a
+	 * MarkAttachClassDef table at all - and then no mark is in the class, so every one of them is
+	 * skipped. Reading MarkAttachmentType by the class instead gave null, which is no marks skipped.
+	 *
+	 * The subset is Carlito 1.104 (OFL 1.1) cut to U+0069, U+006A and U+0313, keeping the two 'ccmp'
+	 * chained contexts that carry the flag and the dotless forms they substitute.
+	 */
+	public function testALookupNamingAMarkAttachmentClassTheFontDoesNotDefineParses()
+	{
+		$raised = $this->diagnosticsWhileParsing('Carlito-MarkAttachmentType-Subset.ttf');
+
+		$this->assertSame([], $raised);
+		$this->assertSame('Carlito-Regular', $this->ttf->fullName);
+	}
+
+	/**
+	 * Class 0 of a Class Definition is every glyph the other classes do not name, so it has no list of
+	 * glyphs to match against and mPDF matches nothing at such a position. Every input position above
+	 * the first already said so; the first read InputClasses by the class and got null.
+	 *
+	 * The subset is Molengo 0.11 (OFL 1.1) cut to U+0069, U+006A, U+0268 and the marks its one 'ccmp'
+	 * lookup classifies. That lookup's only rule set is class 0's, and its Coverage holds nothing but
+	 * glyphs the font puts in class 1, so the rules it states cannot fire either way.
+	 */
+	public function testAContextRuleSetForClassZeroIsReadLikeEveryOther()
+	{
+		$raised = $this->diagnosticsWhileParsing('Molengo-GSUB52Class0-Subset.ttf');
+
+		$this->assertSame([], $raised);
+		$this->assertSame('Molengo-Regular', $this->ttf->fullName);
+	}
+
+	/**
+	 * A feature that runs no lookups is not offered to the shaper: there is nothing for it to do, and
+	 * the lookup index the features are ordered by is the one it has not got.
+	 *
+	 * The subset is Sedan SC 1.100 (OFL 1.1), whose 'smcp' lists no lookups at all. The subsetter drops
+	 * a feature with none, so it is put back. The 'aalt' and 'c2sc' left in it are what says the real
+	 * features still come out in lookup order.
+	 */
+	public function testAFeatureThatRunsNoLookupsIsNotOffered()
+	{
+		$raised = $this->diagnosticsWhileParsing('SedanSC-EmptyFeature-Subset.ttf');
+
+		$this->assertSame([], $raised);
+		$this->assertSame(
+			['aalt' => [0, 1], 'c2sc' => [2], 'ccmp' => [3]],
+			$this->ttf->GSUBFeatures['latn']['DFLT']
+		);
+	}
+
+	/**
 	 * The two bytes at the head of the width table record how many characters it covers, and the filter
 	 * that fills the table admits characters up to 196,607 - three times what the field can hold. chr()
 	 * raises PHP 8's out-of-range deprecation on the overflow, which is fatal to anyone promoting
@@ -169,39 +241,6 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame([], $raised);
 		$this->assertSame(470, $this->characterCount($this->ttf->charWidths));
-	}
-
-	/**
-	 * @return int The number of characters the width table says it covers
-	 */
-	private function characterCount($charWidths)
-	{
-		return (ord($charWidths[0]) << 8) + ord($charWidths[1]);
-	}
-
-	/**
-	 * Parse a font, collecting every diagnostic PHP raised doing it. Deprecations are not converted to
-	 * exceptions, so a handler is what sees them.
-	 *
-	 * @return string[]
-	 */
-	private function diagnosticsWhileParsing($file, $useOTL = 0xFF)
-	{
-		$raised = [];
-
-		set_error_handler(function ($number, $message, $path, $line) use (&$raised) {
-			$raised[] = sprintf('%s in %s:%d', $message, basename($path), $line);
-
-			return true;
-		});
-
-		try {
-			$this->ttf->getMetrics(__DIR__ . '/../data/ttf/' . $file, uniqid('', true), 0, false, false, $useOTL);
-		} finally {
-			restore_error_handler();
-		}
-
-		return $raised;
 	}
 
 	/**
@@ -242,6 +281,39 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			['NotoSans-Regular.ttf', 'NotoSans-Regular'],
 			['Manjari-Regular.ttf', 'Manjari-Regular'],
 		];
+	}
+
+	/**
+	 * Parse a font, collecting every diagnostic PHP raised doing it. Deprecations are not converted to
+	 * exceptions, so a handler is what sees them.
+	 *
+	 * @return string[]
+	 */
+	private function diagnosticsWhileParsing($file, $useOTL = 0xFF)
+	{
+		$raised = [];
+
+		set_error_handler(function ($number, $message, $path, $line) use (&$raised) {
+			$raised[] = sprintf('%s in %s:%d', $message, basename($path), $line);
+
+			return true;
+		});
+
+		try {
+			$this->ttf->getMetrics(__DIR__ . '/../data/ttf/' . $file, uniqid('', true), 0, false, false, $useOTL);
+		} finally {
+			restore_error_handler();
+		}
+
+		return $raised;
+	}
+
+	/**
+	 * @return int The number of characters the width table says it covers
+	 */
+	private function characterCount($charWidths)
+	{
+		return (ord($charWidths[0]) << 8) + ord($charWidths[1]);
 	}
 
 	/**

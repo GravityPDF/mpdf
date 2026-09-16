@@ -2061,7 +2061,9 @@ class Otl
 			$DeltaGlyphID = $this->reader->readInt16();
 			$this->reader->seek($CoverageOffset);
 			$glyphs = $this->_getCoverageGID();
-			$GlyphID = $glyphs[$GlyphPos] + $DeltaGlyphID;
+			// The modulo is how a font names a glyph below the one it covers, or above the end of the
+			// range: Chiron Hei HK's 'hist' reaches glyph 1688 with 15324 from glyph 51900
+			$GlyphID = ($glyphs[$GlyphPos] + $DeltaGlyphID) & 0xFFFF;
 		}
 		// Format 2:
 		elseif ($SubstFormat == 2) { // Specified output glyph indices
@@ -4617,6 +4619,23 @@ class Otl
 	}
 
 	/**
+	 * The marks a lookup naming a mark attachment class skips: every mark outside that class, which is
+	 * what the parser keeps MarkAttachmentType as.
+	 *
+	 * A font may name a class GDEF does not define - Carlito and NATS set the flag without a
+	 * MarkAttachClassDef table at all - and then no mark is in the class, so the lookup skips every one
+	 * of them.
+	 *
+	 * @param int $class The mark attachment class the lookup's flags name
+	 *
+	 * @return string Its glyphs, space-prefixed and "|"-separated
+	 */
+	private function marksOutsideAttachmentClass($class)
+	{
+		return isset($this->MarkAttachmentType[$class]) ? $this->MarkAttachmentType[$class] : $this->GlyphClassMarks;
+	}
+
+	/**
 	 * The characters a Lookup's flag says to skip over, as a set keyed by codepoint.
 	 *
 	 * Every position a rule tests is first walked past the characters this names, so the test is made
@@ -4660,10 +4679,8 @@ class Otl
 		// Flag & 0xFF?? = MarkAttachmentType
 		if ($flag & 0xFF00) {
 			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			// $this->MarkAttachmentType is already adjusted for this i.e. contains all Marks except those in the MarkAttachmentClassDef table
-			$MarkAttachmentType = $flag >> 8;
 			$ignoreflag = $flag;
-			$str = $this->MarkAttachmentType[$MarkAttachmentType];
+			$str = $this->marksOutsideAttachmentClass($flag >> 8);
 		}
 
 		// Flag & 0x0010 = UseMarkFilteringSet
@@ -4726,8 +4743,7 @@ class Otl
 		// Flag & 0xFF?? = MarkAttachmentType
 		if ($flag & 0xFF00) {
 			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			// $this->MarkAttachmentType is already adjusted for this i.e. contains all Marks except those in the MarkAttachmentClassDef table
-			if (strpos($this->MarkAttachmentType[($flag >> 8)], $glyph)) {
+			if (strpos($this->marksOutsideAttachmentClass($flag >> 8), $glyph)) {
 				$ignore = true;
 			}
 		}
