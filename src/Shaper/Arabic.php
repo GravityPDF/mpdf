@@ -174,27 +174,14 @@ class Arabic
 			$chars[] = $info[$i]['hex'];
 		}
 
-		$crntChar = null;
-		$prevChar = null;
 		$nextChar = null;
 		$output = [];
 		$max = count($chars);
 		for ($i = $max - 1; $i >= 0; $i--) {
 			$crntChar = $chars[$i];
-			if ($i > 0) {
-				$prevChar = hexdec($chars[$i - 1]);
-			} else {
-				$prevChar = null;
-			}
-			if ($prevChar && isset($transparentJoin[$prevChar]) && isset($chars[$i - 2])) {
-				$prevChar = hexdec($chars[$i - 2]);
-				if ($prevChar && isset($transparentJoin[$prevChar]) && isset($chars[$i - 3])) {
-					$prevChar = hexdec($chars[$i - 3]);
-					if ($prevChar && isset($transparentJoin[$prevChar]) && isset($chars[$i - 4])) {
-						$prevChar = hexdec($chars[$i - 4]);
-					}
-				}
-			}
+			// joining sees the base a mark is written on, however many marks the base carries
+			$n = self::skipTransparent($chars, $i, -1, $transparentJoin);
+			$prevChar = isset($chars[$n]) ? hexdec($chars[$n]) : null;
 			if ($crntChar && isset($transparentJoin[hexdec($crntChar)])) {
 				// If next_char = RightJoining && prev_char = LeftJoining:
 				if (isset($chars[$i + 1]) && $chars[$i + 1] && isset(self::$rightJoining[hexdec($chars[$i + 1])]) && $prevChar && isset(self::$leftJoining[$prevChar])) {

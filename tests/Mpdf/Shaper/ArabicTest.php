@@ -35,6 +35,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** U+073A SYRIAC HBASA ABOVE */
 	const HBASA = '0073A';
 
+	/** U+073B SYRIAC HBASA BELOW */
+	const HBASA_BELOW = '0073B';
+
 	/** U+0712 SYRIAC LETTER BETH, dual-joining */
 	const BETH = '00712';
 
@@ -115,6 +118,40 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$forms = $this->shape([self::BEH, self::FATHA, self::BEH]);
 
 		$this->assertSame([['B_INIT', 2], [self::FATHA, 0], ['B_FINA', 1]], $forms);
+	}
+
+	/**
+	 * Nothing limits how many marks a base carries, and the lookback stepped over at most three of
+	 * them: a fourth left the following letter reading a mark as the character behind it, and a mark
+	 * joins nothing. GravityPDF/mpdf#154.
+	 *
+	 * The first letter is asserted alongside the last because the two directions are found
+	 * differently - forwards is the last letter the backwards walk over the run passed, which never
+	 * had a limit - and it is the pair that says the marks are invisible to joining from either side.
+	 */
+	public function testALetterJoinsToTheBaseBeforeItHoweverManyMarksAreBetweenThem()
+	{
+		$four = [self::BETH, self::PTHAHA, self::ZQAPHA, self::RBASA, self::HBASA, self::BETH];
+		$five = [self::BETH, self::PTHAHA, self::ZQAPHA, self::RBASA, self::HBASA, self::HBASA_BELOW, self::BETH];
+
+		$forms = $this->shape($four, self::ALL_FORMS, 'syrc');
+
+		$this->assertSame(['BE_INIT', 2], $forms[0]);
+		$this->assertSame(['BE_FINA', 1], $forms[5]);
+		$this->assertSame(['BE_FINA', 1], $this->shape($five, self::ALL_FORMS, 'syrc')[6]);
+	}
+
+	/**
+	 * The marks counted are the Transparent-Joining table together with GDEF's mark class, so a mark
+	 * only the font declares takes up a place in the walk like any other.
+	 */
+	public function testAMarkOnlyGdefDeclaresIsSteppedOverWithTheRest()
+	{
+		$run = [self::BETH, self::PTHAHA, self::ZQAPHA, self::RBASA, self::COMBINING_GRAVE, self::BETH];
+
+		$forms = $this->shape($run, self::ALL_FORMS, 'syrc', self::COMBINING_GRAVE);
+
+		$this->assertSame(['BE_FINA', 1], $forms[5]);
 	}
 
 	/**
@@ -298,6 +335,21 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$this->assertSame($unpointed[1], $beforeAlaph[2], $base . ' with the vowel before the Alaph');
 			$this->assertSame($unpointed[1], $afterAlaph[1], $base . ' with the vowel after the Alaph');
 		}
+	}
+
+	/**
+	 * Through a real font: the marks are drawn where they were written and the letters either side
+	 * read as though they were not there, so a heavily pointed word has to draw the same two BETHs as
+	 * the unpointed one. Estrangelo Edessa states no isolated BETH either, so the second letter losing
+	 * its final form left the nominal U+0712 behind.
+	 */
+	public function testAHeavilyPointedWordDrawsTheSameLettersAsTheUnpointedWord()
+	{
+		$unpointed = $this->render([self::BETH, self::BETH]);
+		$pointed = $this->render([self::BETH, self::PTHAHA, self::ZQAPHA, self::RBASA, self::HBASA, self::BETH]);
+
+		$this->assertSame($unpointed[0], $pointed[0]);
+		$this->assertSame($unpointed[1], $pointed[5]);
 	}
 
 	/**
