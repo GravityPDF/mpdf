@@ -480,16 +480,49 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A form a chained rule gives is drawn where the text holds the glyphs the rule names, and a glyph
+	 * whose hex is only part of one of theirs is not one of them: 00628 is inside 100628, and 0064E
+	 * inside 10064E.
+	 *
+	 * @dataProvider dataContextNamingAPlaneSixteenGlyph
+	 */
+	public function testAFormsContextIsNotMetByAGlyphWhoseHexIsPartOfOneItNames($prel, $ignore, $hexes, $expected)
+	{
+		$glyphs = $this->glyphs();
+		$glyphs[self::DAL] = ['D_ISOL', 'D_FINA', 'prel' => [1 => [$prel]], 'ignore' => [1 => $ignore]];
+
+		$this->assertSame($expected, $this->shape($hexes, self::ALL_FORMS, 'arab', self::FATHA, $glyphs));
+	}
+
+	public function dataContextNamingAPlaneSixteenGlyph()
+	{
+		return [
+			'the backtrack' => [
+				'1' . self::BEH,
+				'()',
+				[self::BEH, self::DAL],
+				[['B_INIT', 2], [self::DAL, 0]],
+			],
+			'the glyphs the lookup skips' => [
+				self::BEH,
+				'((?:(?: 1' . self::FATHA . '))*)',
+				[self::BEH, self::FATHA, self::DAL],
+				[['B_INIT', 2], [self::FATHA, 0], [self::DAL, 0]],
+			],
+		];
+	}
+
+	/**
 	 * @return array one [hex, form] pair per character, in logical order
 	 */
-	private function shape($hexes, $usetags = self::ALL_FORMS, $scriptTag = 'arab', $glyphClassMarks = self::FATHA)
+	private function shape($hexes, $usetags = self::ALL_FORMS, $scriptTag = 'arab', $glyphClassMarks = self::FATHA, $glyphs = null)
 	{
 		$info = [];
 		foreach ($hexes as $hex) {
 			$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
 		}
 
-		Arabic::shape($info, $this->glyphs(), ' ' . $glyphClassMarks, $usetags, $scriptTag);
+		Arabic::shape($info, $glyphs === null ? $this->glyphs() : $glyphs, ' ' . $glyphClassMarks, $usetags, $scriptTag);
 
 		$forms = [];
 		foreach ($info as $char) {

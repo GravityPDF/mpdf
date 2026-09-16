@@ -3,6 +3,7 @@
 namespace Mpdf\Fonts\Table;
 
 use Mpdf\Exception\FontException;
+use Mpdf\Fonts\GlyphString;
 
 /**
  * The glyphs a lookup passes over, from its LookupFlag, its markFilteringSet and GDEF.
@@ -47,6 +48,11 @@ class LookupFlag
 	 * @var string[] mark filtering set => the marks outside it, as each is first asked for
 	 */
 	private $marksOutsideFilteringSets = [];
+
+	/**
+	 * @var true[][] Each class skips() has been asked about, as GlyphString::set() gives it
+	 */
+	private $sets = [];
 
 	/**
 	 * @param string $fontkey
@@ -132,7 +138,8 @@ class LookupFlag
 	 *
 	 * The same answer as looking for the glyph in glyphs(), a class at a time, without joining the
 	 * classes: the shaper asks once per glyph a subtable is offered, and a font's marks can run to tens
-	 * of kilobytes of text.
+	 * of kilobytes of text. Each class is looked up in a set rather than searched, so a glyph is not
+	 * found inside a longer one's hex.
 	 *
 	 * @param int        $flag             The lookup's LookupFlag
 	 * @param string     $glyph            The glyph, as hex
@@ -145,7 +152,8 @@ class LookupFlag
 		$this->checkMarkFilteringSet($flag, $markFilteringSet);
 
 		foreach (self::skipped($flag) as $class) {
-			if (strpos($this->glyphsOf($class, $flag, $markFilteringSet), $glyph)) {
+			$set = $this->setOf($class, $flag, $markFilteringSet);
+			if (isset($set[$glyph])) {
 				return true;
 			}
 		}
@@ -181,6 +189,23 @@ class LookupFlag
 			default:
 				return $this->gdef['GlyphClassBases'];
 		}
+	}
+
+	private function setOf($class, $flag, $markFilteringSet)
+	{
+		if ($class === self::MARKS_OUTSIDE_FILTERING_SET) {
+			$key = $class . $markFilteringSet;
+		} elseif ($class === self::MARKS_OUTSIDE_ATTACHMENT_CLASS) {
+			$key = $class . self::attachmentClass($flag);
+		} else {
+			$key = $class;
+		}
+
+		if (!isset($this->sets[$key])) {
+			$this->sets[$key] = GlyphString::set($this->glyphsOf($class, $flag, $markFilteringSet));
+		}
+
+		return $this->sets[$key];
 	}
 
 	/**
