@@ -110,12 +110,12 @@ class Otl
 	private $marks;
 
 	/**
-	 * $lookupFlag and $marks for every font laid out so far, by font key, since both are built from the
-	 * whole of GDEF and a document sets one font for run after run
+	 * $lookupFlag for every font laid out so far, by font key: the sets it builds from GDEF are kept
+	 * with it, and a document sets one font for run after run
 	 *
-	 * @var array[]
+	 * @var LookupFlag[]
 	 */
-	private $gdefSets = [];
+	private $lookupFlags = [];
 
 	var $Ignores;
 
@@ -306,11 +306,12 @@ class Otl
 		$this->GlyphClassComponents = $gdef['GlyphClassComponents'];
 		$this->GlyphClassBases = $gdef['GlyphClassBases'];
 
-		if (!isset($this->gdefSets[$this->fontkey])) {
-			$this->gdefSets[$this->fontkey] = [new LookupFlag($this->fontkey, $gdef), GlyphString::set($gdef['GlyphClassMarks'])];
+		if (!isset($this->lookupFlags[$this->fontkey])) {
+			$this->lookupFlags[$this->fontkey] = new LookupFlag($this->fontkey, $gdef);
 		}
 
-		list($this->lookupFlag, $this->marks) = $this->gdefSets[$this->fontkey];
+		$this->lookupFlag = $this->lookupFlags[$this->fontkey];
+		$this->marks = $this->lookupFlag->marks();
 	}
 
 	/**
@@ -4608,7 +4609,7 @@ class Otl
 	 * The glyph IDs a Coverage table covers, for a Single Substitution Format 1, which adds a delta
 	 * to a glyph ID rather than naming a replacement.
 	 *
-	 * Cached apart from _getCoverage below: the same table, projected differently.
+	 * Cached apart from coverageIndexByHex below: the same table, projected differently.
 	 */
 	private function _getCoverageGID()
 	{
@@ -4619,25 +4620,6 @@ class Otl
 		}
 
 		return $this->LuDataCache[$this->otlCacheKey]['coverageGID'][$offset];
-	}
-
-	/**
-	 * The characters a Coverage table covers, as the hex strings the shaper matches against
-	 */
-	private function _getCoverage()
-	{
-		$offset = $this->reader->tell();
-
-		if (!isset($this->LuDataCache[$this->otlCacheKey]['coverage'][$offset])) {
-			$g = [];
-			foreach (Coverage::glyphs($this->reader) as $glyphID) {
-				$g[] = GlyphString::of($this->glyphToChar($glyphID));
-			}
-
-			$this->LuDataCache[$this->otlCacheKey]['coverage'][$offset] = $g;
-		}
-
-		return $this->LuDataCache[$this->otlCacheKey]['coverage'][$offset];
 	}
 
 	/**
@@ -4652,7 +4634,8 @@ class Otl
 
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['coverageIndex'][$offset])) {
 			$indexes = [];
-			foreach ($this->_getCoverage() as $index => $hex) {
+			foreach (Coverage::glyphs($this->reader) as $index => $glyphID) {
+				$hex = GlyphString::of($this->glyphToChar($glyphID));
 				if (!isset($indexes[$hex])) {
 					$indexes[$hex] = $index;
 				}
@@ -4674,7 +4657,7 @@ class Otl
 	 * thousands and whose Coverage tables name thousands of glyphs, that scanning was most of the time
 	 * spent shaping a word.
 	 *
-	 * Cached apart from _getCoverage above: the same table, projected differently.
+	 * Cached apart from coverageIndexByHex above: the same table, projected differently.
 	 *
 	 * @return array map of unicode => 1
 	 */
