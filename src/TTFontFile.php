@@ -2421,13 +2421,14 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$this->reportGSUBlookupStart($Lookup, $i, $tag);
 
 			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
-				$this->reportGSUBsubtable($Lookup, $i, $c);
+				$this->reportGSUBsubtable($c);
 
 				$type = $Lookup[$i]['Type'];
 				$subtable = $Lookup[$i]['Subtable'][$c];
 				$format = $subtable['Format'];
 
 				if ($type >= 1 && $type <= 4) {
+					$this->reportGSUBlookupType($type, $format);
 					$this->addTo($volt, $this->gsubSubstitutions($Lookup, $i, $c, $tag));
 					continue;
 				}
@@ -2437,15 +2438,21 @@ class TTFontFile implements Fonts\FontSourceInterface
 						continue; // every entry was filtered out by the Ignore flags
 					}
 
+					$this->reportGSUBlookupType($type, $format);
 					$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-					$backtrackGlyphs = $subtable['BacktrackGlyphCount'] ? $subtable['CoverageBacktrackGlyphs'] : [];
-					$lookaheadGlyphs = $subtable['LookaheadGlyphCount'] ? $subtable['CoverageLookaheadGlyphs'] : [];
+					list($backtrackGlyphs, $lookaheadGlyphs) = $this->coverageSequences($subtable);
 
 					$this->addTo($volt, $this->gsubReverseChainRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $backtrackGlyphs, $lookaheadGlyphs));
 					continue;
 				}
 
-				if (($type != 5 && $type != 6) || $format < 1 || $format > 3) {
+				if ($type != 5 && $type != 6) {
+					continue;
+				}
+
+				$this->reportGSUBlookupType($type, $format);
+
+				if ($format < 1 || $format > 3) {
 					continue;
 				}
 
@@ -2460,16 +2467,20 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 								$rctr,
-								$rule,
+								$rule['SubstLookupRecord'],
 								[],
 								$inputGlyphs,
 								[],
 								count($inputGlyphs),
+								['', '', ''],
 								[$backtrackGlyphs, $lookaheadGlyphs]
 							)));
 						}
 					}
 				} elseif ($type == 5 && $format == 2) {
+					// Class 0 holds every glyph its Class Definition leaves unnamed, which is what the dump reports it as
+					$class0excl = [implode('|', $subtable['InputClasses']), '', ''];
+
 					foreach ($subtable['SubClassSet'] as $inputClass => $cscs) {
 						$this->reportGSUBinputClass($inputClass);
 
@@ -2478,11 +2489,12 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 								$cscrule,
-								$rule,
+								$rule['SubstLookupRecord'],
 								[],
 								$this->classInputGlyphs($subtable['InputClasses'], $inputClass, $rule),
 								[],
 								$rule['InputGlyphCount'],
+								$class0excl,
 								[$backtrackGlyphs, $lookaheadGlyphs]
 							)));
 						}
@@ -2490,12 +2502,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 				} elseif ($type == 5) {
 					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 						null,
-						$subtable,
+						$subtable['SubstLookupRecord'],
 						[],
 						$subtable['CoverageInputGlyphs'],
 						[],
-						$subtable['InputGlyphCount'],
-						[[], []]
+						$subtable['InputGlyphCount']
 					)));
 				} elseif ($format == 1) {
 					for ($s = 0; $s < $subtable['ChainSubRuleSetCount']; $s++) {
@@ -2511,66 +2522,63 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 								$rctr,
-								$rule,
+								$rule['SubstLookupRecord'],
 								$backtrackGlyphs,
 								$inputGlyphs,
 								$lookaheadGlyphs,
-								count($inputGlyphs),
-								[$backtrackGlyphs, $lookaheadGlyphs]
+								count($inputGlyphs)
 							)));
 						}
 					}
 				} elseif ($format == 2) {
+					// A chained context has three Class Definitions, and so three class 0s
+					$class0excl = [
+						implode('|', $subtable['InputClasses']),
+						implode('|', $subtable['BacktrackClasses']),
+						implode('|', $subtable['LookaheadClasses']),
+					];
+
 					foreach ($subtable['ChainSubClassSet'] as $inputClass => $cscs) {
 						$this->reportGSUBinputClass($inputClass);
 
 						for ($cscrule = 0; $cscrule < $cscs['ChainSubClassRuleCnt']; $cscrule++) {
 							$rule = $cscs['ChainSubClassRule'][$cscrule];
 
-							if (!$this->keepsEarlierRulePositions()) {
-								$backtrackGlyphs = [];
-								$lookaheadGlyphs = [];
-							}
-
-							if ($rule['BacktrackGlyphCount']) {
-								for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
-									$backtrackGlyphs[$gcl] = $this->classGlyphs($subtable['BacktrackClasses'], $rule['Backtrack'][$gcl]);
-								}
-							} else {
+							if (!$rule['BacktrackGlyphCount'] || !$this->keepsEarlierRulePositions()) {
 								$backtrackGlyphs = [];
 							}
+							for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
+								$backtrackGlyphs[$gcl] = $this->classGlyphs($subtable['BacktrackClasses'], $rule['Backtrack'][$gcl]);
+							}
 
-							if ($rule['LookaheadGlyphCount']) {
-								for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
-									$lookaheadGlyphs[$gcl] = $this->classGlyphs($subtable['LookaheadClasses'], $rule['Lookahead'][$gcl]);
-								}
-							} else {
+							if (!$rule['LookaheadGlyphCount'] || !$this->keepsEarlierRulePositions()) {
 								$lookaheadGlyphs = [];
+							}
+							for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
+								$lookaheadGlyphs[$gcl] = $this->classGlyphs($subtable['LookaheadClasses'], $rule['Lookahead'][$gcl]);
 							}
 
 							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 								$cscrule,
-								$rule,
+								$rule['SubstLookupRecord'],
 								$backtrackGlyphs,
 								$this->classInputGlyphs($subtable['InputClasses'], $inputClass, $rule),
 								$lookaheadGlyphs,
 								$rule['InputGlyphCount'],
-								[$backtrackGlyphs, $lookaheadGlyphs]
+								$class0excl
 							)));
 						}
 					}
 				} else {
-					$backtrackGlyphs = $subtable['BacktrackGlyphCount'] ? $subtable['CoverageBacktrackGlyphs'] : [];
-					$lookaheadGlyphs = $subtable['LookaheadGlyphCount'] ? $subtable['CoverageLookaheadGlyphs'] : [];
+					list($backtrackGlyphs, $lookaheadGlyphs) = $this->coverageSequences($subtable);
 
 					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 						null,
-						$subtable,
+						$subtable['SubstLookupRecord'],
 						$backtrackGlyphs,
 						$subtable['CoverageInputGlyphs'],
 						$lookaheadGlyphs,
-						$subtable['InputGlyphCount'],
-						[$backtrackGlyphs, $lookaheadGlyphs]
+						$subtable['InputGlyphCount']
 					)));
 				}
 			}
@@ -2584,29 +2592,49 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * One context rule as the walk hands it on.
 	 *
-	 * @param int|null $index     The rule's place in its rule set, null for a Format 3 subtable, which
-	 *                            is its own only rule
-	 * @param array    $rule      The rule, or the Format 3 subtable, holding its SubstLookupRecords
-	 * @param string[] $backtrack One "|"-joined glyph string per position, nearest first
-	 * @param string[] $input     Likewise, first position first
-	 * @param string[] $lookahead Likewise
-	 * @param int      $nInput    Positions in the input sequence, as the rule states the count
-	 * @param array    $arabic    [backtrack, lookahead] for the entry an Arabic joining form's rule
-	 *                            becomes. Not always the rule's own sequences: see _getGSUBarray()
+	 * @param int|null $index      The rule's place in its rule set, null for a Format 3 subtable, which
+	 *                             is its own only rule
+	 * @param array    $records    Its SubstLookupRecords
+	 * @param string[] $backtrack  One "|"-joined glyph string per position, nearest first
+	 * @param string[] $input      Likewise, first position first
+	 * @param string[] $lookahead  Likewise
+	 * @param int      $nInput     Positions in the input sequence, as the rule states the count
+	 * @param string[] $class0excl For a class-based rule, every glyph some class of the input,
+	 *                             backtrack and lookahead Class Definitions names, which is what each
+	 *                             one's class 0 excludes
+	 * @param array    $arabic     [backtrack, lookahead] for the entry an Arabic joining form's rule
+	 *                             becomes, where that is not the rule's own: see _getGSUBarray()
 	 *
 	 * @return array
 	 */
-	private function contextRule($index, array $rule, array $backtrack, array $input, array $lookahead, $nInput, array $arabic)
+	private function contextRule($index, array $records, array $backtrack, array $input, array $lookahead, $nInput, array $class0excl = ['', '', ''], $arabic = null)
 	{
+		if ($arabic === null) {
+			$arabic = [$backtrack, $lookahead];
+		}
+
 		return [
 			'index' => $index,
-			'records' => $rule['SubstLookupRecord'],
+			'records' => $records,
 			'backtrack' => $backtrack,
 			'input' => $input,
 			'lookahead' => $lookahead,
 			'nInput' => $nInput,
+			'class0excl' => $class0excl,
 			'prel' => $arabic[0],
 			'postl' => $arabic[1],
+		];
+	}
+
+	/**
+	 * @return array [backtrack, lookahead] of a Coverage-based chained subtable (Type 6 Format 3 or
+	 *               Type 8), one "|"-joined glyph string per position
+	 */
+	private function coverageSequences(array $subtable)
+	{
+		return [
+			$subtable['BacktrackGlyphCount'] ? $subtable['CoverageBacktrackGlyphs'] : [],
+			$subtable['LookaheadGlyphCount'] ? $subtable['CoverageLookaheadGlyphs'] : [],
 		];
 	}
 
@@ -2673,11 +2701,14 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$volt = [];
 		$type = $Lookup[$i]['Type'];
 
+		// Only a ligature has positions to skip between, and only asked where there is one to build: a
+		// flag naming a mark filtering set GDEF lacks throws
+		$ignore = $type == 4 && $Lookup[$i]['Subtable'][$c]['subs'] ? $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']) : '';
+
 		foreach ($Lookup[$i]['Subtable'][$c]['subs'] as $sub) {
 			$inputGlyphs = $sub['Replace'];
 
 			if ($type == 4) {
-				$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
 				$volt[] = [
 					'match' => $this->_makeGSUBinputMatch($inputGlyphs, $ignore),
 					'replace' => $this->_makeGSUBinputReplacement(count($inputGlyphs), $sub['substitute'][0], $ignore, 0, count($inputGlyphs), 0),
@@ -2808,7 +2839,15 @@ class TTFontFile implements Fonts\FontSourceInterface
 	{
 	}
 
-	protected function reportGSUBsubtable(array $Lookup, $i, $c)
+	protected function reportGSUBsubtable($c)
+	{
+	}
+
+	/**
+	 * @param int $type   The subtable's lookup type, reported once the walk has decided to read it
+	 * @param int $format Its format
+	 */
+	protected function reportGSUBlookupType($type, $format)
 	{
 	}
 

@@ -42,7 +42,7 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$dump = $this->withGdef(new OtlDump($mpdf, $this->cache(), 'win'));
 
 		$report = \Closure::bind(function (array $Lookup) {
-			$this->reportGSUBlookups($Lookup, [0 => 'ccmp'], 'latn');
+			$this->reportGSUBlookups($Lookup, [0 => 'ccmp'], 'latn', OtlDump::TOP_LEVEL);
 		}, $dump, OtlDump::class);
 		$report($this->chainedClassRules());
 
