@@ -66,16 +66,7 @@ class FontWriter
 						$used = $f['used'];
 						if ($used) {
 							$nChars = (ord($f['cw'][0]) << 8) + ord($f['cw'][1]);
-							// What the document drew over what the font covers. The subset records every
-							// codepoint of the text whether the font has a glyph for it or not, and nChars
-							// counts only the characters it does, so the numerator makes the same test
-							$drawn = 0;
-							foreach ($f['subset'] as $u) {
-								if ($this->mpdf->_charDefined($f['cw'], $u)) {
-									$drawn++;
-								}
-							}
-							$usage = (int) ($drawn * 100 / $nChars);
+							$usage = (int) ($this->charactersDrawn($f) * 100 / $nChars);
 							// At most percentSubset, not less than, so that the default of 100 subsets
 							// even a font every glyph of which was drawn
 							$asSubset = $info['length1'] > ($this->mpdf->maxTTFFilesize * 1024) || $usage <= $this->mpdf->percentSubset;
@@ -462,6 +453,27 @@ class FontWriter
 				throw new \Mpdf\MpdfException(sprintf('Unsupported font type: %s (%s)', $type, $name));
 			}
 		}
+	}
+
+	/**
+	 * How much of a font the document drew, counted the way the font's own character count is.
+	 *
+	 * The subset records every codepoint of the text whether the font has a glyph for it or not, so
+	 * the two only divide into a share of the font if this makes the same test.
+	 *
+	 * @return int
+	 */
+	private function charactersDrawn(array $font)
+	{
+		$drawn = 0;
+
+		foreach ($font['subset'] as $u) {
+			if ($this->mpdf->_charDefined($font['cw'], $u)) {
+				$drawn++;
+			}
+		}
+
+		return $drawn;
 	}
 
 	/**

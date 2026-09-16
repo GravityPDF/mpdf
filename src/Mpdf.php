@@ -4119,6 +4119,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// unioned back in where the subset font is built
 			$this->fonts[$fontkey]['subset'] = [];
 		} else {
+			// The range below is the encoding rather than a seed - a character is written as the CID
+			// it holds in subsets - so it stays where it is
 			$this->fonts[$fontkey]['subsets'] = [0 => range(0, 127)];
 			$this->fonts[$fontkey]['subsetfontids'] = [$i];
 		}

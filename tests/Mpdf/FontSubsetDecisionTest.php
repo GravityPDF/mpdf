@@ -8,59 +8,18 @@ namespace Mpdf;
  * nothing: `Writer\FontWriter::writeFonts()` worked out how much of the font was used and how big it
  * was, then subsetted whatever the answer.
  *
- * Poppins is 154KB and this document draws 11% of it, so every threshold below is one the font
- * passes or fails outright, and 11 itself is the boundary the comparison sits on.
+ * The document here draws 11% of Poppins, so every threshold below is one the font passes or fails
+ * outright, and 11 itself is the boundary the comparison sits on.
  */
 class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
-	/**
-	 * Every letter of the alphabet in both cases: 52 distinct characters, enough of the 470 Poppins
-	 * covers to put the usage somewhere a threshold can sit either side of.
-	 */
-	const TEXT = '<p>ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz</p>';
+	use ProbeFont;
 
 	/**
-	 * The share of Poppins writeFonts() counts this document as drawing.
+	 * The share of Poppins writeFonts() counts the alphabet as drawing.
 	 */
 	const USAGE = 11;
-
-	/**
-	 * @param array $config What the document is given beyond the font, typically the two options
-	 *
-	 * @return array The font as it was written, and the document it was written into
-	 */
-	private function embed(array $config)
-	{
-		$mpdf = new Mpdf($config + [
-			'mode' => 'utf-8',
-			'fontDir' => [__DIR__ . '/../data/ttf'],
-			'fontdata' => ['probe' => ['R' => 'Poppins-Regular.ttf', 'useOTL' => 0]],
-			'default_font' => 'probe',
-		]);
-		$mpdf->WriteHTML(self::TEXT);
-		$pdf = $mpdf->Output('', 'S');
-		$mpdf->cleanup();
-
-		return [$mpdf->fonts['probe'], $pdf];
-	}
-
-	/**
-	 * A subset wears a six-letter tag on its name, which is what PDF/A and PDF/X ask of one and what
-	 * tells the two branches apart in the output.
-	 */
-	private function assertSubsetted($font, $pdf)
-	{
-		$this->assertTrue($font['asSubset']);
-		$this->assertStringContainsString('/BaseFont /MPDFAA+Poppins', $pdf);
-	}
-
-	private function assertEmbeddedWhole($font, $pdf)
-	{
-		$this->assertFalse($font['asSubset']);
-		$this->assertStringContainsString('/BaseFont /Poppins-Regular', $pdf);
-		$this->assertStringNotContainsString('MPDFAA+', $pdf);
-	}
 
 	/**
 	 * percentSubset ships at 100, which every font is at or under, so a document that says nothing
@@ -68,7 +27,7 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheShippedDefaultSubsets()
 	{
-		list($font, $pdf) = $this->embed([]);
+		list($font, $pdf) = $this->embed($this->alphabet());
 
 		$this->assertSubsetted($font, $pdf);
 	}
@@ -78,7 +37,7 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAFontUsedMoreThanPercentSubsetIsEmbeddedWhole()
 	{
-		list($font, $pdf) = $this->embed(['percentSubset' => self::USAGE - 1]);
+		list($font, $pdf) = $this->embed($this->alphabet(), ['percentSubset' => self::USAGE - 1]);
 
 		$this->assertEmbeddedWhole($font, $pdf);
 	}
@@ -90,7 +49,7 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAFontUsedExactlyPercentSubsetIsSubsetted()
 	{
-		list($font, $pdf) = $this->embed(['percentSubset' => self::USAGE]);
+		list($font, $pdf) = $this->embed($this->alphabet(), ['percentSubset' => self::USAGE]);
 
 		$this->assertSubsetted($font, $pdf);
 	}
@@ -101,7 +60,7 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAFontLargerThanMaxTtfFilesizeIsSubsettedWhateverItsUsage()
 	{
-		list($font, $pdf) = $this->embed(['percentSubset' => self::USAGE - 1, 'maxTTFFilesize' => 100]);
+		list($font, $pdf) = $this->embed($this->alphabet(), ['percentSubset' => self::USAGE - 1, 'maxTTFFilesize' => 100]);
 
 		$this->assertSubsetted($font, $pdf);
 	}
@@ -112,8 +71,8 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheWholeFontBranchEmbedsTheWholeFont()
 	{
-		list(, $whole) = $this->embed(['percentSubset' => self::USAGE - 1]);
-		list(, $subset) = $this->embed([]);
+		list(, $whole) = $this->embed($this->alphabet(), ['percentSubset' => self::USAGE - 1]);
+		list(, $subset) = $this->embed($this->alphabet());
 
 		$this->assertGreaterThan(strlen($subset) * 2, strlen($whole));
 	}

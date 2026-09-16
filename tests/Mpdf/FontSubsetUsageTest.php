@@ -2,6 +2,9 @@
 
 namespace Mpdf;
 
+use Mpdf\Fonts\BlobReader;
+use Mpdf\Fonts\FontReader;
+
 /**
  * What `Writer\FontWriter::writeFonts()` reads `percentSubset` against: the share of a font the
  * document drew. GravityPDF/mpdf#152 is that it read it against the 32-127 range `AddFont()` seeded
@@ -15,34 +18,10 @@ namespace Mpdf;
 class FontSubsetUsageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
-	/**
-	 * 52 distinct characters, 11% of Poppins - over the threshold the shorter documents are under.
-	 */
-	const ALPHABET = '<p>ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz</p>';
+	use ProbeFont;
 
 	/**
-	 * @param string $html   What the document draws
-	 * @param array  $config What it is given beyond the font
-	 *
-	 * @return array The font as it was written, and the document it was written into
-	 */
-	private function embed($html, array $config = [])
-	{
-		$mpdf = new Mpdf($config + [
-			'mode' => 'utf-8',
-			'fontDir' => [__DIR__ . '/../data/ttf'],
-			'fontdata' => ['probe' => ['R' => 'Poppins-Regular.ttf', 'useOTL' => 0]],
-			'default_font' => 'probe',
-		]);
-		$mpdf->WriteHTML($html);
-		$pdf = $mpdf->Output('', 'S');
-		$mpdf->cleanup();
-
-		return [$mpdf->fonts['probe'], $pdf];
-	}
-
-	/**
-	 * The font program the document embedded, which carries its own length and so can be cut out of
+	 * The font program the document embedded, which states its own length and so can be cut out of
 	 * the PDF without trusting the compressed bytes not to read as a keyword.
 	 *
 	 * @return string
@@ -52,9 +31,9 @@ class FontSubsetUsageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$found = preg_match_all('/<<\/Length (\d+)\s*\/Filter \/FlateDecode\s*\/Length1 \d+\s*>>\s*stream\r?\n/', $pdf, $matches, PREG_OFFSET_CAPTURE);
 		$this->assertSame(1, $found);
 
-		list($header, $length) = [$matches[0][0], $matches[1][0]];
+		$start = $matches[0][0][1] + strlen($matches[0][0][0]);
 
-		return gzuncompress(substr($pdf, $header[1] + strlen($header[0]), (int) $length[0]));
+		return gzuncompress(substr($pdf, $start, (int) $matches[1][0][0]));
 	}
 
 	/**
@@ -64,15 +43,21 @@ class FontSubsetUsageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function glyphCount($font)
 	{
-		list(, $tables) = unpack('n', substr($font, 4, 2));
+		$reader = new BlobReader($font);
+		$reader->skip(4); // sfntVersion
+		$numTables = $reader->readUInt16();
+		$reader->skip(6); // searchRange, entrySelector, rangeShift
 
-		for ($table = 0; $table < $tables; $table++) {
-			$record = substr($font, 12 + $table * 16, 16);
-			if (substr($record, 0, 4) === 'maxp') {
-				list(, $offset) = unpack('N', substr($record, 8, 4));
-				list(, $glyphs) = unpack('n', substr($font, $offset + 4, 2));
+		for ($table = 0; $table < $numTables; $table++) {
+			$tag = $reader->read(4);
+			$reader->skip(4); // checksum
+			$offset = FontReader::uint32($reader->read(4));
+			$reader->skip(4); // length
 
-				return $glyphs;
+			if ($tag === 'maxp') {
+				$reader->seek($offset + 4); // past the table's version
+
+				return $reader->readUInt16();
 			}
 		}
 
@@ -91,27 +76,16 @@ class FontSubsetUsageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * Two documents of the same font under the same threshold, answered differently: 2 characters of
-	 * Poppins is under 10% of it and 52 is over. Both read as 20% while the seed was the numerator.
+	 * Poppins is under 10% of it and 52 is over. Both read as 20% while the seed was the numerator,
+	 * and 10 is below the floor the seed put under the font, so neither could be subsetted at all.
 	 */
-	public function testUsageMovesWithWhatTheDocumentDrew()
+	public function testPercentSubsetDecidesOnWhatTheDocumentDrew()
 	{
-		list($sparse) = $this->embed('<p>Hi</p>', ['percentSubset' => 10]);
-		list($dense) = $this->embed(self::ALPHABET, ['percentSubset' => 10]);
+		list($sparse, $sparsePdf) = $this->embed('<p>Hi</p>', ['percentSubset' => 10]);
+		list($dense, $densePdf) = $this->embed($this->alphabet(), ['percentSubset' => 10]);
 
-		$this->assertTrue($sparse['asSubset']);
-		$this->assertFalse($dense['asSubset']);
-	}
-
-	/**
-	 * 10 is below the 20% floor the seed put under Poppins, so this document used to be embedded
-	 * whole however little of the font it drew.
-	 */
-	public function testPercentSubsetDecidesBelowTheOldFloor()
-	{
-		list($font, $pdf) = $this->embed('<p>Hello</p>', ['percentSubset' => 10]);
-
-		$this->assertTrue($font['asSubset']);
-		$this->assertStringContainsString('/BaseFont /MPDFAA+Poppins', $pdf);
+		$this->assertSubsetted($sparse, $sparsePdf);
+		$this->assertEmbeddedWhole($dense, $densePdf);
 	}
 
 	/**
