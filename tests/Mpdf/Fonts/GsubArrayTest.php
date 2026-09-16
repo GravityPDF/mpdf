@@ -55,8 +55,7 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A Type 5 rule has no backtrack or lookahead, yet where it belongs to an Arabic joining form the
-	 * parser hands the shaper the sequences of the chained rule it read last. Kept as it was by the
-	 * walk the two share; see #189.
+	 * parser hands the shaper the sequences of the chained rule it read last (#189).
 	 */
 	public function testAPlainContextRuleOfAnArabicFormCarriesTheLastChainedRulesSequences()
 	{

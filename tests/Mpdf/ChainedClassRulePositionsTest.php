@@ -40,6 +40,7 @@ class ChainedClassRulePositionsTest extends \Yoast\PHPUnitPolyfills\TestCases\Te
 		}
 
 		$mpdf = new TextRecordingMpdf([
+			'mode' => 'utf-8',
 			'fontDir' => [__DIR__ . '/../data/ttf'],
 			'fontdata' => ['notosansarabicgsub62positionssynthetic' => [
 				'R' => 'NotoSansArabic-GSUB62Positions-Synthetic.ttf',

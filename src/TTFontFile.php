@@ -2544,15 +2544,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 						for ($cscrule = 0; $cscrule < $cscs['ChainSubClassRuleCnt']; $cscrule++) {
 							$rule = $cscs['ChainSubClassRule'][$cscrule];
 
-							$backtrackGlyphs = [];
-							for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
-								$backtrackGlyphs[$gcl] = $this->classGlyphs($subtable['BacktrackClasses'], $rule['Backtrack'][$gcl]);
-							}
-
-							$lookaheadGlyphs = [];
-							for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
-								$lookaheadGlyphs[$gcl] = $this->classGlyphs($subtable['LookaheadClasses'], $rule['Lookahead'][$gcl]);
-							}
+							list($backtrackGlyphs, $lookaheadGlyphs) = $this->classSequences($subtable, $rule);
 
 							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 								$cscrule,
@@ -2632,6 +2624,25 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$subtable['BacktrackGlyphCount'] ? $subtable['CoverageBacktrackGlyphs'] : [],
 			$subtable['LookaheadGlyphCount'] ? $subtable['CoverageLookaheadGlyphs'] : [],
 		];
+	}
+
+	/**
+	 * @return array [backtrack, lookahead] of one class-based chained rule (Type 6 Format 2), one
+	 *               "|"-joined glyph string per position
+	 */
+	private function classSequences(array $subtable, array $rule)
+	{
+		$backtrack = [];
+		for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
+			$backtrack[$gcl] = $this->classGlyphs($subtable['BacktrackClasses'], $rule['Backtrack'][$gcl]);
+		}
+
+		$lookahead = [];
+		for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
+			$lookahead[$gcl] = $this->classGlyphs($subtable['LookaheadClasses'], $rule['Lookahead'][$gcl]);
+		}
+
+		return [$backtrack, $lookahead];
 	}
 
 	/**
