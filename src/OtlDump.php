@@ -936,21 +936,23 @@ class OtlDump extends TTFontFile
 	/**
 	 * Report the substitution rules of a list of GSUB lookups.
 	 *
-	 * @param array  $Lookup    The GSUB lookup list, with subtable offsets already made absolute
-	 * @param array  $lul       The lookups to report, as lookup index => the feature tag that asked
-	 *                          for it
-	 * @param string $scripttag The script the report is being written for
-	 * @param int    $level     1 for the report itself; 2 for a lookup nested inside a context rule,
-	 *                          whose part is returned to the rule rather than written
-	 * @param string $coverage  At level 2, the glyphs the nesting position can hold, so that only the
-	 *                          rules that could fire there are reported
-	 * @param string $exB       At level 2, the example text that precedes the nested position
-	 * @param string $exL       At level 2, the example text that follows it
+	 * @param array  $Lookup     The GSUB lookup list, with subtable offsets already made absolute
+	 * @param array  $lul        The lookups to report, as lookup index => the feature tag that asked
+	 *                           for it
+	 * @param string $scripttag  The script the report is being written for
+	 * @param int    $level      1 for the report itself; 2 for a lookup nested inside a context rule,
+	 *                           whose part is returned to the rule rather than written
+	 * @param string $coverage   At level 2, the glyphs the nesting position can hold, so that only the
+	 *                           rules that could fire there are reported. Empty where it names class 0
+	 * @param string $exB        At level 2, the example text that precedes the nested position
+	 * @param string $exL        At level 2, the example text that follows it
+	 * @param string $class0excl At level 2, every glyph in some class of the nesting rule's Class
+	 *                           Definition, so that an empty $coverage reads as class 0
 	 *
 	 * @return string At level 2, the rules; at level 1, the empty string, the report having been
 	 *                written as it was built
 	 */
-	function _getGSUBarray(array $Lookup, $lul, $scripttag, $level = 1, $coverage = '', $exB = '', $exL = '')
+	function _getGSUBarray(array $Lookup, $lul, $scripttag, $level = 1, $coverage = '', $exB = '', $exL = '', $class0excl = '')
 	{
 		// Process (3) LookupList for specific Script-LangSys
 		// Generate preg_replace
@@ -999,7 +1001,7 @@ class OtlDump extends TTFontFile
 					for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
 						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
 						$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-						if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
+						if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
 							continue;
 						}
 						$this->flushReport($html);
@@ -1030,7 +1032,7 @@ class OtlDump extends TTFontFile
 						for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
 							$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
 							$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'];
-							if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
+							if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
 								continue;
 							}
 							$this->flushReport($html);
@@ -1061,7 +1063,7 @@ class OtlDump extends TTFontFile
 							for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
 								$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
 								$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-								if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
+								if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
 									continue;
 								}
 								$this->flushReport($html);
@@ -1100,7 +1102,7 @@ class OtlDump extends TTFontFile
 								for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
 									$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
 									$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-									if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
+									if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
 										continue;
 									}
 									$this->flushReport($html);
@@ -1150,23 +1152,8 @@ class OtlDump extends TTFontFile
 													$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
 													$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
 
-													// GENERATE exampleI[<seqIndex] .... exampleI[>seqIndex]
-													$exB = '';
-													$exL = '';
-													if ($seqIndex > 0) {
-														$exB .= '<span class="inputother">';
-														for ($ip = 0; $ip < $seqIndex; $ip++) {
-															$exB .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-														}
-														$exB .= '</span>';
-													}
-													if (count($inputGlyphs) > ($seqIndex + 1)) {
-														$exL .= '<span class="inputother">';
-														for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-															$exL .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-														}
-														$exL .= '</span>';
-													}
+													list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
+
 													$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
 													$lul2 = [$lup => $tag];
@@ -1210,33 +1197,7 @@ class OtlDump extends TTFontFile
 														$lup = $rule['LookupListIndex'][$b];
 														$seqIndex = $rule['SequenceIndex'][$b];
 
-														// GENERATE exampleI[<seqIndex] .... exampleI[>seqIndex]
-														$exB = '';
-														$exL = '';
-
-														if ($seqIndex > 0) {
-															$exB .= '<span class="inputother">';
-															for ($ip = 0; $ip < $seqIndex; $ip++) {
-																if (!$inputGlyphs[$ip]) {
-																	$exB .= '[*]';
-																} else {
-																	$exB .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																}
-															}
-															$exB .= '</span>';
-														}
-
-														if (count($inputGlyphs) > ($seqIndex + 1)) {
-															$exL .= '<span class="inputother">';
-															for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																if (!$inputGlyphs[$ip]) {
-																	$exL .= '[*]';
-																} else {
-																	$exL .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																}
-															}
-															$exL .= '</span>';
-														}
+														list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
 
 														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1246,7 +1207,7 @@ class OtlDump extends TTFontFile
 														// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
 														// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
 														// to level 2 and only apply if first Replace glyph is in this list
-														$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL);
+														$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
 													}
 												}
 											}
@@ -1264,24 +1225,8 @@ class OtlDump extends TTFontFile
 												for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
 													$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
 													$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
-													// GENERATE exampleI[<seqIndex] .... exampleI[>seqIndex]
-													$exB = '';
-													$exL = '';
-													if ($seqIndex > 0) {
-														$exB .= '<span class="inputother">';
-														for ($ip = 0; $ip < $seqIndex; $ip++) {
-															$exB .= $exampleI[$ip] . '&#x200d;';
-														}
-														$exB .= '</span>';
-													}
 
-													if (count($inputGlyphs) > ($seqIndex + 1)) {
-														$exL .= '<span class="inputother">';
-														for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-															$exL .= $exampleI[$ip] . '&#x200d;';
-														}
-														$exL .= '</span>';
-													}
+													list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
 
 													$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1336,32 +1281,7 @@ class OtlDump extends TTFontFile
 														$lup = $rule['LookupListIndex'][$b];
 														$seqIndex = $rule['SequenceIndex'][$b];
 
-														// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-														$exB = '';
-														$exL = '';
-														if (count($exampleB)) {
-															$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-														}
-
-														if ($seqIndex > 0) {
-															$exB .= '<span class="inputother">';
-															for ($ip = 0; $ip < $seqIndex; $ip++) {
-																$exB .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-															}
-															$exB .= '</span>';
-														}
-
-														if (count($inputGlyphs) > ($seqIndex + 1)) {
-															$exL .= '<span class="inputother">';
-															for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																$exL .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-															}
-															$exL .= '</span>';
-														}
-
-														if (count($exampleL)) {
-															$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-														}
+														list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1428,40 +1348,7 @@ class OtlDump extends TTFontFile
 															$lup = $rule['LookupListIndex'][$b];
 															$seqIndex = $rule['SequenceIndex'][$b];
 
-															// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-															$exB = '';
-															$exL = '';
-															if (count($exampleB)) {
-																$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-															}
-
-															if ($seqIndex > 0) {
-																$exB .= '<span class="inputother">';
-																for ($ip = 0; $ip < $seqIndex; $ip++) {
-																	if (!$inputGlyphs[$ip]) {
-																		$exB .= '[*]';
-																	} else {
-																		$exB .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																	}
-																}
-																$exB .= '</span>';
-															}
-
-															if (count($inputGlyphs) > ($seqIndex + 1)) {
-																$exL .= '<span class="inputother">';
-																for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																	if (!$inputGlyphs[$ip]) {
-																		$exL .= '[*]';
-																	} else {
-																		$exL .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																	}
-																}
-																$exL .= '</span>';
-															}
-
-															if (count($exampleL)) {
-																$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-															}
+															list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 															$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1471,7 +1358,7 @@ class OtlDump extends TTFontFile
 															// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
 															// Pass $inputGlyphs[$seqIndex] e.g. 00636|00645|00656
 															// to level 2 and only apply if first Replace glyph is in this list
-															$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL);
+															$html .= $this->_getGSUBarray($Lookup, $lul2, $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
 														}
 													}
 												}
@@ -1503,32 +1390,7 @@ class OtlDump extends TTFontFile
 														$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
 														$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
 
-														// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-														$exB = '';
-														$exL = '';
-														if (count($exampleB)) {
-															$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-														}
-
-														if ($seqIndex > 0) {
-															$exB .= '<span class="inputother">';
-															for ($ip = 0; $ip < $seqIndex; $ip++) {
-																$exB .= $exampleI[$ip] . '&#x200d;';
-															}
-															$exB .= '</span>';
-														}
-
-														if (count($inputGlyphs) > ($seqIndex + 1)) {
-															$exL .= '<span class="inputother">';
-															for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																$exL .= $exampleI[$ip] . '&#x200d;';
-															}
-															$exL .= '</span>';
-														}
-
-														if (count($exampleL)) {
-															$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-														}
+														list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1550,7 +1412,7 @@ class OtlDump extends TTFontFile
 											foreach ($Lookup[$i]['Subtable'][$c]['subs'] as $luss) {
 												$inputGlyphs = $luss['Replace'];
 												$substitute = $luss['substitute'][0];
-												if ($level == 2 && strpos($coverage, $inputGlyphs[0]) === false) {
+												if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
 													continue;
 												}
 												$this->flushReport($html);
@@ -1909,21 +1771,23 @@ class OtlDump extends TTFontFile
 	/**
 	 * Report the positioning rules of a list of GPOS lookups.
 	 *
-	 * @param array  $Lookup    The GPOS lookup list, with subtable offsets already made absolute
-	 * @param array  $lul       The lookups to report, as lookup index => the feature tag that asked
-	 *                          for it
-	 * @param string $scripttag The script the report is being written for
-	 * @param int    $level     1 for the report itself; 2 for a lookup nested inside a context rule,
-	 *                          whose part is returned to the rule rather than written
-	 * @param string $lcoverage At level 2, the glyphs the nesting position can hold, so that only the
-	 *                          rules that could fire there are reported
-	 * @param string $exB       At level 2, the example text that precedes the nested position
-	 * @param string $exL       At level 2, the example text that follows it
+	 * @param array  $Lookup     The GPOS lookup list, with subtable offsets already made absolute
+	 * @param array  $lul        The lookups to report, as lookup index => the feature tag that asked
+	 *                           for it
+	 * @param string $scripttag  The script the report is being written for
+	 * @param int    $level      1 for the report itself; 2 for a lookup nested inside a context rule,
+	 *                           whose part is returned to the rule rather than written
+	 * @param string $lcoverage  At level 2, the glyphs the nesting position can hold, so that only the
+	 *                           rules that could fire there are reported. Empty where it names class 0
+	 * @param string $exB        At level 2, the example text that precedes the nested position
+	 * @param string $exL        At level 2, the example text that follows it
+	 * @param string $class0excl At level 2, every glyph in some class of the nesting rule's Class
+	 *                           Definition, so that an empty $lcoverage reads as class 0
 	 *
 	 * @return string At level 2, the rules; at level 1, the empty string, the report having been
 	 *                written as it was built
 	 */
-	function _getGPOSarray(array $Lookup, $lul, $scripttag, $level = 1, $lcoverage = '', $exB = '', $exL = '')
+	function _getGPOSarray(array $Lookup, $lul, $scripttag, $level = 1, $lcoverage = '', $exB = '', $exL = '', $class0excl = '')
 	{
 		// Process (3) LookupList for specific Script-LangSys
 		// Level 1 writes the report, level 2 returns its part of it to the rule that nested the
@@ -1980,7 +1844,7 @@ class OtlDump extends TTFontFile
 						$this->reader->seek($Coverage);
 						$glyphs = $this->_getCoverage(); // Array of Hex Glyphs
 						for ($g = 0; $g < count($glyphs); $g++) {
-							if ($level == 2 && strpos($lcoverage, $glyphs[$g]) === false) {
+							if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $glyphs[$g])) {
 								continue;
 							}
 
@@ -2031,7 +1895,7 @@ class OtlDump extends TTFontFile
 							$glyphs = $this->_getCoverage(); // Array of Hex Glyphs
 
 							for ($g = 0; $g < count($glyphs); $g++) {
-								if ($level == 2 && strpos($lcoverage, $glyphs[$g]) === false) {
+								if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $glyphs[$g])) {
 									continue;
 								}
 								$Value = $Values[$g];
@@ -2087,7 +1951,7 @@ class OtlDump extends TTFontFile
 							$this->reader->seek($Coverage);
 							$glyphs = $this->_getCoverage(); // Array of Hex Glyphs
 							for ($p = 0; $p < $PairSetCount; $p++) {
-								if ($level == 2 && strpos($lcoverage, $glyphs[$p]) === false) {
+								if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $glyphs[$p])) {
 									continue;
 								}
 								$this->reader->seek($PairSetOffset[$p]);
@@ -2188,7 +2052,7 @@ class OtlDump extends TTFontFile
 
 										for ($c1 = 0; $c1 < count($Class1[$i]); $c1++) {
 											$FirstGlyph = $Class1[$i][$c1];
-											if ($level == 2 && strpos($lcoverage, $FirstGlyph) === false) {
+											if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $FirstGlyph)) {
 												continue;
 											}
 
@@ -2313,7 +2177,7 @@ class OtlDump extends TTFontFile
 								$firstMark = '';
 								$html .= '<div class="glyphs">Marks: ';
 								for ($i = 0; $i < count($MarkGlyphs); $i++) {
-									if ($level == 2 && strpos($lcoverage, $MarkGlyphs[$i]) === false) {
+									if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $MarkGlyphs[$i])) {
 										continue;
 									} else {
 										if (!$firstMark) {
@@ -2360,7 +2224,7 @@ class OtlDump extends TTFontFile
 									$html .= '<div class="glyphs">Marks: <span class="unchanged">';
 									$MarkRecord = [];
 									for ($i = 0; $i < count($MarkGlyphs); $i++) {
-										if ($level == 2 && strpos($lcoverage, $MarkGlyphs[$i]) === false) {
+										if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $MarkGlyphs[$i])) {
 											continue;
 										} else {
 											if (!$firstMark) {
@@ -2430,7 +2294,7 @@ class OtlDump extends TTFontFile
 										$firstMark = '';
 										$html .= '<div class="glyphs">Marks: <span class="unchanged">';
 										for ($i = 0; $i < count($Mark1Glyphs); $i++) {
-											if ($level == 2 && strpos($lcoverage, $Mark1Glyphs[$i]) === false) {
+											if ($level == 2 && !$this->positionHolds($lcoverage, $class0excl, $Mark1Glyphs[$i])) {
 												continue;
 											} else {
 												if (!$firstMark) {
@@ -2864,6 +2728,63 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
+	 * The example a nested lookup's own output is rendered between: everything the rule matches
+	 * before the position it is handed, and everything it matches after it.
+	 *
+	 * The zero-width joiner separates a fragment from that output, so it trails every fragment
+	 * before the position and leads every fragment after it.
+	 *
+	 * @param array $exampleB One fragment per backtrack position, as reportContext() returned them;
+	 *                        likewise $exampleI for the input sequence and $exampleL for lookahead
+	 * @param int   $seqIndex The input position the nested lookup is handed
+	 *
+	 * @return array [$exB, $exL]
+	 */
+	private function contextExample(array $exampleB, array $exampleI, array $exampleL, $seqIndex)
+	{
+		$exB = '';
+		$exL = '';
+
+		if (count($exampleB)) {
+			$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
+		}
+
+		if ($seqIndex > 0) {
+			$exB .= '<span class="inputother">' . implode('&#x200d;', array_slice($exampleI, 0, $seqIndex)) . '&#x200d;</span>';
+		}
+
+		if (count($exampleI) > ($seqIndex + 1)) {
+			$exL .= '<span class="inputother">&#x200d;' . implode('&#x200d;', array_slice($exampleI, $seqIndex + 1)) . '</span>';
+		}
+
+		if (count($exampleL)) {
+			$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
+		}
+
+		return [$exB, $exL];
+	}
+
+	/**
+	 * Whether the position a nested lookup was handed can hold the glyph one of its rules reads.
+	 *
+	 * A position naming class 0 holds every glyph its Class Definition leaves unnamed, and the dump
+	 * has no list of those - _getClasses() only walks the pairs the table names. So the test there is
+	 * against the complement of $class0excl, the same set reportContext() renders the position as.
+	 *
+	 * @param string $coverage   The glyphs that position holds, empty where it names class 0
+	 * @param string $class0excl Every glyph in some class of that sequence's Class Definition, or
+	 *                           empty where the rule names glyphs rather than classes
+	 */
+	private function positionHolds($coverage, $class0excl, $glyph)
+	{
+		if ($coverage === '' && $class0excl !== '') {
+			return strpos($class0excl, $glyph) === false;
+		}
+
+		return strpos($coverage, $glyph) !== false;
+	}
+
+	/**
 	 * One context rule: the sequences it matches, and every lookup it hands a position within them.
 	 *
 	 * @param array  $PosLookupRecord Each a SequenceIndex and a LookupListIndex, already read: where
@@ -2881,40 +2802,11 @@ class OtlDump extends TTFontFile
 		foreach ($PosLookupRecord as $record) {
 			$seqIndex = $record['SequenceIndex'];
 
-			// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-			$exB = '';
-			$exL = '';
-			if (count($exampleB)) {
-				$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-			}
-
-			if ($seqIndex > 0) {
-				$exB .= '<span class="inputother">';
-				for ($ip = 0; $ip < $seqIndex; $ip++) {
-					$exB .= $exampleI[$ip] . '&#x200d;';
-				}
-				$exB .= '</span>';
-			}
-
-			if (count($inputGlyphs) > ($seqIndex + 1)) {
-				$exL .= '<span class="inputother">';
-				for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-					$exL .= '&#x200d;' . $exampleI[$ip];
-				}
-				$exL .= '</span>';
-			}
-
-			if (count($exampleL)) {
-				$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-			}
+			list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 			$this->report .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
-			// Only report the nested lookup where the glyph it replaces is one this position can hold,
-			// which is what level 2 filters $inputGlyphs[$seqIndex] on. A position naming class 0 holds
-			// every glyph in none of the named classes, which is a set the dump does not have, so it
-			// filters everything out and the nested lookup is named without its rules.
-			$this->_getGPOSarray($Lookup, [$record['LookupListIndex'] => $tag], $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL);
+			$this->_getGPOSarray($Lookup, [$record['LookupListIndex'] => $tag], $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
 		}
 	}
 

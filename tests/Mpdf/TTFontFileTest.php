@@ -12,18 +12,19 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	protected $ttf;
 
 	/**
+	 * @var FontCache
+	 */
+	protected $fontCache;
+
+	/**
 	 * @throws MpdfException
 	 */
 	public function set_up()
 	{
 		parent::set_up();
 
-		$this->ttf = new TTFontFile(
-			new FontCache(
-				new Cache(__DIR__ . '/tmp/mpdf/ttfontdata')
-			),
-			'win'
-		);
+		$this->fontCache = new FontCache(new Cache(__DIR__ . '/tmp/mpdf/ttfontdata'));
+		$this->ttf = new TTFontFile($this->fontCache, 'win');
 	}
 
 	/**
@@ -121,6 +122,26 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * \Mpdf\Otl looks one glyph up in the kashida `finals` string, so a final form of several glyphs
+	 * belongs in it as the base alone. Held whole, an entry put its marks in as final forms of their
+	 * own and hid its first glyph from the exclusion list beside it, which is tested the same way:
+	 * U+06CC's form here begins with U+FEAE, one of the fifteen, and all four codes went in.
+	 *
+	 * @see \Mpdf\KashidaFinalFormTest, for what the shaper then made of them
+	 */
+	public function testAFinalFormOfMoreThanOneGlyphContributesOnlyTheBaseItIsDrawnOn()
+	{
+		$fontkey = uniqid('', true);
+		$this->ttf->getMetrics(__DIR__ . '/../data/ttf/NotoSansArabic-MultipleFinal-Subset.ttf', $fontkey, 0, false, false, 0xFF);
+
+		$gsub = $this->fontCache->jsonLoad($fontkey . '.GSUB.arab.DFLT.json');
+
+		$this->assertSame('0E001 0E005', $gsub['rtlSUB']['00628'][1]);
+		$this->assertSame('0FEAE 0E006', $gsub['rtlSUB']['006CC'][1]);
+		$this->assertSame('0E001 ', $gsub['finals']);
+	}
+
+	/**
 	 * The parser's half of the modulo the spec adds a Single Substitution Format 1 delta by. Adding
 	 * without it lands outside glyphToChar, and unicode_hex() made U+0000 of the null that came back,
 	 * so the rule named the null character. @see DeltaGlyphIdTest for the shaper's half and for the
@@ -193,28 +214,33 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Parse a font, collecting every diagnostic PHP raised doing it. Deprecations are not converted to
-	 * exceptions, so a handler is what sees them.
+	 * The two bytes at the head of the width table record how many characters it covers, and the filter
+	 * that fills the table admits characters up to 196,607 - three times what the field can hold. chr()
+	 * raises PHP 8's out-of-range deprecation on the overflow, which is fatal to anyone promoting
+	 * warnings, and writes a header that reads back as a number the font never had.
 	 *
-	 * @return string[]
+	 * The font is 256 blank glyphs cycled through a format 12 cmap over U+0020-U+101EF, which is 65,999
+	 * characters once U+FFFF is dropped - enough to reach past the field, and 7 KB of doing it. Adobe
+	 * Blank, where this was found, counts 194,521.
 	 */
-	private function diagnosticsWhileParsing($file)
+	public function testTheCharacterCountHeaderStopsAtWhatTwoBytesHold()
 	{
-		$raised = [];
+		$raised = $this->diagnosticsWhileParsing('Blank-WideCmap-Synthetic.ttf', 0);
 
-		set_error_handler(function ($number, $message, $path, $line) use (&$raised) {
-			$raised[] = sprintf('%s in %s:%d', $message, basename($path), $line);
+		$this->assertSame([], $raised);
+		$this->assertSame(0xFFFF, $this->characterCount($this->ttf->charWidths));
+	}
 
-			return true;
-		});
+	/**
+	 * Under the limit the header is still the font's own count. Writer\FontWriter reads these two bytes
+	 * back and divides by them, which is why they cannot simply be left zeroed.
+	 */
+	public function testTheCharacterCountHeaderIsTheCountWhereItFits()
+	{
+		$raised = $this->diagnosticsWhileParsing('Poppins-Regular.ttf', 0);
 
-		try {
-			$this->ttf->getMetrics(__DIR__ . '/../data/ttf/' . $file, uniqid('', true), 0, false, false, 0xFF);
-		} finally {
-			restore_error_handler();
-		}
-
-		return $raised;
+		$this->assertSame([], $raised);
+		$this->assertSame(470, $this->characterCount($this->ttf->charWidths));
 	}
 
 	/**
@@ -258,12 +284,45 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Parse a font, collecting every diagnostic PHP raised doing it. Deprecations are not converted to
+	 * exceptions, so a handler is what sees them.
+	 *
+	 * @return string[]
+	 */
+	private function diagnosticsWhileParsing($file, $useOTL = 0xFF)
+	{
+		$raised = [];
+
+		set_error_handler(function ($number, $message, $path, $line) use (&$raised) {
+			$raised[] = sprintf('%s in %s:%d', $message, basename($path), $line);
+
+			return true;
+		});
+
+		try {
+			$this->ttf->getMetrics(__DIR__ . '/../data/ttf/' . $file, uniqid('', true), 0, false, false, $useOTL);
+		} finally {
+			restore_error_handler();
+		}
+
+		return $raised;
+	}
+
+	/**
+	 * @return int The number of characters the width table says it covers
+	 */
+	private function characterCount($charWidths)
+	{
+		return (ord($charWidths[0]) << 8) + ord($charWidths[1]);
+	}
+
+	/**
 	 * Everything the parser extracted. The reader it extracted them with is not public, so it does
 	 * not appear here and its position does not have to be excluded.
 	 */
 	private function metrics($file, $debug)
 	{
-		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/tmp/mpdf/ttfontdata')), 'win');
+		$ttf = new TTFontFile($this->fontCache, 'win');
 		$ttf->getMetrics(__DIR__ . '/../data/ttf/' . $file, uniqid('', true), 0, $debug, false, 0xFF);
 
 		$vars = get_object_vars($ttf);
