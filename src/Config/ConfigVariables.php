@@ -66,8 +66,7 @@ class ConfigVariables
 			// 0 - 100' => percent characters
 			// i.e. if ==40, mPDF will embed whole font if >40% characters in that font
 			// or embed subset if <=40% characters
-			// 100 (the default) always subsets
-			// 0 embeds whole, bar a font so little drawn with that its share rounds to nothing
+			// 100, the default, always subsets
 			// This value is overridden if you set new mPDF('s')
 			// and/or Can set at runtime
 			'percentSubset' => 100,

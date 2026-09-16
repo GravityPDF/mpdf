@@ -8,15 +8,16 @@ namespace Mpdf;
  * nothing: `Writer\FontWriter::writeFonts()` worked out how much of the font was used and how big it
  * was, then subsetted whatever the answer.
  *
- * Poppins is 154KB and this document draws 20% of it, so every threshold below is one the font
- * passes or fails outright, and 20 itself is the boundary the comparison sits on.
+ * Poppins is 154KB and this document reads as drawing 20% of it, so every threshold below is one the
+ * font passes or fails outright, and 20 itself is the boundary the comparison sits on.
  */
 class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
-	 * The share of Poppins `<p>Hello</p>` draws, as writeFonts() counts it: the 96 characters mPDF
-	 * asks every font for, over the 470 the font covers.
+	 * The share of Poppins writeFonts() counts this document as drawing: the 96 characters mPDF
+	 * registers for every font, over the 470 Poppins covers. It is the seed and nothing else - no
+	 * document of Latin text moves it, which is GravityPDF/mpdf#152 and not what is under test here.
 	 */
 	const USAGE = 20;
 
@@ -33,11 +34,28 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontdata' => ['probe' => ['R' => 'Poppins-Regular.ttf', 'useOTL' => 0]],
 			'default_font' => 'probe',
 		]);
-		$mpdf->SetCompression(false);
 		$mpdf->WriteHTML('<p>Hello</p>');
 		$pdf = $mpdf->Output('', 'S');
+		$mpdf->cleanup();
 
 		return [$mpdf->fonts['probe'], $pdf];
+	}
+
+	/**
+	 * A subset wears a six-letter tag on its name, which is what PDF/A and PDF/X ask of one and what
+	 * tells the two branches apart in the output.
+	 */
+	private function assertSubsetted($font, $pdf)
+	{
+		$this->assertTrue($font['asSubset']);
+		$this->assertStringContainsString('/BaseFont /MPDFAA+Poppins', $pdf);
+	}
+
+	private function assertEmbeddedWhole($font, $pdf)
+	{
+		$this->assertFalse($font['asSubset']);
+		$this->assertStringContainsString('/BaseFont /Poppins-Regular', $pdf);
+		$this->assertStringNotContainsString('MPDFAA+', $pdf);
 	}
 
 	/**
@@ -48,21 +66,17 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($font, $pdf) = $this->embed([]);
 
-		$this->assertTrue($font['asSubset']);
-		$this->assertStringContainsString('/BaseFont /MPDFAA+Poppins', $pdf);
+		$this->assertSubsetted($font, $pdf);
 	}
 
 	/**
-	 * A small font the document leans on harder than percentSubset asks is cheaper carried whole, and
-	 * is named without the six-letter tag a subset is required to wear.
+	 * A small font the document leans on harder than percentSubset asks is cheaper carried whole.
 	 */
 	public function testAFontUsedMoreThanPercentSubsetIsEmbeddedWhole()
 	{
 		list($font, $pdf) = $this->embed(['percentSubset' => self::USAGE - 1]);
 
-		$this->assertFalse($font['asSubset']);
-		$this->assertStringContainsString('/BaseFont /Poppins-Regular', $pdf);
-		$this->assertStringNotContainsString('MPDFAA+', $pdf);
+		$this->assertEmbeddedWhole($font, $pdf);
 	}
 
 	/**
@@ -74,8 +88,7 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($font, $pdf) = $this->embed(['percentSubset' => self::USAGE]);
 
-		$this->assertTrue($font['asSubset']);
-		$this->assertStringContainsString('/BaseFont /MPDFAA+Poppins', $pdf);
+		$this->assertSubsetted($font, $pdf);
 	}
 
 	/**
@@ -86,15 +99,14 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($font, $pdf) = $this->embed(['percentSubset' => self::USAGE - 1, 'maxTTFFilesize' => 100]);
 
-		$this->assertTrue($font['asSubset']);
-		$this->assertStringContainsString('/BaseFont /MPDFAA+Poppins', $pdf);
+		$this->assertSubsetted($font, $pdf);
 	}
 
 	/**
-	 * What the options are worth: the whole font carries every glyph Poppins has, the subset carries
-	 * the handful this document asked for.
+	 * The name says which branch ran; this says the branch carried the font program with it, rather
+	 * than writing a whole font's name over a subset's bytes.
 	 */
-	public function testTheTwoOptionsChangeWhatTheDocumentWeighs()
+	public function testTheWholeFontBranchEmbedsTheWholeFont()
 	{
 		list(, $whole) = $this->embed(['percentSubset' => self::USAGE - 1]);
 		list(, $subset) = $this->embed([]);

@@ -70,11 +70,9 @@ class FontWriter
 							// the font covers it or not, so on a font of fewer characters than that the
 							// count outruns nChars and the share has to be held to the 100 it means
 							$usage = min(100, (int) (count($f['subset']) * 100 / $nChars));
-							$fsize = $info['length1'];
-							// Carrying a font whole only pays when it is small enough and the document
-							// draws with more of it than percentSubset. At most, not less than, so that
-							// the default of 100 subsets even a font every glyph of which was drawn
-							$asSubset = $fsize > ($this->mpdf->maxTTFFilesize * 1024) || $usage <= $this->mpdf->percentSubset;
+							// At most percentSubset, not less than, so that the default of 100 subsets
+							// even a font every glyph of which was drawn
+							$asSubset = $info['length1'] > ($this->mpdf->maxTTFFilesize * 1024) || $usage <= $this->mpdf->percentSubset;
 						}
 						$this->mpdf->fonts[$k]['asSubset'] = $asSubset;
 						break;
