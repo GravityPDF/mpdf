@@ -1698,16 +1698,21 @@ class TTFontFile
 					$glyphs = $this->_getCoverage(false);
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
-						$substitute = [];
 						$replace[] = unicode_hex($this->glyphToChar[$glyphs[$g]][0]);
 						// Flag = Ignore
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
 							continue;
 						}
 						if (isset($Lookup[$i]['Subtable'][$c]['DeltaGlyphID'])) { // Format 1
-							$substitute[] = unicode_hex($this->glyphToChar[($glyphs[$g] + $Lookup[$i]['Subtable'][$c]['DeltaGlyphID'])][0]);
+							// The modulo is how a font names a glyph below the one it covers: Cactus
+							// Classical Serif reaches its extended em dash with -7504 from glyph 504
+							$gid = ($glyphs[$g] + $Lookup[$i]['Subtable'][$c]['DeltaGlyphID']) & 0xFFFF;
 						} else { // Format 2
-							$substitute[] = unicode_hex($this->glyphToChar[($Lookup[$i]['Subtable'][$c]['Glyphs'][$g])][0]);
+							$gid = $Lookup[$i]['Subtable'][$c]['Glyphs'][$g];
+						}
+						$substitute = $this->substituteGlyph($gid);
+						if ($substitute === null) {
+							continue;
 						}
 						$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute];
 					}
@@ -1717,7 +1722,6 @@ class TTFontFile
 					$glyphs = $this->_getCoverage();
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
-						$substitute = [];
 						$replace[] = $glyphs[$g];
 						// Flag = Ignore
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
@@ -1738,7 +1742,6 @@ class TTFontFile
 					$glyphs = $this->_getCoverage();
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
-						$substitute = [];
 						$replace[] = $glyphs[$g];
 						// Flag = Ignore
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
@@ -1758,7 +1761,6 @@ class TTFontFile
 					for ($s = 0; $s < $LigSetCount; $s++) {
 						for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['LigCount']; $g++) {
 							$replace = [];
-							$substitute = [];
 							$replace[] = $glyphs[$s];
 							// Flag = Ignore
 							if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
@@ -1774,10 +1776,10 @@ class TTFontFile
 								$replace[] = $rpl;
 							}
 							$gid = $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['LigGlyph'];
-							if (!isset($this->glyphToChar[$gid][0])) {
+							$substitute = $this->substituteGlyph($gid);
+							if ($substitute === null) {
 								continue;
 							}
-							$substitute[] = unicode_hex($this->glyphToChar[$gid][0]);
 							$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute, 'CompCount' => $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['CompCount']];
 						}
 					}
@@ -1977,7 +1979,6 @@ class TTFontFile
 					$Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'] = [implode("|", $glyphs)];
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
-						$substitute = [];
 						$replace[] = $glyphs[$g];
 						// Flag = Ignore
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
@@ -1986,11 +1987,10 @@ class TTFontFile
 						if (!isset($Lookup[$i]['Subtable'][$c]['SubstituteGlyphID'][$g])) {
 							continue;
 						} // The substitutes must run parallel to the Coverage table; either an error in the font, or something has gone wrong
-						$gid = $Lookup[$i]['Subtable'][$c]['SubstituteGlyphID'][$g];
-						if (!isset($this->glyphToChar[$gid][0])) {
+						$substitute = $this->substituteGlyph($Lookup[$i]['Subtable'][$c]['SubstituteGlyphID'][$g]);
+						if ($substitute === null) {
 							continue;
 						}
-						$substitute[] = unicode_hex($this->glyphToChar[$gid][0]);
 						$Lookup[$i]['Subtable'][$c]['subs'][] = ['Replace' => $replace, 'substitute' => $substitute];
 					}
 					for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']; $b++) {
@@ -2431,7 +2431,11 @@ class TTFontFile
 
 								$inputGlyphs = [];
 
-								$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass];
+								if (isset($Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass])) {
+									$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass];
+								} else {
+									$inputGlyphs[0] = '';
+								}
 								if ($rule['InputGlyphCount'] > 1) {
 									//  NB starts at 1
 									for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
@@ -2871,8 +2875,7 @@ class TTFontFile
 		// Flag & 0xFF?? = MarkAttachmentType
 		if ($flag & 0xFF00) {
 			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			// $this->MarkAttachmentType is already adjusted for this i.e. contains all Marks except those in the MarkAttachmentClassDef table
-			if (strpos($this->MarkAttachmentType[($flag >> 8)], $glyph)) {
+			if (strpos($this->marksOutsideAttachmentClass($flag >> 8), $glyph)) {
 				$ignore = true;
 			}
 		}
@@ -2937,6 +2940,23 @@ class TTFontFile
 	}
 
 	/**
+	 * The marks a lookup naming a mark attachment class skips: every mark outside that class, which
+	 * is what _getGDEFtables() keeps MarkAttachmentType as.
+	 *
+	 * A font may name a class GDEF does not define - Carlito and NATS set the flag without a
+	 * MarkAttachClassDef table at all - and then no mark is in the class, so the lookup skips every
+	 * one of them.
+	 *
+	 * @param int $class The mark attachment class the lookup's flags name
+	 *
+	 * @return string Its glyphs, space-prefixed and "|"-separated
+	 */
+	private function marksOutsideAttachmentClass($class)
+	{
+		return isset($this->MarkAttachmentType[$class]) ? $this->MarkAttachmentType[$class] : $this->GlyphClassMarks;
+	}
+
+	/**
 	 * The glyphs a lookup's flags say to skip, as a pattern that matches a run of them.
 	 *
 	 * Skipping is done in the match rather than by walking the text, so every rule the lookup states
@@ -2959,10 +2979,8 @@ class TTFontFile
 		// Flag & 0xFF?? = MarkAttachmentType
 		if ($flag & 0xFF00) {
 			// "a lookup must ignore any mark glyphs that are not in the specified mark attachment class"
-			// $this->MarkAttachmentType is already adjusted for this i.e. contains all Marks except those in the MarkAttachmentClassDef table
-			$MarkAttachmentType = $flag >> 8;
 			$ignoreflag = $flag;
-			$str = $this->MarkAttachmentType[$MarkAttachmentType];
+			$str = $this->marksOutsideAttachmentClass($flag >> 8);
 		}
 
 		// Flag & 0x0010 = UseMarkFilteringSet
@@ -3434,9 +3452,11 @@ class TTFontFile
 				$byFirstLookup = [];
 				foreach ($featureIndices as $featureIndex) {
 					$feature = $features[$featureIndex];
-					// A feature that runs no lookups has nothing to be ordered by and nothing to do.
-					// The spec permits one; no font in the 183 installed carries one, which is why the
-					// GSUB reader went without this guard for years and the GPOS one grew it.
+					// A feature that runs no lookups has nothing to be ordered by and nothing to do. The
+					// spec permits one and fonts in the wild carry one - Sedan SC's 'smcp' lists no
+					// lookups at all - so dropping it is the whole of what is right to do with it: keying
+					// the row by the lookup it has not got put it under '', which ksort() then ordered
+					// ahead of every real lookup index.
 					if (isset($feature['LookupListIndex'][0])) {
 						$byFirstLookup[$feature['LookupListIndex'][0]] = $feature;
 					}
@@ -3605,6 +3625,26 @@ class TTFontFile
 	}
 
 	/**
+	 * One replacement glyph, as the character the shaper names it by.
+	 *
+	 * Every glyph of a font read with useOTL has a character: the ones the cmap does not reach are
+	 * mapped into the Private Use Area. So the only glyph id without one is a glyph the font has not
+	 * got, which Single, Ligature, Alternate and Reverse Chaining Substitution can all name.
+	 *
+	 * @param int $gid The glyph the rule replaces its match with
+	 *
+	 * @return array|null It as hex in a list of one, or null to record nothing for this one
+	 */
+	private function substituteGlyph($gid)
+	{
+		if (!isset($this->glyphToChar[$gid][0])) {
+			return null;
+		}
+
+		return [unicode_hex($this->glyphToChar[$gid][0])];
+	}
+
+	/**
 	 * What an Alternate Substitution puts in place of the glyph it covers.
 	 *
 	 * The parser takes the first alternate and stops: mPDF has no way for a document to ask for the
@@ -3616,13 +3656,7 @@ class TTFontFile
 	 */
 	protected function alternateSubstitutes(array $alternateSet)
 	{
-		$gid = $alternateSet['SubstituteGlyphID'][0];
-
-		if (!isset($this->glyphToChar[$gid][0])) {
-			return null;
-		}
-
-		return [unicode_hex($this->glyphToChar[$gid][0])];
+		return $this->substituteGlyph($alternateSet['SubstituteGlyphID'][0]);
 	}
 
 	/**
