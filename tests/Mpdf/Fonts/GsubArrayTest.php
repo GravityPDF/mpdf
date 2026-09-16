@@ -54,10 +54,10 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A Type 5 rule has no backtrack or lookahead, yet where it belongs to an Arabic joining form the
-	 * parser hands the shaper the sequences of the chained rule it read last (#189).
+	 * A Type 5 rule has no backtrack or lookahead, so where it belongs to an Arabic joining form the
+	 * shaper gets none, not those of the chained rule read before it (#189).
 	 */
-	public function testAPlainContextRuleOfAnArabicFormCarriesTheLastChainedRulesSequences()
+	public function testAPlainContextRuleOfAnArabicFormHasNoBacktrackOrLookahead()
 	{
 		$parser = $this->withGdef(new TTFontFile($this->cache(), 'win'));
 
@@ -78,7 +78,7 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$volt = $parser->_getGSUBarray($Lookup, [0 => 'init', 2 => 'init'], 'arab');
 
-		$this->assertSame(['match' => '00041', 'replace' => '00044', 'tag' => 'init', 'prel' => ['00043'], 'postl' => [], 'ignore' => '()'], end($volt));
+		$this->assertSame(['match' => '00041', 'replace' => '00044', 'tag' => 'init', 'prel' => [], 'postl' => [], 'ignore' => '()'], end($volt));
 	}
 
 	private function chainedClassRules()
