@@ -2509,15 +2509,12 @@ class TTFontFile implements Fonts\FontSourceInterface
 							$inputGlyphs[0] = $firstInputGlyph;
 							ksort($inputGlyphs);
 
-							$backtrackGlyphs = $rule['BacktrackGlyphCount'] ? $rule['BacktrackGlyphs'] : [];
-							$lookaheadGlyphs = $rule['LookaheadGlyphCount'] ? $rule['LookaheadGlyphs'] : [];
-
 							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 								$rctr,
 								$rule['SubstLookupRecord'],
-								$backtrackGlyphs,
+								$rule['BacktrackGlyphCount'] ? $rule['BacktrackGlyphs'] : [],
 								$inputGlyphs,
-								$lookaheadGlyphs,
+								$rule['LookaheadGlyphCount'] ? $rule['LookaheadGlyphs'] : [],
 								count($inputGlyphs)
 							)));
 						}
