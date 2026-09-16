@@ -2108,11 +2108,13 @@ class TTFontFile
 					// For kashida, need to determine all final forms except ones already identified by kashida priority rules (see \Mpdf\Otl)
 					foreach ($rtl as $base => $variants) {
 						if (isset($variants[1])) { // i.e. final form
-							if (strpos('0FE8E 0FE94 0FEA2 0FEAA 0FEAE 0FEC2 0FEDA 0FEDE 0FB93 0FECA 0FED2 0FED6 0FEEE 0FEF0 0FEF2', $variants[1]) === false) { // not already included
-								// This version does not exclude RA (0631) FEAE; Ya (064A)  FEF2; Alef Maqsurah (0649) FEF0 which
-								// are selected in priority if connected to a medial Bah
-								//if (strpos('0FE8E 0FE94 0FEA2 0FEAA 0FEC2 0FEDA 0FEDE 0FB93 0FECA 0FED2 0FED6 0FEEE', $variants[1])===false) {	// not already included
-								$finals .= $variants[1] . ' ';
+							// A form of several glyphs is a base and the marks drawn on it, and the kashida
+							// point belongs to the base. Otl matches one glyph against this string, so every
+							// other glyph of an entry is a substring anyone can match
+							list($final) = explode(' ', $variants[1]);
+
+							if (strpos('0FE8E 0FE94 0FEA2 0FEAA 0FEAE 0FEC2 0FEDA 0FEDE 0FB93 0FECA 0FED2 0FED6 0FEEE 0FEF0 0FEF2', $final) === false) { // not already included
+								$finals .= $final . ' ';
 							}
 						}
 					}
