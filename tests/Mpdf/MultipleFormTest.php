@@ -59,6 +59,29 @@ class MultipleFormTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The two glyphs arrive from rtlSUB as one space-separated string, and a reader written for one
+	 * glyph gives itself away on the space: hexdec() deprecates the character it ignored. PHPUnit
+	 * converts a warning into a failure but lets a deprecation through, so nothing in the suite saw
+	 * GravityPDF/mpdf#114 - the handler is what sees it.
+	 */
+	public function testDrawingAFormOfSeveralGlyphsRaisesNoDiagnostic()
+	{
+		$raised = [];
+		set_error_handler(static function ($errno, $message) use (&$raised) {
+			$raised[] = $message;
+			return true;
+		});
+
+		try {
+			$this->render([self::FARSI_YEH, self::FARSI_YEH])->Output('', 'S');
+		} finally {
+			restore_error_handler();
+		}
+
+		$this->assertSame([], $raised);
+	}
+
+	/**
 	 * Draw the characters in Noto Sans Arabic cut down to the one letter, whose initial, medial and
 	 * final forms are written as Multiple Substitutions: the first two name two glyphs and the last
 	 * names one, which is the shape the Nastaliq faces have and the corpus otherwise has nowhere.

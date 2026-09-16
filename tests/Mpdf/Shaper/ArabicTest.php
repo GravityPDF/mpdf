@@ -161,6 +161,10 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * A form the font states as several glyphs leaves its base where the character stood and is handed
 	 * back whole, because the whole of it is what replaces the character. @see \Mpdf\MultipleFormTest
+	 *
+	 * `uni` is asserted beside `hex` because nothing downstream shows it wrong: `shapeArabic()`
+	 * substitutes over every position handed back, writing `uni` again from the same glyph.
+	 * GravityPDF/mpdf#114.
 	 */
 	public function testAFormOfSeveralGlyphsIsHandedBackForTheCallerToSubstitute()
 	{
@@ -170,6 +174,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame([0 => [0xE01D, 0xFBB3]], $multiple);
 		$this->assertSame('0E01D', $info[0]['hex']);
+		$this->assertSame(0xE01D, $info[0]['uni']);
 	}
 
 	/**
