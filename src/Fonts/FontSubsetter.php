@@ -309,12 +309,7 @@ class FontSubsetter
 		ksort($codeToGlyph);
 		unset($codeToGlyph[0]);
 
-		$this->writer->add('cmap', TableWriter::uint16s([
-			0, 3, // version, number of encoding records
-			0, 0, 0, 28, // platform (Unicode), encoding 0, offset
-			0, 3, 0, 28, // platform (Unicode), encoding 3, offset
-			3, 1, 0, 28, // platform (Microsoft), encoding 1, offset
-		]) . $this->format4Subtable($codeToGlyph));
+		$this->writer->add('cmap', $this->unicodeCmap($codeToGlyph));
 
 		// glyf - Glyph data
 		list($glyfOffset, $glyfLength) = $this->font->get_table_pos('glyf');
@@ -1017,12 +1012,7 @@ class FontSubsetter
 			unset($charToGlyph[0]);
 
 			ksort($charToGlyph);
-			$this->writer->add('cmap', TableWriter::uint16s([
-				0, 3, // version, number of encoding records
-				0, 0, 0, 28, // platform (Unicode), encoding 0, offset
-				0, 3, 0, 28, // platform (Unicode), encoding 3, offset
-				3, 1, 0, 28, // platform (Microsoft), encoding 1, offset
-			]) . $this->format4Subtable($charToGlyph));
+			$this->writer->add('cmap', $this->unicodeCmap($charToGlyph));
 		} else {
 			$this->writer->add('cmap', $this->get_table('cmap'));
 		}
@@ -1032,13 +1022,28 @@ class FontSubsetter
 	}
 
 	/**
+	 * A cmap holding one format 4 subtable, listed under both Unicode encodings and Microsoft's.
+	 *
+	 * @param int[] $codeToGlyph Glyph id by character code, sorted by code
+	 *
+	 * @return string The packed cmap table
+	 */
+	private function unicodeCmap(array $codeToGlyph)
+	{
+		return TableWriter::uint16s([
+			0, 3, // version, number of encoding records
+			0, 0, 0, 28, // platform (Unicode), encoding 0, offset
+			0, 3, 0, 28, // platform (Unicode), encoding 3, offset
+			3, 1, 0, 28, // platform (Microsoft), encoding 1, offset
+		]) . $this->format4Subtable($codeToGlyph);
+	}
+
+	/**
 	 * A format 4 cmap subtable mapping each code to its glyph, with its length field set.
 	 *
 	 * Codes are segmented in the order given, so the caller sorts them. A run of codes whose glyphs
 	 * run on with them is one segment, resolved through idDelta alone: every segment states an
 	 * idRangeOffset of 0, so no glyphIdArray follows the segment arrays - nothing could reach one.
-	 * A segment is kept as no more than the subtable states of it, the code it ends at and the delta
-	 * to its glyphs, since a wide cmap is tens of thousands of characters.
 	 *
 	 * @param int[] $codeToGlyph Glyph id by character code
 	 *
@@ -1056,13 +1061,11 @@ class FontSubsetter
 		$prevGlyph = -1;
 
 		foreach ($codeToGlyph as $code => $glyph) {
-			if ($code == ($prevCode + 1) && $glyph == ($prevGlyph + 1)) {
-				$endCodes[$start] = $code;
-			} else {
+			if ($code != ($prevCode + 1) || $glyph != ($prevGlyph + 1)) {
 				$start = $code;
-				$endCodes[$start] = $code;
 				$idDeltas[$start] = $glyph - $code;
 			}
+			$endCodes[$start] = $code;
 			$prevCode = $code;
 			$prevGlyph = $glyph;
 		}
@@ -1078,17 +1081,14 @@ class FontSubsetter
 
 		$searchRange *= 2;
 
-		$subtable = TableWriter::uint16s(array_merge(
-			[4, 0, 0], // format, length (set below), language
-			[$segCount * 2, $searchRange, $entrySelector, $segCount * 2 - $searchRange], // segCountX2, searchRange, entrySelector, rangeShift
-			$endCodes,
-			[0xFFFF, 0], // the last segment's endCode, reservedPad
-			array_keys($endCodes), // startCode
-			[0xFFFF],
-			$idDeltas,
-			[1],
-			array_fill(0, $segCount, 0) // idRangeOffset
-		));
+		// Packed a section at a time, since uint16s copies its argument and the sections of a wide cmap
+		// merged into one list would be held several times over
+		$subtable = TableWriter::uint16s([4, 0, 0]) // format, length (set below), language
+			. TableWriter::uint16s([$segCount * 2, $searchRange, $entrySelector, $segCount * 2 - $searchRange]) // segCountX2, searchRange, entrySelector, rangeShift
+			. TableWriter::uint16s($endCodes) . TableWriter::uint16s([0xFFFF, 0]) // endCode, then reservedPad
+			. TableWriter::uint16s(array_keys($endCodes)) . TableWriter::uint16s([0xFFFF]) // startCode
+			. TableWriter::uint16s($idDeltas) . TableWriter::uint16s([1]) // idDelta
+			. str_repeat("\x00\x00", $segCount); // idRangeOffset
 
 		$length = strlen($subtable);
 
