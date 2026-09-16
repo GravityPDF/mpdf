@@ -336,7 +336,6 @@ class FontSubsetter
 
 		$searchRange *= 2;
 		$rangeShift = $segCount * 2 - $searchRange;
-		$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
 		$cmap = [
 			0, 3, // Index : version, number of encoding subtables
 			0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
@@ -345,7 +344,7 @@ class FontSubsetter
 			0, 28, // Encoding Subtable : offset (hi,lo)
 			3, 1, // Encoding Subtable : platform (MS=3), encoding 1
 			0, 28, // Encoding Subtable : offset (hi,lo)
-			4, $length, 0, // Format 4 Mapping subtable: format, length, language
+			4, 0, 0, // Format 4 Mapping subtable: format, length (reserved, set below), language
 			$segCount * 2,
 			$searchRange,
 			$entrySelector,
@@ -371,7 +370,6 @@ class FontSubsetter
 		// idDelta(s)
 		foreach ($range as $start => $subrange) {
 			$idDelta = -($start - $subrange[0]);
-			$n += count($subrange);
 			$cmap[] = $idDelta; // idDelta(s)
 		}
 
@@ -390,7 +388,11 @@ class FontSubsetter
 		}
 
 		$cmap[] = 0; // Mapping for last character
-		$this->writer->add('cmap', TableWriter::uint16s($cmap));
+
+		// The subtable states a size only known once it is written. It starts at 28, where the three
+		// encoding records point, and its length is the uint16 after the format.
+		$table = TableWriter::uint16s($cmap);
+		$this->writer->add('cmap', TableWriter::setUInt16($table, 30, strlen($table) - 28));
 
 		// glyf - Glyph data
 		list($glyfOffset, $glyfLength) = $this->font->get_table_pos('glyf');
@@ -926,9 +928,8 @@ class FontSubsetter
 
 		$searchRange = $searchRange * 2;
 		$rangeShift = $segCount * 2 - $searchRange;
-		$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
 		$cmap = [
-			4, $length, 0, // Format 4 Mapping subtable: format, length, language
+			4, 0, 0, // Format 4 Mapping subtable: format, length (reserved, set below), language
 			$segCount * 2,
 			$searchRange,
 			$entrySelector,
@@ -952,7 +953,6 @@ class FontSubsetter
 		// idDelta(s)
 		foreach ($range as $start => $subrange) {
 			$idDelta = -($start - $subrange[0]);
-			$n += count($subrange);
 			$cmap[] = $idDelta; // idDelta(s)
 		}
 		$cmap[] = 1; // idDelta of last Segment
@@ -970,7 +970,10 @@ class FontSubsetter
 		}
 
 		$cmap[] = 0; // Mapping for last character
+
+		// Here the subtable is the whole of what was built, so its length field is the second uint16
 		$cmapstr4 = TableWriter::uint16s($cmap);
+		$cmapstr4 = TableWriter::setUInt16($cmapstr4, 2, strlen($cmapstr4));
 
 		// cmap - Character to glyph mapping
 		$entryCount = count($subset);
@@ -1199,7 +1202,6 @@ class FontSubsetter
 
 			$searchRange *= 2;
 			$rangeShift = $segCount * 2 - $searchRange;
-			$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
 			$cmap = [0, 3, // Index : version, number of encoding subtables
 				0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
 				0, 28, // Encoding Subtable : offset (hi,lo)
@@ -1207,7 +1209,7 @@ class FontSubsetter
 				0, 28, // Encoding Subtable : offset (hi,lo)
 				3, 1, // Encoding Subtable : platform (MS=3), encoding 1
 				0, 28, // Encoding Subtable : offset (hi,lo)
-				4, $length, 0, // Format 4 Mapping subtable: format, length, language
+				4, 0, 0, // Format 4 Mapping subtable: format, length (reserved, set below), language
 				$segCount * 2,
 				$searchRange,
 				$entrySelector,
@@ -1247,7 +1249,10 @@ class FontSubsetter
 			}
 			$cmap[] = 0; // Mapping for last character
 
-			$this->writer->add('cmap', TableWriter::uint16s($cmap));
+			// The subtable states a size only known once it is written. It starts at 28, where the
+			// three encoding records point, and its length is the uint16 after the format.
+			$table = TableWriter::uint16s($cmap);
+			$this->writer->add('cmap', TableWriter::setUInt16($table, 30, strlen($table) - 28));
 		} else {
 			$this->writer->add('cmap', $this->get_table('cmap'));
 		}
