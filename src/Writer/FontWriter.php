@@ -51,8 +51,8 @@ class FontWriter
 	/**
 	 * Write every font the document used into the PDF, as a font file object and a descriptor.
 	 *
-	 * A TrueType font is subsetted unless the document asked for it whole, and a font mPDF loaded but
-	 * nothing drew with is skipped.
+	 * A TrueType font is subsetted or carried whole according to `percentSubset` and `maxTTFFilesize`,
+	 * and a font mPDF loaded but nothing drew with is skipped.
 	 */
 	public function writeFonts()
 	{
@@ -60,20 +60,19 @@ class FontWriter
 			// TrueType embedded
 			if (isset($info['type']) && $info['type'] === 'TTF' && !$info['sip'] && !$info['smp']) {
 				$used = true;
-				$asSubset = true;
+				$asSubset = false;
 				foreach ($this->mpdf->fonts as $k => $f) {
 					if (isset($f['fontkey']) && $f['fontkey'] === $fontkey && $f['type'] === 'TTF') {
 						$used = $f['used'];
 						if ($used) {
 							$nChars = (ord($f['cw'][0]) << 8) + ord($f['cw'][1]);
-							$usage = (int) (count($f['subset']) * 100 / $nChars);
-							$fsize = $info['length1'];
-							// Always subset the very large TTF files
-							if ($fsize > ($this->mpdf->maxTTFFilesize * 1024)) {
-								$asSubset = true;
-							} elseif ($usage < $this->mpdf->percentSubset) {
-								$asSubset = true;
-							}
+							// The subset carries the 32-127 range mPDF registers for every font whether
+							// the font covers it or not, so on a font of fewer characters than that the
+							// count outruns nChars and the share has to be held to the 100 it means
+							$usage = min(100, (int) (count($f['subset']) * 100 / $nChars));
+							// At most percentSubset, not less than, so that the default of 100 subsets
+							// even a font every glyph of which was drawn
+							$asSubset = $info['length1'] > ($this->mpdf->maxTTFFilesize * 1024) || $usage <= $this->mpdf->percentSubset;
 						}
 						$this->mpdf->fonts[$k]['asSubset'] = $asSubset;
 						break;

@@ -65,12 +65,11 @@ class ConfigVariables
 			// this value determines whether to subset or not
 			// 0 - 100' => percent characters
 			// i.e. if ==40, mPDF will embed whole font if >40% characters in that font
-			// or embed subset if <40% characters
-			// 0 will force whole file to be embedded (NO subsetting)
-			// 100 will force always to subset
+			// or embed subset if <=40% characters
+			// 100, the default, always subsets
 			// This value is overridden if you set new mPDF('s')
 			// and/or Can set at runtime
-			'percentSubset' => 30,
+			'percentSubset' => 100,
 
 			// Uses Adobe CJK fonts for CJK languages
 			// default TRUE, only set false if you have defined some available fonts that support CJK
