@@ -1123,6 +1123,10 @@ class FontSubsetter
 	 * @param bool   $useOTL    Whether the document laid the font out with its OTL tables
 	 *
 	 * @return string The font program to embed
+	 *
+	 * @throws \Mpdf\Exception\FontException Where the font will not fit a format 4 cmap: more glyphs
+	 *                                       unmapped than the Private Use Area holds, or more
+	 *                                       segments than the subtable's length field can state
 	 */
 	public function repackageTTF($file, $TTCfontID = 0, $debug = false, $useOTL = false)
 	{
@@ -1242,17 +1246,24 @@ class FontSubsetter
 			}
 
 			$cmap[] = 0; // idRangeOffset of last Segment
-			foreach ($range as $subrange) {
-				foreach ($subrange as $glidx) {
-					$cmap[] = $glidx;
-				}
-			}
-			$cmap[] = 0; // Mapping for last character
+
+			// No glyphIdArray follows: every segment states an idRangeOffset of 0, which resolves it
+			// through idDelta, so nothing could reach one.
 
 			// The subtable states a size only known once it is written. It starts at 28, where the
 			// three encoding records point, and its length is the uint16 after the format.
 			$table = TableWriter::uint16s($cmap);
-			$this->writer->add('cmap', TableWriter::setUInt16($table, 30, strlen($table) - 28));
+			$length = strlen($table) - 28;
+
+			if ($length > 0xFFFF) {
+				throw new \Mpdf\Exception\FontException(sprintf(
+					'Font "%s" repackages into a format 4 cmap subtable of %d bytes, more than its length field can state',
+					$this->font->filename,
+					$length
+				));
+			}
+
+			$this->writer->add('cmap', TableWriter::setUInt16($table, 30, $length));
 		} else {
 			$this->writer->add('cmap', $this->get_table('cmap'));
 		}
