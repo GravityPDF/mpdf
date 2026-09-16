@@ -8,18 +8,22 @@ namespace Mpdf;
  * nothing: `Writer\FontWriter::writeFonts()` worked out how much of the font was used and how big it
  * was, then subsetted whatever the answer.
  *
- * Poppins is 154KB and this document reads as drawing 20% of it, so every threshold below is one the
- * font passes or fails outright, and 20 itself is the boundary the comparison sits on.
+ * Poppins is 154KB and this document draws 11% of it, so every threshold below is one the font
+ * passes or fails outright, and 11 itself is the boundary the comparison sits on.
  */
 class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
-	 * The share of Poppins writeFonts() counts this document as drawing: the 96 characters mPDF
-	 * registers for every font, over the 470 Poppins covers. It is the seed and nothing else - no
-	 * document of Latin text moves it, which is GravityPDF/mpdf#152 and not what is under test here.
+	 * Every letter of the alphabet in both cases: 52 distinct characters, enough of the 470 Poppins
+	 * covers to put the usage somewhere a threshold can sit either side of.
 	 */
-	const USAGE = 20;
+	const TEXT = '<p>ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz</p>';
+
+	/**
+	 * The share of Poppins writeFonts() counts this document as drawing.
+	 */
+	const USAGE = 11;
 
 	/**
 	 * @param array $config What the document is given beyond the font, typically the two options
@@ -34,7 +38,7 @@ class FontSubsetDecisionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontdata' => ['probe' => ['R' => 'Poppins-Regular.ttf', 'useOTL' => 0]],
 			'default_font' => 'probe',
 		]);
-		$mpdf->WriteHTML('<p>Hello</p>');
+		$mpdf->WriteHTML(self::TEXT);
 		$pdf = $mpdf->Output('', 'S');
 		$mpdf->cleanup();
 
