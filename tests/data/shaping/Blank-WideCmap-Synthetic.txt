@@ -1,0 +1,1 @@
+Mpdf\Exception\FontException: Unable to set font "tests/Mpdf/Fonts/../../data/ttf/Blank-WideCmap-Synthetic.ttf" to use OTL as it does not include OTL tables (or at least not a GDEF table).

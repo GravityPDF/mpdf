@@ -3749,7 +3749,9 @@ class TTFontFile
 		}
 
 		// NB 65535 is a set width of 0
-		// First bytes define number of chars in font
+		// First bytes define number of chars in font, a two byte field the filter above can outrun
+		$nCharWidths = min($nCharWidths, 0xFFFF);
+
 		$charWidths[0] = chr($nCharWidths >> 8);
 		$charWidths[1] = chr($nCharWidths & 0xFF);
 
