@@ -55,14 +55,22 @@ class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Pins #192 as it stands: a v2 tag reaches the original tags listed after its own, but never
-	 * those before it.
+	 * @dataProvider otherIndicScripts
 	 */
-	public function testAV2TagFallsThroughToTheOriginalTagsListedAfterItsOwn()
+	public function testAV2TagFallsBackToItsOwnOriginalTagAndNoOtherScriptsOriginalTag(array $offered, $scripttag, $scriptblock, array $expected)
 	{
-		$this->assertSame(['deva', true], OtlTags::script(['deva' => 'DFLT', 'DFLT' => 'DFLT'], 'bng2', Ucdn::SCRIPT_BENGALI, 'I', 0xFF));
-		$this->assertSame(['mymr', true], OtlTags::script(['mymr' => 'DFLT'], 'tml2', Ucdn::SCRIPT_TAMIL, 'I', 0xFF));
-		$this->assertSame(['DFLT', false], OtlTags::script(['beng' => 'DFLT', 'DFLT' => 'DFLT'], 'dev2', Ucdn::SCRIPT_DEVANAGARI, 'I', 0xFF));
+		$this->assertSame($expected, OtlTags::script($offered, $scripttag, $scriptblock, 'I', 0xFF));
+	}
+
+	public function otherIndicScripts()
+	{
+		return [
+			'Bengali, where the font offers deva' => [['deva' => 'DFLT', 'DFLT' => 'DFLT'], 'bng2', Ucdn::SCRIPT_BENGALI, ['DFLT', false]],
+			'Devanagari, where the font offers gujr' => [['gujr' => 'DFLT', 'DFLT' => 'DFLT'], 'dev2', Ucdn::SCRIPT_DEVANAGARI, ['DFLT', false]],
+			'Tamil, where the font offers only mymr' => [['mymr' => 'DFLT'], 'tml2', Ucdn::SCRIPT_TAMIL, ['', false]],
+			'Devanagari, where the font offers beng' => [['beng' => 'DFLT', 'DFLT' => 'DFLT'], 'dev2', Ucdn::SCRIPT_DEVANAGARI, ['DFLT', false]],
+			'Bengali, where the font offers beng and deva' => [['deva' => 'DFLT', 'beng' => 'DFLT'], 'bng2', Ucdn::SCRIPT_BENGALI, ['beng', true]],
+		];
 	}
 
 	public function testATagThatIsNotAV2IndicTagHasNoOriginalToFallBackTo()
