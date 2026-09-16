@@ -60,6 +60,7 @@ class LookupFlagTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAnUndefinedMarkAttachmentClassSkipsEveryMark()
 	{
+		$this->assertSame(2, LookupFlag::attachmentClass(0x0218));
 		$this->assertSame(' 00300| 00301| 00302', $this->lookupFlag->glyphs(0x0200, ''));
 		$this->assertTrue($this->lookupFlag->skips(0x0200, '00301', ''));
 	}

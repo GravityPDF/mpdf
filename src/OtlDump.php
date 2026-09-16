@@ -779,6 +779,8 @@ class OtlDump extends TTFontFile
 		} else {
 			$this->mpdf->WriteHTML('<div>GDEF table not defined</div>');
 		}
+
+		$this->lookupFlag = new LookupFlag($this->fontkey, $this->gdefClasses());
 	}
 
 	/**
@@ -1242,12 +1244,12 @@ class OtlDump extends TTFontFile
 	 */
 	function _getGSUBignoreString($flag, $MarkFilteringSet)
 	{
-		$this->lookupFlag()->checkMarkFilteringSet($flag, $MarkFilteringSet);
+		$this->lookupFlag->checkMarkFilteringSet($flag, $MarkFilteringSet);
 
 		$names = [
 			LookupFlag::MARKS => 'Mark Glyphs ',
 			LookupFlag::MARKS_OUTSIDE_FILTERING_SET => 'Marks outside Mark Glyph Set[' . $MarkFilteringSet . '] ',
-			LookupFlag::MARKS_OUTSIDE_ATTACHMENT_CLASS => 'MarkAttachmentType[' . ($flag >> 8) . '] ',
+			LookupFlag::MARKS_OUTSIDE_ATTACHMENT_CLASS => 'MarkAttachmentType[' . LookupFlag::attachmentClass($flag) . '] ',
 			LookupFlag::LIGATURES => 'Ligature Glyphs ',
 			LookupFlag::BASES => 'Base Glyphs ',
 		];

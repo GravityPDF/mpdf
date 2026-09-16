@@ -64,6 +64,14 @@ class TTFontFile
 	 */
 	protected $reader;
 
+	/**
+	 * Which glyphs a lookup skips, made by _getGDEFtables() from the classes it reads, which every
+	 * GSUB read follows
+	 *
+	 * @var LookupFlag
+	 */
+	protected $lookupFlag;
+
 	private $fontCache;
 
 	private $fontDescriptor;
@@ -1309,7 +1317,18 @@ class TTFontFile
 			$this->fontCache->write($this->fontkey . '.' . $tag . '.dat', $this->reader->read($this->tables[$tag]['length']));
 		}
 
-		$font = [
+		$this->fontCache->jsonWrite($this->fontkey . '.GDEFdata.json', $this->gdefClasses());
+		$this->lookupFlag = new LookupFlag($this->fontkey, $this->gdefClasses());
+	}
+
+	/**
+	 * The GDEF classes as the shaper reads them back from the cache, and as LookupFlag takes them
+	 *
+	 * @return array
+	 */
+	protected function gdefClasses()
+	{
+		return [
 			'GlyphClassBases' => $this->GlyphClassBases,
 			'GlyphClassMarks' => $this->GlyphClassMarks,
 			'GlyphClassLigatures' => $this->GlyphClassLigatures,
@@ -1317,8 +1336,6 @@ class TTFontFile
 			'MarkGlyphSets' => $this->MarkGlyphSets,
 			'MarkAttachmentType' => $this->MarkAttachmentType,
 		];
-
-		$this->fontCache->jsonWrite($this->fontkey . '.GDEFdata.json', $font);
 	}
 
 	/**
@@ -2845,24 +2862,7 @@ class TTFontFile
 	 */
 	function _checkGSUBignore($flag, $glyph, $MarkFilteringSet)
 	{
-		return $this->lookupFlag()->skips($flag, $glyph, $MarkFilteringSet);
-	}
-
-	/**
-	 * Made each time it is asked for rather than kept, because the GDEF classes it reads are filled in
-	 * by _getGDEFtables() - and by OtlDump's own, in its own format.
-	 *
-	 * @return LookupFlag
-	 */
-	protected function lookupFlag()
-	{
-		return new LookupFlag($this->fontkey, [
-			'GlyphClassMarks' => $this->GlyphClassMarks,
-			'GlyphClassLigatures' => $this->GlyphClassLigatures,
-			'GlyphClassBases' => $this->GlyphClassBases,
-			'MarkAttachmentType' => $this->MarkAttachmentType,
-			'MarkGlyphSets' => $this->MarkGlyphSets,
-		]);
+		return $this->lookupFlag->skips($flag, $glyph, $MarkFilteringSet);
 	}
 
 	/**
@@ -2879,7 +2879,7 @@ class TTFontFile
 	 */
 	function _getGSUBignoreString($flag, $MarkFilteringSet)
 	{
-		$str = $this->lookupFlag()->glyphs($flag, $MarkFilteringSet);
+		$str = $this->lookupFlag->glyphs($flag, $MarkFilteringSet);
 
 		if ($str) {
 			// This originally returned e.g. ((?:(?:[IGNORE8]))*) when NOT specific to a Lookup e.g. rtlSub in

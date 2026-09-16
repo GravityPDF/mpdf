@@ -44,6 +44,11 @@ class LookupFlag
 	private $gdef;
 
 	/**
+	 * @var string[] mark filtering set => the marks outside it, as each is first asked for
+	 */
+	private $marksOutsideFilteringSets = [];
+
+	/**
 	 * @param string $fontkey
 	 * @param array  $gdef
 	 */
@@ -92,6 +97,16 @@ class LookupFlag
 	}
 
 	/**
+	 * @param int $flag A lookup's LookupFlag
+	 *
+	 * @return int The mark attachment class it names, 0 where it names none
+	 */
+	public static function attachmentClass($flag)
+	{
+		return ($flag & self::MARK_ATTACHMENT_CLASS_FILTER) >> 8;
+	}
+
+	/**
 	 * Every glyph a lookup skips, in GDEF's own format.
 	 *
 	 * @param int        $flag             The lookup's LookupFlag
@@ -117,8 +132,9 @@ class LookupFlag
 	/**
 	 * Whether a lookup skips one glyph.
 	 *
-	 * The same answer as looking for the glyph in glyphs(), without building the list: the shaper asks
-	 * once per glyph a subtable is offered, and a font's marks can run to tens of kilobytes of text.
+	 * The same answer as looking for the glyph in glyphs(), a class at a time, without joining the
+	 * classes: the shaper asks once per glyph a subtable is offered, and a font's marks can run to tens
+	 * of kilobytes of text.
 	 *
 	 * @param int        $flag             The lookup's LookupFlag
 	 * @param string     $glyph            The glyph, as hex
@@ -131,13 +147,7 @@ class LookupFlag
 		$this->checkMarkFilteringSet($flag, $markFilteringSet);
 
 		foreach (self::skipped($flag) as $class) {
-			if ($class === self::MARKS_OUTSIDE_FILTERING_SET) {
-				$skips = strpos($this->gdef['GlyphClassMarks'], $glyph) && !strpos($this->gdef['MarkGlyphSets'][$markFilteringSet], $glyph);
-			} else {
-				$skips = strpos($this->glyphsOf($class, $flag, $markFilteringSet), $glyph);
-			}
-
-			if ($skips) {
+			if (strpos($this->glyphsOf($class, $flag, $markFilteringSet), $glyph)) {
 				return true;
 			}
 		}
@@ -165,9 +175,9 @@ class LookupFlag
 			case self::MARKS:
 				return $this->gdef['GlyphClassMarks'];
 			case self::MARKS_OUTSIDE_FILTERING_SET:
-				return $this->marksOutsideFilteringSet($this->gdef['MarkGlyphSets'][$markFilteringSet]);
+				return $this->marksOutsideFilteringSet($markFilteringSet);
 			case self::MARKS_OUTSIDE_ATTACHMENT_CLASS:
-				return $this->marksOutsideAttachmentClass($flag >> 8);
+				return $this->marksOutsideAttachmentClass(self::attachmentClass($flag));
 			case self::LIGATURES:
 				return $this->gdef['GlyphClassLigatures'];
 			default:
@@ -178,12 +188,18 @@ class LookupFlag
 	/**
 	 * UseMarkFilteringSet means "skip every mark except those in the given mark glyph set", so the
 	 * glyphs to skip are the marks minus that set - not the set itself.
+	 *
+	 * Kept once worked out, since skips() asks for it glyph after glyph.
 	 */
-	private function marksOutsideFilteringSet($set)
+	private function marksOutsideFilteringSet($markFilteringSet)
 	{
+		if (isset($this->marksOutsideFilteringSets[$markFilteringSet])) {
+			return $this->marksOutsideFilteringSets[$markFilteringSet];
+		}
+
 		$keep = [];
 		$inSet = [];
-		foreach (explode('|', $set) as $glyph) {
+		foreach (explode('|', $this->gdef['MarkGlyphSets'][$markFilteringSet]) as $glyph) {
 			$inSet[trim($glyph)] = true;
 		}
 
@@ -194,7 +210,7 @@ class LookupFlag
 			}
 		}
 
-		return $keep ? ' ' . implode('| ', $keep) : '';
+		return $this->marksOutsideFilteringSets[$markFilteringSet] = $keep ? ' ' . implode('| ', $keep) : '';
 	}
 
 	/**
