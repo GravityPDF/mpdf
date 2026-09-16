@@ -145,6 +145,80 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * getCTG opens the file for itself, after getMetrics has closed it, to read the character map of a
+	 * font that is embedded whole. It can give up from the header, like getMetrics, or from having
+	 * more unmapped glyphs than the Private Use Area has codes to give them.
+	 *
+	 * @dataProvider characterMapProvider
+	 */
+	public function testTheParserLetsGoOfAFontOnceItHasReadItsCharacterMap($variant, $argument, $TTCfontID, $expected)
+	{
+		$file = $this->$variant('NotoSansSinhala-Subset.ttf', $argument);
+
+		$parser = new TTFontFile($this->cache(), 'win');
+
+		$this->assertLetsGoOf($parser, $file, $expected, function () use ($parser, $file, $TTCfontID) {
+			$parser->getCTG($file, $TTCfontID, false, true);
+		});
+	}
+
+	public function characterMapProvider()
+	{
+		return [
+			'as many glyphs as the Private Use Area holds' => ['withGlyphCount', 0x1000, 0, null],
+			'a collection of a version it cannot read' => ['withHeader', "ttcf\x00\x03\x00\x00", 1,
+				'Mpdf\Exception\FontException: Error parsing TrueType Collection: version=196608 (<font>)',
+			],
+			'more glyphs than the Private Use Area holds' => ['withGlyphCount', 0xFFFF, 0,
+				'Mpdf\Exception\FontException: Font "<font>" cannot map all included glyphs into Private Use Area U+E000-U+F8FF; cannot use useOTL on this font',
+			],
+		];
+	}
+
+	/**
+	 * The font browser reads a collection's header through getTTCFonts before reading each font of it
+	 * with extractCoreInfo, and nothing it does in between needs the file open. So it is let go of
+	 * when the header reads as well as when it does not.
+	 *
+	 * @dataProvider collectionHeaderProvider
+	 */
+	public function testTheBrowserLetsGoOfACollectionOnceItHasReadItsHeader($header, $expected, $fonts)
+	{
+		$file = $this->withHeader('NotoSansSinhala-Subset.ttf', $header);
+		$browser = new TTFontFileAnalysis($this->cache(), 'win');
+
+		$this->assertLetsGoOf($browser, $file, $expected, function () use ($browser, $file) {
+			$browser->getTTCFonts($file);
+		});
+
+		$this->assertSame($fonts, $browser->TTCFonts);
+	}
+
+	public function collectionHeaderProvider()
+	{
+		return [
+			'not a collection' => ["\x00\x01\x00\x00", 'Mpdf\Exception\FontException: Not a TrueType Collection: version=65536 (<font>)', []],
+			'a collection of a version it cannot read' => ["ttcf\x00\x03\x00\x00", 'Mpdf\Exception\FontException: Error parsing TrueType Collection: version=196608 (<font>)', []],
+			// ttcf, version 1.0, two fonts, and their offsets
+			'a collection it can read' => ['ttcf' . pack('NNNN', 0x00010000, 2, 20, 40), null, [1 => ['offset' => 20], 2 => ['offset' => 40]]],
+		];
+	}
+
+	/**
+	 * @param string|null $expected The complaint, as describe() gives it, or null for none
+	 */
+	private function assertLetsGoOf(TTFontFile $ttf, $file, $expected, \Closure $read)
+	{
+		$raised = $this->raisedBy($file, $read);
+		$stillOpen = $this->holdsFileOpen($ttf);
+
+		unlink($file);
+
+		$this->assertSame($expected, $raised);
+		$this->assertFalse($stillOpen, 'still holding open the file it read');
+	}
+
+	/**
 	 * Whether each class gave up on the file with the complaint expected, and let go of it.
 	 *
 	 * Letting go is read from each reader rather than inferred from the unlink() at the end: POSIX
@@ -156,19 +230,14 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$parser = new TTFontFile($this->cache(), 'win');
 		$browser = new TTFontFileAnalysis($this->cache(), 'win');
 
-		$raised = [];
-
-		try {
-			$parser->getMetrics($file, uniqid('', true), $TTCfontID);
-		} catch (\Exception $e) {
-			$raised['parser'] = $this->describe($e, $file);
-		}
-
-		try {
-			$browser->extractCoreInfo($file, $TTCfontID);
-		} catch (\Exception $e) {
-			$raised['browser'] = $this->describe($e, $file);
-		}
+		$raised = array_filter([
+			'parser' => $this->raisedBy($file, function () use ($parser, $file, $TTCfontID) {
+				$parser->getMetrics($file, uniqid('', true), $TTCfontID);
+			}),
+			'browser' => $this->raisedBy($file, function () use ($browser, $file, $TTCfontID) {
+				$browser->extractCoreInfo($file, $TTCfontID);
+			}),
+		]);
 
 		$stillOpen = array_keys(array_filter([
 			'parser' => $this->holdsFileOpen($parser),
@@ -207,14 +276,7 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$font = file_get_contents(__DIR__ . '/../../data/ttf/' . $file);
 
-		$tables = unpack('n', substr($font, 4, 2));
-		for ($i = 0; $i < $tables[1]; $i++) {
-			$record = 12 + $i * 16;
-			if (substr($font, $record, 4) === 'OS/2') {
-				$font = substr_replace($font, 'XXXX', $record, 4);
-				break;
-			}
-		}
+		$font = substr_replace($font, 'XXXX', $this->tableRecord($font, 'OS/2'), 4);
 
 		return $this->writeFontVariant($font, 'no-os2');
 	}
@@ -233,6 +295,36 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		);
 
 		return $this->writeFontVariant($font, 'header');
+	}
+
+	/**
+	 * Overwrites the glyph count maxp states. getCTG gives a Private Use Area code to every glyph up to
+	 * it that the cmap does not reach, and reads nothing else by it.
+	 */
+	private function withGlyphCount($file, $numGlyphs)
+	{
+		$font = file_get_contents(__DIR__ . '/../../data/ttf/' . $file);
+
+		$offset = unpack('N', substr($font, $this->tableRecord($font, 'maxp') + 8, 4));
+		$font = substr_replace($font, pack('n', $numGlyphs), $offset[1] + 4, 2);
+
+		return $this->writeFontVariant($font, 'glyph-count');
+	}
+
+	/**
+	 * @return int Where the table directory entry for $tag starts
+	 */
+	private function tableRecord($font, $tag)
+	{
+		$tables = unpack('n', substr($font, 4, 2));
+		for ($i = 0; $i < $tables[1]; $i++) {
+			$record = 12 + $i * 16;
+			if (substr($font, $record, 4) === $tag) {
+				return $record;
+			}
+		}
+
+		$this->fail(sprintf('The font has no %s table', $tag));
 	}
 
 	/**
@@ -277,6 +369,20 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		file_put_contents($path, $font);
 
 		return $path;
+	}
+
+	/**
+	 * @return string|null What $read raised, as describe() gives it, or null if it raised nothing
+	 */
+	private function raisedBy($file, \Closure $read)
+	{
+		try {
+			$read();
+		} catch (\Exception $e) {
+			return $this->describe($e, $file);
+		}
+
+		return null;
 	}
 
 	/**

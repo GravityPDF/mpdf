@@ -385,9 +385,9 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * Start reading one font file.
 	 *
-	 * getMetrics and getCTG open their own; FontSubsetter opens one through here and reads the same
-	 * handle, so that the table directory this parses and the two readers built on it that the
-	 * subsetter borrows are all looking at the font it is building from.
+	 * getMetrics, getCTG and getTTCFonts open their own; FontSubsetter opens one through here and reads
+	 * the same handle, so that the table directory this parses and the two readers built on it that
+	 * the subsetter borrows are all looking at the font it is building from.
 	 *
 	 * @return FileReader The open file, for a caller that reads it itself
 	 */
@@ -523,6 +523,19 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->useOTL = $useOTL; // mPDF 5.7.1
 		$this->open($file);
 
+		// Closed however the read ends: see getMetrics
+		try {
+			return $this->readCharToGlyph($TTCfontID, $debug);
+		} finally {
+			$this->reader->close();
+		}
+	}
+
+	/**
+	 * @return array See getCTG
+	 */
+	private function readCharToGlyph($TTCfontID, $debug)
+	{
 		$this->charWidths = '';
 		$this->charToGlyph = [];
 		$this->tables = [];
@@ -562,7 +575,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
 
 		// Map Unmapped glyphs - from $numGlyphs
-		if ($useOTL) {
+		if ($this->useOTL) {
 			$this->seek_table("maxp");
 			$this->reader->skip(4);
 			$numGlyphs = $this->reader->readUInt16();
@@ -573,7 +586,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 						$bctr++;
 					} // Avoid overwriting a glyph already mapped in PUA
 					if ($bctr > 0xF8FF) {
-						throw new \Mpdf\Exception\FontException(sprintf('Font "%s" cannot map all included glyphs into Private Use Area U+E000-U+F8FF; cannot use useOTL on this font', $file));
+						throw new \Mpdf\Exception\FontException(sprintf('Font "%s" cannot map all included glyphs into Private Use Area U+E000-U+F8FF; cannot use useOTL on this font', $this->filename));
 					}
 					$glyphToChar[$gid][] = $bctr;
 					$charToGlyph[$bctr] = $gid;
@@ -581,8 +594,6 @@ class TTFontFile implements Fonts\FontSourceInterface
 				}
 			}
 		}
-
-		$this->reader->close();
 
 		return $charToGlyph;
 	}
@@ -597,25 +608,30 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 */
 	function getTTCFonts($file)
 	{
-		$this->filename = $file;
-
-		$this->reader = new FileReader($file);
-
 		$this->numTTCFonts = 0;
 		$this->TTCFonts = [];
-		$this->version = $version = $this->reader->readUInt32();
-		if ($version === 0x74746366) {
-			$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
-			if (!in_array($version, [0x00010000, 0x00020000], true)) {
-				throw new \Mpdf\Exception\FontException(sprintf("Error parsing TrueType Collection: version=%s (%s)", $version, $file));
-			}
-		} else {
-			throw new \Mpdf\Exception\FontException(sprintf("Not a TrueType Collection: version=%s (%s)", $version, $file));
-		}
 
-		$this->numTTCFonts = $this->reader->readUInt32();
-		for ($i = 1; $i <= $this->numTTCFonts; $i++) {
-			$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
+		$this->open($file);
+
+		// Closed on success too: the caller goes on to read each font of the collection, and opens the
+		// file again for every one of them
+		try {
+			$this->version = $version = $this->reader->readUInt32();
+			if ($version === 0x74746366) {
+				$this->version = $version = $this->reader->readUInt32(); // TTC Header version now
+				if (!in_array($version, [0x00010000, 0x00020000], true)) {
+					throw new \Mpdf\Exception\FontException(sprintf("Error parsing TrueType Collection: version=%s (%s)", $version, $file));
+				}
+			} else {
+				throw new \Mpdf\Exception\FontException(sprintf("Not a TrueType Collection: version=%s (%s)", $version, $file));
+			}
+
+			$this->numTTCFonts = $this->reader->readUInt32();
+			for ($i = 1; $i <= $this->numTTCFonts; $i++) {
+				$this->TTCFonts[$i]['offset'] = $this->reader->readUInt32();
+			}
+		} finally {
+			$this->reader->close();
 		}
 	}
 
