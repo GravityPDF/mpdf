@@ -50,7 +50,7 @@ if (!function_exists('\Mpdf\unicode_hex')) {
  * @author Ian Back <ianb@bpm1.com>
  * @license LGPL
  */
-class TTFontFile
+class TTFontFile implements Fonts\FontSourceInterface
 {
 
 	use Strict;
@@ -475,6 +475,24 @@ class TTFontFile
 		$this->reader->seek($pos + $offset_in_table);
 
 		return $pos + $offset_in_table;
+	}
+
+	public function hasTable($tag)
+	{
+		return isset($this->tables[$tag]);
+	}
+
+	/**
+	 * get_table_pos() under the name FontSourceInterface gives it
+	 */
+	public function getTablePosition($tag)
+	{
+		return $this->get_table_pos($tag);
+	}
+
+	public function getMaxStrLenRead()
+	{
+		return $this->maxStrLenRead;
 	}
 
 	/**

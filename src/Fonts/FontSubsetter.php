@@ -2,8 +2,6 @@
 
 namespace Mpdf\Fonts;
 
-use Mpdf\TTFontFile;
-
 // Work out the profile tables - head's bounding box, maxp's point and contour maxima, OS/2's
 // character range - from the glyphs the subset actually holds, rather than copying what the original
 // font stated. A host can set it before mPDF loads; nothing in mPDF sets it.
@@ -23,11 +21,11 @@ if (!defined('_RECALC_PROFILE')) {
  * rather than Writer\, because every Writer\* class serialises PDF objects and takes an Mpdf; this
  * builds a font program, takes a file path, and knows nothing about the document.
  *
- * It takes a TTFontFile rather than being one. What it borrows is the table directory and the two
- * readers built on it that the metrics path also uses - seek_table, get_table_pos, getCMAP4 and
- * getHMTX - so the parser is handed the same open file and asked for those; everything else here is
- * its own. The borrowed readers hand back what they read, so nothing the subsetter does shows up on
- * the parser afterwards.
+ * It takes a parser rather than being one, through FontSourceInterface. What it borrows is the table
+ * directory and the two readers built on it that the metrics path also uses, getCMAP4 and getHMTX,
+ * so the parser is handed the same open file and asked for those; everything else here is its own.
+ * The borrowed readers hand back what they read, so nothing the subsetter does shows up on the
+ * parser afterwards.
  */
 class FontSubsetter
 {
@@ -35,9 +33,16 @@ class FontSubsetter
 	/**
 	 * The parser, for the table directory and the readers shared with the metrics path
 	 *
-	 * @var TTFontFile
+	 * @var FontSourceInterface
 	 */
 	private $font;
+
+	/**
+	 * The path of the font file being read, for what an exception says
+	 *
+	 * @var string
+	 */
+	private $file;
 
 	/**
 	 * The font file being read, which is the parser's reader too
@@ -102,9 +107,9 @@ class FontSubsetter
 	public $maxUniChar;
 
 	/**
-	 * @param TTFontFile $font The parser to borrow the table directory and the shared readers from
+	 * @param FontSourceInterface $font The parser to borrow the table directory and the shared readers from
 	 */
-	public function __construct(TTFontFile $font)
+	public function __construct(FontSourceInterface $font)
 	{
 		$this->font = $font;
 	}
@@ -118,6 +123,7 @@ class FontSubsetter
 	 */
 	private function open($file, $TTCfontID, $debug)
 	{
+		$this->file = $file;
 		$this->reader = $this->font->open($file);
 		$this->writer = new TableWriter();
 		$this->glyphPos = [];
@@ -147,7 +153,7 @@ class FontSubsetter
 	 */
 	private function seekUnicodeCmap()
 	{
-		$cmap_offset = $this->font->seek_table('cmap');
+		$cmap_offset = $this->seekTable('cmap');
 		$this->reader->skip(2); // version
 		$cmapTableCount = $this->reader->readUInt16();
 
@@ -168,7 +174,7 @@ class FontSubsetter
 
 		throw new \Mpdf\Exception\FontException(sprintf(
 			'Font "%s" does not have Unicode cmap (platform 3, encoding 1, format 4, or platform 0 [any encoding] format 4)',
-			$this->font->filename
+			$this->file
 		));
 	}
 
@@ -198,19 +204,19 @@ class FontSubsetter
 		$this->open($file, $TTCfontID, $debug);
 
 		// head - Font header table
-		$this->font->seek_table('head');
+		$this->seekTable('head');
 		$this->reader->skip(50);
 		$indexToLocFormat = $this->reader->readUInt16();
 		$glyphDataFormat = $this->reader->readUInt16();
 
 		// hhea - Horizontal header table
-		$this->font->seek_table('hhea');
+		$this->seekTable('hhea');
 		$this->reader->skip(32);
 		$metricDataFormat = $this->reader->readUInt16();
 		$orignHmetrics = $numberOfHMetrics = $this->reader->readUInt16();
 
 		// maxp - Maximum profile table
-		$this->font->seek_table('maxp');
+		$this->seekTable('maxp');
 		$this->reader->skip(4);
 		$numGlyphs = $this->reader->readUInt16();
 
@@ -258,7 +264,7 @@ class FontSubsetter
 			$this->maxUni = max($this->maxUni, $code);
 		}
 
-		list($start, $dummy) = $this->font->get_table_pos('glyf');
+		list($start, $dummy) = $this->font->getTablePosition('glyf');
 
 		$glyphSet = [];
 		ksort($subsetglyphs);
@@ -293,13 +299,13 @@ class FontSubsetter
 		// tables copied from the original
 		$tags = ['cvt ', 'fpgm', 'prep', 'gasp'];
 		foreach ($tags as $tag) {
-			if (isset($this->font->tables[$tag])) {
+			if ($this->font->hasTable($tag)) {
 				$this->writer->add($tag, $this->get_table($tag));
 			}
 		}
 
 		// post - PostScript
-		if (isset($this->font->tables['post'])) {
+		if ($this->font->hasTable('post')) {
 			$opost = $this->get_table('post');
 			$post = "\x00\x03\x00\x00" . substr($opost, 4, 12) . "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 			$this->writer->add('post', $post);
@@ -312,8 +318,8 @@ class FontSubsetter
 		$this->writer->add('cmap', $this->unicodeCmap($codeToGlyph));
 
 		// glyf - Glyph data
-		list($glyfOffset, $glyfLength) = $this->font->get_table_pos('glyf');
-		if ($glyfLength < $this->font->maxStrLenRead) {
+		list($glyfOffset, $glyfLength) = $this->font->getTablePosition('glyf');
+		if ($glyfLength < $this->font->getMaxStrLenRead()) {
 			$glyphData = $this->get_table('glyf');
 		}
 
@@ -345,7 +351,7 @@ class FontSubsetter
 			$offsets[] = $pos;
 			$glyphPos = $this->glyphPos[$originalGlyphIdx];
 			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
-			if ($glyfLength < $this->font->maxStrLenRead) {
+			if ($glyfLength < $this->font->getMaxStrLenRead()) {
 				$data = substr($glyphData, $glyphPos, $glyphLen);
 			} else {
 				if ($glyphLen > 0) {
@@ -500,8 +506,8 @@ class FontSubsetter
 		$this->writer->add('maxp', $maxp);
 
 		// OS/2 - OS/2
-		if (isset($this->font->tables['OS/2'])) {
-			$os2_offset = $this->font->seek_table("OS/2");
+		if ($this->font->hasTable('OS/2')) {
+			$os2_offset = $this->seekTable('OS/2');
 			if (_RECALC_PROFILE) {
 				$fsSelection = $this->reader->uint16At($os2_offset + 62);
 				$fsSelection = ($fsSelection & ~(1 << 6)); // 2-byte bit field containing information concerning the nature of the font patterns
@@ -562,24 +568,24 @@ class FontSubsetter
 		$this->open($file, $TTCfontID, $debug);
 
 		// head - Font header table
-		$this->font->seek_table('head');
+		$this->seekTable('head');
 		$this->reader->skip(50);
 		$indexToLocFormat = $this->reader->readUInt16();
 		$glyphDataFormat = $this->reader->readUInt16();
 
 		// hhea - Horizontal header table
-		$this->font->seek_table('hhea');
+		$this->seekTable('hhea');
 		$this->reader->skip(32);
 		$metricDataFormat = $this->reader->readUInt16();
 		$orignHmetrics = $numberOfHMetrics = $this->reader->readUInt16();
 
 		// maxp - Maximum profile table
-		$this->font->seek_table('maxp');
+		$this->seekTable('maxp');
 		$this->reader->skip(4);
 		$numGlyphs = $this->reader->readUInt16();
 
 		// cmap - Character to glyph index mapping table
-		$cmap_offset = $this->font->seek_table('cmap');
+		$cmap_offset = $this->seekTable('cmap');
 		$this->reader->skip(2);
 		$cmapTableCount = $this->reader->readUInt16();
 		$unicode_cmap_offset = 0;
@@ -702,7 +708,7 @@ class FontSubsetter
 			$codeToGlyph[$code] = $glyphSet[$originalGlyphIdx];
 		}
 
-		list($start, $dummy) = $this->font->get_table_pos('glyf');
+		list($start, $dummy) = $this->font->getTablePosition('glyf');
 
 		$n = 0;
 		while ($n < count($glyphMap)) {
@@ -749,7 +755,7 @@ class FontSubsetter
 		// Doesn't seem to be a problem?
 		// Needs to have a name entry in 3,0 (e.g. symbol) - original font will be 3,1 (i.e. Unicode)
 		$name = $this->get_table('name');
-		$name_offset = $this->font->seek_table("name");
+		$name_offset = $this->seekTable('name');
 		$format = $this->reader->readUInt16();
 		$numRecords = $this->reader->readUInt16();
 		$string_data_offset = $name_offset + $this->reader->readUInt16();
@@ -765,7 +771,7 @@ class FontSubsetter
 		$this->writer->add('name', $name);
 
 		// OS/2
-		if (isset($this->font->tables['OS/2'])) {
+		if ($this->font->hasTable('OS/2')) {
 			$os2 = $this->get_table('OS/2');
 			$os2 = TableWriter::setUInt16($os2, 42, 0x00); // ulCharRange (Unicode ranges)
 			$os2 = TableWriter::setUInt16($os2, 44, 0x00); // ulCharRange (Unicode ranges)
@@ -792,14 +798,14 @@ class FontSubsetter
 		//tables copied from the original
 		$tags = ['cvt ', 'fpgm', 'prep', 'gasp'];
 		foreach ($tags as $tag) {  // 1.02
-			if (isset($this->font->tables[$tag])) {
+			if ($this->font->hasTable($tag)) {
 				$this->writer->add($tag, $this->get_table($tag));
 			}
 		}
 
 		// post - PostScript. Written only where the font has one to rewrite, as makeSubset does: a
 		// font without one used to get a post table built out of an undefined variable.
-		if (isset($this->font->tables['post'])) {
+		if ($this->font->hasTable('post')) {
 			$opost = $this->get_table('post');
 			$post = "\x00\x03\x00\x00" . substr($opost, 4, 12) . "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 			$this->writer->add('post', $post);
@@ -852,8 +858,8 @@ class FontSubsetter
 		$this->writer->add('hmtx', $hmtxstr);
 
 		// glyf - Glyph data
-		list($glyfOffset, $glyfLength) = $this->font->get_table_pos('glyf');
-		if ($glyfLength < $this->font->maxStrLenRead) {
+		list($glyfOffset, $glyfLength) = $this->font->getTablePosition('glyf');
+		if ($glyfLength < $this->font->getMaxStrLenRead()) {
 			$glyphData = $this->get_table('glyf');
 		}
 
@@ -867,7 +873,7 @@ class FontSubsetter
 			$glyphPos = $this->glyphPos[$originalGlyphIdx];
 			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
 
-			if ($glyfLength < $this->font->maxStrLenRead) {
+			if ($glyfLength < $this->font->getMaxStrLenRead()) {
 				$data = substr($glyphData, $glyphPos, $glyphLen);
 			} else {
 				if ($glyphLen > 0) {
@@ -972,7 +978,7 @@ class FontSubsetter
 		$tags = ['OS/2', 'glyf', 'head', 'hhea', 'hmtx', 'loca', 'maxp', 'name', 'post', 'cvt ', 'fpgm', 'gasp', 'prep'];
 
 		foreach ($tags as $tag) {
-			if (isset($this->font->tables[$tag])) {
+			if ($this->font->hasTable($tag)) {
 				$this->writer->add($tag, $this->get_table($tag));
 			}
 		}
@@ -980,7 +986,7 @@ class FontSubsetter
 		if ($useOTL) {
 
 			// maxp - Maximum profile table
-			$this->font->seek_table('maxp');
+			$this->seekTable('maxp');
 			$this->reader->skip(4);
 			$numGlyphs = $this->reader->readUInt16();
 
@@ -1095,12 +1101,25 @@ class FontSubsetter
 		if ($length > 0xFFFF) {
 			throw new \Mpdf\Exception\FontException(sprintf(
 				'Font "%s" needs a format 4 cmap subtable of %d bytes, more than its length field can state',
-				$this->font->filename,
+				$this->file,
 				$length
 			));
 		}
 
 		return TableWriter::setUInt16($subtable, 2, $length);
+	}
+
+	/**
+	 * Move the reader to where a table starts, which is the start of the file where the font has none.
+	 *
+	 * @return int Where the table starts
+	 */
+	private function seekTable($tag)
+	{
+		list($offset) = $this->font->getTablePosition($tag);
+		$this->reader->seek($offset);
+
+		return $offset;
 	}
 
 	/**
@@ -1115,7 +1134,7 @@ class FontSubsetter
 	 */
 	private function getLOCA($indexToLocFormat, $numGlyphs)
 	{
-		$start = $this->font->seek_table('loca');
+		$start = $this->seekTable('loca');
 		$this->glyphPos = [];
 		if ($indexToLocFormat == 0) {
 			$data = $this->reader->bytesAt($start, ($numGlyphs * 2) + 2);
@@ -1229,7 +1248,7 @@ class FontSubsetter
 	 */
 	private function getHMetric($numberOfHMetrics, $gid)
 	{
-		$start = $this->font->seek_table("hmtx");
+		$start = $this->seekTable('hmtx');
 		if ($gid < $numberOfHMetrics) {
 			$this->reader->seek($start + ($gid * 4));
 			$hm = $this->reader->read(4);
@@ -1248,7 +1267,7 @@ class FontSubsetter
 	 */
 	private function get_table($tag)
 	{
-		list($pos, $length) = $this->font->get_table_pos($tag);
+		list($pos, $length) = $this->font->getTablePosition($tag);
 
 		if ($length == 0) {
 			return '';
