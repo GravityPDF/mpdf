@@ -193,6 +193,34 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The position a rule hands a nested lookup can name class 0 as well, and then what the nested
+	 * lookup's rules are filtered against is the complement of the named classes rather than a list.
+	 * NotoSans-GPOS72-Synthetic's second rule shifts a class 0 glyph by -250, which the report named
+	 * the nested lookup for and then left out of it.
+	 */
+	public function testANestedLookupHandedAClassZeroPositionIsReportedWithItsRules()
+	{
+		$report = implode('', $this->dump('NotoSans-GPOS72-Synthetic', 'latn', 'DFLT'));
+
+		$this->assertStringContainsString('<div>Input #1: <span class="unchanged">&nbsp;[NOT &#x0041; &#x0042;]&nbsp;</span></div>', $report);
+		$this->assertStringContainsString('Xpl: -250;', $report);
+	}
+
+	/**
+	 * GSUB Types 5 and 6 filter the same way. NotoSans-GSUBClassZero-Synthetic names class 0 at the
+	 * substituted position of a Type 5 Format 2 rule and of a Type 6 Format 2 one, and the lookup
+	 * both hand it replaces A as well as C. Only C is reported: A is in class 1, which is what tells
+	 * class 0 apart from "anything".
+	 */
+	public function testAGsubNestedLookupHandedAClassZeroPositionReportsOnlyTheGlyphsThatPositionHolds()
+	{
+		$report = implode('', $this->dump('NotoSans-GSUBClassZero-Synthetic', 'latn', 'DFLT'));
+
+		$this->assertSame(2, substr_count($report, '<span class="unicode">U+0043&nbsp;</span>'));
+		$this->assertStringNotContainsString('<span class="unicode">U+0041&nbsp;</span>', $report);
+	}
+
+	/**
 	 * A format the spec does not define is named rather than reported as nothing, which is the one
 	 * thing the five throws #90 removed were right about.
 	 */
