@@ -25,6 +25,7 @@ class ParserGoldenMaster extends GoldenMaster
 	 * which would read a fixture someone forgot to commit as an expected refusal.
 	 */
 	private static $noOtlTables = [
+		'Blank-WideCmap-Synthetic',
 		'angerthas',
 	];
 

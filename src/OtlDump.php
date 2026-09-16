@@ -1150,23 +1150,8 @@ class OtlDump extends TTFontFile
 													$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
 													$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
 
-													// GENERATE exampleI[<seqIndex] .... exampleI[>seqIndex]
-													$exB = '';
-													$exL = '';
-													if ($seqIndex > 0) {
-														$exB .= '<span class="inputother">';
-														for ($ip = 0; $ip < $seqIndex; $ip++) {
-															$exB .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-														}
-														$exB .= '</span>';
-													}
-													if (count($inputGlyphs) > ($seqIndex + 1)) {
-														$exL .= '<span class="inputother">';
-														for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-															$exL .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-														}
-														$exL .= '</span>';
-													}
+													list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
+
 													$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
 													$lul2 = [$lup => $tag];
@@ -1210,33 +1195,7 @@ class OtlDump extends TTFontFile
 														$lup = $rule['LookupListIndex'][$b];
 														$seqIndex = $rule['SequenceIndex'][$b];
 
-														// GENERATE exampleI[<seqIndex] .... exampleI[>seqIndex]
-														$exB = '';
-														$exL = '';
-
-														if ($seqIndex > 0) {
-															$exB .= '<span class="inputother">';
-															for ($ip = 0; $ip < $seqIndex; $ip++) {
-																if (!$inputGlyphs[$ip]) {
-																	$exB .= '[*]';
-																} else {
-																	$exB .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																}
-															}
-															$exB .= '</span>';
-														}
-
-														if (count($inputGlyphs) > ($seqIndex + 1)) {
-															$exL .= '<span class="inputother">';
-															for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																if (!$inputGlyphs[$ip]) {
-																	$exL .= '[*]';
-																} else {
-																	$exL .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																}
-															}
-															$exL .= '</span>';
-														}
+														list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
 
 														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1264,24 +1223,8 @@ class OtlDump extends TTFontFile
 												for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
 													$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
 													$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
-													// GENERATE exampleI[<seqIndex] .... exampleI[>seqIndex]
-													$exB = '';
-													$exL = '';
-													if ($seqIndex > 0) {
-														$exB .= '<span class="inputother">';
-														for ($ip = 0; $ip < $seqIndex; $ip++) {
-															$exB .= $exampleI[$ip] . '&#x200d;';
-														}
-														$exB .= '</span>';
-													}
 
-													if (count($inputGlyphs) > ($seqIndex + 1)) {
-														$exL .= '<span class="inputother">';
-														for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-															$exL .= $exampleI[$ip] . '&#x200d;';
-														}
-														$exL .= '</span>';
-													}
+													list($exB, $exL) = $this->contextExample([], $exampleI, [], $seqIndex);
 
 													$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1336,32 +1279,7 @@ class OtlDump extends TTFontFile
 														$lup = $rule['LookupListIndex'][$b];
 														$seqIndex = $rule['SequenceIndex'][$b];
 
-														// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-														$exB = '';
-														$exL = '';
-														if (count($exampleB)) {
-															$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-														}
-
-														if ($seqIndex > 0) {
-															$exB .= '<span class="inputother">';
-															for ($ip = 0; $ip < $seqIndex; $ip++) {
-																$exB .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-															}
-															$exB .= '</span>';
-														}
-
-														if (count($inputGlyphs) > ($seqIndex + 1)) {
-															$exL .= '<span class="inputother">';
-															for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																$exL .= $this->formatEntity($inputGlyphs[$ip]) . '&#x200d;';
-															}
-															$exL .= '</span>';
-														}
-
-														if (count($exampleL)) {
-															$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-														}
+														list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1428,40 +1346,7 @@ class OtlDump extends TTFontFile
 															$lup = $rule['LookupListIndex'][$b];
 															$seqIndex = $rule['SequenceIndex'][$b];
 
-															// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-															$exB = '';
-															$exL = '';
-															if (count($exampleB)) {
-																$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-															}
-
-															if ($seqIndex > 0) {
-																$exB .= '<span class="inputother">';
-																for ($ip = 0; $ip < $seqIndex; $ip++) {
-																	if (!$inputGlyphs[$ip]) {
-																		$exB .= '[*]';
-																	} else {
-																		$exB .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																	}
-																}
-																$exB .= '</span>';
-															}
-
-															if (count($inputGlyphs) > ($seqIndex + 1)) {
-																$exL .= '<span class="inputother">';
-																for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																	if (!$inputGlyphs[$ip]) {
-																		$exL .= '[*]';
-																	} else {
-																		$exL .= $this->formatEntityFirst($inputGlyphs[$ip]) . '&#x200d;';
-																	}
-																}
-																$exL .= '</span>';
-															}
-
-															if (count($exampleL)) {
-																$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-															}
+															list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 															$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -1503,32 +1388,7 @@ class OtlDump extends TTFontFile
 														$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
 														$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
 
-														// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-														$exB = '';
-														$exL = '';
-														if (count($exampleB)) {
-															$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-														}
-
-														if ($seqIndex > 0) {
-															$exB .= '<span class="inputother">';
-															for ($ip = 0; $ip < $seqIndex; $ip++) {
-																$exB .= $exampleI[$ip] . '&#x200d;';
-															}
-															$exB .= '</span>';
-														}
-
-														if (count($inputGlyphs) > ($seqIndex + 1)) {
-															$exL .= '<span class="inputother">';
-															for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-																$exL .= $exampleI[$ip] . '&#x200d;';
-															}
-															$exL .= '</span>';
-														}
-
-														if (count($exampleL)) {
-															$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-														}
+														list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 														$html .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
@@ -2864,6 +2724,43 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
+	 * The example a nested lookup's own output is rendered between: everything the rule matches
+	 * before the position it is handed, and everything it matches after it.
+	 *
+	 * The zero-width joiner separates a fragment from that output, so it trails every fragment
+	 * before the position and leads every fragment after it.
+	 *
+	 * @param array $exampleB One fragment per backtrack position, as reportContext() returned them;
+	 *                        likewise $exampleI for the input sequence and $exampleL for lookahead
+	 * @param int   $seqIndex The input position the nested lookup is handed
+	 *
+	 * @return array [$exB, $exL]
+	 */
+	private function contextExample(array $exampleB, array $exampleI, array $exampleL, $seqIndex)
+	{
+		$exB = '';
+		$exL = '';
+
+		if (count($exampleB)) {
+			$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
+		}
+
+		if ($seqIndex > 0) {
+			$exB .= '<span class="inputother">' . implode('&#x200d;', array_slice($exampleI, 0, $seqIndex)) . '&#x200d;</span>';
+		}
+
+		if (count($exampleI) > ($seqIndex + 1)) {
+			$exL .= '<span class="inputother">&#x200d;' . implode('&#x200d;', array_slice($exampleI, $seqIndex + 1)) . '</span>';
+		}
+
+		if (count($exampleL)) {
+			$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
+		}
+
+		return [$exB, $exL];
+	}
+
+	/**
 	 * One context rule: the sequences it matches, and every lookup it hands a position within them.
 	 *
 	 * @param array  $PosLookupRecord Each a SequenceIndex and a LookupListIndex, already read: where
@@ -2881,32 +2778,7 @@ class OtlDump extends TTFontFile
 		foreach ($PosLookupRecord as $record) {
 			$seqIndex = $record['SequenceIndex'];
 
-			// GENERATE exampleB[n] exampleI[<seqIndex] .... exampleI[>seqIndex] exampleL[n]
-			$exB = '';
-			$exL = '';
-			if (count($exampleB)) {
-				$exB .= '<span class="backtrack">' . implode('&#x200d;', $exampleB) . '</span>';
-			}
-
-			if ($seqIndex > 0) {
-				$exB .= '<span class="inputother">';
-				for ($ip = 0; $ip < $seqIndex; $ip++) {
-					$exB .= $exampleI[$ip] . '&#x200d;';
-				}
-				$exB .= '</span>';
-			}
-
-			if (count($inputGlyphs) > ($seqIndex + 1)) {
-				$exL .= '<span class="inputother">';
-				for ($ip = $seqIndex + 1; $ip < count($inputGlyphs); $ip++) {
-					$exL .= '&#x200d;' . $exampleI[$ip];
-				}
-				$exL .= '</span>';
-			}
-
-			if (count($exampleL)) {
-				$exL .= '<span class="lookahead">' . implode('&#x200d;', $exampleL) . '</span>';
-			}
+			list($exB, $exL) = $this->contextExample($exampleB, $exampleI, $exampleL, $seqIndex);
 
 			$this->report .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 

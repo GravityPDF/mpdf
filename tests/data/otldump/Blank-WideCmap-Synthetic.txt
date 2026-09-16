@@ -1,0 +1,3 @@
+<div>GDEF table not defined</div>
+<div>GSUB table not defined</div>
+<div>GPOS table not defined</div>
