@@ -277,7 +277,7 @@ class FontSubsetter
 			$this->maxUni = max($this->maxUni, $code);
 		}
 
-		list($start, $dummy) = $this->font->getTablePosition('glyf');
+		list($start) = $this->font->getTablePosition('glyf');
 
 		$glyphSet = [];
 		ksort($subsetglyphs);
@@ -505,7 +505,7 @@ class FontSubsetter
 			$codeToGlyph[$code] = $glyphSet[$originalGlyphIdx];
 		}
 
-		list($start, $dummy) = $this->font->getTablePosition('glyf');
+		list($start) = $this->font->getTablePosition('glyf');
 
 		$n = 0;
 		while ($n < count($glyphMap)) {
@@ -528,18 +528,7 @@ class FontSubsetter
 						$glyphSet[$glyphIdx] = count($glyphMap);
 						$glyphMap[] = $glyphIdx;
 					}
-					if ($flags & GlyphOperator::WORDS) {
-						$this->reader->skip(4);
-					} else {
-						$this->reader->skip(2);
-					}
-					if ($flags & GlyphOperator::SCALE) {
-						$this->reader->skip(2);
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$this->reader->skip(4);
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$this->reader->skip(8);
-					}
+					$this->reader->skip(self::componentArgumentsLength($flags));
 				}
 			}
 		}
@@ -921,21 +910,7 @@ class FontSubsetter
 					$up = unpack('n', substr($data, $pos_in_glyph + 2, 2));
 					$glyphIdx = $up[1];
 					$data = TableWriter::setUInt16($data, $pos_in_glyph + 2, $glyphSet[$glyphIdx]);
-					$pos_in_glyph += 4;
-
-					if ($flags & GlyphOperator::WORDS) {
-						$pos_in_glyph += 4;
-					} else {
-						$pos_in_glyph += 2;
-					}
-
-					if ($flags & GlyphOperator::SCALE) {
-						$pos_in_glyph += 2;
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$pos_in_glyph += 4;
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$pos_in_glyph += 8;
-					}
+					$pos_in_glyph += 4 + self::componentArgumentsLength($flags);
 				}
 			}
 
@@ -983,7 +958,6 @@ class FontSubsetter
 		];
 
 		list($glyfOffset) = $this->font->getTablePosition('glyf');
-		$this->glyphdata = [];
 
 		foreach ($glyphMap as $originalGlyphIdx) {
 			$glyphPos = $this->glyphPos[$originalGlyphIdx];
@@ -1024,18 +998,7 @@ class FontSubsetter
 					$nComponentElements += 1;
 					$flags = $this->reader->readUInt16();
 					$this->glyphdata[$originalGlyphIdx]['compGlyphs'][] = $this->reader->readUInt16();
-					if ($flags & GlyphOperator::WORDS) {
-						$this->reader->skip(4);
-					} else {
-						$this->reader->skip(2);
-					}
-					if ($flags & GlyphOperator::SCALE) {
-						$this->reader->skip(2);
-					} elseif ($flags & GlyphOperator::XYSCALE) {
-						$this->reader->skip(4);
-					} elseif ($flags & GlyphOperator::TWOBYTWO) {
-						$this->reader->skip(8);
-					}
+					$this->reader->skip(self::componentArgumentsLength($flags));
 				}
 				$profile['maxComponentElements'] = max($profile['maxComponentElements'], $nComponentElements);
 			} elseif ($numberOfContours > 0) {
@@ -1061,6 +1024,27 @@ class FontSubsetter
 		}
 
 		return $profile;
+	}
+
+	/**
+	 * How many bytes of a compound glyph's component record follow its flags and glyph index: the two
+	 * arguments, as words or bytes, then whichever transformation the flags say is there.
+	 *
+	 * @param int $flags The component's flags
+	 */
+	private static function componentArgumentsLength($flags)
+	{
+		$length = ($flags & GlyphOperator::WORDS) ? 4 : 2;
+
+		if ($flags & GlyphOperator::SCALE) {
+			$length += 2;
+		} elseif ($flags & GlyphOperator::XYSCALE) {
+			$length += 4;
+		} elseif ($flags & GlyphOperator::TWOBYTWO) {
+			$length += 8;
+		}
+
+		return $length;
 	}
 
 	/**
@@ -1143,18 +1127,7 @@ class FontSubsetter
 				$savepos = $this->reader->tell();
 				$this->getGlyphs($glyphIdx, $start, $glyphSet, $subsetglyphs);
 				$this->reader->seek($savepos);
-				if ($flags & GlyphOperator::WORDS) {
-					$this->reader->skip(4);
-				} else {
-					$this->reader->skip(2);
-				}
-				if ($flags & GlyphOperator::SCALE) {
-					$this->reader->skip(2);
-				} elseif ($flags & GlyphOperator::XYSCALE) {
-					$this->reader->skip(4);
-				} elseif ($flags & GlyphOperator::TWOBYTWO) {
-					$this->reader->skip(8);
-				}
+				$this->reader->skip(self::componentArgumentsLength($flags));
 			}
 		}
 	}

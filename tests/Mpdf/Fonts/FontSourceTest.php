@@ -36,7 +36,6 @@ class FontSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		foreach (['glyf', 'OS/2', 'post'] as $tag) {
 			$this->assertTrue($parser->hasTable($tag));
-			$this->assertSame($parser->get_table_pos($tag), $parser->getTablePosition($tag));
 			$this->assertSame([$parser->tables[$tag]['offset'], $parser->tables[$tag]['length']], $parser->getTablePosition($tag));
 		}
 
@@ -123,9 +122,12 @@ class FontSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$reader->seek(4);
 		$numTables = $reader->readUInt16();
 
+		$reader->skip(6); // searchRange, entrySelector, rangeShift
+
 		$tags = [];
 		for ($i = 0; $i < $numTables; $i++) {
-			$tags[] = substr($program, 12 + 16 * $i, 4);
+			$tags[] = $reader->read(4);
+			$reader->skip(12); // checksum, offset, length
 		}
 
 		return $tags;

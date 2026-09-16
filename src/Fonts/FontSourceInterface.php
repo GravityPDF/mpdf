@@ -8,6 +8,8 @@ namespace Mpdf\Fonts;
  *
  * TTFontFile is the implementation. The subsetter reads the table bytes itself, through the reader
  * open() hands back, so what it needs from the parser is where each table is and those two readers.
+ * That reader is shared: selectFont(), readTableDirectory(), getCMAP4() and getHMTX() read through it
+ * too, from wherever the subsetter left it, so a source hands back the reader it reads itself.
  */
 interface FontSourceInterface
 {
