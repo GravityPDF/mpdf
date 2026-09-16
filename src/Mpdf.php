@@ -8318,7 +8318,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$breakfound = [$cutcontentctr, $cutcharctr, $cutcontentctr, $cutcharctr, 'cut'];
 						$content[$contentctr] = mb_substr($content[$contentctr], 0, $charctr, $this->mb_enc) . '-' . mb_substr($content[$contentctr], $charctr + 1, mb_strlen($content[$contentctr]), $this->mb_enc);
 						if (!empty($cOTLdata[$contentctr])) {
-							$cOTLdata[$contentctr]['char_data'][$charctr] = ['bidi_class' => 9, 'uni' => 45];
+							$previous = $charctr > 0 ? $cOTLdata[$contentctr]['char_data'][$charctr - 1] : [];
+							$cOTLdata[$contentctr]['char_data'][$charctr] = $this->breakHyphenCharData($previous, $blockdir);
 							$cOTLdata[$contentctr]['group'][$charctr] = 'C';
 						}
 					} elseif (isset($this->textparam['hyphens']) && $this->textparam['hyphens'] != 2 && $this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats' && $prevchar == chr(173)) {
@@ -8412,9 +8413,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						} else {
 							$savedPreContent[count($savedPreContent) - 1] = '-' . $savedPreContent[count($savedPreContent) - 1];
 						}
-						if (!empty($cOTLdata[(count($cOTLdata) - 1)])) {
-							$cOTLdata[(count($cOTLdata) - 1)]['char_data'][] = ['bidi_class' => 9, 'uni' => 45];
-							$cOTLdata[(count($cOTLdata) - 1)]['group'] .= 'C';
+						$lastChunk = count($cOTLdata) - 1;
+						if (!empty($cOTLdata[$lastChunk])) {
+							$charCount = count($cOTLdata[$lastChunk]['char_data']);
+							$previous = $charCount ? $cOTLdata[$lastChunk]['char_data'][$charCount - 1] : [];
+							$cOTLdata[$lastChunk]['char_data'][] = $this->breakHyphenCharData($previous, $blockdir);
+							$cOTLdata[$lastChunk]['group'] .= 'C';
 						}
 					}
 
@@ -8950,6 +8954,32 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		unset($content);
 		unset($contentB);
+	}
+
+	/**
+	 * The char_data for a hyphen mPDF adds to break a line.
+	 *
+	 * Bidi::prepare() resolves a direction and an embedding level for every character of the
+	 * paragraph before the lines are established, and this hyphen was not there to be resolved. It
+	 * belongs to the word it breaks, so it takes what that word's last character resolved to.
+	 *
+	 * @param array  $previous
+	 * @param string $blockdir The paragraph direction, 'rtl' or 'ltr'
+	 *
+	 * @return array
+	 */
+	private function breakHyphenCharData($previous, $blockdir)
+	{
+		$paragraph = $blockdir === 'rtl'
+			? ['type' => Ucdn::BIDI_CLASS_R, 'level' => 1]
+			: ['type' => Ucdn::BIDI_CLASS_L, 'level' => 0];
+
+		return [
+			'bidi_class' => Ucdn::BIDI_CLASS_ES,
+			'uni' => 45,
+			'type' => Arrays::get($previous, 'type', $paragraph['type']),
+			'level' => Arrays::get($previous, 'level', $paragraph['level']),
+		];
 	}
 
 	// ----------------------END OF FLOWING BLOCK------------------------------------//
