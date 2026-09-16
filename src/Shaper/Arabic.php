@@ -2,8 +2,6 @@
 
 namespace Mpdf\Shaper;
 
-use Mpdf\Utils\UtfString;
-
 /**
  * Arabic and Syriac cursive joining.
  *
@@ -239,6 +237,15 @@ class Arabic
 		return $multiple;
 	}
 
+	/**
+	 * Syriac as the Alaph rules draw it. The range is inherited and stops at U+0745 rather than at the
+	 * end of the block, so the marks above it and the three Sogdian letters do not count here.
+	 */
+	private static function isSyriac($codepoint)
+	{
+		return $codepoint >= 0x0700 && $codepoint <= 0x0745;
+	}
+
 	private static function glyphs($char, $type, &$chars, $i, $scriptTag, $usetags, $arabGlyphs)
 	{
 		// Optional Feature settings    // doesn't control Syriac at present
@@ -256,12 +263,12 @@ class Arabic
 			if (isset($chars[$n])) {
 				$prev = hexdec($chars[$n]);
 				// the Alaph ends the word: nothing follows it, or what follows is not Syriac
-				$wordEnd = !isset($chars[$i + 1]) || !preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf(hexdec($chars[$i + 1])));
+				$wordEnd = !isset($chars[$i + 1]) || !self::isSyriac(hexdec($chars[$i + 1]));
 
 				// med2 and fin2 are the Alaph drawn joined to the letter before it, so that letter has to
 				// be one that joins to what follows it
 				if (isset(self::$leftJoining[$prev])) {
-					if (!$wordEnd && preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf($prev)) && isset($arabGlyphs[$char][4])) {
+					if (!$wordEnd && self::isSyriac($prev) && isset($arabGlyphs[$char][4])) {
 						$retk = 4;
 					} elseif ($wordEnd && isset($arabGlyphs[$char][5])) {
 						$retk = 5;
