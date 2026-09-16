@@ -1,10 +1,11 @@
 <?php
 
 /*
- * Runs Arabic::shape() over one run and prints the run it leaves, as JSON. Run in a process of its
- * own, under a time limit, so a shaper that never returns ends here instead of in the suite.
+ * Runs Arabic::shape() over each of a set of runs and prints, as JSON, each run's [hex, form] pairs
+ * under its name. Run in a process of its own, under a time limit, so a shaper that never returns
+ * ends here instead of in the suite.
  *
- * Usage: php arabic-shape.php <base64 of the JSON [hexes, rtlSUB, usetags, GDEF marks]>
+ * Usage: php arabic-shape.php <base64 of the JSON [{name: [hexes, rtlSUB]}, usetags, GDEF marks]>
  */
 
 require __DIR__ . '/../../../vendor/autoload.php';
@@ -12,13 +13,22 @@ require __DIR__ . '/../../../vendor/autoload.php';
 set_time_limit(5);
 error_reporting(E_ERROR);
 
-list($hexes, $glyphs, $usetags, $marks) = json_decode(base64_decode($argv[1]), true);
+list($runs, $usetags, $marks) = json_decode(base64_decode($argv[1]), true);
 
-$info = [];
-foreach ($hexes as $hex) {
-	$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
+$forms = [];
+foreach ($runs as $name => $run) {
+	list($hexes, $glyphs) = $run;
+
+	$info = [];
+	foreach ($hexes as $hex) {
+		$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
+	}
+
+	\Mpdf\Shaper\Arabic::shape($info, $glyphs, $marks, $usetags, 'arab');
+
+	foreach ($info as $char) {
+		$forms[$name][] = [$char['hex'], $char['form']];
+	}
 }
 
-\Mpdf\Shaper\Arabic::shape($info, $glyphs, $marks, $usetags, 'arab');
-
-echo json_encode($info);
+echo json_encode($forms);

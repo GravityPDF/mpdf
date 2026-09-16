@@ -513,11 +513,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A chained rule's backtrack or lookahead is found by walking over the glyphs its lookup ignores,
-	 * and a run that ends in those glyphs ends the walk. The walk read past the edge: on PHP 7 that was
-	 * a notice for each glyph it read there, and from PHP 8 it never returned (#204), which is why
-	 * testAFormsContextWalkReturnsAtTheEdgeOfTheRun() runs the same cases in a process of its own.
-	 * Here the notice is what fails, so a regression cannot hang the suite.
+	 * The walk over the glyphs a chained rule's lookup ignores read past the edge of the run: a notice
+	 * for each glyph on PHP 7, and from PHP 8 a walk that never returned (#204). Here the notice is what
+	 * fails, so a regression cannot hang the suite.
 	 *
 	 * @dataProvider dataContextWalkedToTheEdgeOfTheRun
 	 */
@@ -537,18 +535,24 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The time limit is the child's own rather than a `timeout` around it, so it holds on Windows too,
-	 * and the child reports nothing short of a fatal error, so a walk warning on every step cannot fill
-	 * the stderr pipe and leave it blocked instead of timed out.
-	 *
-	 * @dataProvider dataContextWalkedToTheEdgeOfTheRun
+	 * The same cases, all in one child process under a time limit, for a regression that reads past the
+	 * edge without a notice. The limit is the child's own rather than a `timeout` around it, so it holds
+	 * on Windows too, and the child reports nothing short of a fatal error, so a walk warning on every
+	 * step cannot fill the stderr pipe and leave it blocked instead of timed out.
 	 */
-	public function testAFormsContextWalkReturnsAtTheEdgeOfTheRun($hexes, $glyphs, $expected)
+	public function testAFormsContextWalkReturnsAtTheEdgeOfTheRun()
 	{
+		$runs = [];
+		$expected = [];
+		foreach ($this->dataContextWalkedToTheEdgeOfTheRun() as $name => $case) {
+			$runs[$name] = [$case[0], $case[1]];
+			$expected[$name] = $case[2];
+		}
+
 		// base64, because Windows argument quoting does not survive the JSON's double quotes
-		$case = base64_encode(json_encode([$hexes, $glyphs, self::ALL_FORMS, ' ' . self::FATHA]));
+		$arg = base64_encode(json_encode([$runs, self::ALL_FORMS, ' ' . self::FATHA]));
 		$command = escapeshellarg(PHP_BINARY) . ' -d display_errors=stderr '
-			. escapeshellarg(__DIR__ . '/../Fixtures/arabic-shape.php') . ' ' . $case;
+			. escapeshellarg(__DIR__ . '/../Fixtures/arabic-shape.php') . ' ' . $arg;
 
 		$process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
 		$output = stream_get_contents($pipes[1]);
@@ -557,11 +561,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		fclose($pipes[2]);
 		$this->assertSame(0, proc_close($process), $errors);
 
-		$forms = [];
-		foreach (json_decode($output, true) as $char) {
-			$forms[] = [$char['hex'], $char['form']];
-		}
-		$this->assertSame($expected, $forms);
+		$this->assertSame($expected, json_decode($output, true));
 	}
 
 	public function dataContextWalkedToTheEdgeOfTheRun()
