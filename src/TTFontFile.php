@@ -7,6 +7,7 @@ use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
+use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\TableChecksum;
 
 // NOTE*** If you change the defined constants below, be sure to delete all temporary font data files in /ttfontdata/
@@ -1597,30 +1598,17 @@ class TTFontFile
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 						}
 						for ($s = 0; $s < $SubRuleSetCount; $s++) {
-							// SubRuleSet Tables
-							$this->reader->seek($Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset']);
-							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount'] = $this->reader->readUInt16();
-							for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount']; $g++) {
-								$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleOffset'][$g] = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] + $this->reader->readUInt16();
-							}
-						}
-						for ($s = 0; $s < $SubRuleSetCount; $s++) {
-							// SubRule Tables
-							for ($g = 0; $g < $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount']; $g++) {
-								// Ligature tables
-								$this->reader->seek($Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleOffset'][$g]);
-
-								$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g]['GlyphCount'] = $this->reader->readUInt16();
-								$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g]['SubstCount'] = $this->reader->readUInt16();
-								// "Input"::[GlyphCount - 1]::Array of input GlyphIDs-start with second glyph
-								for ($l = 1; $l < $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g]['GlyphCount']; $l++) {
-									$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g]['Input'][$l] = $this->reader->readUInt16();
-								}
-								// "SubstLookupRecord"::[SubstCount]::Array of SubstLookupRecords-in design order
-								for ($l = 0; $l < $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g]['SubstCount']; $l++) {
-									$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g]['SubstLookupRecord'][$l]['SequenceIndex'] = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g]['SubstLookupRecord'][$l]['LookupListIndex'] = $this->reader->readUInt16();
-								}
+							$ruleOffsets = SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset']);
+							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount'] = count($ruleOffsets);
+							foreach ($ruleOffsets as $g => $ruleOffset) {
+								$this->reader->seek($ruleOffset);
+								list($input, $SubstCount) = SequenceRule::plain($this->reader);
+								$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$g] = [
+									'GlyphCount' => count($input) + 1,
+									'SubstCount' => $SubstCount,
+									'Input' => $this->fromPosition1($input),
+									'SubstLookupRecord' => SequenceRule::lookupRecords($this->reader, $SubstCount),
+								];
 							}
 						}
 					} // Format 2: Class-based Context Glyph Substitution
@@ -1641,13 +1629,8 @@ class TTFontFile
 						// NB Unlike Lookup Type 6 Format 3, the count of substitutions precedes the Coverage table offsets
 						$Lookup[$i]['Subtable'][$c]['InputGlyphCount'] = $this->reader->readUInt16();
 						$Lookup[$i]['Subtable'][$c]['SubstCount'] = $this->reader->readUInt16();
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['InputGlyphCount']; $b++) {
-							$Lookup[$i]['Subtable'][$c]['CoverageInput'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						}
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
-							$Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'] = $this->reader->readUInt16();
-							$Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'] = $this->reader->readUInt16();
-						}
+						$Lookup[$i]['Subtable'][$c]['CoverageInput'] = SequenceRule::coverageOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['Offset'], $Lookup[$i]['Subtable'][$c]['InputGlyphCount']);
+						$Lookup[$i]['Subtable'][$c]['SubstLookupRecord'] = SequenceRule::lookupRecords($this->reader, $Lookup[$i]['Subtable'][$c]['SubstCount']);
 					} else {
 						throw new \Mpdf\Exception\FontException("GSUB Lookup Type " . $Lookup[$i]['Type'] . ", Format " . $SubstFormat . " not supported.");
 					}
@@ -1677,28 +1660,15 @@ class TTFontFile
 						}
 					} // Format 3: Coverage-based Chaining Context Glyph Substitution  p259
 					elseif ($SubstFormat == 3) {
-						$Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount'] = $this->reader->readUInt16();
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']; $b++) {
-							$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						}
-						$Lookup[$i]['Subtable'][$c]['InputGlyphCount'] = $this->reader->readUInt16();
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['InputGlyphCount']; $b++) {
-							$Lookup[$i]['Subtable'][$c]['CoverageInput'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						}
-						$Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount'] = $this->reader->readUInt16();
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount']; $b++) {
-							$Lookup[$i]['Subtable'][$c]['CoverageLookahead'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						}
+						$base = $Lookup[$i]['Subtable'][$c]['Offset'];
+						$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
+						$Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageBacktrack']);
+						$Lookup[$i]['Subtable'][$c]['CoverageInput'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
+						$Lookup[$i]['Subtable'][$c]['InputGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageInput']);
+						$Lookup[$i]['Subtable'][$c]['CoverageLookahead'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
+						$Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageLookahead']);
 						$Lookup[$i]['Subtable'][$c]['SubstCount'] = $this->reader->readUInt16();
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
-							$Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'] = $this->reader->readUInt16();
-							$Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'] = $this->reader->readUInt16();
-							// Substitution Lookup Record
-							// All contextual substitution subtables specify the substitution data in a Substitution Lookup Record
-							// (SubstLookupRecord). Each record contains a SequenceIndex, which indicates the position where the substitution
-							// will occur in the glyph sequence. In addition, a LookupListIndex identifies the lookup to be applied at the
-							// glyph position specified by the SequenceIndex.
-						}
+						$Lookup[$i]['Subtable'][$c]['SubstLookupRecord'] = SequenceRule::lookupRecords($this->reader, $Lookup[$i]['Subtable'][$c]['SubstCount']);
 					}
 				} // LookupType 8: Reverse Chaining Contextual Single Substitution Subtable
 				elseif ($Lookup[$i]['Type'] == 8) {
@@ -1707,20 +1677,15 @@ class TTFontFile
 						throw new \Mpdf\Exception\FontException("GSUB Lookup Type " . $Lookup[$i]['Type'] . ", Format " . $SubstFormat . " not supported.");
 					}
 					$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-					$Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount'] = $this->reader->readUInt16();
-					for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']; $b++) {
-						$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-					}
-					$Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount'] = $this->reader->readUInt16();
-					for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount']; $b++) {
-						$Lookup[$i]['Subtable'][$c]['CoverageLookahead'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-					}
+					$base = $Lookup[$i]['Subtable'][$c]['Offset'];
+					$Lookup[$i]['Subtable'][$c]['CoverageBacktrack'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
+					$Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageBacktrack']);
+					$Lookup[$i]['Subtable'][$c]['CoverageLookahead'] = SequenceRule::coverageOffsets($this->reader, $base, $this->reader->readUInt16());
+					$Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount'] = count($Lookup[$i]['Subtable'][$c]['CoverageLookahead']);
 					// One substitute glyph per glyph in the Coverage table - the substitution is written into the
 					// subtable itself rather than delegated to a Lookup, as every other contextual type does
 					$Lookup[$i]['Subtable'][$c]['GlyphCount'] = $this->reader->readUInt16();
-					for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['GlyphCount']; $b++) {
-						$Lookup[$i]['Subtable'][$c]['SubstituteGlyphID'][] = $this->reader->readUInt16();
-					}
+					$Lookup[$i]['Subtable'][$c]['SubstituteGlyphID'] = SequenceRule::values($this->reader, $Lookup[$i]['Subtable'][$c]['GlyphCount']);
 				} else {
 					throw new \Mpdf\Exception\FontException(sprintf('Lookup Type "%s" not supported.', $Lookup[$i]['Type']));
 				}
@@ -1847,14 +1812,9 @@ class TTFontFile
 						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->_getCoverage();
 
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['SubRuleSetCount']; $s++) {
-							$SubRuleSet = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s];
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['FirstGlyph'] = $CoverageGlyphs[$s];
 							for ($r = 0; $r < $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount']; $r++) {
-								$GlyphCount = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['GlyphCount'];
-								for ($g = 1; $g < $GlyphCount; $g++) {
-									$glyphID = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['Input'][$g];
-									$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['InputGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
-								}
+								$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['InputGlyphs'] = $this->glyphStrings($Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'][$r]['Input']);
 							}
 						}
 					} // Format 2: Class-based Context Glyph Substitution
@@ -1866,33 +1826,17 @@ class TTFontFile
 						$Lookup[$i]['Subtable'][$c]['InputClasses'] = $InputClasses;
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['SubClassSetCnt']; $s++) {
 							if ($Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s] > 0) {
-								$this->reader->seek($Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s]);
-								$Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRuleCnt'] = $SubClassRuleCnt = $this->reader->readUInt16();
-								$SubClassRule = [];
-								for ($b = 0; $b < $SubClassRuleCnt; $b++) {
-									$SubClassRule[$b] = $Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s] + $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRule'][$b] = $SubClassRule[$b];
-								}
-							}
-						}
-
-						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['SubClassSetCnt']; $s++) {
-							if ($Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s] > 0) {
-								$SubClassRuleCnt = $Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRuleCnt'];
-								for ($b = 0; $b < $SubClassRuleCnt; $b++) {
-									$this->reader->seek($Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRule'][$b]);
-									$Rule = [];
-									$Rule['InputGlyphCount'] = $this->reader->readUInt16();
-									$Rule['SubstCount'] = $this->reader->readUInt16();
-									for ($r = 1; $r < $Rule['InputGlyphCount']; $r++) {
-										$Rule['Input'][$r] = $this->reader->readUInt16();
-									}
-									for ($r = 0; $r < $Rule['SubstCount']; $r++) {
-										$Rule['SequenceIndex'][$r] = $this->reader->readUInt16();
-										$Rule['LookupListIndex'][$r] = $this->reader->readUInt16();
-									}
-
-									$Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRule'][$b] = $Rule;
+								$ruleOffsets = SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][$s]);
+								$Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRuleCnt'] = count($ruleOffsets);
+								foreach ($ruleOffsets as $b => $ruleOffset) {
+									$this->reader->seek($ruleOffset);
+									list($input, $SubstCount) = SequenceRule::plain($this->reader);
+									$Lookup[$i]['Subtable'][$c]['SubClassSet'][$s]['SubClassRule'][$b] = [
+										'InputGlyphCount' => count($input) + 1,
+										'SubstCount' => $SubstCount,
+										'Input' => $this->fromPosition1($input),
+										'SubstLookupRecord' => SequenceRule::lookupRecords($this->reader, $SubstCount),
+									];
 								}
 							}
 						}
@@ -1911,44 +1855,21 @@ class TTFontFile
 						$this->reader->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);
 						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->_getCoverage();
 
-						$ChainSubRuleSetCnt = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount'];
-
-						for ($s = 0; $s < $ChainSubRuleSetCnt; $s++) {
-							$this->reader->seek($Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s]);
-							$ChainSubRuleCnt = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRuleCount'] = $this->reader->readUInt16();
-							for ($r = 0; $r < $ChainSubRuleCnt; $r++) {
-								$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRuleOffset'][$r] = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s] + $this->reader->readUInt16();
-							}
-						}
-						for ($s = 0; $s < $ChainSubRuleSetCnt; $s++) {
-							$ChainSubRuleCnt = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRuleCount'];
-							for ($r = 0; $r < $ChainSubRuleCnt; $r++) {
-								// ChainSubRule
-								$this->reader->seek($Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRuleOffset'][$r]);
-
-								$BacktrackGlyphCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['BacktrackGlyphCount'] = $this->reader->readUInt16();
-								for ($g = 0; $g < $BacktrackGlyphCount; $g++) {
-									$glyphID = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['BacktrackGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
-								}
-
-								$InputGlyphCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['InputGlyphCount'] = $this->reader->readUInt16();
-								for ($g = 1; $g < $InputGlyphCount; $g++) {
-									$glyphID = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['InputGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
-								}
-
-								$LookaheadGlyphCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['LookaheadGlyphCount'] = $this->reader->readUInt16();
-								for ($g = 0; $g < $LookaheadGlyphCount; $g++) {
-									$glyphID = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['LookaheadGlyphs'][$g] = GlyphString::of($this->glyphToChar[$glyphID][0]);
-								}
-
-								$SubstCount = $Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['SubstCount'] = $this->reader->readUInt16();
-								for ($lu = 0; $lu < $SubstCount; $lu++) {
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['SequenceIndex'][$lu] = $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r]['LookupListIndex'][$lu] = $this->reader->readUInt16();
-								}
+						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount']; $s++) {
+							foreach (SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s]) as $r => $ruleOffset) {
+								$this->reader->seek($ruleOffset);
+								list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
+								$SubstCount = $this->reader->readUInt16();
+								$Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'][$r] = [
+									'BacktrackGlyphCount' => count($backtrack),
+									'BacktrackGlyphs' => $this->glyphStrings($backtrack),
+									'InputGlyphCount' => count($input) + 1,
+									'InputGlyphs' => $this->glyphStrings($this->fromPosition1($input)),
+									'LookaheadGlyphCount' => count($lookahead),
+									'LookaheadGlyphs' => $this->glyphStrings($lookahead),
+									'SubstCount' => $SubstCount,
+									'SubstLookupRecord' => SequenceRule::lookupRecords($this->reader, $SubstCount),
+								];
 							}
 						}
 					} // Format 2: Class-based Chaining Context Glyph Substitution  p257
@@ -1967,45 +1888,22 @@ class TTFontFile
 
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubClassSetCnt']; $s++) {
 							if ($Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s] > 0) {
-								$this->reader->seek($Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s]);
-								$Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRuleCnt'] = $ChainSubClassRuleCnt = $this->reader->readUInt16();
-								$ChainSubClassRule = [];
-								for ($b = 0; $b < $ChainSubClassRuleCnt; $b++) {
-									$ChainSubClassRule[$b] = $Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s] + $this->reader->readUInt16();
-									$Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRule'][$b] = $ChainSubClassRule[$b];
-								}
-							}
-						}
-
-						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubClassSetCnt']; $s++) {
-							if (isset($Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRuleCnt'])) {
-								$ChainSubClassRuleCnt = $Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRuleCnt'];
-							} else {
-								$ChainSubClassRuleCnt = 0;
-							}
-							for ($b = 0; $b < $ChainSubClassRuleCnt; $b++) {
-								if ($Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s] > 0) {
-									$this->reader->seek($Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRule'][$b]);
-									$Rule = [];
-									$Rule['BacktrackGlyphCount'] = $this->reader->readUInt16();
-									for ($r = 0; $r < $Rule['BacktrackGlyphCount']; $r++) {
-										$Rule['Backtrack'][$r] = $this->reader->readUInt16();
-									}
-									$Rule['InputGlyphCount'] = $this->reader->readUInt16();
-									for ($r = 1; $r < $Rule['InputGlyphCount']; $r++) {
-										$Rule['Input'][$r] = $this->reader->readUInt16();
-									}
-									$Rule['LookaheadGlyphCount'] = $this->reader->readUInt16();
-									for ($r = 0; $r < $Rule['LookaheadGlyphCount']; $r++) {
-										$Rule['Lookahead'][$r] = $this->reader->readUInt16();
-									}
-									$Rule['SubstCount'] = $this->reader->readUInt16();
-									for ($r = 0; $r < $Rule['SubstCount']; $r++) {
-										$Rule['SequenceIndex'][$r] = $this->reader->readUInt16();
-										$Rule['LookupListIndex'][$r] = $this->reader->readUInt16();
-									}
-
-									$Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRule'][$b] = $Rule;
+								$ruleOffsets = SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][$s]);
+								$Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRuleCnt'] = count($ruleOffsets);
+								foreach ($ruleOffsets as $b => $ruleOffset) {
+									$this->reader->seek($ruleOffset);
+									list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
+									$SubstCount = $this->reader->readUInt16();
+									$Lookup[$i]['Subtable'][$c]['ChainSubClassSet'][$s]['ChainSubClassRule'][$b] = [
+										'BacktrackGlyphCount' => count($backtrack),
+										'Backtrack' => $backtrack,
+										'InputGlyphCount' => count($input) + 1,
+										'Input' => $this->fromPosition1($input),
+										'LookaheadGlyphCount' => count($lookahead),
+										'Lookahead' => $lookahead,
+										'SubstCount' => $SubstCount,
+										'SubstLookupRecord' => SequenceRule::lookupRecords($this->reader, $SubstCount),
+									];
 								}
 							}
 						}
@@ -2064,6 +1962,31 @@ class TTFontFile
 		}
 
 		return $Lookup;
+	}
+
+	/**
+	 * An input sequence as SequenceRule reads it, keyed by its position in the rule. The rules here are
+	 * kept that way so that position 0 - the glyph or class the rule set was reached through, which
+	 * the rule does not list - can be put in front of them and sorted into place.
+	 */
+	private function fromPosition1(array $values)
+	{
+		return $values ? array_combine(range(1, count($values)), $values) : [];
+	}
+
+	/**
+	 * @param int[] $glyphIDs
+	 *
+	 * @return string[] Each glyph as the character it is matched by, keys kept
+	 */
+	private function glyphStrings(array $glyphIDs)
+	{
+		$strings = [];
+		foreach ($glyphIDs as $position => $glyphID) {
+			$strings[$position] = GlyphString::of($this->glyphToChar[$glyphID][0]);
+		}
+
+		return $strings;
 	}
 
 	/**
@@ -2515,8 +2438,8 @@ class TTFontFile
 								$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => '', 'match' => $contextInputMatch, 'nBacktrack' => 0, 'nInput' => $nInput, 'nLookahead' => 0, 'rules' => [],];
 
 								for ($b = 0; $b < $rule['SubstCount']; $b++) {
-									$lup = $rule['LookupListIndex'][$b];
-									$seqIndex = $rule['SequenceIndex'][$b];
+									$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
+									$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
 
 									// $Lookup[$lup] = secondary Lookup
 									for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
@@ -2644,8 +2567,8 @@ class TTFontFile
 								$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => $backtrackMatch, 'match' => ($contextInputMatch . $lookaheadMatch), 'nBacktrack' => count($backtrackGlyphs), 'nInput' => $nInput, 'nLookahead' => count($lookaheadGlyphs), 'rules' => [],];
 
 								for ($b = 0; $b < $rule['SubstCount']; $b++) {
-									$lup = $rule['LookupListIndex'][$b];
-									$seqIndex = $rule['SequenceIndex'][$b];
+									$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
+									$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
 
 									// $Lookup[$lup] = secondary Lookup
 									for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
@@ -2760,8 +2683,8 @@ class TTFontFile
 								$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => $backtrackMatch, 'match' => ($contextInputMatch . $lookaheadMatch), 'nBacktrack' => count($backtrackGlyphs), 'nInput' => $nInput, 'nLookahead' => count($lookaheadGlyphs), 'rules' => [],];
 
 								for ($b = 0; $b < $rule['SubstCount']; $b++) {
-									$lup = $rule['LookupListIndex'][$b];
-									$seqIndex = $rule['SequenceIndex'][$b];
+									$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
+									$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
 
 									// $Lookup[$lup] = secondary Lookup
 									for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
