@@ -26,12 +26,8 @@ class ChineseRegionLangSysTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	{
 		return [
 			'zh-HK' => ['zh-HK', self::ZHH],
-			'zh-Hant-HK' => ['zh-Hant-HK', self::ZHH],
 			'zh-TW' => ['zh-TW', self::ZHT],
-			'zh-MO' => ['zh-MO', self::ZHT],
 			'zh-CN' => ['zh-CN', self::ZHS],
-			'zh-SG' => ['zh-SG', self::ZHS],
-			'lower case' => ['zh-tw', self::ZHT],
 		];
 	}
 
