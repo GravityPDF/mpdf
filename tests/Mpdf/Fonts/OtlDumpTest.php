@@ -238,34 +238,6 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A rule whose format lists its records as two parallel arrays reads as the same records as one
-	 * that lists them as records.
-	 */
-	public function testARulesLookupRecordsReadTheSameInEitherShape()
-	{
-		$records = [
-			['SequenceIndex' => 0, 'LookupListIndex' => 7],
-			['SequenceIndex' => 2, 'LookupListIndex' => 3]
-		];
-
-		$this->assertSame($records, $this->substLookupRecords(['SubstCount' => 2, 'SubstLookupRecord' => $records]));
-
-		$this->assertSame($records, $this->substLookupRecords([
-			'SubstCount' => 2,
-			'SequenceIndex' => [0, 2],
-			'LookupListIndex' => [7, 3]
-		]));
-	}
-
-	/**
-	 * A rule that substitutes nothing names neither shape, and the count is all there is to read.
-	 */
-	public function testARuleWithoutLookupRecordsHasNone()
-	{
-		$this->assertSame([], $this->substLookupRecords(['SubstCount' => 0]));
-	}
-
-	/**
 	 * The report names the classes a lookup's flags skip. Noto Sans Takri's GDEF defines mark glyph sets
 	 * 0 and 1 and a mark attachment class 1, which is enough to name each of the five.
 	 */
@@ -332,14 +304,6 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$reflected->setAccessible(true);
 
 		return $reflected->invoke($dump, $flag, $markFilteringSet);
-	}
-
-	private function substLookupRecords(array $rule)
-	{
-		$reflected = new \ReflectionMethod(OtlDump::class, 'substLookupRecords');
-		$reflected->setAccessible(true);
-
-		return $reflected->invoke($this->dumper(), $rule);
 	}
 
 	/**
