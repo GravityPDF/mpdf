@@ -60,10 +60,11 @@ class OtlTags
 			return [$scripttag, false];
 		}
 
-		if ($shaper && isset(self::$originalIndicTags[$scripttag])) {
-			$from = array_search($scripttag, array_keys(self::$originalIndicTags), true);
-			foreach (array_slice(self::$originalIndicTags, $from) as $original) {
-				if (isset($ScriptLang[$original])) {
+		if ($shaper) {
+			$reached = false;
+			foreach (self::$originalIndicTags as $v2 => $original) {
+				$reached = $reached || $v2 === $scripttag;
+				if ($reached && isset($ScriptLang[$original])) {
 					return [$original, true];
 				}
 			}

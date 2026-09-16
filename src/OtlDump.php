@@ -1681,9 +1681,7 @@ class OtlDump extends TTFontFile
 	/**
 	 * The run as it stands at one step of shaping, for Otl's debugOTL trace.
 	 *
-	 * Static, because it is the shaper that reports as it goes, with no font dump to hand. Where the
-	 * rest of this class shows what a font's lookups could do to any text, this shows what one lookup
-	 * did to one string.
+	 * Static, because it is the shaper that reports as it goes, with no font dump to hand.
 	 *
 	 * @param array      $OTLdata   The run, one entry per glyph
 	 * @param string     $GPOSSUB   'GSUB' or 'GPOS', or 'BEGIN' or 'END' of the run

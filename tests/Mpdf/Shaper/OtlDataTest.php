@@ -339,7 +339,7 @@ class OtlDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * @param int[] $unicode
 	 * @param array $GPOSinfo
 	 *
-	 * @return array A run of the characters, grouped as Mpdf::getBasicOTLdata() groups them
+	 * @return array A run of the characters, with spaces grouped S and everything else C
 	 */
 	private function laidOut($unicode, $GPOSinfo = [])
 	{

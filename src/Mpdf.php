@@ -8518,7 +8518,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							if ((isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) || !empty($sOTLdata)) {
 								OtlData::removeChar($chunk, $cOTLdata[$k], "\xc2\xad", $this->mb_enc);
 								OtlData::removeChar($chunk, $cOTLdata[$k], "\xe2\x80\x8b", $this->mb_enc);
-								OtlData::nbspToSpace($chunk, $cOTLdata[$k], $this->mb_enc); // NBSP -> space
+								OtlData::nbspToSpace($chunk, $cOTLdata[$k], $this->mb_enc);
 								if (preg_match("/([" . $this->pregCURSchars . "])/u", $chunk)) {
 									$inclCursive = true;
 								}
