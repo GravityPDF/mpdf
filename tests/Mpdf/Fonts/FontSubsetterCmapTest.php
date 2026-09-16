@@ -14,9 +14,6 @@ use Mpdf\TTFontFile;
  * and glyphs are resolved through the CIDToGIDMap beside it - and which every font tool refuses.
  * #150 was that same array standing a repackaged subtable past anything the field can hold, and #156
  * the two subset builders writing it as well.
- *
- * makeSubsetSIP's format 6 subtable beside it states a length the same way, and #164 was that length
- * wrapping on a wide subset.
  */
 class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -98,19 +95,12 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$cmap = $this->table($this->build($this->file($font), 'makeSubsetSIP', array_slice($subset, 0, $characters)), 'cmap');
 		$this->assertNotNull($cmap, 'The font program carries no cmap table');
 
+		$records = $this->encodingRecords($cmap);
+
 		$reader = new BlobReader($cmap);
-		$reader->skip(2); // version
-		$subtableCount = $reader->readUInt16();
-
-		$records = [];
-		for ($i = 0; $i < $subtableCount; $i++) {
-			$encoding = $reader->readUInt16() . ',' . $reader->readUInt16();
-			$records[$encoding] = FontReader::uint32($reader->read(4));
-		}
-
 		$offsets = array_values($records);
 		$offsets[] = strlen($cmap);
-		for ($i = 0; $i < $subtableCount; $i++) {
+		for ($i = 0; $i < count($records); $i++) {
 			$reader->seek($offsets[$i] + 2);
 			$this->assertSame($offsets[$i + 1] - $offsets[$i], $reader->readUInt16());
 		}
@@ -178,15 +168,8 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function format4Subtable($cmap)
 	{
+		$offsets = array_values($this->encodingRecords($cmap));
 		$reader = new BlobReader($cmap);
-		$reader->skip(2); // version
-		$subtableCount = $reader->readUInt16();
-
-		$offsets = [];
-		for ($i = 0; $i < $subtableCount; $i++) {
-			$reader->skip(4); // platform, encoding
-			$offsets[] = FontReader::uint32($reader->read(4));
-		}
 
 		$start = null;
 		foreach ($offsets as $offset) {
@@ -214,6 +197,24 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		return [$start, $end, $segCount];
+	}
+
+	/**
+	 * @return int[] Each encoding record's subtable offset, keyed "platform,encoding" in the order listed
+	 */
+	private function encodingRecords($cmap)
+	{
+		$reader = new BlobReader($cmap);
+		$reader->skip(2); // version
+		$subtableCount = $reader->readUInt16();
+
+		$records = [];
+		for ($i = 0; $i < $subtableCount; $i++) {
+			$encoding = $reader->readUInt16() . ',' . $reader->readUInt16();
+			$records[$encoding] = FontReader::uint32($reader->read(4));
+		}
+
+		return $records;
 	}
 
 	/**
