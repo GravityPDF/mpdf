@@ -56,6 +56,16 @@ class OtlDump extends TTFontFile
 	private $reportChunkBytes = 0;
 
 	/**
+	 * Where the GSUB report is: level 1, or a lookup nested at level 2 with what the rule that nested
+	 * it filters and frames its rows by. @see reportGSUBlookups()
+	 *
+	 * @var array
+	 */
+	private $nesting = self::TOP_LEVEL;
+
+	const TOP_LEVEL = ['level' => 1, 'coverage' => '', 'exB' => '', 'exL' => '', 'class0excl' => ''];
+
+	/**
 	 * What the summary report's links should carry to reach a detail report of the same font.
 	 *
 	 * The summary lists every script and language system a font offers and links each to its own
@@ -260,410 +270,215 @@ class OtlDump extends TTFontFile
 	 */
 	protected function useGSUBlookups(array $Lookup, array $gsub, array $GSLookup, $gsubOffset)
 	{
-		$this->_getGSUBarray($Lookup, $this->lookupsInTableOrder($gsub, 'GSUB'), $this->script);
+		$this->reportGSUBlookups($Lookup, $this->lookupsInTableOrder($gsub, 'GSUB'), $this->script, self::TOP_LEVEL);
 
 		return '';
 	}
 
 	/**
-	 * Report the substitution rules of a list of GSUB lookups.
+	 * Report the substitution rules of a list of GSUB lookups, walked by the parser's _getGSUBarray().
 	 *
-	 * @param array  $Lookup     The GSUB lookup list, with subtable offsets already made absolute
-	 * @param array  $lul        The lookups to report, as lookup index => the feature tag that asked
-	 *                           for it
-	 * @param string $scripttag  The script the report is being written for
-	 * @param int    $level      1 for the report itself; 2 for a lookup nested inside a context rule,
-	 *                           whose part is returned to the rule rather than written
-	 * @param string $coverage   At level 2, the glyphs the nesting position can hold, so that only the
-	 *                           rules that could fire there are reported. Empty where it names class 0
-	 * @param string $exB        At level 2, the example text that precedes the nested position
-	 * @param string $exL        At level 2, the example text that follows it
-	 * @param string $class0excl At level 2, every glyph in some class of the nesting rule's Class
-	 *                           Definition, so that an empty $coverage reads as class 0
-	 *
-	 * @return string At level 2, the rules; at level 1, the empty string, the report having been
-	 *                written as it was built
+	 * @param array  $Lookup    The GSUB lookup list, with subtable offsets already made absolute
+	 * @param array  $lul       The lookups to report, as lookup index => the feature tag that asked
+	 *                          for it
+	 * @param string $scripttag The script the report is being written for
+	 * @param array  $nesting   TOP_LEVEL for the report itself. For a lookup nested inside a context
+	 *                          rule, level 2, whose part goes into the rule's rather than being
+	 *                          written, with: the glyphs the nesting position can hold ('coverage',
+	 *                          empty where it names class 0), so that only the rules that could fire
+	 *                          there are reported; the example text before and after it ('exB',
+	 *                          'exL'); and every glyph some class of the nesting rule's Class
+	 *                          Definition names ('class0excl'), so that an empty coverage reads as
+	 *                          class 0
 	 */
-	function _getGSUBarray(array $Lookup, $lul, $scripttag, $level = 1, $coverage = '', $exB = '', $exL = '', $class0excl = '')
+	private function reportGSUBlookups(array $Lookup, $lul, $scripttag, array $nesting)
 	{
-		// Process (3) LookupList for specific Script-LangSys
-		// Generate preg_replace
-		// Level 1 writes the report, level 2 returns its part of it to the rule that nested the
-		// lookup. Both append to one buffer so that a nested lookup's thousands of rows can be handed
-		// over as they are built, rather than arriving at level 1 as one string too long to write.
-		if ($level == 1) {
+		// Level 1 writes the report, level 2 adds its part to the rule that nested the lookup. Both
+		// append to one buffer so that a nested lookup's thousands of rows can be handed over as they
+		// are built, rather than arriving at level 1 as one string too long to write.
+		if ($nesting['level'] == 1) {
+			$this->report = '<bookmark level="0" content="GSUB features">';
+		}
+
+		$outer = $this->nesting;
+		$this->nesting = $nesting;
+
+		try {
+			$this->_getGSUBarray($Lookup, $lul, $scripttag);
+		} finally {
+			$this->nesting = $outer;
+		}
+
+		if ($nesting['level'] == 1 && $this->report !== '') {
+			$this->mpdf->WriteHTML($this->report);
 			$this->report = '';
 		}
-		$html = &$this->report;
+	}
+
+	protected function reportGSUBlookupStart(array $Lookup, $i, $tag)
+	{
+		$level = $this->nesting['level'];
+
+		$this->report .= '<div class="level' . $level . '">';
+		$this->report .= '<h5 class="level' . $level . '">';
 		if ($level == 1) {
-			$html .= '<bookmark level="0" content="GSUB features">';
+			$this->report .= '<bookmark level="1" content="' . $tag . ' [#' . $i . ']">';
 		}
-		foreach ($lul as $i => $tag) {
-			$html .= '<div class="level' . $level . '">';
-			$html .= '<h5 class="level' . $level . '">';
-			if ($level == 1) {
-				$html .= '<bookmark level="1" content="' . $tag . ' [#' . $i . ']">';
-			}
-			$html .= 'Lookup #' . $i . ' [tag: <span style="color:#000066;">' . $tag . '</span>]</h5>';
-			$ignore = $this->skippedClassNames($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-			if ($ignore) {
-				$html .= '<div class="ignore">Ignoring: ' . $ignore . '</div> ';
-			}
+		$this->report .= 'Lookup #' . $i . ' [tag: <span style="color:#000066;">' . $tag . '</span>]</h5>';
 
-			$Type = $Lookup[$i]['Type'];
-			$Flag = $Lookup[$i]['Flag'];
-			if (($Flag & 0x0001) == 1) {
-				$dir = 'RTL';
+		$ignore = $this->skippedClassNames($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
+		if ($ignore) {
+			$this->report .= '<div class="ignore">Ignoring: ' . $ignore . '</div> ';
+		}
+	}
+
+	protected function reportGSUBlookupEnd()
+	{
+		$this->report .= '</div>';
+		$this->flushReport($this->report);
+	}
+
+	protected function reportGSUBsubtable($c)
+	{
+		$this->report .= '<div class="subtable">Subtable #' . $c;
+		if ($this->nesting['level'] == 1) {
+			$this->report .= '<bookmark level="2" content="Subtable #' . $c . '">';
+		}
+		$this->report .= '</div>';
+	}
+
+	protected function reportGSUBlookupType($type, $format)
+	{
+		$types = [
+			1 => 'LookupType 1: Single Substitution Subtable',
+			2 => 'LookupType 2: Multiple Substitution Subtable',
+			3 => 'LookupType 3: Alternate Forms',
+			4 => 'LookupType 4: Ligature Substitution Subtable',
+			5 => 'LookupType 5: Contextual Substitution Subtable',
+			6 => 'LookupType 6: Chaining Contextual Substitution Subtable',
+			8 => 'LookupType 8: Reverse Chaining Contextual Single Substitution Subtable',
+		];
+
+		$formats = [
+			5 => [
+				1 => 'Format 1: Context Substitution',
+				2 => 'Format 2: Class-based Context Glyph Substitution',
+				3 => 'Format 3: Coverage-based Context Glyph Substitution  ',
+			],
+			6 => [
+				1 => 'Format 1: Simple Chaining Context Glyph Substitution  ',
+				2 => 'Format 2: Class-based Chaining Context Glyph Substitution  ',
+				3 => 'Format 3: Coverage-based Chaining Context Glyph Substitution  ',
+			],
+		];
+
+		$this->report .= '<div class="lookuptype">' . $types[$type] . '</div>';
+
+		if (isset($formats[$type][$format])) {
+			$this->report .= '<div class="lookuptypesub">' . $formats[$type][$format] . '</div>';
+		}
+	}
+
+	protected function reportGSUBinputClass($inputClass)
+	{
+		$this->report .= '<div class="rule">Input Class: ' . $inputClass . '</div>';
+	}
+
+	/**
+	 * @return array Always empty: the substitutions are reported, one row each
+	 */
+	protected function gsubSubstitutions(array $Lookup, $i, $c, $tag)
+	{
+		$type = $Lookup[$i]['Type'];
+
+		foreach ($Lookup[$i]['Subtable'][$c]['subs'] as $sub) {
+			if ($type == 4) {
+				$this->reportSubstitution($sub['Replace'], [$sub['substitute'][0]]);
+			} elseif ($type == 2) {
+				$this->reportSubstitution([$sub['Replace'][0]], $sub['substitute']);
 			} else {
-				$dir = 'LTR';
+				// An Alternate substitution's first alternate is the substitution; the rest follow it
+				$this->reportSubstitution([$sub['Replace'][0]], [$sub['substitute'][0]], $type == 3 ? array_slice($sub['substitute'], 1) : []);
 			}
-
-			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
-				$html .= '<div class="subtable">Subtable #' . $c;
-				if ($level == 1) {
-					$html .= '<bookmark level="2" content="Subtable #' . $c . '">';
-				}
-				$html .= '</div>';
-
-				$SubstFormat = $Lookup[$i]['Subtable'][$c]['Format'];
-
-				// LookupType 1: Single Substitution Subtable
-				if ($Lookup[$i]['Type'] == 1) {
-					$html .= '<div class="lookuptype">LookupType 1: Single Substitution Subtable</div>';
-					for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
-						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-						$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-						if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
-							continue;
-						}
-						$this->flushReport($html);
-						$html .= '<div class="substitution">';
-						$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
-						if ($level == 2 && $exB) {
-							$html .= $exB;
-						}
-						$html .= '<span class="unchanged">&nbsp;' . $this->formatEntity($inputGlyphs[0]) . '</span>';
-						if ($level == 2 && $exL) {
-							$html .= $exL;
-						}
-						$html .= '&nbsp; &raquo; &raquo; &nbsp;';
-						if ($level == 2 && $exB) {
-							$html .= $exB;
-						}
-						$html .= '<span class="changed">&nbsp;' . $this->formatEntity($substitute) . '</span>';
-						if ($level == 2 && $exL) {
-							$html .= $exL;
-						}
-						$html .= '&nbsp; <span class="unicode">' . $this->formatUni($substitute) . '</span> ';
-						$html .= '</div>';
-					}
-				} // LookupType 2: Multiple Substitution Subtable
-				else {
-					if ($Lookup[$i]['Type'] == 2) {
-						$html .= '<div class="lookuptype">LookupType 2: Multiple Substitution Subtable</div>';
-						for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
-							$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-							$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'];
-							if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
-								continue;
-							}
-							$this->flushReport($html);
-							$html .= '<div class="substitution">';
-							$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
-							if ($level == 2 && $exB) {
-								$html .= $exB;
-							}
-							$html .= '<span class="unchanged">&nbsp;' . $this->formatEntity($inputGlyphs[0]) . '</span>';
-							if ($level == 2 && $exL) {
-								$html .= $exL;
-							}
-							$html .= '&nbsp; &raquo; &raquo; &nbsp;';
-							if ($level == 2 && $exB) {
-								$html .= $exB;
-							}
-							$html .= '<span class="changed">&nbsp;' . $this->formatEntityArr($substitute) . '</span>';
-							if ($level == 2 && $exL) {
-								$html .= $exL;
-							}
-							$html .= '&nbsp; <span class="unicode">' . $this->formatUniArr($substitute) . '</span> ';
-							$html .= '</div>';
-						}
-					} // LookupType 3: Alternate Forms
-					else {
-						if ($Lookup[$i]['Type'] == 3) {
-							$html .= '<div class="lookuptype">LookupType 3: Alternate Forms</div>';
-							for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
-								$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-								$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-								if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
-									continue;
-								}
-								$this->flushReport($html);
-								$html .= '<div class="substitution">';
-								$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
-								if ($level == 2 && $exB) {
-									$html .= $exB;
-								}
-								$html .= '<span class="unchanged">&nbsp;' . $this->formatEntity($inputGlyphs[0]) . '</span>';
-								if ($level == 2 && $exL) {
-									$html .= $exL;
-								}
-								$html .= '&nbsp; &raquo; &raquo; &nbsp;';
-								if ($level == 2 && $exB) {
-									$html .= $exB;
-								}
-								$html .= '<span class="changed">&nbsp;' . $this->formatEntity($substitute) . '</span>';
-								if ($level == 2 && $exL) {
-									$html .= $exL;
-								}
-								$html .= '&nbsp; <span class="unicode">' . $this->formatUni($substitute) . '</span> ';
-								if (count($Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute']) > 1) {
-									for ($alt = 1; $alt < count($Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute']); $alt++) {
-										$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][$alt];
-										$html .= '&nbsp; | &nbsp; ALT #' . $alt . ' &nbsp; ';
-										$html .= '<span class="changed">&nbsp;' . $this->formatEntity($substitute) . '</span>';
-										$html .= '&nbsp; <span class="unicode">' . $this->formatUni($substitute) . '</span> ';
-									}
-								}
-								$html .= '</div>';
-							}
-						} // LookupType 4: Ligature Substitution Subtable
-						else {
-							if ($Lookup[$i]['Type'] == 4) {
-								$html .= '<div class="lookuptype">LookupType 4: Ligature Substitution Subtable</div>';
-								for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
-									$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-									$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-									if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
-										continue;
-									}
-									$this->flushReport($html);
-									$html .= '<div class="substitution">';
-									$html .= '<span class="unicode">' . $this->formatUniArr($inputGlyphs) . '&nbsp;</span> ';
-									if ($level == 2 && $exB) {
-										$html .= $exB;
-									}
-									$html .= '<span class="unchanged">&nbsp;' . $this->formatEntityArr($inputGlyphs) . '</span>';
-									if ($level == 2 && $exL) {
-										$html .= $exL;
-									}
-									$html .= '&nbsp; &raquo; &raquo; &nbsp;';
-									if ($level == 2 && $exB) {
-										$html .= $exB;
-									}
-									$html .= '<span class="changed">&nbsp;' . $this->formatEntity($substitute) . '</span>';
-									if ($level == 2 && $exL) {
-										$html .= $exL;
-									}
-									$html .= '&nbsp; <span class="unicode">' . $this->formatUni($substitute) . '</span> ';
-									$html .= '</div>';
-								}
-							} // LookupType 5: Contextual Substitution Subtable
-							else {
-								if ($Lookup[$i]['Type'] == 5) {
-									$html .= '<div class="lookuptype">LookupType 5: Contextual Substitution Subtable</div>';
-									// Format 1: Context Substitution
-									if ($SubstFormat == 1) {
-										$html .= '<div class="lookuptypesub">Format 1: Context Substitution</div>';
-										for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['SubRuleSetCount']; $s++) {
-											// SubRuleSet											$html .= '<div class="rule">Subrule Set: ' . $s . '</div>';
-											foreach ($Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'] as $rctr => $rule) {
-												// SubRule
-												$html .= '<div class="rule">SubRule: ' . $rctr . '</div>';
-												$inputGlyphs = [];
-												if ($rule['GlyphCount'] > 1) {
-													$inputGlyphs = $rule['InputGlyphs'];
-												}
-												$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['FirstGlyph'];
-												ksort($inputGlyphs);
-
-												$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), [], $inputGlyphs, [], '', '', '', $tag, $scripttag);
-											}
-										}
-									} // Format 2: Class-based Context Glyph Substitution
-									else {
-										if ($SubstFormat == 2) {
-											$html .= '<div class="lookuptypesub">Format 2: Class-based Context Glyph Substitution</div>';
-											foreach ($Lookup[$i]['Subtable'][$c]['SubClassSet'] as $inputClass => $cscs) {
-												$html .= '<div class="rule">Input Class: ' . $inputClass . '</div>';
-												for ($cscrule = 0; $cscrule < $cscs['SubClassRuleCnt']; $cscrule++) {
-													$html .= '<div class="rule">Rule: ' . $cscrule . '</div>';
-													$rule = $cscs['SubClassRule'][$cscrule];
-
-													$inputGlyphs = [];
-
-													$inputGlyphs[0] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $inputClass);
-
-													if ($rule['InputGlyphCount'] > 1) {
-														//  NB starts at 1
-														for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
-															$classindex = $rule['Input'][$gcl];
-															$inputGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $classindex);
-														}
-													}
-
-													// Class 0 contains all the glyphs NOT in the other classes
-													$class0excl = implode('|', $Lookup[$i]['Subtable'][$c]['InputClasses']);
-
-													$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), [], $inputGlyphs, [], $class0excl, '', '', $tag, $scripttag);
-												}
-											}
-										} // Format 3: Coverage-based Context Glyph Substitution  p259
-										else {
-											if ($SubstFormat == 3) {
-												$html .= '<div class="lookuptypesub">Format 3: Coverage-based Context Glyph Substitution  </div>';
-												// IgnoreMarks flag set on main Lookup table
-												$inputGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'];
-
-												$this->reportGSUBrule($Lookup, $this->substLookupRecords($Lookup[$i]['Subtable'][$c]), [], $inputGlyphs, [], '', '', '', $tag, $scripttag);
-											}
-										}
-									}
-
-								} // LookupType 6: Chaining Contextual Substitution Subtable
-								else {
-									if ($Lookup[$i]['Type'] == 6) {
-										$html .= '<div class="lookuptype">LookupType 6: Chaining Contextual Substitution Subtable</div>';
-										// Format 1: Simple Chaining Context Glyph Substitution  p255
-										if ($SubstFormat == 1) {
-											$html .= '<div class="lookuptypesub">Format 1: Simple Chaining Context Glyph Substitution  </div>';
-											for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount']; $s++) {
-												// ChainSubRuleSet												$html .= '<div class="rule">Subrule Set: ' . $s . '</div>';
-												$firstInputGlyph = $Lookup[$i]['Subtable'][$c]['CoverageGlyphs'][$s]; // First input gyyph
-												foreach ($Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'] as $rctr => $rule) {
-													$html .= '<div class="rule">SubRule: ' . $rctr . '</div>';
-													// ChainSubRule
-													$inputGlyphs = [];
-													if ($rule['InputGlyphCount'] > 1) {
-														$inputGlyphs = $rule['InputGlyphs'];
-													}
-													$inputGlyphs[0] = $firstInputGlyph;
-													ksort($inputGlyphs);
-
-													if ($rule['BacktrackGlyphCount']) {
-														$backtrackGlyphs = $rule['BacktrackGlyphs'];
-													} else {
-														$backtrackGlyphs = [];
-													}
-
-													if ($rule['LookaheadGlyphCount']) {
-														$lookaheadGlyphs = $rule['LookaheadGlyphs'];
-													} else {
-														$lookaheadGlyphs = [];
-													}
-
-													$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), $backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, '', '', '', $tag, $scripttag);
-												}
-											}
-										} // Format 2: Class-based Chaining Context Glyph Substitution  p257
-										else {
-											if ($SubstFormat == 2) {
-												$html .= '<div class="lookuptypesub">Format 2: Class-based Chaining Context Glyph Substitution  </div>';
-												foreach ($Lookup[$i]['Subtable'][$c]['ChainSubClassSet'] as $inputClass => $cscs) {
-													$html .= '<div class="rule">Input Class: ' . $inputClass . '</div>';
-													for ($cscrule = 0; $cscrule < $cscs['ChainSubClassRuleCnt']; $cscrule++) {
-														$html .= '<div class="rule">Rule: ' . $cscrule . '</div>';
-														$rule = $cscs['ChainSubClassRule'][$cscrule];
-
-														// These contain classes of glyphs as strings
-														// $Lookup[$i]['Subtable'][$c]['InputClasses'][(class)] e.g. 02E6|02E7|02E8
-														// $Lookup[$i]['Subtable'][$c]['LookaheadClasses'][(class)]
-														// $Lookup[$i]['Subtable'][$c]['BacktrackClasses'][(class)]
-														// These contain arrays of classIndexes
-														// [Backtrack] [Lookahead] and [Input] (Input is from the second position only)
-
-														$inputGlyphs = [];
-
-														$inputGlyphs[0] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $inputClass);
-														if ($rule['InputGlyphCount'] > 1) {
-															//  NB starts at 1
-															for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
-																$classindex = $rule['Input'][$gcl];
-																$inputGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['InputClasses'], $classindex);
-															}
-														}
-														// Class 0 contains all the glyphs NOT in the other classes - of its own ClassDef. A chained
-														// context has three of them, so telling the reader a backtrack position is anything but the
-														// input classes named the wrong set. The shaper keeps them apart as $bclass0excl and $lclass0excl.
-														$class0excl = implode('|', $Lookup[$i]['Subtable'][$c]['InputClasses']);
-														$bclass0excl = implode('|', $Lookup[$i]['Subtable'][$c]['BacktrackClasses']);
-														$lclass0excl = implode('|', $Lookup[$i]['Subtable'][$c]['LookaheadClasses']);
-
-														// Built fresh per rule: the rules of a set can name fewer positions than the one before,
-														// and a kept array would leave the earlier rule's extra positions in the sequence
-														$backtrackGlyphs = [];
-														for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
-															$backtrackGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['BacktrackClasses'], $rule['Backtrack'][$gcl]);
-														}
-
-														$lookaheadGlyphs = [];
-														for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
-															$lookaheadGlyphs[$gcl] = $this->classGlyphs($Lookup[$i]['Subtable'][$c]['LookaheadClasses'], $rule['Lookahead'][$gcl]);
-														}
-
-														$this->reportGSUBrule($Lookup, $this->substLookupRecords($rule), $backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, $class0excl, $bclass0excl, $lclass0excl, $tag, $scripttag);
-													}
-												}
-
-											} // Format 3: Coverage-based Chaining Context Glyph Substitution  p259
-											else {
-												if ($SubstFormat == 3) {
-													$html .= '<div class="lookuptypesub">Format 3: Coverage-based Chaining Context Glyph Substitution  </div>';
-													// IgnoreMarks flag set on main Lookup table
-													$inputGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'];
-
-													if ($Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']) {
-														$backtrackGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageBacktrackGlyphs'];
-													} else {
-														$backtrackGlyphs = [];
-													}
-
-													if ($Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount']) {
-														$lookaheadGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageLookaheadGlyphs'];
-													} else {
-														$lookaheadGlyphs = [];
-													}
-
-													$this->reportGSUBrule($Lookup, $this->substLookupRecords($Lookup[$i]['Subtable'][$c]), $backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, '', '', '', $tag, $scripttag);
-												}
-											}
-										}
-									} else {
-										// LookupType 8: Reverse Chaining Contextual Single Substitution Subtable
-										if ($Lookup[$i]['Type'] == 8 && !empty($Lookup[$i]['Subtable'][$c]['subs'])) {
-											$html .= '<div class="lookuptype">LookupType 8: Reverse Chaining Contextual Single Substitution Subtable</div>';
-											foreach ($Lookup[$i]['Subtable'][$c]['subs'] as $luss) {
-												$inputGlyphs = $luss['Replace'];
-												$substitute = $luss['substitute'][0];
-												if ($level == 2 && !$this->positionHolds($coverage, $class0excl, $inputGlyphs[0])) {
-													continue;
-												}
-												$this->flushReport($html);
-												$html .= '<div class="substitution">';
-												$html .= '<span class="unicode">' . $this->formatUni($inputGlyphs[0]) . '&nbsp;</span> ';
-												$html .= '<span class="unchanged">&nbsp;' . $this->formatEntity($inputGlyphs[0]) . '</span>';
-												$html .= '&nbsp; &raquo; &raquo; &nbsp;';
-												$html .= '<span class="changed">&nbsp;' . $this->formatEntity($substitute) . '</span>';
-												$html .= '&nbsp; <span class="unicode">' . $this->formatUni($substitute) . '</span> ';
-												$html .= '</div>';
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			$html .= '</div>';
-			$this->flushReport($html);
-		}
-		if ($level == 1 && $html !== '') {
-			$this->mpdf->WriteHTML($html);
-			$html = '';
 		}
 
-		return '';
+		return [];
+	}
+
+	/**
+	 * @return array Always empty: the rule is reported, along with every lookup it nests
+	 */
+	protected function gsubContextRule(array $Lookup, $i, $c, $tag, $scripttag, $ignore, array $rule)
+	{
+		if ($rule['index'] !== null) {
+			$this->report .= '<div class="rule">' . ($Lookup[$i]['Subtable'][$c]['Format'] == 1 ? 'SubRule: ' : 'Rule: ') . $rule['index'] . '</div>';
+		}
+
+		list($class0excl, $bclass0excl, $lclass0excl) = $rule['class0excl'];
+
+		$this->reportGSUBrule($Lookup, $rule['records'], $rule['backtrack'], $rule['input'], $rule['lookahead'], $class0excl, $bclass0excl, $lclass0excl, $tag, $scripttag);
+
+		return [];
+	}
+
+	/**
+	 * @return array Always empty: the substitutions are reported, one row each, without the context
+	 */
+	protected function gsubReverseChainRule(array $Lookup, $i, $c, $tag, $scripttag, $ignore, array $backtrackGlyphs, array $lookaheadGlyphs)
+	{
+		foreach ($Lookup[$i]['Subtable'][$c]['subs'] as $luss) {
+			$this->reportSubstitution([$luss['Replace'][0]], [$luss['substitute'][0]], [], false);
+		}
+
+		return [];
+	}
+
+	/**
+	 * The dump reads each class-based rule's positions fresh, where the parser does not (#170).
+	 */
+	protected function keepsEarlierRulePositions()
+	{
+		return false;
+	}
+
+	/**
+	 * One substitution, as a row of the report.
+	 *
+	 * At level 2 only the substitutions the nesting position can hold are reported, each shown inside
+	 * the example text of the rule that nested it. The position is tested before anything is
+	 * formatted: a nested lookup is walked again for every rule that nests it, and most of its rows
+	 * are not for that position.
+	 *
+	 * @param string[] $input       The glyphs replaced, as hex; the first is tested against the position
+	 * @param string[] $output      What replaces them
+	 * @param string[] $alternates  Any further alternates, each shown after the substitution
+	 * @param bool     $withExample Whether to show the nesting rule's example text around it
+	 */
+	private function reportSubstitution(array $input, array $output, array $alternates = [], $withExample = true)
+	{
+		$nested = $this->nesting['level'] == 2;
+
+		if ($nested && !$this->positionHolds($this->nesting['coverage'], $this->nesting['class0excl'], $input[0])) {
+			return;
+		}
+
+		$exB = $withExample && $nested ? $this->nesting['exB'] : '';
+		$exL = $withExample && $nested ? $this->nesting['exL'] : '';
+
+		$this->flushReport($this->report);
+
+		$this->report .= '<div class="substitution">';
+		$this->report .= '<span class="unicode">' . $this->formatUniArr($input) . '&nbsp;</span> ';
+		$this->report .= $exB . '<span class="unchanged">&nbsp;' . $this->formatEntityArr($input) . '</span>' . $exL;
+		$this->report .= '&nbsp; &raquo; &raquo; &nbsp;';
+		$this->report .= $exB . '<span class="changed">&nbsp;' . $this->formatEntityArr($output) . '</span>' . $exL;
+		$this->report .= '&nbsp; <span class="unicode">' . $this->formatUniArr($output) . '</span> ';
+		foreach ($alternates as $alt => $glyph) {
+			$this->report .= '&nbsp; | &nbsp; ALT #' . ($alt + 1) . ' &nbsp; ';
+			$this->report .= '<span class="changed">&nbsp;' . $this->formatEntity($glyph) . '</span>';
+			$this->report .= '&nbsp; <span class="unicode">' . $this->formatUni($glyph) . '</span> ';
+		}
+		$this->report .= '</div>';
 	}
 
 	/**
@@ -1843,7 +1658,7 @@ class OtlDump extends TTFontFile
 	/**
 	 * One context rule: the sequences it matches, and every lookup it hands a position within them.
 	 *
-	 * @param array $SubstLookupRecord As substLookupRecords() normalised them
+	 * @param array $SubstLookupRecord Each a SequenceIndex and a LookupListIndex
 	 *
 	 * @see reportGPOSrule() for the rest of the parameters, which are the same ones
 	 */
@@ -1859,34 +1674,8 @@ class OtlDump extends TTFontFile
 			$this->report .= '<div class="sequenceIndex">Substitution Position: ' . $seqIndex . '</div>';
 
 			// The position's own glyphs, e.g. 00636|00645|00656, are what level 2 filters its rules on
-			$this->_getGSUBarray($Lookup, [$record['LookupListIndex'] => $tag], $scripttag, 2, $inputGlyphs[$seqIndex], $exB, $exL, $class0excl);
+			$this->reportGSUBlookups($Lookup, [$record['LookupListIndex'] => $tag], $scripttag, ['level' => 2, 'coverage' => $inputGlyphs[$seqIndex], 'exB' => $exB, 'exL' => $exL, 'class0excl' => $class0excl]);
 		}
-	}
-
-	/**
-	 * The lookup records of one context rule, whichever of the two shapes the parser wrote them in:
-	 * an array of records, or a SequenceIndex array and a LookupListIndex array side by side.
-	 *
-	 * @param array $rule The rule, or the subtable itself for a format whose subtable is its own
-	 *                    only rule and keeps the records
-	 *
-	 * @see \Mpdf\Fonts\Table\SequenceRule::lookupRecords() for the shape both are read as
-	 */
-	private function substLookupRecords(array $rule)
-	{
-		if (isset($rule['SubstLookupRecord'])) {
-			return $rule['SubstLookupRecord'];
-		}
-
-		$records = [];
-		for ($b = 0; $b < $rule['SubstCount']; $b++) {
-			$records[] = [
-				'SequenceIndex' => $rule['SequenceIndex'][$b],
-				'LookupListIndex' => $rule['LookupListIndex'][$b],
-			];
-		}
-
-		return $records;
 	}
 
 	/**
@@ -1983,27 +1772,6 @@ class OtlDump extends TTFontFile
 		$query['lang'] = trim($language);
 
 		return 'font_dump_otl.php?' . htmlspecialchars(http_build_query($query), ENT_QUOTES);
-	}
-
-	/**
-	 * The glyphs one class of a ClassDef holds, as the "|" separated string the report prints.
-	 *
-	 * Class 0 is every glyph the ClassDef does not mention, so a ClassDef never lists it and
-	 * _getClasses never returns a key for it. A rule may still name it, and the report already
-	 * renders an empty class as "[NOT <the other classes>]" - so that is what an unlisted class
-	 * returns. Reading the key straight raised a warning per rule and then rendered the same thing
-	 * from null.
-	 *
-	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table
-	 *
-	 * @param array $classes class => glyphs, as _getClasses returns it
-	 * @param int   $class   the class a rule names
-	 *
-	 * @return string
-	 */
-	private function classGlyphs($classes, $class)
-	{
-		return isset($classes[$class]) ? $classes[$class] : '';
 	}
 
 	/**

@@ -904,12 +904,6 @@ parameters:
 			path: src/TTFontFile.php
 
 		-
-			message: '#^Variable \$backtrackGlyphs might not be defined\.$#'
-			identifier: variable.undefined
-			count: 6
-			path: src/TTFontFile.php
-
-		-
 			message: '#^Variable \$format might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
@@ -931,12 +925,6 @@ parameters:
 			message: '#^Variable \$locax might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
-			path: src/TTFontFile.php
-
-		-
-			message: '#^Variable \$lookaheadGlyphs might not be defined\.$#'
-			identifier: variable.undefined
-			count: 5
 			path: src/TTFontFile.php
 
 		-

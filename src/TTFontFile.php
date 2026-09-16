@@ -2396,6 +2396,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * Turn a list of GSUB lookups into the substitution rules the shaper applies.
 	 *
+	 * This is the walk over the lookups, and what it reads out of each subtable, rule by rule. What
+	 * becomes of a rule is up to gsubSubstitutions(), gsubContextRule() and gsubReverseChainRule():
+	 * here they build what the shaper matches against, and OtlDump overrides them to report the rules
+	 * instead.
+	 *
 	 * @param array  $Lookup    The GSUB lookup list, with subtable offsets already made absolute
 	 * @param array  $lul       The lookups to read, as lookup index => the feature tag that asked for
 	 *                          it
@@ -2405,551 +2410,452 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 */
 	function _getGSUBarray(array $Lookup, $lul, $scripttag)
 	{
-		// Process (3) LookupList for specific Script-LangSys
-		// Generate preg_replace
 		$volt = [];
-		$reph = '';
-		$matraE = '';
-		$vatu = '';
+
+		// Kept across rules and lookups rather than read fresh for each: see keepsEarlierRulePositions().
+		// A Type 5 Format 1 or 2 rule hands whatever these last held to the Arabic shaper (#189).
+		$backtrackGlyphs = [];
+		$lookaheadGlyphs = [];
 
 		foreach ($lul as $i => $tag) {
+			$this->reportGSUBlookupStart($Lookup, $i, $tag);
+
 			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
-				$SubstFormat = $Lookup[$i]['Subtable'][$c]['Format'];
+				$this->reportGSUBsubtable($c);
 
-				// LookupType 1: Single Substitution Subtable
-				if ($Lookup[$i]['Type'] == 1) {
-					$subCount = count($Lookup[$i]['Subtable'][$c]['subs']);
-					for ($s = 0; $s < $subCount; $s++) {
-						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-						$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-						// Ignore has already been applied earlier on
-						$repl = $this->_makeGSUBinputMatch($inputGlyphs, "()");
-						$subs = $this->_makeGSUBinputReplacement(1, $substitute, "()", 0, 1, 0);
-						$volt[] = ['match' => $repl, 'replace' => $subs, 'tag' => $tag, 'key' => $inputGlyphs[0], 'type' => 1];
-					}
-				} // LookupType 2: Multiple Substitution Subtable
-				elseif ($Lookup[$i]['Type'] == 2) {
-					if (!isset($Lookup[$i]['Subtable'][$c]['subs'])) {
+				$type = $Lookup[$i]['Type'];
+				$subtable = $Lookup[$i]['Subtable'][$c];
+				$format = $subtable['Format'];
+
+				if ($type >= 1 && $type <= 4) {
+					$this->reportGSUBlookupType($type, $format);
+					$this->addTo($volt, $this->gsubSubstitutions($Lookup, $i, $c, $tag));
+					continue;
+				}
+
+				if ($type == 8) {
+					if (empty($subtable['subs'])) {
 						continue; // every entry was filtered out by the Ignore flags
 					}
 
-					for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
-						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-						$substitute = implode(" ", $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute']);
-						// Ignore has already been applied earlier on
-						$repl = $this->_makeGSUBinputMatch($inputGlyphs, "()");
-						$subs = $this->_makeGSUBinputReplacement(1, $substitute, "()", 0, 1, 0);
-						$volt[] = ['match' => $repl, 'replace' => $subs, 'tag' => $tag, 'key' => $inputGlyphs[0], 'type' => 2];
-					}
-				} // LookupType 3: Alternate Forms
-				elseif ($Lookup[$i]['Type'] == 3) {
-					if (!isset($Lookup[$i]['Subtable'][$c]['subs'])) {
-						continue; // every entry was filtered out by the Ignore flags
-					}
-
-					for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
-						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-						$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-						// Ignore has already been applied earlier on
-						$repl = $this->_makeGSUBinputMatch($inputGlyphs, "()");
-						$subs = $this->_makeGSUBinputReplacement(1, $substitute, "()", 0, 1, 0);
-						$volt[] = ['match' => $repl, 'replace' => $subs, 'tag' => $tag, 'key' => $inputGlyphs[0], 'type' => 3];
-					}
-				} // LookupType 4: Ligature Substitution Subtable
-				elseif ($Lookup[$i]['Type'] == 4) {
-					if (!isset($Lookup[$i]['Subtable'][$c]['subs'])) {
-						continue; // every entry was filtered out by the Ignore flags
-					}
-
-					for ($s = 0; $s < count($Lookup[$i]['Subtable'][$c]['subs']); $s++) {
-						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['subs'][$s]['Replace'];
-						$substitute = $Lookup[$i]['Subtable'][$c]['subs'][$s]['substitute'][0];
-						// Ignore has already been applied earlier on
-						$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-						$repl = $this->_makeGSUBinputMatch($inputGlyphs, $ignore);
-						$subs = $this->_makeGSUBinputReplacement(count($inputGlyphs), $substitute, $ignore, 0, count($inputGlyphs), 0);
-						$volt[] = ['match' => $repl, 'replace' => $subs, 'tag' => $tag, 'key' => $inputGlyphs[0], 'type' => 4, 'CompCount' => $Lookup[$i]['Subtable'][$c]['subs'][$s]['CompCount'], 'Lig' => $substitute];
-					}
-				} // LookupType 5: Chaining Contextual Substitution Subtable
-				elseif ($Lookup[$i]['Type'] == 5) {
-					// Format 1: Context Substitution
-					if ($SubstFormat == 1) {
-						$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['SubRuleSetCount']; $s++) {
-							// SubRuleSet
-							$subRule = [];
-							foreach ($Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRule'] as $rule) {
-								// SubRule
-								$inputGlyphs = [];
-								if ($rule['GlyphCount'] > 1) {
-									$inputGlyphs = $rule['InputGlyphs'];
-								}
-								$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['FirstGlyph'];
-								ksort($inputGlyphs);
-								$nInput = count($inputGlyphs);
-
-								$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, [], 0);
-								$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => '', 'match' => $contextInputMatch, 'nBacktrack' => 0, 'nInput' => $nInput, 'nLookahead' => 0, 'rules' => [],];
-
-								for ($b = 0; $b < $rule['SubstCount']; $b++) {
-									$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
-									$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
-
-									// $Lookup[$lup] = secondary Lookup
-									for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
-										if (!empty($Lookup[$lup]['Subtable'][$lus]['subs'])) {
-											foreach ($Lookup[$lup]['Subtable'][$lus]['subs'] as $luss) {
-												$lookupGlyphs = $luss['Replace'];
-												$mLen = count($lookupGlyphs);
-
-												// Only apply if the (first) 'Replace' glyph from the
-												// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-												// then apply the substitution
-												if (strpos($inputGlyphs[$seqIndex], $lookupGlyphs[0]) === false) {
-													continue;
-												}
-												$REPL = implode(" ", $luss['substitute']);
-												if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-													$volt[] = ['match' => $lookupGlyphs[0], 'replace' => $REPL, 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
-												} else {
-													$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
-												}
-											}
-										}
-									}
-								}
-
-								if (count($subRule['rules'])) {
-									$volt[] = $subRule;
-								}
-							}
-						}
-					} // Format 2: Class-based Context Glyph Substitution
-					elseif ($SubstFormat == 2) {
-						$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-						foreach ($Lookup[$i]['Subtable'][$c]['SubClassSet'] as $inputClass => $cscs) {
-							for ($cscrule = 0; $cscrule < $cscs['SubClassRuleCnt']; $cscrule++) {
-								$rule = $cscs['SubClassRule'][$cscrule];
-
-								$inputGlyphs = [];
-
-								if (isset($Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass])) {
-									$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass];
-								} else {
-									$inputGlyphs[0] = '';
-								}
-								if ($rule['InputGlyphCount'] > 1) {
-									//  NB starts at 1
-									for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
-										$classindex = $rule['Input'][$gcl];
-										if (isset($Lookup[$i]['Subtable'][$c]['InputClasses'][$classindex])) {
-											$inputGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$classindex];
-										} // if class[0] = all glyphs excluding those specified in all other classes
-										// set to blank '' for now
-										else {
-											$inputGlyphs[$gcl] = '';
-										}
-									}
-								}
-
-								$nInput = $rule['InputGlyphCount'];
-								$nIsubs = (2 * $nInput) - 1;
-
-								$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, [], 0);
-								$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => '', 'match' => $contextInputMatch, 'nBacktrack' => 0, 'nInput' => $nInput, 'nLookahead' => 0, 'rules' => [],];
-
-								for ($b = 0; $b < $rule['SubstCount']; $b++) {
-									$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
-									$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
-
-									// $Lookup[$lup] = secondary Lookup
-									for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
-										if (isset($Lookup[$lup]['Subtable'][$lus]['subs']) && count($Lookup[$lup]['Subtable'][$lus]['subs'])) {
-											foreach ($Lookup[$lup]['Subtable'][$lus]['subs'] as $luss) {
-												$lookupGlyphs = $luss['Replace'];
-												$mLen = count($lookupGlyphs);
-
-												// Only apply if the (first) 'Replace' glyph from the
-												// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-												// then apply the substitution
-												if (strpos($inputGlyphs[$seqIndex], $lookupGlyphs[0]) === false) {
-													continue;
-												}
-
-												// Returns e.g. ¦(0612)¦(ignore) (0613)¦(ignore) (0614)¦
-												$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, $lookupGlyphs, $seqIndex);
-												$REPL = implode(" ", $luss['substitute']);
-												// Returns e.g. "REPL\${6}\${8}" or "\${1}\${2} \${3} REPL\${4}\${6}\${8} \${9}"
-
-												if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-													$volt[] = ['match' => $lookupGlyphs[0], 'replace' => $REPL, 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
-												} else {
-													$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
-												}
-											}
-										}
-									}
-								}
-								if (count($subRule['rules'])) {
-									$volt[] = $subRule;
-								}
-							}
-						}
-
-					} // Format 3: Coverage-based Context Glyph Substitution  p259
-					elseif ($SubstFormat == 3) {
-
-						// IgnoreMarks flag set on main Lookup table
-						$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'];
-						$nInput = $Lookup[$i]['Subtable'][$c]['InputGlyphCount'];
-
-						$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, [], 0);
-
-						// Type 5 is a plain context: it has no backtrack or lookahead sequence, as Format 1 above
-						$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => '', 'match' => $contextInputMatch, 'nBacktrack' => 0, 'nInput' => $nInput, 'nLookahead' => 0, 'rules' => [],];
-
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
-							$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
-							$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
-							for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
-								if (empty($Lookup[$lup]['Subtable'][$lus]['subs']) || !is_array($Lookup[$lup]['Subtable'][$lus]['subs'])) {
-									continue;
-								}
-
-								foreach ($Lookup[$lup]['Subtable'][$lus]['subs'] as $luss) {
-									$lookupGlyphs = $luss['Replace'];
-
-									// Only apply if the (first) 'Replace' glyph from the
-									// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-									// then apply the substitution
-									if (strpos($inputGlyphs[$seqIndex], $lookupGlyphs[0]) === false) {
-										continue;
-									}
-
-									// Returns e.g. ¦(0612)¦(ignore) (0613)¦(ignore) (0614)¦
-									$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, $lookupGlyphs, $seqIndex);
-									$REPL = implode(" ", $luss['substitute']);
-
-									if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-										$volt[] = ['match' => $lookupGlyphs[0], 'replace' => $REPL, 'tag' => $tag, 'prel' => [], 'postl' => [], 'ignore' => $ignore];
-									} else {
-										$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
-									}
-								}
-							}
-						}
-						if (count($subRule['rules'])) {
-							$volt[] = $subRule;
-						}
-					}
-
-				} // LookupType 6: ing Contextual Substitution Subtable
-				elseif ($Lookup[$i]['Type'] == 6) {
-
-					// Format 1: Simple Chaining Context Glyph Substitution  p255
-					if ($SubstFormat == 1) {
-						$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount']; $s++) {
-
-							// ChainSubRuleSet
-							$subRule = [];
-							$firstInputGlyph = $Lookup[$i]['Subtable'][$c]['CoverageGlyphs'][$s]; // First input gyyph
-
-							foreach ($Lookup[$i]['Subtable'][$c]['ChainSubRuleSet'][$s]['ChainSubRule'] as $rule) {
-								// ChainSubRule
-								$inputGlyphs = [];
-								if ($rule['InputGlyphCount'] > 1) {
-									$inputGlyphs = $rule['InputGlyphs'];
-								}
-								$inputGlyphs[0] = $firstInputGlyph;
-								ksort($inputGlyphs);
-								$nInput = count($inputGlyphs);
-
-								if ($rule['BacktrackGlyphCount']) {
-									$backtrackGlyphs = $rule['BacktrackGlyphs'];
-								} else {
-									$backtrackGlyphs = [];
-								}
-								$backtrackMatch = $this->_makeGSUBbacktrackMatch($backtrackGlyphs, $ignore);
-
-								if ($rule['LookaheadGlyphCount']) {
-									$lookaheadGlyphs = $rule['LookaheadGlyphs'];
-								} else {
-									$lookaheadGlyphs = [];
-								}
-
-								$lookaheadMatch = $this->_makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore);
-
-								$nBsubs = 2 * count($backtrackGlyphs);
-								$nIsubs = (2 * $nInput) - 1;
-
-								$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, [], 0);
-								$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => $backtrackMatch, 'match' => ($contextInputMatch . $lookaheadMatch), 'nBacktrack' => count($backtrackGlyphs), 'nInput' => $nInput, 'nLookahead' => count($lookaheadGlyphs), 'rules' => [],];
-
-								for ($b = 0; $b < $rule['SubstCount']; $b++) {
-									$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
-									$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
-
-									// $Lookup[$lup] = secondary Lookup
-									for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
-										if (!empty($Lookup[$lup]['Subtable'][$lus]['subs'])) {
-											foreach ($Lookup[$lup]['Subtable'][$lus]['subs'] as $luss) {
-												$lookupGlyphs = $luss['Replace'];
-												$mLen = count($lookupGlyphs);
-
-												// Only apply if the (first) 'Replace' glyph from the
-												// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-												// then apply the substitution
-												if (strpos($inputGlyphs[$seqIndex], $lookupGlyphs[0]) === false) {
-													continue;
-												}
-
-												// Returns e.g. ¦(0612)¦(ignore) (0613)¦(ignore) (0614)¦
-												$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, $lookupGlyphs, $seqIndex);
-
-												$REPL = implode(" ", $luss['substitute']);
-
-												if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-													$volt[] = ['match' => $lookupGlyphs[0], 'replace' => $REPL, 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
-												} else {
-													$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
-												}
-											}
-										}
-									}
-								}
-
-								if (count($subRule['rules'])) {
-									$volt[] = $subRule;
-								}
-							}
-						}
-
-					} // Format 2: Class-based Chaining Context Glyph Substitution  p257
-					elseif ($SubstFormat == 2) {
-						$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-						foreach ($Lookup[$i]['Subtable'][$c]['ChainSubClassSet'] as $inputClass => $cscs) {
-							for ($cscrule = 0; $cscrule < $cscs['ChainSubClassRuleCnt']; $cscrule++) {
-								$rule = $cscs['ChainSubClassRule'][$cscrule];
-
-								// These contain classes of glyphs as strings
-								// $Lookup[$i]['Subtable'][$c]['InputClasses'][(class)] e.g. 02E6|02E7|02E8
-								// $Lookup[$i]['Subtable'][$c]['LookaheadClasses'][(class)]
-								// $Lookup[$i]['Subtable'][$c]['BacktrackClasses'][(class)]
-								// These contain arrays of classIndexes
-								// [Backtrack] [Lookahead] and [Input] (Input is from the second position only)
-
-								$inputGlyphs = [];
-
-								if (isset($Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass])) {
-									$inputGlyphs[0] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$inputClass];
-								} else {
-									$inputGlyphs[0] = '';
-								}
-								if ($rule['InputGlyphCount'] > 1) {
-									//  NB starts at 1
-									for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
-										$classindex = $rule['Input'][$gcl];
-										if (isset($Lookup[$i]['Subtable'][$c]['InputClasses'][$classindex])) {
-											$inputGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['InputClasses'][$classindex];
-										} // if class[0] = all glyphs excluding those specified in all other classes
-										// set to blank '' for now
-										else {
-											$inputGlyphs[$gcl] = '';
-										}
-									}
-								}
-
-								$nInput = $rule['InputGlyphCount'];
-
-								if ($rule['BacktrackGlyphCount']) {
-									for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
-										$classindex = $rule['Backtrack'][$gcl];
-										if (isset($Lookup[$i]['Subtable'][$c]['BacktrackClasses'][$classindex])) {
-											$backtrackGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['BacktrackClasses'][$classindex];
-										} // if class[0] = all glyphs excluding those specified in all other classes
-										// set to blank '' for now
-										else {
-											$backtrackGlyphs[$gcl] = '';
-										}
-									}
-								} else {
-									$backtrackGlyphs = [];
-								}
-								// Returns e.g. ¦(FEEB|FEEC)(ignore) ¦(FD12|FD13)(ignore) ¦
-								$backtrackMatch = $this->_makeGSUBbacktrackMatch($backtrackGlyphs, $ignore);
-
-								if ($rule['LookaheadGlyphCount']) {
-									for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
-										$classindex = $rule['Lookahead'][$gcl];
-										if (isset($Lookup[$i]['Subtable'][$c]['LookaheadClasses'][$classindex])) {
-											$lookaheadGlyphs[$gcl] = $Lookup[$i]['Subtable'][$c]['LookaheadClasses'][$classindex];
-										} // if class[0] = all glyphs excluding those specified in all other classes
-										// set to blank '' for now
-										else {
-											$lookaheadGlyphs[$gcl] = '';
-										}
-									}
-								} else {
-									$lookaheadGlyphs = [];
-								}
-								// Returns e.g. ¦(ignore) (FD12|FD13)¦(ignore) (FEEB|FEEC)¦
-								$lookaheadMatch = $this->_makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore);
-
-								$nBsubs = 2 * count($backtrackGlyphs);
-								$nIsubs = (2 * $nInput) - 1;
-
-								$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, [], 0);
-								$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => $backtrackMatch, 'match' => ($contextInputMatch . $lookaheadMatch), 'nBacktrack' => count($backtrackGlyphs), 'nInput' => $nInput, 'nLookahead' => count($lookaheadGlyphs), 'rules' => [],];
-
-								for ($b = 0; $b < $rule['SubstCount']; $b++) {
-									$lup = $rule['SubstLookupRecord'][$b]['LookupListIndex'];
-									$seqIndex = $rule['SubstLookupRecord'][$b]['SequenceIndex'];
-
-									// $Lookup[$lup] = secondary Lookup
-									for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
-										if (!empty($Lookup[$lup]['Subtable'][$lus]['subs'])) {
-											foreach ($Lookup[$lup]['Subtable'][$lus]['subs'] as $luss) {
-												$lookupGlyphs = $luss['Replace'];
-												$mLen = count($lookupGlyphs);
-
-												// Only apply if the (first) 'Replace' glyph from the
-												// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-												// then apply the substitution
-												if (strpos($inputGlyphs[$seqIndex], $lookupGlyphs[0]) === false) {
-													continue;
-												}
-
-												// Returns e.g. ¦(0612)¦(ignore) (0613)¦(ignore) (0614)¦
-												$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, $lookupGlyphs, $seqIndex);
-												$REPL = implode(" ", $luss['substitute']);
-												// Returns e.g. "REPL\${6}\${8}" or "\${1}\${2} \${3} REPL\${4}\${6}\${8} \${9}"
-
-												if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-													$volt[] = ['match' => $lookupGlyphs[0], 'replace' => $REPL, 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
-												} else {
-													$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
-												}
-											}
-										}
-									}
-								}
-								if (count($subRule['rules'])) {
-									$volt[] = $subRule;
-								}
-							}
-						}
-
-					} // Format 3: Coverage-based Chaining Context Glyph Substitution  p259
-					elseif ($SubstFormat == 3) {
-						// IgnoreMarks flag set on main Lookup table
-						$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-						$inputGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'];
-						$CoverageInputGlyphs = implode('|', $inputGlyphs);
-						$nInput = $Lookup[$i]['Subtable'][$c]['InputGlyphCount'];
-
-						if ($Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']) {
-							$backtrackGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageBacktrackGlyphs'];
-						} else {
-							$backtrackGlyphs = [];
-						}
-						// Returns e.g. ¦(FEEB|FEEC)(ignore) ¦(FD12|FD13)(ignore) ¦
-						$backtrackMatch = $this->_makeGSUBbacktrackMatch($backtrackGlyphs, $ignore);
-
-						if ($Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount']) {
-							$lookaheadGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageLookaheadGlyphs'];
-						} else {
-							$lookaheadGlyphs = [];
-						}
-						// Returns e.g. ¦(ignore) (FD12|FD13)¦(ignore) (FEEB|FEEC)¦
-						$lookaheadMatch = $this->_makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore);
-
-						$nBsubs = 2 * count($backtrackGlyphs);
-						$nIsubs = (2 * $nInput) - 1;
-						$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, [], 0);
-						$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => $backtrackMatch, 'match' => ($contextInputMatch . $lookaheadMatch), 'nBacktrack' => count($backtrackGlyphs), 'nInput' => $nInput, 'nLookahead' => count($lookaheadGlyphs), 'rules' => [],];
-
-						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubstCount']; $b++) {
-							$lup = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['LookupListIndex'];
-							$seqIndex = $Lookup[$i]['Subtable'][$c]['SubstLookupRecord'][$b]['SequenceIndex'];
-							for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
-								if (empty($Lookup[$lup]['Subtable'][$lus]['subs']) || ! is_array($Lookup[$lup]['Subtable'][$lus]['subs'])) {
-									continue;
-								}
-
-								foreach ($Lookup[$lup]['Subtable'][$lus]['subs'] as $luss) {
-									$lookupGlyphs = $luss['Replace'];
-
-									// Only apply if the (first) 'Replace' glyph from the
-									// Lookup list is in the [inputGlyphs] at ['SequenceIndex']
-									// then apply the substitution
-									if (strpos($inputGlyphs[$seqIndex], $lookupGlyphs[0]) === false) {
-										continue;
-									}
-
-									// Returns e.g. ¦(0612)¦(ignore) (0613)¦(ignore) (0614)¦
-									$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, $lookupGlyphs, $seqIndex);
-									$REPL = implode(" ", $luss['substitute']);
-
-									if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-										$volt[] = ['match' => $lookupGlyphs[0], 'replace' => $REPL, 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
-									} else {
-										$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
-									}
-								}
-							}
-						}
-						if (count($subRule['rules'])) {
-							$volt[] = $subRule;
-						}
-					}
-				} // LookupType 8: Reverse Chaining Contextual Single Substitution Subtable
-				elseif ($Lookup[$i]['Type'] == 8) {
-					if (empty($Lookup[$i]['Subtable'][$c]['subs'])) {
-						continue; // every entry was filtered out by the Ignore flags
-					}
-
-					// IgnoreMarks flag set on main Lookup table
+					$this->reportGSUBlookupType($type, $format);
 					$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
-					$inputGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageInputGlyphs'];
+					list($backtrackGlyphs, $lookaheadGlyphs) = $this->coverageSequences($subtable);
 
-					if ($Lookup[$i]['Subtable'][$c]['BacktrackGlyphCount']) {
-						$backtrackGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageBacktrackGlyphs'];
-					} else {
-						$backtrackGlyphs = [];
-					}
-					// Returns e.g. ¦(FEEB|FEEC)(ignore) ¦(FD12|FD13)(ignore) ¦
-					$backtrackMatch = $this->_makeGSUBbacktrackMatch($backtrackGlyphs, $ignore);
+					$this->addTo($volt, $this->gsubReverseChainRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $backtrackGlyphs, $lookaheadGlyphs));
+					continue;
+				}
 
-					if ($Lookup[$i]['Subtable'][$c]['LookaheadGlyphCount']) {
-						$lookaheadGlyphs = $Lookup[$i]['Subtable'][$c]['CoverageLookaheadGlyphs'];
-					} else {
-						$lookaheadGlyphs = [];
-					}
-					// Returns e.g. ¦(ignore) (FD12|FD13)¦(ignore) (FEEB|FEEC)¦
-					$lookaheadMatch = $this->_makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore);
+				if ($type != 5 && $type != 6) {
+					continue;
+				}
 
-					// Type 8 replaces exactly one glyph, so the input sequence is always a single Coverage table
-					$contextInputMatch = $this->_makeGSUBcontextInputMatch($inputGlyphs, $ignore, [], 0);
-					$subRule = ['context' => 1, 'tag' => $tag, 'matchback' => $backtrackMatch, 'match' => ($contextInputMatch . $lookaheadMatch), 'nBacktrack' => count($backtrackGlyphs), 'nInput' => 1, 'nLookahead' => count($lookaheadGlyphs), 'rules' => [],];
+				$this->reportGSUBlookupType($type, $format);
 
-					foreach ($Lookup[$i]['Subtable'][$c]['subs'] as $luss) {
-						if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-							$volt[] = ['match' => $luss['Replace'][0], 'replace' => implode(" ", $luss['substitute']), 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
-						} else {
-							$subRule['rules'][] = ['type' => 1, 'match' => $luss['Replace'], 'replace' => $luss['substitute'], 'seqIndex' => 0, 'key' => $luss['Replace'][0],];
+				if ($format < 1 || $format > 3) {
+					continue;
+				}
+
+				$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
+
+				if ($type == 5 && $format == 1) {
+					for ($s = 0; $s < $subtable['SubRuleSetCount']; $s++) {
+						foreach ($subtable['SubRuleSet'][$s]['SubRule'] as $rctr => $rule) {
+							$inputGlyphs = $rule['GlyphCount'] > 1 ? $rule['InputGlyphs'] : [];
+							$inputGlyphs[0] = $subtable['SubRuleSet'][$s]['FirstGlyph'];
+							ksort($inputGlyphs);
+
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+								$rctr,
+								$rule['SubstLookupRecord'],
+								[],
+								$inputGlyphs,
+								[],
+								count($inputGlyphs),
+								['', '', ''],
+								[$backtrackGlyphs, $lookaheadGlyphs]
+							)));
 						}
 					}
+				} elseif ($type == 5 && $format == 2) {
+					// Class 0 holds every glyph its Class Definition leaves unnamed, which is what the dump reports it as
+					$class0excl = [implode('|', $subtable['InputClasses']), '', ''];
 
-					if (count($subRule['rules'])) {
-						$volt[] = $subRule;
+					foreach ($subtable['SubClassSet'] as $inputClass => $cscs) {
+						$this->reportGSUBinputClass($inputClass);
+
+						for ($cscrule = 0; $cscrule < $cscs['SubClassRuleCnt']; $cscrule++) {
+							$rule = $cscs['SubClassRule'][$cscrule];
+
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+								$cscrule,
+								$rule['SubstLookupRecord'],
+								[],
+								$this->classInputGlyphs($subtable['InputClasses'], $inputClass, $rule),
+								[],
+								$rule['InputGlyphCount'],
+								$class0excl,
+								[$backtrackGlyphs, $lookaheadGlyphs]
+							)));
+						}
+					}
+				} elseif ($type == 5) {
+					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+						null,
+						$subtable['SubstLookupRecord'],
+						[],
+						$subtable['CoverageInputGlyphs'],
+						[],
+						$subtable['InputGlyphCount']
+					)));
+				} elseif ($format == 1) {
+					for ($s = 0; $s < $subtable['ChainSubRuleSetCount']; $s++) {
+						$firstInputGlyph = $subtable['CoverageGlyphs'][$s];
+
+						foreach ($subtable['ChainSubRuleSet'][$s]['ChainSubRule'] as $rctr => $rule) {
+							$inputGlyphs = $rule['InputGlyphCount'] > 1 ? $rule['InputGlyphs'] : [];
+							$inputGlyphs[0] = $firstInputGlyph;
+							ksort($inputGlyphs);
+
+							$backtrackGlyphs = $rule['BacktrackGlyphCount'] ? $rule['BacktrackGlyphs'] : [];
+							$lookaheadGlyphs = $rule['LookaheadGlyphCount'] ? $rule['LookaheadGlyphs'] : [];
+
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+								$rctr,
+								$rule['SubstLookupRecord'],
+								$backtrackGlyphs,
+								$inputGlyphs,
+								$lookaheadGlyphs,
+								count($inputGlyphs)
+							)));
+						}
+					}
+				} elseif ($format == 2) {
+					// A chained context has three Class Definitions, and so three class 0s
+					$class0excl = [
+						implode('|', $subtable['InputClasses']),
+						implode('|', $subtable['BacktrackClasses']),
+						implode('|', $subtable['LookaheadClasses']),
+					];
+
+					foreach ($subtable['ChainSubClassSet'] as $inputClass => $cscs) {
+						$this->reportGSUBinputClass($inputClass);
+
+						for ($cscrule = 0; $cscrule < $cscs['ChainSubClassRuleCnt']; $cscrule++) {
+							$rule = $cscs['ChainSubClassRule'][$cscrule];
+
+							if (!$rule['BacktrackGlyphCount'] || !$this->keepsEarlierRulePositions()) {
+								$backtrackGlyphs = [];
+							}
+							for ($gcl = 0; $gcl < $rule['BacktrackGlyphCount']; $gcl++) {
+								$backtrackGlyphs[$gcl] = $this->classGlyphs($subtable['BacktrackClasses'], $rule['Backtrack'][$gcl]);
+							}
+
+							if (!$rule['LookaheadGlyphCount'] || !$this->keepsEarlierRulePositions()) {
+								$lookaheadGlyphs = [];
+							}
+							for ($gcl = 0; $gcl < $rule['LookaheadGlyphCount']; $gcl++) {
+								$lookaheadGlyphs[$gcl] = $this->classGlyphs($subtable['LookaheadClasses'], $rule['Lookahead'][$gcl]);
+							}
+
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+								$cscrule,
+								$rule['SubstLookupRecord'],
+								$backtrackGlyphs,
+								$this->classInputGlyphs($subtable['InputClasses'], $inputClass, $rule),
+								$lookaheadGlyphs,
+								$rule['InputGlyphCount'],
+								$class0excl
+							)));
+						}
+					}
+				} else {
+					list($backtrackGlyphs, $lookaheadGlyphs) = $this->coverageSequences($subtable);
+
+					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+						null,
+						$subtable['SubstLookupRecord'],
+						$backtrackGlyphs,
+						$subtable['CoverageInputGlyphs'],
+						$lookaheadGlyphs,
+						$subtable['InputGlyphCount']
+					)));
+				}
+			}
+
+			$this->reportGSUBlookupEnd();
+		}
+
+		return $volt;
+	}
+
+	/**
+	 * One context rule as the walk hands it on.
+	 *
+	 * @param int|null $index      The rule's place in its rule set, null for a Format 3 subtable, which
+	 *                             is its own only rule
+	 * @param array    $records    Its SubstLookupRecords
+	 * @param string[] $backtrack  One "|"-joined glyph string per position, nearest first
+	 * @param string[] $input      Likewise, first position first
+	 * @param string[] $lookahead  Likewise
+	 * @param int      $nInput     Positions in the input sequence, as the rule states the count
+	 * @param string[] $class0excl For a class-based rule, every glyph some class of the input,
+	 *                             backtrack and lookahead Class Definitions names, which is what each
+	 *                             one's class 0 excludes
+	 * @param array    $arabic     [backtrack, lookahead] for the entry an Arabic joining form's rule
+	 *                             becomes, where that is not the rule's own: see _getGSUBarray()
+	 *
+	 * @return array
+	 */
+	private function contextRule($index, array $records, array $backtrack, array $input, array $lookahead, $nInput, array $class0excl = ['', '', ''], $arabic = null)
+	{
+		if ($arabic === null) {
+			$arabic = [$backtrack, $lookahead];
+		}
+
+		return [
+			'index' => $index,
+			'records' => $records,
+			'backtrack' => $backtrack,
+			'input' => $input,
+			'lookahead' => $lookahead,
+			'nInput' => $nInput,
+			'class0excl' => $class0excl,
+			'prel' => $arabic[0],
+			'postl' => $arabic[1],
+		];
+	}
+
+	/**
+	 * @return array [backtrack, lookahead] of a Coverage-based chained subtable (Type 6 Format 3 or
+	 *               Type 8), one "|"-joined glyph string per position
+	 */
+	private function coverageSequences(array $subtable)
+	{
+		return [
+			$subtable['BacktrackGlyphCount'] ? $subtable['CoverageBacktrackGlyphs'] : [],
+			$subtable['LookaheadGlyphCount'] ? $subtable['CoverageLookaheadGlyphs'] : [],
+		];
+	}
+
+	/**
+	 * The input sequence of a class-based rule: the class its rule set is for, then the class of each
+	 * position after the first.
+	 */
+	private function classInputGlyphs(array $classes, $inputClass, array $rule)
+	{
+		$inputGlyphs = [$this->classGlyphs($classes, $inputClass)];
+
+		for ($gcl = 1; $gcl < $rule['InputGlyphCount']; $gcl++) {
+			$inputGlyphs[$gcl] = $this->classGlyphs($classes, $rule['Input'][$gcl]);
+		}
+
+		return $inputGlyphs;
+	}
+
+	/**
+	 * The glyphs one class of a ClassDef holds, as a "|"-joined string.
+	 *
+	 * Class 0 is every glyph the ClassDef does not mention, so a ClassDef never lists it and
+	 * _getClasses() never returns a key for it. A rule may still name it, and gets the empty string:
+	 * nothing matches it in the parser, and the dump renders it as "[NOT <the other classes>]".
+	 *
+	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table
+	 *
+	 * @param array $classes class => glyphs, as _getClasses() returns them
+	 * @param int   $class   The class a rule names
+	 *
+	 * @return string
+	 */
+	protected function classGlyphs($classes, $class)
+	{
+		return isset($classes[$class]) ? $classes[$class] : '';
+	}
+
+	private function addTo(array &$volt, array $entries)
+	{
+		foreach ($entries as $entry) {
+			$volt[] = $entry;
+		}
+	}
+
+	/**
+	 * Whether a class-based chained rule (Type 6 Format 2) that names fewer backtrack or lookahead
+	 * positions than the rule read before it keeps that rule's extra positions.
+	 *
+	 * The parser does, which is #170: the extra positions end up in the rule's matchback and counts,
+	 * and in what an Arabic joining form hands the shaper. Fixing it is returning false here.
+	 */
+	protected function keepsEarlierRulePositions()
+	{
+		return true;
+	}
+
+	/**
+	 * The rules of a Single, Multiple, Alternate or Ligature substitution subtable (Types 1 to 4).
+	 *
+	 * @return array What the shaper matches: one entry per substitution
+	 */
+	protected function gsubSubstitutions(array $Lookup, $i, $c, $tag)
+	{
+		$volt = [];
+		$type = $Lookup[$i]['Type'];
+
+		// Only a ligature has positions to skip between, and only asked where there is one to build: a
+		// flag naming a mark filtering set GDEF lacks throws
+		$ignore = $type == 4 && $Lookup[$i]['Subtable'][$c]['subs'] ? $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']) : '';
+
+		foreach ($Lookup[$i]['Subtable'][$c]['subs'] as $sub) {
+			$inputGlyphs = $sub['Replace'];
+
+			if ($type == 4) {
+				$volt[] = [
+					'match' => $this->_makeGSUBinputMatch($inputGlyphs, $ignore),
+					'replace' => $this->_makeGSUBinputReplacement(count($inputGlyphs), $sub['substitute'][0], $ignore, 0, count($inputGlyphs), 0),
+					'tag' => $tag,
+					'key' => $inputGlyphs[0],
+					'type' => 4,
+					'CompCount' => $sub['CompCount'],
+					'Lig' => $sub['substitute'][0],
+				];
+				continue;
+			}
+
+			// Types 1 to 3 replace one glyph, so there is nothing between positions to skip
+			$substitute = $type == 2 ? implode(" ", $sub['substitute']) : $sub['substitute'][0];
+			$volt[] = [
+				'match' => $this->_makeGSUBinputMatch($inputGlyphs, "()"),
+				'replace' => $this->_makeGSUBinputReplacement(1, $substitute, "()", 0, 1, 0),
+				'tag' => $tag,
+				'key' => $inputGlyphs[0],
+				'type' => $type,
+			];
+		}
+
+		return $volt;
+	}
+
+	/**
+	 * One rule of a context (Type 5) or chained context (Type 6) subtable.
+	 *
+	 * @param string $ignore The glyphs the lookup's flags skip, as _getGSUBignoreString() gives them
+	 * @param array  $rule   As contextRule() builds it
+	 *
+	 * @return array What the shaper matches: the rule and the nested substitutions that fit it, and
+	 *               an entry of its own for each substitution an Arabic joining form's rule makes
+	 */
+	protected function gsubContextRule(array $Lookup, $i, $c, $tag, $scripttag, $ignore, array $rule)
+	{
+		$volt = [];
+		$subRule = [
+			'context' => 1,
+			'tag' => $tag,
+			'matchback' => $this->_makeGSUBbacktrackMatch($rule['backtrack'], $ignore),
+			'match' => $this->_makeGSUBcontextInputMatch($rule['input'], $ignore, [], 0) . $this->_makeGSUBlookaheadMatch($rule['lookahead'], $ignore),
+			'nBacktrack' => count($rule['backtrack']),
+			'nInput' => $rule['nInput'],
+			'nLookahead' => count($rule['lookahead']),
+			'rules' => [],
+		];
+
+		foreach ($rule['records'] as $record) {
+			$lup = $record['LookupListIndex'];
+			$seqIndex = $record['SequenceIndex'];
+
+			for ($lus = 0; $lus < $Lookup[$lup]['SubtableCount']; $lus++) {
+				foreach ($Lookup[$lup]['Subtable'][$lus]['subs'] as $luss) {
+					$lookupGlyphs = $luss['Replace'];
+
+					// Only where the nested lookup's (first) glyph is one the rule's position can hold
+					if (strpos($rule['input'][$seqIndex], $lookupGlyphs[0]) === false) {
+						continue;
+					}
+
+					if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
+						$volt[] = ['match' => $lookupGlyphs[0], 'replace' => implode(" ", $luss['substitute']), 'tag' => $tag, 'prel' => $rule['prel'], 'postl' => $rule['postl'], 'ignore' => $ignore];
+					} else {
+						$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
 					}
 				}
 			}
 		}
 
+		if (count($subRule['rules'])) {
+			$volt[] = $subRule;
+		}
+
 		return $volt;
+	}
+
+	/**
+	 * A Reverse Chaining Contextual Single Substitution subtable (Type 8), which is one rule.
+	 *
+	 * @param string   $ignore          The glyphs the lookup's flags skip
+	 * @param string[] $backtrackGlyphs One "|"-joined glyph string per position, nearest first
+	 * @param string[] $lookaheadGlyphs Likewise
+	 *
+	 * @return array What the shaper matches
+	 */
+	protected function gsubReverseChainRule(array $Lookup, $i, $c, $tag, $scripttag, $ignore, array $backtrackGlyphs, array $lookaheadGlyphs)
+	{
+		$volt = [];
+		$subtable = $Lookup[$i]['Subtable'][$c];
+
+		// Type 8 replaces exactly one glyph, so the input sequence is always a single Coverage table
+		$subRule = [
+			'context' => 1,
+			'tag' => $tag,
+			'matchback' => $this->_makeGSUBbacktrackMatch($backtrackGlyphs, $ignore),
+			'match' => $this->_makeGSUBcontextInputMatch($subtable['CoverageInputGlyphs'], $ignore, [], 0) . $this->_makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore),
+			'nBacktrack' => count($backtrackGlyphs),
+			'nInput' => 1,
+			'nLookahead' => count($lookaheadGlyphs),
+			'rules' => [],
+		];
+
+		foreach ($subtable['subs'] as $luss) {
+			if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
+				$volt[] = ['match' => $luss['Replace'][0], 'replace' => implode(" ", $luss['substitute']), 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
+			} else {
+				$subRule['rules'][] = ['type' => 1, 'match' => $luss['Replace'], 'replace' => $luss['substitute'], 'seqIndex' => 0, 'key' => $luss['Replace'][0],];
+			}
+		}
+
+		if (count($subRule['rules'])) {
+			$volt[] = $subRule;
+		}
+
+		return $volt;
+	}
+
+	/**
+	 * Reporting hooks for the GSUB walk, silent here. @see OtlDump
+	 */
+	protected function reportGSUBlookupStart(array $Lookup, $i, $tag)
+	{
+	}
+
+	protected function reportGSUBlookupEnd()
+	{
+	}
+
+	protected function reportGSUBsubtable($c)
+	{
+	}
+
+	/**
+	 * @param int $type   The subtable's lookup type, reported once the walk has decided to read it
+	 * @param int $format Its format
+	 */
+	protected function reportGSUBlookupType($type, $format)
+	{
+	}
+
+	/**
+	 * @param int $inputClass The class a class-based rule set is for, reported before its rules
+	 */
+	protected function reportGSUBinputClass($inputClass)
+	{
 	}
 
 	/**
