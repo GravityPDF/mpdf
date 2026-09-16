@@ -173,6 +173,29 @@ class FontSubsetter
 	}
 
 	/**
+	 * How many bytes the format 4 cmap subtable the three builders below write will occupy.
+	 *
+	 * 14 bytes of subtable header and 2 of reservedPad, then four uint16 arrays of $segCount each -
+	 * endCode, startCode, idDelta, idRangeOffset - and then glyphIdArray, which is uint16 too. Its
+	 * entries are the glyphs the segments map, plus the trailing zero every builder appends.
+	 *
+	 * @param array[] $range    The segments, as the builders sort them: glyph ids by starting code
+	 * @param int     $segCount The segments plus the 0xFFFF one that closes the subtable
+	 *
+	 * @return int
+	 */
+	private function cmapFormat4Length(array $range, $segCount)
+	{
+		$glyphIdArray = 1;
+
+		foreach ($range as $subrange) {
+			$glyphIdArray += count($subrange);
+		}
+
+		return 16 + (8 * $segCount) + (2 * $glyphIdArray);
+	}
+
+	/**
 	 * Build a subset holding only the characters the document used, for a font within the Basic
 	 * Multilingual Plane.
 	 *
@@ -336,7 +359,7 @@ class FontSubsetter
 
 		$searchRange *= 2;
 		$rangeShift = $segCount * 2 - $searchRange;
-		$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
+		$length = $this->cmapFormat4Length($range, $segCount);
 		$cmap = [
 			0, 3, // Index : version, number of encoding subtables
 			0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
@@ -371,7 +394,6 @@ class FontSubsetter
 		// idDelta(s)
 		foreach ($range as $start => $subrange) {
 			$idDelta = -($start - $subrange[0]);
-			$n += count($subrange);
 			$cmap[] = $idDelta; // idDelta(s)
 		}
 
@@ -926,7 +948,7 @@ class FontSubsetter
 
 		$searchRange = $searchRange * 2;
 		$rangeShift = $segCount * 2 - $searchRange;
-		$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
+		$length = $this->cmapFormat4Length($range, $segCount);
 		$cmap = [
 			4, $length, 0, // Format 4 Mapping subtable: format, length, language
 			$segCount * 2,
@@ -952,7 +974,6 @@ class FontSubsetter
 		// idDelta(s)
 		foreach ($range as $start => $subrange) {
 			$idDelta = -($start - $subrange[0]);
-			$n += count($subrange);
 			$cmap[] = $idDelta; // idDelta(s)
 		}
 		$cmap[] = 1; // idDelta of last Segment
@@ -1199,7 +1220,7 @@ class FontSubsetter
 
 			$searchRange *= 2;
 			$rangeShift = $segCount * 2 - $searchRange;
-			$length = 16 + (8 * $segCount) + ($numGlyphs + 1);
+			$length = $this->cmapFormat4Length($range, $segCount);
 			$cmap = [0, 3, // Index : version, number of encoding subtables
 				0, 0, // Encoding Subtable : platform (UNI=0), encoding 0
 				0, 28, // Encoding Subtable : offset (hi,lo)
