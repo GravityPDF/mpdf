@@ -1012,7 +1012,16 @@ class FontSubsetter
 
 		list($glyfOffset) = $this->font->getTablePosition('glyf');
 
+		// The spec takes advanceWidthMax over every glyph in hmtx, but the bounds, side bearings and
+		// extent over the glyphs with contours alone. Those start from the first such glyph, because
+		// zero may lie outside all of them; a subset with none keeps the zeros above, as fontTools does.
+		$outlineSeen = false;
+
 		foreach ($glyphMap as $originalGlyphIdx) {
+			$hm = $this->getHMetric($numberOfHMetrics, $originalGlyphIdx);
+			list(, $aw) = unpack('n', $hm); // uint16, where the side bearing is int16
+			$profile['advanceWidthMax'] = max($profile['advanceWidthMax'], $aw);
+
 			$glyphPos = $this->glyphPos[$originalGlyphIdx];
 			$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
 
@@ -1020,25 +1029,42 @@ class FontSubsetter
 				continue;
 			}
 
-			$hm = $this->getHMetric($numberOfHMetrics, $originalGlyphIdx);
-			$aw = FontReader::int16(substr($hm, 0, 2));
-			$lsb = FontReader::int16(substr($hm, 2, 2));
-
 			$this->reader->seek($glyfOffset + $glyphPos);
 			$numberOfContours = $this->reader->readInt16();
+
+			if ($numberOfContours === 0) {
+				continue;
+			}
+
 			$xMin = $this->reader->readInt16();
 			$yMin = $this->reader->readInt16();
 			$xMax = $this->reader->readInt16();
 			$yMax = $this->reader->readInt16();
 
+			$lsb = FontReader::int16(substr($hm, 2, 2));
+			$extent = $lsb + ($xMax - $xMin);
+			$rsb = $aw - $extent;
+
+			if (!$outlineSeen) {
+				$profile = array_merge($profile, [
+					'xMin' => $xMin,
+					'yMin' => $yMin,
+					'xMax' => $xMax,
+					'yMax' => $yMax,
+					'minLeftSideBearing' => $lsb,
+					'minRightSideBearing' => $rsb,
+					'xMaxExtent' => $extent,
+				]);
+				$outlineSeen = true;
+			}
+
 			$profile['xMin'] = min($profile['xMin'], $xMin);
 			$profile['yMin'] = min($profile['yMin'], $yMin);
 			$profile['xMax'] = max($profile['xMax'], $xMax);
 			$profile['yMax'] = max($profile['yMax'], $yMax);
-			$profile['advanceWidthMax'] = max($profile['advanceWidthMax'], $aw);
 			$profile['minLeftSideBearing'] = min($profile['minLeftSideBearing'], $lsb);
-			$profile['minRightSideBearing'] = min($profile['minRightSideBearing'], ($aw - $lsb - ($xMax - $xMin)));
-			$profile['xMaxExtent'] = max($profile['xMaxExtent'], ($lsb + ($xMax - $xMin)));
+			$profile['minRightSideBearing'] = min($profile['minRightSideBearing'], $rsb);
+			$profile['xMaxExtent'] = max($profile['xMaxExtent'], $extent);
 
 			if ($glyphLen <= 2) {
 				continue;
@@ -1054,7 +1080,7 @@ class FontSubsetter
 					$this->reader->skip(self::componentArgumentsLength($flags));
 				}
 				$profile['maxComponentElements'] = max($profile['maxComponentElements'], $nComponentElements);
-			} elseif ($numberOfContours > 0) {
+			} else {
 				$this->glyphdata[$originalGlyphIdx]['nContours'] = $numberOfContours;
 				$profile['maxContours'] = max($profile['maxContours'], $numberOfContours);
 
