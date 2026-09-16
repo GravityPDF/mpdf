@@ -144,6 +144,9 @@ class OtlDump extends TTFontFile
 		parent::restrictedFont();
 	}
 
+	/**
+	 * Every read of GDEF, including one that finds none, replaces the marks the last font left.
+	 */
 	function _getGDEFtables()
 	{
 		parent::_getGDEFtables();
@@ -1898,10 +1901,8 @@ class OtlDump extends TTFontFile
 	{
 		$char = preg_replace('/^[0]/', '', $char);
 		$x = '&#x' . $char . ';';
-		if ($this->isMark($char)) {
-			if (!$allowjoining) {
-				$x = '&#x25cc;' . $x;
-			}
+		if (!$allowjoining && $this->isMark($char)) {
+			$x = '&#x25cc;' . $x;
 		}
 
 		return $x;
@@ -1937,17 +1938,7 @@ class OtlDump extends TTFontFile
 	 */
 	function formatEntityArr($arr)
 	{
-		$s = [];
-		foreach ($arr as $c) {
-			$c = preg_replace('/^[0]/', '', $c);
-			$x = '&#x' . $c . ';';
-			if ($this->isMark($c)) {
-				$x = '&#x25cc;' . $x;
-			}
-			$s[] = $x;
-		}
-
-		return implode(' ', $s); // ZWNJ? &#x200d;
+		return implode(' ', array_map([$this, 'formatEntity'], $arr));
 	}
 
 	/**
@@ -2005,18 +1996,7 @@ class OtlDump extends TTFontFile
 	 */
 	function formatEntityStr($str)
 	{
-		$s = [];
-		$arr = explode('|', $str);
-		foreach ($arr as $c) {
-			$c = preg_replace('/^[0]/', '', $c);
-			$x = '&#x' . $c . ';';
-			if ($this->isMark($c)) {
-				$x = '&#x25cc;' . $x;
-			}
-			$s[] = $x;
-		}
-
-		return implode(' ', $s); // ZWNJ? &#x200d;
+		return $this->formatEntityArr(explode('|', $str));
 	}
 
 	/**
@@ -2028,13 +2008,8 @@ class OtlDump extends TTFontFile
 	function formatEntityFirst($str)
 	{
 		$arr = explode('|', $str);
-		$char = preg_replace('/^[0]/', '', $arr[0]);
-		$x = '&#x' . $char . ';';
-		if ($this->isMark($char)) {
-			$x = '&#x25cc;' . $x;
-		}
 
-		return $x;
+		return $this->formatEntity($arr[0]);
 	}
 
 }
