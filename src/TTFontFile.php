@@ -498,7 +498,7 @@ class TTFontFile
 
 		// Closed however the read ends: see getMetrics
 		try {
-			return $this->readCharToGlyph($file, $TTCfontID, $debug, $useOTL);
+			return $this->readCharToGlyph($TTCfontID, $debug);
 		} finally {
 			$this->reader->close();
 		}
@@ -507,7 +507,7 @@ class TTFontFile
 	/**
 	 * @return array See getCTG
 	 */
-	private function readCharToGlyph($file, $TTCfontID, $debug, $useOTL)
+	private function readCharToGlyph($TTCfontID, $debug)
 	{
 		$this->charWidths = '';
 		$this->charToGlyph = [];
@@ -548,7 +548,7 @@ class TTFontFile
 		$this->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
 
 		// Map Unmapped glyphs - from $numGlyphs
-		if ($useOTL) {
+		if ($this->useOTL) {
 			$this->seek_table("maxp");
 			$this->reader->skip(4);
 			$numGlyphs = $this->reader->readUInt16();
@@ -559,7 +559,7 @@ class TTFontFile
 						$bctr++;
 					} // Avoid overwriting a glyph already mapped in PUA
 					if ($bctr > 0xF8FF) {
-						throw new \Mpdf\Exception\FontException(sprintf('Font "%s" cannot map all included glyphs into Private Use Area U+E000-U+F8FF; cannot use useOTL on this font', $file));
+						throw new \Mpdf\Exception\FontException(sprintf('Font "%s" cannot map all included glyphs into Private Use Area U+E000-U+F8FF; cannot use useOTL on this font', $this->filename));
 					}
 					$glyphToChar[$gid][] = $bctr;
 					$charToGlyph[$bctr] = $gid;
@@ -581,13 +581,14 @@ class TTFontFile
 	 */
 	function getTTCFonts($file)
 	{
+		$this->numTTCFonts = 0;
+		$this->TTCFonts = [];
+
 		$this->open($file);
 
 		// Closed on success too: the caller goes on to read each font of the collection, and opens the
 		// file again for every one of them
 		try {
-			$this->numTTCFonts = 0;
-			$this->TTCFonts = [];
 			$this->version = $version = $this->reader->readUInt32();
 			if ($version === 0x74746366) {
 				$this->version = $version = $this->reader->readUInt32(); // TTC Header version now

@@ -151,23 +151,25 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @dataProvider characterMapProvider
 	 */
-	public function testTheParserLetsGoOfAFontOnceItHasReadItsCharacterMap($variant, $TTCfontID, $expected)
+	public function testTheParserLetsGoOfAFontOnceItHasReadItsCharacterMap($variant, $argument, $TTCfontID, $expected)
 	{
-		$file = call_user_func_array([$this, $variant[0]], array_slice($variant, 1));
+		$file = $this->$variant('NotoSansSinhala-Subset.ttf', $argument);
 
-		$this->assertLetsGoOf(new TTFontFile($this->cache(), 'win'), $file, $expected, function (TTFontFile $ttf) use ($file, $TTCfontID) {
-			$ttf->getCTG($file, $TTCfontID, false, true);
+		$parser = new TTFontFile($this->cache(), 'win');
+
+		$this->assertLetsGoOf($parser, $file, $expected, function () use ($parser, $file, $TTCfontID) {
+			$parser->getCTG($file, $TTCfontID, false, true);
 		});
 	}
 
 	public function characterMapProvider()
 	{
 		return [
-			'a font it can read' => [['withHeader', 'NotoSansSinhala-Subset.ttf', "\x00\x01\x00\x00"], 0, null],
-			'a collection of a version it cannot read' => [['withHeader', 'NotoSansSinhala-Subset.ttf', "ttcf\x00\x03\x00\x00"], 1,
+			'as many glyphs as the Private Use Area holds' => ['withGlyphCount', 0x1000, 0, null],
+			'a collection of a version it cannot read' => ['withHeader', "ttcf\x00\x03\x00\x00", 1,
 				'Mpdf\Exception\FontException: Error parsing TrueType Collection: version=196608 (<font>)',
 			],
-			'more glyphs than the Private Use Area holds' => [['withGlyphCount', 'NotoSansSinhala-Subset.ttf', 0xFFFF], 0,
+			'more glyphs than the Private Use Area holds' => ['withGlyphCount', 0xFFFF, 0,
 				'Mpdf\Exception\FontException: Font "<font>" cannot map all included glyphs into Private Use Area U+E000-U+F8FF; cannot use useOTL on this font',
 			],
 		];
@@ -185,8 +187,8 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$file = $this->withHeader('NotoSansSinhala-Subset.ttf', $header);
 		$browser = new TTFontFileAnalysis($this->cache(), 'win');
 
-		$this->assertLetsGoOf($browser, $file, $expected, function (TTFontFile $ttf) use ($file) {
-			$ttf->getTTCFonts($file);
+		$this->assertLetsGoOf($browser, $file, $expected, function () use ($browser, $file) {
+			$browser->getTTCFonts($file);
 		});
 
 		$this->assertSame($fonts, $browser->TTCFonts);
@@ -207,14 +209,7 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function assertLetsGoOf(TTFontFile $ttf, $file, $expected, \Closure $read)
 	{
-		$raised = null;
-
-		try {
-			$read($ttf);
-		} catch (\Exception $e) {
-			$raised = $this->describe($e, $file);
-		}
-
+		$raised = $this->raisedBy($file, $read);
 		$stillOpen = $this->holdsFileOpen($ttf);
 
 		unlink($file);
@@ -235,19 +230,14 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$parser = new TTFontFile($this->cache(), 'win');
 		$browser = new TTFontFileAnalysis($this->cache(), 'win');
 
-		$raised = [];
-
-		try {
-			$parser->getMetrics($file, uniqid('', true), $TTCfontID);
-		} catch (\Exception $e) {
-			$raised['parser'] = $this->describe($e, $file);
-		}
-
-		try {
-			$browser->extractCoreInfo($file, $TTCfontID);
-		} catch (\Exception $e) {
-			$raised['browser'] = $this->describe($e, $file);
-		}
+		$raised = array_filter([
+			'parser' => $this->raisedBy($file, function () use ($parser, $file, $TTCfontID) {
+				$parser->getMetrics($file, uniqid('', true), $TTCfontID);
+			}),
+			'browser' => $this->raisedBy($file, function () use ($browser, $file, $TTCfontID) {
+				$browser->extractCoreInfo($file, $TTCfontID);
+			}),
+		]);
 
 		$stillOpen = array_keys(array_filter([
 			'parser' => $this->holdsFileOpen($parser),
@@ -286,14 +276,7 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$font = file_get_contents(__DIR__ . '/../../data/ttf/' . $file);
 
-		$tables = unpack('n', substr($font, 4, 2));
-		for ($i = 0; $i < $tables[1]; $i++) {
-			$record = 12 + $i * 16;
-			if (substr($font, $record, 4) === 'OS/2') {
-				$font = substr_replace($font, 'XXXX', $record, 4);
-				break;
-			}
-		}
+		$font = substr_replace($font, 'XXXX', $this->tableRecord($font, 'OS/2'), 4);
 
 		return $this->writeFontVariant($font, 'no-os2');
 	}
@@ -322,17 +305,26 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$font = file_get_contents(__DIR__ . '/../../data/ttf/' . $file);
 
+		$offset = unpack('N', substr($font, $this->tableRecord($font, 'maxp') + 8, 4));
+		$font = substr_replace($font, pack('n', $numGlyphs), $offset[1] + 4, 2);
+
+		return $this->writeFontVariant($font, 'glyph-count');
+	}
+
+	/**
+	 * @return int Where the table directory entry for $tag starts
+	 */
+	private function tableRecord($font, $tag)
+	{
 		$tables = unpack('n', substr($font, 4, 2));
 		for ($i = 0; $i < $tables[1]; $i++) {
 			$record = 12 + $i * 16;
-			if (substr($font, $record, 4) === 'maxp') {
-				$offset = unpack('N', substr($font, $record + 8, 4));
-				$font = substr_replace($font, pack('n', $numGlyphs), $offset[1] + 4, 2);
-				break;
+			if (substr($font, $record, 4) === $tag) {
+				return $record;
 			}
 		}
 
-		return $this->writeFontVariant($font, 'glyph-count');
+		$this->fail(sprintf('The font has no %s table', $tag));
 	}
 
 	/**
@@ -377,6 +369,20 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		file_put_contents($path, $font);
 
 		return $path;
+	}
+
+	/**
+	 * @return string|null What $read raised, as describe() gives it, or null if it raised nothing
+	 */
+	private function raisedBy($file, \Closure $read)
+	{
+		try {
+			$read();
+		} catch (\Exception $e) {
+			return $this->describe($e, $file);
+		}
+
+		return null;
 	}
 
 	/**
