@@ -996,32 +996,30 @@ class FontSubsetter
 		$cmapstr4 = TableWriter::setUInt16($cmapstr4, 2, $subtableLength);
 
 		// cmap - Character to glyph mapping
-		$entryCount = count($subset);
-		$length = 10 + $entryCount * 2;
+		$format6Length = 10 + 2 * count($subset);
 
-		$off = 20 + $length;
-		$hoff = $off >> 16;
-		$loff = $off & 0xFFFF;
+		if ($format6Length > 0xFFFF) {
+			// A format 6 subtable states its length in a uint16, so past 32,762 characters it cannot be
+			// written. It maps the same codes to the same glyphs as the format 4 subtable, and a reader
+			// looks a symbolic TrueType font's codes up in (3,0) before (1,0) (ISO 32000-1, 9.6.6.4),
+			// so leave (1,0) out rather than refuse a font the format 4 subtable maps whole.
+			$cmapstr = TableWriter::uint16s([0, 1, 3, 0]) . TableWriter::uint32(12) . $cmapstr4;
+		} else {
+			$cmap = [
+				6, $format6Length, 0, 1, // Format 6 Mapping subtable: format, length, language, firstCode
+				count($subset), // entryCount
+			];
 
-		$cmap = [
-			0, 2, // Index : version, number of subtables
-			1, 0, // Subtable : platform, encoding
-			0, 20, // offset (hi,lo)
-			3, 0, // Subtable : platform, encoding	// See note above for 'name'
-			$hoff, $loff, // offset (hi,lo)
-			6, $length, // Format 6 Mapping table: format, length
-			0, 1, // language, First char code
-			$entryCount,
-		];
+			foreach ($subset as $code) {
+				$cmap[] = $codeToGlyph[$code];
+			}
 
-		$cmapstr = '';
-		foreach ($subset as $code) {
-			$cmap[] = $codeToGlyph[$code];
+			$cmapstr = TableWriter::uint16s([0, 2, 1, 0]) . TableWriter::uint32(20)
+				. TableWriter::uint16s([3, 0]) . TableWriter::uint32(20 + $format6Length)
+				. TableWriter::uint16s($cmap)
+				. $cmapstr4;
 		}
 
-		$cmapstr .= TableWriter::uint16s($cmap);
-
-		$cmapstr .= $cmapstr4;
 		$this->writer->add('cmap', $cmapstr);
 
 		// hmtx - Horizontal Metrics

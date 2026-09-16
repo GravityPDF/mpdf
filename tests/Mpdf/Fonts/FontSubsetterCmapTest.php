@@ -79,6 +79,44 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * makeSubsetSIP writes a format 6 subtable under (1,0) ahead of its format 4 one under (3,0). Its
+	 * length is a uint16 too, and at two bytes a character it runs out at 32,762 - which a subset in a
+	 * document never nears, at 255 characters, but the two wide synthetic fonts' whole character sets
+	 * pass. Past it the subtable is left out, since the format 4 one maps the same codes whole.
+	 *
+	 * @dataProvider format6Provider
+	 */
+	public function testDeclaresTheLengthOfEverySubtableMakeSubsetSipWrites($characters, array $encodings)
+	{
+		$font = 'Blank-WideCmap-Synthetic';
+		$subset = array_keys($this->parser()->getCTG($this->file($font), 0, false, 0));
+		sort($subset);
+
+		$cmap = $this->table($this->build($this->file($font), 'makeSubsetSIP', array_slice($subset, 0, $characters)), 'cmap');
+		$this->assertNotNull($cmap, 'The font program carries no cmap table');
+
+		$records = $this->encodingRecords($cmap);
+
+		$reader = new BlobReader($cmap);
+		$offsets = array_values($records);
+		$offsets[] = strlen($cmap);
+		for ($i = 0; $i < count($records); $i++) {
+			$reader->seek($offsets[$i] + 2);
+			$this->assertSame($offsets[$i + 1] - $offsets[$i], $reader->readUInt16());
+		}
+
+		$this->assertSame($encodings, array_keys($records));
+	}
+
+	public function format6Provider()
+	{
+		return [
+			'the most a format 6 subtable holds' => [32762, ['1,0', '3,0']],
+			'one character more' => [32763, ['3,0']],
+		];
+	}
+
+	/**
 	 * repackageTTF maps the glyphs the cmap does not reach into the Private Use Area as well, so it
 	 * takes one segment more than the subset builders do.
 	 */
@@ -130,15 +168,8 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function format4Subtable($cmap)
 	{
+		$offsets = array_values($this->encodingRecords($cmap));
 		$reader = new BlobReader($cmap);
-		$reader->skip(2); // version
-		$subtableCount = $reader->readUInt16();
-
-		$offsets = [];
-		for ($i = 0; $i < $subtableCount; $i++) {
-			$reader->skip(4); // platform, encoding
-			$offsets[] = FontReader::uint32($reader->read(4));
-		}
 
 		$start = null;
 		foreach ($offsets as $offset) {
@@ -166,6 +197,24 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		return [$start, $end, $segCount];
+	}
+
+	/**
+	 * @return int[] Each encoding record's subtable offset, keyed "platform,encoding" in the order listed
+	 */
+	private function encodingRecords($cmap)
+	{
+		$reader = new BlobReader($cmap);
+		$reader->skip(2); // version
+		$subtableCount = $reader->readUInt16();
+
+		$records = [];
+		for ($i = 0; $i < $subtableCount; $i++) {
+			$encoding = $reader->readUInt16() . ',' . $reader->readUInt16();
+			$records[$encoding] = FontReader::uint32($reader->read(4));
+		}
+
+		return $records;
 	}
 
 	/**
