@@ -4115,9 +4115,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 
 		if (!$font['sip'] && !$font['smp']) {
-			$subsetRange = range(32, 127);
-			$this->fonts[$fontkey]['subset'] = array_combine($subsetRange, $subsetRange);
+			// What the document draws and nothing else; the ASCII range every subset font carries is
+			// unioned back in where the subset font is built
+			$this->fonts[$fontkey]['subset'] = [];
 		} else {
+			// The range below is the encoding rather than a seed - a character is written as the CID
+			// it holds in subsets - so it stays where it is
 			$this->fonts[$fontkey]['subsets'] = [0 => range(0, 127)];
 			$this->fonts[$fontkey]['subsetfontids'] = [$i];
 		}

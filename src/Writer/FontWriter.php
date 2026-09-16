@@ -66,10 +66,7 @@ class FontWriter
 						$used = $f['used'];
 						if ($used) {
 							$nChars = (ord($f['cw'][0]) << 8) + ord($f['cw'][1]);
-							// The subset carries the 32-127 range mPDF registers for every font whether
-							// the font covers it or not, so on a font of fewer characters than that the
-							// count outruns nChars and the share has to be held to the 100 it means
-							$usage = min(100, (int) (count($f['subset']) * 100 / $nChars));
+							$usage = (int) ($this->charactersDrawn($f) * 100 / $nChars);
 							// At most percentSubset, not less than, so that the default of 100 subsets
 							// even a font every glyph of which was drawn
 							$asSubset = $info['length1'] > ($this->mpdf->maxTTFFilesize * 1024) || $usage <= $this->mpdf->percentSubset;
@@ -297,7 +294,9 @@ class FontWriter
 					$ssfaid = 'A';
 					$subsetter = $this->subsetter();
 					$fontname = 'MPDFA' . $ssfaid . '+' . $font['name'];
-					$subset = $font['subset'];
+					// Every subset mPDF builds carries the 32-127 range whether the document drew it or not
+					$ascii = range(32, 127);
+					$subset = array_combine($ascii, $ascii) + $font['subset'];
 					unset($subset[0]);
 					$ttfontstream = $subsetter->makeSubset($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']);
 					$ttfontsize = strlen($ttfontstream);
@@ -454,6 +453,27 @@ class FontWriter
 				throw new \Mpdf\MpdfException(sprintf('Unsupported font type: %s (%s)', $type, $name));
 			}
 		}
+	}
+
+	/**
+	 * How much of a font the document drew, counted the way the font's own character count is.
+	 *
+	 * The subset records every codepoint of the text whether the font has a glyph for it or not, so
+	 * the two only divide into a share of the font if this makes the same test.
+	 *
+	 * @return int
+	 */
+	private function charactersDrawn(array $font)
+	{
+		$drawn = 0;
+
+		foreach ($font['subset'] as $u) {
+			if ($this->mpdf->_charDefined($font['cw'], $u)) {
+				$drawn++;
+			}
+		}
+
+		return $drawn;
 	}
 
 	/**

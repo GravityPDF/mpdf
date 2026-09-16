@@ -62,7 +62,7 @@ class AddFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertTrue($ttf['haskerninfo']);
 		$this->assertFalse($ttf['haskernGPOS']);
 		$this->assertFalse($ttf['hassmallcapsGSUB']);
-		$this->assertCount(96, $ttf['subset']);
+		$this->assertCount(0, $ttf['subset']);
 		$this->assertCount(103, $ttf['kerninfo']);
 	}
 
