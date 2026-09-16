@@ -198,9 +198,9 @@ class Arabic
 			if ($crntChar && isset($transparentJoin[hexdec($crntChar)])) {
 				// If next_char = RightJoining && prev_char = LeftJoining:
 				if (isset($chars[$i + 1]) && $chars[$i + 1] && isset(self::$rightJoining[hexdec($chars[$i + 1])]) && $prevChar && isset(self::$leftJoining[$prevChar])) {
-					$output[] = self::glyphs($crntChar, 1, $chars, $i, $scriptTag, $usetags, $arabGlyphs); // <final> form
+					$output[] = self::glyphs($crntChar, 1, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin); // <final> form
 				} else {
-					$output[] = self::glyphs($crntChar, 0, $chars, $i, $scriptTag, $usetags, $arabGlyphs);  // <isolated> form
+					$output[] = self::glyphs($crntChar, 0, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);  // <isolated> form
 				}
 				continue;
 			}
@@ -217,7 +217,7 @@ class Arabic
 			if ($nextChar && isset(self::$rightJoining[hexdec($nextChar)])) {
 				$form += 2;
 			}
-			$output[] = self::glyphs($crntChar, $form, $chars, $i, $scriptTag, $usetags, $arabGlyphs);
+			$output[] = self::glyphs($crntChar, $form, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);
 			$nextChar = $crntChar;
 		}
 		$ra = array_reverse($output);
@@ -239,7 +239,28 @@ class Arabic
 		return $multiple;
 	}
 
-	private static function glyphs($char, $type, &$chars, $i, $scriptTag, $usetags, $arabGlyphs)
+	/**
+	 * The position to either side of $i that joining sees, which is the first one past any
+	 * transparent-joining characters.
+	 *
+	 * @param array $chars           The run, as hex code points
+	 * @param int   $i               The position to walk out from
+	 * @param int   $step            -1 to walk back through the run, 1 to walk forward
+	 * @param array $transparentJoin The Transparent-Joining table, with GDEF's marks
+	 *
+	 * @return int The position reached, which the run need not hold
+	 */
+	private static function skipTransparent(&$chars, $i, $step, $transparentJoin)
+	{
+		$n = $i + $step;
+		while (isset($chars[$n]) && isset($transparentJoin[hexdec($chars[$n])])) {
+			$n += $step;
+		}
+
+		return $n;
+	}
+
+	private static function glyphs($char, $type, &$chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin)
 	{
 		// Optional Feature settings    // doesn't control Syriac at present
 		if (($type === 0 && strpos($usetags, 'isol') === false) || ($type === 1 && strpos($usetags, 'fina') === false) || ($type === 2 && strpos($usetags, 'init') === false) || ($type === 3 && strpos($usetags, 'medi') === false)) {
@@ -250,13 +271,14 @@ class Arabic
 		$retk = -1;
 		// Alaph 00710 in Syriac
 		if ($scriptTag == 'syrc' && $char == '00710') {
-			// if there is a preceding (base?) character *** should search back to previous base - ignoring vowels and change $n
-			// set $n as the position of the last base; for now we'll just do this:
-			$n = $i - 1;
+			// fin2, fin3 and med2 follow from the base either side of the Alaph, and a
+			// transparent-joining character is not one
+			$n = self::skipTransparent($chars, $i, -1, $transparentJoin);
 			if (isset($chars[$n])) {
 				$prev = hexdec($chars[$n]);
+				$next = self::skipTransparent($chars, $i, 1, $transparentJoin);
 				// the Alaph ends the word: nothing follows it, or what follows is not Syriac
-				$wordEnd = !isset($chars[$i + 1]) || !preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf(hexdec($chars[$i + 1])));
+				$wordEnd = !isset($chars[$next]) || !preg_match('/[\x{0700}-\x{0745}]/u', UtfString::code2utf(hexdec($chars[$next])));
 
 				// med2 and fin2 are the Alaph drawn joined to the letter before it, so that letter has to
 				// be one that joins to what follows it
