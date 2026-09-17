@@ -1,0 +1,17 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00061; &#x00068; &#x00069; &#x0006D; &#x00070; &#x00074; &#x003B1; &#x003B2; &#x00710; &#x00712; &#x01000; &#x01001; &#x010A0; &#x010A1; &#x04E00; &#x04E09; &#x04E8C; &#x09AA8; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>geor</h5><div><a href="font_dump_otl.php?script=geor&amp;lang=KGE">KGE </a></b>: locl </div><h5>grek</h5><div><a href="font_dump_otl.php?script=grek&amp;lang=PGR">PGR </a></b>: locl </div><h5>hani</h5><div><a href="font_dump_otl.php?script=hani&amp;lang=ZHH">ZHH </a></b>: locl </div><div><a href="font_dump_otl.php?script=hani&amp;lang=ZHS">ZHS </a></b>: locl </div><div><a href="font_dump_otl.php?script=hani&amp;lang=ZHT">ZHT </a></b>: locl </div><h5>latn</h5><div><a href="font_dump_otl.php?script=latn&amp;lang=ATH">ATH </a></b>: locl </div><div><a href="font_dump_otl.php?script=latn&amp;lang=IPPH">IPPH</a></b>: locl </div><div><a href="font_dump_otl.php?script=latn&amp;lang=IRT">IRT </a></b>: locl </div><div><a href="font_dump_otl.php?script=latn&amp;lang=MOL">MOL </a></b>: locl </div><div><a href="font_dump_otl.php?script=latn&amp;lang=PRO">PRO </a></b>: locl </div><h5>mym2</h5><div><a href="font_dump_otl.php?script=mym2&amp;lang=MONT">MONT</a></b>: locl </div><h5>syrc</h5><div><a href="font_dump_otl.php?script=syrc&amp;lang=SYRE">SYRE</a></b>: locl </div>
+</div>
+<div>GPOS table not defined</div>
+
+=== detail: script syrc language DFLT ===
+<h1>GSUB Tables</h1>
+<div class="notoffered">This font's GSUB script "syrc" offers no language system "DFLT". It has: SYRE</div>
+<bookmark level="0" content="GSUB features">
+<div>GPOS table not defined</div>
