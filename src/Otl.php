@@ -1709,11 +1709,19 @@ class Otl
 			}
 		}
 
-		$tags = explode(' ', $usetags);
+		// An entry is a four character tag, which font-feature-settings may follow with the alternate it
+		// wants, 'salt4' - the $tagInt below reads that back out of $usetags. A feature named twice, as
+		// a document asking for one the shaper already named leaves it, is applied once.
+		$tags = [];
+		foreach (explode(' ', $usetags) as $usetag) {
+			$tags[] = substr($usetag, 0, 4);
+		}
+		$tags = array_unique($tags);
+
 		foreach ($tags as $usetag) {
 			$LookupList = [];
 			foreach ($GSUBFeatures as $tag => $arr) {
-				if (strpos($usetags, $tag) !== false) {
+				if ($tag == $usetag) {
 					foreach ($arr as $lu) {
 						if (!isset($reverse[$lu])) {
 							$LookupList[$lu] = $tag;
