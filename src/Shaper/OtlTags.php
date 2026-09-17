@@ -153,14 +153,11 @@ class OtlTags
 	 * 2. a retired tag, read whole
 	 * 3. a script or region with its own language system in this language, e.g. ro-MD
 	 * 4. Chinese scripts and regions
-	 * 5. an extended language subtag, e.g. zh-yue
+	 * 5. an extended language subtag, e.g. zh-yue, which stands in for the language
 	 * 6. the language subtag
 	 *
 	 * Only the subtags before the first singleton count, so an extension or private use subtag
 	 * selects nothing. A script is the subtag after the language; a region may be anywhere.
-	 *
-	 * An extended language Ucdn::$ot_languages has no key for keeps the language subtag's tags, where
-	 * HarfBuzz would take an unlisted one as its own ISO 639-3 code.
 	 *
 	 * @param string $ietf
 	 *
@@ -199,17 +196,14 @@ class OtlTags
 			}
 		}
 
-		$own = self::tags($language);
-
-		$chinese = self::chinese($own, $script, $subtags);
+		$chinese = self::chinese($language, $script, $subtags);
 		if ($chinese) {
 			return $chinese;
 		}
 
-		// A three-digit region such as 419 has no key, so three characters that find one are a language
-		$extended = strlen($script) == 3 ? self::tags($script) : [];
-
-		return $extended ?: $own;
+		// An extended language stands in for the language itself, so ar-afb is Gulf Arabic rather than
+		// Arabic even where it has no tags at all
+		return self::tags(self::isThreeLetterCode($script) ? $script : $language);
 	}
 
 	/**
@@ -222,21 +216,27 @@ class OtlTags
 	 * Only Hans moves Cantonese (yue, ZHH) and Literary Chinese (lzh, ZHT) off their own tags. Every
 	 * other Chinese language is Simplified by default and takes zh's rules.
 	 *
-	 * @param string[] $own     The language's own tags
-	 * @param string   $script  The subtag after the language
-	 * @param string[] $subtags The subtags after the language
+	 * A Chinese language is one Ucdn::$ot_languages gives ZHS, ZHT or ZHH, which in HarfBuzz 14.3.1 is
+	 * exactly the twenty its generator writes these rules for.
+	 *
+	 * @param string   $language The language subtag
+	 * @param string   $script   The subtag after the language
+	 * @param string[] $subtags  The subtags after the language
 	 *
 	 * @return string[] The language systems, or none
 	 */
-	private static function chinese(array $own, $script, array $subtags)
+	private static function chinese($language, $script, array $subtags)
 	{
-		if (!$own || !in_array($own[0], ['ZHS ', 'ZHT ', 'ZHH '], true)) {
+		$listed = self::listed($language);
+		$first = $listed ? $listed[0] : '';
+
+		if (!in_array($first, ['ZHS ', 'ZHT ', 'ZHH '], true)) {
 			return [];
 		}
 		if ($script == 'hans') {
 			return ['ZHS '];
 		}
-		if ($own[0] != 'ZHS ') {
+		if ($first != 'ZHS ') {
 			return [];
 		}
 		if ($script == 'hant') {
@@ -255,13 +255,57 @@ class OtlTags
 	}
 
 	/**
+	 * The language systems of one subtag.
+	 *
+	 * A three-letter code the table does not list is an ISO 639-3 code HarfBuzz has nothing better for,
+	 * and is used upper-cased as its own tag. A two-letter one it does not list gets no language system:
+	 * the two-letter codes are a closed set, so an unlisted one is not a language at all.
+	 *
 	 * @param string $language A language subtag
 	 *
-	 * @return string[] Its language systems in Ucdn::$ot_languages, or none
+	 * @return string[] Its language systems, in the order to ask a font for them, or none
 	 */
 	private static function tags($language)
 	{
-		return isset(Ucdn::$ot_languages[$language]) ? (array) Ucdn::$ot_languages[$language] : [];
+		$listed = self::listed($language);
+		if ($listed !== null) {
+			return $listed;
+		}
+
+		return self::isThreeLetterCode($language) ? [strtoupper($language) . ' '] : [];
+	}
+
+	/**
+	 * What Ucdn::$ot_languages says about a subtag, which holds its tags end to end, four characters
+	 * apiece, and lists with none of them the three-letter codes HarfBuzz will not map because the tag
+	 * they would take belongs to an unrelated language.
+	 *
+	 * @param string $language A language subtag
+	 *
+	 * @return string[]|null Its language systems, none where HarfBuzz refuses it one, null where the
+	 *                       table does not list it at all
+	 */
+	private static function listed($language)
+	{
+		if (!isset(Ucdn::$ot_languages[$language])) {
+			return null;
+		}
+
+		$tags = Ucdn::$ot_languages[$language];
+
+		// str_split gives one empty tag rather than nothing for an empty string before PHP 8.2
+		return $tags === '' ? [] : str_split($tags, 4);
+	}
+
+	/**
+	 * Whether a subtag is shaped like a three-letter language code, which a three-digit region such as
+	 * 419 is not.
+	 *
+	 * @return bool
+	 */
+	private static function isThreeLetterCode($subtag)
+	{
+		return (bool) preg_match('/^[a-z]{3}$/', $subtag);
 	}
 
 	/**

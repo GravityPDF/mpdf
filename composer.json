@@ -82,6 +82,7 @@
 		"test": "@php vendor/bin/phpunit",
 		"snapshot:update": "@php utils/snapshot_update.php",
 		"fontcache:update": "@php utils/fontcache_update.php",
+		"otlanguages:update": "@php utils/otlanguages_update.php",
 		"otldump:update": "@php utils/otldump_update.php",
 		"shaping:update": "@php utils/shaping_update.php",
 		"subset:update": "@php utils/subset_update.php",

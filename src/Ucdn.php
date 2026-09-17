@@ -420,382 +420,1286 @@ class Ucdn
 		/* SCRIPT_ZANABAZAR_SQUARE */ 174 => 'zanb',
 	];
 
+	// HARFBUZZ_VERSION 14.3.1
+	/**
+	 * The OpenType language system tags of a language code, in the order a font is to be asked for
+	 * them, generated from HarfBuzz's own table - see tests/Mpdf/OtLanguageTags.php. Each value holds
+	 * the tags end to end, four characters apiece; an empty one is a code HarfBuzz refuses to map
+	 * because an unrelated language has the tag it would take, and the comment names the collision.
+	 *
+	 * Shaper\OtlTags holds the rest of HarfBuzz's mapping, which is not rows of a table: a three-letter
+	 * code with no key here is used upper-cased as its own tag, and a tag of several subtags has rules
+	 * of its own.
+	 *
+	 * @var string[]
+	 */
 	public static $ot_languages = [
 		'aa' => 'AFR ', /* Afar */
+		'aae' => 'SQI ', /* Arbëreshë Albanian */
+		'aao' => 'ARA ', /* Algerian Saharan Arabic */
+		'aat' => 'SQI ', /* Arvanitika Albanian */
 		'ab' => 'ABK ', /* Abkhazian */
+		'aba' => '', /* Abé != Abaza */
+		'abh' => 'ARA ', /* Tajiki Arabic */
 		'abq' => 'ABA ', /* Abaza */
-		'ada' => 'DNG ', /* Dangme */
-		'ady' => 'ADY ', /* Adyghe */
+		'abs' => 'CPP ', /* Ambonese Malay */
+		'abv' => 'ARA ', /* Baharna Arabic */
+		'acf' => 'FAN CPP ', /* Saint Lucian Creole French */
+		'acm' => 'ARA ', /* Mesopotamian Arabic */
+		'acq' => 'ARA ', /* Ta'izzi-Adeni Arabic */
+		'acr' => 'ACR MYN ', /* Achi */
+		'acw' => 'ARA ', /* Hijazi Arabic */
+		'acx' => 'ARA ', /* Omani Arabic */
+		'acy' => 'ACY ARA ', /* Cypriot Arabic */
+		'ada' => 'DNG ', /* Adangme */
+		'adf' => 'ARA ', /* Dhofari Arabic */
+		'adp' => 'DZN ', /* Adap (retired code) */
+		'aeb' => 'ARA ', /* Tunisian Arabic */
+		'aec' => 'ARA ', /* Saidi Arabic */
 		'af' => 'AFK ', /* Afrikaans */
-		'aii' => 'SWA ', /* Swadaya Aramaic */
+		'afb' => 'ARA ', /* Gulf Arabic */
+		'afk' => '', /* Nanubae != Afrikaans */
+		'afs' => 'CPP ', /* Afro-Seminole Creole */
+		'agu' => 'MYN ', /* Aguacateco */
+		'agw' => '', /* Kahua != Agaw */
+		'ahg' => 'AGW ', /* Qimant */
+		'aht' => 'ATH ', /* Ahtena */
+		'aig' => 'CPP ', /* Antigua and Barbuda Creole English */
+		'aii' => 'SWA SYR ', /* Assyrian Neo-Aramaic */
 		'aiw' => 'ARI ', /* Aari */
-		'alt' => 'ALT ', /* [Southern] Altai */
+		'ajp' => 'ARA ', /* South Levantine Arabic (retired code) */
+		'ajt' => 'ARA ', /* Judeo-Tunisian Arabic (retired code) */
+		'ak' => 'AKA ', /* Akan [macrolanguage] */
+		'akb' => 'AKB BTK ', /* Batak Angkola */
+		'aln' => 'SQI ', /* Gheg Albanian */
+		'als' => 'SQI ', /* Tosk Albanian */
 		'am' => 'AMH ', /* Amharic */
-		'amf' => 'HBN ', /* Hammer-Banna */
-		'ar' => 'ARA ', /* Arabic */
+		'amf' => 'HBN ', /* Hamer-Banna */
+		'amw' => 'SYR ', /* Western Neo-Aramaic */
+		'an' => 'ARG ', /* Aragonese */
+		'aoa' => 'CPP ', /* Angolar */
+		'apa' => 'ATH ', /* Apache [collection] */
+		'apc' => 'ARA ', /* Levantine Arabic */
+		'apd' => 'ARA ', /* Sudanese Arabic */
+		'apj' => 'ATH ', /* Jicarilla Apache */
+		'apk' => 'ATH ', /* Kiowa Apache */
+		'apl' => 'ATH ', /* Lipan Apache */
+		'apm' => 'ATH ', /* Mescalero-Chiricahua Apache */
+		'apw' => 'ATH ', /* Western Apache */
+		'ar' => 'ARA ', /* Arabic [macrolanguage] */
+		'arb' => 'ARA ', /* Standard Arabic */
+		'ari' => '', /* Arikara != Aari */
+		'ark' => '', /* Arikapú != Rakhine */
 		'arn' => 'MAP ', /* Mapudungun */
+		'arq' => 'ARA ', /* Algerian Arabic */
+		'ars' => 'ARA ', /* Najdi Arabic */
+		'ary' => 'MOR ARA ', /* Moroccan Arabic */
+		'arz' => 'ARA ', /* Egyptian Arabic */
 		'as' => 'ASM ', /* Assamese */
-		'ath' => 'ATH ', /* Athapaskan [family] */
-		'atv' => 'ALT ', /* [Northern] Altai */
+		'atj' => 'RCR ', /* Atikamekw */
+		'atv' => 'ALT ', /* Northern Altai */
+		'auj' => 'BBR ', /* Awjilah */
+		'auz' => 'ARA ', /* Uzbeki Arabic */
 		'av' => 'AVR ', /* Avaric */
-		'awa' => 'AWA ', /* Awadhi */
-		'ay' => 'AYM ', /* Aymara */
-		'az' => 'AZE ', /* Azerbaijani */
+		'avl' => 'ARA ', /* Eastern Egyptian Bedawi Arabic */
+		'ay' => 'AYM ', /* Aymara [macrolanguage] */
+		'ayc' => 'AYM ', /* Southern Aymara */
+		'ayh' => 'ARA ', /* Hadrami Arabic */
+		'ayl' => 'ARA ', /* Libyan Arabic */
+		'ayn' => 'ARA ', /* Sanaani Arabic */
+		'ayp' => 'ARA ', /* North Mesopotamian Arabic */
+		'ayr' => 'AYM ', /* Central Aymara */
+		'az' => 'AZE ', /* Azerbaijani [macrolanguage] */
+		'azb' => 'AZB AZE ', /* South Azerbaijani */
+		'azd' => 'NAH ', /* Eastern Durango Nahuatl */
+		'azj' => 'AZE ', /* North Azerbaijani */
+		'azn' => 'NAH ', /* Western Durango Nahuatl */
+		'azz' => 'NAH ', /* Highland Puebla Nahuatl */
 		'ba' => 'BSH ', /* Bashkir */
-		'bai' => 'BML ', /* Bamileke [family] */
-		'bal' => 'BLI ', /* Baluchi */
-		'bci' => 'BAU ', /* Baule */
+		'bad' => 'BAD0', /* Banda [collection] */
+		'bag' => '', /* Tuki != Baghelkhandi */
+		'bah' => 'CPP ', /* Bahamas Creole English */
+		'bai' => 'BML ', /* Bamileke [collection] */
+		'bal' => 'BLI ', /* Baluchi [macrolanguage] */
+		'bau' => '', /* Bada (Nigeria) != Baulé */
+		'bbc' => 'BBC BTK ', /* Batak Toba */
+		'bbj' => 'BML ', /* Ghomálá' */
+		'bbp' => 'BAD0', /* West Central Banda */
+		'bbr' => '', /* Girawa != Berber */
+		'bbz' => 'ARA ', /* Babalia Creole Arabic (retired code) */
+		'bcc' => 'BLI ', /* Southern Balochi */
+		'bch' => '', /* Bariai != Bench */
+		'bci' => 'BAU ', /* Baoulé */
+		'bcl' => 'BIK ', /* Central Bikol */
 		'bcq' => 'BCH ', /* Bench */
-		'be' => 'BEL ', /* Belarussian */
-		'bem' => 'BEM ', /* Bemba (Zambia) */
-		'ber' => 'BER ', /* Berber [family] */
+		'bcr' => 'ATH ', /* Babine */
+		'be' => 'BEL ', /* Belarusian */
+		'bea' => 'ATH ', /* Beaver */
+		'beb' => 'BTI ', /* Bebele */
+		'ber' => 'BBR ', /* Berber [collection] */
+		'bew' => 'CPP ', /* Betawi */
+		'bfl' => 'BAD0', /* Banda-Ndélé */
 		'bfq' => 'BAD ', /* Badaga */
 		'bft' => 'BLT ', /* Balti */
-		'bfy' => 'BAG ', /* Baghelkhandi */
+		'bfu' => 'LAH ', /* Gahri */
+		'bfy' => 'BAG ', /* Bagheli */
 		'bg' => 'BGR ', /* Bulgarian */
+		'bgn' => 'BLI ', /* Western Balochi */
+		'bgp' => 'BLI ', /* Eastern Balochi */
+		'bgq' => 'BGQ RAJ ', /* Bagri */
+		'bgr' => 'QIN ', /* Bawm Chin */
 		'bhb' => 'BHI ', /* Bhili */
-		'bho' => 'BHO ', /* Bhojpuri */
-		'bik' => 'BIK ', /* Bikol */
-		'bin' => 'EDO ', /* Bini */
+		'bhk' => 'BIK ', /* Albay Bicolano (retired code) */
+		'bhr' => 'MLG ', /* Bara Malagasy */
+		'bi' => 'BIS CPP ', /* Bislama */
+		'bil' => '', /* Bile != Bilen */
+		'bin' => 'EDO ', /* Edo */
+		'biu' => 'QIN ', /* Biete */
+		'bjn' => 'MLY ', /* Banjar */
+		'bjo' => 'BAD0', /* Mid-Southern Banda */
+		'bjq' => 'MLG ', /* Southern Betsimisaraka Malagasy (retired code) */
+		'bjs' => 'CPP ', /* Bajan */
 		'bjt' => 'BLN ', /* Balanta-Ganja */
-		'bla' => 'BKF ', /* Blackfoot */
+		'bkf' => '', /* Beeke != Blackfoot */
+		'bko' => 'BML ', /* Kwa' */
+		'bla' => 'BKF ', /* Siksika */
 		'ble' => 'BLN ', /* Balanta-Kentohe */
-		'bm' => 'BMB ', /* Bambara */
-		'bn' => 'BEN ', /* Bengali */
+		'blg' => 'IBA ', /* Balau (retired code) */
+		'bli' => '', /* Bolia != Baluchi */
+		'blk' => 'BLK KRN ', /* Pa’o Karen */
+		'bln' => 'BIK ', /* Southern Catanduanes Bikol */
+		'blt' => '', /* Tai Dam != Balti */
+		'bm' => 'BMB ', /* Bambara (Bamanankan) */
+		'bmb' => '', /* Bembe != Bambara (Bamanankan) */
+		'bml' => '', /* Bomboli != Bamileke */
+		'bmm' => 'MLG ', /* Northern Betsimisaraka Malagasy */
+		'bn' => 'BEN ', /* Bangla */
 		'bo' => 'TIB ', /* Tibetan */
+		'bpd' => 'BAD0', /* Banda-Banda */
+		'bpl' => 'CPP ', /* Broome Pearling Lugger Pidgin */
+		'bpq' => 'CPP ', /* Banda Malay */
+		'bqi' => 'LRC ', /* Bakhtiari */
+		'bqk' => 'BAD0', /* Banda-Mbrès */
 		'br' => 'BRE ', /* Breton */
-		'bra' => 'BRI ', /* Braj Bhasha */
-		'brh' => 'BRH ', /* Brahui */
+		'bra' => 'BRI ', /* Braj */
+		'brc' => 'CPP ', /* Berbice Creole Dutch */
+		'bri' => '', /* Mokpwe != Braj Bhasha */
+		'brm' => '', /* Barambu != Burmese */
 		'bs' => 'BOS ', /* Bosnian */
-		'btb' => 'BTI ', /* Beti (Cameroon) */
-		'bxr' => 'RBU ', /* Russian Buriat */
-		'byn' => 'BIL ', /* Bilen */
+		'bsh' => '', /* Kati != Bashkir */
+		'btb' => 'BTI ', /* Beti (Cameroon) (retired code) */
+		'btd' => 'BTD BTK ', /* Batak Dairi (Pakpak) */
+		'bti' => '', /* Burate != Beti */
+		'btj' => 'MLY ', /* Bacanese Malay */
+		'btm' => 'BTM BTK ', /* Batak Mandailing */
+		'bto' => 'BIK ', /* Rinconada Bikol */
+		'bts' => 'BTS BTK ', /* Batak Simalungun */
+		'btx' => 'BTX BTK ', /* Batak Karo */
+		'btz' => 'BTZ BTK ', /* Batak Alas-Kluet */
+		'bum' => 'BTI ', /* Bulu (Cameroon) */
+		'bve' => 'MLY ', /* Berau Malay */
+		'bvu' => 'MLY ', /* Bukit Malay */
+		'bwe' => 'KRN ', /* Bwe Karen */
+		'bxk' => 'LUH ', /* Bukusu */
+		'bxo' => 'CPP ', /* Barikanchi */
+		'bxp' => 'BTI ', /* Bebil */
+		'bxr' => 'RBU ', /* Russia Buriat */
+		'byn' => 'BIL ', /* Bilin */
+		'byv' => 'BYV BML ', /* Medumba */
+		'bzc' => 'MLG ', /* Southern Betsimisaraka Malagasy */
+		'bzj' => 'CPP ', /* Belize Kriol English */
+		'bzk' => 'CPP ', /* Nicaragua Creole English */
 		'ca' => 'CAT ', /* Catalan */
+		'caa' => 'MYN ', /* Chortí */
+		'cac' => 'MYN ', /* Chuj */
+		'caf' => 'CRR ATH ', /* Southern Carrier */
+		'cak' => 'CAK MYN ', /* Kaqchikel */
+		'cbk' => 'CBK CPP ', /* Chavacano */
+		'cbl' => 'QIN ', /* Bualkhaw Chin */
+		'ccl' => 'CPP ', /* Cutchi-Swahili */
+		'ccm' => 'CPP ', /* Malaccan Creole Malay */
+		'cco' => 'CCHN', /* Comaltepec Chinantec */
+		'ccq' => 'ARK ', /* Chaungtha (retired code) */
 		'cdo' => 'ZHS ', /* Min Dong Chinese */
 		'ce' => 'CHE ', /* Chechen */
-		'ceb' => 'CEB ', /* Cebuano */
-		'chp' => 'CHP ', /* Chipewyan */
-		'chr' => 'CHR ', /* Cherokee */
+		'cek' => 'QIN ', /* Eastern Khumi Chin */
+		'cey' => 'QIN ', /* Ekai Chin */
+		'cfm' => 'HAL QIN ', /* Halam (Falam Chin) */
+		'ch' => 'CHA ', /* Chamorro */
+		'chf' => 'MYN ', /* Tabasco Chontal */
+		'chg' => '', /* Chagatai != Chaha Gurage */
+		'chh' => '', /* Chinook != Chattisgarhi */
+		'chj' => 'CCHN', /* Ojitlán Chinantec */
+		'chk' => 'CHK0', /* Chuukese */
+		'chm' => 'HMA LMA ', /* Mari (Russia) [macrolanguage] */
+		'chn' => 'CPP ', /* Chinook jargon */
+		'chp' => 'CHP SAY ATH ', /* Chipewyan */
+		'chq' => 'CCHN', /* Quiotepec Chinantec */
+		'chz' => 'CCHN', /* Ozumacín Chinantec */
+		'ciw' => 'OJB ', /* Chippewa */
 		'cjy' => 'ZHS ', /* Jinyu Chinese */
-		'ckt' => 'CHK ', /* Chukchi */
+		'cka' => 'QIN ', /* Khumi Awa Chin (retired code) */
+		'ckb' => 'KUR ', /* Central Kurdish */
+		'ckn' => 'QIN ', /* Kaang Chin */
+		'cks' => 'CPP ', /* Tayo */
+		'ckt' => 'CHK ', /* Chukot */
+		'ckz' => 'MYN ', /* Cakchiquel-Quiché Mixed Language */
+		'clc' => 'ATH ', /* Chilcotin */
+		'cld' => 'SYR ', /* Chaldean Neo-Aramaic */
+		'cle' => 'CCHN', /* Lealao Chinantec */
+		'clj' => 'QIN ', /* Laitu Chin */
+		'cls' => 'SAN ', /* Classical Sanskrit */
+		'clt' => 'QIN ', /* Lautu Chin */
 		'cmn' => 'ZHS ', /* Mandarin Chinese */
+		'cmr' => 'QIN ', /* Mro-Khimi Chin */
+		'cnb' => 'QIN ', /* Chinbon Chin */
+		'cnh' => 'QIN ', /* Hakha Chin */
+		'cnk' => 'QIN ', /* Khumi Chin */
+		'cnl' => 'CCHN', /* Lalana Chinantec */
 		'cnp' => 'ZHS ', /* Northern Ping Chinese */
-		'cop' => 'COP ', /* Coptic */
+		'cnr' => 'SRB ', /* Montenegrin */
+		'cnt' => 'CCHN', /* Tepetotutla Chinantec */
+		'cnu' => 'BBR ', /* Chenoua */
+		'cnw' => 'QIN ', /* Ngawn Chin */
+		'co' => 'COS ', /* Corsican */
+		'coa' => 'MLY ', /* Cocos Islands Malay */
+		'cob' => 'MYN ', /* Chicomuceltec */
+		'coq' => 'ATH ', /* Coquille */
+		'cpa' => 'CCHN', /* Palantla Chinantec */
+		'cpe' => 'CPP ', /* English-based creoles and pidgins [collection] */
+		'cpf' => 'CPP ', /* French-based creoles and pidgins [collection] */
+		'cpi' => 'CPP ', /* Chinese Pidgin English */
 		'cpx' => 'ZHS ', /* Pu-Xian Chinese */
-		'cr' => 'CRE ', /* Cree */
+		'cqd' => 'HMN ', /* Chuanqiandian Cluster Miao */
+		'cqu' => 'QUH QUZ ', /* Chilean Quechua (retired code) */
+		'cr' => 'CRE ', /* Cree [macrolanguage] */
 		'crh' => 'CRT ', /* Crimean Tatar */
-		'crj' => 'ECR ', /* [Southern] East Cree */
-		'crl' => 'ECR ', /* [Northern] East Cree */
-		'crm' => 'MCR ', /* Moose Cree */
-		'crx' => 'CRR ', /* Carrier */
+		'cri' => 'CPP ', /* Sãotomense */
+		'crj' => 'ECR YCR CRE ', /* Southern East Cree */
+		'crk' => 'WCR YCR CRE ', /* Plains Cree */
+		'crl' => 'ECR YCR CRE ', /* Northern East Cree */
+		'crm' => 'MCR LCR CRE ', /* Moose Cree */
+		'crp' => 'CPP ', /* Creoles and pidgins [collection] */
+		'crr' => '', /* Carolina Algonquian != Carrier */
+		'crs' => 'CPP ', /* Seselwa Creole French */
+		'crt' => '', /* Iyojwa'ja Chorote != Crimean Tatar */
+		'crx' => 'CRR ATH ', /* Carrier */
 		'cs' => 'CSY ', /* Czech */
+		'csa' => 'CCHN', /* Chiltepec Chinantec */
+		'csh' => 'QIN ', /* Asho Chin */
+		'csj' => 'QIN ', /* Songlai Chin */
+		'csl' => '', /* Chinese Sign Language != Church Slavonic */
+		'cso' => 'CCHN', /* Sochiapam Chinantec */
 		'csp' => 'ZHS ', /* Southern Ping Chinese */
-		'cu' => 'CSL ', /* Church Slavic */
+		'csv' => 'QIN ', /* Sumtu Chin */
+		'csw' => 'NCR NHC CRE ', /* Swampy Cree */
+		'csy' => 'QIN ', /* Siyin Chin */
+		'ctc' => 'ATH ', /* Chetco */
+		'ctd' => 'QIN ', /* Tedim Chin */
+		'cte' => 'CCHN', /* Tepinapa Chinantec */
+		'cth' => 'QIN ', /* Thaiphum Chin */
+		'ctl' => 'CCHN', /* Tlacoatzintepec Chinantec */
+		'cts' => 'BIK ', /* Northern Catanduanes Bikol */
+		'ctu' => 'MYN ', /* Chol */
+		'cu' => 'CSL ', /* Church Slavonic */
+		'cuc' => 'CCHN', /* Usila Chinantec */
 		'cv' => 'CHU ', /* Chuvash */
-		'cwd' => 'DCR ', /* Woods Cree */
+		'cvn' => 'CCHN', /* Valle Nacional Chinantec */
+		'cwd' => 'DCR TCR CRE ', /* Woods Cree */
 		'cy' => 'WEL ', /* Welsh */
 		'czh' => 'ZHS ', /* Huizhou Chinese */
 		'czo' => 'ZHS ', /* Min Zhong Chinese */
+		'czt' => 'QIN ', /* Zotung Chin */
 		'da' => 'DAN ', /* Danish */
-		'dap' => 'NIS ', /* Nisi (India) */
-		'dar' => 'DAR ', /* Dargwa */
+		'dao' => 'QIN ', /* Daai Chin */
+		'dap' => 'NIS ', /* Nisi (India) (retired code) */
+		'dcr' => 'CPP ', /* Negerhollands */
 		'de' => 'DEU ', /* German */
-		'din' => 'DNK ', /* Dinka */
-		'dje' => 'DJR ', /* Djerma */
+		'den' => 'SLA ATH ', /* Slavey [macrolanguage] */
+		'dep' => 'CPP ', /* Pidgin Delaware */
+		'dgo' => 'DGO DGR ', /* Dogri (individual language) */
+		'dgr' => 'ATH ', /* Tlicho */
+		'dhd' => 'MAW ', /* Dhundari */
+		'dhv' => '', /* Dehu != Divehi (Dhivehi, Maldivian) (deprecated) */
+		'dib' => 'DNK ', /* South Central Dinka */
+		'dik' => 'DNK ', /* Southwestern Dinka */
+		'din' => 'DNK ', /* Dinka [macrolanguage] */
+		'dip' => 'DNK ', /* Northeastern Dinka */
+		'diq' => 'DIQ ZZA ', /* Dimli */
+		'diw' => 'DNK ', /* Northwestern Dinka */
+		'dje' => 'DJR ', /* Zarma */
+		'djk' => 'CPP ', /* Eastern Maroon Creole */
+		'djr' => 'DJR0', /* Djambarrpuyngu */
+		'dks' => 'DNK ', /* Southeastern Dinka */
 		'dng' => 'DUN ', /* Dungan */
-		'doi' => 'DGR ', /* Dogri */
+		'dnk' => '', /* Dengka != Dinka */
+		'doi' => 'DGR ', /* Dogri (macrolanguage) [macrolanguage] */
+		'drh' => 'MNG ', /* Darkhat (retired code) */
+		'dri' => '', /* C'Lela != Dari */
+		'drw' => 'DRI FAR ', /* Darwazi (retired code) */
 		'dsb' => 'LSB ', /* Lower Sorbian */
-		'dv' => 'DIV ', /* Dhivehi */
-		'dyu' => 'JUL ', /* Jula */
+		'dty' => 'NEP ', /* Dotyali */
+		'dun' => '', /* Dusun Deyah != Dungan */
+		'dup' => 'MLY ', /* Duano */
+		'dv' => 'DIV DHV ', /* Divehi (Dhivehi, Maldivian) */
+		'dwk' => 'KUI ', /* Dawik Kui */
+		'dwu' => 'DUJ ', /* Dhuwal */
+		'dwy' => 'DUJ ', /* Dhuwaya */
+		'dyu' => 'JUL ', /* Dyula */
 		'dz' => 'DZN ', /* Dzongkha */
+		'dzn' => '', /* Dzando != Dzongkha */
+		'ecr' => '', /* Eteocretan != Eastern Cree */
 		'ee' => 'EWE ', /* Ewe */
-		'efi' => 'EFI ', /* Efik */
+		'ekk' => 'ETI ', /* Standard Estonian */
+		'eky' => 'KRN ', /* Eastern Kayah */
 		'el' => 'ELL ', /* Modern Greek (1453-) */
-		'grc' => 'PGR ', /* Polytonic Greek */
+		'emk' => 'EMK MNK ', /* Eastern Maninkakan */
+		'emy' => 'MYN ', /* Epigraphic Mayan */
 		'en' => 'ENG ', /* English */
+		'enb' => 'KAL ', /* Markweeta */
+		'enf' => 'FNE ', /* Forest Enets */
+		'enh' => 'TNE ', /* Tundra Enets */
 		'eo' => 'NTO ', /* Esperanto */
-		'eot' => 'BTI ', /* Beti (Côte d'Ivoire) */
 		'es' => 'ESP ', /* Spanish */
-		'et' => 'ETI ', /* Estonian */
+		'esg' => 'GON ', /* Aheri Gondi */
+		'esi' => 'IPK ', /* North Alaskan Inupiatun */
+		'esk' => 'IPK ', /* Northwest Alaska Inupiatun */
+		'et' => 'ETI ', /* Estonian [macrolanguage] */
+		'eto' => 'BTI ', /* Eton (Cameroon) */
 		'eu' => 'EUQ ', /* Basque */
+		'euq' => '', /* Basque [collection] != Basque */
 		'eve' => 'EVN ', /* Even */
 		'evn' => 'EVK ', /* Evenki */
-		'fa' => 'FAR ', /* Persian */
-		'ff' => 'FUL ', /* Fulah */
+		'ewo' => 'BTI ', /* Ewondo */
+		'eyo' => 'KAL ', /* Keiyo */
+		'fa' => 'FAR ', /* Persian [macrolanguage] */
+		'fab' => 'CPP ', /* Fa d'Ambu */
+		'fan' => 'FAN0BTI ', /* Fang (Equatorial Guinea) */
+		'far' => '', /* Fataleka != Persian */
+		'fat' => 'FAT AKA ', /* Fanti */
+		'fbl' => 'BIK ', /* West Albay Bikol */
+		'ff' => 'FUL ', /* Fulah [macrolanguage] */
+		'ffm' => 'FUL ', /* Maasina Fulfulde */
 		'fi' => 'FIN ', /* Finnish */
 		'fil' => 'PIL ', /* Filipino */
 		'fj' => 'FJI ', /* Fijian */
+		'flm' => 'HAL QIN ', /* Halam (Falam Chin) (retired code) */
+		'fmp' => 'FMP BML ', /* Fe’fe’ */
+		'fng' => 'CPP ', /* Fanagalo */
 		'fo' => 'FOS ', /* Faroese */
-		'fon' => 'FON ', /* Fon */
+		'fos' => '', /* Siraya != Faroese */
+		'fpe' => 'CPP ', /* Fernando Po Creole English */
 		'fr' => 'FRA ', /* French */
+		'fub' => 'FUL ', /* Adamawa Fulfulde */
+		'fuc' => 'FUL ', /* Pulaar */
+		'fue' => 'FUL ', /* Borgu Fulfulde */
+		'fuf' => 'FTA FUL ', /* Pular */
+		'fuh' => 'FUL ', /* Western Niger Fulfulde */
+		'fui' => 'FUL ', /* Bagirmi Fulfulde */
+		'fuq' => 'FUL ', /* Central-Eastern Niger Fulfulde */
 		'fur' => 'FRL ', /* Friulian */
+		'fuv' => 'FUV FUL ', /* Nigerian Fulfulde */
 		'fy' => 'FRI ', /* Western Frisian */
-		'ga' => ['IRI ', 'IRT '], /* Irish */
+		'ga' => 'IRI IRT ', /* Irish */
 		'gaa' => 'GAD ', /* Ga */
-		'gag' => 'GAG ', /* Gagauz */
+		'gac' => 'CPP ', /* Mixed Great Andamanese */
+		'gad' => '', /* Gaddang != Ga */
+		'gae' => '', /* Guarequena != Scottish Gaelic */
+		'gal' => '', /* Galolen != Galician */
 		'gan' => 'ZHS ', /* Gan Chinese */
+		'gar' => '', /* Galeya != Garshuni */
+		'gaw' => '', /* Nobonob != Garhwali */
+		'gax' => 'ORO ', /* Borana-Arsi-Guji Oromo */
+		'gaz' => 'ORO ', /* West Central Oromo */
 		'gbm' => 'GAW ', /* Garhwali */
+		'gce' => 'ATH ', /* Galice */
+		'gcf' => 'CPP ', /* Guadeloupean Creole French */
+		'gcl' => 'CPP ', /* Grenadian Creole English */
+		'gcr' => 'CPP ', /* Guianese Creole French */
 		'gd' => 'GAE ', /* Scottish Gaelic */
-		'gez' => 'GEZ ', /* Ge'ez */
+		'gda' => 'RAJ ', /* Gade Lohar */
+		'ggo' => 'GON ', /* Southern Gondi (retired code) */
+		'gha' => 'BBR ', /* Ghadamès */
+		'ghc' => 'IRT ', /* Hiberno-Scottish Gaelic */
+		'ghk' => 'KRN ', /* Geko Karen */
+		'gho' => 'BBR ', /* Ghomara */
+		'gib' => 'CPP ', /* Gibanawa */
+		'gil' => 'GIL0', /* Kiribati (Gilbertese) */
+		'gju' => 'RAJ ', /* Gujari */
+		'gkp' => 'GKP KPL ', /* Guinea Kpelle */
 		'gl' => 'GAL ', /* Galician */
 		'gld' => 'NAN ', /* Nanai */
-		'gn' => 'GUA ', /* Guarani */
-		'gon' => 'GON ', /* Gondi */
+		'gmz' => '', /* Mgbolizhia != Gumuz */
+		'gn' => 'GUA ', /* Guarani [macrolanguage] */
+		'gnb' => 'QIN ', /* Gangte */
+		'gno' => 'GON ', /* Northern Gondi */
+		'gnw' => 'GUA ', /* Western Bolivian Guaraní */
+		'gom' => 'KOK ', /* Goan Konkani */
+		'goq' => 'CPP ', /* Gorap */
+		'gox' => 'BAD0', /* Gobu */
+		'gpe' => 'CPP ', /* Ghanaian Pidgin English */
+		'gro' => '', /* Groma != Garo */
+		'grr' => 'BBR ', /* Taznatit */
 		'grt' => 'GRO ', /* Garo */
-		'gru' => 'SOG ', /* Sodo Gurage */
+		'gru' => 'SOG ', /* Kistane */
+		'gsw' => 'ALS ', /* Alsatian */
 		'gu' => 'GUJ ', /* Gujarati */
+		'gua' => '', /* Shiki != Guarani */
+		'gug' => 'GUA ', /* Paraguayan Guaraní */
+		'gui' => 'GUA ', /* Eastern Bolivian Guaraní */
 		'guk' => 'GMZ ', /* Gumuz */
-		'gv' => 'MNX ', /* Manx Gaelic */
+		'gul' => 'CPP ', /* Sea Island Creole English */
+		'gun' => 'GUA ', /* Mbyá Guaraní */
+		'gv' => 'MNX ', /* Manx */
+		'gwi' => 'ATH ', /* Gwichʼin */
+		'gyn' => 'CPP ', /* Guyanese Creole English */
 		'ha' => 'HAU ', /* Hausa */
+		'haa' => 'ATH ', /* Hän */
+		'hae' => 'ORO ', /* Eastern Oromo */
+		'hai' => 'HAI0', /* Haida [macrolanguage] */
 		'hak' => 'ZHS ', /* Hakka Chinese */
+		'hal' => '', /* Halang != Halam (Falam Chin) */
 		'har' => 'HRI ', /* Harari */
-		'haw' => 'HAW ', /* Hawaiin */
+		'hax' => 'HAI0', /* Southern Haida */
+		'hbn' => '', /* Heiban != Hammer-Banna */
+		'hca' => 'CPP ', /* Andaman Creole Hindi */
+		'hdn' => 'HAI0', /* Northern Haida */
 		'he' => 'IWR ', /* Hebrew */
+		'hea' => 'HMN ', /* Northern Qiandong Miao */
 		'hi' => 'HIN ', /* Hindi */
-		'hil' => 'HIL ', /* Hiligaynon */
-		'hnd' => 'HND ', /* [Southern] Hindko */
-		'hne' => 'CHH ', /* Chattisgarhi */
+		'hji' => 'MLY ', /* Haji */
+		'hlt' => 'QIN ', /* Matu Chin */
+		'hma' => 'HMN ', /* Southern Mashan Hmong */
+		'hmc' => 'HMN ', /* Central Huishui Hmong */
+		'hmd' => 'HMD HMN ', /* Large Flowery Miao */
+		'hme' => 'HMN ', /* Eastern Huishui Hmong */
+		'hmg' => 'HMN ', /* Southwestern Guiyang Hmong */
+		'hmh' => 'HMN ', /* Southwestern Huishui Hmong */
+		'hmi' => 'HMN ', /* Northern Huishui Hmong */
+		'hmj' => 'HMN ', /* Ge */
+		'hml' => 'HMN ', /* Luopohe Hmong */
+		'hmm' => 'HMN ', /* Central Mashan Hmong */
+		'hmp' => 'HMN ', /* Northern Mashan Hmong */
+		'hmq' => 'HMN ', /* Eastern Qiandong Miao */
+		'hmr' => 'QIN ', /* Hmar */
+		'hms' => 'HMN ', /* Southern Qiandong Miao */
+		'hmw' => 'HMN ', /* Western Mashan Hmong */
+		'hmy' => 'HMN ', /* Southern Guiyang Hmong */
+		'hmz' => 'HMZ HMN ', /* Hmong Shua */
+		'hne' => 'CHH ', /* Chhattisgarhi */
+		'hnj' => 'HMN ', /* Hmong Njua */
 		'hnm' => 'ZHS ', /* Hainanese */
-		'hno' => 'HND ', /* [Northern] Hindko */
+		'hno' => 'HND ', /* Northern Hindko */
+		'ho' => 'HMO CPP ', /* Hiri Motu */
 		'hoc' => 'HO  ', /* Ho */
-		'hoj' => 'HAR ', /* Harauti */
+		'hoi' => 'ATH ', /* Holikachuk */
+		'hoj' => 'HAR RAJ ', /* Hadothi */
 		'hr' => 'HRV ', /* Croatian */
+		'hra' => 'QIN ', /* Hrangkhol */
+		'hrm' => 'HMN ', /* Horned Miao */
 		'hsb' => 'USB ', /* Upper Sorbian */
 		'hsn' => 'ZHS ', /* Xiang Chinese */
-		'ht' => 'HAI ', /* Haitian */
+		'ht' => 'HAI CPP ', /* Haitian (Haitian Creole) */
 		'hu' => 'HUN ', /* Hungarian */
-		'hy' => 'HYE ', /* Armenian */
-		'id' => 'IND ', /* Indonesian */
+		'huj' => 'HMN ', /* Northern Guiyang Hmong */
+		'hup' => 'ATH ', /* Hupa */
+		'hus' => 'MYN ', /* Huastec */
+		'hwc' => 'CPP ', /* Hawai'i Creole English */
+		'hy' => 'HYE0HYE ', /* Armenian */
+		'hyw' => 'HYE ', /* Western Armenian */
+		'hz' => 'HER ', /* Herero */
+		'ia' => 'INA ', /* Interlingua (IALA) */
+		'iby' => 'IJO ', /* Ibani */
+		'icr' => 'CPP ', /* Islander Creole English */
+		'id' => 'IND MLY ', /* Indonesian */
+		'ida' => 'LUH ', /* Idakho-Isukha-Tiriki */
+		'idb' => 'CPP ', /* Indo-Portuguese */
+		'ie' => 'ILE ', /* Interlingue */
 		'ig' => 'IBO ', /* Igbo */
 		'igb' => 'EBI ', /* Ebira */
-		'ijo' => 'IJO ', /* Ijo [family] */
-		'ilo' => 'ILO ', /* Ilokano */
+		'ihb' => 'CPP ', /* Iha Based Pidgin */
+		'ii' => 'YIM ', /* Sichuan Yi */
+		'ijc' => 'IJO ', /* Izon */
+		'ije' => 'IJO ', /* Biseni */
+		'ijn' => 'IJO ', /* Kalabari */
+		'ijs' => 'IJO ', /* Southeast Ijo */
+		'ik' => 'IPK ', /* Inupiaq [macrolanguage] */
+		'ike' => 'INU INUK', /* Eastern Canadian Inuktitut */
+		'ikt' => 'INU ', /* Inuinnaqtun */
+		'in' => 'IND MLY ', /* Indonesian (retired code) */
+		'ing' => 'ATH ', /* Degexit'an */
 		'inh' => 'ING ', /* Ingush */
+		'io' => 'IDO ', /* Ido */
+		'iri' => '', /* Rigwe != Irish */
 		'is' => 'ISL ', /* Icelandic */
+		'ism' => '', /* Masimasi != Inari Sami */
 		'it' => 'ITA ', /* Italian */
-		'iu' => 'INU ', /* Inuktitut */
+		'itz' => 'MYN ', /* Itzá */
+		'iu' => 'INU INUK', /* Inuktitut [macrolanguage] */
+		'iw' => 'IWR ', /* Hebrew (retired code) */
+		'ixl' => 'MYN ', /* Ixil */
 		'ja' => 'JAN ', /* Japanese */
+		'jac' => 'MYN ', /* Popti' */
+		'jak' => 'MLY ', /* Jakun */
+		'jam' => 'JAM CPP ', /* Jamaican Creole English */
+		'jan' => '', /* Jandai != Japanese */
+		'jax' => 'MLY ', /* Jambi Malay */
+		'jbe' => 'BBR ', /* Judeo-Berber */
+		'jbn' => 'BBR ', /* Nafusi */
+		'jgo' => 'BML ', /* Ngomba */
+		'ji' => 'JII ', /* Yiddish (retired code) */
+		'jii' => '', /* Jiiddu != Yiddish */
+		'jkm' => 'KRN ', /* Mobwa Karen */
+		'jkp' => 'KRN ', /* Paku Karen */
+		'jud' => '', /* Worodougou != Ladino */
+		'jul' => '', /* Jirel != Jula */
 		'jv' => 'JAV ', /* Javanese */
+		'jvd' => 'CPP ', /* Javindo */
+		'jw' => 'JAV ', /* Javanese (retired code) */
 		'ka' => 'KAT ', /* Georgian */
 		'kaa' => 'KRK ', /* Karakalpak */
+		'kab' => 'KAB0BBR ', /* Kabyle */
+		'kac' => '', /* Kachin != Kachchi */
 		'kam' => 'KMB ', /* Kamba (Kenya) */
-		'kar' => 'KRN ', /* Karen [family] */
+		'kar' => 'KRN ', /* Karen [collection] */
 		'kbd' => 'KAB ', /* Kabardian */
+		'kby' => 'KNR ', /* Manga Kanuri */
+		'kca' => 'KHK KHS KHV ', /* Khanty */
+		'kcn' => 'CPP ', /* Nubi */
 		'kdr' => 'KRM ', /* Karaim */
 		'kdt' => 'KUY ', /* Kuy */
-		'kex' => 'KKN ', /* Kokni */
-		'kfr' => 'KAC ', /* Kachchi */
+		'kea' => 'KEA CPP ', /* Kabuverdianu (Crioulo) */
+		'keb' => '', /* Kélé != Kebena */
+		'kek' => 'KEK MYN ', /* Kekchi */
+		'kex' => 'KKN ', /* Kukna */
+		'kfa' => 'KOD ', /* Kodava */
+		'kfr' => 'KAC ', /* Kachhi */
+		'kfx' => 'KUL ', /* Kullu Pahari */
 		'kfy' => 'KMN ', /* Kumaoni */
+		'kg' => 'KON0', /* Kongo [macrolanguage] */
+		'kge' => '', /* Komering != Khutsuri Georgian */
 		'kha' => 'KSI ', /* Khasi */
-		'khb' => 'XBD ', /* Tai Lue */
-		'khw' => 'KHW ', /* Khowar */
-		'ki' => 'KIK ', /* Kikuyu */
-		'kjh' => 'KHA ', /* Khakass */
+		'khb' => 'XBD ', /* Lü */
+		'khk' => 'MNG ', /* Halh Mongolian */
+		'khn' => '', /* Khandesi != Khamti Shan (Microsoft fonts) */
+		'khs' => '', /* Kasua != Khanty-Shurishkar */
+		'kht' => 'KHT KHN ', /* Khamti */
+		'khv' => '', /* Khvarshi != Khanty-Vakhi */
+		'ki' => 'KIK ', /* Kikuyu (Gikuyu) */
+		'kis' => '', /* Kis != Kisii */
+		'kiu' => 'KIU ZZA ', /* Kirmanjki */
+		'kj' => 'KUA ', /* Kuanyama */
+		'kjb' => 'MYN ', /* Q'anjob'al */
+		'kjh' => 'KHA ', /* Khakas */
+		'kjp' => 'KJP KRN ', /* Pwo Eastern Karen */
+		'kjt' => 'KRN ', /* Phrae Pwo Karen */
 		'kk' => 'KAZ ', /* Kazakh */
-		'kl' => 'GRN ', /* Kalaallisut */
-		'kln' => 'KAL ', /* Kalenjin */
-		'km' => 'KHM ', /* Central Khmer */
-		'kmb' => 'MBN ', /* [North] Mbundu */
+		'kkn' => '', /* Kon Keu != Kokni */
+		'kkz' => 'ATH ', /* Kaska */
+		'kl' => 'GRN ', /* Greenlandic */
+		'klm' => '', /* Migum != Kalmyk */
+		'kln' => 'KAL ', /* Kalenjin [macrolanguage] */
+		'km' => 'KHM ', /* Khmer */
+		'kmb' => 'MBN ', /* Kimbundu */
+		'kmn' => '', /* Awtuw != Kumaoni */
+		'kmo' => '', /* Kwoma != Komo */
+		'kmr' => 'KUR ', /* Northern Kurdish */
+		'kms' => '', /* Kamasau != Komso */
+		'kmv' => 'CPP ', /* Karipúna Creole French */
 		'kmw' => 'KMO ', /* Komo (Democratic Republic of Congo) */
 		'kn' => 'KAN ', /* Kannada */
-		'ko' => 'KOR ', /* Korean */
-		'koi' => 'KOP ', /* Komi-Permyak */
-		'kok' => 'KOK ', /* Konkani */
-		'kpe' => 'KPL ', /* Kpelle */
-		'kpv' => 'KOZ ', /* Komi-Zyrian */
+		'knc' => 'KNR ', /* Central Kanuri */
+		'kng' => 'KON0', /* Koongo */
+		'knj' => 'MYN ', /* Western Kanjobal */
+		'knn' => 'KOK ', /* Konkani */
+		'knr' => '', /* Kaningra != Kanuri */
+		'ko' => 'KOR KOH ', /* Korean */
+		'kod' => '', /* Kodi != Kodagu */
+		'koh' => '', /* Koyo != Korean Old Hangul */
+		'koi' => 'KOP KOM ', /* Komi-Permyak */
+		'kop' => '', /* Waube != Komi-Permyak */
+		'koy' => 'ATH ', /* Koyukon */
+		'koz' => '', /* Korak != Komi-Zyrian */
+		'kpe' => 'KPL ', /* Kpelle [macrolanguage] */
+		'kpl' => '', /* Kpala != Kpelle */
+		'kpp' => 'KRN ', /* Paku Karen (retired code) */
+		'kpv' => 'KOZ KOM ', /* Komi-Zyrian */
 		'kpy' => 'KYK ', /* Koryak */
+		'kqs' => 'KIS ', /* Northern Kissi */
 		'kqy' => 'KRT ', /* Koorete */
-		'kr' => 'KNR ', /* Kanuri */
-		'kri' => 'KRI ', /* Krio */
-		'krl' => 'KRL ', /* Karelian */
+		'kr' => 'KNR ', /* Kanuri [macrolanguage] */
+		'krc' => 'KAR BAL ', /* Karachay-Balkar */
+		'kri' => 'KRI CPP ', /* Krio */
+		'krk' => '', /* Kerek != Karakalpak */
+		'krm' => '', /* Krim (retired code) != Karaim */
+		'krn' => '', /* Sapo != Karen */
+		'krt' => 'KNR ', /* Tumari Kanuri */
 		'kru' => 'KUU ', /* Kurukh */
 		'ks' => 'KSH ', /* Kashmiri */
-		'ku' => 'KUR ', /* Kurdish */
-		'kum' => 'KUM ', /* Kumyk */
-		'kvd' => 'KUI ', /* Kui (Indonesia) */
-		'kxc' => 'KMS ', /* Komso */
-		'kxu' => 'KUI ', /* Kui (India) */
-		'ky' => 'KIR ', /* Kirghiz */
+		'ksh' => 'KSH0', /* Kölsch */
+		'ksi' => '', /* Krisa != Khasi */
+		'ksm' => '', /* Kumba != Kildin Sami */
+		'kss' => 'KIS ', /* Southern Kisi */
+		'ksw' => 'KSW KRN ', /* S’gaw Karen */
+		'ktb' => 'KEB ', /* Kambaata */
+		'ktu' => 'KON ', /* Kituba (Democratic Republic of Congo) */
+		'ktw' => 'ATH ', /* Kato */
+		'ku' => 'KUR ', /* Kurdish [macrolanguage] */
+		'kui' => '', /* Kuikúro-Kalapálo != Kui */
+		'kul' => '', /* Kulere != Kulvi */
+		'kuu' => 'ATH ', /* Upper Kuskokwim */
+		'kuw' => 'BAD0', /* Kpagua */
+		'kuy' => '', /* Kuuku-Ya'u != Kuy */
+		'kv' => 'KOM ', /* Komi [macrolanguage] */
+		'kvb' => 'MLY ', /* Kubu */
+		'kvl' => 'KRN ', /* Kayaw */
+		'kvq' => 'KVQ KRN ', /* Geba Karen */
+		'kvr' => 'MLY ', /* Kerinci */
+		'kvt' => 'KRN ', /* Lahta Karen */
+		'kvu' => 'KRN ', /* Yinbaw Karen */
+		'kvy' => 'KRN ', /* Yintale Karen */
+		'kw' => 'COR ', /* Cornish */
+		'kww' => 'CPP ', /* Kwinti */
+		'kwy' => 'KON0', /* San Salvador Kongo */
+		'kxc' => 'KMS ', /* Konso */
+		'kxd' => 'MLY ', /* Brunei */
+		'kxf' => 'KRN ', /* Manumanaw Karen */
+		'kxk' => 'KRN ', /* Zayein Karen */
+		'kxl' => 'KUU ', /* Nepali Kurux (retired code) */
+		'kxu' => 'KUI ', /* Kui (India) (retired code) */
+		'ky' => 'KIR ', /* Kirghiz (Kyrgyz) */
+		'kyk' => '', /* Kamayo != Koryak */
+		'kyu' => 'KYU KRN ', /* Western Kayah */
 		'la' => 'LAT ', /* Latin */
+		'lac' => 'MYN ', /* Lacandon */
 		'lad' => 'JUD ', /* Ladino */
+		'lah' => '', /* Lahnda [macrolanguage] != Lahuli */
+		'lak' => '', /* Laka (Nigeria) (retired code) != Lak */
+		'lam' => '', /* Lamba != Lambani */
+		'laz' => '', /* Aribwatsa != Laz */
 		'lb' => 'LTZ ', /* Luxembourgish */
 		'lbe' => 'LAK ', /* Lak */
 		'lbj' => 'LDK ', /* Ladakhi */
-		'lez' => 'LEZ ', /* Lezgi */
-		'lg' => 'LUG ', /* Luganda */
+		'lbl' => 'BIK ', /* Libon Bikol */
+		'lce' => 'MLY ', /* Loncong */
+		'lcf' => 'MLY ', /* Lubu */
+		'ldi' => 'KON0', /* Laari */
+		'ldk' => '', /* Leelau != Ladakhi */
+		'lg' => 'LUG ', /* Ganda */
+		'li' => 'LIM ', /* Limburgish */
 		'lif' => 'LMB ', /* Limbu */
+		'lir' => 'CPP ', /* Liberian English */
+		'liw' => 'MLY ', /* Col */
+		'liy' => 'BAD0', /* Banda-Bambari */
+		'lkb' => 'LUH ', /* Kabras */
+		'lko' => 'LUH ', /* Khayo */
+		'lks' => 'LUH ', /* Kisa */
 		'lld' => 'LAD ', /* Ladin */
-		'lmn' => 'LAM ', /* Lambani */
+		'lma' => '', /* East Limba != Low Mari */
+		'lmb' => '', /* Merei != Limbu */
+		'lmn' => 'LAM ', /* Lambadi */
+		'lmw' => '', /* Lake Miwok != Lomwe */
 		'ln' => 'LIN ', /* Lingala */
+		'lna' => 'BAD0', /* Langbashe */
+		'lnl' => 'BAD0', /* South Central Banda */
 		'lo' => 'LAO ', /* Lao */
+		'lou' => 'CPP ', /* Louisiana Creole */
+		'lri' => 'LUH ', /* Marachi */
+		'lrm' => 'LUH ', /* Marama */
+		'lrt' => 'CPP ', /* Larantuka Malay */
+		'lsb' => '', /* Burundian Sign Language != Lower Sorbian */
+		'lsm' => 'LUH ', /* Saamia */
 		'lt' => 'LTH ', /* Lithuanian */
+		'ltg' => 'LVI ', /* Latgalian */
+		'lth' => '', /* Thur != Lithuanian */
+		'lto' => 'LUH ', /* Tsotso */
+		'lts' => 'LUH ', /* Tachoni */
 		'lu' => 'LUB ', /* Luba-Katanga */
-		'lua' => 'LUB ', /* Luba-Kasai */
 		'luh' => 'ZHS ', /* Leizhou Chinese */
-		'luo' => 'LUO ', /* Luo (Kenya and Tanzania) */
-		'lus' => 'MIZ ', /* Mizo */
-		'luy' => 'LUH ', /* Luhya [macrolanguage] */
-		'lv' => 'LVI ', /* Latvian */
+		'lus' => 'MIZ QIN ', /* Lushai */
+		'luy' => 'LUH ', /* Luyia [macrolanguage] */
+		'luz' => 'LRC ', /* Southern Luri */
+		'lv' => 'LVI ', /* Latvian [macrolanguage] */
+		'lvi' => '', /* Lavi != Latvian */
+		'lvs' => 'LVI ', /* Standard Latvian */
+		'lwg' => 'LUH ', /* Wanga */
 		'lzh' => 'ZHT ', /* Literary Chinese */
 		'lzz' => 'LAZ ', /* Laz */
 		'mai' => 'MTH ', /* Maithili */
-		'mdc' => 'MLE ', /* Male (Papua New Guinea) */
+		'maj' => '', /* Jalapa De Díaz Mazatec != Majang */
+		'mak' => 'MKR ', /* Makasar */
+		'mam' => 'MAM MYN ', /* Mam */
+		'man' => 'MNK ', /* Mandingo [macrolanguage] */
+		'map' => '', /* Austronesian [collection] != Mapudungun */
+		'maw' => '', /* Mampruli != Marwari */
+		'max' => 'MLY CPP ', /* North Moluccan Malay */
+		'mbf' => 'CPP ', /* Baba Malay */
+		'mbn' => '', /* Macaguán != Mbundu */
+		'mch' => '', /* Maquiritari != Manchu */
+		'mcm' => 'CPP ', /* Malaccan Creole Portuguese */
+		'mcr' => '', /* Menya != Moose Cree */
+		'mct' => 'BTI ', /* Mengisa */
+		'mde' => '', /* Maba (Chad) != Mende */
 		'mdf' => 'MOK ', /* Moksha */
-		'mdy' => 'MLE ', /* Male (Ethiopia) */
+		'mdy' => 'MLE ', /* Male */
 		'men' => 'MDE ', /* Mende (Sierra Leone) */
-		'mg' => 'MLG ', /* Malagasy */
-		'mhr' => 'LMA ', /* Low Mari */
+		'meo' => 'MLY ', /* Kedah Malay */
+		'mfa' => 'MFA MLY ', /* Pattani Malay */
+		'mfb' => 'MLY ', /* Bangka */
+		'mfe' => 'MFE CPP ', /* Morisyen */
+		'mfp' => 'CPP ', /* Makassar Malay */
+		'mg' => 'MLG ', /* Malagasy [macrolanguage] */
+		'mga' => 'SGA ', /* Middle Irish (900-1200) */
+		'mh' => 'MAH ', /* Marshallese */
+		'mhc' => 'MYN ', /* Mocho */
+		'mhr' => 'LMA ', /* Eastern Mari */
+		'mhv' => 'ARK ', /* Arakanese (retired code) */
 		'mi' => 'MRI ', /* Maori */
+		'min' => 'MIN MLY ', /* Minangkabau */
+		'miz' => '', /* Coatzospan Mixtec != Mizo */
 		'mk' => 'MKD ', /* Macedonian */
-		'ml' => 'MLR ', /* Malayalam reformed  (MAL is Malayalam Traditional) */
-		'mn' => 'MNG ', /* Mongolian */
+		'mkn' => 'CPP ', /* Kupang Malay */
+		'mkr' => '', /* Malas != Makasar */
+		'mku' => 'MNK ', /* Konyanka Maninka */
+		'ml' => 'MAL MLR ', /* Malayalam */
+		'mle' => '', /* Manambu != Male */
+		'mln' => '', /* Malango != Malinke */
+		'mlq' => 'MLN MNK ', /* Western Maninkakan */
+		'mlr' => '', /* Vame != Malayalam Reformed */
+		'mmr' => 'HMN ', /* Western Xiangxi Miao */
+		'mn' => 'MNG ', /* Mongolian [macrolanguage] */
 		'mnc' => 'MCH ', /* Manchu */
-		'mni' => 'MNI ', /* Manipuri */
-		'mnk' => 'MND ', /* Mandinka */
+		'mnd' => '', /* Mondé != Mandinka */
+		'mng' => '', /* Eastern Mnong != Mongolian */
+		'mnh' => 'BAD0', /* Mono (Democratic Republic of Congo) */
+		'mnk' => 'MND MNK ', /* Mandinka */
 		'mnp' => 'ZHS ', /* Min Bei Chinese */
 		'mns' => 'MAN ', /* Mansi */
-		'mnw' => 'MON ', /* Mon */
-		'mo' => 'MOL ', /* Moldavian */
-		'moh' => 'MOH ', /* Mohawk */
+		'mnw' => 'MON MONT', /* Mon */
+		'mnx' => '', /* Manikion != Manx */
+		'mo' => 'MOL ROM ', /* Moldavian (retired code) */
+		'mod' => 'CPP ', /* Mobilian */
+		'mok' => '', /* Morori != Moksha */
+		'mop' => 'MYN ', /* Mopán Maya */
+		'mor' => '', /* Moro != Moroccan */
 		'mpe' => 'MAJ ', /* Majang */
+		'mqg' => 'MLY ', /* Kota Bangun Kutai Malay */
 		'mr' => 'MAR ', /* Marathi */
-		'mrj' => 'HMA ', /* High Mari */
-		'ms' => 'MLY ', /* Malay */
+		'mrh' => 'QIN ', /* Mara Chin */
+		'mrj' => 'HMA ', /* Western Mari */
+		'ms' => 'MLY ', /* Malay [macrolanguage] */
+		'msc' => 'MNK ', /* Sankaran Maninka */
+		'msh' => 'MLG ', /* Masikoro Malagasy */
+		'msi' => 'MLY CPP ', /* Sabah Malay */
 		'mt' => 'MTS ', /* Maltese */
-		'mwr' => 'MAW ', /* Marwari */
+		'mth' => '', /* Munggui != Maithili */
+		'mtr' => 'MAW ', /* Mewari */
+		'mts' => '', /* Yora != Maltese */
+		'mud' => 'CPP ', /* Mednyj Aleut */
+		'mui' => 'MLY ', /* Musi */
+		'mun' => '', /* Munda [collection] != Mundari */
+		'mup' => 'RAJ ', /* Malvi */
+		'muq' => 'HMN ', /* Eastern Xiangxi Miao */
+		'mvb' => 'ATH ', /* Mattole */
+		'mve' => 'MAW ', /* Marwari (Pakistan) */
+		'mvf' => 'MNG ', /* Peripheral Mongolian */
+		'mwk' => 'MNK ', /* Kita Maninkakan */
+		'mwq' => 'QIN ', /* Mün Chin */
+		'mwr' => 'MAW ', /* Marwari [macrolanguage] */
+		'mww' => 'MWW HMN ', /* Hmong Daw */
 		'my' => 'BRM ', /* Burmese */
-		'mym' => 'MEN ', /* Me'en */
+		'mym' => 'MEN ', /* Me’en */
+		'myq' => 'MNK ', /* Forest Maninka (retired code) */
 		'myv' => 'ERZ ', /* Erzya */
-		'nag' => 'NAG ', /* Naga-Assamese */
+		'mzb' => 'BBR ', /* Tumzabt */
+		'mzs' => 'CPP ', /* Macanese */
+		'na' => 'NAU ', /* Nauru */
+		'nag' => 'NAG CPP ', /* Naga Pidgin */
 		'nan' => 'ZHS ', /* Min Nan Chinese */
+		'nas' => '', /* Naasioi != Naskapi */
+		'naz' => 'NAH ', /* Coatepec Nahuatl */
 		'nb' => 'NOR ', /* Norwegian Bokmål */
-		'nco' => 'SIB ', /* Sibe */
-		'nd' => 'NDB ', /* [North] Ndebele */
-		'ne' => 'NEP ', /* Nepali */
-		'new' => 'NEW ', /* Newari */
+		'nch' => 'NAH ', /* Central Huasteca Nahuatl */
+		'nci' => 'NAH ', /* Classical Nahuatl */
+		'ncj' => 'NAH ', /* Northern Puebla Nahuatl */
+		'ncl' => 'NAH ', /* Michoacán Nahuatl */
+		'ncr' => '', /* Ncane != N-Cree */
+		'ncx' => 'NAH ', /* Central Puebla Nahuatl */
+		'nd' => 'NDB ', /* North Ndebele */
+		'ndb' => '', /* Kenswei Nsei != Ndebele */
+		'ndg' => '', /* Ndengereko != Ndonga */
+		'ne' => 'NEP ', /* Nepali [macrolanguage] */
+		'nef' => 'CPP ', /* Nefamese */
 		'ng' => 'NDG ', /* Ndonga */
 		'ngl' => 'LMW ', /* Lomwe */
-		'niu' => 'NIU ', /* Niuean */
+		'ngm' => 'CPP ', /* Ngatik Men's Creole */
+		'ngo' => 'SXT ', /* Ngoni (retired code) */
+		'ngr' => '', /* Engdewu != Nagari */
+		'ngu' => 'NAH ', /* Guerrero Nahuatl */
+		'nhc' => 'NAH ', /* Tabasco Nahuatl */
+		'nhd' => 'GUA ', /* Chiripá */
+		'nhe' => 'NAH ', /* Eastern Huasteca Nahuatl */
+		'nhg' => 'NAH ', /* Tetelcingo Nahuatl */
+		'nhi' => 'NAH ', /* Zacatlán-Ahuacatlán-Tepetzintla Nahuatl */
+		'nhk' => 'NAH ', /* Isthmus-Cosoleacaque Nahuatl */
+		'nhm' => 'NAH ', /* Morelos Nahuatl */
+		'nhn' => 'NAH ', /* Central Nahuatl */
+		'nhp' => 'NAH ', /* Isthmus-Pajapan Nahuatl */
+		'nhq' => 'NAH ', /* Huaxcaleca Nahuatl */
+		'nht' => 'NAH ', /* Ometepec Nahuatl */
+		'nhv' => 'NAH ', /* Temascaltepec Nahuatl */
+		'nhw' => 'NAH ', /* Western Huasteca Nahuatl */
+		'nhx' => 'NAH ', /* Isthmus-Mecayapan Nahuatl */
+		'nhy' => 'NAH ', /* Northern Oaxaca Nahuatl */
+		'nhz' => 'NAH ', /* Santa María La Alta Nahuatl */
+		'niq' => 'KAL ', /* Nandi */
+		'nis' => '', /* Nimi != Nisi */
 		'niv' => 'GIL ', /* Gilyak */
+		'njt' => 'CPP ', /* Ndyuka-Trio Pidgin */
+		'njz' => 'NIS ', /* Nyishi */
+		'nko' => '', /* Nkonya != N’Ko */
+		'nkx' => 'IJO ', /* Nkoroo */
 		'nl' => 'NLD ', /* Dutch */
-		'nn' => 'NYN ', /* Norwegian Nynorsk */
-		'no' => 'NOR ', /* Norwegian (deprecated) */
-		'nod' => 'NTA ', /* Northern Tai */
-		'nog' => 'NOG ', /* Nogai */
-		'nqo' => 'NKO ', /* N'Ko */
-		'nr' => 'NDB ', /* [South] Ndebele */
+		'nla' => 'BML ', /* Ngombale */
+		'nle' => 'LUH ', /* East Nyala */
+		'nln' => 'NAH ', /* Durango Nahuatl (retired code) */
+		'nlv' => 'NAH ', /* Orizaba Nahuatl */
+		'nn' => 'NYN ', /* Norwegian Nynorsk (Nynorsk, Norwegian) */
+		'nnh' => 'BML ', /* Ngiemboon */
+		'nnz' => 'BML ', /* Nda'nda' */
+		'no' => 'NOR ', /* Norwegian [macrolanguage] */
+		'nod' => 'NTA ', /* Northern Thai */
+		'npi' => 'NEP ', /* Nepali */
+		'npl' => 'NAH ', /* Southeastern Puebla Nahuatl */
+		'nqo' => 'NKO ', /* N’Ko */
+		'nr' => 'NDB ', /* South Ndebele */
 		'nsk' => 'NAS ', /* Naskapi */
-		'nso' => 'SOT ', /* [Northern] Sotho */
-		'nv' => ['NAV ', 'ATH '], /* Navajo */
-		'ny' => 'CHI ', /* Nyanja */
-		'nyn' => 'NKL ', /* Nkole */
+		'nsm' => '', /* Sumi Naga != Northern Sami */
+		'nsu' => 'NAH ', /* Sierra Negra Nahuatl */
+		'nto' => '', /* Ntomba != Esperanto */
+		'nue' => 'BAD0', /* Ngundu */
+		'nuu' => 'BAD0', /* Ngbundu */
+		'nuz' => 'NAH ', /* Tlamacazapa Nahuatl */
+		'nv' => 'NAV ATH ', /* Navajo */
+		'nwe' => 'BML ', /* Ngwe */
+		'ny' => 'CHI ', /* Chichewa (Chewa, Nyanja) */
+		'nyd' => 'LUH ', /* Nyore */
+		'nyn' => 'NKL ', /* Nyankole */
 		'oc' => 'OCI ', /* Occitan (post 1500) */
-		'oj' => 'OJB ', /* Ojibwa */
-		'ojs' => 'OCR ', /* Oji-Cree */
-		'om' => 'ORO ', /* Oromo */
-		'or' => 'ORI ', /* Oriya */
+		'oj' => 'OJB ', /* Ojibwa [macrolanguage] */
+		'ojc' => 'OJB ', /* Central Ojibwa */
+		'ojg' => 'OJB ', /* Eastern Ojibwa */
+		'ojs' => 'OCR OJB ', /* Severn Ojibwa */
+		'ojw' => 'OJB ', /* Western Ojibwa */
+		'okd' => 'IJO ', /* Okodia */
+		'oki' => 'KAL ', /* Okiek */
+		'okm' => 'KOH ', /* Middle Korean (10th-16th cent.) */
+		'okr' => 'IJO ', /* Kirike */
+		'om' => 'ORO ', /* Oromo [macrolanguage] */
+		'onx' => 'CPP ', /* Onin Based Pidgin */
+		'oor' => 'CPP ', /* Oorlams */
+		'or' => 'ORI ', /* Odia [macrolanguage] */
+		'orc' => 'ORO ', /* Orma */
+		'orn' => 'MLY ', /* Orang Kanaq */
+		'oro' => '', /* Orokolo != Oromo */
+		'orr' => 'IJO ', /* Oruma */
+		'ors' => 'MLY ', /* Orang Seletar */
+		'ory' => 'ORI ', /* Odia */
 		'os' => 'OSS ', /* Ossetian */
-		'pa' => 'PAN ', /* Panjabi */
-		'pce' => 'PLG ', /* [Ruching] Palaung */
+		'otw' => 'OJB ', /* Ottawa */
+		'oua' => 'BBR ', /* Tagargrent */
+		'pa' => 'PAN ', /* Punjabi */
+		'paa' => '', /* Papuan [collection] != Palestinian Aramaic */
+		'pal' => '', /* Pahlavi != Pali */
+		'pap' => 'PAP0CPP ', /* Papiamento */
+		'pas' => '', /* Papasena != Pashto */
+		'pbt' => 'PAS ', /* Southern Pashto */
+		'pbu' => 'PAS ', /* Northern Pashto */
+		'pce' => 'PLG ', /* Ruching Palaung */
+		'pck' => 'QIN ', /* Paite Chin */
+		'pcm' => 'CPP ', /* Nigerian Pidgin */
+		'pdu' => 'KRN ', /* Kayan */
+		'pea' => 'CPP ', /* Peranakan Indonesian */
+		'pel' => 'MLY ', /* Pekal */
+		'pes' => 'FAR ', /* Iranian Persian */
+		'pey' => 'CPP ', /* Petjo */
+		'pga' => 'ARA CPP ', /* Sudanese Creole Arabic */
 		'pi' => 'PAL ', /* Pali */
+		'pih' => 'PIH CPP ', /* Pitcairn-Norfolk */
+		'pil' => '', /* Yom != Filipino */
+		'pis' => 'CPP ', /* Pijin */
+		'pkh' => 'QIN ', /* Pankhu */
+		'pko' => 'KAL ', /* Pökoot */
 		'pl' => 'PLK ', /* Polish */
-		'pll' => 'PLG ', /* [Shwe] Palaung */
-		'plp' => 'PAP ', /* Palpa */
-		'prs' => 'DRI ', /* Dari */
-		'ps' => 'PAS ', /* Pushto */
+		'plg' => 'PLG0', /* Pilagá */
+		'plk' => '', /* Kohistani Shina != Polish */
+		'pll' => 'PLG ', /* Shwe Palaung */
+		'pln' => 'CPP ', /* Palenquero */
+		'plp' => 'PAP ', /* Palpa (retired code) */
+		'plt' => 'MLG ', /* Plateau Malagasy */
+		'pml' => 'CPP ', /* Lingua Franca */
+		'pmy' => 'CPP ', /* Papuan Malay */
+		'poc' => 'MYN ', /* Poqomam */
+		'poh' => 'POH MYN ', /* Poqomchi' */
+		'pov' => 'CPP ', /* Upper Guinea Crioulo */
+		'ppa' => 'BAG ', /* Pao (retired code) */
+		'pre' => 'CPP ', /* Principense */
+		'prp' => 'GUJ ', /* Parsi (retired code) */
+		'prs' => 'DRI FAR ', /* Dari */
+		'ps' => 'PAS ', /* Pashto [macrolanguage] */
+		'pse' => 'MLY ', /* Central Malay */
+		'pst' => 'PAS ', /* Central Pashto */
 		'pt' => 'PTG ', /* Portuguese */
-		'raj' => 'RAJ ', /* Rajasthani */
-		'rbb' => 'PLG ', /* [Rumai] Palaung */
-		'ria' => 'RIA ', /* Riang (India) */
-		'ril' => 'RIA ', /* Riang (Myanmar) */
-		'rki' => 'ARK ', /* Arakanese */
-		'rm' => 'RMS ', /* Rhaeto-Romanic */
+		'pub' => 'QIN ', /* Purum */
+		'puz' => 'QIN ', /* Purum Naga (retired code) */
+		'pwo' => 'PWO KRN ', /* Pwo Western Karen */
+		'pww' => 'KRN ', /* Pwo Northern Karen */
+		'qu' => 'QUZ ', /* Quechua [macrolanguage] */
+		'qub' => 'QWH QUZ ', /* Huallaga Huánuco Quechua */
+		'quc' => 'QUC MYN ', /* K’iche’ */
+		'qud' => 'QVI QUZ ', /* Calderón Highland Quichua */
+		'quf' => 'QUZ ', /* Lambayeque Quechua */
+		'qug' => 'QVI QUZ ', /* Chimborazo Highland Quichua */
+		'quh' => 'QUH QUZ ', /* South Bolivian Quechua */
+		'quk' => 'QUZ ', /* Chachapoyas Quechua */
+		'qul' => 'QUH QUZ ', /* North Bolivian Quechua */
+		'qum' => 'MYN ', /* Sipacapense */
+		'qup' => 'QVI QUZ ', /* Southern Pastaza Quechua */
+		'qur' => 'QWH QUZ ', /* Yanahuanca Pasco Quechua */
+		'qus' => 'QUH QUZ ', /* Santiago del Estero Quichua */
+		'quv' => 'MYN ', /* Sacapulteco */
+		'quw' => 'QVI QUZ ', /* Tena Lowland Quichua */
+		'qux' => 'QWH QUZ ', /* Yauyos Quechua */
+		'quy' => 'QUZ ', /* Ayacucho Quechua */
+		'qva' => 'QWH QUZ ', /* Ambo-Pasco Quechua */
+		'qvc' => 'QUZ ', /* Cajamarca Quechua */
+		'qve' => 'QUZ ', /* Eastern Apurímac Quechua */
+		'qvh' => 'QWH QUZ ', /* Huamalíes-Dos de Mayo Huánuco Quechua */
+		'qvi' => 'QVI QUZ ', /* Imbabura Highland Quichua */
+		'qvj' => 'QVI QUZ ', /* Loja Highland Quichua */
+		'qvl' => 'QWH QUZ ', /* Cajatambo North Lima Quechua */
+		'qvm' => 'QWH QUZ ', /* Margos-Yarowilca-Lauricocha Quechua */
+		'qvn' => 'QWH QUZ ', /* North Junín Quechua */
+		'qvo' => 'QVI QUZ ', /* Napo Lowland Quechua */
+		'qvp' => 'QWH QUZ ', /* Pacaraos Quechua */
+		'qvs' => 'QUZ ', /* San Martín Quechua */
+		'qvw' => 'QWH QUZ ', /* Huaylla Wanca Quechua */
+		'qvz' => 'QVI QUZ ', /* Northern Pastaza Quichua */
+		'qwa' => 'QWH QUZ ', /* Corongo Ancash Quechua */
+		'qwc' => 'QUZ ', /* Classical Quechua */
+		'qwh' => 'QWH QUZ ', /* Huaylas Ancash Quechua */
+		'qws' => 'QWH QUZ ', /* Sihuas Ancash Quechua */
+		'qwt' => 'ATH ', /* Kwalhioqua-Tlatskanai */
+		'qxa' => 'QWH QUZ ', /* Chiquián Ancash Quechua */
+		'qxc' => 'QWH QUZ ', /* Chincha Quechua */
+		'qxh' => 'QWH QUZ ', /* Panao Huánuco Quechua */
+		'qxl' => 'QVI QUZ ', /* Salasaca Highland Quichua */
+		'qxn' => 'QWH QUZ ', /* Northern Conchucos Ancash Quechua */
+		'qxo' => 'QWH QUZ ', /* Southern Conchucos Ancash Quechua */
+		'qxp' => 'QUZ ', /* Puno Quechua */
+		'qxr' => 'QVI QUZ ', /* Cañar Highland Quichua */
+		'qxt' => 'QWH QUZ ', /* Santa Ana de Tusi Pasco Quechua */
+		'qxu' => 'QUZ ', /* Arequipa-La Unión Quechua */
+		'qxw' => 'QWH QUZ ', /* Jauja Wanca Quechua */
+		'rag' => 'LUH ', /* Logooli */
+		'ral' => 'QIN ', /* Ralte */
+		'rbb' => 'PLG ', /* Rumai Palaung */
+		'rbl' => 'BIK ', /* Miraya Bikol */
+		'rcf' => 'CPP ', /* Réunion Creole French */
+		'rif' => 'RIF BBR ', /* Tarifit */
+		'rki' => 'ARK ', /* Rakhine */
+		'rm' => 'RMS ', /* Romansh */
+		'rmc' => 'ROY ', /* Carpathian Romani */
+		'rmf' => 'ROY ', /* Kalo Finnish Romani */
+		'rml' => 'ROY ', /* Baltic Romani */
+		'rmn' => 'ROY ', /* Balkan Romani */
+		'rmo' => 'ROY ', /* Sinte Romani */
+		'rms' => '', /* Romanian Sign Language != Romansh */
+		'rmw' => 'ROY ', /* Welsh Romani */
+		'rmy' => 'RMY ROY ', /* Vlax Romani */
+		'rmz' => 'ARK ', /* Marma */
+		'rn' => 'RUN ', /* Rundi */
 		'ro' => 'ROM ', /* Romanian */
-		'rom' => 'ROY ', /* Romany */
+		'rom' => 'ROY ', /* Romany [macrolanguage] */
+		'rop' => 'CPP ', /* Kriol */
+		'rtc' => 'QIN ', /* Rungtu Chin */
 		'ru' => 'RUS ', /* Russian */
 		'rue' => 'RSY ', /* Rusyn */
-		'rw' => 'RUA ', /* Ruanda */
-		'sa' => 'SAN ', /* Sanskrit */
+		'rw' => 'RUA ', /* Kinyarwanda */
+		'rwr' => 'MAW ', /* Marwari (India) */
+		'sa' => 'SAN ', /* Sanskrit [macrolanguage] */
+		'sad' => '', /* Sandawe != Sadri */
 		'sah' => 'YAK ', /* Yakut */
-		'sat' => 'SAT ', /* Santali */
+		'sam' => 'PAA ', /* Samaritan Aramaic */
+		'say' => '', /* Saya != Sayisi */
+		'sc' => 'SRD ', /* Sardinian [macrolanguage] */
+		'scf' => 'CPP ', /* San Miguel Creole French */
+		'sch' => 'QIN ', /* Sakachep */
+		'sci' => 'CPP ', /* Sri Lankan Creole Malay */
 		'sck' => 'SAD ', /* Sadri */
-		'scs' => 'SLA ', /* [North] Slavey */
+		'scs' => 'SCS SLA ATH ', /* North Slavey */
 		'sd' => 'SND ', /* Sindhi */
+		'sdc' => 'SRD ', /* Sassarese Sardinian */
+		'sdh' => 'KUR ', /* Southern Kurdish */
+		'sdn' => 'SRD ', /* Gallurese Sardinian */
+		'sds' => 'BBR ', /* Sened */
 		'se' => 'NSM ', /* Northern Sami */
 		'seh' => 'SNA ', /* Sena */
-		'sel' => 'SEL ', /* Selkup */
+		'sek' => 'ATH ', /* Sekani */
+		'sez' => 'QIN ', /* Senthang Chin */
+		'sfm' => 'SFM HMN ', /* Small Flowery Miao */
 		'sg' => 'SGO ', /* Sango */
-		'shn' => 'SHN ', /* Shan */
-		'si' => 'SNH ', /* Sinhala */
-		'sid' => 'SID ', /* Sidamo */
+		'sgc' => 'KAL ', /* Kipsigis */
+		'sgo' => '', /* Songa (retired code) != Sango */
+		'sgw' => 'CHG ', /* Sebat Bet Gurage */
+		'sh' => 'BOS HRV SRB ', /* Serbo-Croatian [macrolanguage] */
+		'shi' => 'SHI BBR ', /* Tachelhit */
+		'shl' => 'QIN ', /* Shendu */
+		'shu' => 'ARA ', /* Chadian Arabic */
+		'shy' => 'BBR ', /* Tachawit */
+		'si' => 'SNH ', /* Sinhala (Sinhalese) */
+		'sib' => '', /* Sebop != Sibe */
+		'sig' => '', /* Paasaal != Silte Gurage */
+		'siz' => 'BBR ', /* Siwi */
 		'sjc' => 'ZHS ', /* Shaojiang Chinese */
 		'sjd' => 'KSM ', /* Kildin Sami */
+		'sjo' => 'SIB ', /* Xibe */
+		'sjs' => 'BBR ', /* Senhaja De Srair */
 		'sk' => 'SKY ', /* Slovak */
-		'skr' => 'SRK ', /* Seraiki */
+		'skg' => 'MLG ', /* Sakalava Malagasy */
+		'skr' => 'SRK ', /* Saraiki */
+		'sks' => '', /* Maia != Skolt Sami */
+		'skw' => 'CPP ', /* Skepi Creole Dutch */
+		'sky' => '', /* Sikaiana != Slovak */
 		'sl' => 'SLV ', /* Slovenian */
+		'sla' => '', /* Slavic [collection] != Slavey */
 		'sm' => 'SMO ', /* Samoan */
 		'sma' => 'SSM ', /* Southern Sami */
+		'smd' => 'MBN ', /* Sama (retired code) */
 		'smj' => 'LSM ', /* Lule Sami */
+		'sml' => '', /* Central Sama != Somali */
 		'smn' => 'ISM ', /* Inari Sami */
 		'sms' => 'SKS ', /* Skolt Sami */
-		'snk' => 'SNK ', /* Soninke */
+		'smt' => 'QIN ', /* Simte */
+		'sn' => 'SNA0', /* Shona */
+		'snb' => 'IBA ', /* Sebuyau (retired code) */
+		'snh' => '', /* Shinabo (retired code) != Sinhala (Sinhalese) */
 		'so' => 'SML ', /* Somali */
-		'sq' => 'SQI ', /* Albanian */
+		'sog' => '', /* Sogdian != Sodo Gurage */
+		'spv' => 'ORI ', /* Sambalpuri */
+		'spy' => 'KAL ', /* Sabaot */
+		'sq' => 'SQI ', /* Albanian [macrolanguage] */
 		'sr' => 'SRB ', /* Serbian */
-		'srr' => 'SRR ', /* Serer */
-		'ss' => 'SWZ ', /* Swazi */
-		'st' => 'SOT ', /* [Southern] Sotho */
+		'srb' => '', /* Sora != Serbian */
+		'src' => 'SRD ', /* Logudorese Sardinian */
+		'srk' => '', /* Serudung Murut != Saraiki */
+		'srm' => 'CPP ', /* Saramaccan */
+		'srn' => 'CPP ', /* Sranan Tongo */
+		'sro' => 'SRD ', /* Campidanese Sardinian */
+		'srs' => 'ATH ', /* Tsuut'ina */
+		'ss' => 'SWZ ', /* Swati */
+		'ssh' => 'ARA ', /* Shihhi Arabic */
+		'ssl' => '', /* Western Sisaala != South Slavey */
+		'ssm' => '', /* Semnam != Southern Sami */
+		'st' => 'SOT ', /* Southern Sotho */
+		'sta' => 'CPP ', /* Settla */
+		'stv' => 'SIG ', /* Silt'e */
+		'su' => 'SUN ', /* Sundanese */
 		'suq' => 'SUR ', /* Suri */
+		'sur' => '', /* Mwaghavul != Suri */
 		'sv' => 'SVE ', /* Swedish */
-		'sva' => 'SVA ', /* Svan */
-		'sw' => 'SWK ', /* Swahili */
-		'swb' => 'CMR ', /* Comorian */
-		'syr' => 'SYR ', /* Syriac */
+		'svc' => 'CPP ', /* Vincentian Creole English */
+		'sve' => '', /* Serili != Swedish */
+		'sw' => 'SWK ', /* Swahili [macrolanguage] */
+		'swb' => 'CMR ', /* Maore Comorian */
+		'swc' => 'SWK ', /* Congo Swahili */
+		'swh' => 'SWK ', /* Swahili */
+		'swk' => '', /* Malawi Sena != Swahili */
+		'swn' => 'BBR ', /* Sawknah */
+		'swv' => 'MAW ', /* Shekhawati */
+		'syc' => 'SYR ', /* Classical Syriac */
 		'ta' => 'TAM ', /* Tamil */
-		'tab' => 'TAB ', /* Tabasaran */
+		'taa' => 'ATH ', /* Lower Tanana */
+		'taj' => '', /* Eastern Tamang != Tajiki */
+		'taq' => 'TAQ TMH BBR ', /* Tamasheq */
+		'tas' => 'CPP ', /* Tay Boi */
+		'tau' => 'ATH ', /* Upper Tanana */
+		'tcb' => 'ATH ', /* Tanacross */
+		'tce' => 'ATH ', /* Southern Tutchone */
+		'tch' => 'CPP ', /* Turks And Caicos Creole English */
+		'tcp' => 'QIN ', /* Tawr Chin */
+		'tcs' => 'CPP ', /* Torres Strait Creole */
 		'tcy' => 'TUL ', /* Tulu */
+		'tcz' => 'QIN ', /* Thado Chin */
+		'tdx' => 'MLG ', /* Tandroy-Mahafaly Malagasy */
 		'te' => 'TEL ', /* Telugu */
-		'tem' => 'TMN ', /* Temne */
+		'tec' => 'KAL ', /* Terik */
+		'tem' => 'TMN ', /* Timne */
+		'tez' => 'BBR ', /* Tetserret */
+		'tfn' => 'ATH ', /* Tanaina */
 		'tg' => 'TAJ ', /* Tajik */
+		'tgh' => 'CPP ', /* Tobagonian Creole English */
+		'tgj' => 'NIS ', /* Tagin */
+		'tgn' => '', /* Tandaganon != Tongan */
+		'tgr' => '', /* Tareng != Tigre */
+		'tgx' => 'ATH ', /* Tagish */
+		'tgy' => '', /* Togoyo != Tigrinya */
 		'th' => 'THA ', /* Thai */
+		'tht' => 'ATH ', /* Tahltan */
+		'thv' => 'THV TMH BBR ', /* Tahaggart Tamahaq */
+		'thz' => 'THZ TMH BBR ', /* Tayart Tamajeq */
 		'ti' => 'TGY ', /* Tigrinya */
+		'tia' => 'BBR ', /* Tidikelt Tamazight */
 		'tig' => 'TGR ', /* Tigre */
+		'tjo' => 'BBR ', /* Temacine Tamazight */
 		'tk' => 'TKM ', /* Turkmen */
+		'tkg' => 'MLG ', /* Tesaka Malagasy */
+		'tkm' => '', /* Takelma != Turkmen */
+		'tl' => 'TGL ', /* Tagalog */
+		'tmg' => 'CPP ', /* Ternateño */
+		'tmh' => 'TMH BBR ', /* Tamashek [macrolanguage] */
+		'tmn' => '', /* Taman (Indonesia) != Temne */
+		'tmw' => 'MLY ', /* Temuan */
 		'tn' => 'TNA ', /* Tswana */
+		'tna' => '', /* Tacana != Tswana */
+		'tne' => '', /* Tinoc Kallahan (retired code) != Tundra Enets */
+		'tnf' => 'DRI FAR ', /* Tangshewi (retired code) */
+		'tng' => '', /* Tobanga != Tonga */
 		'to' => 'TGN ', /* Tonga (Tonga Islands) */
+		'tod' => 'TOD0', /* Toma */
+		'toi' => 'TNG ', /* Tonga (Zambia) */
+		'toj' => 'MYN ', /* Tojolabal */
+		'tol' => 'ATH ', /* Tolowa */
+		'tor' => 'BAD0', /* Togbo-Vara Banda */
+		'tpi' => 'TPI CPP ', /* Tok Pisin */
 		'tr' => 'TRK ', /* Turkish */
-		'tru' => 'TUA ', /* Turoyo Aramaic */
+		'trf' => 'CPP ', /* Trinidadian Creole English */
+		'trk' => '', /* Turkic [collection] != Turkish */
+		'tru' => 'TUA SYR ', /* Turoyo */
 		'ts' => 'TSG ', /* Tsonga */
+		'tsg' => '', /* Tausug != Tsonga */
 		'tt' => 'TAT ', /* Tatar */
-		'tw' => 'TWI ', /* Twi */
+		'ttc' => 'MYN ', /* Tektiteko */
+		'ttm' => 'ATH ', /* Northern Tutchone */
+		'ttq' => 'TTQ TMH BBR ', /* Tawallammat Tamajaq */
+		'tua' => '', /* Wiarumus != Turoyo Aramaic */
+		'tul' => '', /* Tula != Tulu */
+		'tuu' => 'ATH ', /* Tututni */
+		'tuv' => '', /* Turkana != Tuvin */
+		'tuy' => 'KAL ', /* Tugen */
+		'tvy' => 'CPP ', /* Timor Pidgin */
+		'tw' => 'TWI AKA ', /* Twi */
+		'txc' => 'ATH ', /* Tsetsaut */
+		'txy' => 'MLG ', /* Tanosy Malagasy */
 		'ty' => 'THT ', /* Tahitian */
-		'tyv' => 'TUV ', /* Tuvin */
-		'udm' => 'UDM ', /* Udmurt */
-		'ug' => 'UYG ', /* Uighur */
+		'tyv' => 'TUV ', /* Tuvinian */
+		'tzh' => 'MYN ', /* Tzeltal */
+		'tzj' => 'MYN ', /* Tz'utujil */
+		'tzm' => 'TZM BBR ', /* Central Atlas Tamazight */
+		'tzo' => 'TZO MYN ', /* Tzotzil */
+		'ubl' => 'BIK ', /* Buhi'non Bikol */
+		'ug' => 'UYG ', /* Uyghur */
 		'uk' => 'UKR ', /* Ukrainian */
-		'umb' => 'MBN ', /* [South] Mbundu */
+		'uki' => 'KUI ', /* Kui (India) */
+		'uln' => 'CPP ', /* Unserdeutsch */
 		'unr' => 'MUN ', /* Mundari */
 		'ur' => 'URD ', /* Urdu */
-		'uz' => 'UZB ', /* Uzbek */
+		'urk' => 'MLY ', /* Urak Lawoi' */
+		'usp' => 'MYN ', /* Uspanteco */
+		'uz' => 'UZB ', /* Uzbek [macrolanguage] */
+		'uzn' => 'UZB ', /* Northern Uzbek */
+		'uzs' => 'UZB ', /* Southern Uzbek */
+		'vap' => 'QIN ', /* Vaiphei */
 		've' => 'VEN ', /* Venda */
 		'vi' => 'VIT ', /* Vietnamese */
-		'vmw' => 'MAK ', /* Makua */
+		'vic' => 'CPP ', /* Virgin Islands Creole English */
+		'vit' => '', /* Viti != Vietnamese */
+		'vkk' => 'MLY ', /* Kaur */
+		'vkp' => 'CPP ', /* Korlai Creole Portuguese */
+		'vkt' => 'MLY ', /* Tenggarong Kutai Malay */
+		'vls' => 'FLE ', /* Vlaams */
+		'vmw' => 'MAK ', /* Makhuwa */
+		'vo' => 'VOL ', /* Volapük */
+		'vro' => 'VRO ETI ', /* Võro */
+		'vsn' => 'SAN ', /* Vedic Sanskrit */
+		'wa' => 'WLN ', /* Walloon */
+		'wag' => '', /* Wa'ema != Wagdi */
 		'wbm' => 'WA  ', /* Wa */
-		'wbr' => 'WAG ', /* Wagdi */
+		'wbr' => 'WAG RAJ ', /* Wagdi */
+		'wea' => 'KRN ', /* Wewaw */
+		'wes' => 'CPP ', /* Cameroon Pidgin */
+		'weu' => 'QIN ', /* Rawngtu Chin */
+		'wlc' => 'CMR ', /* Mwali Comorian */
+		'wle' => 'SIG ', /* Wolane */
+		'wlk' => 'ATH ', /* Wailaki */
+		'wni' => 'CMR ', /* Ndzwani Comorian */
 		'wo' => 'WLF ', /* Wolof */
+		'wry' => 'MAW ', /* Merwari */
+		'wsg' => 'GON ', /* Adilabad Gondi */
 		'wuu' => 'ZHS ', /* Wu Chinese */
-		'xal' => 'KLM ', /* Kalmyk */
+		'wya' => 'WDT WYN ', /* Wyandot (retired code) */
+		'xal' => 'KLM TOD ', /* Kalmyk */
+		'xan' => 'SEK ', /* Xamtanga */
+		'xbd' => '', /* Bindal != Lü */
 		'xh' => 'XHS ', /* Xhosa */
-		'xom' => 'KMO ', /* Komo (Sudan) */
-		'xsl' => 'SSL ', /* South Slavey */
-		'yi' => 'JII ', /* Yiddish */
-		'yid' => 'JII ', /* Yiddish */
+		'xmg' => 'BML ', /* Mengaka */
+		'xmm' => 'MLY CPP ', /* Manado Malay */
+		'xmv' => 'MLG ', /* Antankarana Malagasy */
+		'xmw' => 'MLG ', /* Tsimihety Malagasy */
+		'xnj' => 'SXT ', /* Ngoni (Tanzania) */
+		'xnq' => 'SXT ', /* Ngoni (Mozambique) */
+		'xnr' => 'DGR ', /* Kangri */
+		'xpe' => 'XPE KPL ', /* Liberia Kpelle */
+		'xsl' => 'SSL SLA ATH ', /* South Slavey */
+		'xst' => 'SIG ', /* Silt'e (retired code) */
+		'xup' => 'ATH ', /* Upper Umpqua */
+		'xwo' => 'TOD ', /* Written Oirat */
+		'yaj' => 'BAD0', /* Banda-Yangere */
+		'yak' => '', /* Yakama != Sakha */
+		'yba' => '', /* Yala != Yoruba */
+		'ybb' => 'BML ', /* Yemba */
+		'ybd' => 'ARK ', /* Yangbye (retired code) */
+		'ycr' => 'CPP ', /* Yilan Creole */
+		'ydd' => 'JII ', /* Eastern Yiddish */
+		'yi' => 'JII ', /* Yiddish [macrolanguage] */
+		'yih' => 'JII ', /* Western Yiddish */
+		'yim' => '', /* Yimchungru Naga != Yi Modern */
 		'yo' => 'YBA ', /* Yoruba */
-		'yso' => 'NIS ', /* Nisi (China) */
+		'yos' => 'QIN ', /* Yos (retired code) */
+		'yua' => 'MYN ', /* Yucateco */
 		'yue' => 'ZHH ', /* Yue Chinese */
-		'zh' => 'ZHS ', /* Chinese */
+		'za' => 'ZHA ', /* Zhuang [macrolanguage] */
+		'zch' => 'ZHA ', /* Central Hongshuihe Zhuang */
+		'zdj' => 'CMR ', /* Ngazidja Comorian */
+		'zeh' => 'ZHA ', /* Eastern Hongshuihe Zhuang */
+		'zen' => 'BBR ', /* Zenaga */
+		'zgb' => 'ZHA ', /* Guibei Zhuang */
+		'zgh' => 'ZGH BBR ', /* Standard Moroccan Tamazight */
+		'zgm' => 'ZHA ', /* Minz Zhuang */
+		'zgn' => 'ZHA ', /* Guibian Zhuang */
+		'zh' => 'ZHS ', /* Chinese, Simplified [macrolanguage] */
+		'zhd' => 'ZHA ', /* Dai Zhuang */
+		'zhn' => 'ZHA ', /* Nong Zhuang */
+		'zkb' => 'KHA ', /* Koibal (retired code) */
+		'zlj' => 'ZHA ', /* Liujiang Zhuang */
+		'zlm' => 'MLY ', /* Malay */
+		'zln' => 'ZHA ', /* Lianshan Zhuang */
+		'zlq' => 'ZHA ', /* Liuqian Zhuang */
+		'zmi' => 'MLY ', /* Negeri Sembilan Malay */
+		'zmz' => 'BAD0', /* Mbandja */
+		'znd' => '', /* Zande [collection] != Zande */
 		'zne' => 'ZND ', /* Zande */
+		'zom' => 'QIN ', /* Zou */
+		'zqe' => 'ZHA ', /* Qiubei Zhuang */
+		'zsm' => 'MLY ', /* Standard Malay */
 		'zu' => 'ZUL ', /* Zulu */
+		'zum' => 'LRC ', /* Kumzari */
+		'zyb' => 'ZHA ', /* Yongbei Zhuang */
+		'zyg' => 'ZHA ', /* Yang Zhuang */
+		'zyj' => 'ZHA ', /* Youjiang Zhuang */
+		'zyn' => 'ZHA ', /* Yongnan Zhuang */
+		'zyp' => 'QIN ', /* Zyphe Chin */
+		'zzj' => 'ZHA ', /* Zuojiang Zhuang */
 	];
 
 	// hb-unicode.h

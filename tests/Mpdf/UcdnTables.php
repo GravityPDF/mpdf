@@ -32,6 +32,8 @@ namespace Mpdf;
 class UcdnTables
 {
 
+	use GeneratedTable;
+
 	/**
 	 * The database read when none is named
 	 */
@@ -82,13 +84,7 @@ class UcdnTables
 	 */
 	public function rewrite($path)
 	{
-		// The patterns below are anchored on the line, and a Windows checkout of the class ends its
-		// lines with CRLF. The work is done in LF and the file is written back the way it was found.
-		$source = file_get_contents($path);
-		$crlf = strpos($source, "\r\n") !== false;
-		if ($crlf) {
-			$source = str_replace("\r\n", "\n", $source);
-		}
+		$source = $this->sourceInLf($path);
 
 		list($categories, $bidi, $constants) = $this->numbersInUse($source);
 		$aliases = $this->aliases($this->lines('PropertyValueAliases.txt'));
@@ -129,10 +125,7 @@ class UcdnTables
 		$source = $this->replaceArray($source, 'private static $index1', $this->wrapped($index1));
 		$source = $this->replaceArray($source, 'private static $index2', $this->wrapped($index2));
 
-		if ($crlf) {
-			$source = str_replace("\n", "\r\n", $source);
-		}
-		file_put_contents($path, $source);
+		$this->writeBack($path, $source);
 
 		return [
 			'records' => count($records),
@@ -143,27 +136,15 @@ class UcdnTables
 	}
 
 	/**
-	 * Reads one file of the database, keeping a copy so the next run needs no network.
+	 * Reads one file of the database.
 	 *
 	 * @return string[] the file's lines
 	 */
 	public function lines($name)
 	{
-		$file = $this->files . '/' . basename($name);
+		$url = 'https://www.unicode.org/Public/' . $this->version . '/ucd/' . $name;
 
-		if (!is_file($file)) {
-			$url = 'https://www.unicode.org/Public/' . $this->version . '/ucd/' . $name;
-			$body = file_get_contents($url);
-			if ($body === false) {
-				throw new \RuntimeException(sprintf('Could not read %s', $url));
-			}
-			if (!is_dir($this->files)) {
-				mkdir($this->files, 0777, true);
-			}
-			file_put_contents($file, $body);
-		}
-
-		return explode("\n", str_replace("\r\n", "\n", file_get_contents($file)));
+		return explode("\n", $this->cached($this->files . '/' . basename($name), $url));
 	}
 
 	/**
@@ -558,29 +539,6 @@ class UcdnTables
 		}
 
 		return implode("\n", $lines);
-	}
-
-	/**
-	 * Replaces the body of one array in the class, matching it by its declaration.
-	 */
-	private function replaceArray($source, $declaration, $body)
-	{
-		$pattern = '/(' . preg_quote($declaration, '/') . " = \[\n).*?(\n\t\];\n)/s";
-		$replaced = preg_replace_callback(
-			$pattern,
-			function ($m) use ($body) {
-				return $m[1] . $body . $m[2];
-			},
-			$source,
-			1,
-			$count
-		);
-
-		if ($count !== 1) {
-			throw new \RuntimeException(sprintf('Could not find %s to rewrite', $declaration));
-		}
-
-		return $replaced;
 	}
 
 }
