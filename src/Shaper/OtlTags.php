@@ -16,11 +16,6 @@ class OtlTags
 	/**
 	 * The v2 Indic and Myanmar tags, each with the original tag that a font made to the earlier
 	 * specification offers instead.
-	 *
-	 * Order is load-bearing. A v2 tag the font does not offer is tried against its own original tag
-	 * and then against the original tags of every entry after it, not only its own: a Bengali run in
-	 * a font offering neither bng2 nor beng is laid out as deva if the font has that. That is #192,
-	 * kept here as it was.
 	 */
 	private static $originalIndicTags = [
 		'bng2' => 'beng',
@@ -60,14 +55,11 @@ class OtlTags
 			return [$scripttag, false];
 		}
 
-		if ($shaper) {
-			$reached = false;
-			foreach (self::$originalIndicTags as $v2 => $original) {
-				$reached = $reached || $v2 === $scripttag;
-				if ($reached && isset($ScriptLang[$original])) {
-					return [$original, true];
-				}
-			}
+		// Only the run's own original tag: another Indic script's lookups and reordering are no fit
+		// for it, and a font offering nothing for the script is laid out by its default entry
+		$original = isset(self::$originalIndicTags[$scripttag]) ? self::$originalIndicTags[$scripttag] : '';
+		if ($shaper && $original && isset($ScriptLang[$original])) {
+			return [$original, true];
 		}
 
 		foreach (['DFLT', 'dflt', 'latn'] as $fallback) {
