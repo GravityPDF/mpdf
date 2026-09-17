@@ -159,9 +159,8 @@ class OtlTags
 	 * Only the subtags before the first singleton count, so an extension or private use subtag
 	 * selects nothing. A script is the subtag after the language; a region may be anywhere.
 	 *
-	 * An extended language Ucdn::$ot_languages has no key for keeps the language subtag's tags, so
-	 * ar-afb stays ARA. HarfBuzz's far larger table gives most extended languages their
-	 * macrolanguage's tag, and takes the rest as their own ISO 639-3 code.
+	 * An extended language Ucdn::$ot_languages has no key for keeps the language subtag's tags, where
+	 * HarfBuzz would take an unlisted one as its own ISO 639-3 code.
 	 *
 	 * @param string $ietf
 	 *
@@ -170,21 +169,18 @@ class OtlTags
 	private static function languageSystems($ietf)
 	{
 		$tag = strtolower((string) $ietf);
-		$subtags = explode('-', $tag);
-
-		foreach ($subtags as $i => $subtag) {
-			if ($i > 0 && strlen($subtag) == 1 && isset($subtags[$i + 1])) {
-				$subtags = array_slice($subtags, 0, $i);
-				break;
-			}
-		}
-		if ($subtags[0] == 'x') {
+		if ($tag == '') {
 			return [];
 		}
 
-		$following = array_slice($subtags, 1);
+		$subtags = explode('-', preg_replace('/-[^-]-.*/s', '', $tag));
+		$language = array_shift($subtags);
+		if ($language == 'x') {
+			return [];
+		}
+
 		foreach (self::$variants as $variant => $langsys) {
-			if (in_array($variant, $following, true)) {
+			if (in_array($variant, $subtags, true)) {
 				return $langsys;
 			}
 		}
@@ -193,12 +189,11 @@ class OtlTags
 			return self::$retired[$tag];
 		}
 
-		$language = $subtags[0];
-		$script = isset($subtags[1]) ? $subtags[1] : '';
+		$script = isset($subtags[0]) ? $subtags[0] : '';
 
 		if (isset(self::$languageSubtags[$language])) {
 			foreach (self::$languageSubtags[$language] as $subtag => $langsys) {
-				if (strlen($subtag) == 4 ? $script == $subtag : in_array($subtag, $following, true)) {
+				if (strlen($subtag) == 4 ? $script == $subtag : in_array($subtag, $subtags, true)) {
 					return $langsys;
 				}
 			}
@@ -206,18 +201,15 @@ class OtlTags
 
 		$own = self::tags($language);
 
-		if ($own && in_array($own[0], ['ZHS ', 'ZHT ', 'ZHH '], true)) {
-			$chinese = self::chinese($own[0], $script, $following);
-			if ($chinese) {
-				return $chinese;
-			}
+		$chinese = self::chinese($own, $script, $subtags);
+		if ($chinese) {
+			return $chinese;
 		}
 
-		if (preg_match('/^[a-z]{3}$/', $script) && self::tags($script)) {
-			return self::tags($script);
-		}
+		// A three-digit region such as 419 has no key, so three characters that find one are a language
+		$extended = strlen($script) == 3 ? self::tags($script) : [];
 
-		return $own;
+		return $extended ?: $own;
 	}
 
 	/**
@@ -230,28 +222,31 @@ class OtlTags
 	 * Only Hans moves Cantonese (yue, ZHH) and Literary Chinese (lzh, ZHT) off their own tags. Every
 	 * other Chinese language is Simplified by default and takes zh's rules.
 	 *
-	 * @param string   $own       The language's own tag
-	 * @param string   $script    The subtag after the language
-	 * @param string[] $following The subtags after the language
+	 * @param string[] $own     The language's own tags
+	 * @param string   $script  The subtag after the language
+	 * @param string[] $subtags The subtags after the language
 	 *
-	 * @return string[] The language systems, or none where the language's own tag stands
+	 * @return string[] The language systems, or none
 	 */
-	private static function chinese($own, $script, array $following)
+	private static function chinese(array $own, $script, array $subtags)
 	{
+		if (!$own || !in_array($own[0], ['ZHS ', 'ZHT ', 'ZHH '], true)) {
+			return [];
+		}
 		if ($script == 'hans') {
 			return ['ZHS '];
 		}
-		if ($own != 'ZHS ') {
+		if ($own[0] != 'ZHS ') {
 			return [];
 		}
 		if ($script == 'hant') {
-			$region = isset($following[1]) ? $following[1] : '';
+			$region = isset($subtags[1]) ? $subtags[1] : '';
 
 			return $region == 'hk' || $region == 'mo' ? self::$chineseRegions[$region] : ['ZHT '];
 		}
 
 		foreach (self::$chineseRegions as $region => $langsys) {
-			if (in_array($region, $following, true)) {
+			if (in_array($region, $subtags, true)) {
 				return $langsys;
 			}
 		}
