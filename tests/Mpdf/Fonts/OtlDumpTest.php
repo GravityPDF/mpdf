@@ -260,6 +260,64 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Noto Sans Mono's `ccmp` lookup #4 skips every mark outside mark glyph set 0, and U+0328 is one.
+	 * The parser drops the ligatures that name it, so the shaper never applies them, and the report
+	 * should not list them either.
+	 */
+	public function testALigatureWhoseComponentTheLookupSkipsIsNotReported()
+	{
+		$report = implode('', $this->dump('NotoSansMono-GDEF13-Subset', 'cyrl', 'DFLT'));
+
+		$this->assertStringContainsString('<div class="ignore">Ignoring: Marks outside Mark Glyph Set[0] </div> <div class="subtable">Subtable #0', $report);
+		$this->assertStringNotContainsString('<span class="unicode">U+0041, U+0328&nbsp;</span>', $report);
+		$this->assertStringNotContainsString('<span class="unicode">M+E028, M+E031&nbsp;</span>', $report);
+	}
+
+	/**
+	 * A glyph is drawn on a dotted circle when GDEF classes it as a mark, and not when its hex only
+	 * turns up inside a mark's: DIGIT ZERO is 00030 inside COMBINING GRAVE ACCENT's 00300, and HANGUL
+	 * SYLLABLE U+D165 is inside MUSICAL SYMBOL COMBINING STEM's U+1D165.
+	 */
+	public function testOnlyAGlyphGdefClassesAsAMarkIsDrawnAsOne()
+	{
+		$dump = $this->dumper();
+		$dump->getMetrics(self::FONT_DIR . '/NotoMusic-GSUB52-Subset.ttf', 'music', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('&#xD165;', $dump->formatEntity('0D165'));
+		$this->assertSame('&#x25cc;&#x1D165;', $dump->formatEntity('1D165'));
+
+		$dump = $this->dumper();
+		$dump->getMetrics(self::FONT_DIR . '/NotoSansMono-GDEF13-Subset.ttf', 'mono', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('&#x0030;', $dump->formatEntity('00030'));
+		$this->assertSame('&#x0030; &#x0041;', $dump->formatEntityArr(['00030', '00041']));
+		$this->assertSame('&#x0030; &#x0041;', $dump->formatEntityStr('00030|00041'));
+		$this->assertSame('&#x0030;', $dump->formatEntityFirst('00030|00041'));
+
+		$this->assertSame('&#x25cc;&#x0300;', $dump->formatEntity('00300'));
+		$this->assertSame('&#x0300;', $dump->formatEntity('00300', true));
+		$this->assertSame('&#x0041; &#x25cc;&#x0300;', $dump->formatEntityArr(['00041', '00300']));
+		$this->assertSame('&#x25cc;&#x0300; &#x0041;', $dump->formatEntityStr('00300|00041'));
+		$this->assertSame('&#x25cc;&#x0300;', $dump->formatEntityFirst('00300|00041'));
+	}
+
+	/**
+	 * One dump can read fonts one after another, and Blank-WideCmap-Synthetic has no GDEF. Noto Sans
+	 * Mono's COMBINING GRAVE ACCENT is not a mark of that font's.
+	 */
+	public function testADumpReusedOnAFontWithoutGdefForgetsTheLastFontsMarks()
+	{
+		$dump = $this->dumper();
+		$dump->getMetrics(self::FONT_DIR . '/NotoSansMono-GDEF13-Subset.ttf', 'mono', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('&#x25cc;&#x0300;', $dump->formatEntity('00300'));
+
+		$dump->getMetrics(self::FONT_DIR . '/Blank-WideCmap-Synthetic.ttf', 'blank', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('&#x0300;', $dump->formatEntity('00300'));
+	}
+
+	/**
 	 * The dump reports a lookup's rules and never matches them, so it has no pattern of its own to
 	 * build: asked for one, it builds the parser's, capture groups and all.
 	 */
@@ -276,9 +334,8 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The parser caches GDEF and the raw GSUB and GPOS for the shaper to read back by font key. The
-	 * dump holds GDEF in its report's format, and utils/font_dump_otl.php hands it the shaper's own
-	 * cache, so it writes nothing there.
+	 * The parser caches GDEF and the raw GSUB and GPOS for the shaper to read back by font key.
+	 * utils/font_dump_otl.php hands the dump the shaper's own cache, so it writes nothing there.
 	 */
 	public function testTheDumpLeavesTheShapersCacheAlone()
 	{
