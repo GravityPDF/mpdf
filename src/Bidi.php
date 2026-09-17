@@ -2,6 +2,7 @@
 
 namespace Mpdf;
 
+use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\UtfString;
 
 /**
@@ -11,8 +12,9 @@ use Mpdf\Utils\UtfString;
  * resolved and in string form. Nothing here reads a font table - this is the Unicode algorithm over
  * the classes Ucdn supplies, which is why it sits beside Ucdn rather than under Fonts.
  *
- * prepare() takes an Otl because resolving the explicit embedding controls means deleting them from
- * the text afterwards, and removing a character from text and its OTLdata together is Otl's job.
+ * prepare() takes the document's text encoding because resolving the explicit embedding controls
+ * means deleting them from the text afterwards, which Shaper\OtlData does to the text and its OTLdata
+ * together, counting characters in that encoding.
  *
  * @see https://www.unicode.org/reports/tr9/
  *
@@ -445,7 +447,7 @@ class Bidi
 	 * from Mpdf::printbuffer(); reorder() then rearranges, from WriteFlowingBlock() and
 	 * finishFlowingBlock(), once line breaks have divided the paragraph into lines.
 	 */
-	public static function prepare(&$para, $dir, Otl $otl)
+	public static function prepare(&$para, $dir, $encoding)
 	{
 
 		// Set the initial paragraph embedding level
@@ -653,11 +655,11 @@ class Bidi
 			// Paragraph separators are not included in the embedding.
 			// X9. Remove all RLE, LRE, RLO, LRO, and PDF codes.
 			if ($controlchars) {
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xaa");
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xab");
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xac");
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xad");
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xae");
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xaa", $encoding);
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xab", $encoding);
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xac", $encoding);
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xad", $encoding);
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x80\xae", $encoding);
 				preg_replace("/\x{202a}-\x{202e}/u", '', $para[$nc][0]);
 			}
 		}
@@ -1011,10 +1013,10 @@ class Bidi
 		$numchunks = count($para);
 		if ($controlchars) {
 			for ($nc = 0; $nc < $numchunks; $nc++) {
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa6");
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa7");
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa8");
-				$otl->removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa9");
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa6", $encoding);
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa7", $encoding);
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa8", $encoding);
+				OtlData::removeChar($para[$nc][0], $para[$nc][18], "\xe2\x81\xa9", $encoding);
 				preg_replace("/\x{2066}-\x{2069}/u", '', $para[$nc][0]);
 			}
 			// Remove any blank chunks made by removing directional codes

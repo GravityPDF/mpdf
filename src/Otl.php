@@ -20,6 +20,8 @@ use Mpdf\Shaper\Arabic;
 use Mpdf\Shaper\Indic;
 use Mpdf\Shaper\LineBreaking;
 use Mpdf\Shaper\Myanmar;
+use Mpdf\Shaper\OtlData;
+use Mpdf\Shaper\OtlTags;
 use Mpdf\Shaper\Sea;
 
 use Mpdf\Utils\UtfString;
@@ -223,7 +225,7 @@ class Otl
 			$this->assocMarks = [];  // assocMarks[$posarr mpos] => array(compID, ligPos)
 
 			if ($this->debugOTL) {
-				$this->_dumpproc('BEGIN', '-', '-', '-', '-', -1, '-', 0);
+				echo OtlDump::shapingStep($this->OTLdata, 'BEGIN', '-', '-', '-', '-', -1, '-', 0);
 			}
 
 			$this->markWordBoundaries($scriptblock);
@@ -244,7 +246,7 @@ class Otl
 			}
 
 			if ($this->debugOTL) {
-				$this->_dumpproc('END', '-', '-', '-', '-', 0, '-', 0);
+				echo OtlDump::shapingStep($this->OTLdata, 'END', '-', '-', '-', '-', 0, '-', 0);
 				exit;
 			}
 
@@ -1354,11 +1356,11 @@ class Otl
 
 		$ScriptLang = $this->mpdf->CurrentFont['GSUBScriptLang'];
 		if (count($ScriptLang)) {
-			list($GSUBscriptTag, $is_old_spec) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GSUB');
+			list($GSUBscriptTag, $is_old_spec) = OtlTags::script($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL);
 			if ($this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GSUBscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
 				$GSUBlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
 			} elseif ($GSUBscriptTag && isset($ScriptLang[$GSUBscriptTag]) && $ScriptLang[$GSUBscriptTag] != '') {
-				$GSUBlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GSUBscriptTag]);
+				$GSUBlangsys = OtlTags::language($this->mpdf->currentLang, $ScriptLang[$GSUBscriptTag]);
 			}
 		}
 		$ScriptLang = $this->mpdf->CurrentFont['GPOSScriptLang'];
@@ -1370,11 +1372,11 @@ class Otl
 		} // else repeat for GPOS
 		// [Font XBRiyaz has GSUB tables for latn, but not GPOS for latn]
 		elseif (count($ScriptLang)) {
-			list($GPOSscriptTag, $dummy) = $this->_getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL, 'GPOS');
+			list($GPOSscriptTag, $dummy) = OtlTags::script($ScriptLang, $scripttag, $scriptblock, $this->shaper, $useOTL);
 			if ($GPOSscriptTag && $this->mpdf->fontLanguageOverride && strpos($ScriptLang[$GPOSscriptTag], $this->mpdf->fontLanguageOverride) !== false) {
 				$GPOSlangsys = str_pad($this->mpdf->fontLanguageOverride, 4);
 			} elseif ($GPOSscriptTag && isset($ScriptLang[$GPOSscriptTag]) && $ScriptLang[$GPOSscriptTag] != '') {
-				$GPOSlangsys = $this->_getOTLLangTag($this->mpdf->currentLang, $ScriptLang[$GPOSscriptTag]);
+				$GPOSlangsys = OtlTags::language($this->mpdf->currentLang, $ScriptLang[$GPOSscriptTag]);
 			}
 		}
 
@@ -2084,7 +2086,7 @@ class Otl
 		$substitute = $this->glyphToChar($GlyphID);
 		$this->GSUBsubstitute($ptr, $substitute, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return 1;
@@ -2125,7 +2127,7 @@ class Otl
 		// What it puts there is what the cursor moves by, which for the empty sequence is nothing
 		$shift = $this->GSUBsubstitute($ptr, $SubstituteGlyphs, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return $shift;
@@ -2177,7 +2179,7 @@ class Otl
 		$substitute = $this->glyphToChar($GlyphID);
 		$this->GSUBsubstitute($ptr, $substitute, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return 1;
@@ -2246,7 +2248,7 @@ class Otl
 			if ($match) {
 				$shift = $this->GSUBsubstitute($ptr, $substitute, $Type, $GlyphPos); // GlyphPos contains positions to set null
 				if ($this->debugOTL && $shift) {
-					$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
 				if ($shift) {
 					return ($spos - $ptr + 1 - ($CompCount - 1));
@@ -2301,7 +2303,7 @@ class Otl
 				$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
 				if ($matched) {
 					if ($this->debugOTL) {
-						$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+						echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 					}
 					return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 				}
@@ -2361,7 +2363,7 @@ class Otl
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
 					if ($matched) {
 						if ($this->debugOTL) {
-							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 						}
 						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 					}
@@ -2395,7 +2397,7 @@ class Otl
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, [], [], $ignore, $ptr);
 		if ($matched) {
 			if ($this->debugOTL) {
-				$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 			}
 
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
@@ -2441,7 +2443,7 @@ class Otl
 			$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
 			if ($matched) {
 				if ($this->debugOTL) {
-					$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
 				$SubstCount = $this->reader->readUInt16();
 				return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
@@ -2510,7 +2512,7 @@ class Otl
 					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
 					if ($matched) {
 						if ($this->debugOTL) {
-							$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 						}
 						$SubstCount = $this->reader->readUInt16();
 						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
@@ -2549,7 +2551,7 @@ class Otl
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
 			if ($this->debugOTL) {
-				$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 			}
 
 			$this->reader->seek($save_pos); // Return to just after SubstCount
@@ -2621,7 +2623,7 @@ class Otl
 
 		$this->GSUBsubstitute($ptr, $substitute, $Type);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 		}
 
 		return 1;
@@ -3303,7 +3305,7 @@ class Otl
 		}
 		$this->_applyGPOSvaluerecord($ptr, $Value);
 		if ($this->debugOTL) {
-			$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 		}
 		return 1;
 	}
@@ -3383,12 +3385,12 @@ class Otl
 						if ($ValueFormat2) {
 							$this->_applyGPOSvaluerecord($matchedpos, $Value2);
 							if ($this->debugOTL) {
-								$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+								echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 							}
 							return $matchedpos - $ptr + 1;
 						}
 						if ($this->debugOTL) {
-							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 						return $matchedpos - $ptr;
 					} else {
@@ -3463,12 +3465,12 @@ class Otl
 							if ($ValueFormat2) {
 								$this->_applyGPOSvaluerecord($matchedpos, $Value2);
 								if ($this->debugOTL) {
-									$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+									echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 								}
 								return $matchedpos - $ptr + 1;
 							}
 							if ($this->debugOTL) {
-								$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+								echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 							}
 							return $matchedpos - $ptr;
 						}
@@ -3525,7 +3527,7 @@ class Otl
 			$this->Exit[$ptr] = ['X' => $x, 'Y' => $y, 'dir' => $dir];
 		}
 		if ($this->debugOTL) {
-			$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+			echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 		}
 		return 1;
 	}
@@ -3614,7 +3616,7 @@ class Otl
 			$this->OTLdata[$ptr]['GPOSinfo']['XPlacement'] = $prevXPlacement + $BaseRecord['AnchorX'] - $MarkRecord['AnchorX'];
 			$this->OTLdata[$ptr]['GPOSinfo']['YPlacement'] = $prevYPlacement + $BaseRecord['AnchorY'] - $MarkRecord['AnchorY'];
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 			return 1;
 		}
@@ -3720,7 +3722,7 @@ class Otl
 				$this->OTLdata[$ptr]['GPOSinfo']['XPlacement'] = $prevXPlacement + $LigatureRecord['AnchorX'] - $MarkRecord['AnchorX'];
 				$this->OTLdata[$ptr]['GPOSinfo']['YPlacement'] = $prevYPlacement + $LigatureRecord['AnchorY'] - $MarkRecord['AnchorY'];
 				if ($this->debugOTL) {
-					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 				return 1;
 			}
@@ -3817,7 +3819,7 @@ class Otl
 			$this->OTLdata[$ptr]['GPOSinfo']['XPlacement'] = $prevXPlacement + $Mark2Record['AnchorX'] - $Mark1Record['AnchorX'];
 			$this->OTLdata[$ptr]['GPOSinfo']['YPlacement'] = $prevYPlacement + $Mark2Record['AnchorY'] - $Mark1Record['AnchorY'];
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 			return 1;
 		}
@@ -3867,7 +3869,7 @@ class Otl
 			if ($matched) {
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
-					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 
 				return $shift;
@@ -3928,7 +3930,7 @@ class Otl
 					if ($matched) {
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL) {
-							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 
 						return $shift;
@@ -3965,7 +3967,7 @@ class Otl
 			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 
 			return $shift;
@@ -4018,7 +4020,7 @@ class Otl
 				$PosCount = $this->reader->readUInt16();
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
-					$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 				}
 
 				return $shift;
@@ -4088,7 +4090,7 @@ class Otl
 						$PosCount = $this->reader->readUInt16();
 						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 						if ($this->debugOTL) {
-							$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 						}
 
 						return $shift;
@@ -4129,7 +4131,7 @@ class Otl
 			$this->reader->seek($save_pos); // Return to just after PosCount
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
-				$this->_dumpproc('GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 			}
 
 			return $shift;
@@ -4515,217 +4517,51 @@ class Otl
 	}
 
 	/**
-	 * Cut a laid-out run in two, at a line break.
-	 *
-	 * What is left of the run keeps everything up to the cut; what is returned starts at the restart
-	 * position, which is past the cut where the break took a space with it.
-	 *
-	 * @param array      $cOTLdata      The run, truncated in place to the part before the break
-	 * @param int        $OTLcutoffpos  Where the first part ends
-	 * @param int|string $OTLrestartpos Where the second part begins, or '' for the cutoff
-	 *
-	 * @return array The part after the break
+	 * @deprecated Use Mpdf\Shaper\OtlData::split()
 	 */
 	public function splitOTLdata(&$cOTLdata, $OTLcutoffpos, $OTLrestartpos = '')
 	{
-		if (!$OTLrestartpos) {
-			$OTLrestartpos = $OTLcutoffpos;
-		}
-		$newOTLdata = ['GPOSinfo' => [], 'char_data' => []];
-		$newOTLdata['group'] = substr($cOTLdata['group'], $OTLrestartpos);
-		$cOTLdata['group'] = substr($cOTLdata['group'], 0, $OTLcutoffpos);
-
-		if (isset($cOTLdata['GPOSinfo']) && $cOTLdata['GPOSinfo']) {
-			foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-				if ($k >= $OTLrestartpos) {
-					$newOTLdata['GPOSinfo'][($k - $OTLrestartpos)] = $val;
-				}
-				if ($k >= $OTLcutoffpos) {
-					unset($cOTLdata['GPOSinfo'][$k]);
-					//$cOTLdata['GPOSinfo'][$k] = array();
-				}
-			}
-		}
-		if (isset($cOTLdata['char_data'])) {
-			$newOTLdata['char_data'] = array_slice($cOTLdata['char_data'], $OTLrestartpos);
-			array_splice($cOTLdata['char_data'], $OTLcutoffpos);
-		}
-
-		// Not necessary - easier to debug
-		if (isset($cOTLdata['GPOSinfo'])) {
-			ksort($cOTLdata['GPOSinfo']);
-		}
-		if (isset($newOTLdata['GPOSinfo'])) {
-			ksort($newOTLdata['GPOSinfo']);
-		}
-
-		return $newOTLdata;
+		return OtlData::split($cOTLdata, $OTLcutoffpos, $OTLrestartpos);
 	}
 
 	/**
-	 * A copy of part of a laid-out run, with the positioning renumbered to start at zero.
-	 *
-	 * @param array $OTLdata The run
-	 * @param int   $pos     Where the part begins
-	 * @param int   $len     How many characters of it to take
-	 *
-	 * @return array The part, as a run of its own
+	 * @deprecated Use Mpdf\Shaper\OtlData::slice()
 	 */
 	public function sliceOTLdata($OTLdata, $pos, $len)
 	{
-		// applyOTL() leaves OTLdata empty for a blank string, so every key here is optional
-		$newOTLdata = ['GPOSinfo' => [], 'char_data' => []];
-		$newOTLdata['group'] = isset($OTLdata['group']) ? substr($OTLdata['group'], $pos, $len) : '';
-
-		if (!empty($OTLdata['GPOSinfo'])) {
-			foreach ($OTLdata['GPOSinfo'] as $k => $val) {
-				if ($k >= $pos && $k < ($pos + $len)) {
-					$newOTLdata['GPOSinfo'][($k - $pos)] = $val;
-				}
-			}
-		}
-
-		if (isset($OTLdata['char_data'])) {
-			$newOTLdata['char_data'] = array_slice($OTLdata['char_data'], $pos, $len);
-		}
-
-		// Not necessary - easier to debug
-		if ($newOTLdata['GPOSinfo']) {
-			ksort($newOTLdata['GPOSinfo']);
-		}
-
-		return $newOTLdata;
+		return OtlData::slice($OTLdata, $pos, $len);
 	}
 
 	/**
-	 * Put one character at the front of a laid-out run, moving the rest of it along by one.
-	 *
-	 * @param array  $cOTLdata The run
-	 * @param array  $charData The character's entry, as Bidi::prepare() would have left it
-	 * @param string $group    Its class in the run's group string
+	 * @deprecated Use Mpdf\Shaper\OtlData::prependChar()
 	 */
 	public function prependOTLchar(&$cOTLdata, $charData, $group)
 	{
-		// applyOTL() leaves OTLdata empty for a blank string, so every key here is optional
-		$cOTLdata += ['group' => '', 'char_data' => [], 'GPOSinfo' => []];
-
-		$cOTLdata['group'] = $group . $cOTLdata['group'];
-		array_unshift($cOTLdata['char_data'], $charData);
-
-		if ($cOTLdata['GPOSinfo']) {
-			$newGPOSinfo = [];
-			foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-				$newGPOSinfo[$k + 1] = $val;
-			}
-			$cOTLdata['GPOSinfo'] = $newGPOSinfo;
-		}
+		OtlData::prependChar($cOTLdata, $charData, $group);
 	}
 
 	/**
-	 * Remove one or more occurrences of $char (single character) from $txt and adjust OTLdata
+	 * @deprecated Use Mpdf\Shaper\OtlData::removeChar()
 	 */
 	public function removeChar(&$txt, &$cOTLdata, $char)
 	{
-		while (mb_strpos($txt, $char, 0, $this->mpdf->mb_enc) !== false) {
-			$pos = mb_strpos($txt, $char, 0, $this->mpdf->mb_enc);
-			$newGPOSinfo = [];
-			$cOTLdata['group'] = substr_replace($cOTLdata['group'], '', $pos, 1);
-			if ($cOTLdata['GPOSinfo']) {
-				foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-					if ($k > $pos) {
-						$newGPOSinfo[($k - 1)] = $val;
-					} elseif ($k != $pos) {
-						$newGPOSinfo[$k] = $val;
-					}
-				}
-				$cOTLdata['GPOSinfo'] = $newGPOSinfo;
-			}
-			if (isset($cOTLdata['char_data'])) {
-				array_splice($cOTLdata['char_data'], $pos, 1);
-			}
-
-			$txt = preg_replace("/" . $char . "/", '', $txt, 1);
-		}
+		OtlData::removeChar($txt, $cOTLdata, $char, $this->mpdf->mb_enc);
 	}
 
 	/**
-	 * Remove one or more occurrences of $char (single character) from $txt and adjust OTLdata
+	 * @deprecated Use Mpdf\Shaper\OtlData::nbspToSpace()
 	 */
 	public function replaceSpace(&$txt, &$cOTLdata)
 	{
-		$char = chr(194) . chr(160); // NBSP
-		while (mb_strpos($txt, $char, 0, $this->mpdf->mb_enc) !== false) {
-			$pos = mb_strpos($txt, $char, 0, $this->mpdf->mb_enc);
-			if ($cOTLdata['char_data'][$pos]['uni'] == 160) {
-				$cOTLdata['char_data'][$pos]['uni'] = 32;
-			}
-			$txt = preg_replace("/" . $char . "/", ' ', $txt, 1);
-		}
+		OtlData::nbspToSpace($txt, $cOTLdata, $this->mpdf->mb_enc);
 	}
 
 	/**
-	 * Drop the spaces from the ends of a laid-out run, and the positioning that went with them.
-	 *
-	 * @param array $cOTLdata The run, trimmed in place
-	 * @param bool  $Left     Whether to trim the start
-	 * @param bool  $Right    Whether to trim the end
+	 * @deprecated Use Mpdf\Shaper\OtlData::trim()
 	 */
 	public function trimOTLdata(&$cOTLdata, $Left = true, $Right = true)
 	{
-		$len = (!is_array($cOTLdata) || $cOTLdata['char_data'] === null) ? 0 : count($cOTLdata['char_data']);
-		$nLeft = 0;
-		$nRight = 0;
-		for ($i = 0; $i < $len; $i++) {
-			if ($cOTLdata['char_data'][$i]['uni'] == 32 || $cOTLdata['char_data'][$i]['uni'] == 12288) {
-				$nLeft++;
-			} // 12288 = 0x3000 = CJK space
-			else {
-				break;
-			}
-		}
-		for ($i = ($len - 1); $i >= 0; $i--) {
-			if ($cOTLdata['char_data'][$i]['uni'] == 32 || $cOTLdata['char_data'][$i]['uni'] == 12288) {
-				$nRight++;
-			} // 12288 = 0x3000 = CJK space
-			else {
-				break;
-			}
-		}
-
-		// Trim Right
-		if ($Right && $nRight) {
-			$cOTLdata['group'] = substr($cOTLdata['group'], 0, strlen($cOTLdata['group']) - $nRight);
-			if ($cOTLdata['GPOSinfo']) {
-				foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-					if ($k >= $len - $nRight) {
-						unset($cOTLdata['GPOSinfo'][$k]);
-					}
-				}
-			}
-			if (isset($cOTLdata['char_data'])) {
-				for ($i = 0; $i < $nRight; $i++) {
-					array_pop($cOTLdata['char_data']);
-				}
-			}
-		}
-		// Trim Left
-		if ($Left && $nLeft) {
-			$cOTLdata['group'] = substr($cOTLdata['group'], $nLeft);
-			if ($cOTLdata['GPOSinfo']) {
-				$newPOSinfo = [];
-				foreach ($cOTLdata['GPOSinfo'] as $k => $val) {
-					if ($k >= $nLeft) {
-						$newPOSinfo[$k - $nLeft] = $cOTLdata['GPOSinfo'][$k];
-					}
-				}
-				$cOTLdata['GPOSinfo'] = $newPOSinfo;
-			}
-			if (isset($cOTLdata['char_data'])) {
-				for ($i = 0; $i < $nLeft; $i++) {
-					array_shift($cOTLdata['char_data']);
-				}
-			}
-		}
+		OtlData::trim($cOTLdata, $Left, $Right);
 	}
 
 	/**
@@ -4932,263 +4768,5 @@ class Otl
 		}
 
 		return $this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset];
-	}
-
-	/**
-	 * Pick the OpenType script tag to lay the text out under, from what the font offers.
-	 *
-	 * The tag Unicode implies is only a first choice: a font may offer the v2 Indic tag and not the
-	 * old one or the other way round, may offer nothing for the script and still have a default
-	 * entry, and may offer a script mPDF has no shaper for. This settles all of that, and says which
-	 * Indic specification the chosen tag implies.
-	 *
-	 * @param array  $ScriptLang  The scripts this table offers, and the language systems under each
-	 * @param string $scripttag   The tag the text's Unicode script implies
-	 * @param int    $scriptblock The text's Unicode script
-	 * @param string $shaper      The shaper picked for it, where there is one
-	 * @param int    $useOTL      Which script groups the document asked to be laid out this way
-	 * @param string $mode        'GSUB' or 'GPOS', which may not offer the same scripts
-	 *
-	 * @return array The tag to use, or '' for none, and whether it implies the original Indic
-	 *               specification rather than the v2 one
-	 */
-	private function _getOTLscriptTag($ScriptLang, $scripttag, $scriptblock, $shaper, $useOTL, $mode)
-	{
-		// ScriptLang is the array of available script/lang tags supported by the font
-		// $scriptblock is the (number/code) for the script of the actual text string based on Unicode properties (Ucdn::$uni_scriptblock)
-		// $scripttag is the default tag derived from $scriptblock
-		/*
-		  https://learn.microsoft.com/en-us/typography/opentype/spec/ttoreg
-		  https://learn.microsoft.com/en-us/typography/opentype/spec/scripttags
-
-		  Values for useOTL
-
-		  Bit   dn  hn  Value
-		  1 1   0x0001  GSUB/GPOS - Latin scripts
-		  2 2   0x0002  GSUB/GPOS - Cyrillic scripts
-		  3 4   0x0004  GSUB/GPOS - Greek scripts
-		  4 8   0x0008  GSUB/GPOS - CJK scripts (excluding Hangul-Jamo)
-		  5 16  0x0010  (Reserved)
-		  6 32  0x0020  (Reserved)
-		  7 64  0x0040  (Reserved)
-		  8 128 0x0080  GSUB/GPOS - All other scripts (including all RTL scripts, complex scripts with shapers etc)
-
-		  NB If change for RTL - cf. function magic_reverse_dir in mpdf.php to update
-
-		 */
-
-		if ($scriptblock == Ucdn::SCRIPT_LATIN) {
-			if (!($useOTL & 0x01)) {
-				return ['', false];
-			}
-		} elseif ($scriptblock == Ucdn::SCRIPT_CYRILLIC) {
-			if (!($useOTL & 0x02)) {
-				return ['', false];
-			}
-		} elseif ($scriptblock == Ucdn::SCRIPT_GREEK) {
-			if (!($useOTL & 0x04)) {
-				return ['', false];
-			}
-		} elseif ($scriptblock >= Ucdn::SCRIPT_HIRAGANA && $scriptblock <= Ucdn::SCRIPT_YI) {
-			if (!($useOTL & 0x08)) {
-				return ['', false];
-			}
-		} else {
-			if (!($useOTL & 0x80)) {
-				return ['', false];
-			}
-		}
-
-		//  If availabletags includes scripttag - choose
-		if (isset($ScriptLang[$scripttag])) {
-			return [$scripttag, false];
-		}
-
-		//  If INDIC (or Myanmar) and available tag not includes new version, check if includes old version & choose old version
-		if ($shaper) {
-			switch ($scripttag) {
-				case 'bng2':
-					if (isset($ScriptLang['beng'])) {
-						return ['beng', true];
-					}
-					// fallthrough
-				case 'dev2':
-					if (isset($ScriptLang['deva'])) {
-						return ['deva', true];
-					}
-					// fallthrough
-				case 'gjr2':
-					if (isset($ScriptLang['gujr'])) {
-						return ['gujr', true];
-					}
-					// fallthrough
-				case 'gur2':
-					if (isset($ScriptLang['guru'])) {
-						return ['guru', true];
-					}
-					// fallthrough
-				case 'knd2':
-					if (isset($ScriptLang['knda'])) {
-						return ['knda', true];
-					}
-					// fallthrough
-				case 'mlm2':
-					if (isset($ScriptLang['mlym'])) {
-						return ['mlym', true];
-					}
-					// fallthrough
-				case 'ory2':
-					if (isset($ScriptLang['orya'])) {
-						return ['orya', true];
-					}
-					// fallthrough
-				case 'tml2':
-					if (isset($ScriptLang['taml'])) {
-						return ['taml', true];
-					}
-					// fallthrough
-				case 'tel2':
-					if (isset($ScriptLang['telu'])) {
-						return ['telu', true];
-					}
-					// fallthrough
-				case 'mym2':
-					if (isset($ScriptLang['mymr'])) {
-						return ['mymr', true];
-					}
-			}
-		}
-
-		//  choose DFLT if present
-		if (isset($ScriptLang['DFLT'])) {
-			return ['DFLT', false];
-		}
-		//  else choose dflt if present
-		if (isset($ScriptLang['dflt'])) {
-			return ['dflt', false];
-		}
-		//  else return no scriptTag
-		if (isset($ScriptLang['latn'])) {
-			return ['latn', false];
-		}
-		//  else return no scriptTag
-		return ['', false];
-	}
-
-	/**
-	 * Pick the OpenType language system tag from the document's language, out of what the script
-	 * offers.
-	 *
-	 * An IETF tag is tried from the most specific part down - the language with its script or region,
-	 * then the language alone - so that a font offering only the broader entry is still matched.
-	 *
-	 * @param string $ietf      The language of the text, as an IETF tag, e.g. 'sr-Cyrl'
-	 * @param string $available The language systems this script offers, space separated
-	 *
-	 * @return string The tag to use, or '' to fall back to the script's default
-	 */
-	private function _getOTLLangTag($ietf, $available)
-	{
-		// http://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
-		// https://learn.microsoft.com/en-us/typography/opentype/spec/languagetags
-		// IETF tag = e.g. en-US, und-Arab, sr-Cyrl cf. class LangToFont
-		if ($available == '') {
-			return '';
-		}
-
-		$tags = $ietf
-			? preg_split('/-/', $ietf)
-			: [];
-
-		$lang = '';
-		$country = '';
-		$script = '';
-
-		$lang = isset($tags[0])
-			? strtolower($tags[0])
-			: '';
-
-		if (isset($tags[1]) && $tags[1]) {
-			if (strlen($tags[1]) == 2) {
-				$country = strtolower($tags[1]);
-			}
-		}
-
-		if (isset($tags[2]) && $tags[2]) {
-			$country = strtolower($tags[2]);
-		}
-
-		if ($lang != '' && isset(Ucdn::$ot_languages[$lang])) {
-			$langsys = Ucdn::$ot_languages[$lang];
-		} elseif ($lang != '' && $country != '' && isset(Ucdn::$ot_languages[$lang . '' . $country])) {
-			$langsys = Ucdn::$ot_languages[$lang . '' . $country];
-		} else {
-			$langsys = "DFLT";
-		}
-
-		if (strpos($available, $langsys) === false) {
-			if (strpos($available, "DFLT") !== false) {
-				return "DFLT";
-			} else {
-				return '';
-			}
-		}
-
-		return $langsys;
-	}
-
-	/**
-	 * Echo the state of the run at one step of shaping, for the debugOTL trace.
-	 *
-	 * @param string $GPOSSUB   'GSUB' or 'GPOS', or a marker for the beginning or end of the run
-	 * @param int    $lookupID  The lookup that applied
-	 * @param int    $subtable  Which of its subtables
-	 * @param int    $Type      The lookup's type
-	 * @param int    $Format    The subtable's format
-	 * @param int    $ptr       Where in the run it applied
-	 * @param string $currGlyph The glyph it applied at, as hex
-	 * @param int    $level     0 for a lookup applied directly, 1 for one nested in a context rule
-	 */
-	private function _dumpproc($GPOSSUB, $lookupID, $subtable, $Type, $Format, $ptr, $currGlyph, $level)
-	{
-		echo '<div style="padding-left: ' . ($level * 2) . 'em;">';
-		echo $GPOSSUB . ' LookupID #' . $lookupID . ' Subtable#' . $subtable . ' Type: ' . $Type . ' Format: ' . $Format . '<br />';
-		echo '<div style="font-family:monospace">';
-		echo 'Glyph position: ' . $ptr . ' Current Glyph: ' . $currGlyph . '<br />';
-
-		for ($i = 0; $i < count($this->OTLdata); $i++) {
-			if ($i == $ptr) {
-				echo '<b>';
-			}
-			echo $this->OTLdata[$i]['hex'] . ' ';
-			if ($i == $ptr) {
-				echo '</b>';
-			}
-		}
-		echo '<br />';
-
-		for ($i = 0; $i < count($this->OTLdata); $i++) {
-			if ($i == $ptr) {
-				echo '<b>';
-			}
-			echo str_pad($this->OTLdata[$i]['uni'], 5) . ' ';
-			if ($i == $ptr) {
-				echo '</b>';
-			}
-		}
-		echo '<br />';
-
-		if ($GPOSSUB == 'GPOS') {
-			for ($i = 0; $i < count($this->OTLdata); $i++) {
-				if (!empty($this->OTLdata[$i]['GPOSinfo'])) {
-					echo $this->OTLdata[$i]['hex'] . ' &#x' . $this->OTLdata[$i]['hex'] . '; ';
-					print_r($this->OTLdata[$i]['GPOSinfo']);
-					echo ' ';
-				}
-			}
-		}
-
-		echo '</div>';
-		echo '</div>';
 	}
 }

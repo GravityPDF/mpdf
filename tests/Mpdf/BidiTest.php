@@ -93,9 +93,27 @@ class BidiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @return array [the codepoints in display order, the strong-direction bitmask]
+	 * X9: the embedding controls are resolved into levels, then deleted from the text and from its
+	 * OTLdata together, positions counted in characters of the document's encoding.
 	 */
-	private function sort($unicode, $dir)
+	public function testPrepareTakesTheEmbeddingControlsOutOfTheTextAndItsRun()
+	{
+		$rle = 0x202B;
+		$pdf = 0x202C;
+		$para = [$this->chunk([0x41, $rle, self::ALEF, self::BET, $pdf, 0x42])];
+
+		Bidi::prepare($para, 'ltr', 'UTF-8');
+
+		$this->assertSame('A' . UtfString::code2utf(self::ALEF) . UtfString::code2utf(self::BET) . 'B', $para[0][0]);
+		$this->assertSame('CCCC', $para[0][18]['group']);
+		$this->assertSame([0x41, self::ALEF, self::BET, 0x42], array_column($para[0][18]['char_data'], 'uni'));
+		$this->assertSame([0, 1, 1, 0], array_column($para[0][18]['char_data'], 'level'));
+	}
+
+	/**
+	 * @return array A textbuffer chunk of the characters: the text at 0 and its OTLdata at 18
+	 */
+	private function chunk($unicode)
 	{
 		$otlData = ['group' => '', 'GPOSinfo' => [], 'char_data' => []];
 		$str = '';
@@ -106,7 +124,17 @@ class BidiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$str .= UtfString::code2utf($char);
 		}
 
-		list($ordered, $strong) = Bidi::sort($unicode, $str, $dir, $otlData, false);
+		return [0 => $str, 18 => $otlData];
+	}
+
+	/**
+	 * @return array [the codepoints in display order, the strong-direction bitmask]
+	 */
+	private function sort($unicode, $dir)
+	{
+		$chunk = $this->chunk($unicode);
+
+		list($ordered, $strong) = Bidi::sort($unicode, $chunk[0], $dir, $chunk[18], false);
 
 		return [array_values(unpack('N*', mb_convert_encoding($ordered, 'UTF-32BE', 'UTF-8'))), $strong];
 	}

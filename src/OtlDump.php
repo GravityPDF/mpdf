@@ -1680,6 +1680,55 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
+	 * The run as it stands at one step of shaping, for Otl's debugOTL trace.
+	 *
+	 * Static, because it is the shaper that reports as it goes, with no font dump to hand.
+	 *
+	 * @param array      $OTLdata   The run, one entry per glyph
+	 * @param string     $GPOSSUB   'GSUB' or 'GPOS', or 'BEGIN' or 'END' of the run
+	 * @param int|string $lookupID  The lookup that applied, '-' at either end of the run
+	 * @param int|string $subtable  Which of its subtables
+	 * @param int|string $Type      The lookup's type
+	 * @param int|string $Format    The subtable's format
+	 * @param int        $ptr       Where in the run it applied, shown in bold
+	 * @param string     $currGlyph The glyph it applied at, as hex
+	 * @param int        $level     0 for a lookup applied directly, 1 for one nested in a context rule
+	 *
+	 * @return string HTML
+	 */
+	public static function shapingStep(array $OTLdata, $GPOSSUB, $lookupID, $subtable, $Type, $Format, $ptr, $currGlyph, $level)
+	{
+		$html = '<div style="padding-left: ' . ($level * 2) . 'em;">';
+		$html .= $GPOSSUB . ' LookupID #' . $lookupID . ' Subtable#' . $subtable . ' Type: ' . $Type . ' Format: ' . $Format . '<br />';
+		$html .= '<div style="font-family:monospace">';
+		$html .= 'Glyph position: ' . $ptr . ' Current Glyph: ' . $currGlyph . '<br />';
+
+		$hex = '';
+		$uni = '';
+		for ($i = 0; $i < count($OTLdata); $i++) {
+			$h = $OTLdata[$i]['hex'] . ' ';
+			$u = str_pad($OTLdata[$i]['uni'], 5) . ' ';
+			if ($i == $ptr) {
+				$h = '<b>' . $h . '</b>';
+				$u = '<b>' . $u . '</b>';
+			}
+			$hex .= $h;
+			$uni .= $u;
+		}
+		$html .= $hex . '<br />' . $uni . '<br />';
+
+		if ($GPOSSUB == 'GPOS') {
+			for ($i = 0; $i < count($OTLdata); $i++) {
+				if (!empty($OTLdata[$i]['GPOSinfo'])) {
+					$html .= $OTLdata[$i]['hex'] . ' &#x' . $OTLdata[$i]['hex'] . '; ' . print_r($OTLdata[$i]['GPOSinfo'], true) . ' ';
+				}
+			}
+		}
+
+		return $html . '</div></div>';
+	}
+
+	/**
 	 * @return string[] One "hex|hex|hex" string of the alternatives each Coverage table holds
 	 */
 	private function coverageGlyphs(array $offsets)

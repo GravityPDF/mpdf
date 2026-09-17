@@ -9,6 +9,7 @@ use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
 use Mpdf\Mpdf;
+use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
 use Mpdf\Utils\UtfString;
 
@@ -1241,7 +1242,7 @@ abstract class BlockTag extends Tag
 					);
 					/* -- OTL -- */
 					if (!empty($this->mpdf->CurrentFont['useOTL'])) {
-						$this->otl->trimOTLdata($this->mpdf->textbuffer[count($this->mpdf->textbuffer) - 1][18], false); // mPDF 6  ZZZ99K
+						OtlData::trim($this->mpdf->textbuffer[count($this->mpdf->textbuffer) - 1][18], false); // mPDF 6  ZZZ99K
 					}
 					/* -- END OTL -- */
 				}

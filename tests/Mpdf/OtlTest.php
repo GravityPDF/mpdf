@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Mpdf\Fonts\FontCache;
+use Mpdf\Shaper\OtlData;
 
 class OtlTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -58,6 +59,51 @@ class OtlTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('', $slice['group']);
 		$this->assertSame([], $slice['GPOSinfo']);
 		$this->assertSame([], $slice['char_data']);
+	}
+
+	/**
+	 * The six were public on Otl, which Mpdf exposes as $otl, and stay there as delegates.
+	 */
+	public function testTheDeprecatedRunMethodsGiveWhatOtlDataGives()
+	{
+		$run = [
+			'group' => 'SCCS',
+			'GPOSinfo' => [1 => ['XAdvance' => 10], 3 => ['XAdvance' => 20]],
+			'char_data' => [['uni' => 0x20], ['uni' => 0x1F600], ['uni' => 0xAD], ['uni' => 0xA0]],
+		];
+		$text = " \xf0\x9f\x98\x80\xc2\xad\xc2\xa0";
+		$this->mpdf->mb_enc = 'UTF-8';
+
+		$expected = $run;
+		$actual = $run;
+		$this->assertSame(OtlData::split($expected, 2, 3), $this->otl->splitOTLdata($actual, 2, 3));
+		$this->assertSame($expected, $actual);
+
+		$this->assertSame(OtlData::slice($run, 1, 2), $this->otl->sliceOTLdata($run, 1, 2));
+
+		$expected = $run;
+		$actual = $run;
+		OtlData::prependChar($expected, ['uni' => 0x2D], 'C');
+		$this->otl->prependOTLchar($actual, ['uni' => 0x2D], 'C');
+		$this->assertSame($expected, $actual);
+
+		$expected = [$text, $run];
+		$actual = [$text, $run];
+		OtlData::removeChar($expected[0], $expected[1], "\xc2\xad", 'UTF-8');
+		$this->otl->removeChar($actual[0], $actual[1], "\xc2\xad");
+		$this->assertSame($expected, $actual);
+
+		$expected = [$text, $run];
+		$actual = [$text, $run];
+		OtlData::nbspToSpace($expected[0], $expected[1], 'UTF-8');
+		$this->otl->replaceSpace($actual[0], $actual[1]);
+		$this->assertSame($expected, $actual);
+
+		$expected = $run;
+		$actual = $run;
+		OtlData::trim($expected, false, true);
+		$this->otl->trimOTLdata($actual, false, true);
+		$this->assertSame($expected, $actual);
 	}
 
 }
