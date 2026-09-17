@@ -1,0 +1,17 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x04E00; &#x04E09; &#x04E8C; &#x09AA8; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>hani</h5><div><a href="font_dump_otl.php?script=hani&amp;lang=ZHH">ZHH </a></b>: locl </div><div><a href="font_dump_otl.php?script=hani&amp;lang=ZHS">ZHS </a></b>: locl </div><div><a href="font_dump_otl.php?script=hani&amp;lang=ZHT">ZHT </a></b>: locl </div>
+</div>
+<div>GPOS table not defined</div>
+
+=== detail: script hani language DFLT ===
+<h1>GSUB Tables</h1>
+<div class="notoffered">This font's GSUB script "hani" offers no language system "DFLT". It has: ZHH, ZHS, ZHT</div>
+<bookmark level="0" content="GSUB features">
+<div>GPOS table not defined</div>
