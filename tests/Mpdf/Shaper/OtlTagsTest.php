@@ -124,36 +124,44 @@ class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @dataProvider chineseRegions
+	 * @dataProvider chinese
 	 */
-	public function testAChineseRegionSelectsItsLanguageSystem($ietf, $expected)
+	public function testChineseSelectsItsLanguageSystemTheWayHarfBuzzDoes($ietf, $expected)
 	{
-		$this->assertSame($expected, OtlTags::language($ietf, 'DFLT ZHH ZHS ZHT '));
+		$this->assertSame($expected, OtlTags::language($ietf, 'DFLT ZHH  ZHS  ZHT  ZHTM '));
 	}
 
-	public function chineseRegions()
+	public function chinese()
 	{
 		return [
 			'Hong Kong' => ['zh-HK', 'ZHH '],
-			'Hong Kong, after the script' => ['zh-Hant-HK', 'ZHH '],
 			'Taiwan' => ['zh-TW', 'ZHT '],
-			'Macao' => ['zh-MO', 'ZHT '],
+			'Macao' => ['zh-MO', 'ZHTM'],
 			'China' => ['zh-CN', 'ZHS '],
 			'Singapore' => ['zh-SG', 'ZHS '],
 			'lower case' => ['zh-tw', 'ZHT '],
-			'a region the table has no entry for' => ['zh-US', 'DFLT'],
+			'a region with no language system of its own' => ['zh-US', 'ZHS '],
+			'no script or region' => ['zh', 'ZHS '],
+			'Simplified' => ['zh-Hans', 'ZHS '],
+			'Traditional' => ['zh-Hant', 'ZHT '],
+			'upper case' => ['ZH-HANT', 'ZHT '],
+			'Simplified, in Hong Kong' => ['zh-Hans-HK', 'ZHS '],
+			'Simplified, in Taiwan' => ['zh-Hans-TW', 'ZHS '],
+			'Simplified, in Macao' => ['zh-Hans-MO', 'ZHS '],
+			'Traditional, in China' => ['zh-Hant-CN', 'ZHT '],
+			'Traditional, in Taiwan' => ['zh-Hant-TW', 'ZHT '],
+			'Traditional, in Hong Kong' => ['zh-Hant-HK', 'ZHH '],
+			'Traditional, in Macao' => ['zh-Hant-MO', 'ZHTM'],
+			'another script, in Hong Kong' => ['zh-Latn-HK', 'ZHH '],
+			'Min Nan, a retired tag' => ['zh-min-nan', 'ZHS '],
 		];
 	}
 
-	/**
-	 * Pins #201 as it stands: without a region, Chinese has no language system, where HarfBuzz
-	 * takes ZHS for zh and zh-Hans and ZHT for zh-Hant.
-	 */
-	public function testChineseWithoutARegionHasNoLanguageSystem()
+	public function testMacaoFallsBackToHongKong()
 	{
-		$this->assertSame('DFLT', OtlTags::language('zh', 'DFLT ZHH ZHS ZHT '));
-		$this->assertSame('DFLT', OtlTags::language('zh-Hant', 'DFLT ZHH ZHS ZHT '));
-		$this->assertSame('DFLT', OtlTags::language('zh-Hans', 'DFLT ZHH ZHS ZHT '));
+		$this->assertSame('ZHH ', OtlTags::language('zh-MO', 'DFLT ZHH  ZHS  ZHT  '));
+		$this->assertSame('ZHH ', OtlTags::language('zh-Hant-MO', 'DFLT ZHH  ZHS  ZHT  '));
+		$this->assertSame('DFLT', OtlTags::language('zh-MO', 'DFLT ZHS  ZHT  '));
 	}
 
 }
