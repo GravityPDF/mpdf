@@ -73,6 +73,15 @@ class GlyphString
 		return false;
 	}
 
+	/**
+	 * Whether a match in a list is flanked by another hex digit, which makes it part of a longer glyph
+	 * rather than a glyph of its own.
+	 *
+	 * @param string $string The list being searched
+	 * @param int    $at     A position either side of a match, which may fall outside the string
+	 *
+	 * @return bool False before the start or past the end, where nothing flanks the match
+	 */
 	private static function isHexDigitAt($string, $at)
 	{
 		return $at >= 0 && isset($string[$at]) && strpos('0123456789ABCDEFabcdef', $string[$at]) !== false;

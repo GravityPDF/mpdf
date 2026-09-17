@@ -199,6 +199,18 @@ class LookupFlag
 		return $this->setOf(self::MARKS, 0, '');
 	}
 
+	/**
+	 * A class skips() tests glyphs against, built once and kept, since it is asked glyph after glyph.
+	 *
+	 * The marks outside a filtering set or an attachment class depend on which set or class the flag
+	 * names, so those are kept per set or class; every other class is the same for any flag.
+	 *
+	 * @param string     $class            One of the class constants, as skipped() gives it
+	 * @param int        $flag             The lookup's LookupFlag, which names the attachment class
+	 * @param int|string $markFilteringSet The mark glyph set it names, or '' where it names none
+	 *
+	 * @return true[] The class, as GlyphString::set() gives it
+	 */
 	private function setOf($class, $flag, $markFilteringSet)
 	{
 		if ($class === self::MARKS_OUTSIDE_FILTERING_SET) {
