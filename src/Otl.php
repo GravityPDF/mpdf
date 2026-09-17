@@ -206,10 +206,10 @@ class Otl
 			list($GSUBscriptTag, $GSUBlangsys, $GPOSscriptTag, $GPOSlangsys, $is_old_spec)
 				= $this->selectScriptAndLanguage($scriptblock, $useOTL);
 
-			$this->shaper = $this->shaperForScriptTag($scriptblock, $GSUBscriptTag);
+			$this->shaper = $this->shaperForScriptTag($this->shaper, $scriptblock, $GSUBscriptTag);
 
 			// A run the font offers no script for still goes to its shaper, which reorders it with
-			// no lookups to apply. Every script with a shaper is one useOTL opens with 0x80, and a
+			// nothing to substitute. Every script with a shaper is one useOTL opens with 0x80, and a
 			// document that has not opened it gets nothing.
 			$shapeWithoutTables = $this->shaper && ($useOTL & 0x80);
 
@@ -220,8 +220,8 @@ class Otl
 				continue;
 			}
 
-			$GSUBFeatures = $this->gsubFeatures($GSUBscriptTag, $GSUBlangsys);
-			$GPOSFeatures = (isset($this->mpdf->CurrentFont['GPOSFeatures'][$GPOSscriptTag][$GPOSlangsys]) ? $this->mpdf->CurrentFont['GPOSFeatures'][$GPOSscriptTag][$GPOSlangsys] : false);
+			$GSUBFeatures = $this->features('GSUB', $GSUBscriptTag, $GSUBlangsys);
+			$GPOSFeatures = $this->features('GPOS', $GPOSscriptTag, $GPOSlangsys);
 
 			$this->assocLigs = []; // Ligatures[$posarr lpos] => nc
 			$this->assocMarks = [];  // assocMarks[$posarr mpos] => array(compID, ligPos)
@@ -481,7 +481,13 @@ class Otl
 			return '';
 		}
 
-		$this->loadGsubData($GSUBscriptTag, $GSUBlangsys, (bool) $GSUBFeatures);
+		$this->loadGsubDerivedData($GSUBscriptTag, $GSUBlangsys);
+
+		// A run with nothing to substitute still goes to its shaper, and its font need not have a
+		// GSUB table at all
+		if ($GSUBFeatures) {
+			$this->loadGsubLookups();
+		}
 
 		// 5. GSUB - Shaper
 		if ($this->shaper == 'A') {
@@ -512,12 +518,11 @@ class Otl
 	/**
 	 * Phase 4: what this font's GSUB table says, for this script and language system.
 	 *
-	 * Three things, cached for the life of the document because a document sets the same font for
-	 * line after line: the derived tables the shapers work from, which the parser builds per script
-	 * and language; the coverage of every lookup, which is how a lookup is passed over without being
-	 * read; and the lookup list itself.
+	 * Cached for the life of the document because a document sets the same font for line after line:
+	 * the derived tables the shapers work from, which the parser builds per script and language, and
+	 * which are empty where it built none.
 	 */
-	private function loadGsubData($GSUBscriptTag, $GSUBlangsys, $hasFeatures)
+	private function loadGsubDerivedData($GSUBscriptTag, $GSUBlangsys)
 	{
 		$this->GSUBfont = $this->fontkey . '.GSUB.' . $GSUBscriptTag . '.' . $GSUBlangsys;
 
@@ -541,13 +546,14 @@ class Otl
 				];
 			}
 		}
+	}
 
-		// Nothing past this is read for a run with no lookups, and its font need not have a GSUB
-		// table at all
-		if (!$hasFeatures) {
-			return;
-		}
-
+	/**
+	 * Phase 4, continued: the coverage of every lookup, which is how a lookup is passed over without
+	 * being read, and the lookup list itself.
+	 */
+	private function loadGsubLookups()
+	{
 		$this->readTable('GSUB');
 
 		$fontCacheFilename = $this->fontkey . '.GSUBdata.json';
@@ -1347,36 +1353,39 @@ class Otl
 	 * skip the shaper. Khmer, Thai and Lao keep theirs whatever was chosen, Arabic too, and Syriac
 	 * everywhere but under DFLT. Myanmar also gives the pre-specification mymr to the default shaper.
 	 *
+	 * @param string $shaper        The shaper selectShaper() picked for the run's script
 	 * @param int    $scriptblock   The run's Unicode script, as Ucdn::SCRIPT_*
 	 * @param string $GSUBscriptTag The GSUB script chosen for it, or '' for none
 	 *
 	 * @return string The shaper, as selectShaper() names it
 	 */
-	private function shaperForScriptTag($scriptblock, $GSUBscriptTag)
+	private function shaperForScriptTag($shaper, $scriptblock, $GSUBscriptTag)
 	{
-		if ($this->shaper == 'K' || $this->shaper == 'T' || $this->shaper == 'L' || $scriptblock == Ucdn::SCRIPT_ARABIC) {
-			return $this->shaper;
+		if ($shaper == 'K' || $shaper == 'T' || $shaper == 'L' || $scriptblock == Ucdn::SCRIPT_ARABIC) {
+			return $shaper;
 		}
 
 		if ($scriptblock == Ucdn::SCRIPT_SYRIAC) {
-			return $GSUBscriptTag == 'DFLT' ? '' : $this->shaper;
+			return $GSUBscriptTag == 'DFLT' ? '' : $shaper;
 		}
 
-		if ($GSUBscriptTag == 'DFLT' || $GSUBscriptTag == 'latn' || ($this->shaper == 'M' && $GSUBscriptTag == 'mymr')) {
+		if ($GSUBscriptTag == 'DFLT' || $GSUBscriptTag == 'latn' || ($shaper == 'M' && $GSUBscriptTag == 'mymr')) {
 			return '';
 		}
 
-		return $this->shaper;
+		return $shaper;
 	}
 
 	/**
-	 * @return array The GSUB features the font offers under a script and language system, by tag,
-	 *               or none where it offers neither
+	 * @param string $table 'GSUB' or 'GPOS'
+	 *
+	 * @return array The features the table offers under a script and language system, by tag, or
+	 *               none where it offers neither
 	 */
-	private function gsubFeatures($scriptTag, $langsys)
+	private function features($table, $scriptTag, $langsys)
 	{
-		return isset($this->mpdf->CurrentFont['GSUBFeatures'][$scriptTag][$langsys])
-			? $this->mpdf->CurrentFont['GSUBFeatures'][$scriptTag][$langsys]
+		return isset($this->mpdf->CurrentFont[$table . 'Features'][$scriptTag][$langsys])
+			? $this->mpdf->CurrentFont[$table . 'Features'][$scriptTag][$langsys]
 			: [];
 	}
 
@@ -1581,7 +1590,7 @@ class Otl
 		// - Implemented in functions checkContextMatch and checkContextMatchMultiple by failing to match if outside scope of current 'syllable'
 		// if $this->restrictToSyllable is true
 
-		$GSUBFeatures = $this->gsubFeatures($scriptTag, $langsys);
+		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 		$LookupList = [];
 		foreach ($GSUBFeatures as $tag => $arr) {
 			if (strpos($usetags, $tag) !== false) {
@@ -1642,7 +1651,7 @@ class Otl
 	{
 		// Features are applied one at a time, working through each codepoint
 
-		$GSUBFeatures = $this->gsubFeatures($scriptTag, $langsys);
+		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
 		// A reverse Lookup runs the other way down the glyphs, so it cannot share the cursor the rest
 		// of the list walks forward. Taking each over the whole run up front costs nothing here: this
@@ -1730,7 +1739,7 @@ class Otl
 		// $usetags = locl ccmp rphf pref blwf pstf';
 		// applied to all characters
 
-		$GSUBFeatures = $this->gsubFeatures($scriptTag, $langsys);
+		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
 		// ALL should be applied one syllable at a time
 		// Implemented in functions checkContextMatch and checkContextMatchMultiple by failing to match if outside scope of current 'syllable'
@@ -1803,7 +1812,7 @@ class Otl
 		// rphf, pref, blwf, half, abvf, pstf, and init are only applied where ['mask'] indicates:  Indic::FLAG(Indic::RPHF);
 		// The rest are applied to all characters
 
-		$GSUBFeatures = $this->gsubFeatures($scriptTag, $langsys);
+		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
 		// ALL should be applied one syllable at a time
 		// Implemented in functions checkContextMatch and checkContextMatchMultiple by failing to match if outside scope of current 'syllable'
