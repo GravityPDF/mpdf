@@ -99,11 +99,12 @@ class OtlTags
 			$country = strtolower($tags[2]);
 		}
 
+		$region = $lang . '-' . $country;
+
 		if ($lang != '' && isset(Ucdn::$ot_languages[$lang])) {
 			$langsys = Ucdn::$ot_languages[$lang];
-		} elseif ($lang != '' && $country != '' && isset(Ucdn::$ot_languages[$lang . $country])) {
-			// Never matches: the region keys are written 'zh-hk' (#191)
-			$langsys = Ucdn::$ot_languages[$lang . $country];
+		} elseif ($lang != '' && $country != '' && isset(Ucdn::$ot_languages[$region])) {
+			$langsys = Ucdn::$ot_languages[$region];
 		} else {
 			$langsys = 'DFLT';
 		}
