@@ -1,0 +1,34 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00995; &#x00996; &#x00997; &#x009B7; &#x009BF; &#x025CC; </div>
+<h3>Glyph class 3</h3>
+<h5>Mark glyph (non-spacing combining glyph)</h5>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h1>Mark Glyph Sets</h1>
+<h3>Mark Glyph Set class: 0</h3>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h3>Mark Glyph Set class: 1</h3>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h3>Mark Glyph Set class: 2</h3>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h3>Mark Glyph Set class: 3</h3>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h3>Mark Glyph Set class: 4</h3>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h3>Mark Glyph Set class: 5</h3>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h3>Mark Glyph Set class: 6</h3>
+<div class="glyphs">&#x25cc;&#x009CD; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>guru</h5><div><a href="font_dump_otl.php?script=guru&amp;lang=DFLT">DFLT</a></b>: locl </div>
+</div>
+<div>GPOS table not defined</div>
+
+=== detail: script guru language DFLT ===
+<h1>GSUB Tables</h1>
+<bookmark level="0" content="GSUB features"><div class="level1"><h5 class="level1"><bookmark level="1" content="locl [#0]">Lookup #0 [tag: <span style="color:#000066;">locl</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+0995&nbsp;</span> <span class="unchanged">&nbsp;&#x0995;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#x0996;</span>&nbsp; <span class="unicode">U+0996</span> </div></div>
+<div>GPOS table not defined</div>

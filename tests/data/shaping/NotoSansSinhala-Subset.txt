@@ -27,17 +27,17 @@
 0x80              07CA 07CB 07CC  =>  07CA 07CB 07CC  group=CCC
 0xFF +kern -liga  07CA 07CB 07CC  =>  07CA 07CB 07CC  group=CCC
 === devanagari ===
-0xFF              0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
-0x80              0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
-0xFF +kern -liga  0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
+0xFF              0915 094D 0937 093F  =>  0915 094D 0937 093F  group=CCCC
+0x80              0915 094D 0937 093F  =>  0915 094D 0937 093F  group=CCCC
+0xFF +kern -liga  0915 094D 0937 093F  =>  0915 094D 0937 093F  group=CCCC
 === bengali ===
-0xFF              0995 09CD 09B7 09BF  =>  0995 09CD 09BF 09B7  group=CCCC
-0x80              0995 09CD 09B7 09BF  =>  0995 09CD 09BF 09B7  group=CCCC
-0xFF +kern -liga  0995 09CD 09B7 09BF  =>  0995 09CD 09BF 09B7  group=CCCC
+0xFF              0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
+0x80              0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
+0xFF +kern -liga  0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
 === gurmukhi ===
-0xFF              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A3F 0A38  group=CCCC
-0x80              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A3F 0A38  group=CCCC
-0xFF +kern -liga  0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A3F 0A38  group=CCCC
+0xFF              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
+0x80              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
+0xFF +kern -liga  0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
 === tamil ===
 0xFF              0B95 0BCD 0BB7 0BBF  =>  0B95 0BCD 0BB7 0BBF  group=CCCC
 0x80              0B95 0BCD 0BB7 0BBF  =>  0B95 0BCD 0BB7 0BBF  group=CCCC
