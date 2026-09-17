@@ -471,12 +471,17 @@ class Ucdn
 		'bxr' => 'RBU ', /* Russian Buriat */
 		'byn' => 'BIL ', /* Bilen */
 		'ca' => 'CAT ', /* Catalan */
+		'cdo' => 'ZHS ', /* Min Dong Chinese */
 		'ce' => 'CHE ', /* Chechen */
 		'ceb' => 'CEB ', /* Cebuano */
 		'chp' => 'CHP ', /* Chipewyan */
 		'chr' => 'CHR ', /* Cherokee */
+		'cjy' => 'ZHS ', /* Jinyu Chinese */
 		'ckt' => 'CHK ', /* Chukchi */
+		'cmn' => 'ZHS ', /* Mandarin Chinese */
+		'cnp' => 'ZHS ', /* Northern Ping Chinese */
 		'cop' => 'COP ', /* Coptic */
+		'cpx' => 'ZHS ', /* Pu-Xian Chinese */
 		'cr' => 'CRE ', /* Cree */
 		'crh' => 'CRT ', /* Crimean Tatar */
 		'crj' => 'ECR ', /* [Southern] East Cree */
@@ -484,10 +489,13 @@ class Ucdn
 		'crm' => 'MCR ', /* Moose Cree */
 		'crx' => 'CRR ', /* Carrier */
 		'cs' => 'CSY ', /* Czech */
+		'csp' => 'ZHS ', /* Southern Ping Chinese */
 		'cu' => 'CSL ', /* Church Slavic */
 		'cv' => 'CHU ', /* Chuvash */
 		'cwd' => 'DCR ', /* Woods Cree */
 		'cy' => 'WEL ', /* Welsh */
+		'czh' => 'ZHS ', /* Huizhou Chinese */
+		'czo' => 'ZHS ', /* Min Zhong Chinese */
 		'da' => 'DAN ', /* Danish */
 		'dap' => 'NIS ', /* Nisi (India) */
 		'dar' => 'DAR ', /* Dargwa */
@@ -522,9 +530,10 @@ class Ucdn
 		'fr' => 'FRA ', /* French */
 		'fur' => 'FRL ', /* Friulian */
 		'fy' => 'FRI ', /* Western Frisian */
-		'ga' => 'IRI ', /* Irish */
+		'ga' => ['IRI ', 'IRT '], /* Irish */
 		'gaa' => 'GAD ', /* Ga */
 		'gag' => 'GAG ', /* Gagauz */
+		'gan' => 'ZHS ', /* Gan Chinese */
 		'gbm' => 'GAW ', /* Garhwali */
 		'gd' => 'GAE ', /* Scottish Gaelic */
 		'gez' => 'GEZ ', /* Ge'ez */
@@ -538,6 +547,7 @@ class Ucdn
 		'guk' => 'GMZ ', /* Gumuz */
 		'gv' => 'MNX ', /* Manx Gaelic */
 		'ha' => 'HAU ', /* Hausa */
+		'hak' => 'ZHS ', /* Hakka Chinese */
 		'har' => 'HRI ', /* Harari */
 		'haw' => 'HAW ', /* Hawaiin */
 		'he' => 'IWR ', /* Hebrew */
@@ -545,11 +555,13 @@ class Ucdn
 		'hil' => 'HIL ', /* Hiligaynon */
 		'hnd' => 'HND ', /* [Southern] Hindko */
 		'hne' => 'CHH ', /* Chattisgarhi */
+		'hnm' => 'ZHS ', /* Hainanese */
 		'hno' => 'HND ', /* [Northern] Hindko */
 		'hoc' => 'HO  ', /* Ho */
 		'hoj' => 'HAR ', /* Harauti */
 		'hr' => 'HRV ', /* Croatian */
 		'hsb' => 'USB ', /* Upper Sorbian */
+		'hsn' => 'ZHS ', /* Xiang Chinese */
 		'ht' => 'HAI ', /* Haitian */
 		'hu' => 'HUN ', /* Hungarian */
 		'hy' => 'HYE ', /* Armenian */
@@ -619,10 +631,12 @@ class Ucdn
 		'lt' => 'LTH ', /* Lithuanian */
 		'lu' => 'LUB ', /* Luba-Katanga */
 		'lua' => 'LUB ', /* Luba-Kasai */
+		'luh' => 'ZHS ', /* Leizhou Chinese */
 		'luo' => 'LUO ', /* Luo (Kenya and Tanzania) */
 		'lus' => 'MIZ ', /* Mizo */
 		'luy' => 'LUH ', /* Luhya [macrolanguage] */
 		'lv' => 'LVI ', /* Latvian */
+		'lzh' => 'ZHT ', /* Literary Chinese */
 		'lzz' => 'LAZ ', /* Laz */
 		'mai' => 'MTH ', /* Maithili */
 		'mdc' => 'MLE ', /* Male (Papua New Guinea) */
@@ -638,6 +652,7 @@ class Ucdn
 		'mnc' => 'MCH ', /* Manchu */
 		'mni' => 'MNI ', /* Manipuri */
 		'mnk' => 'MND ', /* Mandinka */
+		'mnp' => 'ZHS ', /* Min Bei Chinese */
 		'mns' => 'MAN ', /* Mansi */
 		'mnw' => 'MON ', /* Mon */
 		'mo' => 'MOL ', /* Moldavian */
@@ -652,6 +667,7 @@ class Ucdn
 		'mym' => 'MEN ', /* Me'en */
 		'myv' => 'ERZ ', /* Erzya */
 		'nag' => 'NAG ', /* Naga-Assamese */
+		'nan' => 'ZHS ', /* Min Nan Chinese */
 		'nb' => 'NOR ', /* Norwegian Bokmål */
 		'nco' => 'SIB ', /* Sibe */
 		'nd' => 'NDB ', /* [North] Ndebele */
@@ -670,6 +686,7 @@ class Ucdn
 		'nr' => 'NDB ', /* [South] Ndebele */
 		'nsk' => 'NAS ', /* Naskapi */
 		'nso' => 'SOT ', /* [Northern] Sotho */
+		'nv' => ['NAV ', 'ATH '], /* Navajo */
 		'ny' => 'CHI ', /* Nyanja */
 		'nyn' => 'NKL ', /* Nkole */
 		'oc' => 'OCI ', /* Occitan (post 1500) */
@@ -711,6 +728,7 @@ class Ucdn
 		'shn' => 'SHN ', /* Shan */
 		'si' => 'SNH ', /* Sinhala */
 		'sid' => 'SID ', /* Sidamo */
+		'sjc' => 'ZHS ', /* Shaojiang Chinese */
 		'sjd' => 'KSM ', /* Kildin Sami */
 		'sk' => 'SKY ', /* Slovak */
 		'skr' => 'SRK ', /* Seraiki */
@@ -765,6 +783,7 @@ class Ucdn
 		'wbm' => 'WA  ', /* Wa */
 		'wbr' => 'WAG ', /* Wagdi */
 		'wo' => 'WLF ', /* Wolof */
+		'wuu' => 'ZHS ', /* Wu Chinese */
 		'xal' => 'KLM ', /* Kalmyk */
 		'xh' => 'XHS ', /* Xhosa */
 		'xom' => 'KMO ', /* Komo (Sudan) */
@@ -773,13 +792,10 @@ class Ucdn
 		'yid' => 'JII ', /* Yiddish */
 		'yo' => 'YBA ', /* Yoruba */
 		'yso' => 'NIS ', /* Nisi (China) */
+		'yue' => 'ZHH ', /* Yue Chinese */
+		'zh' => 'ZHS ', /* Chinese */
 		'zne' => 'ZND ', /* Zande */
 		'zu' => 'ZUL ', /* Zulu */
-		'zh-cn' => 'ZHS ', /* Chinese (China) */
-		'zh-hk' => 'ZHH ', /* Chinese (Hong Kong) */
-		'zh-mo' => 'ZHT ', /* Chinese (Macao) */
-		'zh-sg' => 'ZHS ', /* Chinese (Singapore) */
-		'zh-tw' => 'ZHT ', /* Chinese (Taiwan) */
 	];
 
 	// hb-unicode.h
