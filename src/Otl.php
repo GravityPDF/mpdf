@@ -1660,23 +1660,6 @@ class Otl
 	{
 		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
-		// A reverse Lookup runs the other way down the glyphs, so it cannot share the cursor the rest
-		// of the list walks forward. Taking each over the whole run up front costs nothing here: this
-		// method already abandons Lookup order, applying every Lookup at each glyph before it moves on.
-		$reverse = [];
-		foreach ($GSUBFeatures as $tag => $arr) {
-			if (strpos($usetags, $tag) === false) {
-				continue;
-			}
-			foreach ($arr as $lu) {
-				if ($this->GSUBLookups[$lu]['Type'] != 8) {
-					continue;
-				}
-				$reverse[$lu] = true;
-				$this->_applyGSUBreverseLookup($lu, $this->GSUBLookups[$lu]['Flag'], $this->GSUBLookups[$lu]['MarkFilteringSet'], $tag, $this->alternateWanted($tag, $usetags));
-			}
-		}
-
 		// An entry is a four character tag, which font-feature-settings may follow with the alternate it
 		// wants, 'salt4'. A feature named twice, as a document asking for one the shaper already named
 		// leaves it, is applied once.
@@ -1685,6 +1668,21 @@ class Otl
 			$tags[] = substr($usetag, 0, 4);
 		}
 		$tags = array_unique($tags);
+
+		// A reverse Lookup runs the other way down the glyphs, so it cannot share the cursor the rest
+		// of the list walks forward. Taking each over the whole run up front costs nothing here: this
+		// method already abandons Lookup order, applying every Lookup at each glyph before it moves on.
+		// One that two of these features name is taken once rather than once for each of them.
+		$reverse = [];
+		foreach ($tags as $usetag) {
+			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+				if ($this->GSUBLookups[$lu]['Type'] != 8 || isset($reverse[$lu])) {
+					continue;
+				}
+				$reverse[$lu] = true;
+				$this->_applyGSUBreverseLookup($lu, $this->GSUBLookups[$lu]['Flag'], $this->GSUBLookups[$lu]['MarkFilteringSet'], $usetag, $this->alternateWanted($usetag, $usetags));
+			}
+		}
 
 		foreach ($tags as $usetag) {
 			$LookupList = [];
