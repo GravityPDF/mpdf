@@ -27,17 +27,17 @@
 0x80              07CA 07CB 07CC  =>  07CA 07CB 07CC  group=CCC
 0xFF +kern -liga  07CA 07CB 07CC  =>  07CA 07CB 07CC  group=CCC
 === devanagari ===
-0xFF              0915 094D 0937 093F  =>  0915 094D 0937 093F  group=CCCC
-0x80              0915 094D 0937 093F  =>  0915 094D 0937 093F  group=CCCC
-0xFF +kern -liga  0915 094D 0937 093F  =>  0915 094D 0937 093F  group=CCCC
+0xFF              0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
+0x80              0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
+0xFF +kern -liga  0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
 === bengali ===
-0xFF              0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
-0x80              0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
-0xFF +kern -liga  0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
+0xFF              0995 09CD 09B7 09BF  =>  0995 09CD 09BF 09B7  group=CCCC
+0x80              0995 09CD 09B7 09BF  =>  0995 09CD 09BF 09B7  group=CCCC
+0xFF +kern -liga  0995 09CD 09B7 09BF  =>  0995 09CD 09BF 09B7  group=CCCC
 === gurmukhi ===
-0xFF              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
-0x80              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
-0xFF +kern -liga  0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
+0xFF              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A3F 0A38  group=CCCC
+0x80              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A3F 0A38  group=CCCC
+0xFF +kern -liga  0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A3F 0A38  group=CCCC
 === tamil ===
 0xFF              0B95 0BCD 0BB7 0BBF  =>  0B95 0BCD 0BB7 0BBF  group=CCCC
 0x80              0B95 0BCD 0BB7 0BBF  =>  0B95 0BCD 0BB7 0BBF  group=CCCC
@@ -75,9 +75,9 @@
 0x80              AA00 AA33 AA01  =>  AA00 AA33 AA01  group=CCC
 0xFF +kern -liga  AA00 AA33 AA01  =>  AA00 AA33 AA01  group=CCC
 === tai tham ===
-0xFF              1A20 1A60 1A21  =>  1A20 1A60 1A21  group=CCC
-0x80              1A20 1A60 1A21  =>  1A20 1A60 1A21  group=CCC
-0xFF +kern -liga  1A20 1A60 1A21  =>  1A20 1A60 1A21  group=CCC
+0xFF              1A20 1A60 1A21  =>  1A20 E001  group=CC
+0x80              1A20 1A60 1A21  =>  1A20 E001  group=CC
+0xFF +kern -liga  1A20 1A60 1A21  =>  1A20 E001  group=CC
 === mixed scripts ===
 0xFF              0041 0628 0915 0042  =>  0041 0628 0915 0042  group=CCCC
 0x80              0041 0628 0915 0042  =>  0041 0628 0915 0042  group=CCCC
@@ -87,10 +87,6 @@
 0x80              0041 0020 0628 0020 0042  =>  0041 0020 0628 0020 0042  group=CSCSC
 0xFF +kern -liga  0041 0020 0628 0020 0042  =>  0041 0020 0628 0020 0042  group=CSCSC
 === font characters 0 ===
-0xFF              0020 0041 0060 007E 0300 0301 E000 E001  =>  0020 0041 0060 007E 0060 0301 E000 E001  group=SCCCCMCM
-0x80              0020 0041 0060 007E 0300 0301 E000 E001  =>  0020 0041 0060 007E 0300 0301 E000 E001  group=SCCCCMCM
-0xFF +kern -liga  0020 0041 0060 007E 0300 0301 E000 E001  =>  0020 0041 0060 007E 0060 0301 E000 E001  group=SCCCCMCM
-=== font characters 1 ===
-0xFF              10030  =>  10030  group=C
-0x80              10030  =>  10030  group=C
-0xFF +kern -liga  10030  =>  10030  group=C
+0xFF              0020 1A20 1A21 1A60 1A63 E000 E001 E002  =>  0020 1A20 1A21 1A60 1A63 E000 E001 E002  group=SCCMCCCC
+0x80              0020 1A20 1A21 1A60 1A63 E000 E001 E002  =>  0020 1A20 1A21 1A60 1A63 E000 E001 E002  group=SCCMCCCC
+0xFF +kern -liga  0020 1A20 1A21 1A60 1A63 E000 E001 E002  =>  0020 1A20 1A21 1A60 1A63 E000 E001 E002  group=SCCMCCCC
