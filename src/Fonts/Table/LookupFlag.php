@@ -3,6 +3,7 @@
 namespace Mpdf\Fonts\Table;
 
 use Mpdf\Exception\FontException;
+use Mpdf\Fonts\GlyphString;
 
 /**
  * The glyphs a lookup passes over, from its LookupFlag, its markFilteringSet and GDEF.
@@ -47,6 +48,11 @@ class LookupFlag
 	 * @var string[] mark filtering set => the marks outside it, as each is first asked for
 	 */
 	private $marksOutsideFilteringSets = [];
+
+	/**
+	 * @var true[][] Each class skips() has been asked about, as GlyphString::set() gives it
+	 */
+	private $sets = [];
 
 	/**
 	 * @param string $fontkey
@@ -132,7 +138,8 @@ class LookupFlag
 	 *
 	 * The same answer as looking for the glyph in glyphs(), a class at a time, without joining the
 	 * classes: the shaper asks once per glyph a subtable is offered, and a font's marks can run to tens
-	 * of kilobytes of text.
+	 * of kilobytes of text. Each class is looked up in a set rather than searched, so a glyph is not
+	 * found inside a longer one's hex.
 	 *
 	 * @param int        $flag             The lookup's LookupFlag
 	 * @param string     $glyph            The glyph, as hex
@@ -145,7 +152,8 @@ class LookupFlag
 		$this->checkMarkFilteringSet($flag, $markFilteringSet);
 
 		foreach (self::skipped($flag) as $class) {
-			if (strpos($this->glyphsOf($class, $flag, $markFilteringSet), $glyph)) {
+			$set = $this->setOf($class, $flag, $markFilteringSet);
+			if (isset($set[$glyph])) {
 				return true;
 			}
 		}
@@ -184,6 +192,43 @@ class LookupFlag
 	}
 
 	/**
+	 * @return true[] GDEF's marks, as GlyphString::set() gives them
+	 */
+	public function marks()
+	{
+		return $this->setOf(self::MARKS, 0, '');
+	}
+
+	/**
+	 * A class skips() tests glyphs against, built once and kept, since it is asked glyph after glyph.
+	 *
+	 * The marks outside a filtering set or an attachment class depend on which set or class the flag
+	 * names, so those are kept per set or class; every other class is the same for any flag.
+	 *
+	 * @param string     $class            One of the class constants, as skipped() gives it
+	 * @param int        $flag             The lookup's LookupFlag, which names the attachment class
+	 * @param int|string $markFilteringSet The mark glyph set it names, or '' where it names none
+	 *
+	 * @return true[] The class, as GlyphString::set() gives it
+	 */
+	private function setOf($class, $flag, $markFilteringSet)
+	{
+		if ($class === self::MARKS_OUTSIDE_FILTERING_SET) {
+			$key = $class . $markFilteringSet;
+		} elseif ($class === self::MARKS_OUTSIDE_ATTACHMENT_CLASS) {
+			$key = $class . self::attachmentClass($flag);
+		} else {
+			$key = $class;
+		}
+
+		if (!isset($this->sets[$key])) {
+			$this->sets[$key] = GlyphString::set($this->glyphsOf($class, $flag, $markFilteringSet));
+		}
+
+		return $this->sets[$key];
+	}
+
+	/**
 	 * UseMarkFilteringSet means "skip every mark except those in the given mark glyph set", so the
 	 * glyphs to skip are the marks minus that set - not the set itself.
 	 *
@@ -196,10 +241,7 @@ class LookupFlag
 		}
 
 		$keep = [];
-		$inSet = [];
-		foreach (explode('|', $this->gdef['MarkGlyphSets'][$markFilteringSet]) as $glyph) {
-			$inSet[trim($glyph)] = true;
-		}
+		$inSet = GlyphString::set($this->gdef['MarkGlyphSets'][$markFilteringSet]);
 
 		foreach (explode('|', $this->gdef['GlyphClassMarks']) as $glyph) {
 			$glyph = trim($glyph);

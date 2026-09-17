@@ -1623,10 +1623,10 @@ class OtlDump extends TTFontFile
 	private function positionHolds($coverage, $class0excl, $glyph)
 	{
 		if ($coverage === '' && $class0excl !== '') {
-			return strpos($class0excl, $glyph) === false;
+			return !GlyphString::inList($class0excl, $glyph);
 		}
 
-		return strpos($coverage, $glyph) !== false;
+		return GlyphString::inList($coverage, $glyph);
 	}
 
 	/**
