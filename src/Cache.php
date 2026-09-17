@@ -44,10 +44,14 @@ class Cache
 	{
 		$parentPath = $this->getExistingParentDirectory($basePath);
 		$permissions = $this->getPermission($parentPath);
-		if (!mkdir($basePath, $permissions, true)) {
-			return false;
-		}
 
+		/* Another process can create the directory between createBasePath() finding it missing and
+		 * this call, which then fails over a directory that is there and usable. The warning is
+		 * suppressed so an error handler that converts warnings to exceptions cannot make that
+		 * fatal, and the permissions below are left alone because they are the other process's. */
+		if (!@mkdir($basePath, $permissions, true)) {
+			return is_dir($basePath);
+		}
 
 		/* Check if umask modified the permissions and reset any created directories */
 		if (($permissions & ~umask()) !== $permissions) {
