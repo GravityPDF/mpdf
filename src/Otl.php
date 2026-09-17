@@ -1620,12 +1620,11 @@ class Otl
 	 */
 	function _applyGSUBrules($usetags, $scriptTag, $langsys)
 	{
-		// Features from all Tags are applied together, in Lookup List order.
-		// For Indic - should be applied one syllable at a time
-		// - Implemented in functions checkContextMatch and checkContextMatchMultiple by failing to match if outside scope of current 'syllable'
-		// if $this->restrictToSyllable is true
-
 		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
+
+		// One list across every tag named, in Lookup List order, which is what separates this path from
+		// the one the syllable-based shapers take: a Lookup two of these features share is walked once,
+		// where a pass per feature would walk it once for each
 		$LookupList = [];
 		foreach ($GSUBFeatures as $tag => $arr) {
 			if (strpos($usetags, $tag) !== false) {
@@ -1637,45 +1636,20 @@ class Otl
 		ksort($LookupList);
 
 		foreach ($LookupList as $lu => $tag) {
-			$Type = $this->GSUBLookups[$lu]['Type'];
-			$Flag = $this->GSUBLookups[$lu]['Flag'];
-			$MarkFilteringSet = $this->GSUBLookups[$lu]['MarkFilteringSet'];
-			$tagInt = 1;
-			if (preg_match('/' . $tag . '([0-9]{1,2})/', $usetags, $m)) {
-				$tagInt = $m[1];
-			}
-			if ($Type == 8) {
-				$this->_applyGSUBreverseLookup($lu, $Flag, $MarkFilteringSet, $tag, $tagInt);
-				continue;
-			}
-			$ptr = 0;
-			// Test each glyph sequentially
-			while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
-				$currGlyph = $this->OTLdata[$ptr]['hex'];
-				$currGID = $this->OTLdata[$ptr]['uni'];
-				$shift = null;
-				foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
-					// The Coverage read for this subtable is the one for input position 0, which is the only
-					// position a match can start at - see where TTFontFile reads it
-					if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
-						// Get rules from font GSUB subtable
-						$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
-
-						if ($shift !== null) {
-							break;
-						}
-					}
-				}
-				$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
-			}
+			$this->applyGSUBlookupOverRun($lu, $tag, $this->alternateWanted($tag, $usetags), 0, 0);
 		}
 	}
 
 	/**
 	 * Apply a set of GSUB features one feature at a time, each over the whole run before the next.
 	 *
-	 * What the South East Asian shaper asks for, where a later feature is meant to see what an
-	 * earlier one produced.
+	 * What the South East Asian shaper and the Khmer presentation pass ask for, where a later feature
+	 * is meant to see what an earlier one produced.
+	 *
+	 * The three other paths share applyGSUBlookupOverRun(), which takes a Lookup over the whole run.
+	 * This one cannot: within a feature it walks the glyphs outside the Lookups, so the first Lookup
+	 * that applies at a glyph moves the cursor on and the rest are not offered it. That is a deviation
+	 * from the order the spec and HarfBuzz apply a feature's Lookups in - see #233.
 	 *
 	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
 	 *                          the alternate it asks for
@@ -1684,8 +1658,6 @@ class Otl
 	 */
 	function _applyGSUBrulesSingly($usetags, $scriptTag, $langsys)
 	{
-		// Features are applied one at a time, working through each codepoint
-
 		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
 		// A reverse Lookup runs the other way down the glyphs, so it cannot share the cursor the rest
@@ -1700,18 +1672,14 @@ class Otl
 				if ($this->GSUBLookups[$lu]['Type'] != 8) {
 					continue;
 				}
-				$tagInt = 1;
-				if (preg_match('/' . $tag . '([0-9]{1,2})/', $usetags, $m)) {
-					$tagInt = $m[1];
-				}
 				$reverse[$lu] = true;
-				$this->_applyGSUBreverseLookup($lu, $this->GSUBLookups[$lu]['Flag'], $this->GSUBLookups[$lu]['MarkFilteringSet'], $tag, $tagInt);
+				$this->_applyGSUBreverseLookup($lu, $this->GSUBLookups[$lu]['Flag'], $this->GSUBLookups[$lu]['MarkFilteringSet'], $tag, $this->alternateWanted($tag, $usetags));
 			}
 		}
 
 		// An entry is a four character tag, which font-feature-settings may follow with the alternate it
-		// wants, 'salt4' - the $tagInt below reads that back out of $usetags. A feature named twice, as
-		// a document asking for one the shaper already named leaves it, is applied once.
+		// wants, 'salt4'. A feature named twice, as a document asking for one the shaper already named
+		// leaves it, is applied once.
 		$tags = [];
 		foreach (explode(' ', $usetags) as $usetag) {
 			$tags[] = substr($usetag, 0, 4);
@@ -1720,16 +1688,12 @@ class Otl
 
 		foreach ($tags as $usetag) {
 			$LookupList = [];
-			foreach ($GSUBFeatures as $tag => $arr) {
-				if ($tag == $usetag) {
-					foreach ($arr as $lu) {
-						if (!isset($reverse[$lu])) {
-							$LookupList[$lu] = $tag;
-						}
-					}
+			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+				if (!isset($reverse[$lu])) {
+					$LookupList[] = $lu;
 				}
 			}
-			ksort($LookupList);
+			$tagInt = $this->alternateWanted($usetag, $usetags);
 
 			$ptr = 0;
 			// Test each glyph sequentially
@@ -1738,21 +1702,17 @@ class Otl
 				$currGID = $this->OTLdata[$ptr]['uni'];
 				$shift = null;
 
-				foreach ($LookupList as $lu => $tag) {
+				foreach ($LookupList as $lu) {
 					$Type = $this->GSUBLookups[$lu]['Type'];
 					$Flag = $this->GSUBLookups[$lu]['Flag'];
 					$MarkFilteringSet = $this->GSUBLookups[$lu]['MarkFilteringSet'];
-					$tagInt = 1;
-					if (preg_match('/' . $tag . '([0-9]{1,2})/', $usetags, $m)) {
-						$tagInt = $m[1];
-					}
 
 					foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
 						// The Coverage read for this subtable is the one for input position 0, which is the only
 						// position a match can start at - see where TTFontFile reads it
 						if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
 							// Get rules from font GSUB subtable
-							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, 0, $tagInt);
+							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, 0, $tagInt);
 
 							if ($shift !== null) {
 								break 2;
@@ -1768,9 +1728,7 @@ class Otl
 	/**
 	 * Apply a set of GSUB features one at a time, for Myanmar.
 	 *
-	 * As _applyGSUBrulesSingly, except that a rule may not match across a syllable boundary - the
-	 * shaper has already grouped the text into syllables, and Myanmar's features are defined within
-	 * one.
+	 * Myanmar's features apply to every glyph of the syllable the shaper grouped, so it names no mask.
 	 *
 	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
 	 *                          the alternate it asks for
@@ -1779,60 +1737,7 @@ class Otl
 	 */
 	function _applyGSUBrulesMyanmar($usetags, $scriptTag, $langsys)
 	{
-		// $usetags = locl ccmp rphf pref blwf pstf';
-		// applied to all characters
-
-		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
-
-		// ALL should be applied one syllable at a time
-		// Implemented in functions checkContextMatch and checkContextMatchMultiple by failing to match if outside scope of current 'syllable'
-		$tags = explode(' ', $usetags);
-		foreach ($tags as $usetag) {
-			$LookupList = [];
-			foreach ($GSUBFeatures as $tag => $arr) {
-				if ($tag == $usetag) {
-					foreach ($arr as $lu) {
-						$LookupList[$lu] = $tag;
-					}
-				}
-			}
-			ksort($LookupList);
-
-			foreach ($LookupList as $lu => $tag) {
-				$Type = $this->GSUBLookups[$lu]['Type'];
-				$Flag = $this->GSUBLookups[$lu]['Flag'];
-				$MarkFilteringSet = $this->GSUBLookups[$lu]['MarkFilteringSet'];
-				$tagInt = 1;
-				if (preg_match('/' . $tag . '([0-9]{1,2})/', $usetags, $m)) {
-					$tagInt = $m[1];
-				}
-				if ($Type == 8) {
-					$this->_applyGSUBreverseLookup($lu, $Flag, $MarkFilteringSet, $usetag, $tagInt);
-					continue;
-				}
-
-				$ptr = 0;
-				// Test each glyph sequentially
-				while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
-					$currGlyph = $this->OTLdata[$ptr]['hex'];
-					$currGID = $this->OTLdata[$ptr]['uni'];
-					$shift = null;
-					foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
-						// The Coverage read for this subtable is the one for input position 0, which is the only
-						// position a match can start at - see where TTFontFile reads it
-						if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
-							// Get rules from font GSUB subtable
-							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, 0, $tagInt);
-
-							if ($shift !== null) {
-								break;
-							}
-						}
-					}
-					$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
-				}
-			}
-		}
+		$this->applyGSUBfeaturesInTurn($usetags, $scriptTag, $langsys, 0, []);
 	}
 
 	/**
@@ -1851,93 +1756,144 @@ class Otl
 	 */
 	function _applyGSUBrulesIndic($usetags, $scriptTag, $langsys, $is_old_spec)
 	{
-		// $usetags = 'locl ccmp nukt akhn rphf rkrf pref blwf half pstf vatu cjct'; then later - init
-		// rphf, pref, blwf, half, abvf, pstf, and init are only applied where ['mask'] indicates:  Indic::FLAG(Indic::RPHF);
-		// The rest are applied to all characters
+		$this->applyGSUBfeaturesInTurn($usetags, $scriptTag, $langsys, $is_old_spec, $this->indicFeatureMasks());
+	}
 
+	/**
+	 * Apply each feature over the whole run before the next one starts.
+	 *
+	 * What the two syllable-based shapers ask for: the features they name are staged, and a later one
+	 * is meant to read the glyphs an earlier one made.
+	 *
+	 * @param array $featureMasks The bit a feature's glyphs must carry, by tag. A feature named here
+	 *                            is applied only where the reordering marked a character for it;
+	 *                            one that is not applies to every glyph of the syllable.
+	 */
+	private function applyGSUBfeaturesInTurn($usetags, $scriptTag, $langsys, $is_old_spec, array $featureMasks)
+	{
 		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
-		// ALL should be applied one syllable at a time
-		// Implemented in functions checkContextMatch and checkContextMatchMultiple by failing to match if outside scope of current 'syllable'
-		$tags = explode(' ', $usetags);
-		foreach ($tags as $usetag) {
-			$LookupList = [];
-			foreach ($GSUBFeatures as $tag => $arr) {
-				if ($tag == $usetag) {
-					foreach ($arr as $lu) {
-						$LookupList[$lu] = $tag;
-					}
-				}
+		foreach (explode(' ', $usetags) as $usetag) {
+			$mask = isset($featureMasks[$usetag]) ? $featureMasks[$usetag] : 0;
+			$tagInt = $this->alternateWanted($usetag, $usetags);
+
+			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+				$this->applyGSUBlookupOverRun($lu, $usetag, $tagInt, $mask, $is_old_spec);
 			}
-			ksort($LookupList);
-			$mask = $this->_getIndicFeatureMask($usetag);
+		}
+	}
 
-			foreach ($LookupList as $lu => $tag) {
-				$Type = $this->GSUBLookups[$lu]['Type'];
-				$Flag = $this->GSUBLookups[$lu]['Flag'];
-				$MarkFilteringSet = $this->GSUBLookups[$lu]['MarkFilteringSet'];
-				$tagInt = 1;
-				if (preg_match('/' . $tag . '([0-9]{1,2})/', $usetags, $m)) {
-					$tagInt = $m[1];
-				}
-				if ($Type == 8) {
-					$this->_applyGSUBreverseLookup($lu, $Flag, $MarkFilteringSet, $usetag, $tagInt, $mask);
-					continue;
-				}
+	/**
+	 * Take one Lookup over the run, from the first glyph to the last.
+	 *
+	 * A syllable-based shaper needs a rule not to match across a syllable boundary. That is not
+	 * enforced here but in checkContextMatch() and checkContextMatchMultiple(), which refuse a match
+	 * reaching outside the current syllable while restrictToSyllable is set.
+	 *
+	 * @param int    $lu          The Lookup to take
+	 * @param string $tag         The feature tag it was selected under
+	 * @param int    $tagInt      Which alternate that feature was asked for
+	 * @param int    $mask        The bit a glyph must carry for this feature, 0 where it applies to all
+	 * @param bool   $is_old_spec Whether the font uses the original Indic script tags
+	 */
+	private function applyGSUBlookupOverRun($lu, $tag, $tagInt, $mask, $is_old_spec)
+	{
+		$Type = $this->GSUBLookups[$lu]['Type'];
+		$Flag = $this->GSUBLookups[$lu]['Flag'];
+		$MarkFilteringSet = $this->GSUBLookups[$lu]['MarkFilteringSet'];
 
-				$ptr = 0;
-				// Test each glyph sequentially
-				while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
-					$currGlyph = $this->OTLdata[$ptr]['hex'];
-					$currGID = $this->OTLdata[$ptr]['uni'];
-					$shift = null;
-					foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
-						// The Coverage read for this subtable is the one for input position 0, which is the only
-						// position a match can start at - see where TTFontFile reads it
-						if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
-							if ($mask && !($this->OTLdata[$ptr]['mask'] & $mask)) { // only apply when mask indicates
-								continue;
-							}
+		if ($Type == 8) {
+			$this->_applyGSUBreverseLookup($lu, $Flag, $MarkFilteringSet, $tag, $tagInt, $mask);
+			return;
+		}
+
+		$ptr = 0;
+		// Test each glyph sequentially
+		while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
+			$currGlyph = $this->OTLdata[$ptr]['hex'];
+			$currGID = $this->OTLdata[$ptr]['uni'];
+			$shift = null;
+			foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
+				// The Coverage read for this subtable is the one for input position 0, which is the only
+				// position a match can start at - see where TTFontFile reads it
+				if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
+					if ($mask && !($this->OTLdata[$ptr]['mask'] & $mask)) { // only apply when mask indicates
+						continue;
+					}
+					// Get rules from font GSUB subtable
+					$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $tag, $is_old_spec, $tagInt);
+
+					if ($shift !== null) {
+						break;
+					}
+				} // Special case for Indic  ZZZ99S
+				// Check to substitute Halant-Consonant in PREF, BLWF or PSTF
+				// i.e. new spec but GSUB tables have Consonant-Halant in Lookups e.g. FreeSerif, which
+				// incorrectly just moved old spec tables to new spec. Uniscribe seems to cope with this
+				// See also ttffontsuni.php
+				// First check if current glyph is a Halant/Virama
+				// Only a masked feature reaches this: with no mask there is no bit for the test below to
+				// read, and pref, blwf and pstf all carry one
+				elseif ($mask && static::_OTL_OLD_SPEC_COMPAT_1 && $Type == 4 && !$is_old_spec && strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', $currGlyph) !== false) {
+					// only apply when 'pref blwf pstf' tags, and when mask indicates
+					if (strpos('pref blwf pstf', $tag) !== false) {
+						if (!($this->OTLdata[$ptr]['mask'] & $mask)) {
+							continue;
+						}
+
+						if (!isset($this->OTLdata[$ptr + 1])) {
+							continue;
+						}
+
+						$nextGlyph = $this->OTLdata[$ptr + 1]['hex'];
+						$nextGID = $this->OTLdata[$ptr + 1]['uni'];
+						if (isset($this->GSLuCoverage[$lu][$c][$nextGID])) {
 							// Get rules from font GSUB subtable
-							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, $is_old_spec, $tagInt);
+							$shift = $this->_applyGSUBsubtableSpecial($lu, $c, $ptr, $currGlyph, $currGID, $nextGlyph, $nextGID, $subtable_offset, $Type, $this->GSLuCoverage[$lu][$c]);
 
 							if ($shift !== null) {
 								break;
 							}
-						} // Special case for Indic  ZZZ99S
-						// Check to substitute Halant-Consonant in PREF, BLWF or PSTF
-						// i.e. new spec but GSUB tables have Consonant-Halant in Lookups e.g. FreeSerif, which
-						// incorrectly just moved old spec tables to new spec. Uniscribe seems to cope with this
-						// See also ttffontsuni.php
-						// First check if current glyph is a Halant/Virama
-						elseif (static::_OTL_OLD_SPEC_COMPAT_1 && $Type == 4 && !$is_old_spec && strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', $currGlyph) !== false) {
-							// only apply when 'pref blwf pstf' tags, and when mask indicates
-							if (strpos('pref blwf pstf', $usetag) !== false) {
-								if (!($this->OTLdata[$ptr]['mask'] & $mask)) {
-									continue;
-								}
-
-								if (!isset($this->OTLdata[$ptr + 1])) {
-									continue;
-								}
-
-								$nextGlyph = $this->OTLdata[$ptr + 1]['hex'];
-								$nextGID = $this->OTLdata[$ptr + 1]['uni'];
-								if (isset($this->GSLuCoverage[$lu][$c][$nextGID])) {
-									// Get rules from font GSUB subtable
-									$shift = $this->_applyGSUBsubtableSpecial($lu, $c, $ptr, $currGlyph, $currGID, $nextGlyph, $nextGID, $subtable_offset, $Type, $this->GSLuCoverage[$lu][$c]);
-
-									if ($shift !== null) {
-										break;
-									}
-								}
-							}
 						}
 					}
-					$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 				}
 			}
+			$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 		}
+	}
+
+	/**
+	 * The Lookups one feature offers, keyed by Lookup so that a feature naming one twice takes it
+	 * once, and in Lookup List order rather than the order the feature names them.
+	 *
+	 * @return int[] The Lookup ids, in the order they are to be applied
+	 */
+	private function lookupsForFeature(array $GSUBFeatures, $usetag)
+	{
+		if (!isset($GSUBFeatures[$usetag])) {
+			return [];
+		}
+
+		$LookupList = [];
+		foreach ($GSUBFeatures[$usetag] as $lu) {
+			$LookupList[$lu] = true;
+		}
+		ksort($LookupList);
+
+		return array_keys($LookupList);
+	}
+
+	/**
+	 * Which alternate of a feature the document asked for, as font-feature-settings names it - the
+	 * fourth for 'salt4'. One where it named none.
+	 */
+	private function alternateWanted($tag, $usetags)
+	{
+		if (preg_match('/' . $tag . '([0-9]{1,2})/', $usetags, $m)) {
+			return $m[1];
+		}
+
+		return 1;
 	}
 
 	/**
@@ -1971,22 +1927,22 @@ class Otl
 	}
 
 	/**
-	 * The bit an Indic feature tag sets on the glyphs it may be applied to. Tags that apply to
-	 * every glyph in the syllable have no bit of their own, and return 0.
+	 * The bit each Indic feature sets on the glyphs it may be applied to. The tags left out apply to
+	 * every glyph in the syllable and have no bit of their own.
+	 *
+	 * @return array The mask, by feature tag
 	 */
-	private function _getIndicFeatureMask($usetag)
+	private function indicFeatureMasks()
 	{
-		$masks = [
-			'rphf' => Indic::RPHF,
-			'pref' => Indic::PREF,
-			'blwf' => Indic::BLWF,
-			'half' => Indic::HALF,
-			'pstf' => Indic::PSTF,
-			'cfar' => Indic::CFAR,
-			'init' => Indic::INIT,
+		return [
+			'rphf' => Indic::FLAG(Indic::RPHF),
+			'pref' => Indic::FLAG(Indic::PREF),
+			'blwf' => Indic::FLAG(Indic::BLWF),
+			'half' => Indic::FLAG(Indic::HALF),
+			'pstf' => Indic::FLAG(Indic::PSTF),
+			'cfar' => Indic::FLAG(Indic::CFAR),
+			'init' => Indic::FLAG(Indic::INIT),
 		];
-
-		return isset($masks[$usetag]) ? Indic::FLAG($masks[$usetag]) : 0;
 	}
 
 	/**
