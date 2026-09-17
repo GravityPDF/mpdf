@@ -516,7 +516,7 @@ class Otl
 	}
 
 	/**
-	 * Phase 4: what this font's GSUB table says, for this script and language system.
+	 * What this font's GSUB table says, for this script and language system.
 	 *
 	 * Cached for the life of the document because a document sets the same font for line after line:
 	 * the derived tables the shapers work from, which the parser builds per script and language, and
@@ -549,8 +549,8 @@ class Otl
 	}
 
 	/**
-	 * Phase 4, continued: the coverage of every lookup, which is how a lookup is passed over without
-	 * being read, and the lookup list itself.
+	 * The coverage of every lookup, which is how a lookup is passed over without being read, and the
+	 * lookup list itself.
 	 */
 	private function loadGsubLookups()
 	{
