@@ -21,8 +21,6 @@ class CacheExpiryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->cacheDir = $this->workDir . '/mpdf';
 
 		mkdir($this->cacheDir, 0777, true);
-		chmod($this->workDir, 0777);
-		chmod($this->cacheDir, 0777);
 	}
 
 	protected function tear_down()
@@ -38,38 +36,33 @@ class CacheExpiryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	public function testAnEntryThatGoesBeforeItsMtimeIsReadIsPassedOver()
 	{
-		$this->expire([ExpiryRaceLosingCache::BEFORE_THE_STAT, 'left-to-us']);
+		$this->expire([ExpiryRaceLosingCache::STOLEN, 'left-to-us']);
 
-		/* No error handler here: SplFileInfo turns the failed stat behind getMTime() into a
-		 * RuntimeException itself, so it reaches the caller whether one is installed or not. */
+		/* No error handler: SplFileInfo turns the failed stat behind getMTime() into a
+		 * RuntimeException of its own, which reaches the caller whatever the handler says. */
 		$cache = new ExpiryRaceLosingCache($this->cacheDir, 1);
 		$cache->clearOld();
 
 		$this->assertSame([], $this->filesLeft());
 	}
 
-	public function testAFileAnotherProcessRemovedAfterItWasFoundExpiredIsNotAnError()
-	{
-		$this->expire([ExpiryRaceLosingCache::AFTER_THE_STAT, 'left-to-us']);
-
-		$cache = new ExpiryRaceLosingCache($this->cacheDir, 1);
-
-		$this->throwOnWarning();
-
-		try {
-			$cache->clearOld();
-		} finally {
-			restore_error_handler();
-		}
-
-		$this->assertSame([], $this->filesLeft());
-	}
-
+	/**
+	 * clearOld() removes an expired file through remove(), so this covers the window between its
+	 * listing and its unlink as well as the one between a caller's has() and its remove().
+	 */
 	public function testRemovingAFileAnotherProcessAlreadyRemovedCountsAsRemoved()
 	{
 		$cache = new Cache($this->cacheDir);
 
-		$this->throwOnWarning();
+		/* The handler that makes these warnings fatal, from the stack trace in mpdf/mpdf#1775 and
+		 * written as the PHP manual writes it. */
+		set_error_handler(function ($severity, $message) {
+			if (!(error_reporting() & $severity)) {
+				return false;
+			}
+
+			throw new \ErrorException($message, 0, $severity);
+		});
 
 		try {
 			$removed = $cache->remove('already-gone');
@@ -142,21 +135,7 @@ class CacheExpiryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			}
 		}
 
-		sort($left);
-
 		return $left;
-	}
-
-	private function throwOnWarning()
-	{
-		/* The handler from mpdf/mpdf#1775's stack trace, written as the PHP manual writes it. */
-		set_error_handler(function ($severity, $message) {
-			if (!(error_reporting() & $severity)) {
-				return false;
-			}
-
-			throw new \ErrorException($message, 0, $severity);
-		});
 	}
 
 	private function waitForProcessesToBeReady()

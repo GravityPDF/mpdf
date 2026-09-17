@@ -2,10 +2,9 @@
 
 /*
  * Clears the expired files out of <workDir>/mpdf. Several of these are started at once and released
- * together so that they all list the same expired files and race to remove them: each announces
- * itself by writing <workDir>/ready.<n>, then waits for <workDir>/start. Warnings are turned into
- * exceptions the way the report behind mpdf/mpdf#1775 does, so a lost race is caught here rather
- * than printed. Prints "ok", or the exception it caught.
+ * together so that they all list the same expired files and race to remove them. Warnings are
+ * turned into exceptions the way the report in mpdf/mpdf#1775 does, so a lost race is caught here
+ * rather than printed. Prints "ok", or the exception it caught.
  *
  * Usage: php cache-expiry-race.php <workDir> <n>
  */

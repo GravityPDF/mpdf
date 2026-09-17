@@ -121,8 +121,8 @@ class Cache
 		$path = $this->getFilePath($filename);
 
 		/* A file another process removed first is removed; callers only ask that it be gone. The
-		 * warning is suppressed so a handler converting warnings to exceptions cannot make that
-		 * fatal. */
+		 * warning is suppressed, which is what keeps an error handler that honours suppression from
+		 * turning a race this process lost into an exception. */
 		return @unlink($path) || !file_exists($path);
 	}
 
@@ -136,10 +136,7 @@ class Cache
 					&& $item->isFile()
 					&& !$this->isDotFile($item)
 					&& $this->isOld($item)) {
-				/* Every process sharing the cache lists the same expired files, so the file can be
-				 * gone by the time this reaches it. That is the outcome asked for, and the warning
-				 * is suppressed for the reason given in remove(). */
-				@unlink($item->getPathname());
+				$this->remove($item->getFilename());
 			}
 		}
 	}
@@ -149,15 +146,14 @@ class Cache
 		return $this->basePath . '/' . $filename;
 	}
 
-	protected function isOld(DirectoryIterator $item)
+	private function isOld(DirectoryIterator $item)
 	{
 		if (!$this->cleanupInterval) {
 			return false;
 		}
 
-		/* Not $item->getMTime(), which SplFileInfo turns into a RuntimeException no error handler
-		 * can decline where the file has gone since the directory was listed. A file that is not
-		 * there is not expired, and it is already what clearOld() would have made of it. */
+		/* Not $item->getMTime(), which SplFileInfo throws as a RuntimeException that no error
+		 * handler can decline where the file has gone since the directory was listed. */
 		$mtime = @filemtime($item->getPathname());
 
 		return false !== $mtime && $mtime + $this->cleanupInterval < time();
