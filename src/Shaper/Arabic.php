@@ -142,43 +142,27 @@ class Arabic
 		];
 
 	/**
-	 * Put every character of the run into the form its joining calls for.
+	 * Read the form each character of the run calls for out of the joining classes, and write it into
+	 * the run as `joining`.
 	 *
-	 * A form is usually one glyph and is written straight into $info. It need not be: a font may state
-	 * one as a base glyph and the marks drawn on it, which is how the Nastaliq faces write their
-	 * initial and medial forms. One character is then several glyphs, and making a run longer is the
-	 * caller's to do - it holds the ligature and mark bookkeeping that a change in length disturbs -
-	 * so such a form is handed back whole for the caller to substitute.
+	 * Read from the characters as written, and so before anything is substituted into the run, because
+	 * a substitution can leave a glyph that is no character at all. Where 'ccmp' takes a dotted letter
+	 * apart into its rasm and its dots - Noto Sans Arabic does this for beh - the rasm is unencoded,
+	 * mPDF has mapped it into the Private Use Area, and a Private Use codepoint is in none of the
+	 * joining tables, so the letter would join nothing and neither would its neighbours through it.
+	 * HarfBuzz resolves joining in setup_masks() before it applies GSUB for the same reason, and a
+	 * glyph a substitution produces carries the mask of the character it came from.
 	 *
-	 * @param array[] $info            The run, by reference: each character's form is written into it
-	 * @param array   $arabGlyphs      The font's rtlSUB table: the glyph for each form of each letter
+	 * @param array[] $info            The run, by reference: each character's joining is written into it
 	 * @param string  $glyphClassMarks The mark glyphs of GDEF, which join as a vowel does
-	 * @param string  $usetags         Which of the form features the document left switched on
-	 * @param string  $scriptTag       'arab', 'syrc', 'nko ' or 'mand'
-	 *
-	 * @return int[][] The forms of more than one glyph, as the code points to put in the character's
-	 *                 place, keyed by the position in $info it has
 	 */
-	public static function shape(&$info, $arabGlyphs, $glyphClassMarks, $usetags, $scriptTag)
+	public static function resolveJoining(&$info, $glyphClassMarks)
 	{
-		// A GDEF mark is transparent to joining just as a vowel is, so the mark class joins the
-		// Transparent-Joining table for this string. Array + keeps the left operand on collision, so a
-		// codepoint in both stays as the Unicode table has it.
-		$gcm = [];
-		foreach (explode('| ', $glyphClassMarks) as $g) {
-			$gcm[hexdec($g)] = 1;
-		}
-		$transparentJoin = self::$transparent + $gcm;
-
-		$chars = [];
-		for ($i = 0; $i < count($info); $i++) {
-			$chars[] = $info[$i]['hex'];
-		}
+		$transparentJoin = self::transparentJoining($glyphClassMarks);
+		$chars = self::hexes($info);
 
 		$nextChar = null;
-		$output = [];
-		$max = count($chars);
-		for ($i = $max - 1; $i >= 0; $i--) {
+		for ($i = count($chars) - 1; $i >= 0; $i--) {
 			$crntChar = $chars[$i];
 			// joining sees the base a mark is written on, however many marks the base carries: behind
 			// the position that means walking over them, and in front it means $nextChar, which a
@@ -188,15 +172,13 @@ class Arabic
 			$joinedToPrevious = $prevChar && isset(self::$leftJoining[$prevChar]);
 			$joinedToNext = $nextChar && isset(self::$rightJoining[hexdec($nextChar)]);
 			if ($crntChar && isset($transparentJoin[hexdec($crntChar)])) {
-				if ($joinedToPrevious && $joinedToNext) {
-					$output[] = self::glyphs($crntChar, 1, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin); // <final> form
-				} else {
-					$output[] = self::glyphs($crntChar, 0, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);  // <isolated> form
-				}
+				// a transparent-joining character takes a <final> form where letters that join stand
+				// either side of it and an <isolated> one otherwise; it never takes a medial or initial
+				$info[$i]['joining'] = $joinedToPrevious && $joinedToNext ? 1 : 0;
 				continue;
 			}
 			if (hexdec($crntChar) < 128) {
-				$output[] = [$crntChar, 0];
+				$info[$i]['joining'] = 0;
 				$nextChar = $crntChar;
 				continue;
 			}
@@ -208,19 +190,47 @@ class Arabic
 			if ($joinedToNext) {
 				$form += 2;
 			}
-			$output[] = self::glyphs($crntChar, $form, $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);
+			$info[$i]['joining'] = $form;
 			$nextChar = $crntChar;
 		}
-		$ra = array_reverse($output);
+	}
+
+	/**
+	 * Put every character of the run into the form resolveJoining() said its joining calls for.
+	 *
+	 * A form is usually one glyph and is written straight into $info. It need not be: a font may state
+	 * one as a base glyph and the marks drawn on it, which is how the Nastaliq faces write their
+	 * initial and medial forms. One character is then several glyphs, and making a run longer is the
+	 * caller's to do - it holds the ligature and mark bookkeeping that a change in length disturbs -
+	 * so such a form is handed back whole for the caller to substitute.
+	 *
+	 * @param array[] $info            The run, by reference: the form substituted is written into it
+	 * @param array   $arabGlyphs      The font's rtlSUB table: the glyph for each form of each letter
+	 * @param string  $glyphClassMarks The mark glyphs of GDEF, which join as a vowel does
+	 * @param string  $usetags         Which of the form features the document left switched on
+	 * @param string  $scriptTag       'arab', 'syrc', 'nko ' or 'mand'
+	 *
+	 * @return int[][] The forms of more than one glyph, as the code points to put in the character's
+	 *                 place, keyed by the position in $info it has
+	 */
+	public static function shape(&$info, $arabGlyphs, $glyphClassMarks, $usetags, $scriptTag)
+	{
+		$chars = self::hexes($info);
+		// nothing below reads the table but the Syriac Alaph rule, which is the one form left to resolve
+		// from the run rather than from the joining written on it
+		$transparentJoin = $scriptTag == 'syrc' ? self::transparentJoining($glyphClassMarks) : [];
+
 		$multiple = [];
-		for ($i = 0; $i < count($info); $i++) {
+		for ($i = 0; $i < count($chars); $i++) {
+			list($substitute, $form) = self::glyphs($chars[$i], $info[$i]['joining'], $chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin);
+
 			// rtlSUB writes a form of several glyphs as one space-separated string, which hexdec()
 			// would read as a single code point
-			$glyphs = explode(' ', $ra[$i][0]);
+			$glyphs = explode(' ', $substitute);
 
 			$info[$i]['uni'] = hexdec($glyphs[0]);
 			$info[$i]['hex'] = $glyphs[0];
-			$info[$i]['form'] = $ra[$i][1]; // Actaul form substituted 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL
+			$info[$i]['form'] = $form; // Actaul form substituted 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL
 
 			if (count($glyphs) > 1) {
 				$multiple[$i] = array_map('hexdec', $glyphs);
@@ -228,6 +238,39 @@ class Arabic
 		}
 
 		return $multiple;
+	}
+
+	/**
+	 * The run as hex code points, which is what joining and the context rules are matched against.
+	 *
+	 * Read once either side of the substitutions that stand between resolveJoining() and shape(), so
+	 * the two need not be the same run: 'ccmp' may have made it longer.
+	 */
+	private static function hexes($info)
+	{
+		$chars = [];
+		for ($i = 0; $i < count($info); $i++) {
+			$chars[] = $info[$i]['hex'];
+		}
+
+		return $chars;
+	}
+
+	/**
+	 * The Transparent-Joining table for this string.
+	 *
+	 * A GDEF mark is transparent to joining just as a vowel is, so the mark class joins the table.
+	 * Array + keeps the left operand on collision, so a codepoint in both stays as the Unicode table
+	 * has it.
+	 */
+	private static function transparentJoining($glyphClassMarks)
+	{
+		$gcm = [];
+		foreach (explode('| ', $glyphClassMarks) as $g) {
+			$gcm[hexdec($g)] = 1;
+		}
+
+		return self::$transparent + $gcm;
 	}
 
 	/**

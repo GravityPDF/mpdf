@@ -609,6 +609,10 @@ class Otl
 	 */
 	private function shapeArabic($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock)
 	{
+		// Joining is resolved off the characters as written and carried on the run from here, because a
+		// glyph the substitutions below leave in a character's place is no character to read it from
+		Arabic::resolveJoining($this->OTLdata, $this->GlyphClassMarks);
+
 		// a. Apply initial GSUB Lookups (in order specified in lookup list but only selecting from certain tags)
 		$tags = 'locl ccmp';
 		$omittags = '';
@@ -2864,6 +2868,11 @@ class Otl
 				if (isset($this->OTLdata[$pos]['form'])) {
 					$newOTLdata[$i]['form'] = $this->OTLdata[$pos]['form'];
 				}
+				// The same of the form the character's joining calls for, which is read before 'ccmp'
+				// runs and so has to survive 'ccmp' taking a letter apart into its base and its dots
+				if (isset($this->OTLdata[$pos]['joining'])) {
+					$newOTLdata[$i]['joining'] = $this->OTLdata[$pos]['joining'];
+				}
 			}
 			if ($newOTLdata && ($this->shaper == 'K' || $this->shaper == 'T' || $this->shaper == 'L')) {
 				if ($this->OTLdata[$pos]['wordend']) {
@@ -3058,6 +3067,10 @@ class Otl
 			}
 			if (isset($this->OTLdata[$pos]['syllable'])) {
 				$newOTLdata[0]['syllable'] = $this->OTLdata[$pos]['syllable'];
+			}
+			// A ligature stands where its first component stood, so it joins as that character did
+			if (isset($this->OTLdata[$pos]['joining'])) {
+				$newOTLdata[0]['joining'] = $this->OTLdata[$pos]['joining'];
 			}
 
 			$newOTLdata[0]['is_ligature'] = true;

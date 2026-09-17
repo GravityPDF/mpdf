@@ -87,9 +87,9 @@
 0x80              0041 0020 0628 0020 0042  =>  0041 0020 E000 E006 0020 0042  group=CSCMSC  gpos={"3":{"BaseWidth":993,"XPlacement":410,"YPlacement":-23}}
 0xFF +kern -liga  0041 0020 0628 0020 0042  =>  0041 0020 E000 E006 0020 0042  group=CSCMSC  gpos={"3":{"BaseWidth":993,"XPlacement":410,"YPlacement":-23}}
 === font characters 0 ===
-0xFF              0020 0628 06CC E000 E001 E002 E003 E004  =>  0020 E003 E006 06CC E001 E001 E002 E003 E004  group=SCMCCCCCC  gpos={"2":{"BaseWidth":269,"XPlacement":31,"YPlacement":-3},"4":{"kashida":2},"5":{"kashida":2}}
-0x80              0020 0628 06CC E000 E001 E002 E003 E004  =>  0020 E003 E006 06CC E001 E001 E002 E003 E004  group=SCMCCCCCC  gpos={"2":{"BaseWidth":269,"XPlacement":31,"YPlacement":-3},"4":{"kashida":2},"5":{"kashida":2}}
-0xFF +kern -liga  0020 0628 06CC E000 E001 E002 E003 E004  =>  0020 E003 E006 06CC E001 E001 E002 E003 E004  group=SCMCCCCCC  gpos={"2":{"BaseWidth":269,"XPlacement":31,"YPlacement":-3},"4":{"kashida":2},"5":{"kashida":2}}
+0xFF              0020 0628 06CC E000 E001 E002 E003 E004  =>  0020 E003 E006 E005 E001 E001 E002 E003 E004  group=SCMCCCCCC  gpos={"2":{"BaseWidth":269,"XPlacement":31,"YPlacement":-3},"3":{"kashida":2},"4":{"kashida":2},"5":{"kashida":2}}
+0x80              0020 0628 06CC E000 E001 E002 E003 E004  =>  0020 E003 E006 E005 E001 E001 E002 E003 E004  group=SCMCCCCCC  gpos={"2":{"BaseWidth":269,"XPlacement":31,"YPlacement":-3},"3":{"kashida":2},"4":{"kashida":2},"5":{"kashida":2}}
+0xFF +kern -liga  0020 0628 06CC E000 E001 E002 E003 E004  =>  0020 E003 E006 E005 E001 E001 E002 E003 E004  group=SCMCCCCCC  gpos={"2":{"BaseWidth":269,"XPlacement":31,"YPlacement":-3},"3":{"kashida":2},"4":{"kashida":2},"5":{"kashida":2}}
 === font characters 1 ===
 0xFF              E005 E006 E007  =>  E005 E006 E007  group=CMM
 0x80              E005 E006 E007  =>  E005 E006 E007  group=CMM

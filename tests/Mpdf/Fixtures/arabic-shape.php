@@ -24,6 +24,7 @@ foreach ($runs as $name => $run) {
 		$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
 	}
 
+	\Mpdf\Shaper\Arabic::resolveJoining($info, $marks);
 	\Mpdf\Shaper\Arabic::shape($info, $glyphs, $marks, $usetags, 'arab');
 
 	foreach ($info as $char) {

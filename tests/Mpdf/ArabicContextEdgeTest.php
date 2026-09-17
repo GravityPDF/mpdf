@@ -12,9 +12,8 @@ namespace Mpdf;
  * NotoSansArabic-ContextEdge-Synthetic is NotoSansArabic-Joining-Subset (Noto Sans Arabic 2.012, OFL
  * 1.1) with a FATHA added, and its GSUB replaced by 'init' and 'fina' Chaining Context Substitutions
  * (Type 6 Format 3) flagged IgnoreMarks: beh takes the dotless initial form after a low alef, and the
- * dotless final form before one. Its 'ccmp' is dropped, because the shaper would take beh apart into a
- * dotless beh and a dot before resolving joining, and a glyph that is not a character joins nothing
- * (#209).
+ * dotless final form before one. Its 'ccmp' is dropped, because those rules are stated over the beh
+ * itself, which 'ccmp' would have taken apart into a dotless beh and a dot before they were reached.
  * `hb-shape` 14.3.1 draws the glyphs these tests expect.
  */
 class ArabicContextEdgeTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase

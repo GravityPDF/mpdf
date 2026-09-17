@@ -446,6 +446,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAFormOfSeveralGlyphsIsHandedBackForTheCallerToSubstitute()
 	{
 		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
+		Arabic::resolveJoining($info, ' ' . self::FATHA);
 
 		$multiple = Arabic::shape($info, [self::BEH => ['0E01D 0FBB3']], ' ' . self::FATHA, self::ALL_FORMS, 'arab');
 
@@ -461,8 +462,35 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAFormOfOneGlyphIsHandedBackAsNothing()
 	{
 		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
+		Arabic::resolveJoining($info, ' ' . self::FATHA);
 
 		$this->assertSame([], Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, self::ALL_FORMS, 'arab'));
+	}
+
+	/**
+	 * The form is read off the characters as written and carried on the run, so a character something
+	 * has replaced by the time the forms are drawn still takes the one its own joining called for. That
+	 * is how a letter 'ccmp' takes apart reaches the forms of the rasm it leaves behind (#209): the
+	 * rasm is unencoded, mPDF maps it into the Private Use Area, and a Private Use codepoint is in none
+	 * of the joining tables.
+	 */
+	public function testAGlyphThatReplacedACharacterTakesTheFormTheCharacterJoinedAs()
+	{
+		$rasm = '0E001';
+		$info = [
+			['hex' => self::BEH, 'uni' => hexdec(self::BEH)],
+			['hex' => self::BEH, 'uni' => hexdec(self::BEH)],
+		];
+		Arabic::resolveJoining($info, ' ' . self::FATHA);
+
+		$info[0]['hex'] = $rasm;
+		$info[1]['hex'] = $rasm;
+		Arabic::shape($info, [$rasm => ['R_ISOL', 'R_FINA', 'R_INIT']], ' ' . self::FATHA, self::ALL_FORMS, 'arab');
+
+		$this->assertSame(
+			[['R_INIT', 2], ['R_FINA', 1]],
+			[[$info[0]['hex'], $info[0]['form']], [$info[1]['hex'], $info[1]['form']]]
+		);
 	}
 
 	/**
@@ -609,6 +637,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
 		}
 
+		Arabic::resolveJoining($info, ' ' . $glyphClassMarks);
 		Arabic::shape($info, $glyphs === null ? $this->glyphs() : $glyphs, ' ' . $glyphClassMarks, $usetags, $scriptTag);
 
 		$forms = [];
