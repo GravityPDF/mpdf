@@ -111,6 +111,35 @@ class OtLanguageTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The generator is what produced the table that is checked in: running it again over the file it was
+	 * run with must write the same bytes, or a diff cannot be read.
+	 *
+	 * Skipped unless that file is still on this machine - it is not committed, and the test is worth
+	 * nothing against another release of HarfBuzz.
+	 */
+	public function testTheCheckedInTableIsWhatTheGeneratorWrites()
+	{
+		$version = OtLanguageTags::DEFAULT_VERSION;
+		$files = __DIR__ . '/../../utils/data/harfbuzz/' . $version;
+		if (!is_file($files . '/hb-ot-tag-table.hh')) {
+			$this->markTestSkipped(sprintf('HarfBuzz %s is not unpacked here: composer otlanguages:update', $version));
+		}
+
+		$source = __DIR__ . '/../../src/Ucdn.php';
+		$copy = $this->dir . '/Rebuilt.php';
+		copy($source, $copy);
+
+		$tags = new OtLanguageTags($version, $files);
+		$tags->rewrite($copy);
+
+		$this->assertSame(
+			file_get_contents($source),
+			file_get_contents($copy),
+			'composer otlanguages:update would rewrite src/Ucdn.php'
+		);
+	}
+
+	/**
 	 * @return string A class holding a language system table, ready to be rewritten
 	 */
 	private function copy($version, $table)

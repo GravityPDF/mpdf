@@ -30,6 +30,8 @@ namespace Mpdf;
 class OtLanguageTags
 {
 
+	use GeneratedTable;
+
 	/**
 	 * The HarfBuzz release read when none is named
 	 */
@@ -60,14 +62,7 @@ class OtLanguageTags
 	 */
 	public function rewrite($path)
 	{
-		// The patterns below are anchored on the line, and a Windows checkout of the class ends its
-		// lines with CRLF. The work is done in LF and the file is written back the way it was found.
-		$source = file_get_contents($path);
-		$crlf = strpos($source, "\r\n") !== false;
-		if ($crlf) {
-			$source = str_replace("\r\n", "\n", $source);
-		}
-
+		$source = $this->sourceInLf($path);
 		$table = $this->table();
 
 		$lines = [];
@@ -87,10 +82,7 @@ class OtLanguageTags
 		);
 		$source = $this->replaceArray($source, 'public static $ot_languages', implode("\n", $lines));
 
-		if ($crlf) {
-			$source = str_replace("\n", "\r\n", $source);
-		}
-		file_put_contents($path, $source);
+		$this->writeBack($path, $source);
 
 		return [
 			'languages' => count($table) - $blocked,
@@ -166,7 +158,7 @@ class OtLanguageTags
 		$rows = [];
 
 		foreach ($this->body($declaration) as $line) {
-			$rows[] = [rtrim($this->tag($line, 1)), $this->tag($line, 2), $this->name($line)];
+			$rows[] = [$this->code($line), $this->tag($line, 2), $this->name($line)];
 		}
 
 		return $rows;
@@ -186,7 +178,7 @@ class OtLanguageTags
 			if (!preg_match('/,\s*(\d+),\s*(\d+)\}/', $line, $m)) {
 				throw new \RuntimeException(sprintf('Could not read the range in %s', $line));
 			}
-			$rows[] = [rtrim($this->tag($line, 1)), (int) $m[1], (int) $m[2], $this->name($line)];
+			$rows[] = [$this->code($line), (int) $m[1], (int) $m[2], $this->name($line)];
 		}
 
 		return $rows;
@@ -222,15 +214,25 @@ class OtLanguageTags
 			if (!preg_match('/\/\* (.*?) \*\//', $line, $m)) {
 				throw new \RuntimeException(sprintf('Could not read the comment in %s', $line));
 			}
-			$comments[rtrim($this->tag($line, 1))] = $m[1];
+			$comments[$this->code($line)] = $m[1];
 		}
 
 		return $comments;
 	}
 
 	/**
+	 * The language code a line begins with, unpadded: HarfBuzz writes it as a four-character tag.
+	 *
+	 * @return string
+	 */
+	private function code($line)
+	{
+		return rtrim($this->tag($line, 1));
+	}
+
+	/**
 	 * The nth HB_TAG() of a line, four characters wide, which is how the tables of Ucdn and OtlTags
-	 * hold a language system tag. A language code is rtrimmed by its caller.
+	 * hold a language system tag.
 	 *
 	 * @param int $position 1 for the first HB_TAG() of the line
 	 *
@@ -264,50 +266,15 @@ class OtLanguageTags
 	}
 
 	/**
-	 * Reads one file of HarfBuzz's source, keeping a copy so the next run needs no network.
+	 * Reads one file of HarfBuzz's source.
 	 *
 	 * @return string
 	 */
 	public function read($name)
 	{
-		$file = $this->files . '/' . basename($name);
+		$url = 'https://raw.githubusercontent.com/harfbuzz/harfbuzz/' . $this->version . '/src/' . $name;
 
-		if (!is_file($file)) {
-			$url = 'https://raw.githubusercontent.com/harfbuzz/harfbuzz/' . $this->version . '/src/' . $name;
-			$body = file_get_contents($url);
-			if ($body === false) {
-				throw new \RuntimeException(sprintf('Could not read %s', $url));
-			}
-			if (!is_dir($this->files)) {
-				mkdir($this->files, 0777, true);
-			}
-			file_put_contents($file, $body);
-		}
-
-		return str_replace("\r\n", "\n", file_get_contents($file));
-	}
-
-	/**
-	 * Replaces the body of one array in the class, matching it by its declaration.
-	 */
-	private function replaceArray($source, $declaration, $body)
-	{
-		$pattern = '/(' . preg_quote($declaration, '/') . " = \[\n).*?(\n\t\];\n)/s";
-		$replaced = preg_replace_callback(
-			$pattern,
-			function ($m) use ($body) {
-				return $m[1] . $body . $m[2];
-			},
-			$source,
-			1,
-			$count
-		);
-
-		if ($count !== 1) {
-			throw new \RuntimeException(sprintf('Could not find %s to rewrite', $declaration));
-		}
-
-		return $replaced;
+		return $this->cached($this->files . '/' . basename($name), $url);
 	}
 
 }

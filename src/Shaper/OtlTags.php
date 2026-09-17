@@ -202,8 +202,8 @@ class OtlTags
 		}
 
 		// An extended language stands in for the language itself, so ar-afb is Gulf Arabic rather than
-		// Arabic even where it has no tags at all. Three digits are a region such as 419, not a language.
-		return self::tags(preg_match('/^[a-z]{3}$/', $script) ? $script : $language);
+		// Arabic even where it has no tags at all
+		return self::tags(self::isThreeLetterCode($script) ? $script : $language);
 	}
 
 	/**
@@ -227,15 +227,16 @@ class OtlTags
 	 */
 	private static function chinese($language, $script, array $subtags)
 	{
-		$listed = isset(Ucdn::$ot_languages[$language]) ? substr(Ucdn::$ot_languages[$language], 0, 4) : '';
+		$listed = self::listed($language);
+		$first = $listed ? $listed[0] : '';
 
-		if (!in_array($listed, ['ZHS ', 'ZHT ', 'ZHH '], true)) {
+		if (!in_array($first, ['ZHS ', 'ZHT ', 'ZHH '], true)) {
 			return [];
 		}
 		if ($script == 'hans') {
 			return ['ZHS '];
 		}
-		if ($listed != 'ZHS ') {
+		if ($first != 'ZHS ') {
 			return [];
 		}
 		if ($script == 'hant') {
@@ -254,13 +255,11 @@ class OtlTags
 	}
 
 	/**
-	 * The language systems of one subtag. Ucdn::$ot_languages holds them end to end, four characters
-	 * apiece, and lists with none of them the three-letter codes HarfBuzz will not map because the tag
-	 * they would take belongs to an unrelated language.
+	 * The language systems of one subtag.
 	 *
-	 * Any other three-letter code is an ISO 639-3 code HarfBuzz has nothing better for, and is used
-	 * upper-cased as its own tag. A two-letter one it does not list gets no language system: the
-	 * two-letter codes are a closed set, so an unlisted one is not a language at all.
+	 * A three-letter code the table does not list is an ISO 639-3 code HarfBuzz has nothing better for,
+	 * and is used upper-cased as its own tag. A two-letter one it does not list gets no language system:
+	 * the two-letter codes are a closed set, so an unlisted one is not a language at all.
 	 *
 	 * @param string $language A language subtag
 	 *
@@ -268,13 +267,45 @@ class OtlTags
 	 */
 	private static function tags($language)
 	{
-		if (isset(Ucdn::$ot_languages[$language])) {
-			$tags = Ucdn::$ot_languages[$language];
-
-			return $tags === '' ? [] : str_split($tags, 4);
+		$listed = self::listed($language);
+		if ($listed !== null) {
+			return $listed;
 		}
 
-		return preg_match('/^[a-z]{3}$/', $language) ? [strtoupper($language) . ' '] : [];
+		return self::isThreeLetterCode($language) ? [strtoupper($language) . ' '] : [];
+	}
+
+	/**
+	 * What Ucdn::$ot_languages says about a subtag, which holds its tags end to end, four characters
+	 * apiece, and lists with none of them the three-letter codes HarfBuzz will not map because the tag
+	 * they would take belongs to an unrelated language.
+	 *
+	 * @param string $language A language subtag
+	 *
+	 * @return string[]|null Its language systems, none where HarfBuzz refuses it one, null where the
+	 *                       table does not list it at all
+	 */
+	private static function listed($language)
+	{
+		if (!isset(Ucdn::$ot_languages[$language])) {
+			return null;
+		}
+
+		$tags = Ucdn::$ot_languages[$language];
+
+		// str_split gives one empty tag rather than nothing for an empty string before PHP 8.2
+		return $tags === '' ? [] : str_split($tags, 4);
+	}
+
+	/**
+	 * Whether a subtag is shaped like a three-letter language code, which a three-digit region such as
+	 * 419 is not.
+	 *
+	 * @return bool
+	 */
+	private static function isThreeLetterCode($subtag)
+	{
+		return (bool) preg_match('/^[a-z]{3}$/', $subtag);
 	}
 
 	/**
