@@ -20,7 +20,20 @@ class CacheDirectoryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	protected function tear_down()
 	{
-		$this->remove($this->workDir);
+		foreach (new \DirectoryIterator($this->workDir) as $item) {
+			if ($item->isDot()) {
+				continue;
+			}
+
+			if ($item->isDir()) {
+				rmdir($item->getPathname());
+				continue;
+			}
+
+			unlink($item->getPathname());
+		}
+
+		rmdir($this->workDir);
 
 		parent::tear_down();
 	}
@@ -29,16 +42,7 @@ class CacheDirectoryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$dir = $this->workDir . '/mpdf';
 
-		/* What the lost mkdir() reports is testTheLostRaceRaisesNoWarning...'s business. */
-		set_error_handler(function () {
-			return true;
-		});
-
-		try {
-			new RaceLosingCache($dir);
-		} finally {
-			restore_error_handler();
-		}
+		new RaceLosingCache($dir);
 
 		$this->assertDirectoryExists($dir);
 	}
@@ -75,14 +79,10 @@ class CacheDirectoryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		/* A umask that the parent's 0777 does not survive, so the correcting chmod() would run. */
 		$oldUmask = umask(0022);
-		set_error_handler(function () {
-			return true;
-		});
 
 		try {
 			new RaceLosingCache($dir, 0700);
 		} finally {
-			restore_error_handler();
 			umask($oldUmask);
 		}
 
@@ -102,7 +102,6 @@ class CacheDirectoryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				. escapeshellarg(__DIR__ . '/Fixtures/cache-directory-race.php') . ' '
 				. escapeshellarg($this->workDir) . ' ' . $i;
 
-			$pipes = [];
 			$process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
 			$this->assertNotFalse($process, 'Could not start process ' . $i);
 
@@ -130,36 +129,10 @@ class CacheDirectoryRaceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$deadline = microtime(true) + 15;
 
-		do {
-			$ready = 0;
-			for ($i = 0; $i < self::PROCESSES; $i++) {
-				$ready += file_exists($this->workDir . '/ready.' . $i) ? 1 : 0;
+		for ($i = 0; $i < self::PROCESSES; $i++) {
+			while (!file_exists($this->workDir . '/ready.' . $i) && microtime(true) < $deadline) {
+				usleep(1000);
 			}
-
-			if ($ready === self::PROCESSES) {
-				return;
-			}
-
-			usleep(1000);
-		} while (microtime(true) < $deadline);
-	}
-
-	private function remove($path)
-	{
-		if (is_dir($path)) {
-			foreach (new \DirectoryIterator($path) as $item) {
-				if (!$item->isDot()) {
-					$this->remove($item->getPathname());
-				}
-			}
-
-			rmdir($path);
-
-			return;
-		}
-
-		if (file_exists($path)) {
-			unlink($path);
 		}
 	}
 }

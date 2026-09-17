@@ -46,9 +46,9 @@ class Cache
 		$permissions = $this->getPermission($parentPath);
 
 		/* Another process can create the directory between createBasePath() finding it missing and
-		 * this call, which then fails over a directory that is there and usable. The warning is
-		 * suppressed so an error handler that converts warnings to exceptions cannot make that
-		 * fatal, and the permissions below are left alone because they are the other process's. */
+		 * this call; that counts as created, with whatever permissions that process chose. The
+		 * warning is suppressed so a handler converting warnings to exceptions cannot make it
+		 * fatal. */
 		if (!@mkdir($basePath, $permissions, true)) {
 			return is_dir($basePath);
 		}
