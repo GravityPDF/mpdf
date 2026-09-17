@@ -164,4 +164,110 @@ class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('DFLT', OtlTags::language('zh-MO', 'DFLT ZHS  ZHT  '));
 	}
 
+	/**
+	 * @dataProvider complexLanguages
+	 */
+	public function testSubtagsBeyondTheLanguageSelectTheLanguageSystemHarfBuzzDoes($ietf, $expected)
+	{
+		$offered = 'DFLT ATH  ELL  IPPH IRI  IRT  KAT  KGE  MOL  MON  MONT NAV  OCI  PGR  PRO  ROM  SYR  SYRE ZHH  ZHS  ZHT  ZHTM ';
+
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function complexLanguages()
+	{
+		return [
+			'el-polyton' => ['el-polyton', 'PGR '],
+			'ga-Latg' => ['ga-Latg', 'IRT '],
+			'ro-MD' => ['ro-MD', 'MOL '],
+			'mnw-TH' => ['mnw-TH', 'MONT'],
+			'oc-provenc' => ['oc-provenc', 'PRO '],
+			'syr-Syre' => ['syr-Syre', 'SYRE'],
+			'en-fonipa' => ['en-fonipa', 'IPPH'],
+			'ka-Geok' => ['ka-Geok', 'KGE '],
+			'yue' => ['yue', 'ZHH '],
+			'yue-Hant-HK' => ['yue-Hant-HK', 'ZHH '],
+			'cmn-Hans' => ['cmn-Hans', 'ZHS '],
+			'lzh' => ['lzh', 'ZHT '],
+			'zh-yue' => ['zh-yue', 'ZHH '],
+			'zh-lzh' => ['zh-lzh', 'ZHT '],
+			'a variant after a region' => ['el-GR-polyton', 'PGR '],
+			'the region, after the script' => ['ro-Latn-MD', 'MOL '],
+			'upper case' => ['RO-MD', 'MOL '],
+			'Irish without Latg' => ['ga-IE', 'IRI '],
+			'Mon outside Thailand' => ['mnw-MM', 'MON '],
+			'a variant or region after a private use subtag' => ['ro-x-md', 'ROM '],
+			'a variant after an extension' => ['el-u-polyton', 'ELL '],
+			'a private use tag' => ['x-fonipa', 'DFLT'],
+			'Cantonese, Traditional, in Taiwan' => ['yue-Hant-TW', 'ZHH '],
+			'Cantonese, in Macao' => ['yue-MO', 'ZHH '],
+			'Cantonese, Simplified' => ['yue-Hans', 'ZHS '],
+			'Literary Chinese, in Hong Kong' => ['lzh-HK', 'ZHT '],
+			'Literary Chinese, Simplified' => ['lzh-Hans', 'ZHS '],
+			'Mandarin, Traditional, in Taiwan' => ['cmn-Hant-TW', 'ZHT '],
+			'Mandarin, in Macao' => ['cmn-MO', 'ZHTM'],
+			'Hakka, in Hong Kong' => ['hak-HK', 'ZHH '],
+			'Min Nan, alone' => ['nan', 'ZHS '],
+			'zh-yue, in Hong Kong, by the region' => ['zh-yue-HK', 'ZHH '],
+			'zh-yue, Simplified, by the extended language' => ['zh-yue-Hans', 'ZHH '],
+			'zh-cmn, Traditional, by the extended language' => ['zh-cmn-Hant', 'ZHS '],
+			'Navajo' => ['nv', 'NAV '],
+			'Navajo, retired' => ['i-navajo', 'NAV '],
+		];
+	}
+
+	/**
+	 * @dataProvider languageFallbacks
+	 */
+	public function testALanguageWithMoreThanOneTagTakesTheFirstTheScriptOffers($ietf, $offered, $expected)
+	{
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function languageFallbacks()
+	{
+		return [
+			'Moldova, with MOL' => ['ro-MD', 'DFLT MOL  ROM ', 'MOL '],
+			'Moldova, without MOL' => ['ro-MD', 'DFLT ROM ', 'ROM '],
+			'Moldova, with neither' => ['ro-MD', 'DFLT ENG ', 'DFLT'],
+			'Irish, with IRI' => ['ga', 'DFLT IRI  IRT ', 'IRI '],
+			'Irish, without IRI' => ['ga', 'DFLT IRT ', 'IRT '],
+			'Irish, with neither' => ['ga', 'DFLT ENG ', 'DFLT'],
+			'Navajo, without NAV' => ['nv', 'DFLT ATH ', 'ATH '],
+			'Irish Traditional, without IRT' => ['ga-Latg', 'DFLT IRI ', 'DFLT'],
+		];
+	}
+
+	/**
+	 * HarfBuzz reads these whole. Read a subtag at a time, no-nyn would be Nkole.
+	 *
+	 * @dataProvider retiredTags
+	 */
+	public function testARetiredTagIsReadWhole($ietf, $expected)
+	{
+		$this->assertSame($expected, OtlTags::language($ietf, 'DFLT JBO  LTZ  NKL  NOR  NYN  ZHS '));
+	}
+
+	public function retiredTags()
+	{
+		return [
+			'no-bok' => ['no-bok', 'NOR '],
+			'no-nyn' => ['no-nyn', 'NYN '],
+			'zh-min' => ['zh-min', 'ZHS '],
+			'zh-min-nan' => ['zh-min-nan', 'ZHS '],
+			'i-hak' => ['i-hak', 'ZHS '],
+			'i-lux' => ['i-lux', 'LTZ '],
+			'art-lojban' => ['art-lojban', 'JBO '],
+		];
+	}
+
+	/**
+	 * Ucdn::$ot_languages has no key for most extended languages. HarfBuzz's table gives most of them
+	 * their macrolanguage's tag, as it gives Gulf Arabic ARA, so mPDF keeps the language subtag's.
+	 */
+	public function testAnExtendedLanguageWithNoTagKeepsTheLanguageSubtagsTag()
+	{
+		$this->assertSame('ARA ', OtlTags::language('ar-afb', 'DFLT ARA '));
+	}
+
 }

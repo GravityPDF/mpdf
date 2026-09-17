@@ -31,6 +31,46 @@ class OtlTags
 	];
 
 	/**
+	 * Variant and script subtags with a language system of their own whatever the language, in the
+	 * order HarfBuzz tests them.
+	 */
+	private static $variants = [
+		'fonnapa' => ['APPH'],
+		'polyton' => ['PGR '],
+		'arevmda' => ['HYE '],
+		'provenc' => ['PRO '],
+		'fonipa' => ['IPPH'],
+		'geok' => ['KGE '],
+		'syre' => ['SYRE'],
+		'syrj' => ['SYRJ'],
+		'syrn' => ['SYRN'],
+	];
+
+	/**
+	 * Retired tags HarfBuzz reads whole, before the extended language rule would read no-nyn as
+	 * Nkole.
+	 */
+	private static $retired = [
+		'art-lojban' => ['JBO '],
+		'i-hak' => ['ZHS '],
+		'i-lux' => ['LTZ '],
+		'i-navajo' => ['NAV ', 'ATH '],
+		'no-bok' => ['NOR '],
+		'no-nyn' => ['NYN '],
+		'zh-min' => ['ZHS '],
+		'zh-min-nan' => ['ZHS '],
+	];
+
+	/**
+	 * Languages that take another language system for one script or region.
+	 */
+	private static $languageSubtags = [
+		'ga' => ['latg' => ['IRT ']],
+		'mnw' => ['th' => ['MONT']],
+		'ro' => ['md' => ['MOL ', 'ROM ']],
+	];
+
+	/**
 	 * The Chinese regions with language systems of their own, in the order HarfBuzz looks for them.
 	 */
 	private static $chineseRegions = [
@@ -95,16 +135,7 @@ class OtlTags
 			return '';
 		}
 
-		$subtags = $ietf ? explode('-', strtolower($ietf)) : [];
-
-		$candidates = [];
-		if (isset($subtags[0]) && $subtags[0] == 'zh') {
-			$candidates = self::chinese($subtags);
-		} elseif (isset($subtags[0]) && isset(Ucdn::$ot_languages[$subtags[0]])) {
-			$candidates = [Ucdn::$ot_languages[$subtags[0]]];
-		}
-
-		foreach ($candidates as $langsys) {
+		foreach (self::languageSystems($ietf) as $langsys) {
 			if (strpos($available, $langsys) !== false) {
 				return $langsys;
 			}
@@ -114,29 +145,102 @@ class OtlTags
 	}
 
 	/**
-	 * The language systems for Chinese, in the order HarfBuzz tries them
-	 * (hb_ot_tags_from_complex_language() in hb-ot-tag-table.hh).
+	 * The language systems for an IETF tag, in the order HarfBuzz 14.3.1 tries them
+	 * (hb_ot_tags_from_language() in hb-ot-tag.cc and hb_ot_tags_from_complex_language() in
+	 * hb-ot-tag-table.hh):
 	 *
-	 * The script subtag outranks the region, so zh-Hans-HK is Simplified, except that Traditional
-	 * Chinese in Hong Kong or Macao keeps its region's tag. Macao has its own ZHTM, and where a font
-	 * lacks it takes Hong Kong's ZHH before the default. A tag with neither is Simplified.
+	 * 1. a variant or script that has its own language system in any language, e.g. -polyton
+	 * 2. a retired tag, read whole
+	 * 3. a script or region with its own language system in this language, e.g. ro-MD
+	 * 4. Chinese scripts and regions
+	 * 5. an extended language subtag, e.g. zh-yue
+	 * 6. the language subtag
 	 *
-	 * The zh- keys of Ucdn::$ot_languages are not read: they hold one tag per region, and nothing for
-	 * the script or for zh alone.
+	 * Only the subtags before the first singleton count, so an extension or private use subtag
+	 * selects nothing. A script is the subtag after the language; a region may be anywhere.
 	 *
-	 * @param string[] $subtags The lower-cased subtags of a tag whose language is zh
+	 * An extended language Ucdn::$ot_languages has no key for keeps the language subtag's tags, where
+	 * HarfBuzz would take an unlisted one as its own ISO 639-3 code.
+	 *
+	 * @param string $ietf
 	 *
 	 * @return string[]
 	 */
-	private static function chinese(array $subtags)
+	private static function languageSystems($ietf)
 	{
-		$script = isset($subtags[1]) ? $subtags[1] : '';
+		$tag = strtolower((string) $ietf);
+		if ($tag == '') {
+			return [];
+		}
 
+		$subtags = explode('-', preg_replace('/-[^-]-.*/s', '', $tag));
+		$language = array_shift($subtags);
+		if ($language == 'x') {
+			return [];
+		}
+
+		foreach (self::$variants as $variant => $langsys) {
+			if (in_array($variant, $subtags, true)) {
+				return $langsys;
+			}
+		}
+
+		if (isset(self::$retired[$tag])) {
+			return self::$retired[$tag];
+		}
+
+		$script = isset($subtags[0]) ? $subtags[0] : '';
+
+		if (isset(self::$languageSubtags[$language])) {
+			foreach (self::$languageSubtags[$language] as $subtag => $langsys) {
+				if (strlen($subtag) == 4 ? $script == $subtag : in_array($subtag, $subtags, true)) {
+					return $langsys;
+				}
+			}
+		}
+
+		$own = self::tags($language);
+
+		$chinese = self::chinese($own, $script, $subtags);
+		if ($chinese) {
+			return $chinese;
+		}
+
+		// A three-digit region such as 419 has no key, so three characters that find one are a language
+		$extended = strlen($script) == 3 ? self::tags($script) : [];
+
+		return $extended ?: $own;
+	}
+
+	/**
+	 * The Chinese language systems a script or region gives, in the order HarfBuzz tries them.
+	 *
+	 * The script subtag outranks the region, so zh-Hans-HK is Simplified, except that Traditional
+	 * Chinese in Hong Kong or Macao keeps its region's tag. Macao has its own ZHTM, and where a font
+	 * lacks it takes Hong Kong's ZHH before the default.
+	 *
+	 * Only Hans moves Cantonese (yue, ZHH) and Literary Chinese (lzh, ZHT) off their own tags. Every
+	 * other Chinese language is Simplified by default and takes zh's rules.
+	 *
+	 * @param string[] $own     The language's own tags
+	 * @param string   $script  The subtag after the language
+	 * @param string[] $subtags The subtags after the language
+	 *
+	 * @return string[] The language systems, or none
+	 */
+	private static function chinese(array $own, $script, array $subtags)
+	{
+		if (!$own || !in_array($own[0], ['ZHS ', 'ZHT ', 'ZHH '], true)) {
+			return [];
+		}
 		if ($script == 'hans') {
 			return ['ZHS '];
 		}
+		if ($own[0] != 'ZHS ') {
+			return [];
+		}
 		if ($script == 'hant') {
-			$region = isset($subtags[2]) ? $subtags[2] : '';
+			$region = isset($subtags[1]) ? $subtags[1] : '';
 
 			return $region == 'hk' || $region == 'mo' ? self::$chineseRegions[$region] : ['ZHT '];
 		}
@@ -147,7 +251,17 @@ class OtlTags
 			}
 		}
 
-		return ['ZHS '];
+		return [];
+	}
+
+	/**
+	 * @param string $language A language subtag
+	 *
+	 * @return string[] Its language systems in Ucdn::$ot_languages, or none
+	 */
+	private static function tags($language)
+	{
+		return isset(Ucdn::$ot_languages[$language]) ? (array) Ucdn::$ot_languages[$language] : [];
 	}
 
 	/**
