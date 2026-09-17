@@ -1,4 +1,5 @@
 vendor/*
 tests/Mpdf/tmp/*
 composer.lock
+utils/data/harfbuzz/*
 utils/data/ucd/*

@@ -262,12 +262,106 @@ class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Ucdn::$ot_languages has no key for most extended languages. HarfBuzz's table gives most of them
-	 * their macrolanguage's tag, as it gives Gulf Arabic ARA, so mPDF keeps the language subtag's.
+	 * The keys whose first tag moved when the table was generated from HarfBuzz's. Each script offers
+	 * both tags, so the answer is whichever of them HarfBuzz asks for first.
+	 *
+	 * @dataProvider syncedLanguages
 	 */
-	public function testAnExtendedLanguageWithNoTagKeepsTheLanguageSubtagsTag()
+	public function testALanguageTakesTheTagHarfBuzzAsksForFirst($ietf, $offered, $expected)
 	{
-		$this->assertSame('ARA ', OtlTags::language('ar-afb', 'DFLT ARA '));
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function syncedLanguages()
+	{
+		return [
+			'ml' => ['ml', 'DFLT MAL  MLR ', 'MAL '],
+			'hy' => ['hy', 'DFLT HYE0 HYE ', 'HYE0'],
+			'ber' => ['ber', 'DFLT BBR  BER ', 'BBR '],
+			'scs' => ['scs', 'DFLT SCS  SLA  ATH ', 'SCS '],
+			'grc' => ['grc', 'DFLT GRC  PGR ', 'GRC '],
+			'yid' => ['yid', 'DFLT YID  JII ', 'YID '],
+			'nso' => ['nso', 'DFLT NSO  SOT ', 'NSO '],
+			'lua' => ['lua', 'DFLT LUA  LUB ', 'LUA '],
+			'eot' => ['eot', 'DFLT EOT  BTI ', 'EOT '],
+			'kvd' => ['kvd', 'DFLT KVD  KUI ', 'KVD '],
+			'mdc' => ['mdc', 'DFLT MDC  MLE ', 'MDC '],
+			'nco' => ['nco', 'DFLT NCO  SIB ', 'NCO '],
+			'ril' => ['ril', 'DFLT RIL  RIA ', 'RIL '],
+			'umb' => ['umb', 'DFLT UMB  MBN ', 'UMB '],
+			'xom' => ['xom', 'DFLT XOM  KMO ', 'XOM '],
+			'yso' => ['yso', 'DFLT YSO  NIS ', 'YSO '],
+		];
+	}
+
+	/**
+	 * Languages and fallback tags the table had none of before it was generated from HarfBuzz's.
+	 *
+	 * @dataProvider listedLanguages
+	 */
+	public function testALanguageTakesEveryTagHarfBuzzListsForIt($ietf, $offered, $expected)
+	{
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function listedLanguages()
+	{
+		return [
+			'Quechua' => ['qu', 'DFLT QUZ ', 'QUZ '],
+			'Akan' => ['ak', 'DFLT AKA ', 'AKA '],
+			'Serbo-Croatian, the first of three' => ['sh', 'DFLT BOS  HRV  SRB ', 'BOS '],
+			'Serbo-Croatian, the last of three' => ['sh', 'DFLT SRB ', 'SRB '],
+			'Arbëreshë Albanian' => ['aae', 'DFLT SQI ', 'SQI '],
+			'Saint Lucian Creole French, after French Antillean' => ['acf', 'DFLT CPP ', 'CPP '],
+			'Indonesian, after Indonesian' => ['id', 'DFLT MLY ', 'MLY '],
+			'Inuktitut, after Inuktitut' => ['iu', 'DFLT INUK', 'INUK'],
+			'Twi, after Twi' => ['tw', 'DFLT AKA ', 'AKA '],
+			'Southern East Cree, the last of three' => ['crj', 'DFLT CRE ', 'CRE '],
+		];
+	}
+
+	/**
+	 * A three-letter code HarfBuzz's table does not list is an ISO 639-3 code it has nothing better for,
+	 * save for the codes it blocks because an unrelated language holds the tag they would take.
+	 *
+	 * @dataProvider unlistedCodes
+	 */
+	public function testAnUnlistedThreeLetterCodeIsItsOwnTagUnlessHarfBuzzBlocksIt($ietf, $offered, $expected)
+	{
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function unlistedCodes()
+	{
+		return [
+			'an ISO 639-3 code with no language system of its own' => ['zzz', 'DFLT ZZZ ', 'ZZZ '],
+			'Old Provençal' => ['pro', 'DFLT PRO ', 'PRO '],
+			'upper case' => ['PRO', 'DFLT PRO ', 'PRO '],
+			'a blocked code' => ['kge', 'DFLT KGE ', 'DFLT'],
+			'a blocked code, and no default' => ['aba', 'ABA ', ''],
+			'a three-digit subtag' => ['419', 'DFLT 419 ', 'DFLT'],
+		];
+	}
+
+	/**
+	 * HarfBuzz reads a three-letter second subtag as an extended language and lets it stand in for the
+	 * language, so its tags are the answer even where it has none.
+	 *
+	 * @dataProvider extendedLanguages
+	 */
+	public function testAnExtendedLanguageStandsInForTheLanguage($ietf, $offered, $expected)
+	{
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function extendedLanguages()
+	{
+		return [
+			'Gulf Arabic, which HarfBuzz gives Arabic' => ['ar-afb', 'DFLT AFB  ARA ', 'ARA '],
+			'an unlisted extended language' => ['ar-zzz', 'DFLT ARA  ZZZ ', 'ZZZ '],
+			'a blocked extended language' => ['ar-aba', 'DFLT ARA  ABA ', 'DFLT'],
+			'a three-digit region, which is not an extended language' => ['en-419', 'DFLT ENG ', 'ENG '],
+		];
 	}
 
 }

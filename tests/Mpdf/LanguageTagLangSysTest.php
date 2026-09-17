@@ -3,8 +3,9 @@
 namespace Mpdf;
 
 /**
- * A variant, script, region or extended language subtag, a Chinese language other than zh, and a
- * language with more than one tag select the font's language system the way HarfBuzz does.
+ * A variant, script, region or extended language subtag, a Chinese language other than zh, a language
+ * with more than one tag, a code used upper-cased as its own tag and one HarfBuzz blocks from the tag
+ * it would take all select the font's language system the way HarfBuzz does.
  *
  * Noto-LanguageTags-Synthetic merges subsets of Noto Sans TC 2.004, Noto Sans Georgian 2.005, Noto
  * Sans Myanmar 2.107 and Noto Sans Syriac 3.000 (all OFL 1.1), with its GSUB replaced. Each script
@@ -58,6 +59,9 @@ class LanguageTagLangSysTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'cmn-Hant-TW, ZHT' => ['cmn-Hant-TW', 0x9AA8, 0x4E8C],
 			'yue-Hans, ZHS' => ['yue-Hans', 0x9AA8, 0x4E00],
 			'ro, ROM not offered' => ['ro', 0x61, 0x61],
+			'scs, ATH after SCS and SLA' => ['scs', 0x61, 0x74],
+			'pro, its own code upper-cased' => ['pro', 0x61, 0x70],
+			'kge, blocked although KGE is offered' => ['kge', 0x10A0, 0x10A0],
 		];
 	}
 
