@@ -302,6 +302,22 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * One dump can read fonts one after another, and Blank-WideCmap-Synthetic has no GDEF. Noto Sans
+	 * Mono's COMBINING GRAVE ACCENT is not a mark of that font's.
+	 */
+	public function testADumpReusedOnAFontWithoutGdefForgetsTheLastFontsMarks()
+	{
+		$dump = $this->dumper();
+		$dump->getMetrics(self::FONT_DIR . '/NotoSansMono-GDEF13-Subset.ttf', 'mono', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('&#x25cc;&#x0300;', $dump->formatEntity('00300'));
+
+		$dump->getMetrics(self::FONT_DIR . '/Blank-WideCmap-Synthetic.ttf', 'blank', 0, false, false, 0xFF, 'summary');
+
+		$this->assertSame('&#x0300;', $dump->formatEntity('00300'));
+	}
+
+	/**
 	 * The dump reports a lookup's rules and never matches them, so it has no pattern of its own to
 	 * build: asked for one, it builds the parser's, capture groups and all.
 	 */

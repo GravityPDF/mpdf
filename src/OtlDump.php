@@ -145,26 +145,12 @@ class OtlDump extends TTFontFile
 	}
 
 	/**
-	 * Every read of GDEF, including one that finds none, replaces the marks the last font left.
-	 */
-	function _getGDEFtables()
-	{
-		parent::_getGDEFtables();
-
-		$this->marks = [];
-		foreach (explode('|', (string) $this->GlyphClassMarks) as $glyph) {
-			$glyph = trim($glyph);
-			if ($glyph !== '') {
-				$this->marks[ltrim($glyph, '0')] = true;
-			}
-		}
-	}
-
-	/**
-	 * A font without GDEF still has GSUB and GPOS to report, so the dump says so and reads on.
+	 * A font without GDEF still has GSUB and GPOS to report, so the dump says so and reads on. It has
+	 * no marks either, so a dump reused across fonts does not keep the last font's.
 	 */
 	protected function missingGDEF()
 	{
+		$this->marks = [];
 		$this->reportTableMissing('GDEF');
 	}
 
@@ -176,8 +162,18 @@ class OtlDump extends TTFontFile
 	{
 	}
 
+	/**
+	 * Keeps the marks for every mode, before the summary-only report, since detail mode draws them too.
+	 */
 	protected function reportGlyphClasses(array $glyphByClass)
 	{
+		$this->marks = [];
+		if (isset($glyphByClass[3])) {
+			foreach ($glyphByClass[3] as $glyph) {
+				$this->marks[ltrim($glyph, '0')] = true;
+			}
+		}
+
 		if ($this->mode != 'summary') {
 			return;
 		}
