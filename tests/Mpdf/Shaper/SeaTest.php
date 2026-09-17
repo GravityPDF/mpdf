@@ -10,14 +10,16 @@ use Mpdf\TextRecordingMpdf;
  * pass makes glyphs the categorising pass never saw, and Otl handed them on without a
  * ['sea_category'] of their own - which the reorderer reads on the last glyph of a broken cluster.
  *
- * Lanna Alif is the font throughout. Its 'ccmp' ligates a Sakot with the consonant after it into a
- * subscript form, and the glyph that comes out has no codepoint of its own, so it is mapped into the
- * Private Use Area as the subset is built.
+ * The shaper is only reached under a Tai Tham script tag, and no Tai Tham font in reach offers one:
+ * Lanna Alif has latn, and Noto Sans Tai Tham DFLT and latn, under which HarfBuzz and mPDF both use
+ * the default shaper. NotoSansTaiTham-LanaScript-Synthetic is a subset of Noto Sans Tai Tham 2.002
+ * (OFL 1.1) with its script retagged lana and its Sakot ligatures moved from 'liga' to 'ccmp'. The
+ * ligature has no codepoint of its own, so it is mapped into the Private Use Area as the subset is
+ * built. `hb-shape` draws what each test below expects.
  *
  * What the read turns on is that the last glyph of the cluster came out of that pass, not how long
- * the cluster is. Lanna Alif carries U+25CC, so a dotted circle is inserted ahead of the ligature
- * and the cluster is two elements; Noto Sans Tai Tham carries none, and the same cluster is one.
- * Both raised the warning.
+ * the cluster is. The font has no dotted circle to put in front of the ligature, so the cluster is
+ * one glyph; Lanna Alif, which has one, warned on a cluster of two.
  */
 class SeaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -28,11 +30,8 @@ class SeaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** U+1A60 TAI THAM SIGN SAKOT, which subscripts the consonant after it */
 	const SAKOT = 0x1A60;
 
-	/** U+25CC DOTTED CIRCLE, inserted in front of a cluster with no base consonant */
-	const DOTTED_CIRCLE = 0x25CC;
-
-	/** The subscript High Ka that Lanna Alif's 'ccmp' substitutes for Sakot + High Ka */
-	const SAKOT_HIGH_KA = 0xF001;
+	/** The subscript High Ka that the font's 'ccmp' substitutes for Sakot + High Ka */
+	const SAKOT_HIGH_KA = 0xE002;
 
 	/**
 	 * A Sakot with no consonant in front of it is a broken cluster, and the reorderer reads the
@@ -57,13 +56,12 @@ class SeaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		restore_error_handler();
 
 		$this->assertSame([], $raised);
-		$this->assertSame([self::DOTTED_CIRCLE, self::SAKOT_HIGH_KA], $drawn);
+		$this->assertSame([self::SAKOT_HIGH_KA], $drawn);
 	}
 
 	/**
 	 * The same Sakot inside a well-formed cluster, which is what the rule is for: the consonant in
-	 * front of it is the base, no dotted circle is needed, and the pair after it is subscripted under
-	 * it.
+	 * front of it is the base, and the pair after it is subscripted under it.
 	 */
 	public function testASakotInsideAClusterSubscriptsTheConsonantAfterIt()
 	{
@@ -94,8 +92,14 @@ class SeaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$html .= sprintf('&#x%04X;', $codepoint);
 		}
 
-		$mpdf = new TextRecordingMpdf();
-		$mpdf->WriteHTML('<p style="font-family:lannaalif">' . $html . '</p>');
+		$mpdf = new TextRecordingMpdf([
+			'fontDir' => [__DIR__ . '/../../data/ttf'],
+			'fontdata' => ['notosanstaithamlanascriptsynthetic' => [
+				'R' => 'NotoSansTaiTham-LanaScript-Synthetic.ttf',
+				'useOTL' => 0xFF,
+			]],
+		]);
+		$mpdf->WriteHTML('<p style="font-family:notosanstaithamlanascriptsynthetic">' . $html . '</p>');
 
 		return array_values(unpack('N*', mb_convert_encoding($mpdf->drawnText[0], 'UTF-32BE', 'UTF-8')));
 	}

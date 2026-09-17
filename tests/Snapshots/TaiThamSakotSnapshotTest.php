@@ -14,15 +14,16 @@ use Mpdf\TextRecordingMpdf;
  * Myanmar categories onto them and carried nothing onto these, so a Sakot ligated with the consonant
  * after it reached the reorderer with no category, and reading it was a warning per run.
  *
- * Lanna Alif is the font throughout. Its 'ccmp' ligates a Sakot with the consonant after it into a
- * subscript form whose glyph has no codepoint of its own, so it is mapped into the Private Use Area
- * as the subset is built and the samples are read off the page and compared with each other rather
- * than named.
+ * The font throughout is NotoSansTaiTham-LanaScript-Synthetic, a subset of Noto Sans Tai Tham whose
+ * script is retagged lana: the shaper is only reached under a Tai Tham tag, and Lanna Alif, which
+ * offers latn, is laid out by the default shaper as HarfBuzz lays it out. Its 'ccmp' ligates a Sakot
+ * with the consonant after it into a subscript form whose glyph has no codepoint of its own, so it is
+ * mapped into the Private Use Area as the subset is built and the samples are read off the page and
+ * compared with each other rather than named.
  *
  * Nothing here is drawn differently: a missing category read as null matched nothing at the one test
- * that reads it, and the fixture is byte-identical to the one the code before the fix writes. What it
- * pins is a cluster that reaches the reorderer through a substitution, so moving where the category
- * comes from has to move a page to get through.
+ * that reads it. What it pins is a cluster that reaches the reorderer through a substitution, so
+ * moving where the category comes from has to move a page to get through.
  *
  * @group snapshot
  */
@@ -57,8 +58,20 @@ class TaiThamSakotSnapshotTest extends Snapshot
 	 */
 	public function generatePdf()
 	{
-		$this->mpdf = $this->createMpdf(['mode' => 'utf-8']);
+		$this->mpdf = $this->createMpdf(self::config());
 		$this->mpdf->WriteHTML($this->style() . $this->samples());
+	}
+
+	private static function config()
+	{
+		return [
+			'mode' => 'utf-8',
+			'fontDir' => [__DIR__ . '/../data/ttf'],
+			'fontdata' => ['taithamlana' => [
+				'R' => 'NotoSansTaiTham-LanaScript-Synthetic.ttf',
+				'useOTL' => 0xFF,
+			]],
+		];
 	}
 
 	private function style()
@@ -69,14 +82,14 @@ class TaiThamSakotSnapshotTest extends Snapshot
 			h2 { font-size: 12pt; margin-bottom: 1mm; }
 			p.note { font-size: 9pt; color: #606060; margin-top: 0; }
 			p.label { font-size: 9pt; color: #606060; margin-bottom: 0; }
-			p.sample { font-family: lannaalif; font-size: 28pt; margin-top: 0; margin-bottom: 3mm; }
+			p.sample { font-family: taithamlana; font-size: 28pt; margin-top: 0; margin-bottom: 3mm; }
 		</style>
 
 		<h1>mPDF</h1>
 		<h2>Tai Tham clusters joined by a Sakot</h2>
 		<p class="note">A Sakot subscripts the consonant after it, and the two are drawn as one glyph
 			the font substitutes for the pair. Written with no consonant in front of them they are a
-			broken cluster, and a dotted circle is inserted to stand in for the consonant that is
+			broken cluster, and the font has no dotted circle to stand in for the consonant that is
 			missing. Read the subscript form under each: the broken cluster draws the same one the
 			well-formed cluster does.</p>
 		<?php
@@ -86,7 +99,7 @@ class TaiThamSakotSnapshotTest extends Snapshot
 
 	private function samples()
 	{
-		return $this->sample('Sakot, High Ka - no base, so a dotted circle carries the pair', self::SAKOT . self::HIGH_KA)
+		return $this->sample('Sakot, High Ka - no base, so nothing carries the pair', self::SAKOT . self::HIGH_KA)
 			. $this->sample('High Ka, Sakot, High Ka - the same pair under a base, the form to match', self::HIGH_KA . self::SAKOT . self::HIGH_KA)
 			. $this->sample('High Ka alone - the base by itself', self::HIGH_KA)
 			. $this->sample('Sakot alone - nothing to subscript, drawn as it was written', self::SAKOT)
@@ -110,24 +123,23 @@ class TaiThamSakotSnapshotTest extends Snapshot
 	 */
 	private function glyphsOf($text)
 	{
-		$mpdf = new TextRecordingMpdf(['mode' => 'utf-8']);
+		$mpdf = new TextRecordingMpdf(self::config());
 		$mpdf->WriteHTML($this->style() . '<p class="sample">' . $text . '</p>');
 
 		return array_values(unpack('N*', mb_convert_encoding(end($mpdf->drawnText), 'UTF-32BE', 'UTF-8')));
 	}
 
 	/**
-	 * The Sakot and the consonant after it become one glyph either way. In the broken cluster a dotted
-	 * circle stands where the base would be, and the subscript form is the same one the base takes.
+	 * The Sakot and the consonant after it become one glyph either way, and the subscript form the
+	 * broken cluster draws is the same one the base takes.
 	 */
 	public function testTheBrokenClusterDrawsTheSubscriptFormTheWellFormedClusterDraws()
 	{
 		$broken = $this->glyphsOf(self::SAKOT . self::HIGH_KA);
 		$wellFormed = $this->glyphsOf(self::HIGH_KA . self::SAKOT . self::HIGH_KA);
 
-		$this->assertCount(2, $broken, 'the broken cluster draws something other than a stand-in and one subscript form');
+		$this->assertCount(1, $broken, 'the broken cluster draws something other than one subscript form');
 		$this->assertSame(end($wellFormed), end($broken), 'the broken cluster draws a subscript form the well-formed one does not');
-		$this->assertNotSame($this->glyphsOf(self::HIGH_KA)[0], $broken[0], 'the stand-in is the consonant rather than a dotted circle');
 	}
 
 	/**
