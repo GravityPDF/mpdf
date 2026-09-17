@@ -153,17 +153,13 @@ class Arabic
 	 * HarfBuzz resolves joining in setup_masks() before it applies GSUB for the same reason, and a
 	 * glyph a substitution produces carries the mask of the character it came from.
 	 *
-	 * @param array[] $info            The run, by reference: each character's form is written into it
+	 * @param array[] $info            The run, by reference: each character's joining is written into it
 	 * @param string  $glyphClassMarks The mark glyphs of GDEF, which join as a vowel does
 	 */
 	public static function resolveJoining(&$info, $glyphClassMarks)
 	{
 		$transparentJoin = self::transparentJoining($glyphClassMarks);
-
-		$chars = [];
-		for ($i = 0; $i < count($info); $i++) {
-			$chars[] = $info[$i]['hex'];
-		}
+		$chars = self::hexes($info);
 
 		$nextChar = null;
 		for ($i = count($chars) - 1; $i >= 0; $i--) {
@@ -219,12 +215,10 @@ class Arabic
 	 */
 	public static function shape(&$info, $arabGlyphs, $glyphClassMarks, $usetags, $scriptTag)
 	{
-		$transparentJoin = self::transparentJoining($glyphClassMarks);
-
-		$chars = [];
-		for ($i = 0; $i < count($info); $i++) {
-			$chars[] = $info[$i]['hex'];
-		}
+		$chars = self::hexes($info);
+		// nothing below reads the table but the Syriac Alaph rule, which is the one form left to resolve
+		// from the run rather than from the joining written on it
+		$transparentJoin = $scriptTag == 'syrc' ? self::transparentJoining($glyphClassMarks) : [];
 
 		$multiple = [];
 		for ($i = 0; $i < count($chars); $i++) {
@@ -244,6 +238,22 @@ class Arabic
 		}
 
 		return $multiple;
+	}
+
+	/**
+	 * The run as hex code points, which is what joining and the context rules are matched against.
+	 *
+	 * Read once either side of the substitutions that stand between resolveJoining() and shape(), so
+	 * the two need not be the same run: 'ccmp' may have made it longer.
+	 */
+	private static function hexes($info)
+	{
+		$chars = [];
+		for ($i = 0; $i < count($info); $i++) {
+			$chars[] = $info[$i]['hex'];
+		}
+
+		return $chars;
 	}
 
 	/**
