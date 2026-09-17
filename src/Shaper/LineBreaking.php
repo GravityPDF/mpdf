@@ -46,9 +46,10 @@ class LineBreaking
 	 * ends and the next begins. That cannot be read off the characters - it needs a dictionary, walked
 	 * as a trie over the low byte of each codepoint.
 	 *
-	 * @param string $dict The dictionary as loaded from the font package, in the format wordMatch() walks
+	 * @param string $dict  The dictionary as loaded from the font package, in the format wordMatch() walks
+	 * @param true[] $marks GDEF's marks, as GlyphString::set() gives them: a word does not end before one
 	 */
-	public static function southEastAsian(&$info, $dict, $glyphClassMarks)
+	public static function southEastAsian(&$info, $dict, $marks)
 	{
 		// Find all word boundaries and mark end of word $info[$i]['wordend']=true on last character
 		// If Thai, allow for possible suffixes (not in Lao or Khmer)
@@ -65,7 +66,7 @@ class LineBreaking
 				$matches = $rollover;
 				$rollover = [];
 			} else {
-				$matches = self::wordMatch($dict, $info, $glyphClassMarks, $ptr);
+				$matches = self::wordMatch($dict, $info, $marks, $ptr);
 			}
 			if (count($matches) == 1) {
 				$matchpos = $matches[0];
@@ -87,7 +88,7 @@ class LineBreaking
 				for ($m = count($matches) - 1; $m >= 0; $m--) {
 					//for ($m=0;$m<count($matches);$m++) {
 					$firstmatch = $matches[$m];
-					$matches2 = self::wordMatch($dict, $info, $glyphClassMarks, $firstmatch + 1);
+					$matches2 = self::wordMatch($dict, $info, $marks, $firstmatch + 1);
 					if (count($matches2)) {
 						// Set end of word marker in OTLdata at matchpos
 						$info[$firstmatch]['wordend'] = true;
@@ -119,7 +120,7 @@ class LineBreaking
 	 * being the end of this branch. Only the low byte of each codepoint is compared, which is why the
 	 * caller must be in a script whose text stays inside one 256-codepoint block.
 	 */
-	private static function wordMatch(&$dict, $info, $glyphClassMarks, $ptr)
+	private static function wordMatch(&$dict, $info, $marks, $ptr)
 	{
 		/*
 		  Node type: Split.
@@ -143,14 +144,14 @@ class LineBreaking
 			if ($x == self::INTERMEDIATE_MATCH) {
 //echo "DICT_INTERMEDIATE_MATCH: ".dechex($c).'<br />';
 				// Do not match if next character in text is a Mark
-				if (isset($info[$ptr]['uni']) && strpos($glyphClassMarks, $info[$ptr]['hex']) === false) {
+				if (isset($info[$ptr]['uni']) && !isset($marks[$info[$ptr]['hex']])) {
 					$matches[] = $ptr - 1;
 				}
 				$dictptr++;
 			} elseif ($x == self::FINAL_MATCH) {
 //echo "DICT_FINAL_MATCH: ".dechex($c).'<br />';
 				// Do not match if next character in text is a Mark
-				if (isset($info[$ptr]['uni']) && strpos($glyphClassMarks, $info[$ptr]['hex']) === false) {
+				if (isset($info[$ptr]['uni']) && !isset($marks[$info[$ptr]['hex']])) {
 					$matches[] = $ptr - 1;
 				}
 				return $matches;
@@ -164,7 +165,7 @@ class LineBreaking
 						$next = ord($dict[$dictptr + 1]);
 						if ($next == self::INTERMEDIATE_MATCH || $next == self::FINAL_MATCH) {
 							// Do not match if next character in text is a Mark
-							if (isset($info[$ptr]['uni']) && strpos($glyphClassMarks, $info[$ptr]['hex']) === false) {
+							if (isset($info[$ptr]['uni']) && !isset($marks[$info[$ptr]['hex']])) {
 								$matches[] = $ptr - 1;
 							}
 						}

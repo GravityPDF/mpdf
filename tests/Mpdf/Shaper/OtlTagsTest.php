@@ -124,36 +124,150 @@ class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @dataProvider chineseRegions
+	 * @dataProvider chinese
 	 */
-	public function testAChineseRegionSelectsItsLanguageSystem($ietf, $expected)
+	public function testChineseSelectsItsLanguageSystemTheWayHarfBuzzDoes($ietf, $expected)
 	{
-		$this->assertSame($expected, OtlTags::language($ietf, 'DFLT ZHH ZHS ZHT '));
+		$this->assertSame($expected, OtlTags::language($ietf, 'DFLT ZHH  ZHS  ZHT  ZHTM '));
 	}
 
-	public function chineseRegions()
+	public function chinese()
 	{
 		return [
 			'Hong Kong' => ['zh-HK', 'ZHH '],
-			'Hong Kong, after the script' => ['zh-Hant-HK', 'ZHH '],
 			'Taiwan' => ['zh-TW', 'ZHT '],
-			'Macao' => ['zh-MO', 'ZHT '],
+			'Macao' => ['zh-MO', 'ZHTM'],
 			'China' => ['zh-CN', 'ZHS '],
 			'Singapore' => ['zh-SG', 'ZHS '],
 			'lower case' => ['zh-tw', 'ZHT '],
-			'a region the table has no entry for' => ['zh-US', 'DFLT'],
+			'a region with no language system of its own' => ['zh-US', 'ZHS '],
+			'no script or region' => ['zh', 'ZHS '],
+			'Simplified' => ['zh-Hans', 'ZHS '],
+			'Traditional' => ['zh-Hant', 'ZHT '],
+			'upper case' => ['ZH-HANT', 'ZHT '],
+			'Simplified, in Hong Kong' => ['zh-Hans-HK', 'ZHS '],
+			'Simplified, in Taiwan' => ['zh-Hans-TW', 'ZHS '],
+			'Simplified, in Macao' => ['zh-Hans-MO', 'ZHS '],
+			'Traditional, in China' => ['zh-Hant-CN', 'ZHT '],
+			'Traditional, in Taiwan' => ['zh-Hant-TW', 'ZHT '],
+			'Traditional, in Hong Kong' => ['zh-Hant-HK', 'ZHH '],
+			'Traditional, in Macao' => ['zh-Hant-MO', 'ZHTM'],
+			'another script, in Hong Kong' => ['zh-Latn-HK', 'ZHH '],
+			'Min Nan, a retired tag' => ['zh-min-nan', 'ZHS '],
+		];
+	}
+
+	public function testMacaoFallsBackToHongKong()
+	{
+		$this->assertSame('ZHH ', OtlTags::language('zh-MO', 'DFLT ZHH  ZHS  ZHT  '));
+		$this->assertSame('ZHH ', OtlTags::language('zh-Hant-MO', 'DFLT ZHH  ZHS  ZHT  '));
+		$this->assertSame('DFLT', OtlTags::language('zh-MO', 'DFLT ZHS  ZHT  '));
+	}
+
+	/**
+	 * @dataProvider complexLanguages
+	 */
+	public function testSubtagsBeyondTheLanguageSelectTheLanguageSystemHarfBuzzDoes($ietf, $expected)
+	{
+		$offered = 'DFLT ATH  ELL  IPPH IRI  IRT  KAT  KGE  MOL  MON  MONT NAV  OCI  PGR  PRO  ROM  SYR  SYRE ZHH  ZHS  ZHT  ZHTM ';
+
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function complexLanguages()
+	{
+		return [
+			'el-polyton' => ['el-polyton', 'PGR '],
+			'ga-Latg' => ['ga-Latg', 'IRT '],
+			'ro-MD' => ['ro-MD', 'MOL '],
+			'mnw-TH' => ['mnw-TH', 'MONT'],
+			'oc-provenc' => ['oc-provenc', 'PRO '],
+			'syr-Syre' => ['syr-Syre', 'SYRE'],
+			'en-fonipa' => ['en-fonipa', 'IPPH'],
+			'ka-Geok' => ['ka-Geok', 'KGE '],
+			'yue' => ['yue', 'ZHH '],
+			'yue-Hant-HK' => ['yue-Hant-HK', 'ZHH '],
+			'cmn-Hans' => ['cmn-Hans', 'ZHS '],
+			'lzh' => ['lzh', 'ZHT '],
+			'zh-yue' => ['zh-yue', 'ZHH '],
+			'zh-lzh' => ['zh-lzh', 'ZHT '],
+			'a variant after a region' => ['el-GR-polyton', 'PGR '],
+			'the region, after the script' => ['ro-Latn-MD', 'MOL '],
+			'upper case' => ['RO-MD', 'MOL '],
+			'Irish without Latg' => ['ga-IE', 'IRI '],
+			'Mon outside Thailand' => ['mnw-MM', 'MON '],
+			'a variant or region after a private use subtag' => ['ro-x-md', 'ROM '],
+			'a variant after an extension' => ['el-u-polyton', 'ELL '],
+			'a private use tag' => ['x-fonipa', 'DFLT'],
+			'Cantonese, Traditional, in Taiwan' => ['yue-Hant-TW', 'ZHH '],
+			'Cantonese, in Macao' => ['yue-MO', 'ZHH '],
+			'Cantonese, Simplified' => ['yue-Hans', 'ZHS '],
+			'Literary Chinese, in Hong Kong' => ['lzh-HK', 'ZHT '],
+			'Literary Chinese, Simplified' => ['lzh-Hans', 'ZHS '],
+			'Mandarin, Traditional, in Taiwan' => ['cmn-Hant-TW', 'ZHT '],
+			'Mandarin, in Macao' => ['cmn-MO', 'ZHTM'],
+			'Hakka, in Hong Kong' => ['hak-HK', 'ZHH '],
+			'Min Nan, alone' => ['nan', 'ZHS '],
+			'zh-yue, in Hong Kong, by the region' => ['zh-yue-HK', 'ZHH '],
+			'zh-yue, Simplified, by the extended language' => ['zh-yue-Hans', 'ZHH '],
+			'zh-cmn, Traditional, by the extended language' => ['zh-cmn-Hant', 'ZHS '],
+			'Navajo' => ['nv', 'NAV '],
+			'Navajo, retired' => ['i-navajo', 'NAV '],
 		];
 	}
 
 	/**
-	 * Pins #201 as it stands: without a region, Chinese has no language system, where HarfBuzz
-	 * takes ZHS for zh and zh-Hans and ZHT for zh-Hant.
+	 * @dataProvider languageFallbacks
 	 */
-	public function testChineseWithoutARegionHasNoLanguageSystem()
+	public function testALanguageWithMoreThanOneTagTakesTheFirstTheScriptOffers($ietf, $offered, $expected)
 	{
-		$this->assertSame('DFLT', OtlTags::language('zh', 'DFLT ZHH ZHS ZHT '));
-		$this->assertSame('DFLT', OtlTags::language('zh-Hant', 'DFLT ZHH ZHS ZHT '));
-		$this->assertSame('DFLT', OtlTags::language('zh-Hans', 'DFLT ZHH ZHS ZHT '));
+		$this->assertSame($expected, OtlTags::language($ietf, $offered));
+	}
+
+	public function languageFallbacks()
+	{
+		return [
+			'Moldova, with MOL' => ['ro-MD', 'DFLT MOL  ROM ', 'MOL '],
+			'Moldova, without MOL' => ['ro-MD', 'DFLT ROM ', 'ROM '],
+			'Moldova, with neither' => ['ro-MD', 'DFLT ENG ', 'DFLT'],
+			'Irish, with IRI' => ['ga', 'DFLT IRI  IRT ', 'IRI '],
+			'Irish, without IRI' => ['ga', 'DFLT IRT ', 'IRT '],
+			'Irish, with neither' => ['ga', 'DFLT ENG ', 'DFLT'],
+			'Navajo, without NAV' => ['nv', 'DFLT ATH ', 'ATH '],
+			'Irish Traditional, without IRT' => ['ga-Latg', 'DFLT IRI ', 'DFLT'],
+		];
+	}
+
+	/**
+	 * HarfBuzz reads these whole. Read a subtag at a time, no-nyn would be Nkole.
+	 *
+	 * @dataProvider retiredTags
+	 */
+	public function testARetiredTagIsReadWhole($ietf, $expected)
+	{
+		$this->assertSame($expected, OtlTags::language($ietf, 'DFLT JBO  LTZ  NKL  NOR  NYN  ZHS '));
+	}
+
+	public function retiredTags()
+	{
+		return [
+			'no-bok' => ['no-bok', 'NOR '],
+			'no-nyn' => ['no-nyn', 'NYN '],
+			'zh-min' => ['zh-min', 'ZHS '],
+			'zh-min-nan' => ['zh-min-nan', 'ZHS '],
+			'i-hak' => ['i-hak', 'ZHS '],
+			'i-lux' => ['i-lux', 'LTZ '],
+			'art-lojban' => ['art-lojban', 'JBO '],
+		];
+	}
+
+	/**
+	 * Ucdn::$ot_languages has no key for most extended languages. HarfBuzz's table gives most of them
+	 * their macrolanguage's tag, as it gives Gulf Arabic ARA, so mPDF keeps the language subtag's.
+	 */
+	public function testAnExtendedLanguageWithNoTagKeepsTheLanguageSubtagsTag()
+	{
+		$this->assertSame('ARA ', OtlTags::language('ar-afb', 'DFLT ARA '));
 	}
 
 }

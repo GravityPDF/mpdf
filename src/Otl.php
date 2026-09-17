@@ -102,6 +102,21 @@ class Otl
 	 */
 	private $lookupFlag;
 
+	/**
+	 * GlyphClassMarks for the current font, as GlyphString::set() gives it
+	 *
+	 * @var true[]
+	 */
+	private $marks;
+
+	/**
+	 * $lookupFlag for every font laid out so far, by font key: the sets it builds from GDEF are kept
+	 * with it, and a document sets one font for run after run
+	 *
+	 * @var LookupFlag[]
+	 */
+	private $lookupFlags = [];
+
 	var $Ignores;
 
 	var $LuCoverage;
@@ -292,7 +307,23 @@ class Otl
 		$this->GlyphClassLigatures = $gdef['GlyphClassLigatures'];
 		$this->GlyphClassComponents = $gdef['GlyphClassComponents'];
 		$this->GlyphClassBases = $gdef['GlyphClassBases'];
-		$this->lookupFlag = new LookupFlag($this->fontkey, $gdef);
+
+		if (!isset($this->lookupFlags[$this->fontkey])) {
+			$this->lookupFlags[$this->fontkey] = new LookupFlag($this->fontkey, $gdef);
+		}
+
+		$this->lookupFlag = $this->lookupFlags[$this->fontkey];
+		$this->marks = $this->lookupFlag->marks();
+	}
+
+	/**
+	 * @param string $hex A glyph, as GlyphString::of() writes it
+	 *
+	 * @return bool Whether GDEF classes it as a mark
+	 */
+	private function isMark($hex)
+	{
+		return isset($this->marks[$hex]);
 	}
 
 	/**
@@ -351,7 +382,7 @@ class Otl
 
 			$charasstr = GlyphString::of($char);
 
-			if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
+			if ($this->isMark($charasstr)) {
 				$OTLdata[$subchunk][$charctr]['group'] = 'M';
 			} elseif ($char == 32 || $char == 12288) {
 				$OTLdata[$subchunk][$charctr]['group'] = 'S';
@@ -406,7 +437,7 @@ class Otl
 		if ($this->usesWordBoundaryDictionary()) {
 			$dict = $this->lineBreakDictionary();
 			if ($dict !== null) {
-				LineBreaking::southEastAsian($this->OTLdata, $dict, $this->GlyphClassMarks);
+				LineBreaking::southEastAsian($this->OTLdata, $dict, $this->marks);
 			}
 		} elseif ($this->usesTibetanWordBoundaries($scriptblock)) {
 			LineBreaking::tibetan($this->OTLdata);
@@ -628,7 +659,7 @@ class Otl
 			// Position: After the character
 			elseif ($this->OTLdata[$i]['uni'] == 0xFEB3 || $this->OTLdata[$i]['uni'] == 0xFEB4 || $this->OTLdata[$i]['uni'] == 0xFEBB || $this->OTLdata[$i]['uni'] == 0xFEBC) {
 				$checkpos = $i + 1;
-				while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
+				while (isset($this->OTLdata[$checkpos]) && $this->isMark($this->OTLdata[$checkpos]['hex'])) {
 					$checkpos++;
 				}
 				if (isset($this->OTLdata[$checkpos])) {
@@ -654,7 +685,7 @@ class Otl
 			elseif ($this->OTLdata[$i]['uni'] == 0xFEAE || $this->OTLdata[$i]['uni'] == 0xFEF2 || $this->OTLdata[$i]['uni'] == 0xFEF0 || $this->OTLdata[$i]['uni'] == 0xFEF4 || $this->OTLdata[$i]['uni'] == 0xFBE9 || $this->OTLdata[$i]['uni'] == 0xFBFD || $this->OTLdata[$i]['uni'] == 0xFBFF
 			) {
 				$checkpos = $i - 1;
-				while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
+				while (isset($this->OTLdata[$checkpos]) && $this->isMark($this->OTLdata[$checkpos]['hex'])) {
 					$checkpos--;
 				}
 				if (isset($this->OTLdata[$checkpos]) && $this->OTLdata[$checkpos]['uni'] == 0xFE92) {
@@ -679,7 +710,7 @@ class Otl
 			 */
 
 			if (!isset($this->OTLdata[$i]['GPOSinfo']['kashida'])) {
-				if (strpos($this->GSUBdata[$this->GSUBfont]['finals'], $this->OTLdata[$i]['hex']) !== false) { // ANY OTHER FINAL FORM
+				if (GlyphString::inList($this->GSUBdata[$this->GSUBfont]['finals'], $this->OTLdata[$i]['hex'])) { // ANY OTHER FINAL FORM
 					$this->OTLdata[$i]['GPOSinfo']['kashida'] = 2;
 				} elseif (strpos('0FEAE 0FEF0 0FEF2', $this->OTLdata[$i]['hex']) !== false) { // not already included in 5 above
 					$this->OTLdata[$i]['GPOSinfo']['kashida'] = 1;
@@ -735,7 +766,7 @@ class Otl
 					$newinfo[$i]['general_category'] = $ucd_record[0];
 					$newinfo[$i]['bidi_type'] = $ucd_record[2];
 					$charasstr = GlyphString::of($sub[$i]);
-					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
+					if ($this->isMark($charasstr)) {
 						$newinfo[$i]['group'] = 'M';
 					} else {
 						$newinfo[$i]['group'] = 'C';
@@ -1033,7 +1064,7 @@ class Otl
 					$newinfo[0]['general_category'] = $ucd_record[0];
 					$newinfo[0]['bidi_type'] = $ucd_record[2];
 					$charasstr = GlyphString::of($sub[0]);
-					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
+					if ($this->isMark($charasstr)) {
 						$newinfo[0]['group'] = 'M';
 					} else {
 						$newinfo[0]['group'] = 'C';
@@ -1060,7 +1091,7 @@ class Otl
 					$newinfo[0]['general_category'] = $ucd_record[0];
 					$newinfo[0]['bidi_type'] = $ucd_record[2];
 					$charasstr = GlyphString::of($sub[1]);
-					if (strpos($this->GlyphClassMarks, $charasstr) !== false) {
+					if ($this->isMark($charasstr)) {
 						$newinfo[0]['group'] = 'M';
 					} else {
 						$newinfo[0]['group'] = 'C';
@@ -1213,7 +1244,7 @@ class Otl
 			for ($i = (count($this->OTLdata) - 1); $i >= 0; $i--) {
 				if (isset($this->Entry[$i]) && isset($this->Entry[$i]['Y']) && $this->Entry[$i]['dir'] == 'RTL') {
 					$nextbase = $i - 1; // Set as next base ignoring marks (next base reading RTL in logical oder
-					while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
+					while (isset($this->OTLdata[$nextbase]['hex']) && $this->isMark($this->OTLdata[$nextbase]['hex'])) {
 						$nextbase--;
 					}
 					if (isset($this->Exit[$nextbase]) && isset($this->Exit[$nextbase]['Y'])) {
@@ -1243,7 +1274,7 @@ class Otl
 					} else {
 						$incurs = false;
 					}
-				} elseif (strpos($this->GlyphClassMarks, $this->OTLdata[$i]['hex']) !== false) {
+				} elseif ($this->isMark($this->OTLdata[$i]['hex'])) {
 					continue;
 				} // ignore Marks
 				else {
@@ -1255,7 +1286,7 @@ class Otl
 			for ($i = 0; $i < count($this->OTLdata); $i++) {
 				if (isset($this->Exit[$i]) && isset($this->Exit[$i]['Y']) && $this->Exit[$i]['dir'] == 'LTR') {
 					$nextbase = $i + 1; // Set as next base ignoring marks
-					while (isset($this->OTLdata[$nextbase]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$nextbase]['hex']) !== false) {
+					while (isset($this->OTLdata[$nextbase]['hex']) && $this->isMark($this->OTLdata[$nextbase]['hex'])) {
 						$nextbase++;
 					}
 					if (isset($this->Entry[$nextbase]) && isset($this->Entry[$nextbase]['Y'])) {
@@ -1285,7 +1316,7 @@ class Otl
 					} else {
 						$incurs = false;
 					}
-				} elseif (strpos($this->GlyphClassMarks, $this->OTLdata[$i]['hex']) !== false) {
+				} elseif ($this->isMark($this->OTLdata[$i]['hex'])) {
 					continue;
 				} // ignore Marks
 				else {
@@ -2795,7 +2826,7 @@ class Otl
 				$bt = $this->OTLdata[$pos]['bidi_type'];
 				//  }
 
-				if (strpos($this->GlyphClassMarks, $newOTLdata[$i]['hex']) !== false) {
+				if ($this->isMark($newOTLdata[$i]['hex'])) {
 					$gp = 'M';
 				} elseif ($uni == 32) {
 					$gp = 'S';
@@ -2865,7 +2896,7 @@ class Otl
 				if ($this->restrictToSyllable && isset($this->OTLdata[$GlyphPos[$i]]['syllable']) && $this->OTLdata[$GlyphPos[$i]]['syllable'] != $current_syllable) {
 					return 0;
 				}
-				if (strpos($this->GlyphClassMarks, $unistr) !== false) {
+				if ($this->isMark($unistr)) {
 					$contains_marks = true;
 				} else {
 					$contains_nonmarks = true;
@@ -2959,7 +2990,7 @@ class Otl
 					// While next char to right is a mark (but not the next matched glyph)
 					// ?? + also include a Mark Ligature here
 					$ic = 1;
-					while ((($i == count($GlyphPos) - 1) || (isset($GlyphPos[$i + 1]) && ($GlyphPos[$i] + $ic) < $GlyphPos[$i + 1])) && isset($this->OTLdata[($GlyphPos[$i] + $ic)]) && strpos($this->GlyphClassMarks, $this->OTLdata[($GlyphPos[$i] + $ic)]['hex']) !== false) {
+					while ((($i == count($GlyphPos) - 1) || (isset($GlyphPos[$i + 1]) && ($GlyphPos[$i] + $ic) < $GlyphPos[$i + 1])) && isset($this->OTLdata[($GlyphPos[$i] + $ic)]) && $this->isMark($this->OTLdata[($GlyphPos[$i] + $ic)]['hex'])) {
 						$newComp = $currComp;
 						if (isset($this->assocMarks[$GlyphPos[$i] + $ic])) { // One of the inbetween Marks is already associated with a Lig
 							// OK as long as it is associated with the current Lig
@@ -2984,7 +3015,7 @@ class Otl
 			$bt = $this->OTLdata[$pos]['bidi_type'];
 			//  }
 
-			if (strpos($this->GlyphClassMarks, GlyphString::of($substitute)) !== false) {
+			if ($this->isMark(GlyphString::of($substitute))) {
 				$gp = 'M';
 			} elseif ($substitute == 32) {
 				$gp = 'S';
@@ -3185,7 +3216,7 @@ class Otl
 
 		// If current glyph is a mark with a defined width, any XAdvance is considered to REPLACE the character Advance Width
 		// Test case <div style="font-family:myanmartext">&#x1004;&#x103a;&#x1039;&#x1000;&#x1039;&#x1000;&#x103b;&#x103c;&#x103d;&#x1031;&#x102d;</div>
-		if (strpos($this->GlyphClassMarks, $this->OTLdata[$basepos]['hex']) !== false) {
+		if ($this->isMark($this->OTLdata[$basepos]['hex'])) {
 			$cw = round($this->mpdf->_getCharWidth($this->mpdf->CurrentFont['cw'], $this->OTLdata[$basepos]['uni']) * $this->mpdf->CurrentFont['unitsPerEm'] / 1000); // convert back to font design units
 		} else {
 			$cw = 0;
@@ -3248,11 +3279,11 @@ class Otl
 	{
 		// NB Not all fonts have all marks specified in GlyphClassMarks
 		// If the current glyph is not a base (but a mark) then ignore this, and apply to the current position
-		if (strpos($this->GlyphClassMarks, $this->OTLdata[$pos]['hex']) !== false) {
+		if ($this->isMark($this->OTLdata[$pos]['hex'])) {
 			return $pos;
 		}
 
-		while (isset($this->OTLdata[$pos + 1]['hex']) && strpos($this->GlyphClassMarks, $this->OTLdata[$pos + 1]['hex']) !== false) {
+		while (isset($this->OTLdata[$pos + 1]['hex']) && $this->isMark($this->OTLdata[$pos + 1]['hex'])) {
 			$pos++;
 		}
 		return $pos;
@@ -3610,7 +3641,7 @@ class Otl
 		$BaseArray = $subtable_offset + $this->reader->readUInt16(); // Offset to BaseArray table
 
 		$this->reader->seek($BaseCoverage);
-		$BaseGlyphs = implode('|', $this->_getCoverage());
+		$BaseGlyphs = $this->coverageIndexByHex();
 
 		$checkpos = $ptr;
 		$checkpos--;
@@ -3622,16 +3653,16 @@ class Otl
 		// This Fix blocks the GPOS rule if the "mark" is not actually classified as a mark in the GlyphClasses of GDEF
 		// but only in Indic old-spec.
 		// Test cases: &#xca8;&#xccd;&#xca8;&#xcc1; and &#xc95;&#xccd;&#xcb0;&#xccc;
-		if ($this->shaper == 'I' && $is_old_spec && strpos($this->GlyphClassMarks, $this->OTLdata[$ptr]['hex']) === false) {
+		if ($this->shaper == 'I' && $is_old_spec && !$this->isMark($this->OTLdata[$ptr]['hex'])) {
 			return;
 		}
 
 		// "To identify the base glyph that combines with a mark, the text-processing client must look backward in the glyph string from the mark to the preceding base glyph."
-		while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
+		while (isset($this->OTLdata[$checkpos]) && $this->isMark($this->OTLdata[$checkpos]['hex'])) {
 			$checkpos--;
 		}
 
-		if (isset($this->OTLdata[$checkpos]) && strpos($BaseGlyphs, $this->OTLdata[$checkpos]['hex']) !== false) {
+		if (isset($this->OTLdata[$checkpos]) && isset($BaseGlyphs[$this->OTLdata[$checkpos]['hex']])) {
 			$matchedpos = $checkpos;
 		} else {
 			$matchedpos = false;
@@ -3645,7 +3676,7 @@ class Otl
 			// Get the relevant BaseRecord
 			$this->reader->seek($BaseArray);
 			$BaseCount = $this->reader->readUInt16();
-			$BasePos = strpos($BaseGlyphs, $this->OTLdata[$matchedpos]['hex']) / 6;
+			$BasePos = $BaseGlyphs[$this->OTLdata[$matchedpos]['hex']];
 
 			// Move to the BaseRecord we want
 			$nSkip = (2 * $BasePos * $ClassCount );
@@ -3702,17 +3733,17 @@ class Otl
 		$LigatureArray = $subtable_offset + $this->reader->readUInt16(); // Offset to LigatureArray table
 
 		$this->reader->seek($LigatureCoverage);
-		$LigatureGlyphs = implode('|', $this->_getCoverage());
+		$LigatureGlyphs = $this->coverageIndexByHex();
 
 		$checkpos = $ptr;
 		$checkpos--;
 
 		// "To position a combining mark using a MarkToLigature attachment subtable, the text-processing client must work backward from the mark to the preceding ligature glyph."
-		while (isset($this->OTLdata[$checkpos]) && strpos($this->GlyphClassMarks, $this->OTLdata[$checkpos]['hex']) !== false) {
+		while (isset($this->OTLdata[$checkpos]) && $this->isMark($this->OTLdata[$checkpos]['hex'])) {
 			$checkpos--;
 		}
 
-		if (isset($this->OTLdata[$checkpos]) && strpos($LigatureGlyphs, $this->OTLdata[$checkpos]['hex']) !== false) {
+		if (isset($this->OTLdata[$checkpos]) && isset($LigatureGlyphs[$this->OTLdata[$checkpos]['hex']])) {
 			$matchedpos = $checkpos;
 		} else {
 			$matchedpos = false;
@@ -3726,7 +3757,7 @@ class Otl
 			// Get the relevant LigatureRecord
 			$this->reader->seek($LigatureArray);
 			$LigatureCount = $this->reader->readUInt16();
-			$LigaturePos = strpos($LigatureGlyphs, $this->OTLdata[$matchedpos]['hex']) / 6;
+			$LigaturePos = $LigatureGlyphs[$this->OTLdata[$matchedpos]['hex']];
 
 			// Move to the LigatureAttach table Record we want
 			$nSkip = (2 * $LigaturePos);
@@ -3807,13 +3838,13 @@ class Otl
 		$Mark1Array = $subtable_offset + $this->reader->readUInt16(); // Offset to MarkArray table
 		$Mark2Array = $subtable_offset + $this->reader->readUInt16(); // Offset to Mark2Array table
 		$this->reader->seek($Mark2Coverage);
-		$Mark2Glyphs = implode('|', $this->_getCoverage());
+		$Mark2Glyphs = $this->coverageIndexByHex();
 		$checkpos = $ptr;
 		$checkpos--;
 		while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 			$checkpos--;
 		}
-		if (isset($this->OTLdata[$checkpos]) && strpos($Mark2Glyphs, $this->OTLdata[$checkpos]['hex']) !== false) {
+		if (isset($this->OTLdata[$checkpos]) && isset($Mark2Glyphs[$this->OTLdata[$checkpos]['hex']])) {
 			$matchedpos = $checkpos;
 		} else {
 			$matchedpos = false;
@@ -3827,7 +3858,7 @@ class Otl
 			// Get the relevant Mark2Record
 			$this->reader->seek($Mark2Array);
 			$Mark2Count = $this->reader->readUInt16();
-			$Mark2Pos = strpos($Mark2Glyphs, $this->OTLdata[$matchedpos]['hex']) / 6;
+			$Mark2Pos = $Mark2Glyphs[$this->OTLdata[$matchedpos]['hex']];
 
 			// Move to the Mark2Record we want
 			$nSkip = (2 * $Mark2Pos * $ClassCount );
@@ -4637,7 +4668,7 @@ class Otl
 	 * The glyph IDs a Coverage table covers, for a Single Substitution Format 1, which adds a delta
 	 * to a glyph ID rather than naming a replacement.
 	 *
-	 * Cached apart from _getCoverage below: the same table, projected differently.
+	 * Cached apart from coverageIndexByHex below: the same table, projected differently.
 	 */
 	private function _getCoverageGID()
 	{
@@ -4651,22 +4682,28 @@ class Otl
 	}
 
 	/**
-	 * The characters a Coverage table covers, as the hex strings the shaper matches against
+	 * The characters a Coverage table covers, each with its Coverage Index, for the mark attachment
+	 * subtables, which find the glyph a mark attaches to and then index a parallel array by it.
+	 *
+	 * @return int[] hex => Coverage Index, the first where two glyphs stand for one character
 	 */
-	private function _getCoverage()
+	private function coverageIndexByHex()
 	{
 		$offset = $this->reader->tell();
 
-		if (!isset($this->LuDataCache[$this->otlCacheKey]['coverage'][$offset])) {
-			$g = [];
-			foreach (Coverage::glyphs($this->reader) as $glyphID) {
-				$g[] = GlyphString::of($this->glyphToChar($glyphID));
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['coverageIndex'][$offset])) {
+			$indexes = [];
+			foreach (Coverage::glyphs($this->reader) as $index => $glyphID) {
+				$hex = GlyphString::of($this->glyphToChar($glyphID));
+				if (!isset($indexes[$hex])) {
+					$indexes[$hex] = $index;
+				}
 			}
 
-			$this->LuDataCache[$this->otlCacheKey]['coverage'][$offset] = $g;
+			$this->LuDataCache[$this->otlCacheKey]['coverageIndex'][$offset] = $indexes;
 		}
 
-		return $this->LuDataCache[$this->otlCacheKey]['coverage'][$offset];
+		return $this->LuDataCache[$this->otlCacheKey]['coverageIndex'][$offset];
 	}
 
 	/**
@@ -4679,7 +4716,7 @@ class Otl
 	 * thousands and whose Coverage tables name thousands of glyphs, that scanning was most of the time
 	 * spent shaping a word.
 	 *
-	 * Cached apart from _getCoverage above: the same table, projected differently.
+	 * Cached apart from coverageIndexByHex above: the same table, projected differently.
 	 *
 	 * @return array map of unicode => 1
 	 */

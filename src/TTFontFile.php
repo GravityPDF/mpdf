@@ -1359,7 +1359,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 	/**
 	 * GDEF's glyph lists as the parser keeps them: space-prefixed, "|"-separated hex, " 00641| 00642",
-	 * which is what LookupFlag and the shaper search.
+	 * which is what LookupFlag and the shaper read.
 	 *
 	 * @param string[] $glyphs One class, as hex
 	 *
@@ -2412,11 +2412,6 @@ class TTFontFile implements Fonts\FontSourceInterface
 	{
 		$volt = [];
 
-		// A Type 5 Format 1 or 2 rule reads these without setting them, so hands whatever the last
-		// chained rule left in them to the Arabic shaper (#189).
-		$backtrackGlyphs = [];
-		$lookaheadGlyphs = [];
-
 		foreach ($lul as $i => $tag) {
 			$this->reportGSUBlookupStart($Lookup, $i, $tag);
 
@@ -2471,9 +2466,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 								[],
 								$inputGlyphs,
 								[],
-								count($inputGlyphs),
-								['', '', ''],
-								[$backtrackGlyphs, $lookaheadGlyphs]
+								count($inputGlyphs)
 							)));
 						}
 					}
@@ -2494,8 +2487,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 								$this->classInputGlyphs($subtable['InputClasses'], $inputClass, $rule),
 								[],
 								$rule['InputGlyphCount'],
-								$class0excl,
-								[$backtrackGlyphs, $lookaheadGlyphs]
+								$class0excl
 							)));
 						}
 					}
@@ -2517,15 +2509,12 @@ class TTFontFile implements Fonts\FontSourceInterface
 							$inputGlyphs[0] = $firstInputGlyph;
 							ksort($inputGlyphs);
 
-							$backtrackGlyphs = $rule['BacktrackGlyphCount'] ? $rule['BacktrackGlyphs'] : [];
-							$lookaheadGlyphs = $rule['LookaheadGlyphCount'] ? $rule['LookaheadGlyphs'] : [];
-
 							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
 								$rctr,
 								$rule['SubstLookupRecord'],
-								$backtrackGlyphs,
+								$rule['BacktrackGlyphCount'] ? $rule['BacktrackGlyphs'] : [],
 								$inputGlyphs,
-								$lookaheadGlyphs,
+								$rule['LookaheadGlyphCount'] ? $rule['LookaheadGlyphs'] : [],
 								count($inputGlyphs)
 							)));
 						}
@@ -2590,17 +2579,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 * @param string[] $class0excl For a class-based rule, every glyph some class of the input,
 	 *                             backtrack and lookahead Class Definitions names, which is what each
 	 *                             one's class 0 excludes
-	 * @param array    $arabic     [backtrack, lookahead] for the entry an Arabic joining form's rule
-	 *                             becomes, where that is not the rule's own: see _getGSUBarray()
 	 *
 	 * @return array
 	 */
-	private function contextRule($index, array $records, array $backtrack, array $input, array $lookahead, $nInput, array $class0excl = ['', '', ''], $arabic = null)
+	private function contextRule($index, array $records, array $backtrack, array $input, array $lookahead, $nInput, array $class0excl = ['', '', ''])
 	{
-		if ($arabic === null) {
-			$arabic = [$backtrack, $lookahead];
-		}
-
 		return [
 			'index' => $index,
 			'records' => $records,
@@ -2609,8 +2592,6 @@ class TTFontFile implements Fonts\FontSourceInterface
 			'lookahead' => $lookahead,
 			'nInput' => $nInput,
 			'class0excl' => $class0excl,
-			'prel' => $arabic[0],
-			'postl' => $arabic[1],
 		];
 	}
 
@@ -2762,12 +2743,12 @@ class TTFontFile implements Fonts\FontSourceInterface
 					$lookupGlyphs = $luss['Replace'];
 
 					// Only where the nested lookup's (first) glyph is one the rule's position can hold
-					if (strpos($rule['input'][$seqIndex], $lookupGlyphs[0]) === false) {
+					if (!GlyphString::inList($rule['input'][$seqIndex], $lookupGlyphs[0])) {
 						continue;
 					}
 
 					if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-						$volt[] = ['match' => $lookupGlyphs[0], 'replace' => implode(" ", $luss['substitute']), 'tag' => $tag, 'prel' => $rule['prel'], 'postl' => $rule['postl'], 'ignore' => $ignore];
+						$volt[] = ['match' => $lookupGlyphs[0], 'replace' => implode(" ", $luss['substitute']), 'tag' => $tag, 'prel' => $rule['backtrack'], 'postl' => $rule['lookahead'], 'ignore' => $ignore];
 					} else {
 						$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
 					}
