@@ -9,8 +9,7 @@ use Mpdf\OtlDump;
 use Mpdf\TTFontFile;
 
 /**
- * The GSUB walk the parser and the dump share, where the two part ways on purpose and no font in
- * tests/data/ttf shows it.
+ * The GSUB walk the parser and the dump share, over rule sets no font in tests/data/ttf has.
  *
  * The lookups are built by hand, in the shape readGSUBrules() leaves them: lookup 0 is a class-based
  * chained context (Type 6 Format 2) whose two rules name first two backtrack positions, then one, and
@@ -20,21 +19,21 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
-	 * The parser keeps the first rule's second backtrack position into the second rule (#170).
+	 * The second rule matches the one backtrack position it names, not the first rule's second as
+	 * well (#170).
 	 */
-	public function testTheParserKeepsAnEarlierClassRulesExtraPositions()
+	public function testTheParserReadsEachClassRuleWithItsOwnPositions()
 	{
 		$parser = $this->withGdef(new TTFontFile($this->cache(), 'win'));
 
 		$volt = $parser->_getGSUBarray($this->chainedClassRules(), [0 => 'ccmp'], 'latn');
 
-		$this->assertSame([2, 2], [$volt[0]['nBacktrack'], $volt[1]['nBacktrack']]);
-		$this->assertSame('(00043)() (00043)() ', $volt[1]['matchback']);
+		$this->assertSame([2, 1], [$volt[0]['nBacktrack'], $volt[1]['nBacktrack']]);
+		$this->assertSame('(00043)() ', $volt[1]['matchback']);
 	}
 
 	/**
-	 * The dump reads each rule's positions fresh, so it reports the second rule with the one
-	 * backtrack position it names.
+	 * So does the dump, which reports the second rule with the one backtrack position it names.
 	 */
 	public function testTheDumpReportsEachClassRuleWithItsOwnPositions()
 	{
@@ -56,8 +55,7 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A Type 5 rule has no backtrack or lookahead, yet where it belongs to an Arabic joining form the
-	 * parser hands the shaper the sequences of the chained rule it read last. Kept as it was by the
-	 * walk the two share; see #189.
+	 * parser hands the shaper the sequences of the chained rule it read last (#189).
 	 */
 	public function testAPlainContextRuleOfAnArabicFormCarriesTheLastChainedRulesSequences()
 	{
@@ -80,7 +78,7 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$volt = $parser->_getGSUBarray($Lookup, [0 => 'init', 2 => 'init'], 'arab');
 
-		$this->assertSame(['match' => '00041', 'replace' => '00044', 'tag' => 'init', 'prel' => ['00043', '00043'], 'postl' => [], 'ignore' => '()'], end($volt));
+		$this->assertSame(['match' => '00041', 'replace' => '00044', 'tag' => 'init', 'prel' => ['00043'], 'postl' => [], 'ignore' => '()'], end($volt));
 	}
 
 	private function chainedClassRules()
