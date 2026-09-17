@@ -1,0 +1,24 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00020; &#x00041; &#x00060; &#x0007E; &#x00300; &#x10030; </div>
+<h3>Glyph class 3</h3>
+<h5>Mark glyph (non-spacing combining glyph)</h5>
+<div class="glyphs">&#x25cc;&#x00301; &#x25cc;&#x0E001; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>DFLT</h5><div><a href="font_dump_otl.php?script=DFLT&amp;lang=DFLT">DFLT</a></b>: ccmp </div><h5>latn</h5><div><a href="font_dump_otl.php?script=latn&amp;lang=DFLT">DFLT</a></b>: ccmp </div>
+</div>
+<h1>GPOS Tables</h1>
+<h3>GPOS Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>DFLT</h5><div><a href="font_dump_otl.php?script=DFLT&amp;lang=DFLT">DFLT</a></b>: mark </div><h5>latn</h5><div><a href="font_dump_otl.php?script=latn&amp;lang=DFLT">DFLT</a></b>: mark </div>
+</div>
+
+=== detail: script latn language DFLT ===
+<h1>GSUB Tables</h1>
+<bookmark level="0" content="GSUB features"><div class="level1"><h5 class="level1"><bookmark level="1" content="ccmp [#0]">Lookup #0 [tag: <span style="color:#000066;">ccmp</span>]</h5><div class="ignore">Ignoring: Mark Glyphs </div> <div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+0300&nbsp;</span> <span class="unchanged">&nbsp;&#x0300;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#x0060;</span>&nbsp; <span class="unicode">U+0060</span> </div></div>
+<h1>GPOS Tables</h1>
+<bookmark level="0" content="GPOS features"><div class="level1"><h5 class="level1"><bookmark level="1" content="mark [#0]">Lookup #0 [tag: <span style="color:#000066;">mark</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 4: MarkToBase attachment </div><div class="glyphs">Marks:  &#x25cc;&#x0301; </div><div class="glyphs">Bases:  &#x10030; </div><div class="glyphs" style="font-feature-settings:'mark' 1;">Example(s):  &#x10030;&#x0301; &nbsp; </div></div>
