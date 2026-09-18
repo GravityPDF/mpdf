@@ -3383,10 +3383,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 				// The order the lookups need to be run in is the order the Lookup table lists them, not
 				// the order the features were asked for. Several features of one language system can
 				// start at the same lookup - Manjari's Malayalam 'akhn', 'half' and 'haln' all start at
-				// lookup 1 - so an index holds every feature that starts there rather than one. Sorting
-				// integer keys and then reading each group as the language system listed it settles the
-				// same way on every PHP version; sorting the features themselves would not, since
-				// usort() was unstable before PHP 8.0.
+				// lookup 1 - so an index holds every feature that starts there, read back in the order
+				// the language system listed them. That order is what decides which of the tied tags
+				// ends up labelling their shared lookup in Otl. Sorting the features themselves would
+				// settle it differently before PHP 8.0, where usort() was not stable, and write a font
+				// cache no other version agrees with.
 				ksort($byFirstLookup);
 				foreach ($byFirstLookup as $sharingAFirstLookup) {
 					foreach ($sharingAFirstLookup as $feature) {

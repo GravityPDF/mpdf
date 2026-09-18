@@ -723,7 +723,11 @@ class Otl
 			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
 		}
 
-		$this->applyGSUBfeaturesInTurn($usetags, $GSUBscriptTag, $GSUBlangsys, 0, []);
+		// One call per stage of HarfBuzz's Arabic plan, which puts rlig in the first, rclt and calt in
+		// the next, and the ligature features with mset in the last
+		foreach ($this->featureStages($usetags, ['rlig', 'rclt calt', 'liga clig mset']) as $tags) {
+			$this->applyGSUBfeaturesInTurn($tags, $GSUBscriptTag, $GSUBlangsys, 0, []);
+		}
 
 		// e. NOT IN SPEC
 		// If space precedes a mark -> substitute a &nbsp; before the Mark, to prevent line breaking Test:
@@ -834,10 +838,14 @@ class Otl
 		// d. Apply initial and basic shaping forms GSUB Lookups (one at a time)
 		// Khmer writes its dependent forms round the base rather than reordering them, so it asks for
 		// a different set. Indic and Sinhala are the only other shapers that reach here.
-		$tags = $this->shaper == 'K'
-			? 'locl ccmp pref blwf abvf pstf cfar'
-			: 'locl ccmp nukt akhn rphf rkrf pref blwf half pstf vatu cjct';
-		$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+		// One call per stage of HarfBuzz's plan for them, which is the whole set for Khmer and a
+		// feature at a time for Indic once locl and ccmp have gone through together
+		$stages = $this->shaper == 'K'
+			? ['locl ccmp pref blwf abvf pstf cfar']
+			: ['locl ccmp', 'nukt', 'akhn', 'rphf', 'rkrf', 'pref', 'blwf', 'half', 'pstf', 'vatu', 'cjct'];
+		foreach ($stages as $tags) {
+			$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+		}
 
 		// e. Final Re-ordering (Indic / Khmer / Sinhala)
 		// Reorder matras
@@ -907,8 +915,11 @@ class Otl
 
 		// c. Apply initial and basic shaping forms GSUB Lookups (one at a time)
 
-		$tags = 'locl ccmp rphf pref blwf pstf';
-		$this->_applyGSUBrulesMyanmar($tags, $GSUBscriptTag, $GSUBlangsys);
+		// One call per stage of HarfBuzz's Myanmar plan
+		$stages = ['locl ccmp', 'rphf', 'pref', 'blwf', 'pstf'];
+		foreach ($stages as $tags) {
+			$this->_applyGSUBrulesMyanmar($tags, $GSUBscriptTag, $GSUBlangsys);
+		}
 
 		// d. Apply Presentation Forms GSUB Lookups (+ any discretionary)
 		$tags = 'pres abvs blws psts haln rlig calt liga clig mset';
@@ -978,8 +989,11 @@ class Otl
 		Sea::initial_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $scriptblock, $dottedcircle);
 
 		// d. Apply basic shaping forms GSUB Lookups (one at a time)
-		$tags = 'pref abvf blwf pstf';
-		$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
+		// One call per stage of the plan HarfBuzz builds for these scripts
+		$stages = ['pref', 'abvf blwf pstf'];
+		foreach ($stages as $tags) {
+			$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
+		}
 
 		// e. Final Re-ordering
 
@@ -1635,6 +1649,9 @@ class Otl
 	 * What the South East Asian shaper and the Khmer presentation pass ask for, where a later feature
 	 * is meant to see what an earlier one produced.
 	 *
+	 * The tags given are one stage of the plan HarfBuzz would build - see lookupsForStage() - so a
+	 * caller whose features do not all share a stage makes a call for each.
+	 *
 	 * Unlike the two syllable-based shapers, which name their own tags, the list it is given can also
 	 * carry what a document asked for.
 	 *
@@ -1645,33 +1662,20 @@ class Otl
 	 */
 	function _applyGSUBrulesSingly($usetags, $scriptTag, $langsys)
 	{
-		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
+		$stage = $this->lookupsForStage($this->features('GSUB', $scriptTag, $langsys), $usetags, []);
 
-		// The reverse Lookups are taken first, out of the passes below, so that one named by two of the
-		// selected features is taken once, under the first of them. The cost is its place in Lookup List
-		// order among the Lookups of its own feature.
-		$lookups = [];
-		$reverse = [];
-		foreach ($this->featuresToApply($usetags) as $usetag) {
-			$lookups[$usetag] = $this->lookupsForFeature($GSUBFeatures, $usetag);
-
-			foreach ($lookups[$usetag] as $lu) {
-				if ($this->GSUBLookups[$lu]['Type'] != 8 || isset($reverse[$lu])) {
-					continue;
-				}
-				$reverse[$lu] = true;
-				$this->applyGSUBlookupOverRun($lu, $usetag, $this->alternateWanted($usetag, $usetags), 0, 0);
+		// The reverse Lookups are taken first, out of the pass below, because a reverse Lookup cannot
+		// share the cursor the rest walk forward. The cost is its place in Lookup List order among the
+		// Lookups of its own feature.
+		foreach ($stage as $lu => $take) {
+			if ($this->GSUBLookups[$lu]['Type'] == 8) {
+				$this->applyGSUBlookupOverRun($lu, $take['tag'], $take['alternate'], $take['mask'], 0);
+				unset($stage[$lu]);
 			}
 		}
 
-		foreach ($lookups as $usetag => $lookupList) {
-			$tagInt = $this->alternateWanted($usetag, $usetags);
-
-			foreach ($lookupList as $lu) {
-				if (!isset($reverse[$lu])) {
-					$this->applyGSUBlookupOverRun($lu, $usetag, $tagInt, 0, 0);
-				}
-			}
+		foreach ($stage as $lu => $take) {
+			$this->applyGSUBlookupOverRun($lu, $take['tag'], $take['alternate'], $take['mask'], 0);
 		}
 	}
 
@@ -1715,21 +1719,18 @@ class Otl
 	 * What the two syllable-based shapers and the Arabic presentation pass ask for: the features they
 	 * name are staged, and a later one is meant to read the glyphs an earlier one made.
 	 *
+	 * As _applyGSUBrulesSingly(), the tags given are one stage of HarfBuzz's plan.
+	 *
 	 * @param array $featureMasks The bit a feature's glyphs must carry, by tag. A feature named here
 	 *                            is applied only where the reordering marked a character for it;
 	 *                            one that is not applies to every glyph of the syllable.
 	 */
 	private function applyGSUBfeaturesInTurn($usetags, $scriptTag, $langsys, $is_old_spec, array $featureMasks)
 	{
-		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
+		$stage = $this->lookupsForStage($this->features('GSUB', $scriptTag, $langsys), $usetags, $featureMasks);
 
-		foreach ($this->featuresToApply($usetags) as $usetag) {
-			$mask = isset($featureMasks[$usetag]) ? $featureMasks[$usetag] : 0;
-			$tagInt = $this->alternateWanted($usetag, $usetags);
-
-			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
-				$this->applyGSUBlookupOverRun($lu, $usetag, $tagInt, $mask, $is_old_spec);
-			}
+		foreach ($stage as $lu => $take) {
+			$this->applyGSUBlookupOverRun($lu, $take['tag'], $take['alternate'], $take['mask'], $is_old_spec);
 		}
 	}
 
@@ -1851,6 +1852,91 @@ class Otl
 		ksort($LookupList);
 
 		return array_keys($LookupList);
+	}
+
+	/**
+	 * The Lookups the features of one stage ask for, each of them once, in the order to take them in.
+	 *
+	 * HarfBuzz collects the Lookups of the features of a stage of its plan and merges the duplicates,
+	 * so a Lookup two features of one stage name is taken once, where one that features of two stages
+	 * name is taken for each of them, over the glyphs the earlier stage made. That is why the paths
+	 * that apply a feature at a time take a stage per call and not a whole plan.
+	 *
+	 * A merged Lookup is taken in the pass of the first feature that named it and under that feature's
+	 * alternate, which costs it its place in the list HarfBuzz would sort by Lookup - the price of the
+	 * per-feature passes, which have no such list. Its mask is the OR of the masks of every feature
+	 * that named it, as HarfBuzz ORs the masks of the entries it merges: a feature with no mask of its
+	 * own reaches every glyph, which is 0 here and a bit every glyph carries there, so 0 absorbs. Only
+	 * the Khmer basic forms put masked and unmasked features in one stage.
+	 *
+	 * @param array  $GSUBFeatures The features the font offers for the script and language in hand
+	 * @param string $usetags      The feature tags of the stage, space separated, each optionally
+	 *                             followed by the alternate it asks for
+	 * @param array  $featureMasks The bit a feature's glyphs must carry, by tag
+	 *
+	 * @return array The tag to take each Lookup under, the alternate and the mask, by Lookup
+	 */
+	private function lookupsForStage(array $GSUBFeatures, $usetags, array $featureMasks)
+	{
+		$stage = [];
+		foreach ($this->featuresToApply($usetags) as $usetag) {
+			$mask = isset($featureMasks[$usetag]) ? $featureMasks[$usetag] : 0;
+			$tagInt = $this->alternateWanted($usetag, $usetags);
+
+			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+				if (!isset($stage[$lu])) {
+					$stage[$lu] = ['tag' => $usetag, 'alternate' => $tagInt, 'mask' => $mask];
+					continue;
+				}
+				$stage[$lu]['mask'] = $stage[$lu]['mask'] && $mask ? $stage[$lu]['mask'] | $mask : 0;
+			}
+		}
+
+		return $stage;
+	}
+
+	/**
+	 * Split a list of feature tags into the stages of the plan HarfBuzz would build for them.
+	 *
+	 * Callers whose tags are fixed name their stages outright. The Arabic presentation pass cannot:
+	 * _applyTagSettings() may have added to its list or taken from it by the time the stages are
+	 * wanted. A tag none of the stages names is one the document asked for, and joins the last of
+	 * them, which is the stage HarfBuzz adds a user feature to. The Khmer presentation pass carries a
+	 * document's tags too, but every one of them is in the same stage, so it needs no split.
+	 *
+	 * @param string   $usetags The tags to apply, space separated, each optionally followed by the
+	 *                          alternate it asks for
+	 * @param string[] $stages  The tags of each stage, space separated, in the order they are applied
+	 *
+	 * @return string[] The tags of each stage the list names something of, in the same order
+	 */
+	private function featureStages($usetags, array $stages)
+	{
+		$grouped = [];
+		$last = count($stages) - 1;
+
+		foreach (explode(' ', $usetags) as $entry) {
+			if ($entry === '') {
+				continue;
+			}
+
+			$at = $last;
+			foreach ($stages as $i => $tags) {
+				if (in_array(substr($entry, 0, 4), explode(' ', $tags), true)) {
+					$at = $i;
+					break;
+				}
+			}
+			$grouped[$at][] = $entry;
+		}
+		ksort($grouped);
+
+		$staged = [];
+		foreach ($grouped as $entries) {
+			$staged[] = implode(' ', $entries);
+		}
+
+		return $staged;
 	}
 
 	/**
