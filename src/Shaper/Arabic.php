@@ -19,6 +19,9 @@ use Mpdf\Utils\UtfString;
 class Arabic
 {
 
+	/** The action of a character the script states no form for, which stands as it was written */
+	const ACTION_NONE = 7;
+
 	// cf. http://unicode.org/Public/UNIDATA/ArabicShaping.txt
 	// http://unicode.org/Public/UNIDATA/extracted/DerivedJoiningType.txt
 	// JOIN TO FOLLOWING LETTER IN LOGICAL ORDER (i.e. AS INITIAL/MEDIAL FORM) = Unicode Left-Joining (+ Dual-Joining + Join_Causing 00640)
@@ -140,6 +143,15 @@ class Arabic
 		/* Mandaic */
 		0x0859 => 1, 0x085A => 1, 0x085B => 1,
 		];
+
+	/**
+	 * The feature each resolved action is stated under, indexed by the action.
+	 *
+	 * 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL :: 4=MED2 :: 5=FIN2 :: 6=FIN3, which is the
+	 * order rtlSUB indexes a letter's forms in. An action outside the table names no feature and is
+	 * substituted by nothing.
+	 */
+	private static $actionFeatures = ['isol', 'fina', 'init', 'medi', 'med2', 'fin2', 'fin3'];
 
 	/**
 	 * Read the form each character of the run calls for out of the joining classes, and write it into
@@ -294,14 +306,15 @@ class Arabic
 		return $n;
 	}
 
-	private static function glyphs($char, $type, &$chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin)
+	private static function glyphs($char, $action, &$chars, $i, $scriptTag, $usetags, $arabGlyphs, $transparentJoin)
 	{
-		// Optional Feature settings    // doesn't control Syriac at present
-		if (($type === 0 && strpos($usetags, 'isol') === false) || ($type === 1 && strpos($usetags, 'fina') === false) || ($type === 2 && strpos($usetags, 'init') === false) || ($type === 3 && strpos($usetags, 'medi') === false)) {
+		// A form whose feature the document switched off through OTLtags is not substituted. Read off the
+		// action rather than compared against each of the four the joining classes resolve, so that
+		// Syriac's three extra forms are each gated on the feature they are stated under as well.
+		if (!isset(self::$actionFeatures[$action]) || strpos($usetags, self::$actionFeatures[$action]) === false) {
 			return [$char, 0];
 		}
 
-		// 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL (:: 4=MED2 :: 5=FIN2 :: 6=FIN3)
 		$retk = -1;
 		// Alaph 00710 in Syriac
 		if ($scriptTag == 'syrc' && $char == '00710') {
@@ -335,11 +348,11 @@ class Arabic
 			}
 		}
 
-		if (($type > 0 || $type === 0) && isset($arabGlyphs[$char][$type])) {
-			$retk = $type;
-		} elseif ($type == 3 && isset($arabGlyphs[$char][1])) { // if <medial> not defined, but <final>, return <final>
+		if (isset($arabGlyphs[$char][$action])) {
+			$retk = $action;
+		} elseif ($action == 3 && isset($arabGlyphs[$char][1])) { // if <medial> not defined, but <final>, return <final>
 			$retk = 1;
-		} elseif ($type == 2 && isset($arabGlyphs[$char][0])) { // if <initial> not defined, but <isolated>, return <isolated>
+		} elseif ($action == 2 && isset($arabGlyphs[$char][0])) { // if <initial> not defined, but <isolated>, return <isolated>
 			$retk = 0;
 		}
 		if ($retk != -1) {

@@ -195,6 +195,59 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Every form is gated on the feature it is stated under, including the three Syriac states for the
+	 * Alaph. The gate compared the action against each of the four the joining classes resolve, so an
+	 * action of med2, fin2 or fin3 matched none of them and was drawn whatever the document asked for.
+	 *
+	 * @dataProvider dataActionFeatures
+	 */
+	public function testAFormIsGatedOnTheFeatureItIsStatedUnder($action, $feature, $substituted)
+	{
+		$without = trim(str_replace($feature, '', self::ALL_FORMS));
+
+		$this->assertSame([$substituted, $action], $this->shapeAction($action, self::ALL_FORMS));
+		$this->assertSame([self::BETH, 0], $this->shapeAction($action, $without), 'without ' . $feature);
+	}
+
+	public function dataActionFeatures()
+	{
+		return [
+			'isol' => [0, 'isol', 'X_ISOL'],
+			'fina' => [1, 'fina', 'X_FINA'],
+			'init' => [2, 'init', 'X_INIT'],
+			'medi' => [3, 'medi', 'X_MEDI'],
+			'med2' => [4, 'med2', 'X_MED2'],
+			'fin2' => [5, 'fin2', 'X_FIN2'],
+			'fin3' => [6, 'fin3', 'X_FIN3'],
+		];
+	}
+
+	/**
+	 * An action that names no feature at all is substituted by nothing, which is how a character Syriac
+	 * states no form for comes through the shaper as it was written
+	 */
+	public function testAFormWhoseActionNamesNoFeatureIsLeftAlone()
+	{
+		$this->assertSame([self::BETH, 0], $this->shapeAction(Arabic::ACTION_NONE, self::ALL_FORMS));
+	}
+
+	/**
+	 * One character in the form its action calls for, through a letter the font states all seven forms
+	 * of, so each action has one to reach and none of them stands in for another.
+	 *
+	 * @return array the [hex, form] pair the character came out as
+	 */
+	private function shapeAction($action, $usetags)
+	{
+		$info = [['hex' => self::BETH, 'uni' => hexdec(self::BETH), 'joining' => $action]];
+		$glyphs = [self::BETH => ['X_ISOL', 'X_FINA', 'X_INIT', 'X_MEDI', 'X_MED2', 'X_FIN2', 'X_FIN3']];
+
+		Arabic::shape($info, $glyphs, ' ' . self::FATHA, $usetags, 'syrc');
+
+		return [$info[0]['hex'], $info[0]['form']];
+	}
+
+	/**
 	 * U+074F SOGDIAN FE is dual-joining, so it joins to the letter before it and that letter takes a
 	 * medial or initial form. One entry of the right-joining table was missing its `=> 1`, which filed
 	 * U+074F as a value under the next free integer key instead of as a key of its own, and left
