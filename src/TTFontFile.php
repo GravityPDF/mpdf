@@ -2212,7 +2212,10 @@ class TTFontFile implements Fonts\FontSourceInterface
 						}
 					}
 
-					ksort($rtl);
+					// SORT_STRING because a key is hex: '0E007' is a numeric string in PHP, exponent notation
+					// for 0, while '0072A' is not, so the default comparison between them is not transitive
+					// and which order it settles on differs between PHP versions
+					ksort($rtl, SORT_STRING);
 					$rtlSUB = $rtl;
 				}
 
