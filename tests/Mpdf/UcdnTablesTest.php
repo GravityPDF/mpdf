@@ -178,21 +178,23 @@ class UcdnTablesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * lowercased ISO 15924 code, and every script that already had a number keeps it - callers
 	 * compare those numbers by range.
 	 *
-	 * The copy has Adlam and Toto taken out of it, leaving holes at their numbers and 174 as the
-	 * last in use
+	 * The copy has Adlam and Toto taken out of it, leaving holes at their numbers. Where the two the
+	 * database appends land is read off the copy rather than written out here, because it is one past
+	 * however many scripts Unicode has.
 	 */
 	public function testANewScriptIsAppendedAndTheRestKeepTheirNumbers()
 	{
 		$constants = $this->constantsOf($this->ucdn);
+		$appended = max(array_diff_key($constants, ['SCRIPT_ADLAM' => 1, 'SCRIPT_TOTO' => 1])) + 1;
 
 		// The copy had neither, and the database lists Toto first - they are numbered alphabetically
 		// and after the last number in use, rather than in the order read or into the holes left.
-		$this->assertSame(175, $constants['SCRIPT_ADLAM'], 'Adlam, which the database lists second');
-		$this->assertSame(176, $constants['SCRIPT_TOTO'], 'Toto, which it lists first');
+		$this->assertSame($appended, $constants['SCRIPT_ADLAM'], 'Adlam, which the database lists second');
+		$this->assertSame($appended + 1, $constants['SCRIPT_TOTO'], 'Toto, which it lists first');
 
 		$block = $this->ucdn;
-		$this->assertSame('adlm', $block::$uni_scriptblock[175]);
-		$this->assertSame('toto', $block::$uni_scriptblock[176]);
+		$this->assertSame('adlm', $block::$uni_scriptblock[$appended]);
+		$this->assertSame('toto', $block::$uni_scriptblock[$appended + 1]);
 
 		$this->assertSame(1, $constants['SCRIPT_LATIN']);
 		$this->assertSame(9, $constants['SCRIPT_DEVANAGARI']);
@@ -201,8 +203,8 @@ class UcdnTablesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The database written here names nine scripts. The other 166 keep the constant and the tag they
-	 * have rather than being dropped, and a chosen tag is never rewritten as the code it derives from.
+	 * The database written here names nine scripts. Every other script keeps the constant and the tag
+	 * it has rather than being dropped, and a chosen tag is never rewritten as the code it derives from.
 	 */
 	public function testAScriptTheDatabaseDoesNotNameKeepsItsConstantAndItsTag()
 	{

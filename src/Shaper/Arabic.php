@@ -19,7 +19,7 @@ use Mpdf\Fonts\GlyphString;
 class Arabic
 {
 
-	// UNIDATA_VERSION 17.0.0
+	// UNIDATA_VERSION 18.0.0
 	/**
 	 * The characters that join to the letter written after them, which is what an initial or a medial
 	 * form is drawn for: Unicode's Left-Joining, Dual-Joining and Join_Causing types.
@@ -62,7 +62,10 @@ class Arabic
 		0x08A8 => 1, 0x08A9 => 1, 0x08AF => 1, 0x08B0 => 1, 0x08B3 => 1, 0x08B4 => 1, 0x08B5 => 1, 0x08B6 => 1,
 		0x08B7 => 1, 0x08B8 => 1, 0x08BA => 1, 0x08BB => 1, 0x08BC => 1, 0x08BD => 1, 0x08BE => 1, 0x08BF => 1,
 		0x08C0 => 1, 0x08C1 => 1, 0x08C2 => 1, 0x08C3 => 1, 0x08C4 => 1, 0x08C5 => 1, 0x08C6 => 1, 0x08C7 => 1,
-		0x08C8 => 1, 0x200D => 1, 0x10EC3 => 1, 0x10EC4 => 1, 0x10EC6 => 1, 0x10EC7 => 1,
+		0x08C8 => 1, 0x200D => 1, 0x10EC3 => 1, 0x10EC4 => 1, 0x10EC6 => 1, 0x10EC7 => 1, 0x10ED9 => 1, 0x10EDA => 1,
+		0x10EDB => 1, 0x10EDC => 1, 0x10EDD => 1, 0x10EDE => 1, 0x10EDF => 1, 0x10EE0 => 1, 0x10EE1 => 1, 0x10EE2 => 1,
+		0x10EE3 => 1, 0x10EE4 => 1, 0x10EE5 => 1, 0x10EE6 => 1, 0x10EE7 => 1, 0x10EE8 => 1, 0x10EE9 => 1, 0x10EEA => 1,
+		0x10EEB => 1, 0x10EEC => 1, 0x10EED => 1, 0x10EEE => 1,
 	];
 
 	/**
