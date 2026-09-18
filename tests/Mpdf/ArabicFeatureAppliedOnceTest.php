@@ -33,12 +33,12 @@ class ArabicFeatureAppliedOnceTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	/** U+066E ARABIC LETTER DOTLESS BEH, the first alternate of beh */
 	const DOTLESS_BEH = 0x066E;
 
-	/** The forms below have no codepoint of their own, so the font maps them into the Private Use Area */
+	/**
+	 * The second alternate of beh, dotless beh's initial form, which has no codepoint of its own, so
+	 * the font maps it into the Private Use Area. The medial and final forms dotless beh takes in a
+	 * second pass are mapped to U+E001 and U+E002, which nothing below expects to be drawn.
+	 */
 	const DOTLESS_BEH_INIT = 0xE000;
-
-	const DOTLESS_BEH_MEDI = 0xE001;
-
-	const DOTLESS_BEH_FINA = 0xE002;
 
 	public function dataFeatureSettings()
 	{
