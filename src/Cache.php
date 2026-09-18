@@ -118,7 +118,12 @@ class Cache
 
 	public function remove($filename)
 	{
-		return unlink($this->getFilePath($filename));
+		$path = $this->getFilePath($filename);
+
+		/* A file another process removed first is removed; callers only ask that it be gone. The
+		 * warning is suppressed, which is what keeps an error handler that honours suppression from
+		 * turning a race this process lost into an exception. */
+		return @unlink($path) || !file_exists($path);
 	}
 
 	public function clearOld()
@@ -131,7 +136,7 @@ class Cache
 					&& $item->isFile()
 					&& !$this->isDotFile($item)
 					&& $this->isOld($item)) {
-				unlink($item->getPathname());
+				$this->remove($item->getFilename());
 			}
 		}
 	}
@@ -143,9 +148,15 @@ class Cache
 
 	private function isOld(DirectoryIterator $item)
 	{
-		return $this->cleanupInterval
-			? $item->getMTime() + $this->cleanupInterval < time()
-			: false;
+		if (!$this->cleanupInterval) {
+			return false;
+		}
+
+		/* Not $item->getMTime(), which SplFileInfo throws as a RuntimeException that no error
+		 * handler can decline where the file has gone since the directory was listed. */
+		$mtime = @filemtime($item->getPathname());
+
+		return false !== $mtime && $mtime + $this->cleanupInterval < time();
 	}
 
 	public function isDotFile(DirectoryIterator $item)

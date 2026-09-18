@@ -497,9 +497,10 @@ class Otl
 	 * Phases 4 and 5: substitution.
 	 *
 	 * Loads what this font's GSUB table says for this script and language, then hands the run to the
-	 * shaper the script needs. Every shaper ends in the same place - _applyGSUBrules() walking the
-	 * font's lookups in the order the Lookup table lists them - and what each does first is put the
-	 * characters into the order those lookups expect to find them in.
+	 * shaper the script needs. Every shaper ends by applying the presentation features - together in
+	 * Lookup List order, or a feature at a time where a later one is meant to read the glyphs an
+	 * earlier one made - and what each does first is put the characters into the order those lookups
+	 * expect to find them in.
 	 *
 	 * @return string The feature tags the generic path settled on, which the positioning below reads
 	 *                to tell an OpenType small-caps run from one drawn with synthesised capitals.
@@ -726,10 +727,8 @@ class Otl
 			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
 		}
 
-		$ts = explode(' ', $usetags);
-		foreach ($ts as $ut) { //  - Apply one at a time in Feature order
-			$this->_applyGSUBrules($ut, $GSUBscriptTag, $GSUBlangsys);
-		}
+		$this->applyGSUBfeaturesInTurn($usetags, $GSUBscriptTag, $GSUBlangsys, 0, []);
+
 		// e. NOT IN SPEC
 		// If space precedes a mark -> substitute a &nbsp; before the Mark, to prevent line breaking Test:
 		for ($ptr = 1; $ptr < count($this->OTLdata); $ptr++) {
@@ -1641,10 +1640,10 @@ class Otl
 	 * What the South East Asian shaper and the Khmer presentation pass ask for, where a later feature
 	 * is meant to see what an earlier one produced.
 	 *
-	 * The three other paths share applyGSUBlookupOverRun(), which takes a Lookup over the whole run.
-	 * This one cannot: within a feature it walks the glyphs outside the Lookups, so the first Lookup
-	 * that applies at a glyph moves the cursor on and the rest are not offered it. That is a deviation
-	 * from the order the spec and HarfBuzz apply a feature's Lookups in - see #233.
+	 * What separates it from the two syllable-based shapers, which name their own tags, is the list it
+	 * is given: the Khmer presentation pass hands on what a document asked for through
+	 * font-feature-settings, which can name the alternate it wants after the tag and can leave a
+	 * feature the shaper already named in the list twice.
 	 *
 	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
 	 *                          the alternate it asks for
@@ -1655,23 +1654,6 @@ class Otl
 	{
 		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
-		// A reverse Lookup runs the other way down the glyphs, so it cannot share the cursor the rest
-		// of the list walks forward. Taking each over the whole run up front costs nothing here: this
-		// method already abandons Lookup order, applying every Lookup at each glyph before it moves on.
-		$reverse = [];
-		foreach ($GSUBFeatures as $tag => $arr) {
-			if (strpos($usetags, $tag) === false) {
-				continue;
-			}
-			foreach ($arr as $lu) {
-				if ($this->GSUBLookups[$lu]['Type'] != 8) {
-					continue;
-				}
-				$reverse[$lu] = true;
-				$this->_applyGSUBreverseLookup($lu, $this->GSUBLookups[$lu]['Flag'], $this->GSUBLookups[$lu]['MarkFilteringSet'], $tag, $this->alternateWanted($tag, $usetags));
-			}
-		}
-
 		// An entry is a four character tag, which font-feature-settings may follow with the alternate it
 		// wants, 'salt4'. A feature named twice, as a document asking for one the shaper already named
 		// leaves it, is applied once.
@@ -1681,41 +1663,27 @@ class Otl
 		}
 		$tags = array_unique($tags);
 
+		// A reverse Lookup is taken over the whole run up front, out of the passes below, so that one
+		// two of these features name is taken once rather than once for each of them. What that costs
+		// is the place the Lookup List gives it among the Lookups of its own feature.
+		$reverse = [];
 		foreach ($tags as $usetag) {
-			$LookupList = [];
 			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
-				if (!isset($reverse[$lu])) {
-					$LookupList[] = $lu;
+				if ($this->GSUBLookups[$lu]['Type'] != 8 || isset($reverse[$lu])) {
+					continue;
 				}
+				$reverse[$lu] = true;
+				$this->_applyGSUBreverseLookup($lu, $this->GSUBLookups[$lu]['Flag'], $this->GSUBLookups[$lu]['MarkFilteringSet'], $usetag, $this->alternateWanted($usetag, $usetags));
 			}
+		}
+
+		foreach ($tags as $usetag) {
 			$tagInt = $this->alternateWanted($usetag, $usetags);
 
-			$ptr = 0;
-			// Test each glyph sequentially
-			while ($ptr < (count($this->OTLdata))) { // whilst there is another glyph ..0064
-				$currGlyph = $this->OTLdata[$ptr]['hex'];
-				$currGID = $this->OTLdata[$ptr]['uni'];
-				$shift = null;
-
-				foreach ($LookupList as $lu) {
-					$Type = $this->GSUBLookups[$lu]['Type'];
-					$Flag = $this->GSUBLookups[$lu]['Flag'];
-					$MarkFilteringSet = $this->GSUBLookups[$lu]['MarkFilteringSet'];
-
-					foreach ($this->GSUBLookups[$lu]['Subtables'] as $c => $subtable_offset) {
-						// The Coverage read for this subtable is the one for input position 0, which is the only
-						// position a match can start at - see where TTFontFile reads it
-						if (isset($this->GSLuCoverage[$lu][$c][$currGID])) {
-							// Get rules from font GSUB subtable
-							$shift = $this->_applyGSUBsubtable($lu, $c, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $Flag, $MarkFilteringSet, $this->GSLuCoverage[$lu][$c], 0, $usetag, 0, $tagInt);
-
-							if ($shift !== null) {
-								break 2;
-							}
-						}
-					}
+			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+				if (!isset($reverse[$lu])) {
+					$this->applyGSUBlookupOverRun($lu, $usetag, $tagInt, 0, 0);
 				}
-				$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 			}
 		}
 	}
@@ -1757,8 +1725,8 @@ class Otl
 	/**
 	 * Apply each feature over the whole run before the next one starts.
 	 *
-	 * What the two syllable-based shapers ask for: the features they name are staged, and a later one
-	 * is meant to read the glyphs an earlier one made.
+	 * What the two syllable-based shapers and the Arabic presentation pass ask for: the features they
+	 * name are staged, and a later one is meant to read the glyphs an earlier one made.
 	 *
 	 * @param array $featureMasks The bit a feature's glyphs must carry, by tag. A feature named here
 	 *                            is applied only where the reordering marked a character for it;
@@ -1768,7 +1736,7 @@ class Otl
 	{
 		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
 
-		foreach (explode(' ', $usetags) as $usetag) {
+		foreach ($this->featuresToApply($usetags) as $usetag) {
 			$mask = isset($featureMasks[$usetag]) ? $featureMasks[$usetag] : 0;
 			$tagInt = $this->alternateWanted($usetag, $usetags);
 
@@ -1855,6 +1823,26 @@ class Otl
 			}
 			$ptr += $shift === null ? 1 : $shift; // null: nothing applied, so step on one glyph
 		}
+	}
+
+	/**
+	 * The features a tag list asks for, in the order it names them and each of them once.
+	 *
+	 * An entry is a four character tag, which font-feature-settings may follow with the alternate it
+	 * wants, 'salt4' - alternateWanted() reads that back off the list. A feature named twice, as a
+	 * document asking for one the shaper already named leaves it, is applied once: a second pass
+	 * reaches the glyphs the first one made, which HarfBuzz never offers a Lookup again.
+	 *
+	 * @return string[] The feature tags, four characters each
+	 */
+	private function featuresToApply($usetags)
+	{
+		$tags = [];
+		foreach (explode(' ', $usetags) as $usetag) {
+			$tags[] = substr($usetag, 0, 4);
+		}
+
+		return array_unique($tags);
 	}
 
 	/**

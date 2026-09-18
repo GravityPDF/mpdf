@@ -10,11 +10,22 @@ namespace Mpdf;
  * bundles offers it. So the walk had no test and no fixture: the four golden masters called it 42
  * times across the corpus and every one of those calls found an empty Lookup list.
  *
- * Padauk-Mym2Script-Synthetic is a nine-glyph subset of Padauk Book 3.002 (OFL 1.1, from
- * packages/Myanmar-Bundle) with its GSUB replaced: the script is retagged mym2, and the below-base
- * forms the original draws through Graphite are stated as the two features the Myanmar shaper applies
- * in turn - blwf, in two Lookups, and pstf - each ligating a Virama with the consonant after it.
- * `hb-shape` draws what every case below expects.
+ * Myanmar-Mym2Script-Synthetic is a nine-glyph subset of the Padauk Book in packages/Myanmar-Bundle
+ * with its GSUB replaced: the script is retagged mym2, and the below-base forms the original draws
+ * through Graphite are stated as the two features the Myanmar shaper applies in turn - blwf, in two
+ * Lookups, and pstf - each ligating a Virama with the consonant after it. `hb-shape` draws what every
+ * case below expects.
+ *
+ * It carries a name of its own rather than the donor's: OFL 1.1 clause 3 bars a modified version from
+ * using a Reserved Font Name, and LICENSE-Padauk.txt reserves "Padauk" (#237). The SIL copyright the
+ * licence does require stays in the name table.
+ *
+ * Name ID 6 keeps the donor's shape: the UTF-8 bytes of a Burmese name zero-extended into UTF-16BE
+ * code units, which is how Padauk Book states its PostScript name and why TTFontFile reads it as
+ * invalid and falls back to name ID 4 - "PadaukBook contains illegal characters in Name ID 6",
+ * src/TTFontFile.php:719. It is the only font in tests/data/ttf that reaches that fallback, so the
+ * name is malformed on purpose. Its code units stay under 256, as the donor's are, because a name
+ * string above U+00FF is truncated as it is read (#238).
  */
 class MyanmarStackedConsonantTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -87,11 +98,11 @@ class MyanmarStackedConsonantTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		$mpdf = new TextRecordingMpdf([
 			'mode' => 'utf-8',
 			'fontDir' => [__DIR__ . '/../data/ttf'],
-			'fontdata' => ['padaukmym2scriptsynthetic' => [
-				'R' => 'Padauk-Mym2Script-Synthetic.ttf',
+			'fontdata' => ['myanmarmym2scriptsynthetic' => [
+				'R' => 'Myanmar-Mym2Script-Synthetic.ttf',
 				'useOTL' => 0xFF,
 			]],
-			'default_font' => 'padaukmym2scriptsynthetic',
+			'default_font' => 'myanmarmym2scriptsynthetic',
 		]);
 		$mpdf->WriteHTML('<p>' . $html . '</p>');
 

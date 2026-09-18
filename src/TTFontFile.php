@@ -676,17 +676,10 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$N = '';
 			if ($platformId == 3 && $encodingId == 1 && $languageId == 0x409) { // Microsoft, Unicode, US English, PS Name
 				$opos = $this->reader->tell();
-				$this->reader->seek($string_data_offset + $offset);
 				if ($length % 2 != 0) {
 					throw new \Mpdf\Exception\FontException("Error loading font: PostScript name is UTF-16BE string of odd length for font $this->filename");
 				}
-				$length /= 2;
-				$N = '';
-				while ($length > 0) {
-					$char = $this->reader->readUInt16();
-					$N .= (chr($char));
-					$length -= 1;
-				}
+				$N = mb_convert_encoding($this->reader->bytesAt($string_data_offset + $offset, $length), 'UTF-8', 'UTF-16BE');
 				$this->reader->seek($opos);
 			} elseif ($platformId == 1 && $encodingId == 0 && $languageId == 0) { // Macintosh, Roman, English, PS Name
 				$opos = $this->reader->tell();
@@ -2219,7 +2212,10 @@ class TTFontFile implements Fonts\FontSourceInterface
 						}
 					}
 
-					ksort($rtl);
+					// SORT_STRING because a key is hex: '0E007' is a numeric string in PHP, exponent notation
+					// for 0, while '0072A' is not, so the default comparison between them is not transitive
+					// and which order it settles on differs between PHP versions
+					ksort($rtl, SORT_STRING);
 					$rtlSUB = $rtl;
 				}
 

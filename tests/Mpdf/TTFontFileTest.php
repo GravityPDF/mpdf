@@ -40,6 +40,28 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A key of rtlSUB is a codepoint written as hex, and PHP reads some of those as numbers: '0E007' is
+	 * exponent notation for 0, while '0072A' beside it is not numeric at all. Sorting the table by the
+	 * default comparison therefore orders it by a relation that is not transitive, and which order that
+	 * settles on is down to the sort the PHP version happens to use - a font carrying both kinds of key
+	 * wrote one cache on PHP 5.6 and another on 8.5, so its fontcache master could only pass on one of
+	 * them.
+	 */
+	public function testTheRightToLeftFormTableIsKeyedInAnOrderEveryPhpVersionAgreesOn()
+	{
+		$fontkey = uniqid('rtlsub', true);
+		$this->ttf->getMetrics(__DIR__ . '/../data/ttf/NotoSansSyriac-Joining-Subset.ttf', $fontkey, 0, false, false, 0xFF);
+
+		$cached = $this->fontCache->jsonLoad($fontkey . '.GSUB.syrc.DFLT.json');
+		$keys = array_keys($cached['rtlSUB']);
+
+		$sorted = $keys;
+		sort($sorted, SORT_STRING);
+
+		$this->assertSame($sorted, $keys);
+	}
+
+	/**
 	 * Verify a font whose GSUB lookups carry UseMarkFilteringSet parses rather than throwing
 	 */
 	public function testGetMetricsWithMarkGlyphSets()

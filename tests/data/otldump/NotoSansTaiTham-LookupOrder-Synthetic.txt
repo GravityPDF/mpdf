@@ -1,0 +1,19 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00020; &#x01A20; &#x01A21; &#x01A63; &#x0E000; &#x0E001; &#x0E002; &#x0E003; </div>
+<h3>Glyph class 3</h3>
+<h5>Mark glyph (non-spacing combining glyph)</h5>
+<div class="glyphs">&#x25cc;&#x01A60; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>lana</h5><div><a href="font_dump_otl.php?script=lana&amp;lang=DFLT">DFLT</a></b>: ccmp </div>
+</div>
+<div>GPOS table not defined</div>
+
+=== detail: script lana language DFLT ===
+<h1>GSUB Tables</h1>
+<bookmark level="0" content="GSUB features"><div class="level1"><h5 class="level1"><bookmark level="1" content="ccmp [#0]">Lookup #0 [tag: <span style="color:#000066;">ccmp</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 4: Ligature Substitution Subtable</div><div class="substitution"><span class="unicode">U+1A60, U+1A21&nbsp;</span> <span class="unchanged">&nbsp;&#x25cc;&#x1A60; &#x1A21;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE001;</span>&nbsp; <span class="unicode">M+E001</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="ccmp [#1]">Lookup #1 [tag: <span style="color:#000066;">ccmp</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 4: Ligature Substitution Subtable</div><div class="substitution"><span class="unicode">U+1A20, M+E001&nbsp;</span> <span class="unchanged">&nbsp;&#x1A20; &#xE001;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE002;</span>&nbsp; <span class="unicode">M+E002</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="ccmp [#2]">Lookup #2 [tag: <span style="color:#000066;">ccmp</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">M+E001&nbsp;</span> <span class="unchanged">&nbsp;&#xE001;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE003;</span>&nbsp; <span class="unicode">M+E003</span> </div></div>
+<div>GPOS table not defined</div>
