@@ -3334,19 +3334,26 @@ class TTFontFile implements Fonts\FontSourceInterface
 					$feature = $features[$featureIndex];
 					// A feature that runs no lookups has nothing to be ordered by and nothing to do. The
 					// spec permits one and fonts in the wild carry one - Sedan SC's 'smcp' lists no
-					// lookups at all - so dropping it is the whole of what is right to do with it: keying
-					// the row by the lookup it has not got put it under '', which ksort() then ordered
-					// ahead of every real lookup index.
+					// lookups at all - so dropping it is the whole of what is right to do with it:
+					// grouping it under the lookup it has not got puts it under '', which ksort() then
+					// orders ahead of every real lookup index.
 					if (isset($feature['LookupListIndex'][0])) {
-						$byFirstLookup[$feature['LookupListIndex'][0]] = $feature;
+						$byFirstLookup[$feature['LookupListIndex'][0]][] = $feature;
 					}
 				}
 
-				// The order the lookups need to be run in is the order the Lookup table lists them,
-				// not the order the features were asked for
+				// The order the lookups need to be run in is the order the Lookup table lists them, not
+				// the order the features were asked for. Several features of one language system can
+				// start at the same lookup - Manjari's Malayalam 'akhn', 'half' and 'haln' all start at
+				// lookup 1 - so an index holds every feature that starts there rather than one. Sorting
+				// integer keys and then reading each group as the language system listed it settles the
+				// same way on every PHP version; sorting the features themselves would not, since
+				// usort() was unstable before PHP 8.0.
 				ksort($byFirstLookup);
-				foreach ($byFirstLookup as $feature) {
-					$table[$scriptTag][$langTag][$feature['tag']] = $feature['LookupListIndex'];
+				foreach ($byFirstLookup as $sharingAFirstLookup) {
+					foreach ($sharingAFirstLookup as $feature) {
+						$table[$scriptTag][$langTag][$feature['tag']] = $feature['LookupListIndex'];
+					}
 				}
 
 				if (!isset($scriptLang[$scriptTag])) {
