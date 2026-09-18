@@ -609,9 +609,10 @@ class Otl
 	 */
 	private function shapeArabic($GSUBscriptTag, $GSUBlangsys, $GSUBFeatures, $scriptblock)
 	{
-		// Joining is resolved off the characters as written and carried on the run from here, because a
-		// glyph the substitutions below leave in a character's place is no character to read it from
-		Arabic::resolveJoining($this->OTLdata, $this->GlyphClassMarks);
+		// The form every character calls for, the Syriac Alaph's three included, is resolved off the
+		// characters as written and carried on the run from here, because a glyph the substitutions below
+		// leave in a character's place is no character to read it from
+		Arabic::resolveJoining($this->OTLdata, $this->GlyphClassMarks, $GSUBscriptTag);
 
 		// a. Apply initial GSUB Lookups (in order specified in lookup list but only selecting from certain tags)
 		$tags = 'locl ccmp';
@@ -632,13 +633,7 @@ class Otl
 			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
 		}
 
-		$multiple = Arabic::shape(
-			$this->OTLdata,
-			$this->GSUBdata[$this->GSUBfont]['rtlSUB'],
-			$this->GlyphClassMarks,
-			$usetags,
-			$GSUBscriptTag
-		);
+		$multiple = Arabic::shape($this->OTLdata, $this->GSUBdata[$this->GSUBfont]['rtlSUB'], $usetags);
 
 		// A form the font states as more than one glyph goes in through the same Multiple Substitution
 		// path GSUB uses, which carries the ligature and mark bookkeeping over the run getting longer.
