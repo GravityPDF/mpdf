@@ -64,6 +64,40 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A name record is a UTF-16BE string, and both classes built it one code unit at a time through
+	 * chr(), which takes a byte: every unit above U+00FF was reduced mod 256, so a font that states
+	 * its name in its own script was read under a mangled one, and on PHP 8.5 reading it raised a
+	 * deprecation per character. fullName is what MetricsGenerator records as the font's name, so the
+	 * mangling reached the document (#238).
+	 *
+	 * Sinhala is two bytes a character in UTF-16 and three in UTF-8, so nothing about the record's
+	 * length says what the decoded name should be.
+	 *
+	 * Built here rather than added to tests/data/ttf, which both golden masters read in full.
+	 */
+	public function testAFontNamedInItsOwnScriptIsReadUnderThatName()
+	{
+		$family = 'නොටෝ සිංහල';
+		$file = $this->withNames('NotoSansSinhala-Subset.ttf', [
+			1 => $family,
+			2 => 'Regular',
+			4 => $family . ' Regular',
+		]);
+
+		$browser = new TTFontFileAnalysis($this->cache(), 'win');
+		list($browserName) = $browser->extractCoreInfo($file);
+
+		$parser = new TTFontFile($this->cache(), 'win');
+		$parser->getMetrics($file, uniqid('', true), 0, false, false, 0xFF);
+
+		unlink($file);
+
+		$this->assertSame($family, $parser->familyName, 'the family name the parser read');
+		$this->assertSame($family . ' Regular', $parser->fullName, 'the full name the parser read');
+		$this->assertSame($family, $browserName, 'the family name the font browser read');
+	}
+
+	/**
 	 * OS/2 carries fsSelection, which states bold and italic, but it is optional - an old Mac
 	 * TrueType need not have it, and then the only statement of either is head.macStyle. The bold
 	 * and italic tests fall through to fsSelection with & when macStyle does not claim them, so it
@@ -275,6 +309,34 @@ class TTFontFileAnalysisTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}, $reader(), FileReader::class);
 
 		return $handle() !== null;
+	}
+
+	/**
+	 * Restates the name table, appended at the end of the file with the directory entry pointed at it,
+	 * because a record's string is as long as its text and the table cannot be patched in place.
+	 *
+	 * @param array $names The string to state for each name ID, as UTF-8
+	 *
+	 * @return string Where the altered font was written, for the caller to read and then unlink
+	 */
+	private function withNames($file, array $names)
+	{
+		$records = '';
+		$strings = '';
+		foreach ($names as $nameId => $name) {
+			$utf16 = mb_convert_encoding($name, 'UTF-16BE', 'UTF-8');
+			// Microsoft, Unicode BMP, US English, which is the platform both classes read
+			$records .= pack('nnnnnn', 3, 1, 0x409, $nameId, strlen($utf16), strlen($strings));
+			$strings .= $utf16;
+		}
+
+		$table = pack('nnn', 0, count($names), 6 + 12 * count($names)) . $records . $strings;
+
+		$font = file_get_contents(__DIR__ . '/../../data/ttf/' . $file);
+		$font = str_pad($font, (int) (4 * ceil(strlen($font) / 4)), "\0");
+		$font = substr_replace($font, pack('NN', strlen($font), strlen($table)), $this->tableRecord($font, 'name') + 8, 8);
+
+		return $this->writeFontVariant($font . $table, 'name-strings');
 	}
 
 	/**

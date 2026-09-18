@@ -127,17 +127,9 @@ class TTFontFileAnalysis extends TTFontFile
 			$N = '';
 			if ($platformId == 3 && $encodingId == 1 && $languageId == 0x409) { // Microsoft, Unicode, US English, PS Name
 				$opos = $this->reader->tell();
-				$this->reader->seek($string_data_offset + $offset);
-				if ($length % 2 != 0) {
-					$length += 1;
-				}
-				$length /= 2;
-				$N = '';
-				while ($length > 0) {
-					$char = $this->reader->readUInt16();
-					$N .= (chr($char));
-					$length -= 1;
-				}
+				// A record of odd length cannot be UTF-16, and the browser lists a font rather than
+				// refusing it as the parser does, so the trailing byte is dropped instead of read past
+				$N = mb_convert_encoding($this->reader->bytesAt($string_data_offset + $offset, $length - ($length % 2)), 'UTF-8', 'UTF-16BE');
 				$this->reader->seek($opos);
 			} elseif ($platformId == 1 && $encodingId == 0 && $languageId == 0) { // Macintosh, Roman, English, PS Name
 				$opos = $this->reader->tell();
