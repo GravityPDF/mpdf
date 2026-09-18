@@ -499,12 +499,6 @@ parameters:
 			path: src/Mpdf.php
 
 		-
-			message: '#^Variable \$cw might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Mpdf.php
-
-		-
 			message: '#^Variable \$desc might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1

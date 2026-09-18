@@ -36,6 +36,11 @@ class FontCache
 		return $this->cache->load($filename);
 	}
 
+	public function loadIfPresent($filename)
+	{
+		return $this->cache->loadIfPresent($filename);
+	}
+
 	public function jsonLoad($filename)
 	{
 		if (isset($this->memoryCache[$filename])) {
@@ -44,6 +49,32 @@ class FontCache
 
 		$this->memoryCache[$filename] = json_decode($this->load($filename), true);
 		return $this->memoryCache[$filename];
+	}
+
+	/**
+	 * The entry decoded, or null where it is not there.
+	 *
+	 * A read that came back with nothing is not remembered: the caller that answers a miss by generating
+	 * the entry again has to be handed what it wrote, and not the same nothing for the rest of a document
+	 * then drawn without the font's metrics. Nothing mPDF writes decodes to null, so a file that does is
+	 * as unusable as a missing one and counts the same way.
+	 */
+	public function jsonLoadIfPresent($filename)
+	{
+		if (isset($this->memoryCache[$filename])) {
+			return $this->memoryCache[$filename];
+		}
+
+		$contents = $this->cache->loadIfPresent($filename);
+		$decoded = null === $contents ? null : json_decode($contents, true);
+
+		if (null === $decoded) {
+			return null;
+		}
+
+		$this->memoryCache[$filename] = $decoded;
+
+		return $decoded;
 	}
 
 	public function write($filename, $data)

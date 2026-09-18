@@ -104,6 +104,30 @@ class Cache
 		return file_get_contents($this->getFilePath($filename));
 	}
 
+	/**
+	 * The entry's contents, or null where it is not there.
+	 *
+	 * A caller that asks has() and then load() is handed nothing in place of the entry it had just seen
+	 * where another process's clearOld() expires it in between. Reporting the miss instead lets the
+	 * caller take the path it takes when has() is false.
+	 *
+	 * The has() below is what makes an entry this cache has never held raise no diagnostic at all, which
+	 * a lone suppressed read cannot: @ leaves an error handler to be called with error_reporting() at
+	 * zero, and a handler that does not consult it sees the warning. Only the read that loses the race
+	 * inside the two calls is suppressed, so that a handler converting warnings to exceptions cannot
+	 * make a cache miss fatal.
+	 */
+	public function loadIfPresent($filename)
+	{
+		if (!$this->has($filename)) {
+			return null;
+		}
+
+		$contents = @file_get_contents($this->getFilePath($filename));
+
+		return false === $contents ? null : $contents;
+	}
+
 	public function write($filename, $data)
 	{
 		$tempFile = tempnam($this->basePath, 'cache_tmp_');

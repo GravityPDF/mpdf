@@ -3997,8 +3997,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		];
 
 		$fontCacheFilename = $fontkey . '.mtx.json';
-		if ($this->fontCache->jsonHas($fontCacheFilename)) {
-			$font = $this->fontCache->jsonLoad($fontCacheFilename);
+		$cachedFont = $this->fontCache->jsonLoadIfPresent($fontCacheFilename);
+		if (null !== $cachedFont) {
+			$font = $cachedFont;
 		}
 
 		$ttffile = $this->fontFileFinder->findFontFile($this->fontdata[$family][$stylekey]);
@@ -4033,8 +4034,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$regenerate = true;
 		}
 
+		$cw = null;
 		$glyphIDtoUni = null;
-		if (empty($font['name']) || $font['originalsize'] != $ttfstat['size'] || $regenerate) {
+		if (!$regenerate && !empty($font['name']) && $font['originalsize'] == $ttfstat['size']) {
+			$cw = $this->fontCache->loadIfPresent($fontkey . '.cw.dat');
+			$glyphIDtoUni = $this->fontCache->loadIfPresent($fontkey . '.gid.dat');
+		}
+
+		/* The widths and the glyph map are written beside the metrics above and read as one entry with
+		 * them: either of them gone is a cache miss for all three, because taking only what survived
+		 * leaves the font holding the widths of no characters at all, which the writer divides by. The
+		 * metrics themselves are already covered, by $font['name'] being empty where they did not load. */
+		if (null === $cw || null === $glyphIDtoUni) {
 			$generator = new MetricsGenerator($this->fontCache, $this->fontDescriptor);
 
 			$generator->generateMetrics(
@@ -4048,16 +4059,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$fontUseOTL
 			);
 
-			$font = $this->fontCache->jsonLoad($fontCacheFilename);
-			$cw = $this->fontCache->load($fontkey . '.cw.dat');
-			$glyphIDtoUni = $this->fontCache->load($fontkey . '.gid.dat');
-		} else {
-			if ($this->fontCache->has($fontkey . '.cw.dat')) {
-				$cw = $this->fontCache->load($fontkey . '.cw.dat');
-			}
+			$font = $this->fontCache->jsonLoadIfPresent($fontCacheFilename);
+			$cw = $this->fontCache->loadIfPresent($fontkey . '.cw.dat');
+			$glyphIDtoUni = $this->fontCache->loadIfPresent($fontkey . '.gid.dat');
 
-			if ($this->fontCache->has($fontkey . '.gid.dat')) {
-				$glyphIDtoUni = $this->fontCache->load($fontkey . '.gid.dat');
+			$written = [$fontCacheFilename => $font, $fontkey . '.cw.dat' => $cw, $fontkey . '.gid.dat' => $glyphIDtoUni];
+			foreach ($written as $entry => $contents) {
+				if (null === $contents) {
+					throw new \Mpdf\MpdfException(sprintf(
+						'Cannot read the font metrics just written to %s',
+						$this->fontCache->tempFilename($entry)
+					));
+				}
 			}
 		}
 
@@ -25772,14 +25785,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			if (isset($this->fonts[$font])) {
 				$cw = &$this->fonts[$font]['cw'];
-			} elseif ($this->fontCache->has($font . '.cw.dat')) {
-				$cw = $this->fontCache->load($font . '.cw.dat');
 			} else {
-				$prevFontFamily = $this->FontFamily;
-				$prevFontStyle = $this->currentfontstyle;
-				$prevFontSizePt = $this->FontSizePt;
-				$this->SetFont($bsf, '', '', false);
-				$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+				$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
+
+				if (null === $cw) {
+					$prevFontFamily = $this->FontFamily;
+					$prevFontStyle = $this->currentfontstyle;
+					$prevFontSizePt = $this->FontSizePt;
+					$this->SetFont($bsf, '', '', false);
+					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+				}
 			}
 
 			if (!$cw) {
@@ -25890,14 +25905,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				if (isset($this->fonts[$font])) {
 					$cw = &$this->fonts[$font]['cw'];
-				} elseif ($this->fontCache->has($font . '.cw.dat')) {
-					$cw = $this->fontCache->load($font . '.cw.dat');
 				} else {
-					$prevFontFamily = $this->FontFamily;
-					$prevFontStyle = $this->currentfontstyle;
-					$prevFontSizePt = $this->FontSizePt;
-					$this->SetFont($font, '', '', false);
-					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+					$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
+
+					if (null === $cw) {
+						$prevFontFamily = $this->FontFamily;
+						$prevFontStyle = $this->currentfontstyle;
+						$prevFontSizePt = $this->FontSizePt;
+						$this->SetFont($font, '', '', false);
+						$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+					}
 				}
 
 				if (!$cw) {
@@ -25939,14 +25956,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				if (isset($this->fonts[$font])) {
 					$cw = &$this->fonts[$font]['cw'];
-				} elseif ($this->fontCache->has($font . '.cw.dat')) {
-					$cw = $this->fontCache->load($font . '.cw.dat');
 				} else {
-					$prevFontFamily = $this->FontFamily;
-					$prevFontStyle = $this->currentfontstyle;
-					$prevFontSizePt = $this->FontSizePt;
-					$this->SetFont($this->backupSIPFont, '', '', false);
-					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+					$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
+
+					if (null === $cw) {
+						$prevFontFamily = $this->FontFamily;
+						$prevFontStyle = $this->currentfontstyle;
+						$prevFontSizePt = $this->FontSizePt;
+						$this->SetFont($this->backupSIPFont, '', '', false);
+						$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+					}
 				}
 
 				if (!$cw) {
@@ -26045,16 +26064,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			if (isset($this->fonts[$font])) {
 				$cw = &$this->fonts[$font]['cw'];
-			} elseif ($this->fontCache->has($font . '.cw.dat')) {
-				$cw = $this->fontCache->load($font . '.cw.dat');
 			} else {
-				$prevFontFamily = $this->FontFamily;
-				$prevFontStyle = $this->currentfontstyle;
-				$prevFontSizePt = $this->FontSizePt;
-				$this->SetFont($bsf, '', '', false);
-				$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-				if ($this->fontCache->has($font . '.cw.dat')) {
-					$cw = $this->fontCache->load($font . '.cw.dat');
+				$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
+
+				if (null === $cw) {
+					$prevFontFamily = $this->FontFamily;
+					$prevFontStyle = $this->currentfontstyle;
+					$prevFontSizePt = $this->FontSizePt;
+					$this->SetFont($bsf, '', '', false);
+					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+					$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
 				}
 			}
 

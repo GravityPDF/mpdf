@@ -81,10 +81,15 @@ class FontWriter
 					$this->mpdf->FontFiles[$fontkey]['n'] = $this->mpdf->n;
 					$originalsize = $info['length1'];
 					if ($this->mpdf->repackageTTF || $this->mpdf->fonts[$fontkey]['TTCfontID'] > 0 || $this->mpdf->fonts[$fontkey]['useOTL'] > 0) { // mPDF 5.7.1
-						// First see if there is a cached compressed file
-						if ($this->fontCache->has($fontkey . '.ps.z') && $this->fontCache->jsonHas($fontkey . '.ps.json')) {
-							$font = $this->fontCache->load($fontkey . '.ps.z');
-							$originalsize = $this->fontCache->jsonLoad($fontkey . '.ps.json');  // sets $originalsize (of repackaged font)
+						// Both entries or neither: the stream and the length it declares are kept in
+						// separate files, and a miss on either leaves nothing to embed. The length is
+						// read first because it is one integer, where the stream it vouches for is the
+						// whole compressed font
+						$repackagedsize = $this->fontCache->jsonLoadIfPresent($fontkey . '.ps.json');
+						$font = null === $repackagedsize ? null : $this->fontCache->loadIfPresent($fontkey . '.ps.z');
+
+						if (null !== $font) {
+							$originalsize = $repackagedsize; // of the repackaged font, not of the file
 						} else {
 							$subsetter = $this->subsetter();
 							$font = $subsetter->repackageTTF($this->mpdf->FontFiles[$fontkey]['ttffile'], $this->mpdf->fonts[$fontkey]['TTCfontID'], $this->mpdf->debugfonts, $this->mpdf->fonts[$fontkey]['useOTL']); // mPDF 5.7.1
@@ -96,12 +101,13 @@ class FontWriter
 							$this->fontCache->binaryWrite($fontkey . '.ps.z', $font);
 							$this->fontCache->jsonWrite($fontkey . '.ps.json', $originalsize);
 						}
-					} elseif ($this->fontCache->has($fontkey . '.z')) {
-						$font = $this->fontCache->load($fontkey . '.z');
 					} else {
-						$font = file_get_contents($this->mpdf->FontFiles[$fontkey]['ttffile']);
-						$font = gzcompress($font);
-						$this->fontCache->binaryWrite($fontkey . '.z', $font);
+						$font = $this->fontCache->loadIfPresent($fontkey . '.z');
+
+						if (null === $font) {
+							$font = gzcompress(file_get_contents($this->mpdf->FontFiles[$fontkey]['ttffile']));
+							$this->fontCache->binaryWrite($fontkey . '.z', $font);
+						}
 					}
 
 					$this->writer->write('<</Length ' . strlen($font));
@@ -332,11 +338,15 @@ class FontWriter
 					$this->writer->write('/DW ' . $font['desc']['MissingWidth'] . '');
 				}
 
-				if (!$asSubset && $this->fontCache->has($font['fontkey'] . '.cw')) {
-					$w = $this->fontCache->load($font['fontkey'] . '.cw');
-					$this->writer->write($w);
-				} else {
+				$w = null;
+				if (!$asSubset) {
+					$w = $this->fontCache->loadIfPresent($font['fontkey'] . '.cw');
+				}
+
+				if (null === $w) {
 					$this->writeTTFontWidths($font, $asSubset, ($asSubset ? $subsetter->maxUni : 0));
+				} else {
+					$this->writer->write($w);
 				}
 
 				$this->writer->write('/CIDToGIDMap ' . ($this->mpdf->n + 4) . ' 0 R');
@@ -416,9 +426,9 @@ class FontWriter
 					$cidtogidmap = gzcompress($cidtogidmap);
 				} else {
 					// First see if there is a cached CIDToGIDMapfile
-					if ($this->fontCache->has($font['fontkey'] . '.cgm')) {
-						$cidtogidmap = $this->fontCache->load($font['fontkey'] . '.cgm');
-					} else {
+					$cidtogidmap = $this->fontCache->loadIfPresent($font['fontkey'] . '.cgm');
+
+					if (null === $cidtogidmap) {
 						$ttf = new TTFontFile($this->fontCache, $this->fontDescriptor);
 						$charToGlyph = $ttf->getCTG($font['ttffile'], $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']);
 						$cidtogidmap = str_pad('', 256 * 256 * 2, "\x00");
@@ -508,15 +518,20 @@ class FontWriter
 		];
 
 		$fontCacheFilename = $font['fontkey'] . '.cw127.json';
-		if ($asSubset && $this->fontCache->jsonHas($fontCacheFilename)) {
-			$character = $this->fontCache->jsonLoad($fontCacheFilename);
+		$cached = null;
+		if ($asSubset) {
+			$cached = $this->fontCache->jsonLoadIfPresent($fontCacheFilename);
+		}
+
+		if (null !== $cached) {
+			$character = $cached;
 			$character['startcid'] = 128;
 		}
 
 		// for each character
 		$cwlen = ($asSubset) ? $maxUni + 1 : (strlen($font['cw']) / 2);
 		for ($cid = $character['startcid']; $cid < $cwlen; $cid++) {
-			if ($cid == 128 && $asSubset && (!$this->fontCache->has($fontCacheFilename))) {
+			if ($cid == 128 && $asSubset && null === $cached) {
 				$character = [
 					'rangeid' => $character['rangeid'],
 					'prevcid' => $character['prevcid'],

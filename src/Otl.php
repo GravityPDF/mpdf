@@ -286,9 +286,8 @@ class Otl
 		$this->fontkey = $this->mpdf->CurrentFont['fontkey'];
 		$this->glyphIDtoUni = $this->mpdf->CurrentFont['glyphIDtoUni'];
 
-		$fontCacheFilename = $this->fontkey . '.GDEFdata.json';
-		if (!isset($this->GDEFdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
-			$font = $this->fontCache->jsonLoad($fontCacheFilename);
+		if (!isset($this->GDEFdata[$this->fontkey])) {
+			$font = $this->loadRequiredLayoutData($this->fontkey . '.GDEFdata.json');
 
 			$this->GDEFdata[$this->fontkey] = [
 				'MarkAttachmentType' => $font['MarkAttachmentType'],
@@ -559,10 +558,8 @@ class Otl
 		$this->GSUBfont = $this->fontkey . '.GSUB.' . $GSUBscriptTag . '.' . $GSUBlangsys;
 
 		if (!isset($this->GSUBdata[$this->GSUBfont])) {
-			$fontCacheFilename = $this->GSUBfont . '.json';
-			if ($this->fontCache->jsonHas($fontCacheFilename)) {
-				$font = $this->fontCache->jsonLoad($fontCacheFilename);
-
+			$font = $this->fontCache->jsonLoadIfPresent($this->GSUBfont . '.json');
+			if (null !== $font) {
 				$this->GSUBdata[$this->GSUBfont]['rtlSUB'] = $font['rtlSUB'];
 				$this->GSUBdata[$this->GSUBfont]['finals'] = $font['finals'];
 				if ($this->shaper == 'I') {
@@ -588,12 +585,11 @@ class Otl
 	{
 		$this->readTable('GSUB');
 
-		$fontCacheFilename = $this->fontkey . '.GSUBdata.json';
-		if (!isset($this->GSUBdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
-			$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'] = $this->fontCache->jsonLoad($fontCacheFilename);
-		} else {
-			$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'];
+		if (!isset($this->GSUBdata[$this->fontkey])) {
+			$this->GSUBdata[$this->fontkey]['GSLuCoverage'] = $this->loadRequiredLayoutData($this->fontkey . '.GSUBdata.json');
 		}
+
+		$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'];
 
 		$this->GSUBLookups = $this->mpdf->CurrentFont['GSUBLookups'];
 	}
@@ -1194,12 +1190,11 @@ class Otl
 		$this->Exit = [];
 
 		// 6. Load GPOS data, Coverage & Lookups
-		$fontCacheFilename = $this->fontkey . '.GPOSdata.json';
-		if (!isset($this->GPOSdata[$this->fontkey]) && $this->fontCache->jsonHas($fontCacheFilename)) {
-			$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'] = $this->fontCache->jsonLoad($fontCacheFilename);
-		} else {
-			$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'];
+		if (!isset($this->GPOSdata[$this->fontkey])) {
+			$this->GPOSdata[$this->fontkey]['LuCoverage'] = $this->loadRequiredLayoutData($this->fontkey . '.GPOSdata.json');
 		}
+
+		$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'];
 
 		$this->GPOSLookups = $this->mpdf->CurrentFont['GPOSLookups'];
 
@@ -3088,7 +3083,7 @@ class Otl
 		}
 
 		$filename = $this->fontkey . '.' . $tag . '.dat';
-		$bytes = $this->fontCache->has($filename) ? $this->fontCache->load($filename) : false;
+		$bytes = $this->fontCache->loadIfPresent($filename);
 
 		if (!$bytes) {
 			throw new \Mpdf\MpdfException(sprintf(
@@ -3099,6 +3094,33 @@ class Otl
 		}
 
 		$this->reader = $this->readers[$this->fontkey][$tag] = new BlobReader($bytes);
+	}
+
+	/**
+	 * What the parser derived from GDEF, GSUB or GPOS and cached whole, for a table this font has. It is
+	 * written for every such table the parser reads, so a miss can only be the entry going between
+	 * renders that share a tempDir - unlike the per-script entry loadGsubDerivedData() reads, which the
+	 * parser writes only where the script has anything to state and whose miss is ordinary.
+	 *
+	 * Nothing here can derive it again - only re-parsing the font can - so the miss is raised rather than
+	 * shaped around, which is what readTable() does with the table bytes these are derived from.
+	 *
+	 * @param string $filename
+	 *
+	 * @return array
+	 */
+	private function loadRequiredLayoutData($filename)
+	{
+		$data = $this->fontCache->jsonLoadIfPresent($filename);
+
+		if (null === $data) {
+			throw new \Mpdf\MpdfException(sprintf(
+				'Cannot read the layout data cached at %s',
+				$this->fontCache->tempFilename($filename)
+			));
+		}
+
+		return $data;
 	}
 
 	/**

@@ -44,4 +44,25 @@ class FontCacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->fontCache->jsonRemove($filename);
 		$this->assertFalse($this->fontCache->jsonHas($filename));
 	}
+
+	/**
+	 * A read that found nothing is not remembered. Remembering it is what turns one entry expiring
+	 * mid-render into a whole document drawn without the font's metrics: the caller answers the miss by
+	 * generating the entry again, and is handed the nothing from before it instead of what it wrote.
+	 */
+	public function testAnEntryThatWasNotThereIsNotRememberedAsEmpty()
+	{
+		$filename = 'jsonMissTest.json';
+
+		$this->assertNull($this->fontCache->jsonLoadIfPresent($filename));
+		$this->assertFalse($this->fontCache->jsonHas($filename));
+
+		$this->fontCache->jsonWrite($filename, 'Output Text');
+
+		try {
+			$this->assertSame('Output Text', $this->fontCache->jsonLoadIfPresent($filename));
+		} finally {
+			$this->fontCache->jsonRemove($filename);
+		}
+	}
 }
