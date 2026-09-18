@@ -19,9 +19,6 @@ use Mpdf\Fonts\GlyphString;
 class Arabic
 {
 
-	/** The action of a character the script states no form for, which stands as it was written */
-	const ACTION_NONE = 7;
-
 	// cf. http://unicode.org/Public/UNIDATA/ArabicShaping.txt
 	// http://unicode.org/Public/UNIDATA/extracted/DerivedJoiningType.txt
 	// JOIN TO FOLLOWING LETTER IN LOGICAL ORDER (i.e. AS INITIAL/MEDIAL FORM) = Unicode Left-Joining (+ Dual-Joining + Join_Causing 00640)
@@ -145,9 +142,13 @@ class Arabic
 		];
 
 	/**
-	 * The feature each resolved action is stated under, in the order rtlSUB indexes a letter's forms in.
-	 * An action outside the table names no feature and is substituted by nothing.
+	 * The joining group DALATH RISH of ArabicShaping.txt, which with ALAPH is the whole of what the
+	 * joining state table reads beyond the joining types. All four letters are right-joining, so an
+	 * Alaph after one of them stands apart from it, and fin3 is the form Syriac states for that.
 	 */
+	private static $dalathRish = [0x0715 => 1, 0x0716 => 1, 0x072A => 1, 0x072F => 1];
+
+	/** The feature each resolved action is stated under, in the order rtlSUB indexes a letter's forms in */
 	private static $actionFeatures = ['isol', 'fina', 'init', 'medi', 'med2', 'fin2', 'fin3'];
 
 	/**
@@ -193,7 +194,7 @@ class Arabic
 				continue;
 			}
 			if ($scriptTag == 'syrc' && $crntChar == '00710') {
-				$action = self::alaphAction($prevChar, $joinedToPrevious, $nextChar);
+				$action = self::alaphAction($prevChar, $joinedToPrevious, $joinedToNext);
 			} else {
 				$action = 0;
 				if ($joinedToPrevious) {
@@ -209,47 +210,39 @@ class Arabic
 	}
 
 	/**
-	 * The action the Syriac Alaph U+0710 calls for: med2, fin2, fin3 or none of them.
+	 * The action the Syriac Alaph U+0710 calls for, read off the ALAPH column of the joining table.
 	 *
-	 * Syriac states three forms for the Alaph that no other letter has, and which of them it takes
-	 * follows from the letter before it and from whether it ends the word. HarfBuzz reads those from
-	 * the ALAPH and DALATH_RISH columns of its own joining table, in arabic_joining() and with the
-	 * other four actions, so the letters this reads are the letters as written.
+	 * Syriac states three forms for the Alaph that no other letter has, and HarfBuzz resolves them in
+	 * arabic_joining() from the same state table as the other four, letting each state rewrite the
+	 * action it has already decided for the character behind it. resolveJoining() decides each
+	 * character from its neighbours instead, and for the Alaph the two agree, because every state an
+	 * Alaph can be reached in from a given kind of letter holds the same action for it, and the only
+	 * rewrites that land on an Alaph - state 4's med2 over a fina and state 5's isol over a fin2 or a
+	 * fin3 - both come of a letter that joins backwards following it.
 	 *
-	 * @param int|null    $prevChar         The base before the Alaph, past any transparent-joining characters
-	 * @param bool        $joinedToPrevious Whether that base is one that joins to what follows it
-	 * @param string|null $nextChar         The hex of the base after it, or null where the Alaph ends the run
+	 * There is no test here for whether the Alaph ends the word, nor for whether what stands either
+	 * side of it is Syriac. HarfBuzz has neither, and reading the joining classes alone is what puts
+	 * the Sogdian letters U+074D to U+074F on the same footing as the rest of the block.
 	 *
-	 * @return int 4=MED2, 5=FIN2, 6=FIN3, or ACTION_NONE where Syriac calls for none of the three
+	 * @param int|null $prevChar         The base before the Alaph, past any transparent-joining characters
+	 * @param bool     $joinedToPrevious Whether that base is one that joins to what follows it
+	 * @param bool     $joinedToNext     Whether the base after the Alaph joins to what precedes it
+	 *
+	 * @return int 0=ISOL, 1=FINA, 4=MED2, 5=FIN2, 6=FIN3
 	 */
-	private static function alaphAction($prevChar, $joinedToPrevious, $nextChar)
+	private static function alaphAction($prevChar, $joinedToPrevious, $joinedToNext)
 	{
-		// the Alaph ends the word: nothing follows it, or what follows is not Syriac
-		$wordEnd = $nextChar === null || !self::isSyriac(hexdec($nextChar));
-
-		// med2 and fin2 are the Alaph drawn joined to the letter before it
 		if ($joinedToPrevious) {
-			if (!$wordEnd && self::isSyriac($prevChar)) {
-				return 4;
-			}
-			if ($wordEnd) {
-				return 5;
-			}
-		} elseif ($wordEnd && ($prevChar === 0x0715 || $prevChar === 0x0716 || $prevChar === 0x072A)) {
-			// DALATH, DOTLESS DALATH RISH and RISH are right-joining, so an Alaph ending the word after
-			// one of them stands apart from it, and fin3 is the form drawn for that
-			return 6;
+			return $joinedToNext ? 4 : 1;
 		}
 
-		return self::ACTION_NONE;
-	}
+		// nothing stands before the Alaph for it to be drawn apart from, or a letter follows it that
+		// joins back over the form the Alaph would otherwise have taken
+		if ($joinedToNext || $prevChar === null || !isset(self::$rightJoining[$prevChar])) {
+			return 0;
+		}
 
-	/**
-	 * Whether the codepoint is one of the Syriac letters, which is the block up to the vowels
-	 */
-	private static function isSyriac($codepoint)
-	{
-		return $codepoint >= 0x0700 && $codepoint <= 0x0745;
+		return isset(self::$dalathRish[$prevChar]) ? 6 : 5;
 	}
 
 	/**
@@ -349,7 +342,7 @@ class Arabic
 	{
 		// A form whose feature the document switched off through OTLtags is not substituted, Syriac's
 		// three extra forms included
-		if (!isset(self::$actionFeatures[$action]) || strpos($usetags, self::$actionFeatures[$action]) === false) {
+		if (strpos($usetags, self::$actionFeatures[$action]) === false) {
 			return [$char, 0];
 		}
 
