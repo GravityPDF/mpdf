@@ -145,11 +145,8 @@ class Arabic
 		];
 
 	/**
-	 * The feature each resolved action is stated under, indexed by the action.
-	 *
-	 * 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL :: 4=MED2 :: 5=FIN2 :: 6=FIN3, which is the
-	 * order rtlSUB indexes a letter's forms in. An action outside the table names no feature and is
-	 * substituted by nothing.
+	 * The feature each resolved action is stated under, in the order rtlSUB indexes a letter's forms in.
+	 * An action outside the table names no feature and is substituted by nothing.
 	 */
 	private static $actionFeatures = ['isol', 'fina', 'init', 'medi', 'med2', 'fin2', 'fin3'];
 
@@ -196,18 +193,17 @@ class Arabic
 				continue;
 			}
 			if ($scriptTag == 'syrc' && $crntChar == '00710') {
-				$form = self::alaphAction($prevChar, $nextChar);
+				$action = self::alaphAction($prevChar, $joinedToPrevious, $nextChar);
 			} else {
-				// 0=ISOLATED FORM :: 1=FINAL :: 2=INITIAL :: 3=MEDIAL
-				$form = 0;
+				$action = 0;
 				if ($joinedToPrevious) {
-					$form++;
+					$action++;
 				}
 				if ($joinedToNext) {
-					$form += 2;
+					$action += 2;
 				}
 			}
-			$info[$i]['joining'] = $form;
+			$info[$i]['joining'] = $action;
 			$nextChar = $crntChar;
 		}
 	}
@@ -220,23 +216,19 @@ class Arabic
 	 * the ALAPH and DALATH_RISH columns of its own joining table, in arabic_joining() and with the
 	 * other four actions, so the letters this reads are the letters as written.
 	 *
-	 * @param int|null    $prevChar The base before the Alaph, past any transparent-joining characters
-	 * @param string|null $nextChar The hex of the base after it, or null where the Alaph ends the run
+	 * @param int|null    $prevChar         The base before the Alaph, past any transparent-joining characters
+	 * @param bool        $joinedToPrevious Whether that base is one that joins to what follows it
+	 * @param string|null $nextChar         The hex of the base after it, or null where the Alaph ends the run
 	 *
 	 * @return int 4=MED2, 5=FIN2, 6=FIN3, or ACTION_NONE where Syriac calls for none of the three
 	 */
-	private static function alaphAction($prevChar, $nextChar)
+	private static function alaphAction($prevChar, $joinedToPrevious, $nextChar)
 	{
-		if ($prevChar === null) {
-			return self::ACTION_NONE;
-		}
-
 		// the Alaph ends the word: nothing follows it, or what follows is not Syriac
 		$wordEnd = $nextChar === null || !self::isSyriac(hexdec($nextChar));
 
-		// med2 and fin2 are the Alaph drawn joined to the letter before it, so that letter has to be one
-		// that joins to what follows it
-		if (isset(self::$leftJoining[$prevChar])) {
+		// med2 and fin2 are the Alaph drawn joined to the letter before it
+		if ($joinedToPrevious) {
 			if (!$wordEnd && self::isSyriac($prevChar)) {
 				return 4;
 			}
@@ -355,68 +347,62 @@ class Arabic
 
 	private static function glyphs($char, $action, &$chars, $i, $usetags, $arabGlyphs)
 	{
-		// A form whose feature the document switched off through OTLtags is not substituted. Read off the
-		// action rather than compared against each of the four the joining classes resolve, so that
-		// Syriac's three extra forms are each gated on the feature they are stated under as well.
+		// A form whose feature the document switched off through OTLtags is not substituted, Syriac's
+		// three extra forms included
 		if (!isset(self::$actionFeatures[$action]) || strpos($usetags, self::$actionFeatures[$action]) === false) {
 			return [$char, 0];
 		}
 
-		$retk = -1;
 		if (isset($arabGlyphs[$char][$action])) {
 			$retk = $action;
 		} elseif ($action == 3 && isset($arabGlyphs[$char][1])) { // if <medial> not defined, but <final>, return <final>
 			$retk = 1;
 		} elseif ($action == 2 && isset($arabGlyphs[$char][0])) { // if <initial> not defined, but <isolated>, return <isolated>
 			$retk = 0;
-		}
-		if ($retk != -1) {
-			$match = true;
-			// If GSUB includes a Backtrack or Lookahead condition (e.g. font ArabicTypesetting)
-			// The walk over ignored glyphs stops at the edge of the run, and a position it runs out before
-			// reaching is not held, as in HarfBuzz's match_backtrack() and match_lookahead(). Past the edge
-			// the glyph is null, which inList() finds in any pattern from PHP 8, so the walk would not end.
-			if (isset($arabGlyphs[$char]['prel'][$retk]) && $arabGlyphs[$char]['prel'][$retk]) {
-				$ig = 1;
-				foreach ($arabGlyphs[$char]['prel'][$retk] as $k => $v) { // $k starts 0, 1...
-					if (!isset($chars[$i - $ig - $k])) {
-						$match = false;
-					} elseif (!GlyphString::inList($v, $chars[$i - $ig - $k])) {
-						while (isset($chars[$i - $ig - $k]) && GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i - $ig - $k])) {
-							$ig++;
-						}
-						if (!isset($chars[$i - $ig - $k])) {
-							$match = false;
-						} elseif (!GlyphString::inList($v, $chars[$i - $ig - $k])) {
-							$match = false;
-						}
-					}
-				}
-			}
-			if (isset($arabGlyphs[$char]['postl'][$retk]) && $arabGlyphs[$char]['postl'][$retk]) {
-				$ig = 1;
-				foreach ($arabGlyphs[$char]['postl'][$retk] as $k => $v) { // $k starts 0, 1...
-					if (!isset($chars[$i + $ig + $k])) {
-						$match = false;
-					} elseif (!GlyphString::inList($v, $chars[$i + $ig + $k])) {
-						while (isset($chars[$i + $ig + $k]) && GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i + $ig + $k])) {
-							$ig++;
-						}
-						if (!isset($chars[$i + $ig + $k])) {
-							$match = false;
-						} elseif (!GlyphString::inList($v, $chars[$i + $ig + $k])) {
-							$match = false;
-						}
-					}
-				}
-			}
-			if ($match) {
-				return [$arabGlyphs[$char][$retk], $retk];
-			} else {
-				return [$char, 0];
-			}
 		} else {
 			return [$char, 0];
 		}
+
+		$match = true;
+		// If GSUB includes a Backtrack or Lookahead condition (e.g. font ArabicTypesetting)
+		// The walk over ignored glyphs stops at the edge of the run, and a position it runs out before
+		// reaching is not held, as in HarfBuzz's match_backtrack() and match_lookahead(). Past the edge
+		// the glyph is null, which inList() finds in any pattern from PHP 8, so the walk would not end.
+		if (isset($arabGlyphs[$char]['prel'][$retk]) && $arabGlyphs[$char]['prel'][$retk]) {
+			$ig = 1;
+			foreach ($arabGlyphs[$char]['prel'][$retk] as $k => $v) { // $k starts 0, 1...
+				if (!isset($chars[$i - $ig - $k])) {
+					$match = false;
+				} elseif (!GlyphString::inList($v, $chars[$i - $ig - $k])) {
+					while (isset($chars[$i - $ig - $k]) && GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i - $ig - $k])) {
+						$ig++;
+					}
+					if (!isset($chars[$i - $ig - $k])) {
+						$match = false;
+					} elseif (!GlyphString::inList($v, $chars[$i - $ig - $k])) {
+						$match = false;
+					}
+				}
+			}
+		}
+		if (isset($arabGlyphs[$char]['postl'][$retk]) && $arabGlyphs[$char]['postl'][$retk]) {
+			$ig = 1;
+			foreach ($arabGlyphs[$char]['postl'][$retk] as $k => $v) { // $k starts 0, 1...
+				if (!isset($chars[$i + $ig + $k])) {
+					$match = false;
+				} elseif (!GlyphString::inList($v, $chars[$i + $ig + $k])) {
+					while (isset($chars[$i + $ig + $k]) && GlyphString::inList($arabGlyphs[$char]['ignore'][$retk], $chars[$i + $ig + $k])) {
+						$ig++;
+					}
+					if (!isset($chars[$i + $ig + $k])) {
+						$match = false;
+					} elseif (!GlyphString::inList($v, $chars[$i + $ig + $k])) {
+						$match = false;
+					}
+				}
+			}
+		}
+
+		return $match ? [$arabGlyphs[$char][$retk], $retk] : [$char, 0];
 	}
 }

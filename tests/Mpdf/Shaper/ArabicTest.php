@@ -201,24 +201,24 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @dataProvider dataActionFeatures
 	 */
-	public function testAFormIsGatedOnTheFeatureItIsStatedUnder($action, $feature, $substituted)
+	public function testAFormIsGatedOnTheFeatureItIsStatedUnder($action, $feature)
 	{
 		$without = trim(str_replace($feature, '', self::ALL_FORMS));
 
-		$this->assertSame([$substituted, $action], $this->shapeAction($action, self::ALL_FORMS));
+		$this->assertSame(['X_' . strtoupper($feature), $action], $this->shapeAction($action, self::ALL_FORMS));
 		$this->assertSame([self::BETH, 0], $this->shapeAction($action, $without), 'without ' . $feature);
 	}
 
 	public function dataActionFeatures()
 	{
 		return [
-			'isol' => [0, 'isol', 'X_ISOL'],
-			'fina' => [1, 'fina', 'X_FINA'],
-			'init' => [2, 'init', 'X_INIT'],
-			'medi' => [3, 'medi', 'X_MEDI'],
-			'med2' => [4, 'med2', 'X_MED2'],
-			'fin2' => [5, 'fin2', 'X_FIN2'],
-			'fin3' => [6, 'fin3', 'X_FIN3'],
+			'isol' => [0, 'isol'],
+			'fina' => [1, 'fina'],
+			'init' => [2, 'init'],
+			'medi' => [3, 'medi'],
+			'med2' => [4, 'med2'],
+			'fin2' => [5, 'fin2'],
+			'fin3' => [6, 'fin3'],
 		];
 	}
 
