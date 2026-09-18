@@ -3248,12 +3248,12 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 *
 	 * A NULL offset means that list is absent, and is the one value that must not be made absolute:
 	 * the table offset plus nothing is the table's own header, where majorVersion 0x0001 would read as
-	 * a count of one. It is left as it stands and listCount() answers nothing for it.
+	 * a count of one. It comes back as it stands, which listCount() answers nothing for.
 	 *
 	 * @param int $tableOffset Where GSUB or GPOS starts, from the start of the file, which the reader
 	 *                         is standing on
 	 *
-	 * @return int[] The three offsets in header order, each absolute or NULL
+	 * @return int[] The three offsets in header order, each absolute, or 0 where the list is absent
 	 */
 	private function readListOffsets($tableOffset)
 	{
@@ -3274,12 +3274,9 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 * How many entries a ScriptList, FeatureList or LookupList states, leaving the reader standing on
 	 * the first of them.
 	 *
-	 * All three are counted here, so a list the header states no offset for is answered in one place
-	 * rather than at each of the three reads.
+	 * @param int $listOffset Absolute, from the start of the file, or 0 where the list is absent
 	 *
-	 * @param int $listOffset Absolute, from the start of the file, or NULL where the list is absent
-	 *
-	 * @return int
+	 * @return int The count the list states, or 0 where it is absent
 	 */
 	private function listCount($listOffset)
 	{
@@ -3295,8 +3292,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * The ScriptList and FeatureList of a GSUB or GPOS table, which are the same structures in both.
 	 *
-	 * @param int $scriptListOffset  Absolute, from the start of the file, or NULL where absent
-	 * @param int $featureListOffset Absolute, from the start of the file, or NULL where absent
+	 * @param int $scriptListOffset  Absolute, from the start of the file, or 0 where absent
+	 * @param int $featureListOffset Absolute, from the start of the file, or 0 where absent
 	 *
 	 * @return array [$scriptLang, $features, $tags]: the languages each script offers as one
 	 *               space-separated string, the lookup list indices of every feature of every one of
@@ -3410,7 +3407,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * The metadata and subtable offsets of a whole GSUB or GPOS LookupList.
 	 *
-	 * @param int $lookupListOffset Absolute, from the start of the file, or NULL where absent
+	 * @param int $lookupListOffset Absolute, from the start of the file, or 0 where absent
 	 * @param int $tableOffset      Where GSUB or GPOS starts, which the subtable offsets come back
 	 *                              relative to: the shaper reads a copy of the one table and has no
 	 *                              idea where in the file it came from
@@ -3436,9 +3433,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$lookups[$i]['Flag'] = $flag = $this->reader->readUInt16();
 			$lookups[$i]['SubtableCount'] = $subtableCount = $this->reader->readUInt16();
 
-			// Stated before the loop that fills it, because the spec lets a Lookup state no subtables at
-			// all and every one of the seven walks of this list - two here, four in Otl, one in OtlDump -
-			// reads Subtables without asking whether it is there
+			// The format lets a Lookup state no subtables, and every walk of this list, here and in Otl
+			// and in OtlDump, iterates Subtables unguarded
 			$lookups[$i]['Subtables'] = [];
 
 			for ($c = 0; $c < $subtableCount; $c++) {
