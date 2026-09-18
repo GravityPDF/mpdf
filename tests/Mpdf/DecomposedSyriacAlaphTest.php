@@ -38,7 +38,7 @@ class DecomposedSyriacAlaphTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	/** The forms and the rasms have no codepoint of their own, so they are mapped into the Private Use Area */
 	const ALAPH_FIN3 = 0xE000;
 
-	const ALAPH_FIN2 = 0xE001;
+	const ALAPH_FINA = 0xE002;
 
 	const ALAPH_MED2 = 0xE003;
 
@@ -99,21 +99,17 @@ class DecomposedSyriacAlaphTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 				[self::BETH, self::ALAPH, self::BETH],
 				[self::BETH, self::ALAPH_MED2, self::BETH_INITIAL],
 			],
-			// mPDF draws fin2 wherever an Alaph ends the word after a letter that joins forwards, which
-			// for this position HarfBuzz resolves as the plain final form. That is a separate defect,
-			// GravityPDF/mpdf#244; what these two cases hold is that the Alaph reaches the same form
-			// whether or not 'ccmp' has taken the letter before it apart.
-			'fin2 after a letter taken apart' => [
+			'the plain final form after a letter taken apart' => [
 				[self::GAMAL_GARSHUNI, self::ALAPH],
-				[self::ALAPH_FIN2, self::QUSHSHAYA, self::GAMAL_RASM_INITIAL],
+				[self::ALAPH_FINA, self::QUSHSHAYA, self::GAMAL_RASM_INITIAL],
 			],
 			'and after a letter left whole' => [
 				[self::BETH, self::ALAPH],
-				[self::ALAPH_FIN2, self::BETH_INITIAL],
+				[self::ALAPH_FINA, self::BETH_INITIAL],
 			],
-			// Syriac states no form for an Alaph inside a word after one of the three letters fin3 turns
-			// on, and no font states an isolated one, so the Alaph stands as it was written
-			'an Alaph inside a word after a letter taken apart keeps no form' => [
+			// An Alaph a letter joins back over is isolated, and no font states an isolated Alaph, so it
+			// stands as it was written
+			'an Alaph inside a word after a letter taken apart is isolated' => [
 				[self::DALATH, self::ALAPH, self::BETH],
 				[self::BETH, self::ALAPH, self::RUKKAKHA, self::DALATH_RASM],
 			],
