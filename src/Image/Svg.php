@@ -3340,7 +3340,7 @@ class Svg
 					$ucd_record = Ucdn::get_ucd_record($char);
 					$sbl = $ucd_record[6];
 
-					if ($sbl && $sbl != 40 && $sbl != 102) {
+					if ($sbl && $sbl != Ucdn::SCRIPT_INHERITED && $sbl != Ucdn::SCRIPT_UNKNOWN) {
 						if ($scriptblock == 0) {
 							$scriptblock = $sbl;
 							$scriptblocks[$subchunk] = $scriptblock;

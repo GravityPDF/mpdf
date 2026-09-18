@@ -37,7 +37,7 @@ class UcdnTables
 	/**
 	 * The database read when none is named
 	 */
-	const DEFAULT_VERSION = '17.0.0';
+	const DEFAULT_VERSION = '18.0.0';
 
 	/**
 	 * Every codepoint Unicode has. The tests build a shorter table, which is the same table with
@@ -107,7 +107,7 @@ class UcdnTables
 		}
 
 		$source = $this->rewriteScripts($source, $constants, $added, $aliases);
-		$source = preg_replace('/\t\/\/ UNIDATA_VERSION [\d.]+\n/', "\t// UNIDATA_VERSION " . $this->version . "\n", $source, 1);
+		$source = $this->replaceVersion($source, 'UNIDATA_VERSION', $this->version);
 
 		$lines = [];
 		foreach ($records as $record) {
