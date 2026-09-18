@@ -95,19 +95,6 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The same table with an isolated Alaph added, for the positions that call for one. No font in the
-	 * corpus states that glyph, so through the real tables an isolated Alaph and an Alaph given no form
-	 * at all are the same character in the run and nothing could tell them apart.
-	 */
-	private function glyphsWithIsolatedAlaph()
-	{
-		$glyphs = $this->glyphs();
-		$glyphs[self::ALAPH][0] = 'A_ISOL';
-
-		return $glyphs;
-	}
-
-	/**
 	 * Two dual-joining letters: the first can only join forward, the last only backward
 	 */
 	public function testADualJoiningPairTakesInitialThenFinal()
@@ -283,109 +270,59 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * fin3 is the Alaph a Syriac font draws after one of the four letters of the DALATH RISH joining
-	 * group. All four are right-joining, so the Alaph after one of them stands apart from it - which is
-	 * why the form exists, and why the test the form sat behind, that the letter before it joins
-	 * forwards, could never be true. GravityPDF/mpdf#132.
+	 * The Alaph's form follows from the letter before it and from whether one after it joins back over
+	 * it, and from nothing else. HarfBuzz reads the same pair off the ALAPH and DALATH RISH columns of
+	 * its joining state table, so this is that table written out: fina after a letter that joins
+	 * forwards, med2 where one joins back over that, fin3 after one of the four DALATH RISH letters,
+	 * fin2 after any other letter that joins to what precedes it, and isol where the Alaph begins the
+	 * word or a letter joins back over it. GravityPDF/mpdf#244.
 	 *
-	 * PERSIAN DHALATH was missing from the group: the rule listed three code points where
-	 * ArabicShaping.txt gives four, and an Alaph after it reached neither branch and kept no form.
+	 * What was drawn instead: fin2 for every word-final Alaph after a letter that joins forwards; no
+	 * form at all after a right-joining letter outside the DALATH RISH group, or after PERSIAN DHALATH,
+	 * which the rule left out of a group ArabicShaping.txt gives four letters; and no form at all where
+	 * the letter either side was one of the Sogdian letters U+074D to U+074F, which fall outside the
+	 * U+0700 to U+0745 the rule tested for. fin3 after the other three is GravityPDF/mpdf#132.
+	 *
+	 * The font is given an isolated Alaph, which no Syriac font in the corpus states, so that a position
+	 * calling for one is told apart from a form the font simply has no glyph for.
+	 *
+	 * @dataProvider dataAlaphForms
 	 */
-	public function testAnAlaphAfterOneOfTheDalathRishLettersTakesFin3()
+	public function testTheLettersEitherSideOfTheAlaphDecideItsForm($hexes, $position, $expected)
 	{
-		foreach ([self::DALATH, self::DOTLESS_DALATH_RISH, self::RISH, self::PERSIAN_DHALATH] as $preceding) {
-			$forms = $this->shape([$preceding, self::ALAPH], self::ALL_FORMS, 'syrc');
+		$glyphs = $this->glyphs();
+		$glyphs[self::ALAPH][0] = 'A_ISOL';
 
-			$this->assertSame(['A_FIN3', 6], $forms[1], $preceding . ' before the Alaph');
-		}
+		$forms = $this->shape($hexes, self::ALL_FORMS, 'syrc', self::FATHA, $glyphs);
+
+		$this->assertSame($expected, $forms[$position]);
 	}
 
-	/**
-	 * fin2 is the Alaph after any other letter that joins to what precedes it, an Alaph included. Those
-	 * reached neither branch of the rule and kept no form at all, because it read fin2 off the letter
-	 * before the Alaph joining forwards - which is the one case that calls for the plain final form.
-	 */
-	public function testAnAlaphAfterAnyOtherRightJoiningLetterTakesFin2()
+	public function dataAlaphForms()
 	{
-		foreach ([self::HE, self::ALAPH] as $preceding) {
-			$forms = $this->shape([$preceding, self::ALAPH], self::ALL_FORMS, 'syrc');
-
-			$this->assertSame(['A_FIN2', 5], $forms[1], $preceding . ' before the Alaph');
-		}
-	}
-
-	/**
-	 * A letter that joins forwards leaves the Alaph the plain final form, which is where mPDF drew
-	 * fin2. GravityPDF/mpdf#244.
-	 */
-	public function testAnAlaphEndingAWordAfterALetterThatJoinsForwardsTakesFina()
-	{
-		$forms = $this->shape([self::BETH, self::ALAPH], self::ALL_FORMS, 'syrc');
-
-		$this->assertSame([['BE_INIT', 2], ['A_FINA', 1]], $forms);
-	}
-
-	/**
-	 * med2 is that same Alaph with a letter following it that joins back over it
-	 */
-	public function testAnAlaphInsideAWordAfterALetterThatJoinsForwardsTakesMed2()
-	{
-		$forms = $this->shape([self::BETH, self::ALAPH, self::BETH], self::ALL_FORMS, 'syrc');
-
-		$this->assertSame(['A_MED2', 4], $forms[1]);
-	}
-
-	/**
-	 * A letter that joins back over the Alaph leaves it isolated wherever the Alaph could not join to
-	 * what stood before it, so neither fin2 nor fin3 survives one.
-	 */
-	public function testALetterJoiningBackOverTheAlaphLeavesItIsolated()
-	{
-		foreach ([self::HE, self::RISH, self::ALAPH] as $preceding) {
-			$run = [$preceding, self::ALAPH, self::BETH];
-			$forms = $this->shape($run, self::ALL_FORMS, 'syrc', self::FATHA, $this->glyphsWithIsolatedAlaph());
-
-			$this->assertSame(['A_ISOL', 0], $forms[1], $preceding . ' before the Alaph');
-		}
-	}
-
-	/**
-	 * An Alaph with nothing before it to join to is isolated as well, which no font in the corpus
-	 * states a glyph for: what the run held was the character as it was written, and so is what the
-	 * rule leaving it without a form at all had left there.
-	 */
-	public function testAnAlaphBeginningAWordIsIsolated()
-	{
-		$run = [self::ALAPH, self::BETH];
-
-		$this->assertSame(
-			['A_ISOL', 0],
-			$this->shape($run, self::ALL_FORMS, 'syrc', self::FATHA, $this->glyphsWithIsolatedAlaph())[0]
-		);
-		$this->assertSame([self::ALAPH, 0], $this->shape($run, self::ALL_FORMS, 'syrc')[0]);
-	}
-
-	/**
-	 * Which form the Alaph takes is read from the joining classes and from nothing else, so a Syriac
-	 * letter outside the block's first page is no different from one inside it. The rule asked instead
-	 * whether its neighbours were in U+0700 to U+0745, which stops at the last of the marks and leaves
-	 * out the three Sogdian letters - and it is joining type that HarfBuzz reads, which has no such
-	 * edge. GravityPDF/mpdf#244.
-	 */
-	public function testASogdianLetterJoinsToTheAlaphLikeAnyOtherDualJoiningLetter()
-	{
-		$before = $this->shape([self::SOGDIAN_FE, self::ALAPH, self::BETH], self::ALL_FORMS, 'syrc');
-		$after = $this->shape([self::BETH, self::ALAPH, self::SOGDIAN_FE], self::ALL_FORMS, 'syrc');
-
-		$this->assertSame(['A_MED2', 4], $before[1]);
-		$this->assertSame(['A_MED2', 4], $after[1]);
+		return [
+			'nothing before it' => [[self::ALAPH, self::BETH], 0, ['A_ISOL', 0]],
+			'after a letter that joins forwards' => [[self::BETH, self::ALAPH], 1, ['A_FINA', 1]],
+			'and with a letter after it' => [[self::BETH, self::ALAPH, self::BETH], 1, ['A_MED2', 4]],
+			'after DALATH' => [[self::DALATH, self::ALAPH], 1, ['A_FIN3', 6]],
+			'after DOTLESS DALATH RISH' => [[self::DOTLESS_DALATH_RISH, self::ALAPH], 1, ['A_FIN3', 6]],
+			'after RISH' => [[self::RISH, self::ALAPH], 1, ['A_FIN3', 6]],
+			'after PERSIAN DHALATH' => [[self::PERSIAN_DHALATH, self::ALAPH], 1, ['A_FIN3', 6]],
+			'after HE' => [[self::HE, self::ALAPH], 1, ['A_FIN2', 5]],
+			'after another Alaph' => [[self::ALAPH, self::ALAPH], 1, ['A_FIN2', 5]],
+			'after DALATH, with a letter after it' => [[self::DALATH, self::ALAPH, self::BETH], 1, ['A_ISOL', 0]],
+			'after HE, with a letter after it' => [[self::HE, self::ALAPH, self::BETH], 1, ['A_ISOL', 0]],
+			'after another Alaph, with a letter after it' => [[self::ALAPH, self::ALAPH, self::BETH], 1, ['A_ISOL', 0]],
+			'after SOGDIAN FE' => [[self::SOGDIAN_FE, self::ALAPH, self::BETH], 1, ['A_MED2', 4]],
+			'before SOGDIAN FE' => [[self::BETH, self::ALAPH, self::SOGDIAN_FE], 1, ['A_MED2', 4]],
+		];
 	}
 
 	/**
 	 * Through a real font: Estrangelo Edessa carries a fin3 Alaph and nothing could ask for it, so the
 	 * nominal U+0710 was what got drawn. It is a glyph of its own - not the final form the same Alaph
 	 * takes after a dual-joining letter - and the same one after each of the three the font covers.
-	 * PERSIAN DHALATH has no glyph in Estrangelo Edessa, so it is only reachable above.
+	 * PERSIAN DHALATH has no glyph in Estrangelo Edessa, so only the table above reaches it.
 	 */
 	public function testAnAlaphAfterDalathOrRishDrawsTheFormTheFontStatesForIt()
 	{
@@ -469,8 +406,8 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAPointedWordDrawsTheSameAlaphAsTheUnpointedWord()
 	{
-		// BETH reaches the plain final form and DALATH fin3; what the other two letters of the DALATH
-		// RISH group draw is already asserted against DALATH above
+		// BETH reaches the plain final form and DALATH fin3; what the other letters of the DALATH RISH
+		// group draw is already asserted against DALATH above
 		foreach ([self::BETH, self::DALATH] as $base) {
 			$unpointed = $this->render([$base, self::ALAPH]);
 			$beforeAlaph = $this->render([$base, self::PTHAHA, self::ALAPH]);
