@@ -107,7 +107,7 @@ class UcdnTables
 		}
 
 		$source = $this->rewriteScripts($source, $constants, $added, $aliases);
-		$source = preg_replace('/\t\/\/ UNIDATA_VERSION [\d.]+\n/', "\t// UNIDATA_VERSION " . $this->version . "\n", $source, 1);
+		$source = $this->replaceVersion($source, 'UNIDATA_VERSION', $this->version);
 
 		$lines = [];
 		foreach ($records as $record) {
