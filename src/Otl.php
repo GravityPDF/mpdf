@@ -356,7 +356,7 @@ class Otl
 				$sbl = Ucdn::SCRIPT_ARABIC;
 			}
 
-			if ($sbl && $sbl != 40 && $sbl != 102) {
+			if ($sbl && $sbl != Ucdn::SCRIPT_INHERITED && $sbl != Ucdn::SCRIPT_UNKNOWN) {
 				if ($scriptblock == 0) {
 					$scriptblock = $sbl;
 					$scriptblocks[$subchunk] = $scriptblock;
