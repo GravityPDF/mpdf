@@ -142,6 +142,54 @@ class CacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 	}
 
+	/**
+	 * A caller that asks whether an entry is there and then reads it is handed nothing where another
+	 * process expired it in between, so the read reports the miss itself - and reports it apart from an
+	 * entry that is there and empty, which is what a font with no glyph map writes.
+	 */
+	public function testAnEntryThatIsNotThereReadsAsAMissRatherThanAsEmpty()
+	{
+		$dir = $this->path('tmp/test8');
+
+		try {
+			$cache = new Cache($dir);
+			$cache->write('empty', '');
+
+			$this->assertNull($cache->loadIfPresent('gone'));
+			$this->assertSame('', $cache->loadIfPresent('empty'));
+		} finally {
+			@unlink($dir . '/empty');
+			@rmdir($dir);
+		}
+	}
+
+	/**
+	 * The miss is an answer rather than a failure, and a cache that has never held the entry is the
+	 * ordinary way of reaching it.
+	 */
+	public function testReadingAnEntryThatIsNotThereSaysNothingAtAll()
+	{
+		$dir = $this->path('tmp/test9');
+		$raised = [];
+
+		set_error_handler(static function ($severity, $message) use (&$raised) {
+			$raised[] = $message;
+
+			return true;
+		});
+
+		try {
+			$cache = new Cache($dir);
+
+			$this->assertNull($cache->loadIfPresent('gone'));
+		} finally {
+			restore_error_handler();
+			@rmdir($dir);
+		}
+
+		$this->assertSame([], $raised);
+	}
+
 	public function testRecursivelyCreatedDirectoriesInheritsParentPermissionsAndOverridesUmask()
 	{
 		/* Set a umask and verify the directory is created with umask-affected permissions */
