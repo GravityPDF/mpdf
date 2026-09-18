@@ -1,0 +1,24 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x01000; &#x01050; &#x01051; &#x0FFFF; </div>
+<h3>Glyph class 3</h3>
+<h5>Mark glyph (non-spacing combining glyph)</h5>
+<div class="glyphs">&#x25cc;&#x01039; &#x25cc;&#x0E000; &#x25cc;&#x0E001; &#x25cc;&#x0E002; </div>
+<h1>Mark Attachment Types</h1>
+<h3>Mark Attachment Type: 1</h3>
+<div class="glyphs">&#x25cc;&#x0E000; </div>
+<h3>Mark Attachment Type: 2</h3>
+<div class="glyphs">&#x25cc;&#x01039; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>mym2</h5><div><a href="font_dump_otl.php?script=mym2&amp;lang=DFLT">DFLT</a></b>: locl ccmp pref blwf </div>
+</div>
+<div>GPOS table not defined</div>
+
+=== detail: script mym2 language DFLT ===
+<h1>GSUB Tables</h1>
+<bookmark level="0" content="GSUB features"><div class="level1"><h5 class="level1"><bookmark level="1" content="locl [#0]">Lookup #0 [tag: <span style="color:#000066;">locl</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+1050&nbsp;</span> <span class="unchanged">&nbsp;&#x1050;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#x25cc;&#xE001;</span>&nbsp; <span class="unicode">M+E001</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="ccmp [#1]">Lookup #1 [tag: <span style="color:#000066;">ccmp</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+1000&nbsp;</span> <span class="unchanged">&nbsp;&#x1000;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#x25cc;&#xE000;</span>&nbsp; <span class="unicode">M+E000</span> </div><div class="subtable">Subtable #1<bookmark level="2" content="Subtable #1"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">M+E000&nbsp;</span> <span class="unchanged">&nbsp;&#x25cc;&#xE000;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#x25cc;&#xE002;</span>&nbsp; <span class="unicode">M+E002</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="pref [#2]">Lookup #2 [tag: <span style="color:#000066;">pref</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+1001&nbsp;</span> <span class="unchanged">&nbsp;&#x1001;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE003;</span>&nbsp; <span class="unicode">M+E003</span> </div></div><div class="level1"><h5 class="level1"><bookmark level="1" content="blwf [#3]">Lookup #3 [tag: <span style="color:#000066;">blwf</span>]</h5><div class="subtable">Subtable #0<bookmark level="2" content="Subtable #0"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">U+1002&nbsp;</span> <span class="unchanged">&nbsp;&#x1002;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE004;</span>&nbsp; <span class="unicode">M+E004</span> </div><div class="subtable">Subtable #1<bookmark level="2" content="Subtable #1"></div><div class="lookuptype">LookupType 1: Single Substitution Subtable</div><div class="substitution"><span class="unicode">M+E004&nbsp;</span> <span class="unchanged">&nbsp;&#xE004;</span>&nbsp; &raquo; &raquo; &nbsp;<span class="changed">&nbsp;&#xE005;</span>&nbsp; <span class="unicode">M+E005</span> </div></div>
+<div>GPOS table not defined</div>
