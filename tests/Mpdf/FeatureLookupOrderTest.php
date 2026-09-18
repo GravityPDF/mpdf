@@ -32,8 +32,6 @@ class FeatureLookupOrderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	const SAKOT = 0x1A60;
 
 	/** The forms no codepoint names are mapped into the Private Use Area, in glyph order */
-	const SUBSCRIPT_HIGH_KHA = 0xE001;
-
 	const HIGH_KA_SUBSCRIPT_HIGH_KHA = 0xE002;
 
 	const SUBSCRIPT_HIGH_KHA_2 = 0xE003;

@@ -32,13 +32,9 @@ class ReverseLookupHoistTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	const VOWEL_AA = 0x1A63;
 
 	/** The forms no codepoint names are mapped into the Private Use Area, in glyph order */
-	const SUBSCRIPT_HIGH_KA = 0xE000;
-
 	const SUBSCRIPT_HIGH_KHA = 0xE001;
 
 	const LOCAL_VOWEL_AA = 0xE002;
-
-	const SUBSCRIPT_HIGH_KHA_2 = 0xE003;
 
 	public function dataRuns()
 	{
