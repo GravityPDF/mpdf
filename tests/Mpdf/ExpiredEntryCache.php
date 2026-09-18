@@ -6,6 +6,10 @@ namespace Mpdf;
  * A Cache that loses the race for an entry: it stands in for the process whose clearOld() expires the
  * entry after this one has decided it wants it and before the read lands.
  *
+ * The entry goes when it is asked for, after the answer that it is there - which is the window, and is
+ * the same window whether the caller reads through loadIfPresent() or asks has() and then load(). A
+ * caller that went back to the second would fail these tests rather than stop racing.
+ *
  * Each named entry goes once, so that a caller answering the miss by generating the entry again can
  * load what it wrote.
  */
@@ -21,18 +25,22 @@ class ExpiredEntryCache extends Cache
 		parent::__construct($basePath);
 	}
 
-	public function loadIfPresent($filename)
+	public function has($filename)
 	{
-		$this->expire($filename);
+		$present = parent::has($filename);
 
-		return parent::loadIfPresent($filename);
+		if ($present) {
+			$this->expire($filename);
+		}
+
+		return $present;
 	}
 
 	private function expire($filename)
 	{
 		$at = array_search($filename, $this->expiring, true);
 
-		if (false === $at || !$this->has($filename)) {
+		if (false === $at) {
 			return;
 		}
 
