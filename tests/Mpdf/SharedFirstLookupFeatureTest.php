@@ -31,6 +31,9 @@ use Mpdf\Fonts\FontCache;
  * The fonts from outside tests/data/ttf are read where they sit in packages/: everything in
  * tests/data/ttf carries four golden master fixtures, and these three fonts would be asking for twelve
  * of them to state three pairs of alias tags.
+ *
+ * @see \Mpdf\TTFontFileTest::testAFeatureThatRunsNoLookupsIsNotOffered, the other half of what the
+ *      same loop decides: which features it drops rather than which it keeps apart
  */
 class SharedFirstLookupFeatureTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -38,19 +41,16 @@ class SharedFirstLookupFeatureTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	/**
 	 * @dataProvider collisions
 	 */
-	public function testEveryFeatureSharingAFirstLookupIsOffered($file, $table, $script, $langsys, $expected)
+	public function testEveryFeatureSharingAFirstLookupIsOffered($file, $property, $script, $langsys, $expected)
 	{
 		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/tmp/mpdf/ttfontdata')), 'win');
 		$ttf->getMetrics(__DIR__ . '/../../' . $file, uniqid('', true), 0, false, false, 0xFF);
 
-		// Braced: $ttf->$table[...] is the property named by $table[...] on PHP 5.6, and a subscript of
-		// the property from 7.0 on
-		$features = $ttf->{$table};
+		$features = $ttf->{$property};
 
-		// array_intersect_key keeps the order of the row rather than of the expectation, so this says
-		// the tags are all there, carry the font's own lookup lists, and stand in the order the language
-		// system listed them - which is what decides, where Otl::_applyGSUBrules() labels each lookup
-		// with a tag, which of them names the lookup they share
+		// array_intersect_key keeps the order of the row rather than of the expectation, so one
+		// assertion says the tags are all there, carry the font's own lookup lists, and stand in the
+		// order the language system listed them
 		$this->assertSame($expected, array_intersect_key($features[$script][$langsys], $expected));
 	}
 
