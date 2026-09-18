@@ -10,8 +10,9 @@ namespace Mpdf\Shaper;
  *
  * The characters here are the ones Unicode has added since the tables were last extended by hand - the
  * Syriac Supplement, Arabic Extended-A, -B and -C, and five Mandaic letters. `hb-shape` 14.3.1 draws
- * the forms these tests expect, except for the crown letters Unicode 18 added, which no released HarfBuzz
- * carries a joining type for yet - see the two tests that name them.
+ * the forms these tests expect. It is the oracle for the crown letters too, but not directly: no
+ * released HarfBuzz carries a joining type for them, so the two tests that name them read it from a
+ * character of the same type that Unicode 17 already had.
  */
 class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -96,18 +97,18 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	}
 
 	/**
-	 * Joining_Type=L, which Unicode 18 is the first release to give any character this shaper is called
-	 * for: the 22 crown letters of Arabic Extended-C. An L character joins to the letter written after it
-	 * and not to the one written before it, so it is the only type that stands in $leftJoining alone -
-	 * every character either table held at Unicode 17 was D, C or R. The second assertion is what says
-	 * this one is L rather than D; it reads the same way for a character in neither table.
+	 * Joining_Type=L, which no character either table held at Unicode 17 had: an L character joins to the
+	 * letter written after it and not to the one written before it, so it is the only type that stands in
+	 * $leftJoining alone. The second assertion is what says the crown letters are L rather than D; it
+	 * reads the same way for a character in neither table.
 	 *
-	 * No released HarfBuzz can be asked about U+10ED9: 14.4.0's joining table is still generated from
-	 * ArabicShaping-17.0.0.txt, so it reads the crown letters as joining nothing at all. Its joining state
-	 * table is byte-identical to the one alongside the ArabicShaping-18.0.0.txt table, though, so the
-	 * oracle for the type is read with U+10ACD MANICHAEAN LETTER HETH, which Unicode 17 already gives
-	 * Joining_Type=L. The corpus has no Manichaean font and Manichaean is a run of its own, so it is read
-	 * beside an Arabic letter with the script forced:
+	 * `hb-shape` 14.3.1 cannot be asked about U+10ED9 - nor can 14.4.0, the latest release: their joining
+	 * tables are still generated from ArabicShaping-17.0.0.txt, so they read the crown letters as joining
+	 * nothing at all. The state machine that turns a joining type into a form is byte-identical between
+	 * 14.3.1 and the revision that regenerated the table from ArabicShaping-18.0.0.txt, so the oracle for
+	 * the type is read with U+10ACD MANICHAEAN LETTER HETH, which Unicode 17 already gives Joining_Type=L.
+	 * The corpus has no Manichaean font and Manichaean is a run of its own, so it is read beside an Arabic
+	 * letter with the script forced:
 	 *
 	 *   $ hb-shape --font-file=packages/Middle-East-Scripts-Bundle/fonts/LateefRegOT.ttf \
 	 *       --script=arab --direction=rtl --no-clusters --no-positions --unicodes=10ACD,0628
@@ -128,8 +129,7 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 
 	/**
 	 * The same through a real font, on the side Lateef can show: a Beh after the crown letter is the glyph
-	 * it is after a Meem, which is the final form. Lateef draws no glyph for U+10ED9, so the Beh is the
-	 * whole of what is being measured.
+	 * it is after a Meem. Lateef draws no glyph for U+10ED9, so the Beh is the whole of what is measured.
 	 */
 	public function testABehAfterALeftJoiningCrownLetterDrawsTheSameFormAsAfterAMeem()
 	{

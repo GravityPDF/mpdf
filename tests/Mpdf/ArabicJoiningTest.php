@@ -163,15 +163,18 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * U+10EE8 CROWN FEH is Arabic and left-joining as of Unicode 18, and Ucdn's scripts are Unicode 17, so
-	 * it reads as Unknown. Otl::analyseCharacters() will not start a run on Unknown any more than on
-	 * Common, so the character stays in the run before it and the Arabic shaper is handed it anyway -
-	 * measured through Lateef, where a Beh after U+10EE8 is drawn with no form until the table has it. A
-	 * joining type newer than the script table is therefore read, not dropped.
+	 * A character Ucdn gives no script is written rather than dropped. Otl::analyseCharacters() will not
+	 * start a run on Unknown any more than on Common, so such a character stays in the run before it and
+	 * the Arabic shaper is handed it anyway - which is how a joining type arrives that the script table has
+	 * not caught up with, and dropping those would be #251's defect again with a longer fuse.
+	 *
+	 * U+FDD0 is a noncharacter, which Unicode's stability policy will never assign, so it is one of the few
+	 * codepoints that reads as Unknown at every release. A codepoint merely reserved today would stop
+	 * reaching this branch the moment Unicode gave it a script.
 	 */
-	public function testACharacterNewerThanTheScriptTableIsStillWritten()
+	public function testACharacterUcdnGivesNoScriptIsStillWritten()
 	{
-		$this->assertContains(0x10EE8, $this->joining->tables()['leftJoining']);
+		$this->assertContains(0xFDD0, $this->joining->tables()['leftJoining']);
 	}
 
 	/**
@@ -215,7 +218,7 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$expected = $this->copy(
 			'9.9.9',
-			"\t\t0x0620 => 1, 0x0628 => 1, 0x0640 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1, 0x10EE8 => 1,\n",
+			"\t\t0x0620 => 1, 0x0628 => 1, 0x0640 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1, 0xFDD0 => 1,\n",
 			"\t\t0x0627 => 1, 0x0628 => 1, 0x0640 => 1, 0x0710 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1,\n"
 			. "\t\t0x10EC2 => 1,\n"
 		);
@@ -269,10 +272,10 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * An ArabicShaping.txt of a dozen lines, carrying every joining type, two Join_Causing characters of no
-	 * script, one letter of each script the shaper resolves, two of scripts it does not and one newer than
-	 * Ucdn's scripts. The codepoints are Unicode's own, because what is in scope is read from the script
-	 * Ucdn gives each one, but the types are not always: Unicode 17 gives no character of the four scripts
-	 * joining type L, so the L line is put on an Arabic letter to leave nothing about the reading untested.
+	 * script, one letter of each script the shaper resolves, two of scripts it does not and one codepoint
+	 * Ucdn gives no script. The codepoints are Unicode's own, because what is in scope is read from the
+	 * script Ucdn gives each one; the types are not always, the L line being put on an Arabic letter so that
+	 * the reading of it does not depend on which release first gave an in-scope character that type.
 	 *
 	 * @return string
 	 */
@@ -295,7 +298,7 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. "1820; MONGOLIAN LETTER A; D; No_Joining_Group\n"
 			. "1E900; ADLAM CAPITAL ALIF; D; No_Joining_Group\n"
 			. "10EC2; DAL WITH VERTICAL 2 DOTS BELOW; R; DAL\n"
-			. "10EE8; CROWN FEH; L; CROWN FEH\n";
+			. "FDD0; NONCHARACTER; L; No_Joining_Group\n";
 	}
 
 }
