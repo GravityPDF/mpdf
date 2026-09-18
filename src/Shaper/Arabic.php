@@ -202,6 +202,10 @@ class Arabic
 			if ($scriptTag == 'syrc' && $crntChar == '00710') {
 				$action = self::alaphAction($prevChar, $joinedToPrevious, $joinedToNext);
 			} else {
+				// The four joining-type columns of the state table alaphAction() reads collapse the same
+				// way: a letter's own action is <final> where the letter before it joins forwards and
+				// <isolated> otherwise, and the table's INIT and MEDI - written back over it once the
+				// letter after it turns out to join backwards - are what the +2 adds here
 				$action = 0;
 				if ($joinedToPrevious) {
 					$action++;
@@ -244,7 +248,7 @@ class Arabic
 
 		// nothing stands before the Alaph for it to be drawn apart from, or a letter follows it that
 		// joins back over the form the Alaph would otherwise have taken
-		if ($joinedToNext || $prevChar === null || !isset(self::$rightJoining[$prevChar])) {
+		if ($prevChar === null || !isset(self::$rightJoining[$prevChar]) || $joinedToNext) {
 			return 0;
 		}
 

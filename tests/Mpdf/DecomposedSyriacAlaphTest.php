@@ -3,14 +3,14 @@
 namespace Mpdf;
 
 /**
- * Which of the three forms Syriac states for the Alaph it takes is read off the characters as written,
- * and not off the glyphs a substitution has left in their place (#228).
+ * Which form the Alaph takes is read off the characters as written, and not off the glyphs a
+ * substitution has left in their place (#228).
  *
  * NotoSansSyriac-AlaphCcmp-Synthetic takes dalath and gamal garshuni apart in 'ccmp', into the rasm
  * each shares with its dotless letter and the dot that distinguishes it, the way Noto Sans Arabic
  * takes beh apart. A rasm is unencoded, so mPDF maps it into the Private Use Area, and a Private Use
- * codepoint is in neither joining table and is none of the three letters fin3 turns on: the Alaph
- * after a letter taken apart was left with no form at all.
+ * codepoint is in neither joining table and in no joining group: the Alaph after a letter taken apart
+ * was left with no form at all.
  *
  * `hb-shape` 14.3.1 draws the glyphs these tests expect, resolving the Alaph's action in
  * arabic_joining() before it applies GSUB.
