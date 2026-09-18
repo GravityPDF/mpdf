@@ -5,61 +5,50 @@ namespace Mpdf;
 /**
  * The mask of a Lookup two features of one stage name is the masks of both (#243).
  *
- * Otl::lookupsForStage() takes such a Lookup once, in the pass of the first feature that named it,
- * and has to decide which glyphs it may reach. HarfBuzz ORs the masks of the entries it merges;
- * here a feature with no mask of its own is 0 rather than a bit every glyph carries, so 0 absorbs
- * and two masks are the union of their bits.
- *
- * Only the Khmer basic forms put masked and unmasked features in one stage - shapeIndic() asks for
+ * Otl::lookupsForStage() settles it, and states the rule: the masks are ORed, except that a feature
+ * with no mask of its own is 0 here rather than a bit every glyph carries, so 0 absorbs. Only the
+ * Khmer basic forms put masked and unmasked features in one stage - shapeIndic() asks for
  * 'locl ccmp pref blwf abvf pstf cfar' in a single call, of which indicFeatureMasks() masks pref,
- * blwf, pstf and cfar - so a Khmer font is the only way to reach the merge, and no font in
- * tests/data/ttf had a Lookup under two of those tags.
+ * blwf, pstf and cfar - and no font in tests/data/ttf offered the khmr script at all, let alone a
+ * Lookup under two of those tags, which is why the line went in uncovered.
  *
  * Khmer-SharedMask is a subset of Battambang Regular 8.002 (Danh Hong, SIL OFL 1.1, fsType 0)
- * carrying a GSUB of four single substitutions built for this test: the below-base and pre-base
- * forms are the donor's own, the features that name them are not. Battambang's OFL notice reserves
- * no font name, so clause 3 leaves the derived font free to be called anything; it carries a name
- * of its own because a font called Battambang that is not Battambang would mislead, and it keeps
- * the donor's copyright and licence strings because clauses 1 and 2 require them to travel.
+ * carrying a GSUB built for this test:
  *
  *   lookup 0  blwf                 uni1783 -> uni17D21783
  *   lookup 1  blwf, then abvf      uni1780 -> uni17D2_1780
  *   lookup 2  ccmp, then blwf      uni1781 -> uni17D2_1781
  *   lookup 3  pref, then blwf      uni1782 -> uni17D2_1782, uni179A -> uni17D2179A
  *
+ * The forms substituted in are the donor's own below-base and pre-base glyphs; only the features
+ * that name them are new. Battambang's OFL notice reserves no font name, so clause 3 leaves a
+ * modified version free to be called anything; it carries a name of its own because a font called
+ * Battambang that is not Battambang would mislead, and keeps the donor's copyright and licence
+ * strings because clauses 1 and 2 require them to travel.
+ *
  * The reordering marks a consonant after the base BLWF, ABVF and PSTF together, and the Coeng and
  * Ra of a Coeng+Ro sequence PREF, so pref's glyphs and blwf's are disjoint and the union of their
- * bits can be told from either of them alone. Lookup 0 is the control: a mask no other feature
- * merges into stays confined to what the reordering marked.
+ * bits can be told from either of them alone. Each Lookup is stated twice, on a glyph it should
+ * reach and on one it should not; lookup 0, which no second feature merges into, is the control.
  *
- * `hb-shape` 14.3.1 draws all of this the same way, save the first row:
+ * `hb-shape` 14.3.1 draws every row the same way but the first:
  *
  *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1780 --no-positions
  *   [uni1780=0]
- *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1781 --no-positions
- *   [uni17D2_1781=0]
- *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1782 --no-positions
- *   [uni1782=0]
- *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1783 --no-positions
- *   [uni1783=0]
  *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1784,17D2,1780 --no-positions
  *   [uni1784=0|uni17D2=0|uni17D2_1780=2]
- *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1784,17D2,1782 --no-positions
- *   [uni1784=0|uni17D2=0|uni17D2_1782=2]
- *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1784,17D2,1783 --no-positions
- *   [uni1784=0|uni17D2=0|uni17D21783=2]
- *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1784,17D2,179A --no-positions
- *   [uni17D2=0|uni17D2179A=0|uni1784=0]
  *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1784,17D2,179A,17D2,1782 --no-positions
  *   [uni17D2=0|uni17D2179A=0|uni1784=0|uni17D2=0|uni17D2_1782=4]
  *
- * The two it agrees with on the union are the ones that matter for it, because pref and blwf are in
- * one stage of HarfBuzz's Khmer plan too and it merges them the same way. The row it draws
- * differently is the lone uni1780: HarfBuzz gives abvf a mask of its own, so the merged Lookup
- * stays confined to the glyphs after the base, while mPDF leaves abvf out of indicFeatureMasks()
- * although the reordering sets Indic::ABVF on exactly those glyphs. That is a gap of its own rather
- * than anything this merge decides - give abvf its bit and mPDF draws HarfBuzz's uni1780 while
- * every other row below stands - and the row records what mPDF does today.
+ * The last of those is what speaks for the union, because pref and blwf are in one stage of
+ * HarfBuzz's Khmer plan too and it merges their masks the same way. Lookup 2 is no evidence either
+ * way: HarfBuzz pauses to reorder between ccmp and the basic forms, so it takes that Lookup twice,
+ * once unmasked, and reaches the same glyph by a route mPDF does not take.
+ *
+ * The lone uni1780 is the one row HarfBuzz draws differently, because it gives abvf a mask of its
+ * own while indicFeatureMasks() leaves abvf out although the reordering sets Indic::ABVF on exactly
+ * the glyphs it would cover. That is a gap of its own rather than anything this merge decides: give
+ * abvf its bit and mPDF draws HarfBuzz's uni1780, with every other row below standing.
  */
 class MergedLookupMaskTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
