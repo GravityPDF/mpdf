@@ -1,0 +1,15 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00041; &#x00042; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<div>No entries in GSUB table.</div>
+</div>
+<h1>GPOS Tables</h1>
+<h3>GPOS Scripts &amp; Languages</h3>
+<div class="glyphs">
+<div>No entries in GPOS table.</div>
+</div>
