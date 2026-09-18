@@ -96,17 +96,26 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The two Join_Causing characters are of no script, because they join whatever is written beside
-	 * them, and causing a join means causing it in both directions
+	 * Causing a join means causing it in both directions, so a Join_Causing character is in both tables.
+	 * The two here are of no script of their own - the tatweel a word is stretched with is Common and ZWJ
+	 * is Inherited - which is the pair that would be lost if the scope were the four scripts alone.
+	 *
+	 * @dataProvider dataJoinCausingCharacters
 	 */
-	public function testAJoinCausingCharacterOfNoScriptIsInBothTables()
+	public function testAJoinCausingCharacterIsInBothTables($codepoint)
 	{
 		$tables = $this->joining->tables();
 
-		foreach ([0x0640, 0x200D] as $codepoint) {
-			$this->assertContains($codepoint, $tables['leftJoining'], sprintf('U+%04X', $codepoint));
-			$this->assertContains($codepoint, $tables['rightJoining'], sprintf('U+%04X', $codepoint));
-		}
+		$this->assertContains($codepoint, $tables['leftJoining']);
+		$this->assertContains($codepoint, $tables['rightJoining']);
+	}
+
+	public function dataJoinCausingCharacters()
+	{
+		return [
+			'U+0640 TATWEEL, script Common' => [0x0640],
+			'U+200D ZWJ, script Inherited' => [0x200D],
+		];
 	}
 
 	/**
@@ -154,14 +163,37 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * U+10EE8 CROWN FEH is Arabic and left-joining as of Unicode 18. Ucdn's scripts are Unicode 17, which
-	 * gives it no script, and a character with no script is one Otl sends to no shaper - so leaving it out
-	 * is what these tables saying nothing about it means, and is why the two are generated from the one
-	 * version.
+	 * U+10EE8 CROWN FEH is Arabic and left-joining as of Unicode 18, and Ucdn's scripts are Unicode 17, so
+	 * it reads as Unknown. Otl::analyseCharacters() will not start a run on Unknown any more than on
+	 * Common, so the character stays in the run before it and the Arabic shaper is handed it anyway -
+	 * measured through Lateef, where a Beh after U+10EE8 is drawn with no form until the table has it. A
+	 * joining type newer than the script table is therefore read, not dropped.
 	 */
-	public function testACharacterNewerThanTheScriptTableIsLeftOut()
+	public function testACharacterNewerThanTheScriptTableIsStillWritten()
 	{
-		$this->assertNotContains(0x10EE8, $this->joining->tables()['leftJoining']);
+		$this->assertContains(0x10EE8, $this->joining->tables()['leftJoining']);
+	}
+
+	/**
+	 * The four scripts are Otl's decision rather than this generator's: selectShaper() is what sends a run
+	 * to the Arabic shaper, and a script added to that branch without being added here would bring the
+	 * defect back for it with nothing failing. selectShaper() reads nothing but its argument, so an
+	 * instance without a constructor is enough to ask it.
+	 */
+	public function testTheScopeIsTheScriptsOtlSendsToTheArabicShaper()
+	{
+		$selectShaper = new \ReflectionMethod('Mpdf\Otl', 'selectShaper');
+		$selectShaper->setAccessible(true);
+		$otl = new \ReflectionClass('Mpdf\Otl');
+
+		$arabic = [];
+		foreach (array_keys(Ucdn::$uni_scriptblock) as $script) {
+			if ($selectShaper->invoke($otl->newInstanceWithoutConstructor(), $script) === 'A') {
+				$arabic[] = $script;
+			}
+		}
+
+		$this->assertSame(ArabicJoining::scripts(), $arabic);
 	}
 
 	public function testEachTableIsSortedByCodepoint()
@@ -183,12 +215,12 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$expected = $this->copy(
 			'9.9.9',
-			"\t\t0x0620 => 1, 0x0628 => 1, 0x0640 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1,\n",
+			"\t\t0x0620 => 1, 0x0628 => 1, 0x0640 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1, 0x10EE8 => 1,\n",
 			"\t\t0x0627 => 1, 0x0628 => 1, 0x0640 => 1, 0x0710 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1,\n"
 			. "\t\t0x10EC2 => 1,\n"
 		);
 
-		$this->assertSame(['leftJoining' => 7, 'rightJoining' => 9], $written);
+		$this->assertSame(['leftJoining' => 8, 'rightJoining' => 9], $written);
 		$this->assertSame($expected, file_get_contents($copy));
 
 		$this->joining->rewrite($copy);
@@ -236,11 +268,11 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * An ArabicShaping.txt of a dozen lines, carrying every joining type, both Join_Causing characters,
-	 * one letter of each script the shaper resolves and three of scripts it does not. The codepoints are
-	 * Unicode's own, because what is in scope is read from the script Ucdn gives each one, but the types
-	 * are not always: Unicode 17 gives no character of the four scripts joining type L, so the L line is
-	 * put on an Arabic letter to leave nothing about the reading untested.
+	 * An ArabicShaping.txt of a dozen lines, carrying every joining type, two Join_Causing characters of no
+	 * script, one letter of each script the shaper resolves, two of scripts it does not and one newer than
+	 * Ucdn's scripts. The codepoints are Unicode's own, because what is in scope is read from the script
+	 * Ucdn gives each one, but the types are not always: Unicode 17 gives no character of the four scripts
+	 * joining type L, so the L line is put on an Arabic letter to leave nothing about the reading untested.
 	 *
 	 * @return string
 	 */

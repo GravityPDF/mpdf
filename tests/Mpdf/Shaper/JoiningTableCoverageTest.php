@@ -36,9 +36,8 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	const SOGDIAN_FE = '0074F';
 
 	/**
-	 * A letter either side of a character Unicode gives a joining type and mPDF had not got.
-	 *
-	 * Each case names the run, the position the form is asserted at, and the form HarfBuzz draws there.
+	 * A letter either side of a character Unicode gives a joining type and mPDF had not got. Both sides,
+	 * because a dual-joining character is read out of both tables and only one of them ever had it.
 	 *
 	 * @dataProvider dataRunsBesideARecentlyAddedCharacter
 	 */
@@ -73,10 +72,17 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	/**
 	 * U+0847 MANDAIC IT is right-joining: it joins to the letter before it and not to the one after, so
 	 * the letter after it starts a run of its own. It was the one character of the four blocks filed in
-	 * the wrong table - in the left-joining one, where it drew the following letter as though joined -
-	 * and `hb-shape` leaves that letter nominal:
+	 * the wrong table - in the left-joining one, where it drew the following letter as though joined.
 	 *
-	 *   [uni0628|.notdef]   0847,0628 through Lateef, against [uni0628.fina|uni0645.init] for 0645,0628
+	 * No font in the corpus draws Mandaic, so the oracle is read with an Arabic letter after U+0847. The
+	 * joining type is the character's own and HarfBuzz reads it from its own table, so what follows it
+	 * only has to be a letter that shows a final form:
+	 *
+	 *   $ hb-shape --font-file=packages/Middle-East-Scripts-Bundle/fonts/LateefRegOT.ttf \
+	 *       --no-clusters --no-positions --unicodes=0847,0628
+	 *   [uni0628|.notdef]
+	 *   $ ... --unicodes=0645,0628
+	 *   [uni0628.fina|uni0645.init]
 	 */
 	public function testALetterAfterARightJoiningMandaicLetterStandsAlone()
 	{
@@ -178,7 +184,7 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	{
 		$entities = '';
 		foreach ($hexes as $hex) {
-			$entities .= sprintf('&#x%s;', ltrim($hex, '0'));
+			$entities .= sprintf('&#x%s;', $hex);
 		}
 
 		$mpdf = new \Mpdf\TextRecordingMpdf();

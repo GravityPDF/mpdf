@@ -12,10 +12,11 @@ namespace Mpdf;
  * Joining_Type as L, D or C, and right-joining where it gives R, D or C, which is what the two tables
  * say: whether a letter joins to what follows it, and whether it joins to what precedes it.
  *
- * $transparent is not generated. ArabicShaping.txt lists no Transparent-Joining character at all -
- * Unicode leaves T to be derived from the general category, and says so in the file's own header - and
- * the table also carries codepoints that are no joining type of Unicode's, the presentation-form
- * ligatures a font's 'ccmp' produces. It stays hand-written.
+ * $transparent, the third table of the same class, is not generated and has the same gap these two had:
+ * that is #259, not this. Generating it needs decisions this does not - the T type is in
+ * extracted/DerivedJoiningType.txt rather than here, because Unicode leaves it to be derived from the
+ * general category and says so in this file's own header, and the table carries five codepoints that are
+ * no joining type of Unicode's at all, the presentation-form ligatures a font's 'ccmp' produces.
  */
 class ArabicJoining
 {
@@ -23,11 +24,9 @@ class ArabicJoining
 	use GeneratedTable;
 
 	/**
-	 * The database read when none is named.
-	 *
-	 * Tied to the one Ucdn's tables were built from, because the script is what routes a run to this
-	 * shaper: a joining type read from a newer database than Ucdn's scripts would be a form resolved for
-	 * a character Otl never sends here. Moving one means moving both.
+	 * The database read when none is named, which is the release the rest of mPDF's generated Unicode
+	 * tables are at. Named there rather than again here so that one answer to "which Unicode is this?"
+	 * covers the repository; either generator still takes a version of its own on the command line.
 	 */
 	const DEFAULT_VERSION = UcdnTables::DEFAULT_VERSION;
 
@@ -64,12 +63,7 @@ class ArabicJoining
 		$source = $this->sourceInLf($path);
 		$tables = $this->tables();
 
-		$source = preg_replace(
-			'/\t\/\/ UNIDATA_VERSION [\d.]+\n/',
-			"\t// UNIDATA_VERSION " . $this->version . "\n",
-			$source,
-			1
-		);
+		$source = $this->replaceVersion($source, 'UNIDATA_VERSION', $this->version);
 
 		$written = [];
 		foreach ($tables as $name => $codepoints) {
@@ -93,10 +87,10 @@ class ArabicJoining
 		$right = [];
 
 		foreach ($this->joiningTypes() as $codepoint => $type) {
-			if ($type !== 'R') {
+			if (in_array($type, ['L', 'D', 'C'], true)) {
 				$left[] = $codepoint;
 			}
-			if ($type !== 'L') {
+			if (in_array($type, ['R', 'D', 'C'], true)) {
 				$right[] = $codepoint;
 			}
 		}
@@ -108,7 +102,9 @@ class ArabicJoining
 	}
 
 	/**
-	 * Every character the shaper can be asked about that joins on either side, by codepoint.
+	 * Every character the shaper can be asked about that joins on either side, by codepoint. The
+	 * non-joining and transparent-joining types are dropped here rather than partitioned above, so that
+	 * neither table is a table of what is left over.
 	 *
 	 * @return string[] codepoint => Joining_Type, one of L, R, D or C
 	 */
@@ -134,29 +130,38 @@ class ArabicJoining
 	}
 
 	/**
-	 * Whether the shaper is ever asked how this character joins.
+	 * Whether this character can stand inside a run the Arabic shaper is given, which is the only way
+	 * either table is ever read.
 	 *
-	 * Otl splits a line by script and picks the shaper from it, so only the four scripts resolveJoining()
-	 * is called for reach these tables. Mongolian, Phags-pa, Manichaean, Psalter Pahlavi, Chorasmian,
-	 * Sogdian, Old Uyghur, Hanifi Rohingya and Adlam all have joining types in the same file and all
-	 * shape elsewhere, and whether mPDF should join them is a question about those scripts rather than
-	 * about this table.
-	 *
-	 * The scripts are read from Ucdn rather than from a list of block ranges so that the two cannot
-	 * disagree: a character Ucdn gives no script to cannot reach this shaper however it joins, which is
-	 * why the two tables are only as new as Ucdn's script table and why DEFAULT_VERSION is tied to it.
+	 * Otl::analyseCharacters() cuts a line into runs at each change of script and Otl::selectShaper()
+	 * picks the shaper from the run's, so the four scripts of scripts() are in scope - Mongolian,
+	 * Phags-pa, Manichaean, Psalter Pahlavi, Chorasmian, Sogdian, Old Uyghur, Hanifi Rohingya and Adlam
+	 * have joining types in the same file, form runs of their own and shape elsewhere, and whether mPDF
+	 * should join them is a question about those scripts rather than about this table.
 	 */
 	private function inScope($codepoint)
 	{
+		// The three values analyseCharacters() refuses to start a run on - Common, Inherited and Unknown -
+		// leave the character in the run before it, so any of them can be read as part of an Arabic one.
+		// Unknown is how a codepoint newer than Ucdn's script table arrives, and it still unjoins the
+		// letter before it, so dropping those would be this same defect with a shorter fuse.
 		$script = Ucdn::get_script($codepoint);
-
-		// The Join_Causing characters - the tatweel a word is stretched with, and ZWJ - belong to no one
-		// script, because they join whatever is written beside them. Unicode gives them Common.
-		if ($script === Ucdn::SCRIPT_COMMON || $script === Ucdn::SCRIPT_INHERITED) {
+		if ($script === Ucdn::SCRIPT_COMMON || $script === Ucdn::SCRIPT_INHERITED || $script === Ucdn::SCRIPT_UNKNOWN) {
 			return true;
 		}
 
-		return in_array($script, [Ucdn::SCRIPT_ARABIC, Ucdn::SCRIPT_SYRIAC, Ucdn::SCRIPT_NKO, Ucdn::SCRIPT_MANDAIC], true);
+		return in_array($script, self::scripts(), true);
+	}
+
+	/**
+	 * The scripts Otl::selectShaper() hands to the Arabic shaper, and so the scripts resolveJoining() is
+	 * called for. Kept in step with that method by ArabicJoiningTest.
+	 *
+	 * @return int[]
+	 */
+	public static function scripts()
+	{
+		return [Ucdn::SCRIPT_ARABIC, Ucdn::SCRIPT_SYRIAC, Ucdn::SCRIPT_NKO, Ucdn::SCRIPT_MANDAIC];
 	}
 
 	/**
@@ -187,7 +192,7 @@ class ArabicJoining
 	 *
 	 * @return string[] the file's lines
 	 */
-	public function lines($name)
+	private function lines($name)
 	{
 		$url = 'https://www.unicode.org/Public/' . $this->version . '/ucd/' . $name;
 
