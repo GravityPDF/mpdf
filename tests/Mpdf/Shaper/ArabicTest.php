@@ -195,6 +195,59 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Every form is gated on the feature it is stated under, including the three Syriac states for the
+	 * Alaph. The gate compared the action against each of the four the joining classes resolve, so an
+	 * action of med2, fin2 or fin3 matched none of them and was drawn whatever the document asked for.
+	 *
+	 * @dataProvider dataActionFeatures
+	 */
+	public function testAFormIsGatedOnTheFeatureItIsStatedUnder($action, $feature)
+	{
+		$without = trim(str_replace($feature, '', self::ALL_FORMS));
+
+		$this->assertSame(['X_' . strtoupper($feature), $action], $this->shapeAction($action, self::ALL_FORMS));
+		$this->assertSame([self::BETH, 0], $this->shapeAction($action, $without), 'without ' . $feature);
+	}
+
+	public function dataActionFeatures()
+	{
+		return [
+			'isol' => [0, 'isol'],
+			'fina' => [1, 'fina'],
+			'init' => [2, 'init'],
+			'medi' => [3, 'medi'],
+			'med2' => [4, 'med2'],
+			'fin2' => [5, 'fin2'],
+			'fin3' => [6, 'fin3'],
+		];
+	}
+
+	/**
+	 * An action that names no feature at all is substituted by nothing, which is how a character Syriac
+	 * states no form for comes through the shaper as it was written
+	 */
+	public function testAFormWhoseActionNamesNoFeatureIsLeftAlone()
+	{
+		$this->assertSame([self::BETH, 0], $this->shapeAction(Arabic::ACTION_NONE, self::ALL_FORMS));
+	}
+
+	/**
+	 * One character in the form its action calls for, through a letter the font states all seven forms
+	 * of, so each action has one to reach and none of them stands in for another.
+	 *
+	 * @return array the [hex, form] pair the character came out as
+	 */
+	private function shapeAction($action, $usetags)
+	{
+		$info = [['hex' => self::BETH, 'uni' => hexdec(self::BETH), 'joining' => $action]];
+		$glyphs = [self::BETH => ['X_ISOL', 'X_FINA', 'X_INIT', 'X_MEDI', 'X_MED2', 'X_FIN2', 'X_FIN3']];
+
+		Arabic::shape($info, $glyphs, $usetags);
+
+		return [$info[0]['hex'], $info[0]['form']];
+	}
+
+	/**
 	 * U+074F SOGDIAN FE is dual-joining, so it joins to the letter before it and that letter takes a
 	 * medial or initial form. One entry of the right-joining table was missing its `=> 1`, which filed
 	 * U+074F as a value under the next free integer key instead of as a key of its own, and left
@@ -446,9 +499,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAFormOfSeveralGlyphsIsHandedBackForTheCallerToSubstitute()
 	{
 		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
-		Arabic::resolveJoining($info, ' ' . self::FATHA);
+		Arabic::resolveJoining($info, ' ' . self::FATHA, 'arab');
 
-		$multiple = Arabic::shape($info, [self::BEH => ['0E01D 0FBB3']], ' ' . self::FATHA, self::ALL_FORMS, 'arab');
+		$multiple = Arabic::shape($info, [self::BEH => ['0E01D 0FBB3']], self::ALL_FORMS);
 
 		$this->assertSame([0 => [0xE01D, 0xFBB3]], $multiple);
 		$this->assertSame('0E01D', $info[0]['hex']);
@@ -462,9 +515,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAFormOfOneGlyphIsHandedBackAsNothing()
 	{
 		$info = [['hex' => self::BEH, 'uni' => hexdec(self::BEH)]];
-		Arabic::resolveJoining($info, ' ' . self::FATHA);
+		Arabic::resolveJoining($info, ' ' . self::FATHA, 'arab');
 
-		$this->assertSame([], Arabic::shape($info, $this->glyphs(), ' ' . self::FATHA, self::ALL_FORMS, 'arab'));
+		$this->assertSame([], Arabic::shape($info, $this->glyphs(), self::ALL_FORMS));
 	}
 
 	/**
@@ -481,16 +534,36 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			['hex' => self::BEH, 'uni' => hexdec(self::BEH)],
 			['hex' => self::BEH, 'uni' => hexdec(self::BEH)],
 		];
-		Arabic::resolveJoining($info, ' ' . self::FATHA);
+		Arabic::resolveJoining($info, ' ' . self::FATHA, 'arab');
 
 		$info[0]['hex'] = $rasm;
 		$info[1]['hex'] = $rasm;
-		Arabic::shape($info, [$rasm => ['R_ISOL', 'R_FINA', 'R_INIT']], ' ' . self::FATHA, self::ALL_FORMS, 'arab');
+		Arabic::shape($info, [$rasm => ['R_ISOL', 'R_FINA', 'R_INIT']], self::ALL_FORMS);
 
 		$this->assertSame(
 			[['R_INIT', 2], ['R_FINA', 1]],
 			[[$info[0]['hex'], $info[0]['form']], [$info[1]['hex'], $info[1]['form']]]
 		);
+	}
+
+	/**
+	 * The Alaph's three forms are read off the character as well, so a 'locl' or 'ccmp' that replaces
+	 * the Alaph itself no longer skips the rule. The rule matched the Alaph's own post-substitution hex,
+	 * and anything standing in its place is not U+0710. GravityPDF/mpdf#228.
+	 */
+	public function testAGlyphThatReplacedTheAlaphTakesTheFormTheAlaphCalledFor()
+	{
+		$alternate = '0E001';
+		$info = [
+			['hex' => self::DALATH, 'uni' => hexdec(self::DALATH)],
+			['hex' => self::ALAPH, 'uni' => hexdec(self::ALAPH)],
+		];
+		Arabic::resolveJoining($info, ' ' . self::PTHAHA, 'syrc');
+
+		$info[1]['hex'] = $alternate;
+		Arabic::shape($info, [$alternate => [6 => 'ALT_FIN3']], self::ALL_FORMS);
+
+		$this->assertSame(['ALT_FIN3', 6], [$info[1]['hex'], $info[1]['form']]);
 	}
 
 	/**
@@ -637,8 +710,8 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
 		}
 
-		Arabic::resolveJoining($info, ' ' . $glyphClassMarks);
-		Arabic::shape($info, $glyphs === null ? $this->glyphs() : $glyphs, ' ' . $glyphClassMarks, $usetags, $scriptTag);
+		Arabic::resolveJoining($info, ' ' . $glyphClassMarks, $scriptTag);
+		Arabic::shape($info, $glyphs === null ? $this->glyphs() : $glyphs, $usetags);
 
 		$forms = [];
 		foreach ($info as $char) {

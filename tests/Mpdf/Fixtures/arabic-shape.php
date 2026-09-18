@@ -24,8 +24,8 @@ foreach ($runs as $name => $run) {
 		$info[] = ['hex' => $hex, 'uni' => hexdec($hex)];
 	}
 
-	\Mpdf\Shaper\Arabic::resolveJoining($info, $marks);
-	\Mpdf\Shaper\Arabic::shape($info, $glyphs, $marks, $usetags, 'arab');
+	\Mpdf\Shaper\Arabic::resolveJoining($info, $marks, 'arab');
+	\Mpdf\Shaper\Arabic::shape($info, $glyphs, $usetags);
 
 	foreach ($info as $char) {
 		$forms[$name][] = [$char['hex'], $char['form']];
