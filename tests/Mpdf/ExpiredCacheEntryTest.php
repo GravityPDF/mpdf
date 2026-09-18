@@ -4,12 +4,12 @@ namespace Mpdf;
 
 /**
  * A font cache entry that goes between the moment a caller decides it wants it and the moment the read
- * lands is a cache miss, and every font path in the library used to read it as an empty entry instead:
- * has() said it was there, file_get_contents() warned, and what it handed back was drawn with.
+ * lands is a cache miss, not an empty entry. Every font path in the library asked has() and then read,
+ * so what the lost race handed back - nothing - was drawn with.
  *
- * The entries below are what the run reads, and each is expired once under a render that has just
- * written it. What the document then holds has to be what it holds when nothing expired - the entry is
- * derived from the font file, so making it again is always open to the caller - except for the layout
+ * The entries below are what a render reads, and each is expired once under a render that has just
+ * written it. What the document then holds has to be what it holds when nothing expired, because every
+ * entry is derived from the font file and making it again is open to the caller - except the layout
  * tables the parser derives, which only re-parsing the font can rebuild and which are raised instead.
  */
 class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
@@ -39,16 +39,14 @@ class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	protected function tear_down()
 	{
-		$directories = [];
+		/* The two directories a Cache makes under a tempDir, innermost first */
+		foreach ([$this->tempDir . '/mpdf/ttfontdata', $this->tempDir . '/mpdf'] as $directory) {
+			foreach (glob($directory . '/*') as $entry) {
+				if (is_file($entry)) {
+					unlink($entry);
+				}
+			}
 
-		foreach (new \RecursiveIteratorIterator(
-			new \RecursiveDirectoryIterator($this->tempDir, \FilesystemIterator::SKIP_DOTS),
-			\RecursiveIteratorIterator::CHILD_FIRST
-		) as $item) {
-			$item->isDir() ? $directories[] = $item->getPathname() : unlink($item->getPathname());
-		}
-
-		foreach ($directories as $directory) {
 			rmdir($directory);
 		}
 
@@ -59,7 +57,7 @@ class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * The font program and the size it was repackaged to are two entries read one after the other, and
-	 * either of them gone left the document with a font file object of no bytes at all.
+	 * either of them gone leaves nothing to put in the font file object.
 	 */
 	public function testAnExpiredFontProgramIsRepackagedRatherThanEmbeddedEmpty()
 	{
@@ -72,8 +70,8 @@ class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The /W array of the CIDFont, which said nothing at all where its entry had gone - leaving every
-	 * character in the document to be drawn at the font's default width.
+	 * The /W array of the CIDFont. Written from nothing it says nothing, and every character in the
+	 * document is then drawn at the font's default width.
 	 */
 	public function testAnExpiredWidthsRunIsWrittenAgainRatherThanLeftOutOfTheFont()
 	{
@@ -97,8 +95,8 @@ class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * The character widths, the glyph map and the metrics are written together by MetricsGenerator, so
-	 * any one of them gone means making all three again. The widths going used to be fatal: the writer
-	 * divides by the number of characters it reads out of them.
+	 * any one of them gone means making all three again. The widths are the fatal one: the writer divides
+	 * by the number of characters it reads out of them.
 	 */
 	public function testExpiredMetricsAreGeneratedAgainRatherThanLeavingTheFontWithout()
 	{
@@ -150,7 +148,15 @@ class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$this->expire($mpdf, $expiring);
 		}
 
-		set_error_handler(array($this, 'record'));
+		set_error_handler(function ($severity, $message, $file, $line) {
+			/* Suppression is honoured: only the read that loses the race inside Cache::loadIfPresent()
+			 * raises anything, and it suppresses itself so that a handler cannot make a miss fatal. */
+			if (error_reporting() & $severity) {
+				$this->raised[] = sprintf('%s in %s:%d', $message, basename($file), $line);
+			}
+
+			return true;
+		});
 
 		try {
 			$mpdf->WriteHTML('<p style="font-family:' . self::FONT . '">ABCE GHIJ</p>');
@@ -164,11 +170,6 @@ class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return $pdf;
 	}
 
-	/**
-	 * The read that loses the race by a hair suppresses its own warning, so that a handler converting
-	 * warnings to exceptions cannot make a cache miss fatal, and the miss it reports is acted on rather
-	 * than being left for the reader of a log to notice.
-	 */
 	private function assertNothingRaised()
 	{
 		$this->assertSame([], $this->raised);
@@ -194,23 +195,12 @@ class ExpiredCacheEntryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$property = new \ReflectionProperty($class, $name);
 
-		/* PHP 8.1 reflects a private member without being asked, and 8.5 deprecates the asking. */
+		// A no-op from PHP 8.1 and deprecated from 8.5
 		if (PHP_VERSION_ID < 80100) {
 			$property->setAccessible(true);
 		}
 
 		return $property;
-	}
-
-	public function record($severity, $message, $file, $line)
-	{
-		if (!(error_reporting() & $severity)) {
-			return true;
-		}
-
-		$this->raised[] = sprintf('%s in %s:%d', $message, basename($file), $line);
-
-		return true;
 	}
 
 	private function assertEmbedsTheFontProgram($pdf)

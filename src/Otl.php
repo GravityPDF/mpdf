@@ -287,7 +287,7 @@ class Otl
 		$this->glyphIDtoUni = $this->mpdf->CurrentFont['glyphIDtoUni'];
 
 		if (!isset($this->GDEFdata[$this->fontkey])) {
-			$font = $this->loadCachedLayoutData($this->fontkey . '.GDEFdata.json');
+			$font = $this->loadRequiredLayoutData($this->fontkey . '.GDEFdata.json');
 
 			$this->GDEFdata[$this->fontkey] = [
 				'MarkAttachmentType' => $font['MarkAttachmentType'],
@@ -585,7 +585,7 @@ class Otl
 		$this->readTable('GSUB');
 
 		if (!isset($this->GSUBdata[$this->fontkey])) {
-			$this->GSUBdata[$this->fontkey]['GSLuCoverage'] = $this->loadCachedLayoutData($this->fontkey . '.GSUBdata.json');
+			$this->GSUBdata[$this->fontkey]['GSLuCoverage'] = $this->loadRequiredLayoutData($this->fontkey . '.GSUBdata.json');
 		}
 
 		$this->GSLuCoverage = $this->GSUBdata[$this->fontkey]['GSLuCoverage'];
@@ -1192,7 +1192,7 @@ class Otl
 
 		// 6. Load GPOS data, Coverage & Lookups
 		if (!isset($this->GPOSdata[$this->fontkey])) {
-			$this->GPOSdata[$this->fontkey]['LuCoverage'] = $this->loadCachedLayoutData($this->fontkey . '.GPOSdata.json');
+			$this->GPOSdata[$this->fontkey]['LuCoverage'] = $this->loadRequiredLayoutData($this->fontkey . '.GPOSdata.json');
 		}
 
 		$this->LuCoverage = $this->GPOSdata[$this->fontkey]['LuCoverage'];
@@ -3109,18 +3109,19 @@ class Otl
 	}
 
 	/**
-	 * What the parser derived from GDEF, GSUB or GPOS and cached whole, for a table this font has.
+	 * What the parser derived from GDEF, GSUB or GPOS and cached whole, for a table this font has. It is
+	 * written for every such table the parser reads, so a miss can only be the entry going between
+	 * renders that share a tempDir - unlike the per-script entry loadGsubDerivedData() reads, which the
+	 * parser writes only where the script has anything to state and whose miss is ordinary.
 	 *
-	 * A miss is the entry going between renders that share a tempDir, since the parser writes one for
-	 * every table it reads and Mpdf::AddFont() writes them all again where the metrics beside them have
-	 * gone. Nothing here can derive it again - only re-parsing the font can - so the miss is raised
-	 * rather than shaped around, which is what readTable() does with the table bytes themselves.
+	 * Nothing here can derive it again - only re-parsing the font can - so the miss is raised rather than
+	 * shaped around, which is what readTable() does with the table bytes these are derived from.
 	 *
 	 * @param string $filename
 	 *
 	 * @return array
 	 */
-	private function loadCachedLayoutData($filename)
+	private function loadRequiredLayoutData($filename)
 	{
 		$data = $this->fontCache->jsonLoadIfPresent($filename);
 

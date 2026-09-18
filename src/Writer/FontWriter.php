@@ -82,11 +82,15 @@ class FontWriter
 					$originalsize = $info['length1'];
 					if ($this->mpdf->repackageTTF || $this->mpdf->fonts[$fontkey]['TTCfontID'] > 0 || $this->mpdf->fonts[$fontkey]['useOTL'] > 0) { // mPDF 5.7.1
 						// Both entries or neither: the stream and the length it declares are kept in
-						// separate files, and a miss on either leaves nothing to embed
-						$font = $this->fontCache->loadIfPresent($fontkey . '.ps.z');
-						$repackagedsize = null === $font ? null : $this->fontCache->jsonLoadIfPresent($fontkey . '.ps.json');
+						// separate files, and a miss on either leaves nothing to embed. The length is
+						// read first because it is one integer, where the stream it vouches for is the
+						// whole compressed font
+						$repackagedsize = $this->fontCache->jsonLoadIfPresent($fontkey . '.ps.json');
+						$font = null === $repackagedsize ? null : $this->fontCache->loadIfPresent($fontkey . '.ps.z');
 
-						if (null === $repackagedsize) {
+						if (null !== $font) {
+							$originalsize = $repackagedsize; // of the repackaged font, not of the file
+						} else {
 							$subsetter = $this->subsetter();
 							$font = $subsetter->repackageTTF($this->mpdf->FontFiles[$fontkey]['ttffile'], $this->mpdf->fonts[$fontkey]['TTCfontID'], $this->mpdf->debugfonts, $this->mpdf->fonts[$fontkey]['useOTL']); // mPDF 5.7.1
 
@@ -96,8 +100,6 @@ class FontWriter
 
 							$this->fontCache->binaryWrite($fontkey . '.ps.z', $font);
 							$this->fontCache->jsonWrite($fontkey . '.ps.json', $originalsize);
-						} else {
-							$originalsize = $repackagedsize; // of the repackaged font, not of the file
 						}
 					} else {
 						$font = $this->fontCache->loadIfPresent($fontkey . '.z');
@@ -336,7 +338,10 @@ class FontWriter
 					$this->writer->write('/DW ' . $font['desc']['MissingWidth'] . '');
 				}
 
-				$w = $asSubset ? null : $this->fontCache->loadIfPresent($font['fontkey'] . '.cw');
+				$w = null;
+				if (!$asSubset) {
+					$w = $this->fontCache->loadIfPresent($font['fontkey'] . '.cw');
+				}
 
 				if (null === $w) {
 					$this->writeTTFontWidths($font, $asSubset, ($asSubset ? $subsetter->maxUni : 0));
@@ -513,7 +518,11 @@ class FontWriter
 		];
 
 		$fontCacheFilename = $font['fontkey'] . '.cw127.json';
-		$cached = $asSubset ? $this->fontCache->jsonLoadIfPresent($fontCacheFilename) : null;
+		$cached = null;
+		if ($asSubset) {
+			$cached = $this->fontCache->jsonLoadIfPresent($fontCacheFilename);
+		}
+
 		if (null !== $cached) {
 			$character = $cached;
 			$character['startcid'] = 128;

@@ -4041,9 +4041,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$glyphIDtoUni = $this->fontCache->loadIfPresent($fontkey . '.gid.dat');
 		}
 
-		/* The metrics, the widths and the glyph map are written together, so any one of them gone is a
-		 * cache miss for all three: taking the ones that survived leaves the font holding the widths of
-		 * no characters at all, which the writer divides by. */
+		/* The widths and the glyph map are written beside the metrics above and read as one entry with
+		 * them: either of them gone is a cache miss for all three, because taking only what survived
+		 * leaves the font holding the widths of no characters at all, which the writer divides by. The
+		 * metrics themselves are already covered, by $font['name'] being empty where they did not load. */
 		if (null === $cw || null === $glyphIDtoUni) {
 			$generator = new MetricsGenerator($this->fontCache, $this->fontDescriptor);
 
@@ -4062,12 +4063,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$cw = $this->fontCache->loadIfPresent($fontkey . '.cw.dat');
 			$glyphIDtoUni = $this->fontCache->loadIfPresent($fontkey . '.gid.dat');
 
-			if (null === $font || null === $cw || null === $glyphIDtoUni) {
-				throw new \Mpdf\MpdfException(sprintf(
-					'Cannot read the metrics just written for font "%s" to %s',
-					$fontkey,
-					$this->fontCache->tempFilename($fontCacheFilename)
-				));
+			$written = [$fontCacheFilename => $font, $fontkey . '.cw.dat' => $cw, $fontkey . '.gid.dat' => $glyphIDtoUni];
+			foreach ($written as $entry => $contents) {
+				if (null === $contents) {
+					throw new \Mpdf\MpdfException(sprintf(
+						'Cannot read the font metrics just written to %s',
+						$this->fontCache->tempFilename($entry)
+					));
+				}
 			}
 		}
 
