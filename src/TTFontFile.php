@@ -1513,10 +1513,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->reportTableRead('GSUB');
 
 		$gsubOffset = $this->seek_table('GSUB');
-		$this->reader->skip(4); // majorVersion, minorVersion
-		$scriptListOffset = $gsubOffset + $this->reader->readUInt16();
-		$featureListOffset = $gsubOffset + $this->reader->readUInt16();
-		$lookupListOffset = $gsubOffset + $this->reader->readUInt16();
+		list($scriptListOffset, $featureListOffset, $lookupListOffset) = $this->readListOffsets($gsubOffset);
 
 		list($GSUBScriptLang, $gsub, $tags) = $this->readScriptsAndFeatures($scriptListOffset, $featureListOffset);
 		$this->hassmallcapsGSUB = isset($tags['smcp']);
@@ -3226,10 +3223,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->reportTableRead('GPOS');
 
 		$gposOffset = $this->seek_table('GPOS');
-		$this->reader->skip(4); // majorVersion, minorVersion
-		$scriptListOffset = $gposOffset + $this->reader->readUInt16();
-		$featureListOffset = $gposOffset + $this->reader->readUInt16();
-		$lookupListOffset = $gposOffset + $this->reader->readUInt16();
+		list($scriptListOffset, $featureListOffset, $lookupListOffset) = $this->readListOffsets($gposOffset);
 
 		list($GPOSScriptLang, $gpos, $tags) = $this->readScriptsAndFeatures($scriptListOffset, $featureListOffset);
 		$this->haskernGPOS = isset($tags['kern']);
@@ -3250,10 +3244,59 @@ class TTFontFile implements Fonts\FontSourceInterface
 	}
 
 	/**
+	 * The ScriptList, FeatureList and LookupList offsets a GSUB or GPOS header states, made absolute.
+	 *
+	 * A NULL offset means that list is absent, and is the one value that must not be made absolute:
+	 * the table offset plus nothing is the table's own header, where majorVersion 0x0001 would read as
+	 * a count of one. It is left as it stands and listCount() answers nothing for it.
+	 *
+	 * @param int $tableOffset Where GSUB or GPOS starts, from the start of the file, which the reader
+	 *                         is standing on
+	 *
+	 * @return int[] The three offsets in header order, each absolute or NULL
+	 */
+	private function readListOffsets($tableOffset)
+	{
+		$this->reader->skip(4); // majorVersion, minorVersion
+
+		$scriptList = $this->reader->readUInt16();
+		$featureList = $this->reader->readUInt16();
+		$lookupList = $this->reader->readUInt16();
+
+		return [
+			$scriptList ? $tableOffset + $scriptList : 0,
+			$featureList ? $tableOffset + $featureList : 0,
+			$lookupList ? $tableOffset + $lookupList : 0,
+		];
+	}
+
+	/**
+	 * How many entries a ScriptList, FeatureList or LookupList states, leaving the reader standing on
+	 * the first of them.
+	 *
+	 * All three are counted here, so a list the header states no offset for is answered in one place
+	 * rather than at each of the three reads.
+	 *
+	 * @param int $listOffset Absolute, from the start of the file, or NULL where the list is absent
+	 *
+	 * @return int
+	 */
+	private function listCount($listOffset)
+	{
+		if (!$listOffset) {
+			return 0;
+		}
+
+		$this->reader->seek($listOffset);
+
+		return $this->reader->readUInt16();
+	}
+
+	/**
 	 * The ScriptList and FeatureList of a GSUB or GPOS table, which are the same structures in both.
 	 *
-	 * @param int $scriptListOffset  Absolute, from the start of the file
-	 * @param int $featureListOffset Absolute, from the start of the file
+	 * @param int $scriptListOffset  Absolute, from the start of the file, or NULL where absent
+	 * @param int $featureListOffset Absolute, from the start of the file, or NULL where absent
 	 *
 	 * @return array [$scriptLang, $features, $tags]: the languages each script offers as one
 	 *               space-separated string, the lookup list indices of every feature of every one of
@@ -3262,8 +3305,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 	private function readScriptsAndFeatures($scriptListOffset, $featureListOffset)
 	{
 		// ScriptList: which scripts the table speaks for, and where each one's Script table is
-		$this->reader->seek($scriptListOffset);
-		$scriptCount = $this->reader->readUInt16();
+		$scriptCount = $this->listCount($scriptListOffset);
 		$scripts = [];
 		for ($i = 0; $i < $scriptCount; $i++) {
 			$scriptTag = $this->reader->readTag(); // "beng", "deva" etc.
@@ -3305,8 +3347,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		}
 
 		// FeatureList: every feature the table carries, and the lookups each one runs
-		$this->reader->seek($featureListOffset);
-		$featureCount = $this->reader->readUInt16();
+		$featureCount = $this->listCount($featureListOffset);
 		$features = [];
 		$tags = [];
 		for ($i = 0; $i < $featureCount; $i++) {
@@ -3369,7 +3410,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * The metadata and subtable offsets of a whole GSUB or GPOS LookupList.
 	 *
-	 * @param int $lookupListOffset Absolute, from the start of the file
+	 * @param int $lookupListOffset Absolute, from the start of the file, or NULL where absent
 	 * @param int $tableOffset      Where GSUB or GPOS starts, which the subtable offsets come back
 	 *                              relative to: the shaper reads a copy of the one table and has no
 	 *                              idea where in the file it came from
@@ -3381,8 +3422,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 */
 	private function readLookupList($lookupListOffset, $tableOffset, $extensionType)
 	{
-		$this->reader->seek($lookupListOffset);
-		$lookupCount = $this->reader->readUInt16();
+		$lookupCount = $this->listCount($lookupListOffset);
 
 		$offsets = [];
 		for ($i = 0; $i < $lookupCount; $i++) {
@@ -3395,6 +3435,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$lookups[$i]['Type'] = $this->reader->readUInt16();
 			$lookups[$i]['Flag'] = $flag = $this->reader->readUInt16();
 			$lookups[$i]['SubtableCount'] = $subtableCount = $this->reader->readUInt16();
+
+			// Stated before the loop that fills it, because the spec lets a Lookup state no subtables at
+			// all and every one of the seven walks of this list - two here, four in Otl, one in OtlDump -
+			// reads Subtables without asking whether it is there
+			$lookups[$i]['Subtables'] = [];
 
 			for ($c = 0; $c < $subtableCount; $c++) {
 				// Offset16 from the start of this Lookup table, stored relative to the start of the
