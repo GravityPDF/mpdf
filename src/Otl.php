@@ -1646,10 +1646,8 @@ class Otl
 	 * What the South East Asian shaper and the Khmer presentation pass ask for, where a later feature
 	 * is meant to see what an earlier one produced.
 	 *
-	 * What separates it from the two syllable-based shapers, which name their own tags, is the list it
-	 * is given: the Khmer presentation pass hands on what a document asked for through
-	 * font-feature-settings, which can name the alternate it wants after the tag and can leave a
-	 * feature the shaper already named in the list twice.
+	 * Unlike the two syllable-based shapers, which name their own tags, the list it is given can also
+	 * carry what a document asked for.
 	 *
 	 * @param string $usetags   The feature tags to apply, space separated, each optionally followed by
 	 *                          the alternate it asks for
@@ -1669,24 +1667,27 @@ class Otl
 		}
 		$tags = array_unique($tags);
 
-		// A reverse Lookup is taken over the whole run up front, out of the passes below, so that one
-		// two of these features name is taken once rather than once for each of them. What that costs
-		// is the place the Lookup List gives it among the Lookups of its own feature.
+		// The reverse Lookups are taken first, out of the passes below, so that one named by two of the
+		// selected features is taken once, under the first of them. The cost is its place in Lookup List
+		// order among the Lookups of its own feature.
+		$lookups = [];
 		$reverse = [];
 		foreach ($tags as $usetag) {
-			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+			$lookups[$usetag] = $this->lookupsForFeature($GSUBFeatures, $usetag);
+
+			foreach ($lookups[$usetag] as $lu) {
 				if ($this->GSUBLookups[$lu]['Type'] != 8 || isset($reverse[$lu])) {
 					continue;
 				}
 				$reverse[$lu] = true;
-				$this->_applyGSUBreverseLookup($lu, $this->GSUBLookups[$lu]['Flag'], $this->GSUBLookups[$lu]['MarkFilteringSet'], $usetag, $this->alternateWanted($usetag, $usetags));
+				$this->applyGSUBlookupOverRun($lu, $usetag, $this->alternateWanted($usetag, $usetags), 0, 0);
 			}
 		}
 
-		foreach ($tags as $usetag) {
+		foreach ($lookups as $usetag => $lookupList) {
 			$tagInt = $this->alternateWanted($usetag, $usetags);
 
-			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+			foreach ($lookupList as $lu) {
 				if (!isset($reverse[$lu])) {
 					$this->applyGSUBlookupOverRun($lu, $usetag, $tagInt, 0, 0);
 				}
@@ -1872,7 +1873,7 @@ class Otl
 	 * reverse order: each match reads a lookahead that has already been substituted and a backtrack
 	 * that has not. It replaces exactly one glyph, so the cursor always steps by one.
 	 */
-	private function _applyGSUBreverseLookup($lu, $Flag, $MarkFilteringSet, $tag, $tagInt, $mask = 0)
+	private function _applyGSUBreverseLookup($lu, $Flag, $MarkFilteringSet, $tag, $tagInt, $mask)
 	{
 		$subtables = $this->GSUBLookups[$lu]['Subtables'];
 		$coverage = $this->GSLuCoverage[$lu];
