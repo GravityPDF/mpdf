@@ -10,7 +10,9 @@ namespace Mpdf\Shaper;
  *
  * The characters here are the ones Unicode has added since the tables were last extended by hand - the
  * Syriac Supplement, Arabic Extended-A, -B and -C, and five Mandaic letters. `hb-shape` 14.3.1 draws
- * the forms these tests expect.
+ * the forms these tests expect. It is the oracle for the crown letters too, but not directly: no
+ * released HarfBuzz carries a joining type for them, so the two tests that name them read it from a
+ * character of the same type that Unicode 17 already had.
  */
 class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -34,6 +36,9 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 
 	/** U+074F SYRIAC SOGDIAN FE, dual-joining, and the letter the corpus already joined an Alaph over */
 	const SOGDIAN_FE = '0074F';
+
+	/** U+10ED9 ARABIC CROWN LETTER BEH, Arabic Extended-C, and left-joining as of Unicode 18 */
+	const CROWN_BEH = '10ED9';
 
 	/**
 	 * A letter either side of a character Unicode gives a joining type and mPDF had not got. Both sides,
@@ -89,6 +94,48 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 		$forms = $this->forms(['00847', self::ATT], 'mand');
 
 		$this->assertSame(['A_ISOL', 0], $forms[1]);
+	}
+
+	/**
+	 * Joining_Type=L, which no character either table held at Unicode 17 had: an L character joins to the
+	 * letter written after it and not to the one written before it, so it is the only type that stands in
+	 * $leftJoining alone. The second assertion is what says the crown letters are L rather than D; it
+	 * reads the same way for a character in neither table.
+	 *
+	 * `hb-shape` 14.3.1 cannot be asked about U+10ED9 - nor can 14.4.0, the latest release: their joining
+	 * tables are still generated from ArabicShaping-17.0.0.txt, so they read the crown letters as joining
+	 * nothing at all. The state machine that turns a joining type into a form is byte-identical between
+	 * 14.3.1 and the revision that regenerated the table from ArabicShaping-18.0.0.txt, so the oracle for
+	 * the type is read with U+10ACD MANICHAEAN LETTER HETH, which Unicode 17 already gives Joining_Type=L.
+	 * The corpus has no Manichaean font and Manichaean is a run of its own, so it is read beside an Arabic
+	 * letter with the script forced:
+	 *
+	 *   $ hb-shape --font-file=packages/Middle-East-Scripts-Bundle/fonts/LateefRegOT.ttf \
+	 *       --script=arab --direction=rtl --no-clusters --no-positions --unicodes=10ACD,0628
+	 *   [uni0628.fina|.notdef]
+	 *   $ ... --unicodes=0628,10ACD
+	 *   [.notdef|uni0628]
+	 *
+	 * Lateef has no isolated Beh, so the second is the nominal character: joined on neither side.
+	 */
+	public function testALetterAfterALeftJoiningCrownLetterTakesItsFinalForm()
+	{
+		$after = $this->forms([self::CROWN_BEH, self::BEH], 'arab');
+		$before = $this->forms([self::BEH, self::CROWN_BEH], 'arab');
+
+		$this->assertSame(['B_FINA', 1], $after[1]);
+		$this->assertSame(['B_ISOL', 0], $before[0], 'the letter before it is joined by nothing');
+	}
+
+	/**
+	 * The same through a real font, on the side Lateef can show: a Beh after the crown letter is the glyph
+	 * it is after a Meem. Lateef draws no glyph for U+10ED9, so the Beh is the whole of what is measured.
+	 */
+	public function testABehAfterALeftJoiningCrownLetterDrawsTheSameFormAsAfterAMeem()
+	{
+		$afterMeem = $this->render([self::MEEM, self::BEH], 'lateef');
+
+		$this->assertSame($afterMeem[1], $this->render([self::CROWN_BEH, self::BEH], 'lateef')[1]);
 	}
 
 	/**
