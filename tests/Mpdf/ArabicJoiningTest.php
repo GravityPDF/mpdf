@@ -3,9 +3,9 @@
 namespace Mpdf;
 
 /**
- * The generator behind composer arabicjoining:update, run over an ArabicShaping.txt written here rather
- * than Unicode's - one line per joining type, and one per script whose joining the shaper is and is not
- * asked about.
+ * The generator behind composer arabicjoining:update, run over an ArabicShaping.txt and a
+ * DerivedJoiningType.txt written here rather than Unicode's - one line per joining type, and one per
+ * script whose joining the shaper is and is not asked about.
  *
  * The last two tests rewrite a copy of the class rather than src/Shaper/Arabic.php, and the first of
  * them is the one that says what a generated line looks like.
@@ -32,6 +32,7 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			mkdir($this->dir, 0777, true);
 		}
 		file_put_contents($this->dir . '/ArabicShaping.txt', $this->shaping());
+		file_put_contents($this->dir . '/DerivedJoiningType.txt', $this->derived());
 
 		$this->joining = new ArabicJoining('9.9.9', $this->dir);
 	}
@@ -74,8 +75,9 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Non-joining and transparent-joining characters are in neither. The Transparent-Joining table is not
-	 * generated - ArabicShaping.txt lists next to none of it - so a T line is nothing to read either.
+	 * Non-joining and transparent-joining characters join on neither side. U+0655 is the second of them
+	 * here and is in no table at all: ArabicShaping.txt lists next to none of the T type, so its T lines
+	 * are read for nothing and the Transparent-Joining table is built from DerivedJoiningType.txt alone.
 	 *
 	 * @dataProvider dataCharactersThatJoinNothing
 	 */
@@ -85,13 +87,84 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertNotContains($codepoint, $tables['leftJoining']);
 		$this->assertNotContains($codepoint, $tables['rightJoining']);
+		$this->assertNotContains($codepoint, $tables['transparent']);
 	}
 
 	public function dataCharactersThatJoinNothing()
 	{
 		return [
 			'U+0600, joining type U' => [0x0600],
-			'U+0655, joining type T' => [0x0655],
+			'U+0655, joining type T in ArabicShaping.txt and nowhere else' => [0x0655],
+		];
+	}
+
+	/**
+	 * The Transparent type is what joining reads straight over, and the letters either side of such a
+	 * character see each other rather than it. One of each script the shaper resolves, so that a table
+	 * with a whole script missing cannot pass as complete.
+	 *
+	 * @dataProvider dataTransparentCharacters
+	 */
+	public function testATransparentCharacterIsInTheTransparentTableAndNeitherJoiningTable($codepoint)
+	{
+		$tables = $this->joining->tables();
+
+		$this->assertContains($codepoint, $tables['transparent']);
+		$this->assertNotContains($codepoint, $tables['leftJoining']);
+		$this->assertNotContains($codepoint, $tables['rightJoining']);
+	}
+
+	public function dataTransparentCharacters()
+	{
+		return [
+			'U+064E FATHA' => [0x064E],
+			'U+0898, the mark #259 was measured with' => [0x0898],
+			'U+0711 SYRIAC SUPERSCRIPT ALAPH' => [0x0711],
+			'U+07EB, N\'Ko' => [0x07EB],
+			'U+0859, Mandaic' => [0x0859],
+		];
+	}
+
+	/**
+	 * DerivedJoiningType.txt states ranges where ArabicShaping.txt never does, so one line can stand for
+	 * a whole block of marks and every codepoint of it has to be written.
+	 */
+	public function testEveryCharacterOfARangeIsWritten()
+	{
+		$transparent = $this->joining->tables()['transparent'];
+
+		$this->assertSame([0x0610, 0x0611, 0x0612, 0x0613, 0x0614, 0x0615], array_slice($transparent, 0, 6));
+	}
+
+	/**
+	 * Out of scope for the same reason a Mongolian letter is: Mongolian forms a run of its own and shapes
+	 * elsewhere, so a Mongolian variation selector is read for no run this shaper is given.
+	 */
+	public function testATransparentCharacterOfAScriptTheShaperNeverResolvesIsLeftOut()
+	{
+		$this->assertNotContains(0x180B, $this->joining->tables()['transparent']);
+	}
+
+	/**
+	 * The presentation-form ligatures the class keeps by hand are no joining type of Unicode's, so the
+	 * database says nothing about them and the generator writes nothing about them either - they are
+	 * merged into the table by transparentJoining() at run time instead.
+	 *
+	 * @dataProvider dataPresentationLigatures
+	 */
+	public function testAPresentationFormLigatureIsNotGenerated($codepoint)
+	{
+		$this->assertArrayNotHasKey($codepoint, \Mpdf\Shaper\Arabic::$transparent);
+	}
+
+	public function dataPresentationLigatures()
+	{
+		return [
+			'U+FC5E' => [0xFC5E],
+			'U+FC5F' => [0xFC5F],
+			'U+FC60' => [0xFC60],
+			'U+FC61' => [0xFC61],
+			'U+FC62' => [0xFC62],
 		];
 	}
 
@@ -174,7 +247,10 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testACharacterUcdnGivesNoScriptIsStillWritten()
 	{
-		$this->assertContains(0xFDD0, $this->joining->tables()['leftJoining']);
+		$tables = $this->joining->tables();
+
+		$this->assertContains(0xFDD0, $tables['leftJoining']);
+		$this->assertContains(0xFDD1, $tables['transparent'], 'and the same for the Transparent type');
 	}
 
 	/**
@@ -209,10 +285,10 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 	}
 
-	public function testTheRewrittenClassCarriesBothTablesAndTheVersionTheyWereBuiltFrom()
+	public function testTheRewrittenClassCarriesEveryTableAndTheVersionTheyWereBuiltFrom()
 	{
 		$copy = $this->dir . '/Copy.php';
-		file_put_contents($copy, $this->copy('0.0.0', "\t\t0x0001 => 1,\n", "\t\t0x0002 => 1,\n"));
+		file_put_contents($copy, $this->copy('0.0.0', "\t\t0x0001 => 1,\n", "\t\t0x0002 => 1,\n", "\t\t0x0003 => 1,\n"));
 
 		$written = $this->joining->rewrite($copy);
 
@@ -220,10 +296,12 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'9.9.9',
 			"\t\t0x0620 => 1, 0x0628 => 1, 0x0640 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1, 0xFDD0 => 1,\n",
 			"\t\t0x0627 => 1, 0x0628 => 1, 0x0640 => 1, 0x0710 => 1, 0x07CA => 1, 0x084F => 1, 0x0860 => 1, 0x200D => 1,\n"
-			. "\t\t0x10EC2 => 1,\n"
+			. "\t\t0x10EC2 => 1,\n",
+			"\t\t0x0610 => 1, 0x0611 => 1, 0x0612 => 1, 0x0613 => 1, 0x0614 => 1, 0x0615 => 1, 0x064E => 1, 0x0711 => 1,\n"
+			. "\t\t0x07EB => 1, 0x0859 => 1, 0x0898 => 1, 0xFDD1 => 1,\n"
 		);
 
-		$this->assertSame(['leftJoining' => 8, 'rightJoining' => 9], $written);
+		$this->assertSame(['leftJoining' => 8, 'rightJoining' => 9, 'transparent' => 12], $written);
 		$this->assertSame($expected, file_get_contents($copy));
 
 		$this->joining->rewrite($copy);
@@ -242,7 +320,7 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$version = ArabicJoining::DEFAULT_VERSION;
 		$files = __DIR__ . '/../../utils/data/ucd/' . $version;
-		if (!is_file($files . '/ArabicShaping.txt')) {
+		if (!is_file($files . '/ArabicShaping.txt') || !is_file($files . '/DerivedJoiningType.txt')) {
 			$this->markTestSkipped(sprintf('Unicode %s is not unpacked here: composer arabicjoining:update', $version));
 		}
 
@@ -261,13 +339,14 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @return string A class holding the two joining tables, ready to be rewritten
+	 * @return string A class holding the three joining tables, ready to be rewritten
 	 */
-	private function copy($version, $left, $right)
+	private function copy($version, $left, $right, $transparent)
 	{
 		return "<?php\n\nclass Copy\n{\n\n\t// UNIDATA_VERSION " . $version . "\n"
 			. "\tpublic static \$leftJoining = [\n" . $left . "\t];\n\n"
-			. "\tpublic static \$rightJoining = [\n" . $right . "\t];\n\n}\n";
+			. "\tpublic static \$rightJoining = [\n" . $right . "\t];\n\n"
+			. "\tpublic static \$transparent = [\n" . $transparent . "\t];\n\n}\n";
 	}
 
 	/**
@@ -299,6 +378,32 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. "1E900; ADLAM CAPITAL ALIF; D; No_Joining_Group\n"
 			. "10EC2; DAL WITH VERTICAL 2 DOTS BELOW; R; DAL\n"
 			. "FDD0; NONCHARACTER; L; No_Joining_Group\n";
+	}
+
+	/**
+	 * A DerivedJoiningType.txt of a dozen lines, in the columns Unicode writes it in: a range and a single
+	 * codepoint, one transparent mark of each script the shaper resolves, one of a script it does not, one
+	 * codepoint Ucdn gives no script, and a line of another type to be read past. As above, the codepoints
+	 * are Unicode's own because the scope is read from the script Ucdn gives each one.
+	 *
+	 * @return string
+	 */
+	private function derived()
+	{
+		return "# DerivedJoiningType-9.9.9.txt\n"
+			. "#\n"
+			. "# Joining_Type=Transparent\n"
+			. "0610..0615    ; T # Mn   [6] ARABIC SIGN SALLALLAHOU ALAYHE WASSALLAM..ARABIC SMALL HIGH TAH\n"
+			. "064E          ; T # Mn       ARABIC FATHA\n"
+			. "0711          ; T # Mn       SYRIAC LETTER SUPERSCRIPT ALAPH\n"
+			. "07EB          ; T # Mn       NKO COMBINING SHORT HIGH TONE\n"
+			. "0859          ; T # Mn       MANDAIC AFFRICATION MARK\n"
+			. "0898          ; T # Mn       ARABIC SMALL HIGH WORD AL-JUZ\n"
+			. "180B          ; T # Mn       MONGOLIAN FREE VARIATION SELECTOR ONE\n"
+			. "FDD1          ; T # Cn       NONCHARACTER\n"
+			. "#\n"
+			. "# Joining_Type=Dual_Joining\n"
+			. "0628          ; D # Lo       ARABIC LETTER BEH\n";
 	}
 
 }
