@@ -74,12 +74,7 @@ class OtLanguageTags
 			$tags += strlen($entry[0]) / 4;
 		}
 
-		$source = preg_replace(
-			'/\t\/\/ HARFBUZZ_VERSION [\d.]+\n/',
-			"\t// HARFBUZZ_VERSION " . $this->version . "\n",
-			$source,
-			1
-		);
+		$source = $this->replaceVersion($source, 'HARFBUZZ_VERSION', $this->version);
 		$source = $this->replaceArray($source, 'public static $ot_languages', implode("\n", $lines));
 
 		$this->writeBack($path, $source);

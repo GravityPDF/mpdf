@@ -59,6 +59,31 @@ trait GeneratedTable
 	}
 
 	/**
+	 * Replaces the line naming the release a class was generated from.
+	 *
+	 * @param string $name    The marker, e.g. 'UNIDATA_VERSION'
+	 * @param string $version What to write after it
+	 *
+	 * @return string
+	 */
+	private function replaceVersion($source, $name, $version)
+	{
+		$replaced = preg_replace(
+			'/\t\/\/ ' . preg_quote($name, '/') . " [\d.]+\n/",
+			"\t// " . $name . ' ' . $version . "\n",
+			$source,
+			1,
+			$count
+		);
+
+		if ($count !== 1) {
+			throw new \RuntimeException(sprintf('Could not find the %s line to rewrite', $name));
+		}
+
+		return $replaced;
+	}
+
+	/**
 	 * Replaces the body of one array in a class, matching it by its declaration.
 	 *
 	 * @return string
