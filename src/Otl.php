@@ -1227,15 +1227,7 @@ class Otl
 		}
 
 		// 8. Get GPOS LookupList from Feature tags
-		$LookupList = [];
-		foreach ($GPOSFeatures as $tag => $arr) {
-			if (strpos($usetags, $tag) !== false) {
-				foreach ($arr as $lu) {
-					$LookupList[$lu] = $tag;
-				}
-			}
-		}
-		ksort($LookupList);
+		$LookupList = $this->lookupsInLookupListOrder($GPOSFeatures, $usetags);
 
 		// 9. Apply GPOS Lookups (in order specified in lookup list but selecting from specified tags)
 		// APPLY THE GPOS RULES (as long as not Latin + SmallCaps - but not OTL smcp)
@@ -1623,23 +1615,10 @@ class Otl
 	 */
 	function _applyGSUBrules($usetags, $scriptTag, $langsys)
 	{
-		$GSUBFeatures = $this->features('GSUB', $scriptTag, $langsys);
+		$stage = $this->lookupsInLookupListOrder($this->features('GSUB', $scriptTag, $langsys), $usetags);
 
-		// One list across every tag named, in Lookup List order, which is what separates this path from
-		// the one the syllable-based shapers take: a Lookup two of these features share is walked once,
-		// where a pass per feature would walk it once for each
-		$LookupList = [];
-		foreach ($GSUBFeatures as $tag => $arr) {
-			if (strpos($usetags, $tag) !== false) {
-				foreach ($arr as $lu) {
-					$LookupList[$lu] = $tag;
-				}
-			}
-		}
-		ksort($LookupList);
-
-		foreach ($LookupList as $lu => $tag) {
-			$this->applyGSUBlookupOverRun($lu, $tag, $this->alternateWanted($tag, $usetags), 0, 0);
+		foreach ($stage as $lu => $take) {
+			$this->applyGSUBlookupOverRun($lu, $take['tag'], $take['alternate'], $take['mask'], 0);
 		}
 	}
 
@@ -1839,14 +1818,14 @@ class Otl
 	 *
 	 * @return int[] The Lookup ids, in the order they are to be applied
 	 */
-	private function lookupsForFeature(array $GSUBFeatures, $usetag)
+	private function lookupsForFeature(array $features, $usetag)
 	{
-		if (!isset($GSUBFeatures[$usetag])) {
+		if (!isset($features[$usetag])) {
 			return [];
 		}
 
 		$LookupList = [];
-		foreach ($GSUBFeatures[$usetag] as $lu) {
+		foreach ($features[$usetag] as $lu) {
 			$LookupList[$lu] = true;
 		}
 		ksort($LookupList);
@@ -1855,35 +1834,41 @@ class Otl
 	}
 
 	/**
-	 * The Lookups the features of one stage ask for, each of them once, in the order to take them in.
+	 * The Lookups the features of one stage ask for, each of them once, in the order the tags named
+	 * them.
 	 *
 	 * HarfBuzz collects the Lookups of the features of a stage of its plan and merges the duplicates,
 	 * so a Lookup two features of one stage name is taken once, where one that features of two stages
 	 * name is taken for each of them, over the glyphs the earlier stage made. That is why the paths
 	 * that apply a feature at a time take a stage per call and not a whole plan.
 	 *
-	 * A merged Lookup is taken in the pass of the first feature that named it and under that feature's
-	 * alternate, which costs it its place in the list HarfBuzz would sort by Lookup - the price of the
-	 * per-feature passes, which have no such list. Its mask is the OR of the masks of every feature
-	 * that named it, as HarfBuzz ORs the masks of the entries it merges: a feature with no mask of its
-	 * own reaches every glyph, which is 0 here and a bit every glyph carries there, so 0 absorbs. Only
-	 * the Khmer basic forms put masked and unmasked features in one stage.
+	 * A merged Lookup is taken under the tag and the alternate of the first feature that named it, so
+	 * that where only one of two tags asked for an alternate it is the tag list that decides whether
+	 * that survives, and not the order the language system happened to list the two in. Its mask is
+	 * the OR of the masks of every feature that named it, as HarfBuzz ORs the masks of the entries it
+	 * merges: a feature with no mask of its own reaches every glyph, which is 0 here and a bit every
+	 * glyph carries there, so 0 absorbs. Only the Khmer basic forms put masked and unmasked features
+	 * in one stage.
 	 *
-	 * @param array  $GSUBFeatures The features the font offers for the script and language in hand
+	 * Ordering by the first feature costs a merged Lookup its place in the list HarfBuzz sorts by
+	 * Lookup, which is the price of the per-feature passes: they have no such list to sort by.
+	 * lookupsInLookupListOrder() puts a caller that has one back into it.
+	 *
+	 * @param array  $features     The features the font offers for the script and language in hand
 	 * @param string $usetags      The feature tags of the stage, space separated, each optionally
 	 *                             followed by the alternate it asks for
 	 * @param array  $featureMasks The bit a feature's glyphs must carry, by tag
 	 *
 	 * @return array The tag to take each Lookup under, the alternate and the mask, by Lookup
 	 */
-	private function lookupsForStage(array $GSUBFeatures, $usetags, array $featureMasks)
+	private function lookupsForStage(array $features, $usetags, array $featureMasks)
 	{
 		$stage = [];
 		foreach ($this->featuresToApply($usetags) as $usetag) {
 			$mask = isset($featureMasks[$usetag]) ? $featureMasks[$usetag] : 0;
 			$tagInt = $this->alternateWanted($usetag, $usetags);
 
-			foreach ($this->lookupsForFeature($GSUBFeatures, $usetag) as $lu) {
+			foreach ($this->lookupsForFeature($features, $usetag) as $lu) {
 				if (!isset($stage[$lu])) {
 					$stage[$lu] = ['tag' => $usetag, 'alternate' => $tagInt, 'mask' => $mask];
 					continue;
@@ -1891,6 +1876,25 @@ class Otl
 				$stage[$lu]['mask'] = $stage[$lu]['mask'] && $mask ? $stage[$lu]['mask'] | $mask : 0;
 			}
 		}
+
+		return $stage;
+	}
+
+	/**
+	 * The Lookups a whole tag list asks for, in the order the font's Lookup List gives them.
+	 *
+	 * What the two plain paths take - _applyGSUBrules(), for the scripts with no shaper of their own,
+	 * and the list applyGPOS() builds. Both name everything they have at once, which is one stage, and
+	 * both have the font's Lookup List to walk it in, which is what separates them from the passes
+	 * that take a feature at a time. Positioning reads only the tag of each entry: an alternate and a
+	 * mask mean nothing to it.
+	 *
+	 * @return array As lookupsForStage(), sorted by Lookup
+	 */
+	private function lookupsInLookupListOrder(array $features, $usetags)
+	{
+		$stage = $this->lookupsForStage($features, $usetags, []);
+		ksort($stage);
 
 		return $stage;
 	}
@@ -3223,14 +3227,14 @@ class Otl
 	 * Each lookup is walked over the whole run, a glyph at a time. Unlike GSUB, nothing here changes
 	 * what the glyphs are, only where they are drawn.
 	 *
-	 * @param array $LookupList  The lookups to apply, as lookup index => the feature tag that asked
-	 *                           for it
+	 * @param array $LookupList  The lookups to apply, as lookupsInLookupListOrder() answers them
 	 * @param bool  $is_old_spec Whether the font uses the original Indic script tags rather than the
 	 *                           v2 ones
 	 */
 	private function _applyGPOSrules($LookupList, $is_old_spec = false)
 	{
-		foreach ($LookupList as $lu => $tag) {
+		foreach ($LookupList as $lu => $take) {
+			$tag = $take['tag'];
 			$Type = $this->GPOSLookups[$lu]['Type'];
 			$Flag = $this->GPOSLookups[$lu]['Flag'];
 			$MarkFilteringSet = '';
