@@ -1,0 +1,16 @@
+<h1>GDEF table</h1>
+<h2>Glyph classes</h2>
+<h3>Glyph class 1</h3>
+<h5>Base glyph (single character, spacing glyph)</h5>
+<div class="glyphs">&#x00041; &#x00042; </div>
+<h1>GSUB Tables</h1>
+<h3>GSUB Scripts &amp; Languages</h3>
+<div class="glyphs">
+<h5>latn</h5><div><a href="font_dump_otl.php?script=latn&amp;lang=DFLT">DFLT</a></b>: liga </div>
+</div>
+<div>GPOS table not defined</div>
+
+=== detail: script latn language DFLT ===
+<h1>GSUB Tables</h1>
+<bookmark level="0" content="GSUB features"><div class="level1"><h5 class="level1"><bookmark level="1" content="liga [#0]">Lookup #0 [tag: <span style="color:#000066;">liga</span>]</h5></div>
+<div>GPOS table not defined</div>
