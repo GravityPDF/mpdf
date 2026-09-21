@@ -167,23 +167,24 @@ class ScriptRunsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Otl's one departure from the table: Unicode calls the Arabic End of Ayah Common, so an ayah number
-	 * standing between two scripts would be shaped by whichever it followed.
+	 * The one departure from the table, for the reason ScriptRuns::END_OF_AYAH gives.
 	 */
-	public function testAnOverriddenCodepointStartsARunOfTheScriptTheCallerGivesIt()
+	public function testTheArabicEndOfAyahStartsARunOfArabicWhateverPrecedesIt()
 	{
-		$string = [self::LATIN_A, self::END_OF_AYAH];
-
-		$runs = ScriptRuns::split($string, [self::END_OF_AYAH => Ucdn::SCRIPT_ARABIC]);
+		$runs = ScriptRuns::split([self::LATIN_A, self::END_OF_AYAH]);
 
 		$this->assertCount(2, $runs);
 		$this->assertSame(Ucdn::SCRIPT_ARABIC, $runs[1]['script']);
 		$this->assertSame(Ucdn::SCRIPT_ARABIC, $runs[1]['characters'][0]['script']);
+	}
 
-		$unchanged = ScriptRuns::split($string);
+	public function testAnAyahMarkerAfterArabicStaysInTheArabicRunItNumbers()
+	{
+		$runs = ScriptRuns::split([self::ARABIC_ALEF, self::END_OF_AYAH]);
 
-		$this->assertCount(1, $unchanged, 'without the override the table decides, and it says Common');
-		$this->assertSame(Ucdn::SCRIPT_COMMON, $unchanged[0]['characters'][1]['script']);
+		$this->assertCount(1, $runs);
+		$this->assertSame(Ucdn::SCRIPT_ARABIC, $runs[0]['script']);
+		$this->assertSame([self::ARABIC_ALEF, self::END_OF_AYAH], $this->codepointsOf($runs[0]));
 	}
 
 	/**

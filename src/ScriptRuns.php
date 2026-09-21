@@ -16,6 +16,17 @@ class ScriptRuns
 {
 
 	/**
+	 * The one character read against the script table rather than out of it.
+	 *
+	 * Unicode calls the Arabic End of Ayah Common, which would leave a verse number to be read as
+	 * whatever script it happened to stand next to - shaped by that script's rules and, where no
+	 * Arabic stands beside it, given that script's font, which need carry no glyph for it. Unicode
+	 * answers this generally in Script_Extensions, which names the scripts a Common character may be
+	 * read as; mPDF has only the Script property, so the character is named here instead.
+	 */
+	const END_OF_AYAH = 0x06DD;
+
+	/**
 	 * Whether a character of this script begins a run of its own.
 	 *
 	 * Common and Inherited do not. Punctuation, spaces and combining marks carry no script to shape by,
@@ -39,18 +50,16 @@ class ScriptRuns
 	 * Characters ahead of the first one to start a run open the first run, which then takes that
 	 * character's script. Nothing is dropped: the runs hold the whole string, in order.
 	 *
+	 * A character's script is the table's, but for END_OF_AYAH, and every caller is handed the same
+	 * reading: the script a character is shaped as is the script it is given a font for.
+	 *
 	 * @param int[] $codepoints The string, as Mpdf::UTF8StringToArray() writes it
-	 * @param int[] $scriptOverrides The script to read a codepoint as, by codepoint, where a caller
-	 *                               reads one differently from the table. Otl shapes the Arabic End of
-	 *                               Ayah as Arabic although Unicode calls it Common; the callers that
-	 *                               pick a language rather than a shaper do not, which is #274 rather
-	 *                               than this.
 	 *
 	 * @return array[] One run per entry, in order, each ['script' => int, 'characters' => array[]]
 	 *                 where a character is ['uni' => int, 'script' => int, 'record' => int[]]. There
 	 *                 is always at least one run; an empty string gives one empty run of no script.
 	 */
-	public static function split($codepoints, $scriptOverrides = [])
+	public static function split($codepoints)
 	{
 		$runs = [];
 		$runScript = Ucdn::SCRIPT_COMMON;
@@ -58,7 +67,7 @@ class ScriptRuns
 
 		foreach ($codepoints as $codepoint) {
 			$record = Ucdn::get_ucd_record($codepoint);
-			$script = isset($scriptOverrides[$codepoint]) ? $scriptOverrides[$codepoint] : $record[6];
+			$script = $codepoint === self::END_OF_AYAH ? Ucdn::SCRIPT_ARABIC : $record[6];
 
 			if (self::startsARun($script)) {
 				if ($runScript === Ucdn::SCRIPT_COMMON) {
