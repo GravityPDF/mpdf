@@ -5,6 +5,7 @@ namespace Mpdf\Fonts\Color;
 use Mpdf\Fonts\FileReader;
 use Mpdf\Mpdf;
 use Mpdf\TTFontFile;
+use Psr\Log\LoggerInterface;
 
 /**
  * The colour formats mPDF draws, and which of a font's it draws the font in.
@@ -18,6 +19,7 @@ class ColorFormats
 	 */
 	const SOURCES = [
 		'CBDT' => 'Mpdf\Fonts\Color\CbdtSource',
+		'sbix' => 'Mpdf\Fonts\Color\SbixSource',
 	];
 
 	/**
@@ -93,17 +95,18 @@ class ColorFormats
 	}
 
 	/**
-	 * @param string     $format One of the keys of SOURCES
-	 * @param TTFontFile $font   The font, its table directory read
-	 * @param FileReader $reader The font file
-	 * @param int        $unitsPerEm
+	 * @param string          $format One of the keys of SOURCES
+	 * @param TTFontFile      $font   The font, its table directory read
+	 * @param FileReader      $reader The font file
+	 * @param int             $unitsPerEm
+	 * @param LoggerInterface $logger Told of a glyph the format has but mPDF cannot draw
 	 *
 	 * @return ColorGlyphSource
 	 */
-	public static function source($format, TTFontFile $font, FileReader $reader, $unitsPerEm)
+	public static function source($format, TTFontFile $font, FileReader $reader, $unitsPerEm, LoggerInterface $logger)
 	{
 		$class = self::SOURCES[$format];
 
-		return new $class($font, $reader, $unitsPerEm);
+		return new $class($font, $reader, $unitsPerEm, $logger);
 	}
 }

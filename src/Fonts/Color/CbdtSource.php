@@ -3,7 +3,9 @@
 namespace Mpdf\Fonts\Color;
 
 use Mpdf\Fonts\FileReader;
+use Mpdf\Log\Context as LogContext;
 use Mpdf\TTFontFile;
+use Psr\Log\LoggerInterface;
 
 /**
  * Colour glyphs as PNG bitmaps, in CBDT with CBLC to index them: Noto Color Emoji's format.
@@ -17,24 +19,11 @@ use Mpdf\TTFontFile;
  * front; a glyph is looked up in its subtable when it is drawn, and the subtables that list their
  * glyphs are read whole the first time one of them is.
  *
- * Every read is checked for coming up short, so an offset past the end of the file draws nothing
- * rather than decoding the empty string.
- *
  * @see https://learn.microsoft.com/en-us/typography/opentype/spec/cblc
  * @see https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt
  */
-class CbdtSource implements ColorGlyphSource
+class CbdtSource extends BitmapSource
 {
-
-	/**
-	 * @var FileReader
-	 */
-	private $reader;
-
-	/**
-	 * @var float Font units per pixel of the strike drawn
-	 */
-	private $scale;
 
 	/**
 	 * @var int Where CBDT ends, which no image runs past
@@ -50,25 +39,26 @@ class CbdtSource implements ColorGlyphSource
 	private $subtables = [];
 
 	/**
-	 * @param TTFontFile $font       The font, its table directory read
-	 * @param FileReader $reader     The font file
-	 * @param int        $unitsPerEm
+	 * @param TTFontFile      $font       The font, its table directory read
+	 * @param FileReader      $reader     The font file
+	 * @param int             $unitsPerEm
+	 * @param LoggerInterface $logger     Told of a bitmap in an image format mPDF does not draw
 	 */
-	public function __construct(TTFontFile $font, FileReader $reader, $unitsPerEm)
+	public function __construct(TTFontFile $font, FileReader $reader, $unitsPerEm, LoggerInterface $logger)
 	{
-		$this->reader = $reader;
+		parent::__construct($reader, $logger);
 		$cblc = $font->getTablePosition('CBLC')[0];
 		list($cbdt, $cbdtLength) = $font->getTablePosition('CBDT');
 		$this->cbdtEnd = $cbdt + $cbdtLength;
 
-		$header = $this->fields($cblc + 4, 4, 'N');
+		$header = $this->reader->fieldsAt($cblc + 4, 4, 'N');
 		$numSizes = $header === null ? 0 : $header[0];
 
 		$strike = null;
 		for ($i = 0; $i < $numSizes; $i++) {
 			// indexSubTableArrayOffset, then numberOfIndexSubTables past indexTablesSize, then ppemY past
 			// colorRef, both line metrics, the first and last glyph and ppemX
-			$size = $this->fields($cblc + 8 + $i * 48, 46, 'Narray/x4/Ncount/x33/Cppem');
+			$size = $this->reader->fieldsAt($cblc + 8 + $i * 48, 46, 'Narray/x4/Ncount/x33/Cppem');
 			if ($size === null) {
 				break;
 			}
@@ -88,12 +78,12 @@ class CbdtSource implements ColorGlyphSource
 
 		for ($i = 0; $i < $subtableCount; $i++) {
 			// The array ends with the file, if not before
-			$entry = $this->fields($array + $i * 8, 8, 'nfirst/nlast/Noffset');
+			$entry = $this->reader->fieldsAt($array + $i * 8, 8, 'nfirst/nlast/Noffset');
 			if ($entry === null) {
 				break;
 			}
 
-			$header = $this->fields($array + $entry[2], 8, 'nindex/nimage/Ndata');
+			$header = $this->reader->fieldsAt($array + $entry[2], 8, 'nindex/nimage/Ndata');
 			if ($header === null) {
 				continue;
 			}
@@ -124,13 +114,19 @@ class CbdtSource implements ColorGlyphSource
 
 		if ($format === 17) {
 			// smallGlyphMetrics, its advance skipped, then dataLength
-			$header = $this->fields($offset, 9, 'Cheight/Cwidth/cx/cy/x/Nlength');
+			$header = $this->reader->fieldsAt($offset, 9, 'Cheight/Cwidth/cx/cy/x/Nlength');
 		} elseif ($format === 18) {
 			// bigGlyphMetrics, its horiAdvance and vertical metrics skipped, then dataLength
-			$header = $this->fields($offset, 12, 'Cheight/Cwidth/cx/cy/x4/Nlength');
-		} elseif ($format === 19 && $metrics !== null) {
-			$header = $this->fields($offset, 4, 'Nlength');
+			$header = $this->reader->fieldsAt($offset, 12, 'Cheight/Cwidth/cx/cy/x4/Nlength');
+		} elseif ($format === 19) {
+			// Where the index gives no metrics the font is broken, not in a format mPDF does not draw
+			if ($metrics === null) {
+				return null;
+			}
+			$header = $this->reader->fieldsAt($offset, 4, 'Nlength');
 		} else {
+			$this->logger->warning(sprintf('Colour glyph %d is a CBDT bitmap of image format %d, which mPDF does not draw', $glyph, $format), ['context' => LogContext::FONTS]);
+
 			return null;
 		}
 
@@ -144,26 +140,19 @@ class CbdtSource implements ColorGlyphSource
 			$metrics = $header;
 		}
 
-		$png = $this->reader->read($dataLength);
-		if (strlen($png) < $dataLength) {
+		$png = $this->reader->fieldsAt($this->reader->tell(), $dataLength, 'a*');
+		if ($png === null) {
 			return null;
 		}
 
 		list($height, $width, $bearingX, $bearingY) = $metrics;
 
-		$image = $resources->image($png);
+		$image = $resources->image($png[0]);
 		if ($image === null) {
 			return null;
 		}
 
-		return sprintf(
-			'q %.3F 0 0 %.3F %.3F %.3F cm %s Do Q',
-			$width * $this->scale,
-			$height * $this->scale,
-			$bearingX * $this->scale,
-			($bearingY - $height) * $this->scale,
-			$image
-		);
+		return $this->place($image[0], $width, $height, $bearingX, $bearingY - $height);
 	}
 
 	/**
@@ -188,7 +177,7 @@ class CbdtSource implements ColorGlyphSource
 				// An Offset32, or an Offset16, per glyph from first to last and one past it: a glyph's
 				// data runs up to the next glyph's
 				$size = $indexFormat === 1 ? 4 : 2;
-				$range = $this->fields($subtable['position'] + ($glyph - $subtable['first']) * $size, 2 * $size, $size === 4 ? 'N2' : 'n2');
+				$range = $this->reader->fieldsAt($subtable['position'] + ($glyph - $subtable['first']) * $size, 2 * $size, $size === 4 ? 'N2' : 'n2');
 			} elseif ($indexFormat === 2 || $indexFormat === 4 || $indexFormat === 5) {
 				if ($subtable['index'] === null) {
 					$subtable['index'] = $this->subtables[$i]['index'] = $this->index($subtable);
@@ -238,8 +227,8 @@ class CbdtSource implements ColorGlyphSource
 		if ($subtable['indexFormat'] === 4) {
 			// numGlyphs, then a glyph id and an offset for each and a closing offset for the last to
 			// run up to
-			$count = $this->fields($position, 4, 'N');
-			$pairs = $count === null || $count[0] > $covered ? null : $this->fields($position + 4, 4 * ($count[0] + 1), 'n*');
+			$count = $this->reader->fieldsAt($position, 4, 'N');
+			$pairs = $count === null || $count[0] > $covered ? null : $this->reader->fieldsAt($position + 4, 4 * ($count[0] + 1), 'n*');
 			if ($pairs === null) {
 				return false;
 			}
@@ -256,7 +245,7 @@ class CbdtSource implements ColorGlyphSource
 		}
 
 		// imageSize and bigGlyphMetrics, its horiAdvance and vertical metrics skipped
-		$header = $this->fields($position, 12, 'Nsize/Cheight/Cwidth/cx/cy');
+		$header = $this->reader->fieldsAt($position, 12, 'Nsize/Cheight/Cwidth/cx/cy');
 		if ($header === null) {
 			return false;
 		}
@@ -267,8 +256,8 @@ class CbdtSource implements ColorGlyphSource
 		}
 
 		// numGlyphs, then the glyph ids, whose images follow one another in that order
-		$count = $this->fields($position + 12, 4, 'N');
-		$glyphs = $count === null || $count[0] > $covered ? null : $this->fields($position + 16, 2 * $count[0], 'n*');
+		$count = $this->reader->fieldsAt($position + 12, 4, 'N');
+		$glyphs = $count === null || $count[0] > $covered ? null : $this->reader->fieldsAt($position + 16, 2 * $count[0], 'n*');
 		if ($glyphs === null) {
 			return false;
 		}
@@ -281,27 +270,5 @@ class CbdtSource implements ColorGlyphSource
 		}
 
 		return [$header, $imageSize, $ranges];
-	}
-
-	/**
-	 * Numbers read in one go from wherever they are in the file
-	 *
-	 * @param int    $position From the start of the file
-	 * @param int    $length   The bytes the numbers take
-	 * @param string $format   How to unpack() them
-	 *
-	 * @return int[]|null The numbers in the order the format lists them, or null where the file ends
-	 *                    before they do
-	 */
-	private function fields($position, $length, $format)
-	{
-		if ($length === 0) {
-			return [];
-		}
-
-		$this->reader->seek($position);
-		$bytes = $this->reader->read($length);
-
-		return strlen($bytes) === $length ? array_values(unpack($format, $bytes)) : null;
 	}
 }

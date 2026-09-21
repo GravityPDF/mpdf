@@ -6,6 +6,7 @@ use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\Color\ColorGlyphSource;
 use Mpdf\Fonts\Color\GlyphResources;
 use Mpdf\Fonts\FontCache;
+use Mpdf\Image\ImageTypeGuesser;
 use Mpdf\Image\PngPixels;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Mpdf;
@@ -89,7 +90,7 @@ class Type3FontWriter implements GlyphResources
 	 * @param BaseWriter      $writer         Writes the objects
 	 * @param FontCache       $fontCache      Holds each font's glyph map and the images decoded from it
 	 * @param string          $fontDescriptor 'win' or 'mac': which platform's metrics a font is read with
-	 * @param LoggerInterface $logger         Told of a glyph whose image cannot be decoded
+	 * @param LoggerInterface $logger         Told of a glyph that cannot be drawn
 	 */
 	public function __construct(Mpdf $mpdf, BaseWriter $writer, FontCache $fontCache, $fontDescriptor, LoggerInterface $logger)
 	{
@@ -126,7 +127,7 @@ class Type3FontWriter implements GlyphResources
 		$reader = $ttf->openFont($font['ttffile'], $font['TTCfontID']);
 
 		try {
-			$this->writeSubsets($k, $font, ColorFormats::source($format, $ttf, $reader, $font['unitsPerEm']), $charToGlyph, $text);
+			$this->writeSubsets($k, $font, ColorFormats::source($format, $ttf, $reader, $font['unitsPerEm'], $this->logger), $charToGlyph, $text);
 		} finally {
 			$reader->close();
 		}
@@ -149,8 +150,11 @@ class Type3FontWriter implements GlyphResources
 	}
 
 	/**
-	 * Registers an image a glyph draws, once however many glyphs draw it. A PNG with transparency is
-	 * two images, the second its /SMask, which ImageWriter expects to find written just before it.
+	 * Registers an image a glyph draws, once however many glyphs draw it. Each is interpolated, since a
+	 * glyph's bitmap is drawn larger than its strike more often than not.
+	 *
+	 * A JPEG is written as it stands, with DCTDecode. A PNG with transparency is two images, the second
+	 * its /SMask, which ImageWriter expects to find written just before it.
 	 *
 	 * A palette PNG - every one in Noto Color Emoji - is written as /Indexed with its image data as the
 	 * file holds it, which is half the size of the same pixels expanded to RGB and deflated again. Any
@@ -163,10 +167,10 @@ class Type3FontWriter implements GlyphResources
 	 *
 	 * @throws \Mpdf\MpdfException Where the image cannot be decoded, under showImageErrors or debug
 	 *
-	 * @param string $data A PNG, as the font stores it
+	 * @param string $data A PNG or a JPEG, as the font stores it
 	 *
-	 * @return string|null The name a glyph's content stream draws it by, e.g. /I3, or null where the image
-	 *                     cannot be decoded
+	 * @return array|null [the name a glyph's content stream draws it by, e.g. /I3, its width in pixels,
+	 *                    its height in pixels], or null where the image cannot be decoded
 	 */
 	public function image($data)
 	{
@@ -178,7 +182,7 @@ class Type3FontWriter implements GlyphResources
 
 		if (!isset($this->mpdf->images[$key])) {
 			try {
-				$decoded = $this->decoded($data, $key);
+				$image = (new ImageTypeGuesser())->guess($data) === 'jpeg' ? $this->jpeg($data) : $this->png($data, $key);
 			} catch (MpdfException $e) {
 				if ($this->mpdf->showImageErrors || $this->mpdf->debug) {
 					throw $e;
@@ -190,31 +194,65 @@ class Type3FontWriter implements GlyphResources
 				return null;
 			}
 
-			// Interpolated, since a glyph's bitmap is drawn larger than its strike more often than not
-			$image = ['w' => $decoded['width'], 'h' => $decoded['height'], 'bpc' => 8, 'f' => 'FlateDecode', 'type' => 'png', 'interpolation' => true];
-
-			if ($decoded['alpha'] !== '') {
-				$this->mpdf->images[$key . '-mask'] = $image + ['cs' => 'DeviceGray', 'data' => $decoded['alpha'], 'i' => count($this->mpdf->images) + 1];
-				$image['masked'] = true;
-			}
-
-			if ($decoded['palette'] !== '') {
-				$image = [
-					'cs' => 'Indexed',
-					'pal' => $decoded['palette'],
-					'bpc' => $decoded['depth'],
-					'parms' => sprintf('/DecodeParms <</Predictor 15 /Colors 1 /BitsPerComponent %d /Columns %d>>', $decoded['depth'], $decoded['width']),
-				] + $image;
-			} else {
-				$image['cs'] = 'DeviceRGB';
-			}
-
-			$this->mpdf->images[$key] = $image + ['data' => $decoded['colour'], 'i' => count($this->mpdf->images) + 1];
+			$this->mpdf->images[$key] = $image + ['i' => count($this->mpdf->images) + 1];
 		}
 
 		$this->drawn[$key] = $key;
+		$image = $this->mpdf->images[$key];
 
-		return '/I' . $this->mpdf->images[$key]['i'];
+		return ['/I' . $image['i'], $image['w'], $image['h']];
+	}
+
+	/**
+	 * @throws \Mpdf\MpdfException Where the JPEG's size and colour space cannot be read
+	 *
+	 * @param string $data A JPEG
+	 *
+	 * @return array The image, as Mpdf::$images holds it, less its number
+	 */
+	private function jpeg($data)
+	{
+		$size = @getimagesizefromstring($data);
+		$spaces = [1 => 'DeviceGray', 3 => 'DeviceRGB', 4 => 'DeviceCMYK'];
+
+		if (!$size || !isset($size['channels'], $spaces[$size['channels']])) {
+			throw new MpdfException('Error parsing JPG header');
+		}
+
+		return ['w' => $size[0], 'h' => $size[1], 'bpc' => $size['bits'], 'cs' => $spaces[$size['channels']], 'f' => 'DCTDecode', 'type' => 'jpg', 'interpolation' => true, 'data' => $data];
+	}
+
+	/**
+	 * Decodes a PNG, and registers its /SMask where it has transparency
+	 *
+	 * @throws \Mpdf\MpdfException Where the PNG cannot be decoded
+	 *
+	 * @param string $data A PNG
+	 * @param string $key  Its key in Mpdf::$images
+	 *
+	 * @return array The image, as Mpdf::$images holds it, less its number
+	 */
+	private function png($data, $key)
+	{
+		$decoded = $this->decoded($data, $key);
+		$image = ['w' => $decoded['width'], 'h' => $decoded['height'], 'bpc' => 8, 'f' => 'FlateDecode', 'type' => 'png', 'interpolation' => true];
+
+		if ($decoded['alpha'] !== '') {
+			$this->mpdf->images[$key . '-mask'] = $image + ['cs' => 'DeviceGray', 'data' => $decoded['alpha'], 'i' => count($this->mpdf->images) + 1];
+			$image['masked'] = true;
+		}
+
+		if ($decoded['palette'] === '') {
+			return $image + ['cs' => 'DeviceRGB', 'data' => $decoded['colour']];
+		}
+
+		return [
+			'cs' => 'Indexed',
+			'pal' => $decoded['palette'],
+			'bpc' => $decoded['depth'],
+			'parms' => sprintf('/DecodeParms <</Predictor 15 /Colors 1 /BitsPerComponent %d /Columns %d>>', $decoded['depth'], $decoded['width']),
+			'data' => $decoded['colour'],
+		] + $image;
 	}
 
 	/**

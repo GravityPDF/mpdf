@@ -128,6 +128,42 @@ class Type3FontWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A JPEG is written as it stands, in the colour space and at the depth its header gives, and handed
+	 * back with its size in pixels
+	 *
+	 * @dataProvider jpegs
+	 *
+	 * @param string $file       The fixture
+	 * @param string $colorSpace What its components are written as
+	 * @param int[]  $size       Its width and height in pixels
+	 */
+	public function testAJpegIsWrittenAsItStands($file, $colorSpace, array $size)
+	{
+		$jpeg = file_get_contents(__DIR__ . '/../../data/img/' . $file);
+
+		$this->assertSame(['/I1', $size[0], $size[1]], $this->writer->image($jpeg));
+
+		$image = $this->mpdf->images['colorglyph-' . md5($jpeg)];
+		$this->assertSame($colorSpace, $image['cs']);
+		$this->assertSame(8, $image['bpc']);
+		$this->assertSame('DCTDecode', $image['f']);
+		$this->assertSame($jpeg, $image['data']);
+		$this->assertTrue($image['interpolation']);
+		$this->assertCount(1, $this->mpdf->images, 'and no mask');
+	}
+
+	/**
+	 * @return array[] Each JPEG fixture, its colour space and its size
+	 */
+	public function jpegs()
+	{
+		return [
+			'RGB' => ['exif-orientation-none.jpg', 'DeviceRGB', [40, 20]],
+			'greyscale' => ['exif-orientation-6-gray.jpg', 'DeviceGray', [20, 40]],
+		];
+	}
+
+	/**
 	 * An opaque image has no mask, and says it has none
 	 */
 	public function testAnOpaqueImageHasNoMask()
@@ -175,15 +211,30 @@ class Type3FontWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * An image that cannot be decoded is logged once, however many glyphs draw it, and registers
 	 * nothing: the glyphs drawing it are left blank and the document goes on
+	 *
+	 * @dataProvider undecodable
+	 *
+	 * @param string $data What the font holds as the image
 	 */
-	public function testAnImageThatCannotBeDecodedIsLoggedOnceAndDrawsNothing()
+	public function testAnImageThatCannotBeDecodedIsLoggedOnceAndDrawsNothing($data)
 	{
-		$this->assertNull($this->writer->image('not a PNG'));
-		$this->assertNull($this->writer->image('not a PNG'));
+		$this->assertNull($this->writer->image($data));
+		$this->assertNull($this->writer->image($data));
 
 		$this->assertSame([], $this->mpdf->images);
 		$this->assertCount(1, $this->logger->records);
 		$this->assertTrue($this->logger->hasWarningThatContains('is left blank'));
+	}
+
+	/**
+	 * @return array[] Images that cannot be decoded
+	 */
+	public function undecodable()
+	{
+		return [
+			'not a PNG' => ['not a PNG'],
+			'a JPEG with no frame header' => ["\xFF\xD8\xFF\xD9"],
+		];
 	}
 
 	/**

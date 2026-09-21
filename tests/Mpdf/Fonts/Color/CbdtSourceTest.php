@@ -4,6 +4,7 @@ namespace Mpdf\Fonts\Color;
 
 use Mpdf\Cache;
 use Mpdf\Fonts\FontCache;
+use Mpdf\TestLogger;
 use Mpdf\TTFontFile;
 
 /**
@@ -19,6 +20,8 @@ use Mpdf\TTFontFile;
  */
 class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
+
+	use SyntheticFonts;
 
 	/**
 	 * @var \Mpdf\Fonts\FileReader
@@ -36,14 +39,9 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private $resources;
 
 	/**
-	 * @var \Mpdf\Fonts\FileReader[] The fonts source() opened
+	 * @var TestLogger Handed to every source the test reads
 	 */
-	private $opened = [];
-
-	/**
-	 * @var string[] The fonts source() wrote
-	 */
-	private $written = [];
+	private $logger;
 
 	/**
 	 * Opens the CBDT fixture and reads its largest strike's index
@@ -55,7 +53,8 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/../../tmp/mpdf/ttfontdata')), 'win');
 		$this->reader = $ttf->openFont(__DIR__ . '/../../../data/ttf/color/TestEmoji-CBDT.ttf');
 
-		$this->source = new CbdtSource($ttf, $this->reader, 1000);
+		$this->logger = new TestLogger();
+		$this->source = new CbdtSource($ttf, $this->reader, 1000, $this->logger);
 		$this->resources = new RecordingResources();
 	}
 
@@ -65,13 +64,7 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	protected function tear_down()
 	{
 		$this->reader->close();
-
-		foreach ($this->opened as $reader) {
-			$reader->close();
-		}
-		foreach ($this->written as $file) {
-			unlink($file);
-		}
+		$this->closeFonts();
 
 		parent::tear_down();
 	}
@@ -213,6 +206,7 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$this->assertNull($this->synthetic($strikes, $data)->draw($glyph, $this->resources));
 		$this->assertSame([], $this->resources->images);
+		$this->assertSame([], $this->logger->records);
 	}
 
 	/**
@@ -228,8 +222,6 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'no strikes' => [5, [], $png],
 			'a strike of 0ppem' => [5, [[0, [[5, 5, 1, 17, $offsets]]]], $png],
 			'an index format CBLC does not define' => [5, [[64, [[5, 5, 6, 17, $offsets]]]], $png],
-			'image format 1, which is not PNG' => [5, [[64, [[5, 5, 1, 1, $offsets]]]], $png],
-			'image format 20, which CBDT does not define' => [5, [[64, [[5, 5, 1, 20, $offsets]]]], $png],
 			'image format 19 under index format 1, which has no metrics to give it' => [5, [[64, [[5, 5, 1, 19, $offsets]]]], $png],
 			'a dataLength of 0' => [5, [[64, [[5, 5, 1, 17, pack('N2', 0, 9)]]]], $this->smallGlyph('')],
 			'equal offsets in index format 1' => [6, [[64, [[5, 7, 1, 17, pack('N4', 0, strlen($png), strlen($png), 2 * strlen($png))]]]], $png . $png],
@@ -244,6 +236,33 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'a format 2 header running past the end of the file' => [5, [[64, [[5, 5, 2, 19, pack('N', 16)]]]], $png],
 			'a format 4 list running past the end of the file' => [10, [[64, [[10, 40, 4, 17, pack('N', 2) . pack('n*', 10, 0)]]]], $png],
 			'a format 5 list running past the end of the file' => [10, [[64, [[10, 40, 5, 19, pack('N', 8) . $this->bigMetrics() . pack('N', 2) . pack('n', 10)]]]], $png],
+		];
+	}
+
+	/**
+	 * A bitmap in an image format mPDF does not draw draws nothing, and says so
+	 *
+	 * @dataProvider imageFormatsNotDrawn
+	 *
+	 * @param int $format A CBDT image format other than 17, 18 and 19
+	 */
+	public function testAnImageFormatNotDrawnIsLogged($format)
+	{
+		$png = $this->smallGlyph('png');
+
+		$this->assertNull($this->synthetic([[64, [[5, 5, 1, $format, pack('N2', 0, strlen($png))]]]], $png)->draw(5, $this->resources));
+		$this->assertSame([], $this->resources->images);
+		$this->assertSame(sprintf('Colour glyph 5 is a CBDT bitmap of image format %d, which mPDF does not draw', $format), $this->logger->records[0]['message']);
+	}
+
+	/**
+	 * @return array[] Image formats CBDT has or not, none of them PNG
+	 */
+	public function imageFormatsNotDrawn()
+	{
+		return [
+			'image format 1, a monochrome bitmap' => [1],
+			'image format 20, which CBDT does not define' => [20],
 		];
 	}
 
@@ -339,28 +358,9 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function source(array $tables, $cut = 0)
 	{
-		if (isset($tables['font'])) {
-			$font = $tables['font'];
-		} else {
-			$directory = '';
-			$body = '';
-			$offset = 12 + 16 * count($tables);
-			foreach ($tables as $tag => $table) {
-				$directory .= $tag . pack('N3', 0, $offset + strlen($body), strlen($table));
-				$body .= $table;
-			}
-			$font = pack('Nn4', 0x00010000, count($tables), 0, 0, 0) . $directory . $body;
-			$font = substr($font, 0, strlen($font) - $cut);
-		}
+		list($ttf, $reader) = $this->openFont(isset($tables['font']) ? $tables['font'] : $this->sfnt($tables, $cut));
 
-		$file = tempnam(sys_get_temp_dir(), 'mpdf-cbdt-');
-		file_put_contents($file, $font);
-		$this->written[] = $file;
-
-		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/../../tmp/mpdf/ttfontdata')), 'win');
-		$this->opened[] = $reader = $ttf->openFont($file);
-
-		return new CbdtSource($ttf, $reader, 1000);
+		return new CbdtSource($ttf, $reader, 1000, $this->logger);
 	}
 
 	/**

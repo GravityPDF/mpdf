@@ -42,6 +42,29 @@ abstract class FontReader
 	}
 
 	/**
+	 * Fields read in one go from wherever they are, for a table whose offsets and lengths are not to be
+	 * trusted: a read that comes up short gives null rather than unpacking what there was
+	 *
+	 * @param int    $position From the start of the font
+	 * @param int    $length   The bytes the fields take
+	 * @param string $format   How to unpack() them
+	 *
+	 * @return array|null The fields in the order the format lists them, or null where the font ends
+	 *                    before they do. The position is left just past them.
+	 */
+	public function fieldsAt($position, $length, $format)
+	{
+		if ($length === 0) {
+			return [];
+		}
+
+		$this->seek($position);
+		$bytes = $this->read($length);
+
+		return strlen($bytes) === $length ? array_values(unpack($format, $bytes)) : null;
+	}
+
+	/**
 	 * @return int The current position, to seek back to after following an offset
 	 */
 	public function tell()

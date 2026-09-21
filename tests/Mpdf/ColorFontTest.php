@@ -27,6 +27,7 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontDir' => [__DIR__ . '/../data/ttf/color', __DIR__ . '/../../packages/Emoji/fonts'],
 			'fontdata' => [
 				'cbdt' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
+				'sbix' => ['R' => 'TestEmoji-sbix.ttf', 'useOTL' => 0xFF],
 				'notoemoji' => ['R' => 'NotoEmoji-Regular.ttf'],
 			],
 			'default_font' => 'cbdt',
@@ -174,6 +175,21 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				'D83CDFF4DB40DC67DB40DC62DB40DC65DB40DC6EDB40DC67DB40DC7F',
 			],
 		];
+	}
+
+	/**
+	 * The girl of TestEmoji-sbix is a JPEG, which is written as it stands, and the woman a 'dupe' of the
+	 * man, whose image is written once for both
+	 */
+	public function testAnSbixJpegIsWrittenAsItStandsAndADupeSharesItsImage()
+	{
+		$objects = $this->objects([0x1F467, 0x1F468, 0x1F469], ['default_font' => 'sbix']);
+
+		$jpeg = $this->objectMatching($objects, '/\/Filter \/DCTDecode/');
+		$this->assertStringContainsString('/ColorSpace /DeviceRGB', $jpeg);
+		$this->assertStringNotContainsString('/SMask', $jpeg);
+
+		$this->assertCount(3, preg_grep('/\/Subtype \/Image/', $objects), 'the JPEG, and the man and his mask once');
 	}
 
 	/**
