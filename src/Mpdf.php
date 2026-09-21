@@ -13757,8 +13757,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						OtlData::removeChar($e, $this->OTLdata, "\xef\xbb\xbf", $this->mb_enc); // Remove ZWNBSP (also Byte order mark FEFF)
 					} /* -- END OTL -- */
 					else {
-						// removes U+200E/U+200F LTR and RTL mark and U+200C/U+200D Zero-width Joiner and Non-joiner
-						$e = preg_replace("/[\xe2\x80\x8c\xe2\x80\x8d\xe2\x80\x8e\xe2\x80\x8f]/u", '', $e);
+						// removes U+200E/U+200F LTR and RTL mark, U+200C/U+200D Zero-width Joiner and Non-joiner,
+						// and the U+FE0E/U+FE0F presentation selectors, which chose the font and draw nothing
+						$e = preg_replace("/[\x{200C}-\x{200F}\x{FE0E}\x{FE0F}]/u", '', $e);
 						$e = preg_replace("/[\xef\xbb\xbf]/u", '', $e); // Remove ZWNBSP (also Byte order mark FEFF)
 					}
 				}
