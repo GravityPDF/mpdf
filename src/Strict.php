@@ -8,6 +8,7 @@ trait Strict
 	/**
 	 * @param string $name method name
 	 * @param array $args arguments
+	 * @throws \Mpdf\MpdfException
 	 */
 	public function __call($name, $args)
 	{
@@ -18,6 +19,7 @@ trait Strict
 	/**
 	 * @param string $name lowercase method name
 	 * @param array $args arguments
+	 * @throws \Mpdf\MpdfException
 	 */
 	public static function __callStatic($name, $args)
 	{
@@ -27,6 +29,7 @@ trait Strict
 
 	/**
 	 * @param string $name property name
+	 * @throws \Mpdf\MpdfException
 	 */
 	public function &__get($name)
 	{
@@ -37,6 +40,7 @@ trait Strict
 	/**
 	 * @param string $name property name
 	 * @param mixed $value property value
+	 * @throws \Mpdf\MpdfException
 	 */
 	public function __set($name, $value)
 	{
@@ -46,7 +50,7 @@ trait Strict
 
 	/**
 	 * @param string $name property name
-	 * @throws \Kdyby\StrictObjects\\Mpdf\MpdfException
+	 * @throws \Mpdf\MpdfException
 	 */
 	public function __isset($name)
 	{
@@ -56,7 +60,7 @@ trait Strict
 
 	/**
 	 * @param string $name property name
-	 * @throws \Kdyby\StrictObjects\\Mpdf\MpdfException
+	 * @throws \Mpdf\MpdfException
 	 */
 	public function __unset($name)
 	{
