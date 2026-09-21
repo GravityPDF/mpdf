@@ -68,8 +68,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 	private static $indicClasses = ['rphf' => false, 'half' => false, 'pref' => true, 'blwf' => true, 'pstf' => true];
 
 	/**
-	 * The virama of each Indic script, which is the glyph a two-glyph sequence pairs a consonant with
-	 * to state its class
+	 * The virama of each Indic script, which is the glyph a substitution pairs a consonant with to
+	 * state its class
 	 *
 	 * @var true[]
 	 */
@@ -83,6 +83,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		'00C4D' => true,
 		'00CCD' => true,
 		'00D4D' => true,
+		'00DCA' => true,
 	];
 
 	/**
@@ -2225,7 +2226,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 				// INDIC - the consonants of each class, keyed by the feature that states the class
 				$indic = array_fill_keys(array_keys(self::$indicClasses), []);
 
-				if (strpos('dev2 bng2 gur2 gjr2 ory2 tml2 tel2 knd2 mlm2 deva beng guru gujr orya taml telu knda mlym', $st) !== false) { // all INDIC scripts [any/all languages]
+				if (strpos('dev2 bng2 gur2 gjr2 ory2 tml2 tel2 knd2 mlm2 deva beng guru gujr orya taml telu knda mlym sinh', $st) !== false) { // all INDIC scripts [any/all languages]
 					if (strpos('deva beng guru gujr orya taml telu knda mlym', $st) !== false) {
 						$is_old_spec = true;
 					} else {
@@ -2255,23 +2256,15 @@ class TTFontFile implements Fonts\FontSourceInterface
 						//     Pre-base-reordering forms of Ra/Rra <pref>
 						//     Below-base forms <blwf>
 						//     Post-base forms <pstf>
-						// applied together with <locl> feature to input sequences consisting of two characters
-						// This is done for each consonant
-						// for <rphf> and <half>, features are applied to Consonant + Halant combinations
-						// for <pref>, <blwf> and <pstf>, features are applied to Halant + Consonant combinations
-						// Old version eg 'deva' <pref>, <blwf> and <pstf>, features are applied to Consonant + Halant
-						// Some malformed fonts still do Consonant + Halant for these - so match both??
-						// If these two glyphs form a ligature, with no additional glyphs in context
-						// this means the consonant has the corresponding form
-						// Currently set to cope with both
-						// See also classes/otl.php
+						// A consonant has one of these forms where the feature makes a ligature of it and
+						// its virama, with nothing else in context - indicConsonant() says which way round
 
 						$classes = array_intersect_key(self::$indicClasses, array_flip($v['tags']));
 						if (!$classes) {
 							continue;
 						}
 
-						foreach ($this->twoGlyphSubstitutions($v) as list($match, $sub)) {
+						foreach ($this->classSubstitutions($v) as list($match, $sub)) {
 							foreach ($classes as $tag => $postBase) {
 								$key = $this->indicConsonant($match, $postBase, $is_old_spec);
 								if ($key === null) {
@@ -2382,50 +2375,55 @@ class TTFontFile implements Fonts\FontSourceInterface
 	}
 
 	/**
-	 * The substitutions of exactly two glyphs an entry states, which are the ones an Indic consonant
+	 * The substitutions of two or three glyphs an entry states, which are the ones an Indic consonant
 	 * class can be read out of.
 	 *
-	 * A contextual entry states them in its nested rules, and only where it matches on the pair alone:
-	 * a rule with backtrack or lookahead states a context rather than a class.
+	 * A contextual entry states them in its nested rules, and only where it matches on the glyphs
+	 * alone: a rule with backtrack or lookahead states a context rather than a class.
 	 *
-	 * @return array One entry per substitution: the two glyphs it matches as hex, and what replaces them
+	 * @return array One entry per substitution: the glyphs it matches as hex, and what replaces them
 	 */
-	private function twoGlyphSubstitutions(array $entry)
+	private function classSubstitutions(array $entry)
 	{
 		if (isset($entry['context'])) {
 			if (!$entry['context'] || $entry['nBacktrack'] || $entry['nLookahead']) {
 				return [];
 			}
 
-			$pairs = [];
+			$substitutions = [];
 			foreach ($entry['rules'] as $vs) {
-				if (count($vs['match']) == 2 && count($vs['replace']) == 1) {
-					$pairs[] = [$vs['match'], $vs['replace'][0]];
+				if (in_array(count($vs['match']), [2, 3], true) && count($vs['replace']) == 1) {
+					$substitutions[] = [$vs['match'], $vs['replace'][0]];
 				}
 			}
 
-			return $pairs;
+			return $substitutions;
 		}
 
 		$match = preg_replace('/[\(\)]*/', '', $entry['match']);
 
-		if (!$match || strlen(trim($match)) != 11 || !$entry['replace']) {
+		if (!$entry['replace'] || !preg_match('/^[0-9A-F]{5}( [0-9A-F]{5}){1,2}$/', $match)) {
 			return [];
 		}
 
-		return [[[substr($match, 0, 5), substr($match, 6, 5)], $entry['replace']]];
+		return [[explode(' ', $match), $entry['replace']]];
 	}
 
 	/**
-	 * The consonant a two-glyph substitution gives a class to under one feature, or null where the
-	 * pair is not one that feature states a class by.
+	 * The consonant a substitution gives a class to under one feature, or null where its glyphs are
+	 * not ones that feature states a class by.
 	 *
 	 * A post-base class states Halant + Consonant under the v2 script tags and Consonant + Halant
 	 * under the original ones, and the other two classes state Consonant + Halant whatever the script
 	 * tag. Fonts written to the v2 tags that still state a post-base class the old way round are read
 	 * as well, which is what _OTL_OLD_SPEC_COMPAT_2 asks for.
 	 *
-	 * @param string[] $match     The two glyphs, as hex
+	 * Three glyphs state a class only as Consonant + Halant + ZWJ, the explicit request for one of the
+	 * two forms stated Consonant + Halant. Sinhala fonts state their repaya only this way, and HarfBuzz
+	 * tries an explicit reph both with the ZWJ and without. Every script is read the same way, so a
+	 * Malayalam font's chillus land in half too.
+	 *
+	 * @param string[] $match     The two or three glyphs, as hex
 	 * @param bool     $postBase  Whether the feature stating the class is one of the post-base three
 	 * @param bool     $isOldSpec Whether the script tag is one of the original Indic ones
 	 *
@@ -2433,6 +2431,10 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 */
 	private function indicConsonant(array $match, $postBase, $isOldSpec)
 	{
+		if (count($match) == 3) {
+			return !$postBase && isset(self::$viramas[$match[1]]) && $match[2] === '0200D' ? $match[0] : null;
+		}
+
 		if ($postBase && !$isOldSpec && isset(self::$viramas[$match[0]])) {
 			return $match[1];
 		}

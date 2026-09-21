@@ -555,27 +555,12 @@ class Otl
 		$this->GSUBfont = $this->fontkey . '.GSUB.' . $GSUBscriptTag . '.' . $GSUBlangsys;
 
 		if (!isset($this->GSUBdata[$this->GSUBfont])) {
-			$classes = ['rphf', 'half', 'pref', 'blwf', 'pstf'];
-
 			$font = $this->fontCache->jsonLoadIfPresent($this->GSUBfont . '.json');
-			if (null !== $font) {
-				$this->GSUBdata[$this->GSUBfont]['rtlSUB'] = $font['rtlSUB'];
-				$this->GSUBdata[$this->GSUBfont]['finals'] = $font['finals'];
-				// useGSUBlookups() classifies the consonants of the nine Devanagari-family script tags
-				// alone, which are the scripts that reach this shaper, so there is nothing to copy for
-				// the others - and no file either, which is why they always take the branch below
-				if ($this->shaper == 'I') {
-					foreach ($classes as $class) {
-						$this->GSUBdata[$this->GSUBfont][$class] = $font[$class];
-					}
-				}
-			} else {
-				$this->GSUBdata[$this->GSUBfont]['rtlSUB'] = [];
-				$this->GSUBdata[$this->GSUBfont]['finals'] = '';
-				foreach ($classes as $class) {
-					$this->GSUBdata[$this->GSUBfont][$class] = [];
-				}
+			if (null === $font) {
+				$font = ['rtlSUB' => [], 'finals' => ''] + array_fill_keys(['rphf', 'half', 'pref', 'blwf', 'pstf'], []);
 			}
+
+			$this->GSUBdata[$this->GSUBfont] = $font;
 		}
 	}
 

@@ -339,6 +339,17 @@
             ]
         ],
         "GSUB.dat": "676 bytes, sha256 118c9c22575a49bf3a9fc01ded18a4f302571be3df7c5695e71a8138ed48ea97",
+        "GSUB.sinh.DFLT.json": {
+            "rtlSUB": [],
+            "finals": "",
+            "rphf": {
+                "3515": 57352
+            },
+            "half": [],
+            "pref": [],
+            "blwf": [],
+            "pstf": []
+        },
         "GSUBdata.json": [
             [
                 {
