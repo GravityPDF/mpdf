@@ -904,12 +904,6 @@ parameters:
 			path: src/Fonts/FontSubsetter.php
 
 		-
-			message: '#^Variable \$kk might not be defined\.$#'
-			identifier: variable.undefined
-			count: 4
-			path: src/TTFontFile.php
-
-		-
 			message: '#^Variable \$locaH might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1

@@ -26,7 +26,7 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$parser = $this->withGdef(new TTFontFile($this->cache(), 'win'));
 
-		$volt = $parser->_getGSUBarray($this->chainedClassRules(), [0 => 'ccmp'], 'latn');
+		$volt = $parser->_getGSUBarray($this->chainedClassRules(), [0 => ['ccmp']], 'latn');
 
 		$this->assertSame([2, 1], [$volt[0]['nBacktrack'], $volt[1]['nBacktrack']]);
 		$this->assertSame('(00043)() ', $volt[1]['matchback']);
@@ -41,7 +41,7 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$dump = $this->withGdef(new OtlDump($mpdf, $this->cache(), 'win'));
 
 		$report = \Closure::bind(function (array $Lookup) {
-			$this->reportGSUBlookups($Lookup, [0 => 'ccmp'], 'latn', OtlDump::TOP_LEVEL);
+			$this->reportGSUBlookups($Lookup, [0 => ['ccmp']], 'latn', OtlDump::TOP_LEVEL);
 		}, $dump, OtlDump::class);
 		$report($this->chainedClassRules());
 
@@ -76,9 +76,9 @@ class GsubArrayTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			]],
 		];
 
-		$volt = $parser->_getGSUBarray($Lookup, [0 => 'init', 2 => 'init'], 'arab');
+		$volt = $parser->_getGSUBarray($Lookup, [0 => ['init'], 2 => ['init']], 'arab');
 
-		$this->assertSame(['match' => '00041', 'replace' => '00044', 'tag' => 'init', 'prel' => [], 'postl' => [], 'ignore' => '()'], end($volt));
+		$this->assertSame(['match' => '00041', 'replace' => '00044', 'tags' => ['init'], 'prel' => [], 'postl' => [], 'ignore' => '()'], end($volt));
 	}
 
 	private function chainedClassRules()
