@@ -270,6 +270,18 @@ class Arabic
 	private static $actionFeatures = ['isol', 'fina', 'init', 'medi', 'med2', 'fin2', 'fin3'];
 
 	/**
+	 * The same order read the other way, which is the half of it the parser needs: TTFontFile files a
+	 * rule read under isol in slot 0, one read under fina in slot 1, and so on, and glyphs() reads the
+	 * slot back by the action it resolved. Stated here because this is the class the order is for.
+	 *
+	 * @return int[] The rtlSUB slot of each joining form, by the feature tag that states it
+	 */
+	public static function formSlots()
+	{
+		return array_flip(self::$actionFeatures);
+	}
+
+	/**
 	 * Read the form each character of the run calls for out of the joining classes, and write it into
 	 * the run as `joining`.
 	 *

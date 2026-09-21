@@ -58,6 +58,34 @@ class TTFontFile implements Fonts\FontSourceInterface
 	use Strict;
 
 	/**
+	 * The features that state a consonant's Indic class, against which side of the script's virama
+	 * each of them states it by: the post-base three as Halant + Consonant under the v2 script tags,
+	 * the other two as Consonant + Halant always. Keyed by the tag so that the tags of a lookup can be
+	 * intersected against it, as they are against Shaper\Arabic::formSlots().
+	 *
+	 * @var bool[]
+	 */
+	private static $indicClasses = ['rphf' => false, 'half' => false, 'pref' => true, 'blwf' => true, 'pstf' => true];
+
+	/**
+	 * The virama of each Indic script, which is the glyph a two-glyph sequence pairs a consonant with
+	 * to state its class
+	 *
+	 * @var true[]
+	 */
+	private static $viramas = [
+		'0094D' => true,
+		'009CD' => true,
+		'00A4D' => true,
+		'00ACD' => true,
+		'00B4D' => true,
+		'00BCD' => true,
+		'00C4D' => true,
+		'00CCD' => true,
+		'00D4D' => true,
+	];
+
+	/**
 	 * The font file, as something that can be read
 	 *
 	 * @var FileReader
@@ -2120,16 +2148,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$rtlpua = []; // All glyphs added to PUA [for magic_reverse]
 		foreach ($gsub as $st => $scripts) {
 			foreach ($scripts as $t => $langsys) {
-				$lul = []; // array of LookupListIndexes
-				$tags = []; // corresponding array of feature tags e.g. 'ccmp'
-
-				foreach ($langsys as $tag => $ft) {
-					foreach ($ft as $ll) {
-						$lul[$ll] = $tag;
-					}
-				}
-				ksort($lul); // Order the Lookups in the order they are in the GUSB table, regardless of Feature order
-				$volt = $this->_getGSUBarray($Lookup, $lul, $st);
+				$volt = $this->_getGSUBarray($Lookup, $this->lookupsWithTheirTags($langsys), $st);
 
 				// Interrogate $volt
 				// isol, fin, medi, init(arab syrc) into $rtlSUB for use in Shaper\Arabic::shape()
@@ -2142,40 +2161,27 @@ class TTFontFile implements Fonts\FontSourceInterface
 				if (strpos('arab syrc hebr thaa nko  samr', $st) !== false) { // all RTL scripts [any/all languages] ? Mandaic
 
 					foreach ($volt as $v) {
-						// isol fina fin2 fin3 medi med2 for Syriac
-						// ISOLATED FORM :: FINAL :: INITIAL :: MEDIAL :: MED2 :: FIN2 :: FIN3
-						// A contextual entry carries the feature's own tag but keeps its replacements in
+						// A contextual entry carries the feature's own tags but keeps its replacements in
 						// ['rules'], so it has no ['replace'] for this branch to read
-						if (strpos('isol fina init medi fin2 fin3 med2', $v['tag']) !== false && !isset($v['context'])) {
+						$forms = isset($v['context']) ? [] : $this->joiningFormsOf($v['tags']);
+
+						if ($forms) {
 
 							$key = $v['match'];
 							$key = preg_replace('/[\(\)]*/', '', $key);
 							$sub = $v['replace'];
-							if ($v['tag'] === 'isol') {
-								$kk = 0;
-							} elseif ($v['tag'] === 'fina') {
-								$kk = 1;
-							} elseif ($v['tag'] === 'init') {
-								$kk = 2;
-							} elseif ($v['tag'] === 'medi') {
-								$kk = 3;
-							} elseif ($v['tag'] === 'med2') {
-								$kk = 4;
-							} elseif ($v['tag'] === 'fin2') {
-								$kk = 5;
-							} elseif ($v['tag'] === 'fin3') {
-								$kk = 6;
-							}
 
-							$rtl[$key][$kk] = $sub;
-							if (isset($v['prel']) && count($v['prel'])) {
-								$rtl[$key]['prel'][$kk] = $v['prel'];
-							}
-							if (isset($v['postl']) && count($v['postl'])) {
-								$rtl[$key]['postl'][$kk] = $v['postl'];
-							}
-							if (isset($v['ignore']) && $v['ignore']) {
-								$rtl[$key]['ignore'][$kk] = $v['ignore'];
+							foreach ($forms as $kk) {
+								$rtl[$key][$kk] = $sub;
+								if (isset($v['prel']) && count($v['prel'])) {
+									$rtl[$key]['prel'][$kk] = $v['prel'];
+								}
+								if (isset($v['postl']) && count($v['postl'])) {
+									$rtl[$key]['postl'][$kk] = $v['postl'];
+								}
+								if (isset($v['ignore']) && $v['ignore']) {
+									$rtl[$key]['ignore'][$kk] = $v['ignore'];
+								}
 							}
 							$this->addPuaGlyphs($rtlpua, $sub);
 
@@ -2216,12 +2222,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 					$rtlSUB = $rtl;
 				}
 
-				// INDIC - Dynamic properties
-				$rphf = [];
-				$half = [];
-				$pref = [];
-				$blwf = [];
-				$pstf = [];
+				// INDIC - the consonants of each class, keyed by the feature that states the class
+				$indic = array_fill_keys(array_keys(self::$indicClasses), []);
 
 				if (strpos('dev2 bng2 gur2 gjr2 ory2 tml2 tel2 knd2 mlm2 deva beng guru gujr orya taml telu knda mlym', $st) !== false) { // all INDIC scripts [any/all languages]
 					if (strpos('deva beng guru gujr orya taml telu knda mlym', $st) !== false) {
@@ -2235,7 +2237,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 					// ['rules'], not ['replace']
 					$loclsubs = [];
 					foreach ($volt as $v) {
-						if (strpos('locl', $v['tag']) !== false && !isset($v['context'])) {
+						if (in_array('locl', $v['tags'], true) && !isset($v['context'])) {
 							$key = $v['match'];
 							$key = preg_replace('/[\(\)]*/', '', $key);
 							$sub = $v['replace'];
@@ -2264,74 +2266,29 @@ class TTFontFile implements Fonts\FontSourceInterface
 						// Currently set to cope with both
 						// See also classes/otl.php
 
-						if (strpos('rphf half pref blwf pstf', $v['tag']) !== false) {
-							if (isset($v['context']) && $v['context'] && $v['nBacktrack'] == 0 && $v['nLookahead'] == 0) {
-								foreach ($v['rules'] as $vs) {
-									if (count($vs['match']) == 2 && count($vs['replace']) == 1) {
-										$sub = $vs['replace'][0];
-										// If Halant Cons   <pref>, <blwf> and <pstf> in New version only
-										if (strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', $vs['match'][0]) !== false && strpos('pref blwf pstf', $v['tag']) !== false && !$is_old_spec) {
-											$key = $vs['match'][1];
-											$tag = $v['tag'];
-											if (isset($loclsubs[$key])) {
-												${$tag}[$loclsubs[$key]] = $sub;
-											}
-											$tmp = &$$tag;
-											$tmp[hexdec($key)] = hexdec($sub);
-										} // If Cons Halant    <rphf> and <half> always
-										// and <pref>, <blwf> and <pstf> in Old version
-										elseif (strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', $vs['match'][1]) !== false && (strpos('rphf half', $v['tag']) !== false || (strpos('pref blwf pstf', $v['tag']) !== false && ($is_old_spec || _OTL_OLD_SPEC_COMPAT_2)))) {
-											$key = $vs['match'][0];
-											$tag = $v['tag'];
-											if (isset($loclsubs[$key])) {
-												${$tag}[$loclsubs[$key]] = $sub;
-											}
-											$tmp = &$$tag;
-											$tmp[hexdec($key)] = hexdec($sub);
-										}
-									}
+						$classes = array_intersect_key(self::$indicClasses, array_flip($v['tags']));
+						if (!$classes) {
+							continue;
+						}
+
+						foreach ($this->twoGlyphSubstitutions($v) as list($match, $sub)) {
+							foreach ($classes as $tag => $postBase) {
+								$key = $this->indicConsonant($match, $postBase, $is_old_spec);
+								if ($key === null) {
+									continue;
 								}
-							} elseif (!isset($v['context'])) {
-								$key = $v['match'];
-								$key = preg_replace('/[\(\)]*/', '', $key);
-								$sub = $v['replace'];
-								if ($key && strlen(trim($key)) == 11 && $sub) {
-									// If Cons Halant    <rphf> and <half> always
-									// and <pref>, <blwf> and <pstf> in Old version
-									// If Halant Cons   <pref>, <blwf> and <pstf> in New version only
-									if (strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', substr($key, 0, 5)) !== false && strpos('pref blwf pstf', $v['tag']) !== false && !$is_old_spec) {
-										$key = substr($key, 6, 5);
-										$tag = $v['tag'];
-										if (isset($loclsubs[$key])) {
-											${$tag}[$loclsubs[$key]] = $sub;
-										}
-										$tmp = &$$tag;
-										$tmp[hexdec($key)] = hexdec($sub);
-									} elseif (strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', substr($key, 6, 5)) !== false && (strpos('rphf half', $v['tag']) !== false || (strpos('pref blwf pstf', $v['tag']) !== false && ($is_old_spec || _OTL_OLD_SPEC_COMPAT_2)))) {
-										$key = substr($key, 0, 5);
-										$tag = $v['tag'];
-										if (isset($loclsubs[$key])) {
-											${$tag}[$loclsubs[$key]] = $sub;
-										}
-										$tmp = &$$tag;
-										$tmp[hexdec($key)] = hexdec($sub);
-									}
+
+								if (isset($loclsubs[$key])) {
+									$indic[$tag][$loclsubs[$key]] = $sub;
 								}
+								$indic[$tag][hexdec($key)] = hexdec($sub);
 							}
 						}
 					}
 				}
 
-				if (count($rtl) || count($rphf) || count($half) || count($pref) || count($blwf) || count($pstf) || $finals) {
-					$font = [
-						'rtlSUB' => $rtlSUB,
-						'finals' => $finals,
-						'rphf' => $rphf,
-						'half' => $half,
-						'pref' => $pref,
-						'blwf' => $blwf,
-						'pstf' => $pstf,
-					];
+				if (count($rtl) || array_filter($indic) || $finals) {
+					$font = array_merge(['rtlSUB' => $rtlSUB, 'finals' => $finals], $indic);
 
 					$this->fontCache->jsonWrite($this->fontkey . '.GSUB.' . $st . '.' . $t . '.json', $font);
 				}
@@ -2387,6 +2344,107 @@ class TTFontFile implements Fonts\FontSourceInterface
 	}
 
 	/**
+	 * The lookups a language system's features name, each under every one of them that named it.
+	 *
+	 * Two features naming one lookup state one set of rules, so it is read once; but the tag is what
+	 * the tables above are classified by - a rule under isol states an isolated form, a rule under
+	 * blwf a below-base consonant - so a lookup keeps every tag that reached it rather than whichever
+	 * feature the language system happened to list last.
+	 *
+	 * @param array $langsys A language system's features, as feature tag => the lookups it names
+	 *
+	 * @return array Lookup index => its feature tags, ordered as the Lookup List orders the lookups,
+	 *               which is the order their rules run in whatever order the features are in
+	 */
+	protected function lookupsWithTheirTags(array $langsys)
+	{
+		$lul = [];
+		foreach ($langsys as $tag => $lookupListIndices) {
+			foreach ($lookupListIndices as $lookupListIndex) {
+				// Keyed by the tag until the sort, because a feature is free to name one lookup more
+				// than once and Noto Sans Mono's ccmp does
+				$lul[$lookupListIndex][$tag] = $tag;
+			}
+		}
+		ksort($lul);
+
+		return array_map('array_values', $lul);
+	}
+
+	/**
+	 * @param string[] $tags The feature tags that named a lookup
+	 *
+	 * @return int[] The joining form each of the tags states, keyed by that tag
+	 */
+	private function joiningFormsOf(array $tags)
+	{
+		return array_intersect_key(Shaper\Arabic::formSlots(), array_flip($tags));
+	}
+
+	/**
+	 * The substitutions of exactly two glyphs an entry states, which are the ones an Indic consonant
+	 * class can be read out of.
+	 *
+	 * A contextual entry states them in its nested rules, and only where it matches on the pair alone:
+	 * a rule with backtrack or lookahead states a context rather than a class.
+	 *
+	 * @return array One entry per substitution: the two glyphs it matches as hex, and what replaces them
+	 */
+	private function twoGlyphSubstitutions(array $entry)
+	{
+		if (isset($entry['context'])) {
+			if (!$entry['context'] || $entry['nBacktrack'] || $entry['nLookahead']) {
+				return [];
+			}
+
+			$pairs = [];
+			foreach ($entry['rules'] as $vs) {
+				if (count($vs['match']) == 2 && count($vs['replace']) == 1) {
+					$pairs[] = [$vs['match'], $vs['replace'][0]];
+				}
+			}
+
+			return $pairs;
+		}
+
+		$match = preg_replace('/[\(\)]*/', '', $entry['match']);
+
+		if (!$match || strlen(trim($match)) != 11 || !$entry['replace']) {
+			return [];
+		}
+
+		return [[[substr($match, 0, 5), substr($match, 6, 5)], $entry['replace']]];
+	}
+
+	/**
+	 * The consonant a two-glyph substitution gives a class to under one feature, or null where the
+	 * pair is not one that feature states a class by.
+	 *
+	 * A post-base class states Halant + Consonant under the v2 script tags and Consonant + Halant
+	 * under the original ones, and the other two classes state Consonant + Halant whatever the script
+	 * tag. Fonts written to the v2 tags that still state a post-base class the old way round are read
+	 * as well, which is what _OTL_OLD_SPEC_COMPAT_2 asks for.
+	 *
+	 * @param string[] $match     The two glyphs, as hex
+	 * @param bool     $postBase  Whether the feature stating the class is one of the post-base three
+	 * @param bool     $isOldSpec Whether the script tag is one of the original Indic ones
+	 *
+	 * @return string|null The consonant, as hex
+	 */
+	private function indicConsonant(array $match, $postBase, $isOldSpec)
+	{
+		if ($postBase && !$isOldSpec && isset(self::$viramas[$match[0]])) {
+			return $match[1];
+		}
+
+		if (isset(self::$viramas[$match[1]]) && (!$postBase || $isOldSpec || _OTL_OLD_SPEC_COMPAT_2)) {
+			return $match[0];
+		}
+
+		return null;
+	}
+
+	/**
 	 * Turn a list of GSUB lookups into the substitution rules the shaper applies.
 	 *
 	 * This is the walk over the lookups, and what it reads out of each subtable, rule by rule. What
@@ -2395,8 +2453,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 * instead.
 	 *
 	 * @param array  $Lookup    The GSUB lookup list, with subtable offsets already made absolute
-	 * @param array  $lul       The lookups to read, as lookup index => the feature tag that asked for
-	 *                          it
+	 * @param array  $lul       The lookups to read, as lookup index => the feature tags that asked
+	 *                          for it
 	 * @param string $scripttag The script the rules are being read for
 	 *
 	 * @return array One entry per subtable, each holding the rules it states
@@ -2405,8 +2463,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 	{
 		$volt = [];
 
-		foreach ($lul as $i => $tag) {
-			$this->reportGSUBlookupStart($Lookup, $i, $tag);
+		foreach ($lul as $i => $tags) {
+			$this->reportGSUBlookupStart($Lookup, $i, $tags);
 
 			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
 				$this->reportGSUBsubtable($c);
@@ -2417,7 +2475,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 				if ($type >= 1 && $type <= 4) {
 					$this->reportGSUBlookupType($type, $format);
-					$this->addTo($volt, $this->gsubSubstitutions($Lookup, $i, $c, $tag));
+					$this->addTo($volt, $this->gsubSubstitutions($Lookup, $i, $c, $tags));
 					continue;
 				}
 
@@ -2430,7 +2488,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 					$ignore = $this->_getGSUBignoreString($Lookup[$i]['Flag'], $Lookup[$i]['MarkFilteringSet']);
 					list($backtrackGlyphs, $lookaheadGlyphs) = $this->coverageSequences($subtable);
 
-					$this->addTo($volt, $this->gsubReverseChainRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $backtrackGlyphs, $lookaheadGlyphs));
+					$this->addTo($volt, $this->gsubReverseChainRule($Lookup, $i, $c, $tags, $scripttag, $ignore, $backtrackGlyphs, $lookaheadGlyphs));
 					continue;
 				}
 
@@ -2453,7 +2511,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 							$inputGlyphs[0] = $subtable['SubRuleSet'][$s]['FirstGlyph'];
 							ksort($inputGlyphs);
 
-							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tags, $scripttag, $ignore, $this->contextRule(
 								$rctr,
 								$rule['SubstLookupRecord'],
 								[],
@@ -2473,7 +2531,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 						for ($cscrule = 0; $cscrule < $cscs['SubClassRuleCnt']; $cscrule++) {
 							$rule = $cscs['SubClassRule'][$cscrule];
 
-							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tags, $scripttag, $ignore, $this->contextRule(
 								$cscrule,
 								$rule['SubstLookupRecord'],
 								[],
@@ -2485,7 +2543,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 						}
 					}
 				} elseif ($type == 5) {
-					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tags, $scripttag, $ignore, $this->contextRule(
 						null,
 						$subtable['SubstLookupRecord'],
 						[],
@@ -2502,7 +2560,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 							$inputGlyphs[0] = $firstInputGlyph;
 							ksort($inputGlyphs);
 
-							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tags, $scripttag, $ignore, $this->contextRule(
 								$rctr,
 								$rule['SubstLookupRecord'],
 								$rule['BacktrackGlyphCount'] ? $rule['BacktrackGlyphs'] : [],
@@ -2528,7 +2586,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 							list($backtrackGlyphs, $lookaheadGlyphs) = $this->classSequences($subtable, $rule);
 
-							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+							$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tags, $scripttag, $ignore, $this->contextRule(
 								$cscrule,
 								$rule['SubstLookupRecord'],
 								$backtrackGlyphs,
@@ -2542,7 +2600,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 				} else {
 					list($backtrackGlyphs, $lookaheadGlyphs) = $this->coverageSequences($subtable);
 
-					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tag, $scripttag, $ignore, $this->contextRule(
+					$this->addTo($volt, $this->gsubContextRule($Lookup, $i, $c, $tags, $scripttag, $ignore, $this->contextRule(
 						null,
 						$subtable['SubstLookupRecord'],
 						$backtrackGlyphs,
@@ -2665,7 +2723,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 *
 	 * @return array What the shaper matches: one entry per substitution
 	 */
-	protected function gsubSubstitutions(array $Lookup, $i, $c, $tag)
+	protected function gsubSubstitutions(array $Lookup, $i, $c, array $tags)
 	{
 		$volt = [];
 		$type = $Lookup[$i]['Type'];
@@ -2681,7 +2739,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 				$volt[] = [
 					'match' => $this->_makeGSUBinputMatch($inputGlyphs, $ignore),
 					'replace' => $this->_makeGSUBinputReplacement(count($inputGlyphs), $sub['substitute'][0], $ignore, 0, count($inputGlyphs), 0),
-					'tag' => $tag,
+					'tags' => $tags,
 					'key' => $inputGlyphs[0],
 					'type' => 4,
 					'CompCount' => $sub['CompCount'],
@@ -2695,7 +2753,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$volt[] = [
 				'match' => $this->_makeGSUBinputMatch($inputGlyphs, "()"),
 				'replace' => $this->_makeGSUBinputReplacement(1, $substitute, "()", 0, 1, 0),
-				'tag' => $tag,
+				'tags' => $tags,
 				'key' => $inputGlyphs[0],
 				'type' => $type,
 			];
@@ -2713,12 +2771,13 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 * @return array What the shaper matches: the rule and the nested substitutions that fit it, and
 	 *               an entry of its own for each substitution an Arabic joining form's rule makes
 	 */
-	protected function gsubContextRule(array $Lookup, $i, $c, $tag, $scripttag, $ignore, array $rule)
+	protected function gsubContextRule(array $Lookup, $i, $c, array $tags, $scripttag, $ignore, array $rule)
 	{
 		$volt = [];
+		$statesJoiningForm = $scripttag == 'arab' && $this->joiningFormsOf($tags);
 		$subRule = [
 			'context' => 1,
-			'tag' => $tag,
+			'tags' => $tags,
 			'matchback' => $this->_makeGSUBbacktrackMatch($rule['backtrack'], $ignore),
 			'match' => $this->_makeGSUBcontextInputMatch($rule['input'], $ignore, [], 0) . $this->_makeGSUBlookaheadMatch($rule['lookahead'], $ignore),
 			'nBacktrack' => count($rule['backtrack']),
@@ -2740,8 +2799,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 						continue;
 					}
 
-					if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-						$volt[] = ['match' => $lookupGlyphs[0], 'replace' => implode(" ", $luss['substitute']), 'tag' => $tag, 'prel' => $rule['backtrack'], 'postl' => $rule['lookahead'], 'ignore' => $ignore];
+					if ($statesJoiningForm) {
+						$volt[] = ['match' => $lookupGlyphs[0], 'replace' => implode(" ", $luss['substitute']), 'tags' => $tags, 'prel' => $rule['backtrack'], 'postl' => $rule['lookahead'], 'ignore' => $ignore];
 					} else {
 						$subRule['rules'][] = ['type' => $Lookup[$lup]['Type'], 'match' => $lookupGlyphs, 'replace' => $luss['substitute'], 'seqIndex' => $seqIndex, 'key' => $lookupGlyphs[0],];
 					}
@@ -2765,15 +2824,16 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 *
 	 * @return array What the shaper matches
 	 */
-	protected function gsubReverseChainRule(array $Lookup, $i, $c, $tag, $scripttag, $ignore, array $backtrackGlyphs, array $lookaheadGlyphs)
+	protected function gsubReverseChainRule(array $Lookup, $i, $c, array $tags, $scripttag, $ignore, array $backtrackGlyphs, array $lookaheadGlyphs)
 	{
 		$volt = [];
+		$statesJoiningForm = $scripttag == 'arab' && $this->joiningFormsOf($tags);
 		$subtable = $Lookup[$i]['Subtable'][$c];
 
 		// Type 8 replaces exactly one glyph, so the input sequence is always a single Coverage table
 		$subRule = [
 			'context' => 1,
-			'tag' => $tag,
+			'tags' => $tags,
 			'matchback' => $this->_makeGSUBbacktrackMatch($backtrackGlyphs, $ignore),
 			'match' => $this->_makeGSUBcontextInputMatch($subtable['CoverageInputGlyphs'], $ignore, [], 0) . $this->_makeGSUBlookaheadMatch($lookaheadGlyphs, $ignore),
 			'nBacktrack' => count($backtrackGlyphs),
@@ -2783,8 +2843,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 		];
 
 		foreach ($subtable['subs'] as $luss) {
-			if (strpos("isol fina fin2 fin3 medi med2 init ", $tag) !== false && $scripttag == 'arab') {
-				$volt[] = ['match' => $luss['Replace'][0], 'replace' => implode(" ", $luss['substitute']), 'tag' => $tag, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
+			if ($statesJoiningForm) {
+				$volt[] = ['match' => $luss['Replace'][0], 'replace' => implode(" ", $luss['substitute']), 'tags' => $tags, 'prel' => $backtrackGlyphs, 'postl' => $lookaheadGlyphs, 'ignore' => $ignore];
 			} else {
 				$subRule['rules'][] = ['type' => 1, 'match' => $luss['Replace'], 'replace' => $luss['substitute'], 'seqIndex' => 0, 'key' => $luss['Replace'][0],];
 			}
@@ -2800,7 +2860,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * Reporting hooks for the GSUB walk, silent here. @see OtlDump
 	 */
-	protected function reportGSUBlookupStart(array $Lookup, $i, $tag)
+	protected function reportGSUBlookupStart(array $Lookup, $i, array $tags)
 	{
 	}
 
