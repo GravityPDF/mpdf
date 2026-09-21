@@ -48,6 +48,34 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	/** U+064E ARABIC FATHA, transparent-joining, and the one mark of the corpus Lateef draws */
 	const FATHA = '0064E';
 
+	/*
+	 * Stand-ins for the glyphs a font's rtlSUB table names. Arabic::shape() reads each as hex, as it
+	 * does a real font's, so they are codes in the Private Use Area rather than names.
+	 */
+	const B_ISOL = '0F100';
+
+	const B_FINA = '0F101';
+
+	const B_INIT = '0F102';
+
+	const B_MEDI = '0F103';
+
+	const BE_ISOL = '0F104';
+
+	const BE_FINA = '0F105';
+
+	const BE_INIT = '0F106';
+
+	const BE_MEDI = '0F107';
+
+	const A_ISOL = '0F108';
+
+	const A_FINA = '0F109';
+
+	const A_INIT = '0F10A';
+
+	const A_MEDI = '0F10B';
+
 	/**
 	 * A letter either side of a character Unicode gives a joining type and mPDF had not got. Both sides,
 	 * because a dual-joining character is read out of both tables and only one of them ever had it.
@@ -65,20 +93,20 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	{
 		return [
 			// U+0870 ALEF WITH ATTACHED FATHA, Arabic Extended-B, right-joining
-			'Arabic Extended-B after a Beh' => ['arab', [self::BEH, '00870'], 0, ['B_INIT', 2]],
+			'Arabic Extended-B after a Beh' => ['arab', [self::BEH, '00870'], 0, [self::B_INIT, 2]],
 			// U+08B3 AIN WITH THREE DOTS BELOW, Arabic Extended-A, dual-joining
-			'Arabic Extended-A after a Beh' => ['arab', [self::BEH, '008B3'], 0, ['B_INIT', 2]],
-			'Arabic Extended-A before a Beh' => ['arab', ['008B3', self::BEH], 1, ['B_FINA', 1]],
+			'Arabic Extended-A after a Beh' => ['arab', [self::BEH, '008B3'], 0, [self::B_INIT, 2]],
+			'Arabic Extended-A before a Beh' => ['arab', ['008B3', self::BEH], 1, [self::B_FINA, 1]],
 			// U+10EC2 DAL WITH VERTICAL TWO DOTS BELOW, Arabic Extended-C, right-joining
-			'Arabic Extended-C after a Beh' => ['arab', [self::BEH, '10EC2'], 0, ['B_INIT', 2]],
+			'Arabic Extended-C after a Beh' => ['arab', [self::BEH, '10EC2'], 0, [self::B_INIT, 2]],
 			// U+0860 MALAYALAM NGA and U+0867 MALAYALAM RA, the Syriac Supplement, dual- and right-joining
-			'the Syriac Supplement after a Beth' => ['syrc', [self::BETH, '00860'], 0, ['BE_INIT', 2]],
-			'the Syriac Supplement before a Beth' => ['syrc', ['00860', self::BETH], 1, ['BE_FINA', 1]],
-			'a right-joining Syriac Supplement letter after a Beth' => ['syrc', [self::BETH, '00867'], 0, ['BE_INIT', 2]],
+			'the Syriac Supplement after a Beth' => ['syrc', [self::BETH, '00860'], 0, [self::BE_INIT, 2]],
+			'the Syriac Supplement before a Beth' => ['syrc', ['00860', self::BETH], 1, [self::BE_FINA, 1]],
+			'a right-joining Syriac Supplement letter after a Beth' => ['syrc', [self::BETH, '00867'], 0, [self::BE_INIT, 2]],
 			// U+084F MANDAIC IN and U+0856 MANDAIC DUSHENNA, dual- and right-joining
-			'a dual-joining Mandaic letter after an Att' => ['mand', [self::ATT, '0084F'], 0, ['A_INIT', 2]],
-			'a dual-joining Mandaic letter before an Att' => ['mand', ['0084F', self::ATT], 1, ['A_FINA', 1]],
-			'a right-joining Mandaic letter after an Att' => ['mand', [self::ATT, '00856'], 0, ['A_INIT', 2]],
+			'a dual-joining Mandaic letter after an Att' => ['mand', [self::ATT, '0084F'], 0, [self::A_INIT, 2]],
+			'a dual-joining Mandaic letter before an Att' => ['mand', ['0084F', self::ATT], 1, [self::A_FINA, 1]],
+			'a right-joining Mandaic letter after an Att' => ['mand', [self::ATT, '00856'], 0, [self::A_INIT, 2]],
 		];
 	}
 
@@ -101,7 +129,7 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	{
 		$forms = $this->forms(['00847', self::ATT], 'mand');
 
-		$this->assertSame(['A_ISOL', 0], $forms[1]);
+		$this->assertSame([self::A_ISOL, 0], $forms[1]);
 	}
 
 	/**
@@ -131,8 +159,8 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 		$after = $this->forms([self::CROWN_BEH, self::BEH], 'arab');
 		$before = $this->forms([self::BEH, self::CROWN_BEH], 'arab');
 
-		$this->assertSame(['B_FINA', 1], $after[1]);
-		$this->assertSame(['B_ISOL', 0], $before[0], 'the letter before it is joined by nothing');
+		$this->assertSame([self::B_FINA, 1], $after[1]);
+		$this->assertSame([self::B_ISOL, 0], $before[0], 'the letter before it is joined by nothing');
 	}
 
 	/**
@@ -314,9 +342,9 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	private function glyphs()
 	{
 		return [
-			self::BEH => ['B_ISOL', 'B_FINA', 'B_INIT', 'B_MEDI'],
-			self::BETH => ['BE_ISOL', 'BE_FINA', 'BE_INIT', 'BE_MEDI'],
-			self::ATT => ['A_ISOL', 'A_FINA', 'A_INIT', 'A_MEDI'],
+			self::BEH => [self::B_ISOL, self::B_FINA, self::B_INIT, self::B_MEDI],
+			self::BETH => [self::BE_ISOL, self::BE_FINA, self::BE_INIT, self::BE_MEDI],
+			self::ATT => [self::A_ISOL, self::A_FINA, self::A_INIT, self::A_MEDI],
 		];
 	}
 

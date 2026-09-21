@@ -74,6 +74,72 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** U+0300 COMBINING GRAVE ACCENT, outside the Transparent-Joining table and in GDEF's mark class */
 	const COMBINING_GRAVE = '00300';
 
+	/*
+	 * Stand-ins for the glyphs a font's rtlSUB table names. Arabic::shape() reads each as hex, as it
+	 * does a real font's, so they are codes in the Private Use Area rather than names.
+	 */
+	const B_ISOL = '0F100';
+
+	const B_FINA = '0F101';
+
+	const B_INIT = '0F102';
+
+	const B_MEDI = '0F103';
+
+	const D_ISOL = '0F104';
+
+	const D_FINA = '0F105';
+
+	const SH_FINA = '0F106';
+
+	const A_ISOL = '0F107';
+
+	const A_FINA = '0F108';
+
+	const A_MED2 = '0F109';
+
+	const A_FIN2 = '0F10A';
+
+	const A_FIN3 = '0F10B';
+
+	const ALT_FIN3 = '0F10C';
+
+	const BE_ISOL = '0F10D';
+
+	const BE_FINA = '0F10E';
+
+	const BE_INIT = '0F10F';
+
+	const BE_MEDI = '0F110';
+
+	const F_ISOL = '0F111';
+
+	const F_FINA = '0F112';
+
+	const F_INIT = '0F113';
+
+	const F_MEDI = '0F114';
+
+	const R_ISOL = '0F115';
+
+	const R_FINA = '0F116';
+
+	const R_INIT = '0F117';
+
+	const X_ISOL = '0F118';
+
+	const X_FINA = '0F119';
+
+	const X_INIT = '0F11A';
+
+	const X_MEDI = '0F11B';
+
+	const X_MED2 = '0F11C';
+
+	const X_FIN2 = '0F11D';
+
+	const X_FIN3 = '0F11E';
+
 	/**
 	 * The font's rtlSUB table, as TTFontFile builds it: replacement hex per form, indexed
 	 * 0=isolated 1=final 2=initial 3=medial, and for Alaph 4=med2 5=fin2 6=fin3.
@@ -85,12 +151,12 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function glyphs()
 	{
 		return [
-			self::BEH => ['B_ISOL', 'B_FINA', 'B_INIT', 'B_MEDI'],
-			self::DAL => ['D_ISOL', 'D_FINA'],
-			self::SHADDA => [1 => 'SH_FINA'],
-			self::ALAPH => [1 => 'A_FINA', 4 => 'A_MED2', 5 => 'A_FIN2', 6 => 'A_FIN3'],
-			self::BETH => ['BE_ISOL', 'BE_FINA', 'BE_INIT', 'BE_MEDI'],
-			self::SOGDIAN_FE => ['F_ISOL', 'F_FINA', 'F_INIT', 'F_MEDI'],
+			self::BEH => [self::B_ISOL, self::B_FINA, self::B_INIT, self::B_MEDI],
+			self::DAL => [self::D_ISOL, self::D_FINA],
+			self::SHADDA => [1 => self::SH_FINA],
+			self::ALAPH => [1 => self::A_FINA, 4 => self::A_MED2, 5 => self::A_FIN2, 6 => self::A_FIN3],
+			self::BETH => [self::BE_ISOL, self::BE_FINA, self::BE_INIT, self::BE_MEDI],
+			self::SOGDIAN_FE => [self::F_ISOL, self::F_FINA, self::F_INIT, self::F_MEDI],
 		];
 	}
 
@@ -101,14 +167,14 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BEH, self::BEH]);
 
-		$this->assertSame([['B_INIT', 2], ['B_FINA', 1]], $forms);
+		$this->assertSame([[self::B_INIT, 2], [self::B_FINA, 1]], $forms);
 	}
 
 	public function testAThreeLetterRunTakesMedialInTheMiddle()
 	{
 		$forms = $this->shape([self::BEH, self::BEH, self::BEH]);
 
-		$this->assertSame([['B_INIT', 2], ['B_MEDI', 3], ['B_FINA', 1]], $forms);
+		$this->assertSame([[self::B_INIT, 2], [self::B_MEDI, 3], [self::B_FINA, 1]], $forms);
 	}
 
 	/**
@@ -119,12 +185,12 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BEH, self::DAL, self::BEH]);
 
-		$this->assertSame([['B_INIT', 2], ['D_FINA', 1], ['B_ISOL', 0]], $forms);
+		$this->assertSame([[self::B_INIT, 2], [self::D_FINA, 1], [self::B_ISOL, 0]], $forms);
 	}
 
 	public function testALoneLetterIsIsolated()
 	{
-		$this->assertSame([['B_ISOL', 0]], $this->shape([self::BEH]));
+		$this->assertSame([[self::B_ISOL, 0]], $this->shape([self::BEH]));
 	}
 
 	/**
@@ -135,7 +201,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BEH, self::FATHA, self::BEH]);
 
-		$this->assertSame([['B_INIT', 2], [self::FATHA, 0], ['B_FINA', 1]], $forms);
+		$this->assertSame([[self::B_INIT, 2], [self::FATHA, 0], [self::B_FINA, 1]], $forms);
 	}
 
 	/**
@@ -150,9 +216,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$underAVowel = $this->shape([self::BEH, self::SHADDA, self::FATHA, self::BEH]);
 		$doubled = $this->shape([self::BEH, self::SHADDA, self::SHADDA, self::BEH]);
 
-		$this->assertSame(['SH_FINA', 1], $alone[1]);
-		$this->assertSame(['SH_FINA', 1], $underAVowel[1]);
-		$this->assertSame([['SH_FINA', 1], ['SH_FINA', 1]], [$doubled[1], $doubled[2]]);
+		$this->assertSame([self::SH_FINA, 1], $alone[1]);
+		$this->assertSame([self::SH_FINA, 1], $underAVowel[1]);
+		$this->assertSame([[self::SH_FINA, 1], [self::SH_FINA, 1]], [$doubled[1], $doubled[2]]);
 	}
 
 	/**
@@ -171,9 +237,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$forms = $this->shape($four, self::ALL_FORMS, 'syrc');
 
-		$this->assertSame(['BE_INIT', 2], $forms[0]);
-		$this->assertSame(['BE_FINA', 1], $forms[5]);
-		$this->assertSame(['BE_FINA', 1], $this->shape($five, self::ALL_FORMS, 'syrc')[6]);
+		$this->assertSame([self::BE_INIT, 2], $forms[0]);
+		$this->assertSame([self::BE_FINA, 1], $forms[5]);
+		$this->assertSame([self::BE_FINA, 1], $this->shape($five, self::ALL_FORMS, 'syrc')[6]);
 	}
 
 	/**
@@ -186,7 +252,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$forms = $this->shape($run, self::ALL_FORMS, 'syrc', self::COMBINING_GRAVE);
 
-		$this->assertSame(['BE_FINA', 1], $forms[5]);
+		$this->assertSame([self::BE_FINA, 1], $forms[5]);
 	}
 
 	/**
@@ -197,7 +263,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BEH, self::BEH], 'isol fina');
 
-		$this->assertSame([[self::BEH, 0], ['B_FINA', 1]], $forms);
+		$this->assertSame([[self::BEH, 0], [self::B_FINA, 1]], $forms);
 	}
 
 	/**
@@ -211,7 +277,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$without = trim(str_replace($feature, '', self::ALL_FORMS));
 
-		$this->assertSame(['X_' . strtoupper($feature), $action], $this->shapeAction($action, self::ALL_FORMS));
+		$this->assertSame([constant('self::X_' . strtoupper($feature)), $action], $this->shapeAction($action, self::ALL_FORMS));
 		$this->assertSame([self::BETH, 0], $this->shapeAction($action, $without), 'without ' . $feature);
 	}
 
@@ -237,7 +303,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function shapeAction($action, $usetags)
 	{
 		$info = [['hex' => self::BETH, 'uni' => hexdec(self::BETH), 'joining' => $action]];
-		$glyphs = [self::BETH => ['X_ISOL', 'X_FINA', 'X_INIT', 'X_MEDI', 'X_MED2', 'X_FIN2', 'X_FIN3']];
+		$glyphs = [self::BETH => [self::X_ISOL, self::X_FINA, self::X_INIT, self::X_MEDI, self::X_MED2, self::X_FIN2, self::X_FIN3]];
 
 		Arabic::shape($info, $glyphs, $usetags);
 
@@ -254,7 +320,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BETH, self::SOGDIAN_FE], self::ALL_FORMS, 'syrc');
 
-		$this->assertSame([['BE_INIT', 2], ['F_FINA', 1]], $forms);
+		$this->assertSame([[self::BE_INIT, 2], [self::F_FINA, 1]], $forms);
 	}
 
 	/**
@@ -266,7 +332,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BEH, self::LOW_ALEF]);
 
-		$this->assertSame([['B_ISOL', 0], [self::LOW_ALEF, 0]], $forms);
+		$this->assertSame([[self::B_ISOL, 0], [self::LOW_ALEF, 0]], $forms);
 	}
 
 	/**
@@ -291,7 +357,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testTheLettersEitherSideOfTheAlaphDecideItsForm($hexes, $position, $expected)
 	{
 		$glyphs = $this->glyphs();
-		$glyphs[self::ALAPH][0] = 'A_ISOL';
+		$glyphs[self::ALAPH][0] = self::A_ISOL;
 
 		$forms = $this->shape($hexes, self::ALL_FORMS, 'syrc', self::FATHA, $glyphs);
 
@@ -301,20 +367,20 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function dataAlaphForms()
 	{
 		return [
-			'nothing before it' => [[self::ALAPH, self::BETH], 0, ['A_ISOL', 0]],
-			'after a letter that joins forwards' => [[self::BETH, self::ALAPH], 1, ['A_FINA', 1]],
-			'and with a letter after it' => [[self::BETH, self::ALAPH, self::BETH], 1, ['A_MED2', 4]],
-			'after DALATH' => [[self::DALATH, self::ALAPH], 1, ['A_FIN3', 6]],
-			'after DOTLESS DALATH RISH' => [[self::DOTLESS_DALATH_RISH, self::ALAPH], 1, ['A_FIN3', 6]],
-			'after RISH' => [[self::RISH, self::ALAPH], 1, ['A_FIN3', 6]],
-			'after PERSIAN DHALATH' => [[self::PERSIAN_DHALATH, self::ALAPH], 1, ['A_FIN3', 6]],
-			'after HE' => [[self::HE, self::ALAPH], 1, ['A_FIN2', 5]],
-			'after another Alaph' => [[self::ALAPH, self::ALAPH], 1, ['A_FIN2', 5]],
-			'after DALATH, with a letter after it' => [[self::DALATH, self::ALAPH, self::BETH], 1, ['A_ISOL', 0]],
-			'after HE, with a letter after it' => [[self::HE, self::ALAPH, self::BETH], 1, ['A_ISOL', 0]],
-			'after another Alaph, with a letter after it' => [[self::ALAPH, self::ALAPH, self::BETH], 1, ['A_ISOL', 0]],
-			'after SOGDIAN FE' => [[self::SOGDIAN_FE, self::ALAPH, self::BETH], 1, ['A_MED2', 4]],
-			'before SOGDIAN FE' => [[self::BETH, self::ALAPH, self::SOGDIAN_FE], 1, ['A_MED2', 4]],
+			'nothing before it' => [[self::ALAPH, self::BETH], 0, [self::A_ISOL, 0]],
+			'after a letter that joins forwards' => [[self::BETH, self::ALAPH], 1, [self::A_FINA, 1]],
+			'and with a letter after it' => [[self::BETH, self::ALAPH, self::BETH], 1, [self::A_MED2, 4]],
+			'after DALATH' => [[self::DALATH, self::ALAPH], 1, [self::A_FIN3, 6]],
+			'after DOTLESS DALATH RISH' => [[self::DOTLESS_DALATH_RISH, self::ALAPH], 1, [self::A_FIN3, 6]],
+			'after RISH' => [[self::RISH, self::ALAPH], 1, [self::A_FIN3, 6]],
+			'after PERSIAN DHALATH' => [[self::PERSIAN_DHALATH, self::ALAPH], 1, [self::A_FIN3, 6]],
+			'after HE' => [[self::HE, self::ALAPH], 1, [self::A_FIN2, 5]],
+			'after another Alaph' => [[self::ALAPH, self::ALAPH], 1, [self::A_FIN2, 5]],
+			'after DALATH, with a letter after it' => [[self::DALATH, self::ALAPH, self::BETH], 1, [self::A_ISOL, 0]],
+			'after HE, with a letter after it' => [[self::HE, self::ALAPH, self::BETH], 1, [self::A_ISOL, 0]],
+			'after another Alaph, with a letter after it' => [[self::ALAPH, self::ALAPH, self::BETH], 1, [self::A_ISOL, 0]],
+			'after SOGDIAN FE' => [[self::SOGDIAN_FE, self::ALAPH, self::BETH], 1, [self::A_MED2, 4]],
+			'before SOGDIAN FE' => [[self::BETH, self::ALAPH, self::SOGDIAN_FE], 1, [self::A_MED2, 4]],
 		];
 	}
 
@@ -347,9 +413,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$fin3 = $this->shape([self::DALATH, self::PTHAHA, self::ALAPH], self::ALL_FORMS, 'syrc');
 		$med2 = $this->shape([self::BETH, self::PTHAHA, self::ALAPH, self::BETH], self::ALL_FORMS, 'syrc');
 
-		$this->assertSame(['A_FINA', 1], $fina[2]);
-		$this->assertSame(['A_FIN3', 6], $fin3[2]);
-		$this->assertSame(['A_MED2', 4], $med2[2]);
+		$this->assertSame([self::A_FINA, 1], $fina[2]);
+		$this->assertSame([self::A_FIN3, 6], $fin3[2]);
+		$this->assertSame([self::A_MED2, 4], $med2[2]);
 	}
 
 	/**
@@ -360,7 +426,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$run = [self::BETH, self::PTHAHA, self::ZQAPHA, self::RBASA, self::HBASA, self::ALAPH];
 
-		$this->assertSame(['A_FINA', 1], $this->shape($run, self::ALL_FORMS, 'syrc')[5]);
+		$this->assertSame([self::A_FINA, 1], $this->shape($run, self::ALL_FORMS, 'syrc')[5]);
 	}
 
 	/**
@@ -371,7 +437,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BETH, self::COMBINING_GRAVE, self::ALAPH], self::ALL_FORMS, 'syrc', self::COMBINING_GRAVE);
 
-		$this->assertSame(['A_FINA', 1], $forms[2]);
+		$this->assertSame([self::A_FINA, 1], $forms[2]);
 	}
 
 	/**
@@ -384,8 +450,8 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$fina = $this->shape([self::BETH, self::ALAPH, self::PTHAHA], self::ALL_FORMS, 'syrc');
 		$fin3 = $this->shape([self::DALATH, self::ALAPH, self::PTHAHA], self::ALL_FORMS, 'syrc');
 
-		$this->assertSame(['A_FINA', 1], $fina[1]);
-		$this->assertSame(['A_FIN3', 6], $fin3[1]);
+		$this->assertSame([self::A_FINA, 1], $fina[1]);
+		$this->assertSame([self::A_FIN3, 6], $fin3[1]);
 	}
 
 	/**
@@ -395,7 +461,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$forms = $this->shape([self::BETH, self::ALAPH, self::PTHAHA, self::BETH], self::ALL_FORMS, 'syrc');
 
-		$this->assertSame(['A_MED2', 4], $forms[1]);
+		$this->assertSame([self::A_MED2, 4], $forms[1]);
 	}
 
 	/**
@@ -537,10 +603,10 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$info[0]['hex'] = $rasm;
 		$info[1]['hex'] = $rasm;
-		Arabic::shape($info, [$rasm => ['R_ISOL', 'R_FINA', 'R_INIT']], self::ALL_FORMS);
+		Arabic::shape($info, [$rasm => [self::R_ISOL, self::R_FINA, self::R_INIT]], self::ALL_FORMS);
 
 		$this->assertSame(
-			[['R_INIT', 2], ['R_FINA', 1]],
+			[[self::R_INIT, 2], [self::R_FINA, 1]],
 			[[$info[0]['hex'], $info[0]['form']], [$info[1]['hex'], $info[1]['form']]]
 		);
 	}
@@ -560,9 +626,9 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		Arabic::resolveJoining($info, ' ' . self::PTHAHA, 'syrc');
 
 		$info[1]['hex'] = $alternate;
-		Arabic::shape($info, [$alternate => [6 => 'ALT_FIN3']], self::ALL_FORMS);
+		Arabic::shape($info, [$alternate => [6 => self::ALT_FIN3]], self::ALL_FORMS);
 
-		$this->assertSame(['ALT_FIN3', 6], [$info[1]['hex'], $info[1]['form']]);
+		$this->assertSame([self::ALT_FIN3, 6], [$info[1]['hex'], $info[1]['form']]);
 	}
 
 	/**
@@ -589,7 +655,7 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAFormsContextIsNotMetByAGlyphWhoseHexIsPartOfOneItNames($prel, $ignore, $hexes, $expected)
 	{
 		$glyphs = $this->glyphs();
-		$glyphs[self::DAL] = ['D_ISOL', 'D_FINA', 'prel' => [1 => [$prel]], 'ignore' => [1 => $ignore]];
+		$glyphs[self::DAL] = [self::D_ISOL, self::D_FINA, 'prel' => [1 => [$prel]], 'ignore' => [1 => $ignore]];
 
 		$this->assertSame($expected, $this->shape($hexes, self::ALL_FORMS, 'arab', self::FATHA, $glyphs));
 	}
@@ -601,13 +667,13 @@ class ArabicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				'1' . self::BEH,
 				'()',
 				[self::BEH, self::DAL],
-				[['B_INIT', 2], [self::DAL, 0]],
+				[[self::B_INIT, 2], [self::DAL, 0]],
 			],
 			'the glyphs the lookup skips' => [
 				self::BEH,
 				'((?:(?: 1' . self::FATHA . '))*)',
 				[self::BEH, self::FATHA, self::DAL],
-				[['B_INIT', 2], [self::FATHA, 0], [self::DAL, 0]],
+				[[self::B_INIT, 2], [self::FATHA, 0], [self::DAL, 0]],
 			],
 		];
 	}
