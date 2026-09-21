@@ -3,20 +3,18 @@
 namespace Mpdf;
 
 /**
- * The joining tables of Mpdf\Shaper\Arabic, rebuilt from a Unicode Character Database's
- * ArabicShaping.txt. What composer arabicjoining:update runs - see utils/arabicjoining_update.php,
- * which is the argument parsing and nothing else.
+ * The joining tables of Mpdf\Shaper\Arabic, rebuilt from a Unicode Character Database. What composer
+ * arabicjoining:update runs - see utils/arabicjoining_update.php, which is the argument parsing and
+ * nothing else.
  *
- * rewrite() replaces $leftJoining, $rightJoining and the UNIDATA_VERSION line above them, and leaves
- * the rest of the class alone. A character is left-joining where ArabicShaping.txt gives its
- * Joining_Type as L, D or C, and right-joining where it gives R, D or C, which is what the two tables
- * say: whether a letter joins to what follows it, and whether it joins to what precedes it.
+ * rewrite() replaces $leftJoining, $rightJoining, $transparent and the UNIDATA_VERSION line above them,
+ * and leaves the rest of the class alone. A character is left-joining where ArabicShaping.txt gives its
+ * Joining_Type as L, D or C, and right-joining where it gives R, D or C, which is what the first two
+ * tables say: whether a letter joins to what follows it, and whether it joins to what precedes it. The
+ * third is the Transparent type, which joining reads straight over.
  *
- * $transparent, the third table of the same class, is not generated and has the same gap these two had:
- * that is #259, not this. Generating it needs decisions this does not - the T type is in
- * extracted/DerivedJoiningType.txt rather than here, because Unicode leaves it to be derived from the
- * general category and says so in this file's own header, and the table carries five codepoints that are
- * no joining type of Unicode's at all, the presentation-form ligatures a font's 'ccmp' produces.
+ * T comes out of extracted/DerivedJoiningType.txt rather than ArabicShaping.txt, whose own header says
+ * the type is left to be derived from the general category rather than listed there.
  */
 class ArabicJoining
 {
@@ -52,7 +50,7 @@ class ArabicJoining
 	}
 
 	/**
-	 * Rewrites the two joining tables of the class at $path from the database.
+	 * Rewrites the three joining tables of the class at $path from the database.
 	 *
 	 * @param string $path The class to rewrite, in place
 	 *
@@ -77,7 +75,7 @@ class ArabicJoining
 	}
 
 	/**
-	 * Both tables, each as its codepoints in ascending order, keyed by the property that holds them.
+	 * All three tables, each as its codepoints in ascending order, keyed by the property that holds them.
 	 *
 	 * @return int[][]
 	 */
@@ -95,10 +93,13 @@ class ArabicJoining
 			}
 		}
 
+		$transparent = $this->transparentCharacters();
+
 		sort($left);
 		sort($right);
+		sort($transparent);
 
-		return ['leftJoining' => $left, 'rightJoining' => $right];
+		return ['leftJoining' => $left, 'rightJoining' => $right, 'transparent' => $transparent];
 	}
 
 	/**
@@ -130,8 +131,41 @@ class ArabicJoining
 	}
 
 	/**
+	 * Every character the shaper can be asked about that joining reads straight over: Unicode's
+	 * Transparent type, which is the marks and the invisible format characters rather than just the
+	 * vowels this table was once named for.
+	 *
+	 * The derivation Unicode publishes states ranges, which ArabicShaping.txt never does, so one line can
+	 * stand for thousands of codepoints. Its "@missing" default is Non_Joining, so the defaults ranges()
+	 * reads first are nothing to expand.
+	 *
+	 * @return int[]
+	 */
+	private function transparentCharacters()
+	{
+		$codepoints = [];
+
+		list(, $values) = $this->ranges($this->lines('extracted/DerivedJoiningType.txt'));
+
+		foreach ($values as $range) {
+			list($start, $end, $type) = $range;
+			if ($type !== 'T') {
+				continue;
+			}
+
+			for ($codepoint = $start; $codepoint <= $end; $codepoint++) {
+				if ($this->inScope($codepoint)) {
+					$codepoints[] = $codepoint;
+				}
+			}
+		}
+
+		return $codepoints;
+	}
+
+	/**
 	 * Whether this character can stand inside a run the Arabic shaper is given, which is the only way
-	 * either table is ever read.
+	 * any of the tables is ever read.
 	 *
 	 * Otl::analyseCharacters() cuts a line into runs at each change of script and Otl::selectShaper()
 	 * picks the shaper from the run's, so the four scripts of scripts() are in scope - Mongolian,

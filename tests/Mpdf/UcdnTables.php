@@ -176,36 +176,6 @@ class UcdnTables
 	}
 
 	/**
-	 * Splits a property file into its "@missing" defaults and its data lines, both as [start, end,
-	 * value]. The defaults come first and in the order the file gives them, because the later ones
-	 * narrow the earlier: bidi class defaults to L over the whole of Unicode and to AL over the
-	 * Arabic blocks.
-	 *
-	 * @return array[] [$defaults, $values]
-	 */
-	private function ranges($lines)
-	{
-		$defaults = [];
-		$values = [];
-
-		foreach ($lines as $line) {
-			if (preg_match('/^#\s*@missing:\s*([0-9A-F]+)\.\.([0-9A-F]+)\s*;\s*([^#\s][^#]*?)\s*$/', $line, $m)) {
-				$defaults[] = [hexdec($m[1]), hexdec($m[2]), $m[3]];
-				continue;
-			}
-
-			$line = preg_replace('/#.*$/', '', $line);
-			if (!preg_match('/^\s*([0-9A-F]+)(?:\.\.([0-9A-F]+))?\s*;\s*(.*?)\s*$/', $line, $m)) {
-				continue;
-			}
-
-			$values[] = [hexdec($m[1]), hexdec($m[2] === '' ? $m[1] : $m[2]), $m[3]];
-		}
-
-		return [$defaults, $values];
-	}
-
-	/**
 	 * Lays a property file over one byte per codepoint, defaults first.
 	 *
 	 * @param string $bytes one byte per codepoint, by reference

@@ -13,6 +13,10 @@ namespace Mpdf\Shaper;
  * the forms these tests expect. It is the oracle for the crown letters too, but not directly: no
  * released HarfBuzz carries a joining type for them, so the two tests that name them read it from a
  * character of the same type that Unicode 17 already had.
+ *
+ * The third table stopped in the same place, with the same consequence the other way round: a mark
+ * neither it nor the font's GDEF knew was read as a base, took a form of its own and broke the join
+ * across itself (#259). The last two tests are that one.
  */
 class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -39,6 +43,9 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 
 	/** U+10ED9 ARABIC CROWN LETTER BEH, Arabic Extended-C, and left-joining as of Unicode 18 */
 	const CROWN_BEH = '10ED9';
+
+	/** U+064E ARABIC FATHA, transparent-joining, and the one mark of the corpus Lateef draws */
+	const FATHA = '0064E';
 
 	/**
 	 * A letter either side of a character Unicode gives a joining type and mPDF had not got. Both sides,
@@ -182,6 +189,66 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 		$beforeNga = $this->render([self::BETH, self::ALAPH, '00860'], 'estrangeloedessa');
 
 		$this->assertSame($beforeFe[1], $beforeNga[1]);
+	}
+
+	/**
+	 * A mark Unicode gives Joining_Type=T is transparent to joining whether or not the font has a glyph
+	 * for it, so the letters either side of it see each other over it exactly as they do over a fatha.
+	 * What hid this is that transparentJoining() merges the font's GDEF mark class into the table, so the
+	 * fonts that broke were the ones with no glyph for the mark - which, for every one of these, is every
+	 * font in the corpus.
+	 *
+	 * Lateef has a Beh, a Meem and a fatha, and nothing for the marks named here:
+	 *
+	 *   $ hb-shape --font-file=packages/Middle-East-Scripts-Bundle/fonts/LateefRegOT.ttf \
+	 *       --no-clusters --no-positions --unicodes=0628,064E,0645
+	 *   [uni0645.fina|uni064E|uni0628.init]
+	 *   $ ... --unicodes=0628,0898,0645
+	 *   [uni0645.fina|.notdef|uni0628.init]
+	 *
+	 * @dataProvider dataTransparentCharactersNoFontOfTheCorpusDraws
+	 */
+	public function testABehAndAMeemJoinThroughAMarkTheFontHasNoGlyphFor($hex)
+	{
+		$throughFatha = $this->render([self::BEH, self::FATHA, self::MEEM], 'lateef');
+		$throughMark = $this->render([self::BEH, $hex, self::MEEM], 'lateef');
+
+		$this->assertSame($throughFatha[0], $throughMark[0], 'the Beh takes its initial form');
+		$this->assertSame($throughFatha[2], $throughMark[2], 'the Meem takes its final form');
+	}
+
+	public function dataTransparentCharactersNoFontOfTheCorpusDraws()
+	{
+		return [
+			'U+0898, Arabic Extended-B' => ['00898'],
+			'U+08D3, Arabic Extended-A' => ['008D3'],
+			'U+10EFB, Arabic Extended-C' => ['10EFB'],
+			'U+061C ARABIC LETTER MARK, a format character rather than a mark' => ['0061C'],
+		];
+	}
+
+	/**
+	 * mPDF has read the five presentation-form ligatures as transparent since long before either table was
+	 * generated, and still does: they are no joining type Unicode states, so the generator cannot write
+	 * them and Shaper\Arabic keeps them by hand and merges them at run time. This is here so that the move
+	 * out of the generated table is not a silent change of behaviour.
+	 *
+	 * HarfBuzz does not agree - DerivedJoiningType.txt lists none of the five, which leaves them
+	 * Non_Joining by that file's own default, and the join breaks across one:
+	 *
+	 *   $ hb-shape --font-file=packages/Middle-East-Scripts-Bundle/fonts/LateefRegOT.ttf \
+	 *       --no-clusters --no-positions --unicodes=0628,FC5E,0645
+	 *   [uni0645|.notdef|uni0628]
+	 *
+	 * Whether mPDF should follow it is #267, not this.
+	 */
+	public function testABehAndAMeemJoinThroughAPresentationFormLigature()
+	{
+		$throughFatha = $this->render([self::BEH, self::FATHA, self::MEEM], 'lateef');
+		$throughLigature = $this->render([self::BEH, '0FC5E', self::MEEM], 'lateef');
+
+		$this->assertSame($throughFatha[0], $throughLigature[0]);
+		$this->assertSame($throughFatha[2], $throughLigature[2]);
 	}
 
 	/**
