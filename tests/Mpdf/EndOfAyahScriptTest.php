@@ -37,10 +37,6 @@ class EndOfAyahScriptTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * A picture's text passes no seam that records what it was drawn in, so this reads the fonts the
 	 * document loaded: with one <text> element holding the marker and nothing else that asks for a
 	 * font, the picture loading the Arabic one is the marker reaching it.
-	 *
-	 * The Arabic branch of Image\Svg::markScriptToLang() writes a language tag that resolves to no
-	 * font, so autoArabic is off here to reach the branch that marks a script; that is its own bug
-	 * and not this one.
 	 */
 	public function testAnAyahMarkerInAPictureReachesTheSameFontAsArabicText()
 	{
@@ -81,7 +77,6 @@ class EndOfAyahScriptTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'mode' => 'utf-8',
 			'autoScriptToLang' => true,
 			'autoLangToFont' => true,
-			'autoArabic' => false,
 			'svgAutoFont' => true,
 		]);
 		$mpdf->WriteHTML(

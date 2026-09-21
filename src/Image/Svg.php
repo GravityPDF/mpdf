@@ -3391,7 +3391,7 @@ class Svg
 							} elseif (preg_match("/[" . $this->scriptToLanguage->getLanguageDelimiters('persian') . "]/u", $s)) {
 								$lang = "fa";
 							} elseif ($this->mpdf->baseScript != Ucdn::SCRIPT_ARABIC && $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch])) {
-								$lang = "'." . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . "'";
+								$lang = $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]);
 							}
 						} // Identify Script block if not Basescript, and mark up as language
 						elseif ($scriptblocks[$sch] > 0 && $scriptblocks[$sch] != $this->mpdf->baseScript && $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch])) {
