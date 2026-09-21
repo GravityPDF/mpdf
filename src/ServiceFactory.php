@@ -16,6 +16,7 @@ use Mpdf\Css\ShadowParser;
 use Mpdf\File\LocalContentLoader;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\FontFileFinder;
+use Mpdf\Fonts\FontSubstitution;
 use Mpdf\Http\CurlHttpClient;
 use Mpdf\Http\SocketHttpClient;
 use Mpdf\Image\ImageProcessor;
@@ -74,6 +75,8 @@ class ServiceFactory
 
 		$cache = new Cache($cacheBasePath, $config['cacheCleanupInterval']);
 		$fontCache = new FontCache(new Cache($cacheBasePath . '/ttfontdata', $config['cacheCleanupInterval']));
+
+		$fontSubstitution = new FontSubstitution($mpdf, $fontCache);
 
 		$fontFileFinder = $this->container && $this->container->has('fontFileFinder')
 			? $this->container->get('fontFileFinder')
@@ -191,6 +194,7 @@ class ServiceFactory
 			'directWrite' => $directWrite,
 			'fontCache' => $fontCache,
 			'fontFileFinder' => $fontFileFinder,
+			'fontSubstitution' => $fontSubstitution,
 			'form' => $form,
 			'gradient' => $gradient,
 			'roundedBox' => $roundedBox,
@@ -234,6 +238,7 @@ class ServiceFactory
 			'directWrite',
 			'fontCache',
 			'fontFileFinder',
+			'fontSubstitution',
 			'form',
 			'gradient',
 			'roundedBox',
