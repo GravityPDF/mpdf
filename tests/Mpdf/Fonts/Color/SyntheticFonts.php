@@ -47,7 +47,8 @@ trait SyntheticFonts
 	/**
 	 * @param string[] $glyphs Each glyph's glyf data, by glyph id
 	 *
-	 * @return string[] head, maxp, loca and glyf for those glyphs, loca in its long format
+	 * @return string[] head, maxp, loca and glyf for those glyphs, loca in its long format, the font's
+	 *                  bounding box a square of 1000 units
 	 */
 	private function glyphTables(array $glyphs)
 	{
@@ -58,8 +59,8 @@ trait SyntheticFonts
 			$loca .= pack('N', strlen($glyf));
 		}
 
-		// unitsPerEm at 18, indexToLocFormat at 50
-		$head = str_repeat("\0", 18) . pack('n', 1000) . str_repeat("\0", 30) . pack('n2', 1, 0);
+		// unitsPerEm at 18, the bounding box from 0,0 to 1000,1000 at 36, indexToLocFormat at 50
+		$head = str_repeat("\0", 18) . pack('n', 1000) . str_repeat("\0", 16) . pack('n4', 0, 0, 1000, 1000) . str_repeat("\0", 6) . pack('n2', 1, 0);
 
 		return ['head' => $head, 'maxp' => pack('Nn', 0x00005000, count($glyphs)), 'loca' => $loca, 'glyf' => $glyf];
 	}
@@ -71,6 +72,16 @@ trait SyntheticFonts
 	private function triangle()
 	{
 		return pack('n5', 1, 0, 0, 1000, 700) . pack('n2', 2, 0) . "\1\1\1" . pack('n3', 0, 500, 500) . pack('n3', 0, 700, 0x10000 - 700);
+	}
+
+	/**
+	 * @return string A CPAL table of one palette of one colour, opaque red
+	 */
+	private function cpal()
+	{
+		// version, numPaletteEntries, numPalettes, numColorRecords, colorRecordsArrayOffset, then the
+		// palette's first colour record and the colour, blue, green, red, alpha
+		return pack('n4Nn', 0, 1, 1, 1, 14, 0) . "\0\0\xFF\xFF";
 	}
 
 	/**

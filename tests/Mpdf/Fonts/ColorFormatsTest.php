@@ -102,15 +102,20 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A font is drawn in the first format mPDF draws that it carries, and in none where the document may
-	 * not use colour
+	 * A font is drawn in colour where it carries a format mPDF draws, and not where the document may not
+	 * use colour
 	 */
-	public function testAFontIsDrawnInTheFirstFormatItCarriesThatMpdfDraws()
+	public function testAFontIsDrawnInColourWhereItCarriesAFormatMpdfDraws()
 	{
-		$this->assertSame('CBDT', ColorFormats::choose(['COLRv1', 'CBDT', 'sbix'], true));
-		$this->assertSame('', ColorFormats::choose(['SVG'], true), 'a format mPDF does not draw yet is not chosen');
-		$this->assertSame('COLRv0', ColorFormats::choose(['COLRv1', 'COLRv0', 'CBDT'], true), 'a COLR version 1 font is drawn from its version 0 records, ahead of its bitmaps');
-		$this->assertSame('', ColorFormats::choose(['CBDT'], false), 'nor anything, where colour is off');
+		$mpdf = new Mpdf(['mode' => 'utf-8']);
+
+		$this->assertTrue(ColorFormats::drawsInColor(['colorFormats' => ['SVG', 'CBDT', 'sbix']], $mpdf));
+		$this->assertTrue(ColorFormats::drawsInColor(['colorFormats' => ['COLRv1', 'COLRv0']], $mpdf));
+		$this->assertFalse(ColorFormats::drawsInColor(['colorFormats' => ['SVG']], $mpdf), 'a format mPDF does not draw yet is not drawn');
+		$this->assertFalse(ColorFormats::drawsInColor(['colorFormats' => []], $mpdf), 'nor is a font with no colour');
+
+		$mpdf->PDFA = true;
+		$this->assertFalse(ColorFormats::drawsInColor(['colorFormats' => ['CBDT']], $mpdf), 'nor anything, where colour is off');
 	}
 
 	/**
@@ -142,15 +147,16 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A glyph is drawn by the font's colour format, then by its outline, and by its outline alone
-	 * where colour is off
+	 * A glyph is drawn by the first of the font's colour formats that has it, then by its outline, and
+	 * by its outline alone where colour is off
 	 */
 	public function testAFontIsDrawnByItsColourFormatThenItsOutlines()
 	{
 		$mpdf = new Mpdf(['mode' => 'utf-8']);
 		$colr = ['colorFormats' => ['COLRv1', 'COLRv0'], 'hasOutlines' => true];
 
-		$this->assertSame(['Mpdf\Fonts\Color\ColrV0Source', 'Mpdf\Fonts\Color\OutlineSource'], ColorFormats::sources($colr, $mpdf));
+		$this->assertSame(['Mpdf\Fonts\Color\ColrV1Source', 'Mpdf\Fonts\Color\ColrV0Source', 'Mpdf\Fonts\Color\OutlineSource'], ColorFormats::sources($colr, $mpdf), 'a glyph with no version 1 paint drawn from its version 0 layers');
+		$this->assertSame(['Mpdf\Fonts\Color\CbdtSource', 'Mpdf\Fonts\Color\SbixSource'], ColorFormats::sources(['colorFormats' => ['sbix', 'SVG', 'CBDT'], 'hasOutlines' => false], $mpdf), 'in the order of SOURCES, less what mPDF does not draw');
 		$this->assertSame(['Mpdf\Fonts\Color\CbdtSource'], ColorFormats::sources(['colorFormats' => ['CBDT'], 'hasOutlines' => false], $mpdf));
 
 		$mpdf->PDFA = true;

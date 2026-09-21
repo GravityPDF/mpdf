@@ -60,7 +60,7 @@ class FontSubstitution
 			return true;
 		}
 
-		if ($presentation === Emoji::PRESENTATION_DEFAULT || (ColorFormats::drawn($this->mpdf->CurrentFont, $this->mpdf) !== '') === ($presentation === Emoji::PRESENTATION_EMOJI)) {
+		if ($presentation === Emoji::PRESENTATION_DEFAULT || ColorFormats::drawsInColor($this->mpdf->CurrentFont, $this->mpdf) === ($presentation === Emoji::PRESENTATION_EMOJI)) {
 			return false;
 		}
 
@@ -193,7 +193,7 @@ class FontSubstitution
 			$this->loadFont($family);
 		}
 
-		return ColorFormats::drawn($this->mpdf->fonts[$family], $this->mpdf) !== '';
+		return ColorFormats::drawsInColor($this->mpdf->fonts[$family], $this->mpdf);
 	}
 
 	/**

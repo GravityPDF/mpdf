@@ -9,7 +9,7 @@ differs.
 
     TestEmoji-COLRv0.ttf  glyf outlines, COLR version 0 layers, CPAL with two palettes
     TestEmoji-FE0F.ttf    the COLRv0 font with Twemoji's GSUB: U+FE0F inside its sequences
-    TestEmoji-COLRv1.ttf  glyf outlines, COLR version 1 paints (and the version 0 records)
+    TestEmoji-COLRv1.ttf  glyf outlines, COLR version 1 paints of every kind (and the version 0 records)
     TestEmoji-CBDT.ttf    no outlines at all, PNG bitmaps in CBDT/CBLC at two strikes
     TestEmoji-sbix.ttf    empty outlines, PNG and JPEG bitmaps in sbix at two strikes
 
@@ -38,6 +38,7 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import newTable
 from fontTools.ttLib.tables.DefaultTable import DefaultTable
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphComponent
+from fontTools.ttLib.tables.otTables import CompositeMode, ExtendMode
 from fontTools.ttLib.tables.sbixGlyph import Glyph as SbixGlyph
 from fontTools.ttLib.tables.sbixStrike import Strike
 from fontTools.misc.timeTools import timestampFromString
@@ -266,6 +267,8 @@ def build_colrv0(style='COLRv0', features=FEATURES):
 
 
 def build_colrv1():
+    """Every glyph as version 1 paints, each emoji showing another part of what version 1 can say, and
+    beside them the version 0 records a renderer that knows only those falls back to."""
     fb = base_font()
     name_font(fb, 'COLRv1')
 
@@ -275,27 +278,80 @@ def build_colrv1():
     def glyph(layer, paint):
         return {'Format': 10, 'Glyph': layer, 'Paint': paint}
 
-    paints = {}
-    for name, _, layers in EMOJI:
-        paints[name] = {'Format': 1, 'Layers': [glyph(layer, solid(colour)) for layer, colour in layers]}
-    # One radial and one linear gradient, so a version 1 font carries what version 0 cannot say
-    paints['u1F600'] = {'Format': 1, 'Layers': [
-        glyph('layer.face', {'Format': 6, 'ColorLine': {'ColorStop': [
-            {'StopOffset': 0.0, 'PaletteIndex': WHITE}, {'StopOffset': 1.0, 'PaletteIndex': YELLOW}]},
-            'x0': 400, 'y0': 450, 'r0': 0, 'x1': 500, 'y1': 350, 'r1': 450}),
-        glyph('layer.eyes', solid(BLACK)),
-        glyph('layer.mouth', solid(FOREGROUND)),
-    ]}
-    paints['u1F1E6_u1F1FA'] = {'Format': 1, 'Layers': [
-        glyph('layer.square', {'Format': 4, 'ColorLine': {'ColorStop': [
-            {'StopOffset': 0.0, 'PaletteIndex': BLUE}, {'StopOffset': 1.0, 'PaletteIndex': GREEN}]},
-            'x0': 50, 'y0': 0, 'x1': 950, 'y1': 0, 'x2': 50, 'y2': 900}),
-        glyph('layer.stripe', solid(WHITE)),
-    ]}
-    # Every glyph as version 1 paints, and beside them the version 0 records a renderer that knows only
-    # those falls back to. buildCOLR would move every paint version 0 can express into the version 0
-    # records and out of the paints, so the two are built apart and put together.
-    colr = buildCOLR(paints, version=1, glyphMap=fb.font.getReverseGlyphMap())
+    def layers(*paints):
+        return {'Format': 1, 'Layers': list(paints)}
+
+    def line(stops, extend=ExtendMode.PAD):
+        return {'Extend': extend, 'ColorStop': [
+            {'StopOffset': offset, 'PaletteIndex': index, 'Alpha': alpha} for offset, index, alpha in stops]}
+
+    def composite(mode, source, backdrop):
+        return {'Format': 32, 'CompositeMode': mode, 'SourcePaint': source, 'BackdropPaint': backdrop}
+
+    eyes = glyph('layer.eyes', solid(BLACK))
+    paints = {
+        # A radial gradient, and a layer in the colour of the text
+        'u1F600': layers(
+            glyph('layer.face', {'Format': 6, 'ColorLine': line([(0.0, WHITE, 1.0), (1.0, YELLOW, 1.0)]),
+                                 'x0': 400, 'y0': 450, 'r0': 0, 'x1': 500, 'y1': 350, 'r1': 450}),
+            eyes,
+            glyph('layer.mouth', solid(FOREGROUND))),
+        # A linear gradient kept to the heart by SRC_IN, and a half-opaque highlight
+        'uni2764': layers(
+            composite(CompositeMode.SRC_IN,
+                      glyph('layer.square', {'Format': 4, 'ColorLine': line([(0.0, RED, 1.0), (1.0, YELLOW, 1.0)]),
+                                             'x0': 500, 'y0': 750, 'x1': 500, 'y1': -50, 'x2': 900, 'y2': 750}),
+                      glyph('layer.heart', solid(RED))),
+            glyph('layer.shine', solid(HALF_WHITE))),
+        # Scaled uniformly about the face's centre
+        'u1F468': {'Format': 22, 'scale': 0.8, 'centerX': 500, 'centerY': 350,
+                   'Paint': layers(glyph('layer.face', solid(BLUE)), eyes)},
+        # A reflected linear gradient whose alpha varies, and whose stops the font lists out of order
+        'u1F469': layers(
+            glyph('layer.face', {'Format': 4, 'ColorLine': line([(1.0, RED, 0.25), (0.0, RED, 1.0)], ExtendMode.REFLECT),
+                                 'x0': 400, 'y0': 0, 'x1': 600, 'y1': 0, 'x2': 400, 'y2': 200}),
+            eyes),
+        # A repeated radial gradient: rings
+        'u1F467': layers(
+            glyph('layer.face', {'Format': 6, 'ColorLine': line([(0.0, GREEN, 1.0), (1.0, WHITE, 1.0)], ExtendMode.REPEAT),
+                                 'x0': 500, 'y0': 350, 'r0': 0, 'x1': 500, 'y1': 350, 'r1': 120}),
+            eyes),
+        # An affine transform: turned a little and moved
+        'u1F1E6': {'Format': 12, 'Transform': {'xx': 0.9, 'yx': 0.1, 'xy': -0.1, 'yy': 0.9, 'dx': 80, 'dy': 0},
+                   'Paint': glyph('layer.square', solid(BLUE))},
+        # Another colour glyph drawn inside this one, and a stripe over it
+        'u1F1FA': layers({'Format': 11, 'Glyph': 'u1F1E6'}, glyph('layer.stripe', solid(RED))),
+        # Skewed, then rotated
+        'u1F3F4': {'Format': 24, 'angle': -10, 'Paint': {'Format': 28, 'xSkewAngle': 15, 'ySkewAngle': 0,
+                                                          'Paint': glyph('layer.pole', solid(BLACK))}},
+        # A sweep gradient, which mPDF draws in the colour of its middle stop
+        'u1F3FD': glyph('layer.square', {'Format': 8, 'ColorLine': line([(0.0, SKIN, 1.0), (0.5, RED, 1.0), (1.0, SKIN, 1.0)]),
+                                         'centerX': 500, 'centerY': 350, 'startAngle': 0, 'endAngle': 360}),
+        # Turned about its centre, and cut off by its clip box
+        'u1F44D': {'Format': 26, 'angle': 20, 'centerX': 500, 'centerY': 375, 'Paint': glyph('layer.thumb', solid(YELLOW))},
+        # The faces multiplied onto a yellow square
+        'u1F468_200D_u1F469_200D_u1F467': composite(
+            CompositeMode.MULTIPLY,
+            layers(glyph('layer.small.left', solid(BLUE)), glyph('layer.small.middle', solid(GREEN)),
+                   glyph('layer.small.right', solid(RED))),
+            glyph('layer.square', solid(YELLOW))),
+        'u1F1E6_u1F1FA': layers(
+            glyph('layer.square', {'Format': 4, 'ColorLine': line([(0.0, BLUE, 1.0), (1.0, GREEN, 1.0)]),
+                                   'x0': 50, 'y0': 0, 'x1': 950, 'y1': 0, 'x2': 50, 'y2': 900}),
+            glyph('layer.stripe', solid(WHITE))),
+        # The digit cut out of the key by DEST_OUT
+        'one_uni20E3': composite(CompositeMode.DEST_OUT, glyph('one', solid(BLACK)), glyph('layer.square', solid(GREY))),
+        # Moved, then scaled across
+        'u1F44D_u1F3FD': {'Format': 14, 'dx': 100, 'dy': 0, 'Paint': {
+            'Format': 16, 'scaleX': 0.8, 'scaleY': 1.0, 'Paint': glyph('layer.thumb', solid(SKIN))}},
+        # A Var paint, read as the paint it varies
+        'u1F3F4_E0067_E0062_E0065_E006E_E0067_E007F': layers(
+            glyph('layer.square', {'Format': 3, 'PaletteIndex': WHITE, 'Alpha': 1.0, 'VarIndexBase': 0xFFFFFFFF}),
+            glyph('layer.cross', solid(RED))),
+    }
+    # buildCOLR would move every paint version 0 can express into the version 0 records and out of the
+    # paints, so the two are built apart and put together
+    colr = buildCOLR(paints, version=1, glyphMap=fb.font.getReverseGlyphMap(), clipBoxes={'u1F44D': (50, -100, 950, 600)})
     populateCOLRv0(colr.table, colr_layers(), fb.font.getReverseGlyphMap())
     fb.font['COLR'] = colr
     fb.font['CPAL'] = buildCPAL([[tuple(c / 255 for c in (r, g, b, a)) for r, g, b, a in palette] for palette in PALETTES])

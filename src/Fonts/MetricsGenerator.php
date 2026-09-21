@@ -14,9 +14,10 @@ class MetricsGenerator
 	 * Regeneration is otherwise triggered only by the font file's size changing, so a release that
 	 * changes what a cache file *means* — the unit an offset is measured in, which table a blob
 	 * holds, the keys of an array — is served the old shape and reads it as the new one. Raise this
-	 * whenever that happens. Mpdf::AddFont() compares it and regenerates on a mismatch.
+	 * whenever that happens, and when ColorFormats::SOURCES gains a format. Mpdf::AddFont() compares it
+	 * and regenerates on a mismatch.
 	 */
-	const CACHE_FORMAT = 7;
+	const CACHE_FORMAT = 8;
 
 	/**
 	 * Whether cached metrics are in the shape this release writes - see CACHE_FORMAT
