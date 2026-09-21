@@ -817,12 +817,6 @@ parameters:
 			path: src/Mpdf.php
 
 		-
-			message: '#^Array has 2 duplicate keys with value ''rphf'' \(''rphf'', ''rphf''\)\.$#'
-			identifier: array.duplicateKey
-			count: 1
-			path: src/Otl.php
-
-		-
 			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
 			identifier: phpDoc.parseError
 			count: 2
