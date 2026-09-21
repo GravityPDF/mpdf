@@ -230,15 +230,15 @@ class Type3FontWriter implements GlyphResources
 	}
 
 	/**
-	 * Registers a graphics state filling at an opacity, once however many glyphs fill at it
+	 * Registers a graphics state painting at an opacity, once however many glyphs paint at it
 	 *
 	 * @param float $opacity From 0, transparent, to 1
 	 *
-	 * @return string Content setting fills to that opacity, e.g. '/GS2 gs'
+	 * @return string Content setting fills and strokes to that opacity, e.g. '/GS2 gs'
 	 */
 	public function alpha($opacity)
 	{
-		return $this->state(['BM' => '/Normal', 'ca' => $opacity]);
+		return $this->state(['BM' => '/Normal', 'ca' => $opacity, 'CA' => $opacity]);
 	}
 
 	/**

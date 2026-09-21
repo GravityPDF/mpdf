@@ -24,7 +24,7 @@ interface GlyphResources
 	/**
 	 * @param float $opacity From 0, transparent, to 1
 	 *
-	 * @return string Content setting fills to that opacity, e.g. '/GS2 gs'
+	 * @return string Content setting fills and strokes to that opacity, e.g. '/GS2 gs'
 	 */
 	public function alpha($opacity);
 

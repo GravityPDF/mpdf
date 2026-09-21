@@ -17,7 +17,7 @@ class MetricsGenerator
 	 * whenever that happens, and when ColorFormats::SOURCES gains a format. Mpdf::AddFont() compares it
 	 * and regenerates on a mismatch.
 	 */
-	const CACHE_FORMAT = 8;
+	const CACHE_FORMAT = 9;
 
 	/**
 	 * Whether cached metrics are in the shape this release writes - see CACHE_FORMAT

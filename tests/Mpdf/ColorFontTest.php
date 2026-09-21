@@ -30,6 +30,7 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				'sbix' => ['R' => 'TestEmoji-sbix.ttf', 'useOTL' => 0xFF],
 				'colr' => ['R' => 'TestEmoji-COLRv0.ttf', 'useOTL' => 0xFF],
 				'colrv1' => ['R' => 'TestEmoji-COLRv1.ttf', 'useOTL' => 0xFF],
+				'svg' => ['R' => 'TestEmoji-SVG.ttf', 'useOTL' => 0xFF],
 				'notoemoji' => ['R' => 'NotoEmoji-Regular.ttf'],
 			],
 			'default_font' => 'cbdt',
@@ -265,6 +266,28 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		// The groups draw with the font's resources
 		$this->assertSame($resources, $this->referenced($objects, $group, 'Resources'));
+	}
+
+	/**
+	 * TestEmoji-SVG's girl is a PNG, its heart a gradient and its woman clipped by a mask: each is named
+	 * by the font's own resources, and the glyphs draw them by those names. The flag of England, which
+	 * has no SVG document, is its outline.
+	 */
+	public function testAnSvgGlyphsImagesShadingsAndMasksAreTheFontsResources()
+	{
+		$objects = $this->objects([0x1F467, 0x2764, 0x1F469, 0x1F3F4, 0xE0067, 0xE0062, 0xE0065, 0xE006E, 0xE0067, 0xE007F], ['default_font' => 'svg']);
+		$resources = $this->referenced($objects, $this->objectMatching($objects, '/\/Subtype \/Type3/'), 'Resources');
+
+		$this->assertSame(1, preg_match('/(\/I\d+) Do/', $this->procedure($objects, 16), $girl));
+		$this->assertStringContainsString('/Subtype /Image', $this->referenced($objects, $resources, substr($girl[1], 1)));
+
+		$this->assertStringContainsString("W n\n/Sh1 sh\n", $this->procedure($objects, 13));
+		$this->assertStringStartsWith('<</ShadingType 2 /ColorSpace /DeviceRGB /Coords [500.000 -750.000 500.000 50.000]', $this->referenced($objects, $resources, 'Sh1'));
+
+		$this->assertSame(1, preg_match('/q\n\/(SM\d+) gs\n/', $this->procedure($objects, 15), $woman));
+		$this->assertStringContainsString('/S /Alpha', $this->referenced($objects, $resources, $woman[1]));
+
+		$this->assertStringContainsString("0 d0\n50 -100 m\n50 800 l\n950 800 l\n950 -100 l\nh\n420 -100 m\n", $this->procedure($objects, 26), 'the flag of England, from its outline');
 	}
 
 	/**

@@ -50,6 +50,12 @@ class ColorLine
 	const MAX_PARTS = 32;
 
 	/**
+	 * The most times a repeated or reflected gradient's stops are drawn over, either way from the stops
+	 * themselves
+	 */
+	const MAX_REPEATS = 64;
+
+	/**
 	 * @var int PAD, REPEAT or REFLECT. A value the spec does not define is PAD.
 	 */
 	public $extend;
@@ -132,6 +138,17 @@ class ColorLine
 		}
 
 		return $spread;
+	}
+
+	/**
+	 * @return array The colour of the middle stop, [[red, green, blue], alpha]: what a gradient PDF
+	 *               cannot draw is filled with
+	 */
+	public function middle()
+	{
+		$stop = $this->stops[(int) (count($this->stops) / 2)];
+
+		return [$stop[1], $stop[2]];
 	}
 
 	/**

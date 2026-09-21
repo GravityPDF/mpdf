@@ -3,7 +3,9 @@
 namespace Mpdf\Fonts\Color;
 
 use Mpdf\Fonts\FileReader;
+use Mpdf\Fonts\FontReader;
 use Mpdf\Fonts\GlyphOutline;
+use Mpdf\Log\Context as LogContext;
 use Mpdf\TTFontFile;
 use Psr\Log\LoggerInterface;
 
@@ -51,6 +53,16 @@ class ColorFontFile
 	private $palette;
 
 	/**
+	 * @var int[]|null
+	 */
+	private $bbox;
+
+	/**
+	 * @var true[] What has been logged, so each is logged once
+	 */
+	private $logged = [];
+
+	/**
 	 * @param TTFontFile      $font       The font, its table directory read
 	 * @param FileReader      $reader     The font file
 	 * @param int             $unitsPerEm
@@ -84,6 +96,42 @@ class ColorFontFile
 		}
 
 		return $this->outline;
+	}
+
+	/**
+	 * @return int[] The font's bounding box from head, [xMin, yMin, xMax, yMax], or all 0 where head
+	 *               is cut short
+	 */
+	public function bbox()
+	{
+		if ($this->bbox === null) {
+			$bytes = $this->reader->fieldsAt($this->table('head')[0] + 36, 8, 'a8');
+			$this->bbox = $bytes === null ? [0, 0, 0, 0] : array_map('Mpdf\Fonts\FontReader::int16', str_split($bytes[0], 2));
+		}
+
+		return $this->bbox;
+	}
+
+	/**
+	 * Logs part of a glyph that is not drawn as the font asks, once however many times it is met
+	 *
+	 * @param int    $glyph
+	 * @param string $what  What it is, e.g. 'a sweep gradient, which is drawn in one colour'
+	 */
+	public function warn($glyph, $what)
+	{
+		$this->log(sprintf('Colour glyph %d has %s', $glyph, $what));
+	}
+
+	/**
+	 * @param string $message Logged once, however many times it is met
+	 */
+	public function log($message)
+	{
+		if (!isset($this->logged[$message])) {
+			$this->logged[$message] = true;
+			$this->logger->warning($message, ['context' => LogContext::FONTS]);
+		}
 	}
 
 	/**

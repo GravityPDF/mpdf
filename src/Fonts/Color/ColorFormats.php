@@ -21,6 +21,7 @@ class ColorFormats
 	const SOURCES = [
 		'COLRv1' => 'Mpdf\Fonts\Color\ColrV1Source',
 		'COLRv0' => 'Mpdf\Fonts\Color\ColrV0Source',
+		'SVG' => 'Mpdf\Fonts\Color\SvgSource',
 		'CBDT' => 'Mpdf\Fonts\Color\CbdtSource',
 		'sbix' => 'Mpdf\Fonts\Color\SbixSource',
 	];
