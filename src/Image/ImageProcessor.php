@@ -1164,53 +1164,6 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Index a PNG's chunks
-	 *
-	 * The signature is PNG (Third Edition) 5.2 and the chunk layout 5.3: a four-byte length, a four-byte
-	 * type, that many bytes of data, then a four-byte CRC. IDAT is 11.2.3 and IEND 11.2.4.
-	 *
-	 * Walks the whole file, up to and including IEND. A caller after metadata wants pngChunksBeforeImageData(), which
-	 * stops at the image data; because this yields, stopping early costs the caller nothing it has not already read.
-	 *
-	 * @param string $data
-	 *
-	 * Yields rather than returns, for the same reason as jpgSegments().
-	 *
-	 * @return \Generator Each entry has a type, a size (of the chunk's data, so not counting the length, the type
-	 *                    or the CRC) and a payload offset, which is where that data starts
-	 */
-	private function pngChunks($data)
-	{
-		$length = strlen($data);
-
-		if (substr($data, 0, 8) !== chr(137) . 'PNG' . chr(13) . chr(10) . chr(26) . chr(10)) {
-			return;
-		}
-
-		$p = 8;
-
-		// Length, type and CRC come to 12 bytes around each chunk's data
-		while ($p + 12 <= $length) {
-
-			$size = $this->fourBytesToInt(substr($data, $p, 4));
-
-			if ($size < 0 || $p + 12 + $size > $length) {
-				break;
-			}
-
-			$type = substr($data, $p + 4, 4);
-
-			yield ['type' => $type, 'size' => $size, 'payload' => $p + 8];
-
-			if ($type === 'IEND') { // PNG 5.6: nothing follows the end of the datastream
-				break;
-			}
-
-			$p += 12 + $size;
-		}
-	}
-
-	/**
 	 * The first chunk of each type the metadata is read from, keyed by type
 	 *
 	 * Gives up at the image data, which PNG 5.6 has every one of those chunks precede. That is what keeps
@@ -1227,7 +1180,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 		$wanted = ['tRNS' => true, 'iCCP' => true, 'pHYs' => true, 'gAMA' => true, 'sRGB' => true];
 		$chunks = [];
 
-		foreach ($this->pngChunks($data) as $chunk) {
+		foreach (PngPixels::chunks($data) as $chunk) {
 
 			if ($chunk['type'] === 'IDAT') {
 				break;
@@ -1678,7 +1631,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			// mPDF 6 cannot have ICC profile and Indexed in a PDF document as both use the colorspace tag
 			$icc = $colspace === 'Indexed' ? false : $this->pngIccProfile($chunks, $data);
 
-			foreach ($this->pngChunks($data) as $chunk) {
+			foreach (PngPixels::chunks($data) as $chunk) {
 
 				$offset = $chunk['payload'];
 

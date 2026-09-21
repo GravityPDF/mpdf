@@ -2,6 +2,7 @@
 
 namespace Mpdf\Fonts;
 
+use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Mpdf;
 use Mpdf\Strict;
 use Mpdf\Unicode\Emoji;
@@ -55,11 +56,11 @@ class FontSubstitution
 	 */
 	public function emojiWantsAnotherFont(array $emoji, $presentation)
 	{
-		if (!$this->fontCovers($this->mpdf->CurrentFont['cw'], $emoji)) {
+		if (!$this->fontCovers($this->drawnWidths($this->mpdf->CurrentFont), $emoji)) {
 			return true;
 		}
 
-		if ($presentation === Emoji::PRESENTATION_DEFAULT || !empty($this->mpdf->CurrentFont['colorFormats']) === ($presentation === Emoji::PRESENTATION_EMOJI)) {
+		if ($presentation === Emoji::PRESENTATION_DEFAULT || (ColorFormats::drawn($this->mpdf->CurrentFont, $this->mpdf) !== '') === ($presentation === Emoji::PRESENTATION_EMOJI)) {
 			return false;
 		}
 
@@ -127,7 +128,8 @@ class FontSubstitution
 	 * The character widths of a font the substitution scan might move text into.
 	 *
 	 * Read from the font cache where the document has not loaded the font, so that trying a font does
-	 * not add it to the document, and loaded where the cache does not have it.
+	 * not add it to the document, and loaded where the cache does not have it. A font that draws nothing
+	 * here has no widths - see drawnWidths().
 	 *
 	 * @param string $family The font's key in fontdata
 	 *
@@ -136,7 +138,13 @@ class FontSubstitution
 	public function widths($family)
 	{
 		if (isset($this->mpdf->fonts[$family])) {
-			return $this->mpdf->fonts[$family]['cw'];
+			return $this->drawnWidths($this->mpdf->fonts[$family]);
+		}
+
+		// Only a font written as Type3 has its glyph map cached, and one of those draws nothing where
+		// the document may not draw colour
+		if (!ColorFormats::inColor($this->mpdf) && $this->fontCache->jsonHas($family . '.ctg.json')) {
+			return '';
 		}
 
 		if (!isset($this->widths[$family])) {
@@ -144,7 +152,7 @@ class FontSubstitution
 			if (null === $cw) {
 				$this->loadFont($family);
 
-				return isset($this->mpdf->fonts[$family]) ? $this->mpdf->fonts[$family]['cw'] : null;
+				return isset($this->mpdf->fonts[$family]) ? $this->drawnWidths($this->mpdf->fonts[$family]) : null;
 			}
 
 			$this->widths[$family] = $cw;
@@ -154,7 +162,7 @@ class FontSubstitution
 	}
 
 	/**
-	 * Whether a backup font is a colour font. The font is loaded to ask, so AddFont() decides whether
+	 * Whether a backup font is drawn in colour. The font is loaded to ask, so AddFont() decides whether
 	 * its cached metrics are still current.
 	 *
 	 * @param string $family The font's key in fontdata
@@ -167,7 +175,21 @@ class FontSubstitution
 			$this->loadFont($family);
 		}
 
-		return !empty($this->mpdf->fonts[$family]['colorFormats']);
+		return ColorFormats::drawn($this->mpdf->fonts[$family], $this->mpdf) !== '';
+	}
+
+	/**
+	 * The widths of the characters a font draws. A font whose glyphs exist only in a colour format the
+	 * document may not draw has none: to the substitution scan it lacks every character, so a backup
+	 * font that has them draws them instead. Its own widths still lay out what is left in it.
+	 *
+	 * @param array $font The font, as Mpdf::$fonts holds it
+	 *
+	 * @return string
+	 */
+	public function drawnWidths(array $font)
+	{
+		return ColorFormats::blank($font, $this->mpdf) ? '' : $font['cw'];
 	}
 
 	/**

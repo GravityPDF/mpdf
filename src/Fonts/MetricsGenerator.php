@@ -2,6 +2,7 @@
 
 namespace Mpdf\Fonts;
 
+use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\TTFontFile;
 
 class MetricsGenerator
@@ -15,7 +16,7 @@ class MetricsGenerator
 	 * holds, the keys of an array — is served the old shape and reads it as the new one. Raise this
 	 * whenever that happens. Mpdf::AddFont() compares it and regenerates on a mismatch.
 	 */
-	const CACHE_FORMAT = 5;
+	const CACHE_FORMAT = 6;
 
 	private $fontCache;
 
@@ -83,6 +84,12 @@ class MetricsGenerator
 		$this->fontCache->jsonWrite($fontkey . '.mtx.json', $font);
 		$this->fontCache->binaryWrite($fontkey . '.cw.dat', $ttf->charWidths);
 		$this->fontCache->binaryWrite($fontkey . '.gid.dat', $ttf->glyphIDtoUni);
+
+		// A font written as Type3 is drawn glyph by glyph, so the writer needs to know which glyph each
+		// character is, Private Use codes included
+		if (ColorFormats::drawable($ttf->colorFormats)) {
+			$this->fontCache->jsonWrite($fontkey . '.ctg.json', $ttf->charToGlyph);
+		}
 
 		if ($this->fontCache->has($fontkey . '.cgm')) {
 			$this->fontCache->remove($fontkey . '.cgm');

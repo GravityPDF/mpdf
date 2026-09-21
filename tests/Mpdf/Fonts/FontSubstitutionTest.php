@@ -9,8 +9,8 @@ use Mpdf\Unicode\Emoji;
 /**
  * The choices behind moving text into a backup font, asked of FontSubstitution directly.
  *
- * DejaVu Sans is the document font. Noto Emoji is a black and white emoji font and TestEmoji-COLRv0 a
- * colour one.
+ * DejaVu Sans is the document font. Noto Emoji is a black and white emoji font and TestEmoji-CBDT one
+ * mPDF draws in colour.
  */
 class FontSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -43,7 +43,7 @@ class FontSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontdata' => [
 				'dejavusans' => ['R' => 'DejaVuSans.ttf'],
 				'notoemoji' => ['R' => 'NotoEmoji-Regular.ttf', 'useOTL' => 0xFF],
-				'coloremoji' => ['R' => 'TestEmoji-COLRv0.ttf', 'useOTL' => 0xFF],
+				'coloremoji' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
 			],
 			'default_font' => 'dejavusans',
 			'backupSubsFont' => ['notoemoji', 'coloremoji'],

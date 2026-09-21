@@ -1,0 +1,332 @@
+<?php
+
+namespace Mpdf;
+
+use Mpdf\Fonts\FontRegistry;
+use Mpdf\Utils\UtfString;
+
+/**
+ * A colour font written as Type3 fonts, read back out of the PDF it is written into.
+ *
+ * TestEmoji-CBDT draws each emoji as a 64 pixel bitmap at 1000 units to the em; its space is glyph 1
+ * and draws nothing.
+ */
+class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
+{
+
+	/**
+	 * @param array $config Merged over the configuration below
+	 *
+	 * @return Mpdf
+	 */
+	private function mpdf(array $config = [])
+	{
+		$mpdf = new Mpdf($config + [
+			'mode' => 'utf-8',
+			'fontRegistry' => new FontRegistry([]),
+			'fontDir' => [__DIR__ . '/../data/ttf/color', __DIR__ . '/../../packages/Emoji/fonts'],
+			'fontdata' => [
+				'cbdt' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
+				'notoemoji' => ['R' => 'NotoEmoji-Regular.ttf'],
+			],
+			'default_font' => 'cbdt',
+		]);
+		$mpdf->SetCompression(false);
+
+		return $mpdf;
+	}
+
+	/**
+	 * @param int[] $codepoints The paragraph's text
+	 * @param array $config     Merged over mpdf()'s configuration
+	 *
+	 * @return string[] The document's objects, by number
+	 */
+	private function objects(array $codepoints, array $config = [])
+	{
+		$mpdf = $this->mpdf($config);
+		$mpdf->WriteHTML('<p>' . implode('', array_map('Mpdf\Utils\UtfString::code2utf', $codepoints)) . '</p>');
+
+		preg_match_all('/(?:^|\n)(\d+) 0 obj\n(.*?)\nendobj/s', $mpdf->OutputBinaryData(), $matches, PREG_SET_ORDER);
+
+		$objects = [];
+		foreach ($matches as $match) {
+			$objects[(int) $match[1]] = $match[2];
+		}
+
+		return $objects;
+	}
+
+	/**
+	 * @param string[] $objects The document's objects, by number
+	 * @param string   $pattern A regular expression
+	 *
+	 * @return string The one object whose body matches
+	 */
+	private function objectMatching(array $objects, $pattern)
+	{
+		$found = preg_grep($pattern, $objects);
+		$this->assertCount(1, $found, 'one object matching ' . $pattern);
+
+		return reset($found);
+	}
+
+	/**
+	 * @param string[] $objects The document's objects, by number
+	 * @param string   $font    The body of the object holding the reference
+	 * @param string   $key     The key it is under, e.g. 'ToUnicode'
+	 *
+	 * @return string The body of the object a reference names, e.g. '/ToUnicode 12 0 R'
+	 */
+	private function referenced(array $objects, $font, $key)
+	{
+		$this->assertSame(1, preg_match('/\/' . $key . ' (\d+) 0 R/', $font, $match), $key);
+
+		return $objects[(int) $match[1]];
+	}
+
+	/**
+	 * The font is scaled from font units by its matrix, and draws its glyphs' images from a resource
+	 * dictionary of its own. The page's would list the font itself, which Acrobat refuses to load.
+	 */
+	public function testAColourFontIsWrittenAsAType3FontWithResourcesOfItsOwn()
+	{
+		$objects = $this->objects([0x1F600]);
+		$font = $this->objectMatching($objects, '/\/Subtype \/Type3/');
+		$resources = $this->referenced($objects, $font, 'Resources');
+
+		$this->assertStringContainsString('/FontMatrix [0.0010000000 0 0 0.0010000000 0 0]', $font);
+		$this->assertStringNotContainsString('/Resources 2 0 R', $font);
+		$this->assertMatchesRegularExpression('/\/XObject <<\/I2 \d+ 0 R >>/', $resources);
+		$this->assertStringNotContainsString('/Font', $resources);
+	}
+
+	/**
+	 * d0 leaves the procedure free to set colours; the bitmap is placed in font units, and its alpha
+	 * is an image of its own that the bitmap names as its /SMask
+	 */
+	public function testAGlyphIsItsWidthAndItsBitmap()
+	{
+		$objects = $this->objects([0x1F600]);
+		$font = $this->objectMatching($objects, '/\/Subtype \/Type3/');
+		$procedures = $this->referenced($objects, $font, 'CharProcs');
+
+		$this->assertSame(1, preg_match('/\/g12 (\d+) 0 R/', $procedures, $match), 'the grinning face is glyph 12');
+		$this->assertStringContainsString("1000.000 0 d0\nq 1000.000 0 0 1000.000 0.000 -93.750 cm /I2 Do Q", $objects[(int) $match[1]]);
+
+		$image = $this->objectMatching($objects, '/\/Subtype \/Image.*\/SMask/s');
+		$this->assertStringContainsString('/Width 64', $image);
+		$this->assertStringContainsString('/ColorSpace /DeviceRGB', $image);
+		$this->assertMatchesRegularExpression('/\/I2 \d+ 0 R/', $objects[2]);
+	}
+
+	/**
+	 * The first 128 bytes are ASCII, so word spacing stretches the space at byte 32
+	 */
+	public function testTheSpaceIsByte32()
+	{
+		$font = $this->objectMatching($this->objects([0x1F600, 0x20, 0x1F600]), '/\/Subtype \/Type3/');
+
+		$this->assertStringContainsString('32 /g1 ', $font);
+	}
+
+	/**
+	 * Copied out of the PDF, the family is the ZWJ sequence it was typed as rather than the Private
+	 * Use code its ligature was handed
+	 */
+	public function testALigatureIsCopiedAsTheSequenceItWasFormedFrom()
+	{
+		$objects = $this->objects([0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467]);
+		$toUnicode = $this->referenced($objects, $this->objectMatching($objects, '/\/Subtype \/Type3/'), 'ToUnicode');
+
+		$this->assertStringContainsString('<D83DDC68200DD83DDC69200DD83DDC67>', $toUnicode);
+	}
+
+	/**
+	 * Each ligature copies out as what was typed: a flag's two regional indicators, a keycap's digit
+	 * and U+20E3 (its U+FE0F went before shaping), a thumb and its skin tone, and the flag of England
+	 * with its tags rather than the Private Use codes the shaper was handed for them
+	 *
+	 * @dataProvider sequences
+	 *
+	 * @param int[]  $codepoints What is typed
+	 * @param string $utf16      What the ToUnicode map gives back, as UTF-16BE hex
+	 */
+	public function testEachSequenceIsCopiedAsItWasTyped(array $codepoints, $utf16)
+	{
+		$objects = $this->objects($codepoints);
+		$toUnicode = $this->referenced($objects, $this->objectMatching($objects, '/\/Subtype \/Type3/'), 'ToUnicode');
+
+		$this->assertStringContainsString('<' . $utf16 . '>', $toUnicode);
+	}
+
+	/**
+	 * @return array[] Each sequence the fixture forms a ligature of, and what it copies out as
+	 */
+	public function sequences()
+	{
+		return [
+			'a flag' => [[0x1F1E6, 0x1F1FA], 'D83CDDE6D83CDDFA'],
+			'a keycap' => [[0x31, 0xFE0F, 0x20E3], '003120E3'],
+			'a skin tone' => [[0x1F44D, 0x1F3FD], 'D83DDC4DD83CDFFD'],
+			'the flag of England' => [
+				[0x1F3F4, 0xE0067, 0xE0062, 0xE0065, 0xE006E, 0xE0067, 0xE007F],
+				'D83CDFF4DB40DC67DB40DC62DB40DC65DB40DC6EDB40DC67DB40DC7F',
+			],
+		];
+	}
+
+	/**
+	 * With compression on, a glyph's procedure is written deflated, and inflates to what it draws
+	 */
+	public function testACompressedProcedureInflatesToTheGlyph()
+	{
+		$mpdf = $this->mpdf();
+		$mpdf->SetCompression(true);
+		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertSame(1, preg_match('/\/g12 (\d+) 0 R/', $pdf, $match), 'the grinning face is glyph 12');
+		$this->assertSame(1, preg_match('/\n' . $match[1] . ' 0 obj\n<<\/Filter \/FlateDecode \/Length (\d+)>>\nstream\n/', $pdf, $stream, PREG_OFFSET_CAPTURE));
+
+		$deflated = substr($pdf, $stream[0][1] + strlen($stream[0][0]), (int) $stream[1][0]);
+		$this->assertStringStartsWith("1000.000 0 d0\nq ", gzuncompress($deflated));
+	}
+
+	/**
+	 * Where the document may not draw colour, TestEmoji-CBDT - bitmaps and nothing else - has nothing
+	 * to draw. It is still written as a Type3 font, at its widths and with its ToUnicode map, but each
+	 * glyph draws nothing: the document is generated, the text keeps its place and copies out, and a
+	 * warning is logged.
+	 *
+	 * @dataProvider restrictions
+	 *
+	 * @param array $config What keeps colour out
+	 */
+	public function testAColourFontThatMayNotBeDrawnInColourDrawsNothingAndSaysSo(array $config)
+	{
+		$logger = new TestLogger();
+		$mpdf = $this->mpdf($config);
+		$mpdf->setLogger($logger);
+		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+
+		preg_match_all('/(?:^|\n)(\d+) 0 obj\n(.*?)\nendobj/s', $mpdf->OutputBinaryData(), $matches, PREG_SET_ORDER);
+		$objects = [];
+		foreach ($matches as $match) {
+			$objects[(int) $match[1]] = $match[2];
+		}
+
+		$font = $this->objectMatching($objects, '/\/Subtype \/Type3/');
+		$procedures = $this->referenced($objects, $font, 'CharProcs');
+		$this->assertSame(1, preg_match('/\/g12 (\d+) 0 R/', $procedures, $match));
+		$this->assertStringContainsString("stream\n1000.000 0 d0\n\nendstream", $objects[(int) $match[1]]);
+		$this->assertStringContainsString('<D83DDE00>', $this->referenced($objects, $font, 'ToUnicode'));
+		$this->assertEmpty(preg_grep('/\/Subtype \/Image/', $objects), 'no bitmap is written');
+		$this->assertStringContainsString('/Resources <<>>', $font, 'a glyph that draws nothing names no resource');
+
+		$this->assertSame([], $mpdf->PDFAXwarnings, 'a glyph that draws nothing is no conformance issue');
+		$this->assertTrue($logger->hasWarningThatContains('Colour font "cbdt" cannot be drawn in colour'));
+	}
+
+	/**
+	 * @return array[] Each setting that keeps colour out of a document
+	 */
+	public function restrictions()
+	{
+		return [
+			'restrictColorSpace' => [['restrictColorSpace' => 1]],
+			'PDF/A' => [['PDFA' => true]],
+			'PDF/A, fixed automatically' => [['PDFA' => true, 'PDFAauto' => true]],
+			'PDF/X' => [['PDFX' => true]],
+			'PDF/X, fixed automatically' => [['PDFX' => true, 'PDFXauto' => true]],
+		];
+	}
+
+	/**
+	 * In debug mode, a colour font drawing nothing stops the document rather than being logged
+	 */
+	public function testDebugModeRefusesAColourFontThatDrawsNothing()
+	{
+		$mpdf = $this->mpdf(['restrictColorSpace' => 1, 'debug' => true]);
+		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+
+		$this->expectException(MpdfException::class);
+		$this->expectExceptionMessage('Colour font "cbdt" cannot be drawn in colour');
+
+		$mpdf->OutputBinaryData();
+	}
+
+	/**
+	 * PDF/A is often switched on after the document is made, once the fonts it starts with are added,
+	 * and the colour font is still kept out of colour
+	 */
+	public function testPdfaSetAfterTheDocumentIsMadeStillKeepsColourOut()
+	{
+		$mpdf = $this->mpdf();
+		$mpdf->PDFA = true;
+		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertStringContainsString('/Subtype /Type3', $pdf);
+		$this->assertStringNotContainsString('/Subtype /Image', $pdf);
+	}
+
+	/**
+	 * A font whose glyph images cannot be decoded - here every PNG's header renamed - still makes a
+	 * document: each glyph is left blank at its width, and a warning is logged. Under showImageErrors
+	 * the document stops instead.
+	 */
+	public function testAFontWhoseImagesCannotBeDecodedLeavesItsGlyphsBlank()
+	{
+		$dir = sys_get_temp_dir() . '/mpdf-broken-cbdt-' . getmypid();
+		if (!is_dir($dir)) {
+			mkdir($dir);
+		}
+		$broken = str_replace('IHDR', 'IHDX', file_get_contents(__DIR__ . '/../data/ttf/color/TestEmoji-CBDT.ttf'));
+		file_put_contents($dir . '/TestEmoji-CBDT-broken.ttf', $broken);
+
+		$config = [
+			'fontDir' => [$dir],
+			'fontdata' => ['broken' => ['R' => 'TestEmoji-CBDT-broken.ttf', 'useOTL' => 0xFF]],
+			'default_font' => 'broken',
+		];
+
+		try {
+			$logger = new TestLogger();
+			$mpdf = $this->mpdf($config);
+			$mpdf->setLogger($logger);
+			$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+			$pdf = $mpdf->OutputBinaryData();
+
+			$this->assertStringContainsString("stream\n1000.000 0 d0\n\nendstream", $pdf);
+			$this->assertStringNotContainsString('/Subtype /Image', $pdf);
+			$this->assertTrue($logger->hasWarningThatContains('A glyph of colour font "broken" is left blank'));
+
+			$mpdf = $this->mpdf($config + ['showImageErrors' => true]);
+			$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+
+			$this->expectException(MpdfException::class);
+			$mpdf->OutputBinaryData();
+		} finally {
+			unlink($dir . '/TestEmoji-CBDT-broken.ttf');
+			rmdir($dir);
+		}
+	}
+
+	/**
+	 * A backup font that has the character draws it instead, and the colour font draws nothing and
+	 * says nothing
+	 */
+	public function testABackupFontDrawsWhatAColourFontMayNot()
+	{
+		$logger = new TestLogger();
+		$mpdf = $this->mpdf(['restrictColorSpace' => 1, 'useSubstitutions' => true, 'backupSubsFont' => ['notoemoji']]);
+		$mpdf->setLogger($logger);
+		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+		$mpdf->OutputBinaryData();
+
+		$this->assertTrue($mpdf->fonts['notoemoji']['used']);
+		$this->assertFalse($logger->hasWarningRecords());
+	}
+}
