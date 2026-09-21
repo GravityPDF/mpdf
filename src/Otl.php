@@ -1994,6 +1994,7 @@ class Otl
 			'rphf' => Indic::FLAG(Indic::RPHF),
 			'pref' => Indic::FLAG(Indic::PREF),
 			'blwf' => Indic::FLAG(Indic::BLWF),
+			'abvf' => Indic::FLAG(Indic::ABVF),
 			'half' => Indic::FLAG(Indic::HALF),
 			'pstf' => Indic::FLAG(Indic::PSTF),
 			'cfar' => Indic::FLAG(Indic::CFAR),

@@ -8,8 +8,8 @@ namespace Mpdf;
  * Otl::lookupsForStage() settles it, and states the rule: the masks are ORed, except that a feature
  * with no mask of its own is 0 here rather than a bit every glyph carries, so 0 absorbs. Only the
  * Khmer basic forms put masked and unmasked features in one stage - shapeIndic() asks for
- * 'locl ccmp pref blwf abvf pstf cfar' in a single call, of which indicFeatureMasks() masks pref,
- * blwf, pstf and cfar - and no font in tests/data/ttf offered the khmr script at all, let alone a
+ * 'locl ccmp pref blwf abvf pstf cfar' in a single call, of which indicFeatureMasks() leaves only
+ * locl and ccmp unmasked - and no font in tests/data/ttf offered the khmr script at all, let alone a
  * Lookup under two of those tags, which is why the line went in uncovered.
  *
  * Khmer-SharedMask is a subset of Battambang Regular 8.002 (Danh Hong, SIL OFL 1.1, fsType 0)
@@ -28,27 +28,25 @@ namespace Mpdf;
  *
  * The reordering marks a consonant after the base BLWF, ABVF and PSTF together, and the Coeng and
  * Ra of a Coeng+Ro sequence PREF, so pref's glyphs and blwf's are disjoint and the union of their
- * bits can be told from either of them alone. Each Lookup is stated twice, on a glyph it should
- * reach and on one it should not; lookup 0, which no second feature merges into, is the control.
+ * bits can be told from either of them alone. Lookup 3 is stated on a glyph of each and on one of
+ * neither; lookup 0, which no second feature merges into, is the control.
  *
- * `hb-shape` 14.3.1 draws every row the same way but the first:
+ * `hb-shape` 14.3.1 draws every row the same way:
  *
- *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1780 --no-positions
- *   [uni1780=0]
  *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1784,17D2,1780 --no-positions
  *   [uni1784=0|uni17D2=0|uni17D2_1780=2]
  *   $ hb-shape --font-file=Khmer-SharedMask-Synthetic.ttf --unicodes=1784,17D2,179A,17D2,1782 --no-positions
  *   [uni17D2=0|uni17D2179A=0|uni1784=0|uni17D2=0|uni17D2_1782=4]
  *
- * The last of those is what speaks for the union, because pref and blwf are in one stage of
+ * The second of those is what speaks for the union, because pref and blwf are in one stage of
  * HarfBuzz's Khmer plan too and it merges their masks the same way. Lookup 2 is no evidence either
  * way: HarfBuzz pauses to reorder between ccmp and the basic forms, so it takes that Lookup twice,
  * once unmasked, and reaches the same glyph by a route mPDF does not take.
  *
- * The lone uni1780 is the one row HarfBuzz draws differently, because it gives abvf a mask of its
- * own while indicFeatureMasks() leaves abvf out although the reordering sets Indic::ABVF on exactly
- * the glyphs it would cover. That is a gap of its own rather than anything this merge decides: give
- * abvf its bit and mPDF draws HarfBuzz's uni1780, with every other row below standing.
+ * Lookup 1 on a lone uni1780 was a row here until abvf was given its bit (#263), the one pinning the
+ * merge the other way about - a masked feature named first and an unmasked one second. That fix put
+ * the case out of reach: the Khmer basic forms are the only stage carrying masks at all, and abvf
+ * was the only tag in the list without one that followed a tag with one. AbvfMaskTest has the run.
  */
 class MergedLookupMaskTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -58,10 +56,6 @@ class MergedLookupMaskTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		// The forms no code point names are given one in the Private Use Area, in glyph order:
 		// uni17D21783, uni17D2179A, uni17D2_1780, uni17D2_1781, uni17D2_1782
 		return [
-			'a Lookup blwf and abvf share, on a base consonant blwf does not mark' => [
-				[0x1780],
-				[0xE002],
-			],
 			'a Lookup blwf and abvf share, on a below-base consonant blwf does mark' => [
 				[0x1784, 0x17D2, 0x1780],
 				[0x1784, 0x17D2, 0xE002],
