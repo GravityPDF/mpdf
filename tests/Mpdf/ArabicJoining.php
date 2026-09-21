@@ -133,7 +133,7 @@ class ArabicJoining
 	 * Whether this character can stand inside a run the Arabic shaper is given, which is the only way
 	 * either table is ever read.
 	 *
-	 * Otl::analyseCharacters() cuts a line into runs at each change of script and Otl::selectShaper()
+	 * ScriptRuns::split() cuts a line into runs at each change of script and Otl::selectShaper()
 	 * picks the shaper from the run's, so the four scripts of scripts() are in scope - Mongolian,
 	 * Phags-pa, Manichaean, Psalter Pahlavi, Chorasmian, Sogdian, Old Uyghur, Hanifi Rohingya and Adlam
 	 * have joining types in the same file, form runs of their own and shape elsewhere, and whether mPDF
@@ -141,12 +141,13 @@ class ArabicJoining
 	 */
 	private function inScope($codepoint)
 	{
-		// The three values analyseCharacters() refuses to start a run on - Common, Inherited and Unknown -
-		// leave the character in the run before it, so any of them can be read as part of an Arabic one.
-		// Unknown is how a codepoint newer than Ucdn's script table arrives, and it still unjoins the
-		// letter before it, so dropping those would be this same defect with a shorter fuse.
 		$script = Ucdn::get_script($codepoint);
-		if ($script === Ucdn::SCRIPT_COMMON || $script === Ucdn::SCRIPT_INHERITED || $script === Ucdn::SCRIPT_UNKNOWN) {
+
+		// A character that starts no run of its own is left in the run before it, so any of them can be
+		// read as part of an Arabic one. That includes Unknown, which is how a codepoint newer than
+		// Ucdn's script table arrives, and it still unjoins the letter before it, so dropping those
+		// would be this same defect with a shorter fuse.
+		if (!ScriptRuns::startsARun($script)) {
 			return true;
 		}
 

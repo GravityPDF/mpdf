@@ -163,8 +163,8 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A character Ucdn gives no script is written rather than dropped. Otl::analyseCharacters() will not
-	 * start a run on Unknown any more than on Common, so such a character stays in the run before it and
+	 * A character Ucdn gives no script is written rather than dropped. ScriptRuns::startsARun() is false
+	 * for Unknown as it is for Common, so such a character stays in the run before it and
 	 * the Arabic shaper is handed it anyway - which is how a joining type arrives that the script table has
 	 * not caught up with, and dropping those would be #251's defect again with a longer fuse.
 	 *

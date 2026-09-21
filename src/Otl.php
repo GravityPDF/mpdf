@@ -329,9 +329,7 @@ class Otl
 	 * Phase 2: what each character of the run is, and where the run changes script.
 	 *
 	 * A run can hold more than one script and each is shaped by different rules, so it is cut into
-	 * subchunks at every change and each is shaped on its own. Characters the Unicode data calls
-	 * Common or Inherited - punctuation, spaces, combining marks - carry no script of their own and
-	 * stay with whatever came before them.
+	 * subchunks at every change and each is shaped on its own. ScriptRuns::split() makes the cut.
 	 *
 	 * @return array [$OTLdata, $scriptblocks]: the characters of each subchunk, and which script
 	 *               each subchunk is
@@ -340,59 +338,43 @@ class Otl
 	{
 		$earr = $this->mpdf->UTF8StringToArray($str, false);
 
-		$scriptblock = 0;
+		// Unicode calls the Arabic End of Ayah Common, which would leave an ayah number to be shaped
+		// by whatever script it happened to follow
+		$runs = ScriptRuns::split($earr, [1757 => Ucdn::SCRIPT_ARABIC]);
+
 		$scriptblocks = [];
-		$scriptblocks[0] = 0;
-		$vstr = '';
 		$OTLdata = [];
-		$subchunk = 0;
-		$charctr = 0;
-		foreach ($earr as $char) {
-			$ucd_record = Ucdn::get_ucd_record($char);
-			$sbl = $ucd_record[6];
 
-			// Special case - Arabic End of Ayah
-			if ($char == 1757) {
-				$sbl = Ucdn::SCRIPT_ARABIC;
-			}
+		foreach ($runs as $subchunk => $run) {
+			$scriptblocks[$subchunk] = $run['script'];
 
-			if ($sbl && $sbl != Ucdn::SCRIPT_INHERITED && $sbl != Ucdn::SCRIPT_UNKNOWN) {
-				if ($scriptblock == 0) {
-					$scriptblock = $sbl;
-					$scriptblocks[$subchunk] = $scriptblock;
-				} elseif ($scriptblock > 0 && $scriptblock != $sbl) {
-					// NEW (non-common) Script encountered in this chunk. Start a new subchunk
-					$subchunk++;
-					$scriptblock = $sbl;
-					$charctr = 0;
-					$scriptblocks[$subchunk] = $scriptblock;
+			foreach ($run['characters'] as $charctr => $character) {
+				$char = $character['uni'];
+				$ucd_record = $character['record'];
+
+				$OTLdata[$subchunk][$charctr]['general_category'] = $ucd_record[0];
+				$OTLdata[$subchunk][$charctr]['bidi_type'] = $ucd_record[2];
+
+				//$OTLdata[$subchunk][$charctr]['combining_class'] = $ucd_record[1];
+				//$OTLdata[$subchunk][$charctr]['bidi_type'] = $ucd_record[2];
+				//$OTLdata[$subchunk][$charctr]['mirrored'] = $ucd_record[3];
+				//$OTLdata[$subchunk][$charctr]['east_asian_width'] = $ucd_record[4];
+				//$OTLdata[$subchunk][$charctr]['normalization_check'] = $ucd_record[5];
+				//$OTLdata[$subchunk][$charctr]['script'] = $ucd_record[6];
+
+				$charasstr = GlyphString::of($char);
+
+				if ($this->isMark($charasstr)) {
+					$OTLdata[$subchunk][$charctr]['group'] = 'M';
+				} elseif ($char == 32 || $char == 12288) { // 12288 = 0x3000 = CJK space
+					$OTLdata[$subchunk][$charctr]['group'] = 'S';
+				} else {
+					$OTLdata[$subchunk][$charctr]['group'] = 'C';
 				}
+
+				$OTLdata[$subchunk][$charctr]['uni'] = $char;
+				$OTLdata[$subchunk][$charctr]['hex'] = $charasstr;
 			}
-
-			$OTLdata[$subchunk][$charctr]['general_category'] = $ucd_record[0];
-			$OTLdata[$subchunk][$charctr]['bidi_type'] = $ucd_record[2];
-
-			//$OTLdata[$subchunk][$charctr]['combining_class'] = $ucd_record[1];
-			//$OTLdata[$subchunk][$charctr]['bidi_type'] = $ucd_record[2];
-			//$OTLdata[$subchunk][$charctr]['mirrored'] = $ucd_record[3];
-			//$OTLdata[$subchunk][$charctr]['east_asian_width'] = $ucd_record[4];
-			//$OTLdata[$subchunk][$charctr]['normalization_check'] = $ucd_record[5];
-			//$OTLdata[$subchunk][$charctr]['script'] = $ucd_record[6];
-
-			$charasstr = GlyphString::of($char);
-
-			if ($this->isMark($charasstr)) {
-				$OTLdata[$subchunk][$charctr]['group'] = 'M';
-			} elseif ($char == 32 || $char == 12288) {
-				$OTLdata[$subchunk][$charctr]['group'] = 'S';
-			} // 12288 = 0x3000 = CJK space
-			else {
-				$OTLdata[$subchunk][$charctr]['group'] = 'C';
-			}
-
-			$OTLdata[$subchunk][$charctr]['uni'] = $char;
-			$OTLdata[$subchunk][$charctr]['hex'] = $charasstr;
-			$charctr++;
 		}
 
 		return [$OTLdata, $scriptblocks];
