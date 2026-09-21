@@ -16,7 +16,8 @@ namespace Mpdf\Shaper;
  *
  * The third table stopped in the same place, with the same consequence the other way round: a mark
  * neither it nor the font's GDEF knew was read as a base, took a form of its own and broke the join
- * across itself (#259). The last two tests are that one.
+ * across itself (#259). The opposite error is the five Arabic presentation forms, which were read as
+ * transparent by hand where Unicode makes them bases (#267).
  */
 class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -228,27 +229,57 @@ class JoiningTableCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	}
 
 	/**
-	 * mPDF has read the five presentation-form ligatures as transparent since long before either table was
-	 * generated, and still does: they are no joining type Unicode states, so the generator cannot write
-	 * them and Shaper\Arabic keeps them by hand and merges them at run time. This is here so that the move
-	 * out of the generated table is not a silent change of behaviour.
+	 * DerivedJoiningType.txt lists none of U+FC5E..U+FC62, and its default for a codepoint it does not
+	 * list is Non_Joining, so no table the shaper reads states them. mPDF kept the five by hand and merged
+	 * them into the Transparent table at run time until #267; this says that list has not come back, for
+	 * all five rather than for the one alone that a font of the corpus can be asked about.
 	 *
-	 * HarfBuzz does not agree - DerivedJoiningType.txt lists none of the five, which leaves them
-	 * Non_Joining by that file's own default, and the join breaks across one:
+	 * @dataProvider dataPresentationLigatures
+	 */
+	public function testAPresentationFormLigatureIsInNoTableTheShaperReads($codepoint)
+	{
+		$this->assertArrayNotHasKey($codepoint, Arabic::$transparent);
+		$this->assertArrayNotHasKey($codepoint, Arabic::$leftJoining);
+		$this->assertArrayNotHasKey($codepoint, Arabic::$rightJoining);
+	}
+
+	public function dataPresentationLigatures()
+	{
+		return [
+			'U+FC5E' => [0xFC5E],
+			'U+FC5F' => [0xFC5F],
+			'U+FC60' => [0xFC60],
+			'U+FC61' => [0xFC61],
+			'U+FC62' => [0xFC62],
+		];
+	}
+
+	/**
+	 * What that costs a document that writes one of them between two letters. A Non_Joining character is
+	 * a base, so it breaks the join rather than being read over, where a fatha in the same place is read
+	 * over and the letters either side still see each other:
 	 *
 	 *   $ hb-shape --font-file=packages/Middle-East-Scripts-Bundle/fonts/LateefRegOT.ttf \
-	 *       --no-clusters --no-positions --unicodes=0628,FC5E,0645
+	 *       --no-clusters --no-positions --unicodes=0628,064E,0645
+	 *   [uni0645.fina|uni064E|uni0628.init]
+	 *   $ ... --unicodes=0628,FC5E,0645
 	 *   [uni0645|.notdef|uni0628]
 	 *
-	 * Whether mPDF should follow it is #267, not this.
+	 * Lateef draws no isolated Beh and no isolated Meem, so each side of the ligature comes out as the
+	 * nominal character, which is what the letter written alone is drawn as.
 	 */
-	public function testABehAndAMeemJoinThroughAPresentationFormLigature()
+	public function testABehAndAMeemStandApartAcrossAPresentationFormLigature()
 	{
+		$joined = $this->render([self::BEH, self::MEEM], 'lateef');
+		$behAlone = $this->render([self::BEH], 'lateef');
+		$meemAlone = $this->render([self::MEEM], 'lateef');
 		$throughFatha = $this->render([self::BEH, self::FATHA, self::MEEM], 'lateef');
 		$throughLigature = $this->render([self::BEH, '0FC5E', self::MEEM], 'lateef');
 
-		$this->assertSame($throughFatha[0], $throughLigature[0]);
-		$this->assertSame($throughFatha[2], $throughLigature[2]);
+		$this->assertSame($joined[0], $throughFatha[0], 'over a fatha the Beh still takes its initial form');
+		$this->assertSame($joined[1], $throughFatha[2], 'and the Meem its final');
+		$this->assertSame($behAlone[0], $throughLigature[0], 'across the ligature the Beh is unjoined');
+		$this->assertSame($meemAlone[0], $throughLigature[2], 'and so is the Meem');
 	}
 
 	/**
