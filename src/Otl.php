@@ -822,7 +822,7 @@ class Otl
 		// feature at a time for Indic once locl and ccmp have gone through together
 		$stages = $this->shaper == 'K'
 			? ['locl ccmp pref blwf abvf pstf cfar']
-			: ['locl ccmp', 'nukt', 'akhn', 'rphf', 'rkrf', 'pref', 'blwf', 'half', 'pstf', 'vatu', 'cjct'];
+			: ['locl ccmp', 'nukt', 'akhn', 'rphf', 'rkrf', 'pref', 'blwf', 'abvf', 'half', 'pstf', 'vatu', 'cjct'];
 		foreach ($stages as $tags) {
 			$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
 		}
