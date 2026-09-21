@@ -166,11 +166,14 @@ class LookupFlag
 	 * meant would shape silently wrong. Checked whenever the flag names a set, even where IgnoreMarks
 	 * makes the set moot.
 	 *
+	 * A font with no marks at all has nothing for a set to filter, so the set it names is moot as
+	 * well. That is every font without GDEF, which HarfBuzz reads the same way.
+	 *
 	 * @throws \Mpdf\Exception\FontException
 	 */
 	public function checkMarkFilteringSet($flag, $markFilteringSet)
 	{
-		if (($flag & self::USE_MARK_FILTERING_SET) && !isset($this->gdef['MarkGlyphSets'][$markFilteringSet])) {
+		if (($flag & self::USE_MARK_FILTERING_SET) && $this->gdef['GlyphClassMarks'] !== '' && !isset($this->gdef['MarkGlyphSets'][$markFilteringSet])) {
 			throw new FontException(sprintf('Font "%s" uses mark filtering set %s, which GDEF does not define', $this->fontkey, $markFilteringSet));
 		}
 	}
@@ -238,6 +241,10 @@ class LookupFlag
 	{
 		if (isset($this->marksOutsideFilteringSets[$markFilteringSet])) {
 			return $this->marksOutsideFilteringSets[$markFilteringSet];
+		}
+
+		if ($this->gdef['GlyphClassMarks'] === '') {
+			return $this->marksOutsideFilteringSets[$markFilteringSet] = '';
 		}
 
 		$keep = [];

@@ -113,10 +113,9 @@ class ShapingGoldenMaster extends GoldenMaster
 
 		try {
 			// Setting it as the default font loads and caches it during construction, and puts it in
-			// CurrentFont, which is where applyOTL reads it from. A font with no OTL tables is refused
-			// there rather than shaped, and is recorded as refused: that is a parser answer the other
-			// masters already state, and stating it here too keeps a font that starts shaping a diff
-			// rather than a fixture nobody committed.
+			// CurrentFont, which is where applyOTL reads it from. A font mPDF refuses there is recorded
+			// as refused, so a font that starts shaping is a diff rather than a fixture nobody
+			// committed.
 			$mpdf = new Mpdf([
 				'mode' => 'utf-8',
 				'tempDir' => $this->tmpDir,

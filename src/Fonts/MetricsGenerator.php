@@ -15,7 +15,7 @@ class MetricsGenerator
 	 * holds, the keys of an array — is served the old shape and reads it as the new one. Raise this
 	 * whenever that happens. Mpdf::AddFont() compares it and regenerates on a mismatch.
 	 */
-	const CACHE_FORMAT = 4;
+	const CACHE_FORMAT = 5;
 
 	private $fontCache;
 
@@ -75,6 +75,8 @@ class MetricsGenerator
 			'GPOSFeatures' => $ttf->GPOSFeatures,
 			'GPOSLookups' => $ttf->GPOSLookups,
 			'kerninfo' => $ttf->kerninfo,
+			'colorFormats' => $ttf->colorFormats,
+			'tagChars' => $ttf->tagChars,
 			'cacheFormat' => self::CACHE_FORMAT,
 		];
 

@@ -138,18 +138,6 @@ class UcdnTables
 	}
 
 	/**
-	 * Reads one file of the database.
-	 *
-	 * @return string[] the file's lines
-	 */
-	public function lines($name)
-	{
-		$url = 'https://www.unicode.org/Public/' . $this->version . '/ucd/' . $name;
-
-		return explode("\n", $this->cached($this->files . '/' . basename($name), $url));
-	}
-
-	/**
 	 * One byte per codepoint for each of the record's seven fields, in the order the record holds
 	 * them. The general category, the canonical combining class and whether the character mirrors are
 	 * the three no derived file states more completely, so they come from UnicodeData.txt; the rest

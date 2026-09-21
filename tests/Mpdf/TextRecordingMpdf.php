@@ -34,4 +34,14 @@ class TextRecordingMpdf extends Mpdf
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);
 	}
 
+	/**
+	 * @param int $i Which recorded Cell() call, from 0
+	 *
+	 * @return int[] The codepoints of the $i-th line drawn
+	 */
+	public function drawnCodepoints($i)
+	{
+		return $this->UTF8StringToArray($this->drawnText[$i], false);
+	}
+
 }

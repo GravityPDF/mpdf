@@ -47,11 +47,6 @@ class GoldenMasterUpdate
 		foreach ($names as $name) {
 			$file = $master->update($name);
 
-			if ($file === null) {
-				printf("%s: no OTL tables, no fixture\n", $name);
-				continue;
-			}
-
 			printf("%s: %s written, %d bytes\n", $name, realpath($file), filesize($file));
 		}
 

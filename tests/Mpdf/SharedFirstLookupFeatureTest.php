@@ -24,9 +24,8 @@ use Mpdf\Fonts\FontCache;
  * forms. In the rest the recovered tag's lookups are all named by the tag that survived as well, so
  * what the collision cost there was the selection alone.
  *
- * The four Aboriginal families hold twenty more collisions between them, 'ccmp' against 'liga', but
- * carry no GDEF table, so getMetrics() refuses them under useOTL and never builds a row of theirs at
- * all.
+ * The four Aboriginal families hold twenty more collisions between them, 'ccmp' against 'liga' in each
+ * script and cut, and one case stands for them all.
  *
  * The fonts from outside tests/data/ttf are read where they sit in packages/: everything in
  * tests/data/ttf carries four golden master fixtures, and these three fonts would be asking for twelve
@@ -84,6 +83,13 @@ class SharedFirstLookupFeatureTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 				'hang',
 				'KOR ',
 				['vert' => [16], 'vrt2' => [16]],
+			],
+			'Aboriginal Sans: ccmp and liga both start at lookup 3, in a font with no GDEF' => [
+				'packages/Aboriginal-Family/fonts/AboriginalSansREGULAR.ttf',
+				'GSUBFeatures',
+				'DFLT',
+				'DFLT',
+				['ccmp' => [3, 4, 5], 'liga' => [3, 4, 5, 8]],
 			],
 			'ayar: clig and liga name the same fifty lookups, starting at 0' => [
 				'packages/Myanmar-Bundle/fonts/ayar.ttf',

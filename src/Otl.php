@@ -169,6 +169,12 @@ class Otl
 
 	var $GDEFdata;
 
+	/**
+	 * @var string[][] Each font's tag characters as UTF-8, to the UTF-8 of the code prepareEmoji() hands
+	 *                 the shaper instead, by fontkey
+	 */
+	private $tagAliases = [];
+
 	var $GPOSLookups;
 
 	var $GSLuCoverage;
@@ -211,6 +217,9 @@ class Otl
 	function applyOTL($str, $useOTL)
 	{
 		$this->OTLdata = [];
+		if ($useOTL) {
+			$str = $this->prepareEmoji($str);
+		}
 		if (trim($str) == '') {
 			return $str;
 		}
@@ -290,6 +299,40 @@ class Otl
 		} // END foreach subchunk
 		// 11. Re-assemble and return text string
 		return $this->reassemble($subchunk);
+	}
+
+	/**
+	 * What HarfBuzz does to an emoji before GSUB sees it.
+	 *
+	 * A presentation selector chooses a font rather than a glyph, and mPDF chose the font before the
+	 * text got here. HarfBuzz hides a selector the font has no variant for, which is every selector to
+	 * a shaper that reads no cmap format 14, and emoji fonts leave them out of the sequences their
+	 * ligatures match: Noto forms a keycap from the digit and U+20E3 alone, and would not form it with
+	 * the U+FE0F still between them.
+	 *
+	 * A tag is handed the code the parser read its glyph at - see TTFontFile::$tagChars.
+	 *
+	 * @param string $str UTF-8
+	 *
+	 * @return string
+	 */
+	private function prepareEmoji($str)
+	{
+		$str = str_replace(["\xef\xb8\x8e", "\xef\xb8\x8f"], '', $str);
+
+		$font = $this->mpdf->CurrentFont;
+		if (!empty($font['tagChars']) && preg_match('/[\x{E0020}-\x{E007F}]/u', $str)) {
+			if (!isset($this->tagAliases[$font['fontkey']])) {
+				$aliases = [];
+				foreach ($font['tagChars'] as $tag => $char) {
+					$aliases[UtfString::code2utf($tag)] = UtfString::code2utf($char);
+				}
+				$this->tagAliases[$font['fontkey']] = $aliases;
+			}
+			$str = strtr($str, $this->tagAliases[$font['fontkey']]);
+		}
+
+		return $str;
 	}
 
 	/**

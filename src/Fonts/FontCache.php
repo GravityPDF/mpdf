@@ -87,8 +87,14 @@ class FontCache
 		return $this->cache->write($filename, $data);
 	}
 
+	/**
+	 * Forgets what was remembered of the entry, so a font regenerated over a stale entry reads back what
+	 * was just written.
+	 */
 	public function jsonWrite($filename, $data)
 	{
+		unset($this->memoryCache[$filename]);
+
 		return $this->cache->write($filename, json_encode($data));
 	}
 

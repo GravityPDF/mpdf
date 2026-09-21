@@ -21,6 +21,7 @@ use Mpdf\Utils\Path;
 use Psr\Log\NullLogger;
 use Mpdf\Unicode\Ucdn;
 use Mpdf\Unicode\Bidi;
+use Mpdf\Unicode\Emoji;
 
 /**
  * mPDF, PHP library generating PDF files from UTF-8 encoded HTML
@@ -905,6 +906,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * @var \Mpdf\Fonts\FontCache
 	 */
 	private $fontCache;
+
+	/**
+	 * @var \Mpdf\Fonts\FontSubstitution
+	 */
+	private $fontSubstitution;
 
 	/**
 	 * @var \Mpdf\Fonts\FontFileFinder
@@ -3995,6 +4001,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'GPOSFeatures' => [],
 			'GPOSLookups' => [],
 			'rtlPUAstr' => '',
+			'colorFormats' => [],
+			'tagChars' => [],
 			'cacheFormat' => 0,
 		];
 
@@ -4127,6 +4135,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'haskerninfo' => $font['haskerninfo'],
 			'haskernGPOS' => $font['haskernGPOS'],
 			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
+			'colorFormats' => $font['colorFormats'],
+			'tagChars' => $font['tagChars'],
 		];
 
 
@@ -13753,8 +13763,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						OtlData::removeChar($e, $this->OTLdata, "\xef\xbb\xbf", $this->mb_enc); // Remove ZWNBSP (also Byte order mark FEFF)
 					} /* -- END OTL -- */
 					else {
-						// removes U+200E/U+200F LTR and RTL mark and U+200C/U+200D Zero-width Joiner and Non-joiner
-						$e = preg_replace("/[\xe2\x80\x8c\xe2\x80\x8d\xe2\x80\x8e\xe2\x80\x8f]/u", '', $e);
+						// removes U+200E/U+200F LTR and RTL mark, U+200C/U+200D Zero-width Joiner and Non-joiner,
+						// and the U+FE0E/U+FE0F presentation selectors, which chose the font and draw nothing
+						$e = preg_replace("/[\x{200C}-\x{200F}\x{FE0E}\x{FE0F}]/u", '', $e);
 						$e = preg_replace("/[\xef\xbb\xbf]/u", '', $e); // Remove ZWNBSP (also Byte order mark FEFF)
 					}
 				}
@@ -25850,12 +25861,41 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$cw = &$this->CurrentFont['cw'];
 		$unicode = $this->UTF8StringToArray($writehtml_e, false);
 		$start = -1;
-		$end = 0;
 		$flag = 0;
 		$ftype = '';
 		$u = [];
+		// Every emoji is outside ASCII, a keycap's U+20E3 included
+		$emojiClusters = preg_match('/[^\x00-\x7F]/', $writehtml_e) ? Emoji::clusters($unicode) : [];
+		$codepointCount = count($unicode);
 
-		foreach ($unicode as $c => $char) {
+		// Not foreach, so the loop can jump past the rest of a multi-codepoint sequence once it has been handled
+		for ($c = 0; $c < $codepointCount; $c++) {
+			$char = $unicode[$c];
+
+			// An emoji moves whole or not at all, so its joiners and selectors go with it to the font
+			// whose GSUB joins them
+			if (isset($emojiClusters[$c])) {
+				// An emoji ends a SIP run; it is handled on the next pass
+				if ($flag == 2) {
+					break;
+				}
+
+				$length = $emojiClusters[$c][0];
+				$emoji = array_slice($unicode, $c, $length);
+
+				if ($this->fontSubstitution->emojiWantsAnotherFont($emoji, $emojiClusters[$c][1])) {
+					if ($flag == 0) {
+						$start = $c;
+					}
+					$flag = 1;
+					$u = array_merge($u, $emoji);
+				} elseif ($flag > 0) {
+					break;
+				}
+
+				$c += $length - 1;
+				continue;
+			}
 
 			if (($flag == 0 || $flag == 2) && (!$this->_charDefined($cw, $char) || ($flag == 2 && $char == 32)) && $this->checkSIP && $char > 131071) {  // Unicode Plane 2 (SIP)
 
@@ -25883,14 +25923,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			} elseif ($flag > 0) {
 
-				$end = $c - 1;
 				break;
 
 			}
-		}
-
-		if ($flag > 0 && !$end) {
-			$end = count($unicode) - 1;
 		}
 
 		if ($start == -1) {
@@ -25903,21 +25938,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) {
 				$font = $this->CurrentFont['sipext'];
 				unset($cw);
-				$cw = '';
-
-				if (isset($this->fonts[$font])) {
-					$cw = &$this->fonts[$font]['cw'];
-				} else {
-					$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
-
-					if (null === $cw) {
-						$prevFontFamily = $this->FontFamily;
-						$prevFontStyle = $this->currentfontstyle;
-						$prevFontSizePt = $this->FontSizePt;
-						$this->SetFont($font, '', '', false);
-						$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-					}
-				}
+				$cw = $this->fontSubstitution->widths($font);
 
 				if (!$cw) {
 					return 0;
@@ -25954,21 +25975,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				unset($cw);
-				$cw = '';
-
-				if (isset($this->fonts[$font])) {
-					$cw = &$this->fonts[$font]['cw'];
-				} else {
-					$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
-
-					if (null === $cw) {
-						$prevFontFamily = $this->FontFamily;
-						$prevFontStyle = $this->currentfontstyle;
-						$prevFontSizePt = $this->FontSizePt;
-						$this->SetFont($this->backupSIPFont, '', '', false);
-						$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-					}
-				}
+				$cw = $this->fontSubstitution->widths($font);
 
 				if (!$cw) {
 					return 0;
@@ -25997,8 +26004,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return 0;
 		}
 
-		// FIRST TRY CORE FONTS (when appropriate)
-		if (!$this->PDFA && !$this->PDFX && !$this->biDirectional) {  // mPDF 6
+		$presentation = isset($emojiClusters[$start]) ? $emojiClusters[$start][1] : Emoji::PRESENTATION_DEFAULT;
+		list($backupFonts, $preferred) = $this->fontSubstitution->backupFontOrder($presentation);
+
+		// FIRST TRY CORE FONTS (when appropriate), which draw no emoji in colour
+		if (!$this->PDFA && !$this->PDFX && !$this->biDirectional && !($preferred && $presentation === Emoji::PRESENTATION_EMOJI)) {  // mPDF 6
 			$repl = [];
 			if (!$this->subArrMB) {
 				require __DIR__ . '/../data/subs_core.php';
@@ -26050,54 +26060,44 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		// LASTLY TRY IN BACKUP SUBS FONT
-		if (!is_array($this->backupSubsFont)) {
-			$this->backupSubsFont = ["$this->backupSubsFont"];
-		}
-
-		foreach ($this->backupSubsFont as $bsfctr => $bsf) {
-			if ($this->currentfontfamily != $bsf) {
-				$font = $bsf;
-			} else {
+		$last = count($backupFonts) - 1;
+		foreach ($backupFonts as $bsfctr => $font) {
+			if ($this->currentfontfamily == $font) {
 				continue;
 			}
 
 			unset($cw);
-			$cw = '';
-
-			if (isset($this->fonts[$font])) {
-				$cw = &$this->fonts[$font]['cw'];
-			} else {
-				$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
-
-				if (null === $cw) {
-					$prevFontFamily = $this->FontFamily;
-					$prevFontStyle = $this->currentfontstyle;
-					$prevFontSizePt = $this->FontSizePt;
-					$this->SetFont($bsf, '', '', false);
-					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-					$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
-				}
-			}
-
+			$cw = $this->fontSubstitution->widths($font);
 			if (!$cw) {
 				continue;
 			}
 
+			// How much of the run this font takes, which ends at an emoji asking for another
+			// presentation than the first: that is tried against the fonts in its own order
 			$l = 0;
-			foreach ($u as $char) {
-				if ($char == 173 || $this->_charDefined($cw, $char) || ($char > 1536 && $char < 1791) || ($char > 2304 && $char < 3455 )) {  // Arabic and Indic
-					$l++;
+			$n = count($u);
+			while ($l < $n) {
+				if (isset($emojiClusters[$start + $l])) {
+					list($length, $clusterPresentation) = $emojiClusters[$start + $l];
+					$covered = ($l === 0 || $clusterPresentation === $presentation) && $this->fontSubstitution->fontCovers($cw, array_slice($u, $l, $length));
 				} else {
-					if ($l == 0 && $bsfctr == (count($this->backupSubsFont) - 1)) { // Not found even in last backup font
-						$cont = mb_substr($writehtml_e, $start + 1);
-						$writehtml_a[$writehtml_i] = $writehtml_e = mb_substr($writehtml_e, 0, $start + 1);
+					$length = 1;
+					$char = $u[$l];
+					$covered = $char == 173 || $this->_charDefined($cw, $char) || ($char > 1536 && $char < 1791) || ($char > 2304 && $char < 3455); // Arabic and Indic
+				}
+
+				if (!$covered) {
+					if ($l == 0 && $bsfctr == $last) { // Not found even in last backup font
+						$cont = mb_substr($writehtml_e, $start + $length);
+						$writehtml_a[$writehtml_i] = $writehtml_e = mb_substr($writehtml_e, 0, $start + $length);
 						array_splice($writehtml_a, $writehtml_i + 1, 0, ['', $cont]);
 						$this->subPos = $writehtml_i + 1;
 						return 2;
-					} else {
-						break;
 					}
+					break;
 				}
+
+				$l += $length;
 			}
 
 			if ($l > 0) {
