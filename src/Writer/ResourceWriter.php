@@ -113,6 +113,9 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->imageWriter->writeImages();
 
+		// After the images, which the colour fonts' resource dictionaries name by object number
+		$this->fontWriter->writeType3Resources();
+
 		$this->formWriter->writeFormObjects();
 
 		$this->mpdf->writeImportedPagesAndResolvedObjects();

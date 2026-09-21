@@ -9762,6 +9762,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->Close();
 		}
 
+		$this->reportBlankColorFonts();
+
 		if ($this->debug && error_get_last()) {
 			$e = error_get_last();
 			if (($e['type'] < 2048 && $e['type'] != 8) || (intval($e['type']) & intval(ini_get("error_reporting")))) {
@@ -25861,7 +25863,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return 0;
 		}
 
-		$cw = &$this->CurrentFont['cw'];
+		$cw = $this->fontSubstitution->drawnWidths($this->CurrentFont);
 		$unicode = $this->UTF8StringToArray($writehtml_e, false);
 		$start = -1;
 		$flag = 0;
@@ -26117,6 +26119,32 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		unset($cw);
 
 		return 0;
+	}
+
+	/**
+	 * A colour font the document may not draw in colour draws its glyphs blank - see
+	 * ColorFormats::blank(). Each one the document drew text in is logged, and refused in debug mode.
+	 *
+	 * @throws \Mpdf\MpdfException In debug mode, where there is one
+	 */
+	private function reportBlankColorFonts()
+	{
+		foreach ($this->fonts as $fontkey => $font) {
+			if (empty($font['used']) || !ColorFormats::blank($font, $this)) {
+				continue;
+			}
+
+			$message = sprintf(
+				'Colour font "%s" cannot be drawn in colour under PDF/A-1b, PDF/X-1a or restrictColorSpace, so the characters drawn in it are left blank. A font in backupSubsFont that has them draws them instead.',
+				$fontkey
+			);
+
+			if ($this->debug) {
+				throw new \Mpdf\MpdfException($message);
+			}
+
+			$this->logger->warning($message, ['context' => LogContext::FONTS]);
+		}
 	}
 
 	function setHiEntitySubstitutions()

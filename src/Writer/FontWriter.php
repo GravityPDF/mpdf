@@ -3,15 +3,19 @@
 namespace Mpdf\Writer;
 
 use Mpdf\Strict;
+use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\FontSubsetter;
 use Mpdf\Mpdf;
+use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
 use Mpdf\TTFontFile;
+use Psr\Log\LoggerInterface;
 
-class FontWriter
+class FontWriter implements \Psr\Log\LoggerAwareInterface
 {
 
 	use Strict;
+	use PsrLogAwareTrait;
 
 	/**
 	 * @var \Mpdf\Mpdf
@@ -34,18 +38,25 @@ class FontWriter
 	private $fontDescriptor;
 
 	/**
-	 * @param Mpdf       $mpdf           The document being written
-	 * @param BaseWriter $writer         Where the PDF objects go
-	 * @param FontCache  $fontCache      Where a parsed font and its width tables are kept
-	 * @param string     $fontDescriptor Which of the font's three sets of vertical metrics to
-	 *                                   believe: 'winTypo', 'mac' or 'win'
+	 * @var Type3FontWriter|null
 	 */
-	public function __construct(Mpdf $mpdf, BaseWriter $writer, FontCache $fontCache, $fontDescriptor)
+	private $type3FontWriter;
+
+	/**
+	 * @param Mpdf            $mpdf           The document being written
+	 * @param BaseWriter      $writer         Where the PDF objects go
+	 * @param FontCache       $fontCache      Where a parsed font and its width tables are kept
+	 * @param string          $fontDescriptor Which of the font's three sets of vertical metrics to
+	 *                                        believe: 'winTypo', 'mac' or 'win'
+	 * @param LoggerInterface $logger         Told of a colour glyph that cannot be drawn
+	 */
+	public function __construct(Mpdf $mpdf, BaseWriter $writer, FontCache $fontCache, $fontDescriptor, LoggerInterface $logger)
 	{
 		$this->mpdf = $mpdf;
 		$this->writer = $writer;
 		$this->fontCache = $fontCache;
 		$this->fontDescriptor = $fontDescriptor;
+		$this->logger = $logger;
 	}
 
 	/**
@@ -172,6 +183,11 @@ class FontWriter
 				// Or Unicode Plane 1 - Supplementary Multilingual Plane
 
 				if (!$font['used']) {
+					continue;
+				}
+
+				if (ColorFormats::drawable($font['colorFormats'])) {
+					$this->type3FontWriter()->writeFont($k, $font);
 					continue;
 				}
 
@@ -494,6 +510,30 @@ class FontWriter
 	private function subsetter()
 	{
 		return new FontSubsetter(new TTFontFile($this->fontCache, $this->fontDescriptor));
+	}
+
+	/**
+	 * Writes the resource dictionaries of the fonts written as Type3, which name their images by object
+	 * number, so this follows ImageWriter::writeImages()
+	 */
+	public function writeType3Resources()
+	{
+		if ($this->type3FontWriter) {
+			$this->type3FontWriter->writeResources();
+		}
+	}
+
+	/**
+	 * @return Type3FontWriter What writes a font drawn in colour: one for the document, which keeps the
+	 *                         resource dictionaries of the fonts it wrote until writeType3Resources()
+	 */
+	private function type3FontWriter()
+	{
+		if (!$this->type3FontWriter) {
+			$this->type3FontWriter = new Type3FontWriter($this->mpdf, $this->writer, $this->fontCache, $this->fontDescriptor, $this->logger);
+		}
+
+		return $this->type3FontWriter;
 	}
 
 	/**

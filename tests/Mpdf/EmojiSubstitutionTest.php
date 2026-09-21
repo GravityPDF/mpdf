@@ -9,9 +9,9 @@ use Mpdf\Fonts\FontRegistry;
  *
  * The document font is DejaVu Sans unless a test says otherwise. It has the grinning face, the heart,
  * the digits, the joiner and both selectors, but no people, flags or keycap. The backup fonts are Noto
- * Emoji, which is black and white, and TestEmoji-COLRv0 and TestEmoji-CBDT, which are in colour. All
- * carry the same ligatures - a family, a flag, a keycap and a thumb with its skin tone - and none has
- * GDEF.
+ * Emoji, which is black and white, and TestEmoji-CBDT, which mPDF draws in colour. The CBDT font is
+ * also registered a second time, as bitmapemoji, where a test needs two colour fonts. All carry the
+ * same ligatures - a family, a flag, a keycap and a thumb with its skin tone - and none has GDEF.
  */
 class EmojiSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -38,7 +38,7 @@ class EmojiSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontdata' => [
 				'dejavusans' => ['R' => 'DejaVuSans.ttf'],
 				'notoemoji' => ['R' => 'NotoEmoji-Regular.ttf', 'useOTL' => 0xFF],
-				'coloremoji' => ['R' => 'TestEmoji-COLRv0.ttf', 'useOTL' => 0xFF],
+				'coloremoji' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
 				'bitmapemoji' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
 				'sunextb' => ['R' => 'Sun-ExtB.ttf'],
 			],

@@ -19,4 +19,6 @@ class Context
 
 	const HTML_MARKUP = 'html_markup';
 
+	const FONTS = 'fonts';
+
 }
