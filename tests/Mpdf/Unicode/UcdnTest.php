@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\Unicode;
 
 /**
  * The tables Ucdn reads a character's properties from used to stop at Unicode 6.1, so everything
@@ -107,7 +107,7 @@ class UcdnTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function scriptConstants()
 	{
-		$reflection = new \ReflectionClass('Mpdf\Ucdn');
+		$reflection = new \ReflectionClass('Mpdf\Unicode\Ucdn');
 		$scripts = [];
 
 		foreach ($reflection->getConstants() as $name => $value) {

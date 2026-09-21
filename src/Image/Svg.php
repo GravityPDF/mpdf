@@ -10,7 +10,7 @@ use Mpdf\Mpdf;
 use Mpdf\Otl;
 use Mpdf\ScriptRuns;
 use Mpdf\SizeConverter;
-use Mpdf\Ucdn;
+use Mpdf\Unicode\Ucdn;
 use Mpdf\Utils\Arrays;
 use Mpdf\Utils\UtfString;
 

@@ -2,7 +2,7 @@
 
 namespace Mpdf\Shaper;
 
-use Mpdf\Ucdn;
+use Mpdf\Unicode\Ucdn;
 
 /**
  * Which of a font's OpenType script and language system tags a run of text is laid out with.

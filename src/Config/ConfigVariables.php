@@ -6,7 +6,7 @@ use Mpdf\Css\DefaultCss;
 use Mpdf\Language\LanguageToFont;
 use Mpdf\Language\LanguageToFontRegistry;
 use Mpdf\Language\ScriptToLanguage;
-use Mpdf\Ucdn;
+use Mpdf\Unicode\Ucdn;
 
 class ConfigVariables
 {

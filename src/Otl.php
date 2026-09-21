@@ -25,6 +25,7 @@ use Mpdf\Shaper\OtlTags;
 use Mpdf\Shaper\Sea;
 
 use Mpdf\Utils\UtfString;
+use Mpdf\Unicode\Ucdn;
 
 class Otl
 {

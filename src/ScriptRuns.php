@@ -2,6 +2,8 @@
 
 namespace Mpdf;
 
+use Mpdf\Unicode\Ucdn;
+
 /**
  * Cuts a string into runs of one script each, which is the unit the rest of mPDF reads a script in:
  * Otl::selectShaper() picks a shaping algorithm per run, and markScriptToLang() gives each run the

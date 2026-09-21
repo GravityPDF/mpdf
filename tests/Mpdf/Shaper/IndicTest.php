@@ -3,7 +3,7 @@
 namespace Mpdf\Shaper;
 
 use Mpdf\TextRecordingMpdf;
-use Mpdf\Ucdn;
+use Mpdf\Unicode\Ucdn;
 
 /**
  * rphf, pref, blwf, half, abvf, pstf and init are applied only where this shaper asked for them, and
