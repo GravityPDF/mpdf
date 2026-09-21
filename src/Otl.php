@@ -338,9 +338,7 @@ class Otl
 	{
 		$earr = $this->mpdf->UTF8StringToArray($str, false);
 
-		// Unicode calls the Arabic End of Ayah Common, which would leave an ayah number to be shaped
-		// by whatever script it happened to follow
-		$runs = ScriptRuns::split($earr, [1757 => Ucdn::SCRIPT_ARABIC]);
+		$runs = ScriptRuns::split($earr);
 
 		$scriptblocks = [];
 		$OTLdata = [];
