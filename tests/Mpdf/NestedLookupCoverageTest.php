@@ -137,13 +137,14 @@ class NestedLookupCoverageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	/**
 	 * The anudatta is the same the other way: its own record drops it below the letter, where the
 	 * first subtable's put it on the baseline.
+	 *
+	 * The `dist` adjustment is all it gets, because the KA states a NULL mark-to-base anchor for the
+	 * class the anudatta is in. The horizontal placement this asserted alongside was that NULL read as
+	 * an Anchor; hb-shape 14.3.1 gives "[kaguru=0+622|uni0952=0@0,-355+0]" - no horizontal shift.
 	 */
 	public function testTheSecondMarkOfTheSameSubtableIsPositionedByItToo()
 	{
-		$this->assertSame(
-			['BaseWidth' => 622, 'XPlacement' => 255, 'YPlacement' => -355, 'XAdvanceL' => 255, 'XAdvanceR' => 255],
-			$this->markPosition(self::ANUDATTA)
-		);
+		$this->assertSame(['YPlacement' => -355], $this->markPosition(self::ANUDATTA));
 	}
 
 	/**

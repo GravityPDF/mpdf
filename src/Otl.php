@@ -3745,8 +3745,15 @@ class Otl
 			// Read BaseRecord we want for appropriate Class
 			$nSkip = 2 * $MarkRecord['Class'];
 			$this->reader->skip($nSkip);
-			$BaseRecordOffset = $BaseArray + $this->reader->readUInt16();
-			list($x, $y) = Anchor::coordinates($this->reader, $BaseRecordOffset);
+			$offset = $this->reader->readUInt16();
+
+			// A NULL offset is how a base states that it offers marks of this class nothing to attach
+			// to. Added to the array start it would read the BaseArray's own header as an Anchor
+			if ($offset == 0) {
+				return null;
+			}
+
+			list($x, $y) = Anchor::coordinates($this->reader, $BaseArray + $offset);
 			$BaseRecord = ['AnchorX' => $x, 'AnchorY' => $y]; // e.g. Array ( [AnchorX] => 660 [AnchorY] => 1556 )
 			// Need default XAdvance for Base glyph
 			$BaseWidth = $this->mpdf->_getCharWidth($this->mpdf->CurrentFont['cw'], $this->OTLdata[$matchedpos]['uni']) * $this->mpdf->CurrentFont['unitsPerEm'] / 1000; // convert back to font design units
@@ -3927,8 +3934,15 @@ class Otl
 			// Read Mark2Record we want for appropriate Class
 			$nSkip = 2 * $Mark1Record['Class'];
 			$this->reader->skip($nSkip);
-			$Mark2RecordOffset = $Mark2Array + $this->reader->readUInt16();
-			list($x, $y) = Anchor::coordinates($this->reader, $Mark2RecordOffset);
+			$offset = $this->reader->readUInt16();
+
+			// The same for the mark being attached to: a NULL offset says it offers this class nothing,
+			// and added to the array start it would read the Mark2Array's own header as an Anchor
+			if ($offset == 0) {
+				return null;
+			}
+
+			list($x, $y) = Anchor::coordinates($this->reader, $Mark2Array + $offset);
 			$Mark2Record = ['AnchorX' => $x, 'AnchorY' => $y]; // e.g. Array ( [AnchorX] => 660 [AnchorY] => 1556 )
 			// Need default XAdvance for Mark2 glyph
 			$Mark2Width = $this->mpdf->_getCharWidth($this->mpdf->CurrentFont['cw'], $this->OTLdata[$matchedpos]['uni']) * $this->mpdf->CurrentFont['unitsPerEm'] / 1000; // convert back to font design units
