@@ -8,6 +8,7 @@ use Mpdf\Language\LanguageToFontInterface;
 use Mpdf\Language\ScriptToLanguageInterface;
 use Mpdf\Mpdf;
 use Mpdf\Otl;
+use Mpdf\ScriptRuns;
 use Mpdf\SizeConverter;
 use Mpdf\Ucdn;
 use Mpdf\Utils\Arrays;
@@ -3330,33 +3331,19 @@ class Svg
 
 				$earr = $this->mpdf->UTF8StringToArray($e, false);
 
-				$scriptblock = 0;
+				$runs = ScriptRuns::split($earr);
+				$subchunk = count($runs) - 1;
+
 				$scriptblocks = [];
-				$scriptblocks[0] = 0;
 				$chardata = [];
-				$subchunk = 0;
-				$charctr = 0;
-				foreach ($earr as $char) {
-					$ucd_record = Ucdn::get_ucd_record($char);
-					$sbl = $ucd_record[6];
 
-					if ($sbl && $sbl != Ucdn::SCRIPT_INHERITED && $sbl != Ucdn::SCRIPT_UNKNOWN) {
-						if ($scriptblock == 0) {
-							$scriptblock = $sbl;
-							$scriptblocks[$subchunk] = $scriptblock;
-						} elseif ($scriptblock > 0 && $scriptblock != $sbl) {
-							// NEW (non-common) Script encountered in this chunk.
-							// Start a new subchunk
-							$subchunk++;
-							$scriptblock = $sbl;
-							$charctr = 0;
-							$scriptblocks[$subchunk] = $scriptblock;
-						}
+				foreach ($runs as $sch => $run) {
+					$scriptblocks[$sch] = $run['script'];
+
+					// An empty text node leaves no entry at all, which is what the isset() below reads
+					if ($run['characters']) {
+						$chardata[$sch] = $run['characters'];
 					}
-
-					$chardata[$subchunk][$charctr]['script'] = $sbl;
-					$chardata[$subchunk][$charctr]['uni'] = $char;
-					$charctr++;
 				}
 
 				// If scriptblock[x] = common & non-baseScript
