@@ -45,6 +45,35 @@ trait SyntheticFonts
 	}
 
 	/**
+	 * @param string[] $glyphs Each glyph's glyf data, by glyph id
+	 *
+	 * @return string[] head, maxp, loca and glyf for those glyphs, loca in its long format
+	 */
+	private function glyphTables(array $glyphs)
+	{
+		$loca = pack('N', 0);
+		$glyf = '';
+		foreach ($glyphs as $glyph) {
+			$glyf .= $glyph;
+			$loca .= pack('N', strlen($glyf));
+		}
+
+		// unitsPerEm at 18, indexToLocFormat at 50
+		$head = str_repeat("\0", 18) . pack('n', 1000) . str_repeat("\0", 30) . pack('n2', 1, 0);
+
+		return ['head' => $head, 'maxp' => pack('Nn', 0x00005000, count($glyphs)), 'loca' => $loca, 'glyf' => $glyf];
+	}
+
+	/**
+	 * @return string A simple glyph of one contour: the triangle 0,0 500,700 1000,0, each point on the
+	 *                curve and each coordinate a two-byte delta
+	 */
+	private function triangle()
+	{
+		return pack('n5', 1, 0, 0, 1000, 700) . pack('n2', 2, 0) . "\1\1\1" . pack('n3', 0, 500, 500) . pack('n3', 0, 700, 0x10000 - 700);
+	}
+
+	/**
 	 * Writes a font and opens it
 	 *
 	 * @param string $font The font's bytes

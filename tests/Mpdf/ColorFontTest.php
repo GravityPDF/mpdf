@@ -28,6 +28,7 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontdata' => [
 				'cbdt' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
 				'sbix' => ['R' => 'TestEmoji-sbix.ttf', 'useOTL' => 0xFF],
+				'colr' => ['R' => 'TestEmoji-COLRv0.ttf', 'useOTL' => 0xFF],
 				'notoemoji' => ['R' => 'NotoEmoji-Regular.ttf'],
 			],
 			'default_font' => 'cbdt',
@@ -48,6 +49,16 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf = $this->mpdf($config);
 		$mpdf->WriteHTML('<p>' . implode('', array_map('Mpdf\Utils\UtfString::code2utf', $codepoints)) . '</p>');
 
+		return $this->objectsOf($mpdf);
+	}
+
+	/**
+	 * @param Mpdf $mpdf A document, its content written
+	 *
+	 * @return string[] Its objects, by number
+	 */
+	private function objectsOf(Mpdf $mpdf)
+	{
 		preg_match_all('/(?:^|\n)(\d+) 0 obj\n(.*?)\nendobj/s', $mpdf->OutputBinaryData(), $matches, PREG_SET_ORDER);
 
 		$objects = [];
@@ -82,6 +93,20 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function referenced(array $objects, $font, $key)
 	{
 		$this->assertSame(1, preg_match('/\/' . $key . ' (\d+) 0 R/', $font, $match), $key);
+
+		return $objects[(int) $match[1]];
+	}
+
+	/**
+	 * @param string[] $objects The document's objects, by number
+	 * @param int      $glyph   A glyph of the document's one Type3 font
+	 *
+	 * @return string The body of the glyph's procedure
+	 */
+	private function procedure(array $objects, $glyph)
+	{
+		$procedures = $this->referenced($objects, $this->objectMatching($objects, '/\/Subtype \/Type3/'), 'CharProcs');
+		$this->assertSame(1, preg_match('/\/g' . $glyph . ' (\d+) 0 R/', $procedures, $match), 'glyph ' . $glyph);
 
 		return $objects[(int) $match[1]];
 	}
@@ -193,6 +218,52 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The number sign of TestEmoji-COLRv0 has no layers, so it is its outline in the colour of the
+	 * text; the heart's highlight is half-opaque, through a graphics state the font's own resources name
+	 */
+	public function testAColrGlyphIsItsLayersAndAPlainGlyphItsOutline()
+	{
+		$objects = $this->objects([0x23, 0x2764], ['default_font' => 'colr']);
+
+		$numberSign = $this->procedure($objects, 2);
+		$this->assertStringContainsString("600.000 0 d0\n100 0 m\n100 700 l\n", $numberSign);
+		$this->assertStringNotContainsString(' rg', $numberSign);
+
+		$this->assertSame(1, preg_match('/q \/GS(\d+) gs 1\.000 1\.000 1\.000 rg/', $this->procedure($objects, 13), $gs));
+
+		$resources = $this->referenced($objects, $this->objectMatching($objects, '/\/Subtype \/Type3/'), 'Resources');
+		$this->assertSame(1, preg_match('/\/ExtGState <<\/GS' . $gs[1] . ' (\d+) 0 R >>/', $resources, $state));
+		$this->assertStringNotContainsString('/XObject', $resources, 'the font draws no image');
+		$this->assertMatchesRegularExpression('/\/Type \/ExtGState\s*\/BM \/Normal\s*\/ca 0\.50/', $objects[(int) $state[1]]);
+	}
+
+	/**
+	 * Where the document may not draw colour, a COLR font is drawn from its outlines, with no colour at
+	 * all, and there is nothing to warn of
+	 *
+	 * @dataProvider restrictions
+	 *
+	 * @param array $config What keeps colour out
+	 */
+	public function testAColrFontIsDrawnFromItsOutlinesWhereColourIsOff(array $config)
+	{
+		$logger = new TestLogger();
+		$mpdf = $this->mpdf($config + ['default_font' => 'colr']);
+		$mpdf->setLogger($logger);
+		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
+
+		$objects = $this->objectsOf($mpdf);
+
+		$face = $this->procedure($objects, 12);
+		$this->assertStringContainsString(' c', $face);
+		$this->assertStringNotContainsString(' rg', $face);
+		$this->assertStringNotContainsString(' gs', $face);
+
+		$this->assertSame([], $mpdf->PDFAXwarnings);
+		$this->assertFalse($logger->hasWarningRecords(), 'nothing is left blank');
+	}
+
+	/**
 	 * With compression on, a glyph's procedure is written deflated, and inflates to what it draws
 	 */
 	public function testACompressedProcedureInflatesToTheGlyph()
@@ -226,11 +297,7 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->setLogger($logger);
 		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
 
-		preg_match_all('/(?:^|\n)(\d+) 0 obj\n(.*?)\nendobj/s', $mpdf->OutputBinaryData(), $matches, PREG_SET_ORDER);
-		$objects = [];
-		foreach ($matches as $match) {
-			$objects[(int) $match[1]] = $match[2];
-		}
+		$objects = $this->objectsOf($mpdf);
 
 		$font = $this->objectMatching($objects, '/\/Subtype \/Type3/');
 		$procedures = $this->referenced($objects, $font, 'CharProcs');

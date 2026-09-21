@@ -26,6 +26,14 @@ class BlobReader extends FontReader
 		$this->bytes = $bytes;
 	}
 
+	/**
+	 * @return int How many bytes there are to read
+	 */
+	public function length()
+	{
+		return strlen($this->bytes);
+	}
+
 	public function read($length)
 	{
 		$data = substr($this->bytes, $this->pos, $length);

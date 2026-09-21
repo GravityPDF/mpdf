@@ -31,13 +31,12 @@ abstract class BitmapSource implements ColorGlyphSource
 	protected $scale;
 
 	/**
-	 * @param FileReader      $reader The font file
-	 * @param LoggerInterface $logger Told of a glyph the format has a bitmap for that cannot be drawn
+	 * @param ColorFontFile $file The font
 	 */
-	public function __construct(FileReader $reader, LoggerInterface $logger)
+	public function __construct(ColorFontFile $file)
 	{
-		$this->reader = $reader;
-		$this->logger = $logger;
+		$this->reader = $file->reader;
+		$this->logger = $file->logger;
 	}
 
 	/**

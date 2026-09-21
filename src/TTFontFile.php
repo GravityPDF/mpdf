@@ -9,6 +9,7 @@ use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
 use Mpdf\Fonts\Table\GsubOutputs;
+use Mpdf\Fonts\Table\Loca;
 use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\TableChecksum;
@@ -253,6 +254,21 @@ class TTFontFile implements Fonts\FontSourceInterface
 	public $colorFormats = [];
 
 	/**
+	 * Whether any glyph has a glyf outline, which a colour font of bitmaps alone does not
+	 *
+	 * @var bool
+	 */
+	public $hasOutlines = false;
+
+	/**
+	 * Whether the font's ligatures are formed with U+FE0F among their components, as Twemoji's are,
+	 * where Noto's leave it out. See Otl::prepareEmoji().
+	 *
+	 * @var bool
+	 */
+	public $selectorsInSequences = false;
+
+	/**
 	 * Each tag character the font maps, and the character the shaper reads its glyph as.
 	 *
 	 * A tag is in plane 14, and the character widths stop at the end of plane 2, so a tag's glyph is
@@ -331,6 +347,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->strikeoutPosition = 0;
 		$this->restrictedUse = false;
 		$this->colorFormats = [];
+		$this->hasOutlines = false;
+		$this->selectorsInSequences = false;
 		$this->tagChars = [];
 
 		$this->open($file);
@@ -1139,6 +1157,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->smpset = $smpset;
 
 		$this->colorFormats = $this->colorFormats();
+		$this->hasOutlines = $this->hasOutlines($numGlyphs, $indexToLocFormat);
 
 		// A font written as Type3 is encoded in subsets of 255 characters, as one of the Supplementary
 		// Multilingual Plane is
@@ -1146,11 +1165,20 @@ class TTFontFile implements Fonts\FontSourceInterface
 			$this->smpset = true;
 		}
 
+		// GSUB's lookups, read once for both questions asked of them
+		$drawable = $this->useOTL && ColorFormats::drawable($this->colorFormats);
+		$selector = $this->useOTL && isset($charToGlyph[Emoji::EMOJI_SELECTOR]);
+		$lookups = $drawable || $selector ? $this->gsubLookups() : [];
+
+		if ($selector) {
+			$this->selectorsInSequences = GsubOutputs::inLigatures($this->reader, $lookups, $charToGlyph[Emoji::EMOJI_SELECTOR]);
+		}
+
 		// A font written as Type3 hands codes only to the glyphs GSUB can output, and to its tags, which
 		// text reaches through $tagChars: the rest are drawn inside other glyphs, never as text
 		$reachable = null;
-		if ($this->useOTL && ColorFormats::drawable($this->colorFormats)) {
-			$reachable = array_fill_keys($tagGlyphs, true) + $this->gsubOutputs();
+		if ($drawable) {
+			$reachable = array_fill_keys($tagGlyphs, true) + GsubOutputs::glyphs($this->reader, $lookups);
 		}
 
 		// Map Unmapped glyphs (or glyphs mapped to upper PUA U+F00000 onwards i.e. > U+2FFFF) - from $numGlyphs
@@ -1294,11 +1322,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 	}
 
 	/**
-	 * Every glyph GSUB can output
+	 * GSUB's lookups, as GsubOutputs reads them
 	 *
-	 * @return true[] Glyph id => true
+	 * @return array
 	 */
-	private function gsubOutputs()
+	private function gsubLookups()
 	{
 		if (!$this->hasTable('GSUB')) {
 			return [];
@@ -1306,9 +1334,29 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 		$gsubOffset = $this->seek_table('GSUB');
 		list(, , $lookupList) = $this->readListOffsets($gsubOffset);
-		$lookups = $this->absoluteSubtables($this->readLookupList($lookupList, $gsubOffset, 7), $gsubOffset);
 
-		return GsubOutputs::glyphs($this->reader, $lookups);
+		return $this->absoluteSubtables($this->readLookupList($lookupList, $gsubOffset, 7), $gsubOffset);
+	}
+
+	/**
+	 * Whether glyf holds any outline: where the last glyph ends is where glyf's data ends, which is 0
+	 * where every glyph is empty, as in a font of bitmaps with a glyf table only because one is
+	 * required
+	 *
+	 * @param int $numGlyphs        maxp's glyph count
+	 * @param int $indexToLocFormat head's: 0 for loca's short format, 1 for the long
+	 *
+	 * @return bool
+	 */
+	private function hasOutlines($numGlyphs, $indexToLocFormat)
+	{
+		if (!$this->hasTable('glyf') || !$this->hasTable('loca')) {
+			return false;
+		}
+
+		$last = $numGlyphs > 0 ? Loca::range($this->reader, $this->get_table_pos('loca')[0], $indexToLocFormat, $numGlyphs - 1) : null;
+
+		return $last !== null && $last[1] > 0;
 	}
 
 	/**

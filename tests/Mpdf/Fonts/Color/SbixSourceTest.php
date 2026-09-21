@@ -54,7 +54,7 @@ class SbixSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->reader = $ttf->openFont(__DIR__ . '/../../../data/ttf/color/TestEmoji-sbix.ttf');
 
 		$this->logger = new TestLogger();
-		$this->source = new SbixSource($ttf, $this->reader, 1000, $this->logger);
+		$this->source = new SbixSource(new ColorFontFile($ttf, $this->reader, 1000, $this->logger));
 		$this->resources = new RecordingResources();
 	}
 
@@ -255,6 +255,6 @@ class SbixSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($ttf, $reader) = $this->openFont($this->sfnt(['maxp' => pack('Nn', 0x00005000, $numGlyphs), 'sbix' => $sbix], $cut));
 
-		return new SbixSource($ttf, $reader, 1000, $this->logger);
+		return new SbixSource(new ColorFontFile($ttf, $reader, 1000, $this->logger));
 	}
 }

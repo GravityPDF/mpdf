@@ -31,4 +31,12 @@ class RecordingResources implements GlyphResources
 
 		return ['/I' . count($this->images), 64, 64];
 	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function alpha($opacity)
+	{
+		return sprintf('/GS%.2F gs', $opacity);
+	}
 }

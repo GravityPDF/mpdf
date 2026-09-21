@@ -26,6 +26,7 @@ use Mpdf\Shaper\OtlTags;
 use Mpdf\Shaper\Sea;
 
 use Mpdf\Utils\UtfString;
+use Mpdf\Unicode\Emoji;
 use Mpdf\Unicode\Ucdn;
 
 class Otl
@@ -299,17 +300,27 @@ class Otl
 			$this->OTLdata = [];
 		} // END foreach subchunk
 		// 11. Re-assemble and return text string
-		return $this->reassemble($subchunk);
+		$shaped = $this->reassemble($subchunk);
+
+		// A selector kept for the ligatures to match, and taken into none, draws nothing, as HarfBuzz
+		// hides it. Both selectors start with the same two bytes.
+		if (!empty($this->mpdf->CurrentFont['selectorsInSequences']) && strpos($shaped, "\xEF\xB8") !== false) {
+			foreach (Emoji::SELECTORS_UTF8 as $selector) {
+				OtlData::removeChar($shaped, $this->OTLdata, $selector, 'UTF-8');
+			}
+		}
+
+		return $shaped;
 	}
 
 	/**
 	 * What HarfBuzz does to an emoji before GSUB sees it.
 	 *
 	 * A presentation selector chooses a font rather than a glyph, and mPDF chose the font before the
-	 * text got here. HarfBuzz hides a selector the font has no variant for, which is every selector to
-	 * a shaper that reads no cmap format 14, and emoji fonts leave them out of the sequences their
-	 * ligatures match: Noto forms a keycap from the digit and U+20E3 alone, and would not form it with
-	 * the U+FE0F still between them.
+	 * text got here. HarfBuzz lets a ligature match with or without a selector, which the shaper here
+	 * cannot, so a font's ligatures decide: Noto leaves U+FE0F out of its sequences - it forms a keycap
+	 * from the digit and U+20E3 alone - and the selectors are taken out of the text; Twemoji puts U+FE0F
+	 * in, and they are kept.
 	 *
 	 * A tag is handed the code the parser read its glyph at - see TTFontFile::$tagChars.
 	 *
@@ -319,9 +330,11 @@ class Otl
 	 */
 	private function prepareEmoji($str)
 	{
-		$str = str_replace(["\xef\xb8\x8e", "\xef\xb8\x8f"], '', $str);
-
 		$font = $this->mpdf->CurrentFont;
+		if (empty($font['selectorsInSequences'])) {
+			$str = str_replace(Emoji::SELECTORS_UTF8, '', $str);
+		}
+
 		if (!empty($font['tagChars']) && preg_match('/[\x{E0020}-\x{E007F}]/u', $str)) {
 			if (!isset($this->tagAliases[$font['fontkey']])) {
 				$aliases = [];

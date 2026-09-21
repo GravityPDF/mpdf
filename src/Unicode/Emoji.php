@@ -31,6 +31,11 @@ class Emoji
 	const CANCEL_TAG = 0xE007F;
 
 	/**
+	 * U+FE0E and U+FE0F as UTF-8
+	 */
+	const SELECTORS_UTF8 = ["\xEF\xB8\x8E", "\xEF\xB8\x8F"];
+
+	/**
 	 * Asks for colour: Emoji_Presentation, U+FE0F, or any sequence longer than one emoji
 	 */
 	const PRESENTATION_EMOJI = 'emoji';

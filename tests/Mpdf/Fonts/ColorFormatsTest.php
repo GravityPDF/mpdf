@@ -4,6 +4,7 @@ namespace Mpdf\Fonts;
 
 use Mpdf\Cache;
 use Mpdf\Fonts\Color\ColorFormats;
+use Mpdf\Mpdf;
 use Mpdf\TTFontFile;
 
 /**
@@ -107,24 +108,68 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAFontIsDrawnInTheFirstFormatItCarriesThatMpdfDraws()
 	{
 		$this->assertSame('CBDT', ColorFormats::choose(['COLRv1', 'CBDT', 'sbix'], true));
-		$this->assertSame('', ColorFormats::choose(['COLRv0'], true), 'a format mPDF does not draw yet is not chosen');
+		$this->assertSame('', ColorFormats::choose(['SVG'], true), 'a format mPDF does not draw yet is not chosen');
+		$this->assertSame('COLRv0', ColorFormats::choose(['COLRv1', 'COLRv0', 'CBDT'], true), 'a COLR version 1 font is drawn from its version 0 records, ahead of its bitmaps');
 		$this->assertSame('', ColorFormats::choose(['CBDT'], false), 'nor anything, where colour is off');
 	}
 
 	/**
 	 * A font in a format mPDF draws is written as Type3 fonts, where the fixture's layer glyphs, from 27
-	 * on, are drawn only inside the emoji that use them. A font mPDF would draw as TrueType hands every
-	 * glyph a code, as it always has.
+	 * on, are drawn only inside the emoji that use them. A font mPDF draws as TrueType hands every glyph
+	 * a code, as it always has: Noto Emoji's family ligature, glyph 1483, is one no character maps to.
 	 */
 	public function testAFontWrittenAsType3GivesCodesOnlyToTheGlyphsTextCanReach()
 	{
-		$type3 = $this->read('TestEmoji-CBDT.ttf');
-		$trueType = $this->read('TestEmoji-COLRv0.ttf');
+		$type3 = $this->read('TestEmoji-COLRv0.ttf');
 
 		$this->assertTrue(isset($type3->glyphToChar[26]), 'a ligature is reached through GSUB');
 		$this->assertTrue(isset($type3->glyphToChar[9]), 'a tag is reached through the tags');
 		$this->assertFalse(isset($type3->glyphToChar[27]), 'a layer is reached by neither');
-		$this->assertTrue(isset($trueType->glyphToChar[27]));
+
+		$trueType = new TTFontFile(new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/ttfontdata')), 'win');
+		$trueType->getMetrics(__DIR__ . '/../../../packages/Emoji/fonts/NotoEmoji-Regular.ttf', uniqid('', true), 0, false, false, 0xFF);
+		$this->assertTrue(isset($trueType->glyphToChar[1483]));
+	}
+
+	/**
+	 * A font of bitmaps can still have a glyf table of empty glyphs, as the sbix fixture does
+	 */
+	public function testAFontHasOutlinesOnlyWhereAGlyphHasOne()
+	{
+		$this->assertTrue($this->read('TestEmoji-COLRv0.ttf')->hasOutlines);
+		$this->assertFalse($this->read('TestEmoji-sbix.ttf')->hasOutlines);
+		$this->assertFalse($this->read('TestEmoji-CBDT.ttf')->hasOutlines);
+	}
+
+	/**
+	 * A glyph is drawn by the font's colour format, then by its outline, and by its outline alone
+	 * where colour is off
+	 */
+	public function testAFontIsDrawnByItsColourFormatThenItsOutlines()
+	{
+		$mpdf = new Mpdf(['mode' => 'utf-8']);
+		$colr = ['colorFormats' => ['COLRv1', 'COLRv0'], 'hasOutlines' => true];
+
+		$this->assertSame(['Mpdf\Fonts\Color\ColrV0Source', 'Mpdf\Fonts\Color\OutlineSource'], ColorFormats::sources($colr, $mpdf));
+		$this->assertSame(['Mpdf\Fonts\Color\CbdtSource'], ColorFormats::sources(['colorFormats' => ['CBDT'], 'hasOutlines' => false], $mpdf));
+
+		$mpdf->PDFA = true;
+		$this->assertSame(['Mpdf\Fonts\Color\OutlineSource'], ColorFormats::sources($colr, $mpdf));
+	}
+
+	/**
+	 * A font draws nothing where colour is off only if it has no outlines to draw from instead
+	 */
+	public function testOnlyAColourFontWithoutOutlinesIsBlankWhereColourIsOff()
+	{
+		$mpdf = new Mpdf(['mode' => 'utf-8', 'restrictColorSpace' => 1]);
+
+		$this->assertTrue(ColorFormats::blank(['colorFormats' => ['CBDT'], 'hasOutlines' => false], $mpdf));
+		$this->assertFalse(ColorFormats::blank(['colorFormats' => ['COLRv0'], 'hasOutlines' => true], $mpdf));
+		$this->assertFalse(ColorFormats::blank(['colorFormats' => ['SVG'], 'hasOutlines' => false], $mpdf), 'a format mPDF does not draw is not written as Type3');
+
+		$mpdf->restrictColorSpace = 0;
+		$this->assertFalse(ColorFormats::blank(['colorFormats' => ['CBDT'], 'hasOutlines' => false], $mpdf), 'nor with colour on');
 	}
 
 	/**
