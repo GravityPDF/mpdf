@@ -2,11 +2,13 @@
 
 namespace Mpdf;
 
+use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\Coverage;
+use Mpdf\Fonts\Table\GsubOutputs;
 use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\TableChecksum;
@@ -1136,6 +1138,21 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->sipset = $sipset;
 		$this->smpset = $smpset;
 
+		$this->colorFormats = $this->colorFormats();
+
+		// A font written as Type3 is encoded in subsets of 255 characters, as one of the Supplementary
+		// Multilingual Plane is
+		if (ColorFormats::drawable($this->colorFormats)) {
+			$this->smpset = true;
+		}
+
+		// A font written as Type3 hands codes only to the glyphs GSUB can output, and to its tags, which
+		// text reaches through $tagChars: the rest are drawn inside other glyphs, never as text
+		$reachable = null;
+		if ($this->useOTL && ColorFormats::drawable($this->colorFormats)) {
+			$reachable = array_fill_keys($tagGlyphs, true) + $this->gsubOutputs();
+		}
+
 		// Map Unmapped glyphs (or glyphs mapped to upper PUA U+F00000 onwards i.e. > U+2FFFF) - from $numGlyphs
 		if ($this->useOTL) {
 
@@ -1143,7 +1160,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 			for ($gid = 1; $gid < $numGlyphs; $gid++) {
 
-				if (!isset($glyphToChar[$gid])) {
+				if (!isset($glyphToChar[$gid]) && ($reachable === null || isset($reachable[$gid]))) {
 
 					while (isset($charToGlyph[$bctr])) {
 						$bctr++;
@@ -1172,15 +1189,15 @@ class TTFontFile implements Fonts\FontSourceInterface
 		}
 
 		$this->glyphToChar = $glyphToChar;
+		$this->charToGlyph = $charToGlyph;
 		$this->maxUniChar = $maxUniChar;
+
 
 		foreach ($tagGlyphs as $tag => $glyph) {
 			if (isset($glyphToChar[$glyph][0])) {
 				$this->tagChars[$tag] = $glyphToChar[$glyph][0];
 			}
 		}
-
-		$this->colorFormats = $this->colorFormats();
 
 		$this->GSUBScriptLang = [];
 		$this->rtlPUAstr = '';
@@ -1274,6 +1291,24 @@ class TTFontFile implements Fonts\FontSourceInterface
 				}
 			}
 		}
+	}
+
+	/**
+	 * Every glyph GSUB can output
+	 *
+	 * @return true[] Glyph id => true
+	 */
+	private function gsubOutputs()
+	{
+		if (!$this->hasTable('GSUB')) {
+			return [];
+		}
+
+		$gsubOffset = $this->seek_table('GSUB');
+		list(, , $lookupList) = $this->readListOffsets($gsubOffset);
+		$lookups = $this->absoluteSubtables($this->readLookupList($lookupList, $gsubOffset, 7), $gsubOffset);
+
+		return GsubOutputs::glyphs($this->reader, $lookups);
 	}
 
 	/**

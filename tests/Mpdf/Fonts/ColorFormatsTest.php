@@ -3,10 +3,12 @@
 namespace Mpdf\Fonts;
 
 use Mpdf\Cache;
+use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\TTFontFile;
 
 /**
- * Which colour formats a font carries, as the parser finds them from its tables
+ * Which colour formats a font carries, as the parser finds them from its tables, and what reading one
+ * to draw in colour changes about it
  */
 class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -83,6 +85,46 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$file = $this->patched('TestEmoji-sbix.ttf', 'sbix', null, 'SVG ');
 
 		$this->assertSame(['SVG'], $this->colorFormats($file));
+	}
+
+	/**
+	 * @param string $name A font in tests/data/ttf/color
+	 *
+	 * @return TTFontFile The font read
+	 */
+	private function read($name)
+	{
+		$ttf = new TTFontFile(new FontCache(new Cache(__DIR__ . '/../tmp/mpdf/ttfontdata')), 'win');
+		$ttf->getMetrics(__DIR__ . '/../../data/ttf/color/' . $name, uniqid('', true), 0, false, false, 0xFF);
+
+		return $ttf;
+	}
+
+	/**
+	 * A font is drawn in the first format mPDF draws that it carries, and in none where the document may
+	 * not use colour
+	 */
+	public function testAFontIsDrawnInTheFirstFormatItCarriesThatMpdfDraws()
+	{
+		$this->assertSame('CBDT', ColorFormats::choose(['COLRv1', 'CBDT', 'sbix'], true));
+		$this->assertSame('', ColorFormats::choose(['COLRv0'], true), 'a format mPDF does not draw yet is not chosen');
+		$this->assertSame('', ColorFormats::choose(['CBDT'], false), 'nor anything, where colour is off');
+	}
+
+	/**
+	 * A font in a format mPDF draws is written as Type3 fonts, where the fixture's layer glyphs, from 27
+	 * on, are drawn only inside the emoji that use them. A font mPDF would draw as TrueType hands every
+	 * glyph a code, as it always has.
+	 */
+	public function testAFontWrittenAsType3GivesCodesOnlyToTheGlyphsTextCanReach()
+	{
+		$type3 = $this->read('TestEmoji-CBDT.ttf');
+		$trueType = $this->read('TestEmoji-COLRv0.ttf');
+
+		$this->assertTrue(isset($type3->glyphToChar[26]), 'a ligature is reached through GSUB');
+		$this->assertTrue(isset($type3->glyphToChar[9]), 'a tag is reached through the tags');
+		$this->assertFalse(isset($type3->glyphToChar[27]), 'a layer is reached by neither');
+		$this->assertTrue(isset($trueType->glyphToChar[27]));
 	}
 
 	/**

@@ -7,6 +7,7 @@ use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
 use Mpdf\Css\TextVars;
+use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
@@ -4046,7 +4047,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$cw = null;
 		$glyphIDtoUni = null;
-		if (!$regenerate && !empty($font['name']) && $font['originalsize'] == $ttfstat['size']) {
+		if (!$regenerate && !empty($font['name']) && $font['originalsize'] == $ttfstat['size']
+			&& (!ColorFormats::drawable($font['colorFormats']) || $this->fontCache->jsonHas($fontkey . '.ctg.json'))) {
 			$cw = $this->fontCache->loadIfPresent($fontkey . '.cw.dat');
 			$glyphIDtoUni = $this->fontCache->loadIfPresent($fontkey . '.gid.dat');
 		}
