@@ -345,6 +345,22 @@ class TTFontFile implements Fonts\FontSourceInterface
 	}
 
 	/**
+	 * Open a font file and read its table directory, for a caller that reads its tables itself.
+	 *
+	 * @param string $file      The font file
+	 * @param int    $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
+	 *
+	 * @return FileReader The open file, which the caller closes
+	 */
+	public function openFont($file, $TTCfontID = 0)
+	{
+		$reader = $this->open($file);
+		$this->readHeader($TTCfontID);
+
+		return $reader;
+	}
+
+	/**
 	 * Read enough of the open font file that seek_table can find any of its tables: the version, the
 	 * font within a collection if that is what it is, and the table directory.
 	 *

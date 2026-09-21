@@ -69,6 +69,32 @@ abstract class FontReader
 	}
 
 	/**
+	 * uint32, and Offset32
+	 */
+	public function readUInt32()
+	{
+		return self::uint32($this->read(4));
+	}
+
+	/**
+	 * uint8
+	 */
+	public function readUInt8()
+	{
+		return ord($this->read(1));
+	}
+
+	/**
+	 * int8, which the bitmap metrics of CBDT are made of
+	 */
+	public function readInt8()
+	{
+		$a = ord($this->read(1));
+
+		return $a & 0x80 ? $a - 0x100 : $a;
+	}
+
+	/**
 	 * Decode an int16 already held as two bytes.
 	 *
 	 * PHP has no signed big-endian unpack format before 7.2 and this library supports 5.6, so the
