@@ -2,7 +2,7 @@
 
 namespace Mpdf\Shaper;
 
-use Mpdf\Ucdn;
+use Mpdf\Unicode\Ucdn;
 
 class OtlTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {

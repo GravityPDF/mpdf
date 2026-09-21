@@ -1,6 +1,8 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\Unicode;
+
+use Mpdf\GeneratedTable;
 
 /**
  * The generated tables of Ucdn, rebuilt from a Unicode Character Database. What composer ucdn:update
@@ -70,7 +72,7 @@ class UcdnTables
 	public function __construct($version = self::DEFAULT_VERSION, $files = null, $codepoints = self::CODEPOINTS)
 	{
 		$this->version = $version;
-		$this->files = $files === null ? __DIR__ . '/../../utils/data/ucd/' . $version : $files;
+		$this->files = $files === null ? __DIR__ . '/../../../utils/data/ucd/' . $version : $files;
 		$this->codepoints = $codepoints;
 	}
 

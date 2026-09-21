@@ -2,6 +2,8 @@
 
 namespace Mpdf;
 
+use Mpdf\Unicode\Ucdn;
+
 /**
  * The generator behind composer arabicjoining:update, run over an ArabicShaping.txt and a
  * DerivedJoiningType.txt written here rather than Unicode's - one line per joining type, and one per

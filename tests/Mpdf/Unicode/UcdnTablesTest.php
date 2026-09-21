@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\Unicode;
 
 /**
  * The generator behind composer ucdn:update, run over a database written here rather than the real
@@ -227,12 +227,12 @@ class UcdnTablesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testTheCheckedInTableIsWhatTheGeneratorWrites()
 	{
 		$version = UcdnTables::DEFAULT_VERSION;
-		$files = __DIR__ . '/../../utils/data/ucd/' . $version;
+		$files = __DIR__ . '/../../../utils/data/ucd/' . $version;
 		if (!is_file($files . '/UnicodeData.txt')) {
 			$this->markTestSkipped(sprintf('Unicode %s is not unpacked here: composer ucdn:update', $version));
 		}
 
-		$source = __DIR__ . '/../../src/Ucdn.php';
+		$source = __DIR__ . '/../../../src/Unicode/Ucdn.php';
 		$copy = $this->dir . '/Rebuilt.php';
 		copy($source, $copy);
 
@@ -242,7 +242,7 @@ class UcdnTablesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(
 			file_get_contents($source),
 			file_get_contents($copy),
-			'composer ucdn:update would rewrite src/Ucdn.php'
+			'composer ucdn:update would rewrite src/Unicode/Ucdn.php'
 		);
 	}
 
@@ -262,7 +262,7 @@ class UcdnTablesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		// A Windows checkout ends the class's lines with CRLF; the copy is written in LF, which is
 		// all the two patterns below and the generator need agree on.
-		$source = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../../src/Ucdn.php'));
+		$source = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../../../src/Unicode/Ucdn.php'));
 		$source = str_replace('class Ucdn', 'class ' . $name, $source);
 		$source = preg_replace('/\tconst SCRIPT_(ADLAM|TOTO) = \d+;\n/', '', $source);
 		$source = preg_replace('/\t\t\/\* SCRIPT_(ADLAM|TOTO) \*\/ \d+ => .*\n/', '', $source);
@@ -273,7 +273,7 @@ class UcdnTablesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		require $file;
 
-		return 'Mpdf\\' . $name;
+		return __NAMESPACE__ . '\\' . $name;
 	}
 
 	/**

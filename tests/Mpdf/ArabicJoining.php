@@ -2,6 +2,9 @@
 
 namespace Mpdf;
 
+use Mpdf\Unicode\Ucdn;
+use Mpdf\Unicode\UcdnTables;
+
 /**
  * The joining tables of Mpdf\Shaper\Arabic, rebuilt from a Unicode Character Database. What composer
  * arabicjoining:update runs - see utils/arabicjoining_update.php, which is the argument parsing and

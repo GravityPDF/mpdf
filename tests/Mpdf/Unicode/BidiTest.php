@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\Unicode;
 
 use Mpdf\Utils\UtfString;
 

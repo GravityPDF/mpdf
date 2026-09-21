@@ -7,7 +7,7 @@ namespace Mpdf;
  * than HarfBuzz's - a couple of dozen lines carrying all four of the shapes its tables come in, and
  * the languages whose mapping is worth knowing by heart.
  *
- * The last test rewrites a copy of the class rather than src/Ucdn.php, and is the one that says what a
+ * The last test rewrites a copy of the class rather than src/Unicode/Ucdn.php, and is the one that says what a
  * generated line looks like.
  */
 class OtLanguageTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
@@ -125,7 +125,7 @@ class OtLanguageTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$this->markTestSkipped(sprintf('HarfBuzz %s is not unpacked here: composer otlanguages:update', $version));
 		}
 
-		$source = __DIR__ . '/../../src/Ucdn.php';
+		$source = __DIR__ . '/../../src/Unicode/Ucdn.php';
 		$copy = $this->dir . '/Rebuilt.php';
 		copy($source, $copy);
 
@@ -135,7 +135,7 @@ class OtLanguageTagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(
 			file_get_contents($source),
 			file_get_contents($copy),
-			'composer otlanguages:update would rewrite src/Ucdn.php'
+			'composer otlanguages:update would rewrite src/Unicode/Ucdn.php'
 		);
 	}
 

@@ -2,6 +2,8 @@
 
 namespace Mpdf;
 
+use Mpdf\Unicode\Bidi;
+
 /**
  * The hyphen mPDF adds when it breaks a word across a line was not in the paragraph the bidi pass
  * resolved, so it carries whatever direction and embedding level WriteFlowingBlock() gives it. Given

@@ -19,6 +19,8 @@ use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 use Mpdf\Utils\Path;
 use Psr\Log\NullLogger;
+use Mpdf\Unicode\Ucdn;
+use Mpdf\Unicode\Bidi;
 
 /**
  * mPDF, PHP library generating PDF files from UTF-8 encoded HTML

@@ -2,6 +2,8 @@
 
 namespace Mpdf;
 
+use Mpdf\Unicode\Ucdn;
+
 /**
  * The rule that used to be copied into Otl, Mpdf, Image\Svg and ArabicJoining. Past the two that ask
  * startsARun() about a script directly, as ArabicJoining does, every case is built out of real

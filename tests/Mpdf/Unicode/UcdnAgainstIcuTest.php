@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\Unicode;
 
 /**
  * Every codepoint of the generated table against ICU.
@@ -138,7 +138,7 @@ class UcdnAgainstIcuTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function numbering()
 	{
 		$tables = new UcdnTables();
-		list($categories, $bidi, $constants) = $tables->numbersInUse(file_get_contents(__DIR__ . '/../../src/Ucdn.php'));
+		list($categories, $bidi, $constants) = $tables->numbersInUse(file_get_contents(__DIR__ . '/../../../src/Unicode/Ucdn.php'));
 
 		return [$categories, $bidi, array_flip($constants)];
 	}

@@ -17,7 +17,7 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 $version = isset($argv[1]) && $argv[1] !== '' ? $argv[1] : Mpdf\OtLanguageTags::DEFAULT_VERSION;
-$file = __DIR__ . '/../src/Ucdn.php';
+$file = __DIR__ . '/../src/Unicode/Ucdn.php';
 
 $tags = new Mpdf\OtLanguageTags($version);
 $written = $tags->rewrite($file);

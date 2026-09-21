@@ -2,7 +2,7 @@
 
 namespace Mpdf\Language;
 
-use Mpdf\Ucdn;
+use Mpdf\Unicode\Ucdn;
 
 class ScriptToLanguage implements \Mpdf\Language\ScriptToLanguageInterface
 {
