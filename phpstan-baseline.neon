@@ -49,12 +49,6 @@ parameters:
 			path: src/DirectWrite.php
 
 		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Form.php
-
-		-
 			message: '#^Variable \$js in isset\(\) always exists and is not nullable\.$#'
 			identifier: isset.variable
 			count: 2
@@ -304,12 +298,6 @@ parameters:
 			message: '#^Call to sprintf contains 0 placeholders, 1 value given\.$#'
 			identifier: argument.sprintf
 			count: 1
-			path: src/Mpdf.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
 			path: src/Mpdf.php
 
 		-
@@ -817,12 +805,6 @@ parameters:
 			path: src/Mpdf.php
 
 		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Otl.php
-
-		-
 			message: '#^Variable \$ChainSubRule might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
@@ -872,12 +854,6 @@ parameters:
 			identifier: variable.undefined
 			count: 2
 			path: src/Shaper/Indic.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/TTFontFile.php
 
 		-
 			message: '#^Undefined variable\: \$fsSelection$#'
@@ -931,12 +907,6 @@ parameters:
 			message: '#^Method Mpdf\\Tag\:\:getTagInstance\(\) should return Mpdf\\Tag\\Tag but return statement is missing\.$#'
 			identifier: return.missing
 			count: 1
-			path: src/Tag.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
 			path: src/Tag.php
 
 		-
@@ -994,18 +964,6 @@ parameters:
 			path: src/Tag/Table.php
 
 		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Tag/Tag.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/BackgroundWriter.php
-
-		-
 			message: '#^Variable \$f1 might not be defined\.$#'
 			identifier: variable.undefined
 			count: 2
@@ -1054,57 +1012,9 @@ parameters:
 			path: src/Writer/BaseWriter.php
 
 		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/BaseWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/BookmarkWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/ColorWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/FontWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/FormWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/ImageWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/JavaScriptWriter.php
-
-		-
 			message: '#^Binary operation "\*" between 2 and string results in an error\.$#'
 			identifier: binaryOp.invalid
 			count: 1
-			path: src/Writer/MetadataWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
 			path: src/Writer/MetadataWriter.php
 
 		-
@@ -1118,27 +1028,3 @@ parameters:
 			identifier: method.notFound
 			count: 2
 			path: src/Writer/ObjectWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/ObjectWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/OptionalContentWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/PageWriter.php
-
-		-
-			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
-			identifier: phpDoc.parseError
-			count: 2
-			path: src/Writer/ResourceWriter.php
