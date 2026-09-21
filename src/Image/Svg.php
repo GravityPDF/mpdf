@@ -3326,6 +3326,14 @@ class Svg
 		$a = preg_split('/<(.*?)>/ms', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
 		foreach ($a as $i => $e) {
 			if ($i % 2 == 0) {
+
+				// <tspan> or <text> only, and anything else keeps the text it was given. The first
+				// piece has no tag before it to read.
+				if ($i == 0 || (substr($a[$i - 1], 0, 5) != '<text' && substr($a[$i - 1], 0, 5) != '<tspa')) {
+					$a[$i] = $e;
+					continue;
+				}
+
 				$e = UtfString::strcode2utf($e);
 				$e = $this->mpdf->lesser_entity_decode($e);
 
@@ -3371,10 +3379,6 @@ class Svg
 						$s = str_replace("&", "&amp;", $s);
 						$s = str_replace("<", "&lt;", $s);
 						$s = str_replace(">", "&gt;", $s);
-
-						if (substr($a[$i - 1], 0, 5) != '<text' && substr($a[$i - 1], 0, 5) != '<tspa') {
-							continue;
-						} // <tspan> or <text> only
 
 						$lang = '';
 						// Check Vietnamese if Latin script - even if Basescript
