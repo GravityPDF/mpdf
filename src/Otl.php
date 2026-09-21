@@ -6,6 +6,7 @@ use Mpdf\Strict;
 
 use Mpdf\Css\TextVars;
 use Mpdf\Fonts\BlobReader;
+use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\Anchor;
 use Mpdf\Fonts\Table\ClassDef;
@@ -333,6 +334,32 @@ class Otl
 		}
 
 		return $str;
+	}
+
+	/**
+	 * For a font drawn as Type3, what a ligature is copied out of the PDF as: the characters it was
+	 * formed from here, a ligature among them read through. Recorded as the text is shaped rather than
+	 * read from GSUB, where one glyph can close more than one sequence - Noto draws Heard Island's flag
+	 * as Australia's, and forms each family from its members in either order.
+	 *
+	 * The first text a ligature is formed from in a document is the one kept.
+	 *
+	 * @param int   $substitute The ligature
+	 * @param int[] $glyphPos   Where its components are in OTLdata
+	 */
+	private function recordLigatureText($substitute, array $glyphPos)
+	{
+		$font = &$this->mpdf->CurrentFont;
+		if (!ColorFormats::drawable($font['colorFormats']) || isset($font['ligatureText'][$substitute])) {
+			return;
+		}
+
+		$text = [];
+		foreach ($glyphPos as $p) {
+			$char = $this->OTLdata[$p]['uni'];
+			$text = array_merge($text, isset($font['ligatureText'][$char]) ? $font['ligatureText'][$char] : [$char]);
+		}
+		$font['ligatureText'][$substitute] = $text;
 	}
 
 	/**
@@ -3124,6 +3151,8 @@ class Otl
 			}
 
 			$newOTLdata[0]['is_ligature'] = true;
+
+			$this->recordLigatureText($substitute, $GlyphPos);
 
 			array_splice($this->OTLdata, $pos, 1, $newOTLdata);
 

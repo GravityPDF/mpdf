@@ -4138,6 +4138,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'haskernGPOS' => $font['haskernGPOS'],
 			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
 			'colorFormats' => $font['colorFormats'],
+			'ligatureText' => [],
 			'tagChars' => $font['tagChars'],
 		];
 
