@@ -146,29 +146,6 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The presentation-form ligatures the class keeps by hand are no joining type of Unicode's, so the
-	 * database says nothing about them and the generator writes nothing about them either - they are
-	 * merged into the table by transparentJoining() at run time instead.
-	 *
-	 * @dataProvider dataPresentationLigatures
-	 */
-	public function testAPresentationFormLigatureIsNotGenerated($codepoint)
-	{
-		$this->assertArrayNotHasKey($codepoint, \Mpdf\Shaper\Arabic::$transparent);
-	}
-
-	public function dataPresentationLigatures()
-	{
-		return [
-			'U+FC5E' => [0xFC5E],
-			'U+FC5F' => [0xFC5F],
-			'U+FC60' => [0xFC60],
-			'U+FC61' => [0xFC61],
-			'U+FC62' => [0xFC62],
-		];
-	}
-
-	/**
 	 * Causing a join means causing it in both directions, so a Join_Causing character is in both tables.
 	 * The two here are of no script of their own - the tatweel a word is stretched with is Common and ZWJ
 	 * is Inherited - which is the pair that would be lost if the scope were the four scripts alone.

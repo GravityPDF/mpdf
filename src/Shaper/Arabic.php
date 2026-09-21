@@ -260,16 +260,6 @@ class Arabic
 	];
 
 	/**
-	 * Arabic ligatures in presentation form, which a font's 'ccmp' produces - Arial and Times among them.
-	 * Unicode gives them no joining type at all, so no database states them and the generator cannot
-	 * write them; they are kept by hand here and read alongside the table above.
-	 *
-	 * Others in the U+FC00 range still need adding. Whether any of them belongs here is #267: Unicode
-	 * leaves the whole range Non_Joining, which is a base rather than something joining reads over.
-	 */
-	private static $presentationLigatures = [0xFC5E => 1, 0xFC5F => 1, 0xFC60 => 1, 0xFC61 => 1, 0xFC62 => 1];
-
-	/**
 	 * The joining group DALATH RISH of ArabicShaping.txt, which with ALAPH is the whole of what the
 	 * joining state table reads beyond the joining types. All four letters are right-joining, so an
 	 * Alaph after one of them stands apart from it, and fin3 is the form Syriac states for that.
@@ -436,9 +426,8 @@ class Arabic
 	/**
 	 * The Transparent-Joining table for this string.
 	 *
-	 * A GDEF mark is transparent to joining just as a vowel is, so the mark class joins the table, as do
-	 * the presentation-form ligatures Unicode states no joining type for. Array + keeps the left operand
-	 * on collision, so a codepoint in more than one stays as the Unicode table has it.
+	 * A GDEF mark is transparent to joining just as a vowel is, so the mark class joins the table. Union
+	 * rather than array_merge(), which would renumber the codepoints these tables are keyed by.
 	 */
 	private static function transparentJoining($glyphClassMarks)
 	{
@@ -447,7 +436,7 @@ class Arabic
 			$gcm[hexdec($g)] = 1;
 		}
 
-		return self::$transparent + self::$presentationLigatures + $gcm;
+		return self::$transparent + $gcm;
 	}
 
 	/**
