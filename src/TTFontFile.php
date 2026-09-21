@@ -10,6 +10,7 @@ use Mpdf\Fonts\Table\Coverage;
 use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\TableChecksum;
+use Mpdf\Unicode\Emoji;
 
 // NOTE*** If you change the defined constants below, be sure to delete all temporary font data files in /ttfontdata/
 // to force mPDF to regenerate cached font files.
@@ -241,6 +242,26 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 	public $glyphToChar;
 
+	/**
+	 * The colour formats the font carries, of 'COLRv1', 'COLRv0', 'SVG', 'CBDT' and 'sbix', as
+	 * colorFormats() finds them
+	 *
+	 * @var string[]
+	 */
+	public $colorFormats = [];
+
+	/**
+	 * Each tag character the font maps, and the character the shaper reads its glyph as.
+	 *
+	 * A tag is in plane 14, and the character widths stop at the end of plane 2, so a tag's glyph is
+	 * one the cmap leaves unmapped as far as the rest of mPDF is concerned. Under OTL it is handed a
+	 * Private Use code like any other, and text on its way to the shaper is given that code instead,
+	 * which is what lets GSUB form the flags of England, Scotland and Wales.
+	 *
+	 * @var int[]
+	 */
+	public $tagChars = [];
+
 	public $GSUBFeatures;
 
 	public $GSUBLookups;
@@ -307,6 +328,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->strikeoutSize = 0;
 		$this->strikeoutPosition = 0;
 		$this->restrictedUse = false;
+		$this->colorFormats = [];
+		$this->tagChars = [];
 
 		$this->open($file);
 
@@ -1051,6 +1074,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		$this->GPOSFeatures = [];
 		$this->GPOSLookups = [];
 		$this->glyphIDtoUni = '';
+		$tagGlyphs = [];
 
 		// Format 12 CMAP does characters above Unicode BMP i.e. some HKCS characters U+20000 and above
 		if ($format == 12 && !$BMPonly) {
@@ -1083,6 +1107,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 						$charToGlyph[$unichar] = $glyph;
 						$maxUniChar = max($unichar, $maxUniChar);
 						$glyphToChar[$glyph][] = $unichar;
+					} elseif (Emoji::isTag($unichar)) {
+						$tagGlyphs[$unichar] = $glyph;
 					}
 				}
 			}
@@ -1131,6 +1157,14 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 		$this->glyphToChar = $glyphToChar;
 		$this->maxUniChar = $maxUniChar;
+
+		foreach ($tagGlyphs as $tag => $glyph) {
+			if (isset($glyphToChar[$glyph][0])) {
+				$this->tagChars[$tag] = $glyphToChar[$glyph][0];
+			}
+		}
+
+		$this->colorFormats = $this->colorFormats();
 
 		$this->GSUBScriptLang = [];
 		$this->rtlPUAstr = '';
@@ -1224,6 +1258,45 @@ class TTFontFile implements Fonts\FontSourceInterface
 				}
 			}
 		}
+	}
+
+	/**
+	 * The colour formats the font carries, found by their tables alone.
+	 *
+	 * A COLR table of version 1 can carry version 0 records as well, for renderers that only know
+	 * those, so it is listed as both where it has any.
+	 *
+	 * @return string[]
+	 */
+	private function colorFormats()
+	{
+		$formats = [];
+
+		if ($this->hasTable('COLR') && $this->hasTable('CPAL')) {
+			$this->seek_table('COLR');
+			$version = $this->reader->readUInt16();
+			$baseGlyphRecords = $this->reader->readUInt16();
+			if ($version >= 1) {
+				$formats[] = 'COLRv1';
+			}
+			if ($baseGlyphRecords > 0) {
+				$formats[] = 'COLRv0';
+			}
+		}
+
+		if ($this->hasTable('SVG ')) {
+			$formats[] = 'SVG';
+		}
+
+		if ($this->hasTable('CBDT') && $this->hasTable('CBLC')) {
+			$formats[] = 'CBDT';
+		}
+
+		if ($this->hasTable('sbix')) {
+			$formats[] = 'sbix';
+		}
+
+		return $formats;
 	}
 
 	/**

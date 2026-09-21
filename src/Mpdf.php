@@ -3995,6 +3995,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'GPOSFeatures' => [],
 			'GPOSLookups' => [],
 			'rtlPUAstr' => '',
+			'colorFormats' => [],
+			'tagChars' => [],
 			'cacheFormat' => 0,
 		];
 
@@ -4127,6 +4129,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'haskerninfo' => $font['haskerninfo'],
 			'haskernGPOS' => $font['haskernGPOS'],
 			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
+			'colorFormats' => $font['colorFormats'],
+			'tagChars' => $font['tagChars'],
 		];
 
 
