@@ -33,6 +33,23 @@ class Otl
 
 	const _OTL_OLD_SPEC_COMPAT_1 = true;
 
+	/**
+	 * The features the presentation pass must not take, whatever a document's font-feature-settings
+	 * asks for (GravityPDF/mpdf#280).
+	 *
+	 * The syllable shapers apply their own basic forms before it, from their stage lists, against the
+	 * mask the reordering left on each glyph. The presentation pass carries no masks, so a Lookup
+	 * reached a second time from there would run over every glyph of the run rather than the ones
+	 * marked for it.
+	 *
+	 * So every tag a shaper applies for itself belongs here. The Arabic joining forms are here for the
+	 * same reason, applied from the joining tables rather than from a stage list. The Hangul jamo
+	 * forms are the exception that is not a shaper's: no stage list names them, and blocking them
+	 * costs nothing because none of these paths shapes Hangul. A script with no shaper passes an empty
+	 * list instead, and a document may ask for them there.
+	 */
+	const PRESENTATION_OMIT_TAGS = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
+
 	private $mpdf;
 
 	private $fontCache;
@@ -697,10 +714,9 @@ class Otl
 		// d. Apply Presentation Forms GSUB Lookups (+ any discretionary) - Apply one at a time in Feature order
 		$tags = 'rlig calt liga clig mset';
 
-		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
 		$usetags = $tags;
 		if (!empty($this->mpdf->OTLtags)) {
-			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, self::PRESENTATION_OMIT_TAGS, false);
 		}
 
 		// One call per stage of HarfBuzz's Arabic plan, which puts rlig in the first, rclt and calt in
@@ -843,10 +859,9 @@ class Otl
 		// g. Apply Presentation Forms GSUB Lookups (+ any discretionary)
 		$tags = 'pres abvs blws psts haln rlig calt liga clig mset';
 
-		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
 		$usetags = $tags;
 		if (!empty($this->mpdf->OTLtags)) {
-			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, self::PRESENTATION_OMIT_TAGS, false);
 		}
 		if ($this->shaper == 'K') {  // Features are applied one at a time, working through each codepoint
 			$this->_applyGSUBrulesSingly($usetags, $GSUBscriptTag, $GSUBlangsys);
@@ -903,10 +918,9 @@ class Otl
 
 		// d. Apply Presentation Forms GSUB Lookups (+ any discretionary)
 		$tags = 'pres abvs blws psts haln rlig calt liga clig mset';
-		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
 		$usetags = $tags;
 		if (!empty($this->mpdf->OTLtags)) {
-			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, self::PRESENTATION_OMIT_TAGS, false);
 		}
 		$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
 		$this->restrictToSyllable = false;
@@ -982,10 +996,9 @@ class Otl
 		// f. Apply Presentation Forms GSUB Lookups (+ any discretionary)
 		$tags = 'pres abvs blws psts';
 
-		$omittags = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
 		$usetags = $tags;
 		if (!empty($this->mpdf->OTLtags)) {
-			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, self::PRESENTATION_OMIT_TAGS, false);
 		}
 		$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
 		$this->restrictToSyllable = false;
@@ -1146,10 +1159,9 @@ class Otl
 		  Hangul:   ljmo vjmo tjmo
 		 */
 
-		$omittags = '';
 		$useGSUBtags = $tags;
 		if (!empty($this->mpdf->OTLtags)) {
-			$useGSUBtags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, false);
+			$useGSUBtags = $this->_applyTagSettings($tags, $GSUBFeatures);
 		}
 		// APPLY GSUB rules (as long as not Latin + SmallCaps - but not OTL smcp)
 		if (!(($this->mpdf->textvar & TextVars::FC_SMALLCAPS) && $scriptblock == Ucdn::SCRIPT_LATIN && strpos($useGSUBtags, 'smcp') === false)) {
@@ -1200,10 +1212,9 @@ class Otl
 			$tags .= ' kern';
 		}
 
-		$omittags = '';
 		$usetags = $tags;
 		if (!empty($this->mpdf->OTLtags)) {
-			$usetags = $this->_applyTagSettings($tags, $GPOSFeatures, $omittags, false);
+			$usetags = $this->_applyTagSettings($tags, $GPOSFeatures);
 		}
 
 		// 8. Get GPOS LookupList from Feature tags
