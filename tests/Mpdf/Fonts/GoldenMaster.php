@@ -110,21 +110,12 @@ abstract class GoldenMaster
 	/**
 	 * Rewrite one fixture from the current code.
 	 *
-	 * @return string|null The file written, or null where this font has no fixture - which only the
-	 *                     parser master has, for a font it refuses outright
+	 * @return string The file written
 	 */
 	public function update($name)
 	{
 		$capture = $this->capture($name);
 		$file = $this->fixtureFile($name);
-
-		if ($capture === null) {
-			if (file_exists($file)) {
-				unlink($file);
-			}
-
-			return null;
-		}
 
 		if (!is_dir($this->fixtureDir())) {
 			mkdir($this->fixtureDir(), 0777, true);

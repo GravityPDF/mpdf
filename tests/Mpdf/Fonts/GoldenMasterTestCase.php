@@ -3,11 +3,8 @@
 namespace Mpdf\Fonts;
 
 /**
- * One assertion, made by three of the four golden masters: what this font captures now is what its
- * committed fixture says.
- *
- * ParserGoldenMasterTest is the exception and stands on its own, because it has a second thing to
- * say - a font with no GDEF table is expected to be refused rather than captured.
+ * One assertion, made by all four golden masters: what this font captures now is what its committed
+ * fixture says.
  */
 abstract class GoldenMasterTestCase extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {

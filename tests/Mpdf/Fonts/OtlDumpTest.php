@@ -4,6 +4,7 @@ namespace Mpdf\Fonts;
 
 use Mpdf\Cache;
 use Mpdf\HtmlRecordingMpdf;
+use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\OtlDump;
 use Mpdf\TTFontFile;
 
@@ -372,6 +373,25 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$reflected = new \ReflectionMethod(OtlDump::class, $method);
 		$reflected->setAccessible(true);
 		$reflected->invoke($this->dumper(), [], 0, 4, 'kern', 'latn');
+	}
+
+	/**
+	 * Aboriginal Sans carries GSUB and no GDEF, as most emoji fonts do. The dump says so, and goes on
+	 * to report the lookups the way the parser lays such a font out: no glyph is a mark, so a mark
+	 * filtering set a lookup names skips nothing rather than being refused.
+	 */
+	public function testAFontWithoutGdefIsStillReported()
+	{
+		$dump = $this->dumper();
+		$dump->getMetrics(__DIR__ . '/../../../packages/Aboriginal-Family/fonts/AboriginalSansREGULAR.ttf', 'aboriginalsans', 0, false, false, 0xFF, 'detail', 'cans', 'DFLT');
+		$report = implode('', $this->mpdf->recordedHtml);
+
+		$this->assertStringContainsString('<div>GDEF table not defined</div>', $report);
+		$this->assertStringContainsString('LookupType 4: Ligature', $report);
+
+		$lookupFlag = new \ReflectionProperty('Mpdf\TTFontFile', 'lookupFlag');
+		$lookupFlag->setAccessible(true);
+		$this->assertFalse($lookupFlag->getValue($dump)->skips(LookupFlag::USE_MARK_FILTERING_SET, '00041', 0));
 	}
 
 	/**

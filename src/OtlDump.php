@@ -150,6 +150,8 @@ class OtlDump extends TTFontFile
 	 */
 	protected function missingGDEF()
 	{
+		parent::missingGDEF();
+
 		$this->marks = [];
 		$this->reportTableMissing('GDEF');
 	}

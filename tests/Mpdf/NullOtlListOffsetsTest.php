@@ -16,8 +16,7 @@ use Mpdf\Fonts\FontCache;
  * Both fonts are three-glyph subsets of the Noto Sans in tests/data/ttf with a GSUB written by hand.
  * Its OFL notice reserves no name - "Copyright 2015-2021 Google LLC", with none of the Reserved Font
  * Names that OFL 1.1 clause 3 would bar a modified version from using - so each is free to be named
- * for what it carries, as the NotoSansTC synthetics beside them are. Each carries a GDEF, without which
- * the parser refuses the font before it ever reads GSUB.
+ * for what it carries, as the NotoSansTC synthetics beside them are. Each carries a GDEF.
  *
  * - NotoSans-NullOtlLists-Synthetic has both a GSUB and a GPOS that are nothing but a header:
  *   `00 01 00 00 00 00 00 00 00 00`, which is byte-for-byte what the five google/fonts families in the

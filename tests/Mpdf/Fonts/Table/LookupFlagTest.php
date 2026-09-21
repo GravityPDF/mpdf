@@ -112,6 +112,25 @@ class LookupFlagTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A font without GDEF has no marks, so a mark glyph set it names has nothing to filter: the lookup
+	 * skips nothing, as HarfBuzz reads it, rather than being refused
+	 */
+	public function testAMarkFilteringSetInAFontWithNoMarksSkipsNothing()
+	{
+		$flag = new LookupFlag('test', [
+			'GlyphClassBases' => '',
+			'GlyphClassMarks' => '',
+			'GlyphClassLigatures' => '',
+			'GlyphClassComponents' => '',
+			'MarkGlyphSets' => [],
+			'MarkAttachmentType' => [],
+		]);
+
+		$this->assertSame('', $flag->glyphs(LookupFlag::USE_MARK_FILTERING_SET, 3));
+		$this->assertFalse($flag->skips(LookupFlag::USE_MARK_FILTERING_SET, '00041', 3));
+	}
+
+	/**
 	 * GlyphString::of() writes a plane 16 glyph six digits wide, and the five-digit glyph its hex ends
 	 * with is not skipped with it
 	 */

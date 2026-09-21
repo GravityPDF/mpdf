@@ -15,12 +15,11 @@ namespace Mpdf;
  *   lookup 3  D -> nothing, and behind it in the same lookup, D -> Q
  *   lookup 6  context G H I, naming G -> nothing at index 0 and J -> R at index 2
  *
- * Nothing shipped reaches any of them. Over the 107 fonts in `packages/` and `tests/data/ttf`, both
- * shapes occur only in the two NotoEmoji faces - two records naming a nested lookup at a sequence
- * index other than 0 whose return the font fixes at something other than 1, and 62 Multiple
- * Substitutions to the empty sequence in each - and neither face has a GDEF table, so TTFontFile
- * refuses to use OTL with them and the shaper never sees either. Everywhere else the records name
- * sequence index 0, where the borrowed advance is accidentally the right one.
+ * Over the 107 fonts in `packages/` and `tests/data/ttf`, both shapes occur only in the two NotoEmoji
+ * faces - two records naming a nested lookup at a sequence index other than 0 whose return the font
+ * fixes at something other than 1, and 62 Multiple Substitutions to the empty sequence in each.
+ * Everywhere else the records name sequence index 0, where the borrowed advance is accidentally the
+ * right one.
  *
  * Each expectation below is what hb-shape draws for the same string.
  */

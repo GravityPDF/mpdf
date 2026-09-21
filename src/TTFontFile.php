@@ -1393,14 +1393,18 @@ class TTFontFile implements Fonts\FontSourceInterface
 	}
 
 	/**
-	 * Without GDEF there is no telling marks from bases, and every lookup flag would be read against
-	 * nothing, so a font asked to use OTL has to carry one.
-	 *
-	 * @throws \Mpdf\Exception\FontException
+	 * A font without GDEF is laid out as HarfBuzz lays it out: every glyph is in class 0, so no glyph
+	 * is a mark, a ligature or a base, and a lookup flag skips nothing. Most emoji fonts are GSUB with
+	 * no GDEF at all.
 	 */
 	protected function missingGDEF()
 	{
-		throw new \Mpdf\Exception\FontException(sprintf('Unable to set font "%s" to use OTL as it does not include OTL tables (or at least not a GDEF table).', $this->filename));
+		$this->GlyphClassBases = '';
+		$this->GlyphClassLigatures = '';
+		$this->GlyphClassMarks = '';
+		$this->GlyphClassComponents = '';
+		$this->MarkAttachmentType = [];
+		$this->MarkGlyphSets = [];
 	}
 
 	/**
