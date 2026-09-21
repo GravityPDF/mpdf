@@ -253,13 +253,16 @@ class Emoji
 	}
 
 	/**
+	 * The emoji at one place in a run, for a caller walking the run itself that would otherwise find
+	 * every emoji in it with clusters() before it knows how far it will look
+	 *
 	 * @param int[] $codepoints The run
-	 * @param int   $i          Where in it to look
+	 * @param int   $i          Where in it to look, which is not inside an emoji that starts earlier
 	 * @param int   $count      How long it is
 	 *
 	 * @return array|null [length, presentation] of the emoji starting at $i, or null where none does
 	 */
-	private static function clusterAt(array $codepoints, $i, $count)
+	public static function clusterAt(array $codepoints, $i, $count)
 	{
 		$first = $codepoints[$i];
 
