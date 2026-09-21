@@ -5,9 +5,44 @@ namespace Mpdf;
 /**
  * What the generators of Ucdn's tables have in common: reading the registry they are built from, and
  * writing one array of a class back without disturbing anything else in it.
+ *
+ * A class using it holds the release it reads as $version, and the directory it keeps its copy of
+ * the database in as $files.
  */
 trait GeneratedTable
 {
+
+	/**
+	 * Reads one file of the database, from a copy kept under $files.
+	 *
+	 * @param string $name Its path below ucd/, e.g. 'emoji/emoji-data.txt'
+	 *
+	 * @return string[] the file's lines
+	 */
+	public function lines($name)
+	{
+		$url = 'https://www.unicode.org/Public/' . $this->version . '/ucd/' . $name;
+
+		return explode("\n", $this->cached($this->files . '/' . basename($name), $url));
+	}
+
+	/**
+	 * A table's entries as the body of an array, $perLine to a line
+	 *
+	 * @param string[] $entries Each already written as PHP
+	 * @param int      $perLine
+	 *
+	 * @return string
+	 */
+	private function chunkedLines(array $entries, $perLine)
+	{
+		$lines = [];
+		foreach (array_chunk($entries, $perLine) as $chunk) {
+			$lines[] = "\t\t" . implode(', ', $chunk) . ',';
+		}
+
+		return implode("\n", $lines);
+	}
 
 	/**
 	 * Reads one file of a registry, keeping a copy so the next run needs no network. The registries are

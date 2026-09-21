@@ -212,29 +212,12 @@ class ArabicJoining
 	 */
 	private function entries($codepoints)
 	{
-		$lines = [];
-
-		foreach (array_chunk($codepoints, self::PER_LINE) as $chunk) {
-			$entries = [];
-			foreach ($chunk as $codepoint) {
-				$entries[] = sprintf('0x%04X => 1', $codepoint);
-			}
-			$lines[] = "\t\t" . implode(', ', $entries) . ',';
+		$entries = [];
+		foreach ($codepoints as $codepoint) {
+			$entries[] = sprintf('0x%04X => 1', $codepoint);
 		}
 
-		return implode("\n", $lines);
-	}
-
-	/**
-	 * Reads one file of the database.
-	 *
-	 * @return string[] the file's lines
-	 */
-	private function lines($name)
-	{
-		$url = 'https://www.unicode.org/Public/' . $this->version . '/ucd/' . $name;
-
-		return explode("\n", $this->cached($this->files . '/' . basename($name), $url));
+		return $this->chunkedLines($entries, self::PER_LINE);
 	}
 
 }
