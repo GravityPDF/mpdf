@@ -34,10 +34,16 @@ final class FormWriter
 
 			$this->mpdf->formobjects[$file]['n'] = $this->mpdf->n;
 
+			$transparencyGroup = $this->mpdf->transparencyAllowed();
+
 			$this->writer->write('<</Type /XObject');
 			$this->writer->write('/Subtype /Form');
-			$this->writer->write('/Group ' . ($this->mpdf->n + 1) . ' 0 R');
+			if ($transparencyGroup) {
+				$this->writer->write('/Group ' . ($this->mpdf->n + 1) . ' 0 R');
+			}
 			$this->writer->write('/BBox [' . $info['x'] . ' ' . $info['y'] . ' ' . ($info['w'] + $info['x']) . ' ' . ($info['h'] + $info['y']) . ']');
+			// The graphics states and fonts it names are in the dictionary the pages share
+			$this->writer->write('/Resources 2 0 R');
 
 			if ($this->mpdf->compress) {
 				$this->writer->write('/Filter /FlateDecode');
@@ -50,6 +56,10 @@ final class FormWriter
 			unset($this->mpdf->formobjects[$file]['data']);
 
 			$this->writer->write('endobj');
+
+			if (!$transparencyGroup) {
+				continue;
+			}
 
 			// Required for SVG transparency (opacity) to work
 			$this->writer->object();

@@ -258,7 +258,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			return $this->imageError('', false, 'GD library needed to parse image files');
 		}
 
-		if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
+		if (!$this->mpdf->transparencyAllowed()) {
 			$mask = false;
 		}
 
@@ -353,7 +353,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			// Read transparency info
 			$trns = [];
 			$trnsrgb = false;
-			if (!$this->mpdf->PDFA && !$this->mpdf->PDFX && !$mask) {  // mPDF 6 added NOT mask
+			if ($this->mpdf->transparencyAllowed() && !$mask) {  // mPDF 6 added NOT mask
 				if ($tRNS) {
 					$t = substr($data, $tRNS['payload'], $tRNS['size']);
 					if ($colspace === 'DeviceGray') {  // ct===0
@@ -1386,7 +1386,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 
 		} elseif (($this->mpdf->PDFA || $this->mpdf->PDFX) && $pngalpha) {
 
-			// Remove alpha channel
+			// Convert to the colour space the standard allows; convertImage() drops the alpha channel where it forbids transparency
 			if ($this->mpdf->restrictColorSpace === 1) { // Grayscale
 				$info = $this->convertImage($data, $colspace, 'DeviceGray', $w, $h, $ppUx, $pngalpha, $gamma, $ct); // mPDF 5.7.2 Gamma correction
 			} elseif ($this->mpdf->restrictColorSpace === 3) { // CMYK
@@ -1394,7 +1394,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			} elseif ($this->mpdf->PDFA) { // RGB
 				$info = $this->convertImage($data, $colspace, 'DeviceRGB', $w, $h, $ppUx, $pngalpha, $gamma, $ct); // mPDF 5.7.2 Gamma correction
 			}
-			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
+			if (!$this->mpdf->transparencyAllowed() && (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto))) {
 				$this->mpdf->PDFAXwarnings[] = sprintf('Transparency (alpha channel) not permitted in PDFA or PDFX files - %s - (Image converted to one without transparency.)', $file);
 			}
 
@@ -1417,10 +1417,6 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 
 			// Alpha channel set (including using tRNS for Paletted images)
 			if ($pngalpha) {
-				if ($this->mpdf->PDFA) {
-					throw new \Mpdf\MpdfException(sprintf('PDFA1-b does not permit images with alpha channel transparency (%s).', $file));
-				}
-
 				$imgalpha = imagecreate($w, $h);
 				// generate gray scale pallete
 				for ($c = 0; $c < 256; ++$c) {

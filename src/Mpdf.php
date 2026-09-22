@@ -2000,6 +2000,44 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->aliasNbPgGp = $alias;
 	}
 
+	/**
+	 * The PDF/A part and conformance level PDFAversion names
+	 *
+	 * @return string[] e.g. ['2', 'U']
+	 *
+	 * @throws \Mpdf\MpdfException when mPDF cannot produce that part and level
+	 */
+	public function pdfaConformance()
+	{
+		$version = strtoupper((string) $this->PDFAversion);
+
+		if (!in_array($version, ['1-B', '2-B', '2-U', '3-B', '3-U'], true)) {
+			throw new \Mpdf\MpdfException(sprintf('PDFA version (%s) is not valid. (Use: 1-B, 2-B, 2-U, 3-B or 3-U)', $this->PDFAversion));
+		}
+
+		return explode('-', $version);
+	}
+
+	/**
+	 * Whether the document may use transparency: PDF/A-1 and PDF/X-1a forbid it, PDF/A-2 onwards does not
+	 *
+	 * @return bool
+	 */
+	public function transparencyAllowed()
+	{
+		if ($this->PDFX) {
+			return false;
+		}
+
+		if (!$this->PDFA) {
+			return true;
+		}
+
+		list($part) = $this->pdfaConformance();
+
+		return $part !== '1';
+	}
+
 	function SetAlpha($alpha, $bm = 'Normal', $return = false, $mode = 'B')
 	{
 		// alpha: real value from 0 (transparent) to 1 (opaque)
@@ -2008,7 +2046,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		//          HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity
 		// set alpha for stroking (CA) and non-stroking (ca) operations
 		// mode determines F (fill) S (stroke) B (both)
-		if (($this->PDFA || $this->PDFX) && $alpha != 1) {
+		if (!$this->transparencyAllowed() && $alpha != 1) {
 			if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
 				$this->PDFAXwarnings[] = "Image opacity must be 100% (Opacity changed to 100%)";
 			}
@@ -10247,7 +10285,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		if ($this->PDFA || $this->PDFX) {
+		if (!$this->transparencyAllowed()) {
 			if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
 				$this->PDFAXwarnings[] = "Annotation markers cannot be semi-transparent in PDFA1-b or PDFX/1-a, so they may make underlying text unreadable. (Annotation markers moved to right margin)";
 			}
@@ -10834,8 +10872,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// add a watermark
 	function watermark($texte, $angle = 45, $fontsize = 96, $alpha = 0.2)
 	{
-		if ($this->PDFA || $this->PDFX) {
-			throw new \Mpdf\MpdfException('PDFA and PDFX do not permit transparency, so mPDF does not allow Watermarks!');
+		if (!$this->transparencyAllowed()) {
+			throw new \Mpdf\MpdfException('PDF/A-1b and PDF/X-1a do not permit transparency, so mPDF does not allow Watermarks!');
 		}
 
 		if (!$this->watermark_font) {
@@ -10913,8 +10951,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function watermarkImg($src, $alpha = 0.2)
 	{
-		if ($this->PDFA || $this->PDFX) {
-			throw new \Mpdf\MpdfException('PDFA and PDFX do not permit transparency, so mPDF does not allow Watermarks!');
+		if (!$this->transparencyAllowed()) {
+			throw new \Mpdf\MpdfException('PDF/A-1b and PDF/X-1a do not permit transparency, so mPDF does not allow Watermarks!');
 		}
 
 		if ($this->watermarkImgBehind) {

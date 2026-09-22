@@ -381,9 +381,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				$toUni .= "1 begincodespacerange\n";
 				$toUni .= "<0000> <FFFF>\n";
 				$toUni .= "endcodespacerange\n";
-				$toUni .= "1 beginbfrange\n";
-				$toUni .= "<0000> <FFFF> <0000>\n";
-				$toUni .= "endbfrange\n";
+				$toUni .= $this->identityBfRanges($asSubset ? array_keys($codeToGlyph) : null);
 				$toUni .= "endcmap\n";
 				$toUni .= "CMapName currentdict /CMap defineresource pop\n";
 				$toUni .= "end\n";
@@ -476,6 +474,39 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				throw new \Mpdf\MpdfException(sprintf('Unsupported font type: %s (%s)', $type, $name));
 			}
 		}
+	}
+
+	/**
+	 * The bfrange blocks of a ToUnicode CMap that maps each two-byte code to the Unicode value with the same number
+	 *
+	 * A bfrange may only increment the last byte of its destination, so one <0000> <FFFF> range maps nothing past
+	 * <00FF>. Each row of 256 codes gets a range of its own instead, skipping the surrogate rows.
+	 *
+	 * @param int[]|null $codes the codes the font can draw, or null for every code
+	 *
+	 * @return string
+	 */
+	private function identityBfRanges($codes)
+	{
+		if ($codes === null) {
+			$rows = array_diff(range(0x00, 0xFF), range(0xD8, 0xDF));
+		} else {
+			$rows = array_unique(array_map(function ($code) {
+				return $code >> 8;
+			}, $codes));
+			sort($rows);
+		}
+
+		$cmap = '';
+		foreach (array_chunk($rows, 100) as $block) { // A block holds at most 100 ranges
+			$cmap .= count($block) . " beginbfrange\n";
+			foreach ($block as $row) {
+				$cmap .= sprintf("<%1\$02X00> <%1\$02XFF> <%1\$02X00>\n", $row);
+			}
+			$cmap .= "endbfrange\n";
+		}
+
+		return $cmap;
 	}
 
 	/**

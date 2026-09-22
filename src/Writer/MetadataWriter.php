@@ -118,14 +118,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		// This bit is specific to PDFX-1a
 		if ($this->mpdf->PDFX) {
 			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdfx="http://ns.adobe.com/pdfx/1.3/" pdfx:Apag_PDFX_Checkup="1.3" pdfx:GTS_PDFXConformance="PDF/X-1a:2003" pdfx:GTS_PDFXVersion="PDF/X-1:2003"/>' . "\n";
-		} // This bit is specific to PDFA-1b
-		elseif ($this->mpdf->PDFA) {
-
-			if (strpos($this->mpdf->PDFAversion, '-') === false) {
-				throw new \Mpdf\MpdfException(sprintf('PDFA version (%s) is not valid. (Use: 1-B, 3-B, etc.)', $this->mpdf->PDFAversion));
-			}
-
-			list($part, $conformance) = explode('-', strtoupper($this->mpdf->PDFAversion));
+		} elseif ($this->mpdf->PDFA) {
+			list($part, $conformance) = $this->mpdf->pdfaConformance();
 			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/" >' . "\n";
 			$m .= '    <pdfaid:part>' . $part . '</pdfaid:part>' . "\n";
 			$m .= '    <pdfaid:conformance>' . $conformance . '</pdfaid:conformance>' . "\n";
@@ -332,9 +326,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		// PDF/A-2 and PDF/A-3 are based on PDF 1.7 (ISO 32000-1).
 		// The /Version entry in the catalog overrides the header version.
-		if ($this->mpdf->PDFA && strpos($this->mpdf->PDFAversion, '-') !== false) {
-			list($part) = explode('-', $this->mpdf->PDFAversion);
-			if ((int) $part >= 2) {
+		if ($this->mpdf->PDFA) {
+			list($part) = $this->mpdf->pdfaConformance();
+			if ($part !== '1') {
 				$this->writer->write('/Version /1.7');
 			}
 		}
@@ -637,11 +631,6 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 						$fileAttachment = (bool) $pl['opt']['file'];
 
-						if ($fileAttachment && !$this->mpdf->allowAnnotationFiles) {
-							$this->logger->warning('Embedded files for annotations have to be allowed explicitly with "allowAnnotationFiles" config key');
-							$fileAttachment = false;
-						}
-
 						$this->writer->object();
 
 						$annot = '';
@@ -681,6 +670,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$f = preg_replace('/[^a-zA-Z0-9._]/', '', $f);
 
 							$annot .= '/FS <</Type /Filespec /F (' . $f . ')';
+							if ($this->mpdf->PDFA) {
+								$annot .= ' /UF (' . $f . ')';
+							}
 							$annot .= '/EF <</F ' . ($this->mpdf->n + 1) . ' 0 R>>';
 							$annot .= '>>';
 
@@ -703,28 +695,23 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 						if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
 							$annot .= ' /F 28';
+						}
+
+						if (!$this->mpdf->transparencyAllowed()) {
 							$annot .= ' /CA 1';
 						} elseif ($pl['opt']['ca'] > 0) {
 							$annot .= ' /CA ' . $pl['opt']['ca'];
 						}
 
-						$annotcolor = ' /C [';
-						if (isset($pl['opt']['c']) && $pl['opt']['c']) {
-							$col = $pl['opt']['c'];
-							if ($col[0] == 3 || $col[0] == 5) {
-								$annotcolor .= sprintf('%.3F %.3F %.3F', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255);
-							} elseif ($col[0] == 1) {
-								$annotcolor .= sprintf('%.3F', ord($col[1]) / 255);
-							} elseif ($col[0] == 4 || $col[0] == 6) {
-								$annotcolor .= sprintf('%.3F %.3F %.3F %.3F', ord($col[1]) / 100, ord($col[2]) / 100, ord($col[3]) / 100, ord($col[4]) / 100);
-							} else {
-								$annotcolor .= '1 1 0';
-							}
-						} else {
-							$annotcolor .= '1 1 0';
+						$fill = $this->annotationFill($pl['opt']);
+						$annot .= ' /C [' . preg_replace('/ (rg|g|k)$/', '', $fill) . ']';
+
+						// Kept apart, as a popup reuses $w and $h for its own size
+						$appearanceWidth = $w;
+						$appearanceHeight = $h;
+						if ($this->mpdf->PDFA) {
+							$annot .= ' /AP <</N ' . ($this->mpdf->n + $this->annotationObjectCount($pl) - 1) . ' 0 R>>';
 						}
-						$annotcolor .= ']';
-						$annot .= $annotcolor;
 
 						// Usually Author
 						// Use as Title for fileattachment
@@ -814,6 +801,10 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$this->writer->write($annot);
 							$this->writer->write('endobj');
 						}
+
+						if ($this->mpdf->PDFA) {
+							$this->writeAnnotationAppearance($appearanceWidth, $appearanceHeight, $fill);
+						}
 					}
 				}
 
@@ -829,6 +820,117 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		if (count($this->form->form_radio_groups)) {
 			$this->form->_putRadioItems($n);
 		}
+	}
+
+	/**
+	 * Drops each annotation's file where the configuration or the PDF/A part does not allow it to be embedded
+	 *
+	 * Runs before PageWriter numbers the annotation objects, so both count the same objects.
+	 */
+	public function settleAnnotations()
+	{
+		foreach ($this->mpdf->PageAnnots as $n => $annotations) {
+			foreach ($annotations as $key => $pl) {
+				$file = $pl['opt']['file'];
+
+				if ($file && !$this->mpdf->allowAnnotationFiles) {
+					$this->logger->warning('Embedded files for annotations have to be allowed explicitly with "allowAnnotationFiles" config key');
+					$file = '';
+				} elseif ($file && !$this->mayEmbed($file)) {
+					if (!$this->mpdf->PDFAauto) {
+						$this->mpdf->PDFAXwarnings[] = sprintf('PDFA version %s cannot embed the file "%s" (Annotation written without the file)', $this->mpdf->PDFAversion, $file);
+					}
+					$file = '';
+				}
+
+				$this->mpdf->PageAnnots[$n][$key]['opt']['file'] = $file;
+			}
+		}
+	}
+
+	/**
+	 * How many objects an annotation writes: itself, then its file or popup, then its appearance under PDF/A
+	 *
+	 * @param mixed[] $pl
+	 *
+	 * @return int
+	 */
+	public function annotationObjectCount(array $pl)
+	{
+		return 1 + (!empty($pl['opt']['popup']) || !empty($pl['opt']['file']) ? 1 : 0) + ($this->mpdf->PDFA ? 1 : 0);
+	}
+
+	/**
+	 * Whether the PDF/A part lets the document embed a file: PDF/A-1 embeds none, PDF/A-2 only PDF/A documents
+	 *
+	 * PDF/A forbids compressing the XMP metadata, so a file's pdfaid:part claim can be read from its raw bytes. The
+	 * claim is taken on trust.
+	 *
+	 * @param string $file
+	 *
+	 * @return bool
+	 */
+	private function mayEmbed($file)
+	{
+		if (!$this->mpdf->PDFA) {
+			return true;
+		}
+
+		list($part) = $this->mpdf->pdfaConformance();
+
+		if ($part === '1') {
+			return false;
+		}
+
+		if ($part !== '2') {
+			return true;
+		}
+
+		if (@file_get_contents($file, false, null, 0, 5) !== '%PDF-') {
+			return false;
+		}
+
+		return strpos((string) @file_get_contents($file), 'pdfaid:part') !== false;
+	}
+
+	/**
+	 * The fill operator for an annotation's colour, yellow if it has none
+	 *
+	 * A spot colour falls back to yellow too, as neither the /C array nor the appearance can name its colour space.
+	 *
+	 * @param mixed[] $opt
+	 *
+	 * @return string
+	 */
+	private function annotationFill(array $opt)
+	{
+		if (empty($opt['c']) || $opt['c'][0] == 2) {
+			return '1.000 1.000 0.000 rg';
+		}
+
+		return $this->mpdf->SetColor($opt['c']);
+	}
+
+	/**
+	 * Writes the appearance PDF/A-2 requires of an annotation: a note icon in the annotation's colour
+	 *
+	 * @param float $w
+	 * @param float $h
+	 * @param string $fill the fill operator for the annotation's colour
+	 */
+	private function writeAnnotationAppearance($w, $h, $fill)
+	{
+		$stream = sprintf("q %s 0 G 0.5 w 0.25 0.25 %.3F %.3F re B\n", $fill, $w - 0.5, $h - 0.5);
+		for ($line = 1; $line <= 3; $line++) {
+			$y = $h * $line / 4;
+			$stream .= sprintf("%.3F %.3F m %.3F %.3F l\n", $w * 0.2, $y, $w * 0.8, $y);
+		}
+		$stream .= "S Q";
+
+		$this->writer->object();
+		$this->writer->write(sprintf('<</Type /XObject /Subtype /Form /BBox [0 0 %.3F %.3F] /Length %d>>', $w, $h, strlen($stream)));
+		$this->writer->stream($stream);
+		$this->writer->write('endobj');
 	}
 
 	public function writeEncryption() // _putencryption
