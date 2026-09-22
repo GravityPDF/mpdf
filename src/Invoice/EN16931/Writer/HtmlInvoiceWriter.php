@@ -14,8 +14,9 @@ use Mpdf\Utils\NumericString;
 /**
  * Writes an invoice as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how to pay
  *
- * Pass labels to translate it, e.g. new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date']), and extend it
- * to format numbers, amounts and dates for a locale.
+ * Pass labels to translate it and the separators its numbers are written with, e.g. for French
+ * new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date'], ',', "\xc2\xa0"). Extend it to format dates or
+ * amounts further.
  *
  *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter()]);
  */
@@ -63,11 +64,25 @@ class HtmlInvoiceWriter implements WriterInterface
 	private $labels;
 
 	/**
-	 * @param string[] $labels Replacements for any of the default labels, keyed as they are
+	 * @var string
 	 */
-	public function __construct(array $labels = [])
+	private $decimalPoint;
+
+	/**
+	 * @var string
+	 */
+	private $thousandsSeparator;
+
+	/**
+	 * @param string[] $labels Replacements for any of the default labels, keyed as they are
+	 * @param string $decimalPoint
+	 * @param string $thousandsSeparator
+	 */
+	public function __construct(array $labels = [], $decimalPoint = '.', $thousandsSeparator = ',')
 	{
 		$this->labels = $labels + self::$defaultLabels;
+		$this->decimalPoint = $decimalPoint;
+		$this->thousandsSeparator = $thousandsSeparator;
 	}
 
 	/**
@@ -312,7 +327,7 @@ class HtmlInvoiceWriter implements WriterInterface
 	}
 
 	/**
-	 * A quantity or VAT rate, to at most four decimals; override to format it for a locale
+	 * A quantity or VAT rate, to at most four decimals and without trailing zeros
 	 *
 	 * @param float $number
 	 *
@@ -320,11 +335,14 @@ class HtmlInvoiceWriter implements WriterInterface
 	 */
 	protected function number($number)
 	{
-		return NumericString::decimal($number, 4);
+		$decimal = NumericString::decimal($number, 4);
+		$point = strpos($decimal, '.');
+
+		return number_format((float) $decimal, $point === false ? 0 : strlen($decimal) - $point - 1, $this->decimalPoint, $this->thousandsSeparator);
 	}
 
 	/**
-	 * An amount with its currency; override to format it for a locale
+	 * An amount, to the cent, with its currency
 	 *
 	 * @param float $amount
 	 * @param string $currency
@@ -333,11 +351,11 @@ class HtmlInvoiceWriter implements WriterInterface
 	 */
 	protected function money($amount, $currency)
 	{
-		return number_format($amount, 2) . ' ' . $currency;
+		return number_format($amount, 2, $this->decimalPoint, $this->thousandsSeparator) . ' ' . $currency;
 	}
 
 	/**
-	 * A date, or null when there is none; override to format it for a locale
+	 * A date, or null when there is none
 	 *
 	 * @param \DateTimeInterface|null $date
 	 *

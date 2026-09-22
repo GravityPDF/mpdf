@@ -6,7 +6,8 @@ use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
 
 /**
- * A credit note in French: every label replaced, and numbers, amounts and dates written by a subclass the French way
+ * A credit note in French: every label replaced, a decimal comma and no-break space between thousands, and dates
+ * written by a subclass the French way
  *
  * @group snapshot
  */
@@ -60,7 +61,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 			'iban' => 'IBAN',
 			'bic' => 'BIC',
 			'accountName' => 'Titulaire du compte',
-		]);
+		], ',', "\xc2\xa0");
 	}
 
 }

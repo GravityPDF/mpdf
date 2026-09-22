@@ -4,6 +4,7 @@ namespace Mpdf\Invoice\EN16931\Writer;
 
 use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
+use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
@@ -48,6 +49,30 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('<td>Date</td>', $html);
 		$this->assertStringContainsString('TVA 20% sur 900.00 EUR', $html);
 		$this->assertStringContainsString('<td>Due date</td>', $html);
+	}
+
+	/**
+	 * The separators given are used in every number: quantities, unit prices, VAT rates and amounts
+	 */
+	public function testTakesTheNumberSeparators()
+	{
+		$invoice = $this->invoice()->addLine(new LineItem('Screws', 1500.25, 0.02, 20));
+		$html = (new HtmlInvoiceWriter([], ',', ' '))->write($invoice);
+
+		$this->assertStringContainsString('>1 500,25<', $html);
+		$this->assertStringContainsString('>0,02 EUR<', $html);
+		$this->assertStringContainsString('>5,5%<', $html);
+		$this->assertStringContainsString('>1 057,12 EUR<', $html);
+	}
+
+	/**
+	 * By default a number is written with a decimal point and commas between thousands
+	 */
+	public function testWritesThousandsWithCommasByDefault()
+	{
+		$html = (new HtmlInvoiceWriter())->write($this->invoice()->addLine(new LineItem('Screws', 1500.25, 0.02, 20)));
+
+		$this->assertStringContainsString('>1,500.25<', $html);
 	}
 
 	/**
