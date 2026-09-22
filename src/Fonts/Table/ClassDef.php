@@ -35,6 +35,47 @@ class ClassDef
 {
 
 	/**
+	 * Where the Class Definition table a subtable points at starts.
+	 *
+	 * A null offset means the subtable states no such table, and every glyph is then in class 0 -
+	 * which is what a chained context says where a backtrack or lookahead position matches anything.
+	 * Adding it to the subtable's own start instead reads the subtable header as a Class Definition
+	 * table, whose format is the subtable's own and whose count is one of its offsets, and the
+	 * ranges are read off the end of the table (#326).
+	 *
+	 * The Coverage offsets beside them are read without this test: the spec requires those.
+	 *
+	 * @param int $subtableOffset Where the subtable starts; the reader is at the ClassDef's offset
+	 *
+	 * @return int From the start of the file, or 0 where the subtable states no such table
+	 */
+	public static function offset(FontReader $reader, $subtableOffset)
+	{
+		$classDef = $reader->readUInt16();
+
+		return $classDef ? $subtableOffset + $classDef : 0;
+	}
+
+	/**
+	 * Read the Class Definition table at $offset, as pairs() reads one.
+	 *
+	 * @param int $offset From the start of the file, as offset() gives it: 0 is no table at all, and
+	 *                    assigns no glyph to any class
+	 *
+	 * @return array[] One [glyphID, class] pair per glyph the table assigns, in table order
+	 */
+	public static function pairsAt(FontReader $reader, $offset)
+	{
+		if (!$offset) {
+			return [];
+		}
+
+		$reader->seek($offset);
+
+		return self::pairs($reader);
+	}
+
+	/**
 	 * Read a Class Definition table from wherever the reader is.
 	 *
 	 * Any glyph the table does not mention belongs to class 0, and the spec says so rather than

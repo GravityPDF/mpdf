@@ -1929,15 +1929,16 @@ class TTFontFile implements Fonts\FontSourceInterface
 						}
 					} // Format 2: Class-based Context Glyph Substitution
 					elseif ($SubstFormat == 2) {
-						$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						$Lookup[$i]['Subtable'][$c]['ClassDefOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
+						$subtableOffset = $Lookup[$i]['Subtable'][$c]['Offset'];
+						$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $subtableOffset + $this->reader->readUInt16();
+						$Lookup[$i]['Subtable'][$c]['ClassDefOffset'] = ClassDef::offset($this->reader, $subtableOffset);
 						$Lookup[$i]['Subtable'][$c]['SubClassSetCnt'] = $this->reader->readUInt16();
 						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['SubClassSetCnt']; $b++) {
 							$offset = $this->reader->readUInt16();
 							if ($offset == 0x0000) {
 								$Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][] = 0;
 							} else {
-								$Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $offset;
+								$Lookup[$i]['Subtable'][$c]['SubClassSetOffset'][] = $subtableOffset + $offset;
 							}
 						}
 					} // Format 3: Coverage-based Context Glyph Substitution
@@ -1961,17 +1962,18 @@ class TTFontFile implements Fonts\FontSourceInterface
 						}
 					} // Format 2: Class-based Chaining Context Glyph Substitution  p257
 					elseif ($SubstFormat == 2) {
-						$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						$Lookup[$i]['Subtable'][$c]['BacktrackClassDefOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						$Lookup[$i]['Subtable'][$c]['InputClassDefOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
-						$Lookup[$i]['Subtable'][$c]['LookaheadClassDefOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
+						$subtableOffset = $Lookup[$i]['Subtable'][$c]['Offset'];
+						$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $subtableOffset + $this->reader->readUInt16();
+						$Lookup[$i]['Subtable'][$c]['BacktrackClassDefOffset'] = ClassDef::offset($this->reader, $subtableOffset);
+						$Lookup[$i]['Subtable'][$c]['InputClassDefOffset'] = ClassDef::offset($this->reader, $subtableOffset);
+						$Lookup[$i]['Subtable'][$c]['LookaheadClassDefOffset'] = ClassDef::offset($this->reader, $subtableOffset);
 						$Lookup[$i]['Subtable'][$c]['ChainSubClassSetCnt'] = $this->reader->readUInt16();
 						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['ChainSubClassSetCnt']; $b++) {
 							$offset = $this->reader->readUInt16();
 							if ($offset == 0x0000) {
 								$Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][] = $offset;
 							} else {
-								$Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $offset;
+								$Lookup[$i]['Subtable'][$c]['ChainSubClassSetOffset'][] = $subtableOffset + $offset;
 							}
 						}
 					} // Format 3: Coverage-based Chaining Context Glyph Substitution  p259
@@ -3418,14 +3420,15 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 * Unlike Otl::_getClasses this keeps class 0, and unlike Otl it drops glyphs no character
 	 * reaches rather than testing for them at match time.
 	 *
+	 * @param int $offset Where the ClassDef starts, as ClassDef::offset() gives it
+	 *
 	 * @return array class => "00041|00042|..."
 	 */
 	function _getClasses($offset)
 	{
-		$this->reader->seek($offset);
 		$GlyphByClass = [];
 
-		foreach (ClassDef::pairs($this->reader) as $pair) {
+		foreach (ClassDef::pairsAt($this->reader, $offset) as $pair) {
 			list($glyphID, $class) = $pair;
 
 			if (isset($this->glyphToChar[$glyphID][0])) {
