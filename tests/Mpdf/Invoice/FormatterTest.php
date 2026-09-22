@@ -6,49 +6,64 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
-	 * Each formatter with its currency, and what it makes of a number, an amount in that currency and in another,
-	 * a refund and a date
+	 * Each formatter with its currency, and what it makes of a quantity, an amount, a refund, a rate and a date
 	 *
 	 * @return mixed[]
 	 */
 	public function formatterProvider()
 	{
+		$french = (new Formatter(',', "\xc2\xa0", 'd/m/Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€")->withPercentFormat("%s\xc2\xa0%%");
+
 		return [
-			'default' => [new Formatter(), 'EUR', '1,500.25', '1,021.11 EUR', '1,021.11 USD', '-100.00 EUR', '2026-09-23'],
-			'USD' => [Formatter::usd(), 'USD', '1,500.25', '$1,021.11', '1,021.11 EUR', '-$100.00', '09/23/2026'],
-			'EUR' => [Formatter::eur(), 'EUR', '1.500,25', "1.021,11\xc2\xa0€", '1.021,11 USD', "-100,00\xc2\xa0€", '23.09.2026'],
-			'French' => [
-				new Formatter(',', "\xc2\xa0", 'd/m/Y', ['EUR' => "%s\xc2\xa0€"]),
-				'EUR',
-				"1\xc2\xa0500,25",
-				"1\xc2\xa0021,11\xc2\xa0€",
-				"1\xc2\xa0021,11 USD",
-				"-100,00\xc2\xa0€",
-				'23/09/2026',
-			],
+			'default' => [new Formatter(), 'EUR', '1,500.25', '1,021.11 EUR', '-100.00 EUR', '5.5%', '2026-09-23'],
+			'USD' => [Formatter::usd(), 'USD', '1,500.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
+			'EUR' => [Formatter::eur(), 'EUR', '1.500,25', "1.021,11\xc2\xa0€", "-100,00\xc2\xa0€", '5,5%', '23.09.2026'],
+			'French' => [$french, 'EUR', "1\xc2\xa0500,25", "1\xc2\xa0021,11\xc2\xa0€", "-100,00\xc2\xa0€", "5,5\xc2\xa0%", '23/09/2026'],
 		];
 	}
 
 	/**
-	 * A formatter writes numbers, amounts and dates by its conventions, and a currency it has no format for by its code
+	 * A formatter writes quantities, amounts, rates and dates by its conventions, the sign of a refund ahead of any symbol
 	 *
 	 * @dataProvider formatterProvider
 	 *
 	 * @param \Mpdf\Invoice\Formatter $formatter
-	 * @param string $currency The currency the formatter has a format for
+	 * @param string $currency
 	 * @param string $number
 	 * @param string $money
-	 * @param string $otherMoney The same amount in the other of EUR and USD
 	 * @param string $refund
+	 * @param string $percent
 	 * @param string $date
 	 */
-	public function testFormats(Formatter $formatter, $currency, $number, $money, $otherMoney, $refund, $date)
+	public function testFormats(Formatter $formatter, $currency, $number, $money, $refund, $percent, $date)
 	{
 		$this->assertSame($number, $formatter->number(1500.25));
 		$this->assertSame($money, $formatter->money(1021.11, $currency));
-		$this->assertSame($otherMoney, $formatter->money(1021.11, $currency === 'EUR' ? 'USD' : 'EUR'));
 		$this->assertSame($refund, $formatter->money(-100, $currency));
+		$this->assertSame($percent, $formatter->percent(5.5));
 		$this->assertSame($date, $formatter->date(new \DateTime('2026-09-23')));
+	}
+
+	/**
+	 * A currency without a format of its own is written with its code after the amount
+	 */
+	public function testWritesAnotherCurrencyByItsCode()
+	{
+		$this->assertSame('1,021.11 EUR', Formatter::usd()->money(1021.11, 'EUR'));
+		$this->assertSame('1.021,11 USD', Formatter::eur()->money(1021.11, 'USD'));
+	}
+
+	/**
+	 * A with method returns an adjusted copy, leaving the formatter it was called on as it was
+	 */
+	public function testAdjustsACopy()
+	{
+		$eur = Formatter::eur();
+		$withPounds = $eur->withCurrencyFormat('GBP', '£%s');
+
+		$this->assertSame('£1.021,11', $withPounds->money(1021.11, 'GBP'));
+		$this->assertSame("1.021,11\xc2\xa0€", $withPounds->money(1021.11, 'EUR'));
+		$this->assertSame('1.021,11 GBP', $eur->money(1021.11, 'GBP'));
 	}
 
 	/**
@@ -91,20 +106,20 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame($expected, (new Formatter())->locality($party));
 		$this->assertSame($expected, Formatter::usd()->locality($party));
-		$this->assertSame($expected, Formatter::eur()->locality($party));
 	}
 
 	/**
-	 * A country's format given replaces the built-in one, and one given for another country is added
+	 * A country's format given replaces the built-in one or adds one, and a comma left beside a missing part is closed up
 	 */
 	public function testTakesLocalityFormats()
 	{
-		$formatter = new Formatter('.', ',', 'Y-m-d', [], ['US' => '{postcode} {city}', 'BR' => '{city} - {subdivision} {postcode}']);
-		$us = (new Party('Buyer', 'US'))->setAddress('1 Main Street', '10118', 'New York');
-		$brazil = (new Party('Buyer', 'BR'))->setAddress('1 Main Street', '01310-100', 'São Paulo')->setCountrySubdivision('SP');
+		$formatter = (new Formatter())
+			->withLocalityFormat('US', '{postcode} {city}')
+			->withLocalityFormat('BR', '{city}, {subdivision}, {postcode}');
 
-		$this->assertSame('10118 New York', $formatter->locality($us));
-		$this->assertSame('São Paulo - SP 01310-100', $formatter->locality($brazil));
+		$this->assertSame('10118 New York', $formatter->locality((new Party('Buyer', 'US'))->setAddress('1 Main Street', '10118', 'New York')));
+		$this->assertSame('São Paulo, SP, 01310-100', $formatter->locality($this->brazilian()->setCountrySubdivision('SP')));
+		$this->assertSame('São Paulo, 01310-100', $formatter->locality($this->brazilian()));
 	}
 
 	/**
@@ -119,6 +134,16 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('3', $formatter->number(3.0));
 		$this->assertSame('0.00 EUR', $formatter->money(-0.001, 'EUR'));
 		$this->assertNull($formatter->date(null));
+	}
+
+	/**
+	 * A buyer in São Paulo, with no state yet
+	 *
+	 * @return \Mpdf\Invoice\Party
+	 */
+	private function brazilian()
+	{
+		return (new Party('Buyer', 'BR'))->setAddress('1 Main Street', '01310-100', 'São Paulo');
 	}
 
 }

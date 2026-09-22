@@ -6,11 +6,13 @@ use Mpdf\Strict;
 use Mpdf\Utils\NumericString;
 
 /**
- * How a printed trade document writes its numbers, amounts, dates and addresses: the separators, the date format,
- * where each currency's symbol goes, and the order of an address's postcode, city and state in each country
+ * How a printed trade document writes its numbers, amounts, rates, dates and addresses
  *
- * The default writes 1,021.11 EUR and 2026-09-23. usd() and eur() are presets to start from, and the constructor takes
- * any other convention, e.g. for France new Formatter(',', "\xc2\xa0", 'd/m/Y', ['EUR' => "%s\xc2\xa0€"]).
+ * The default writes 1,021.11 EUR, 20% and 2026-09-23. usd() and eur() are presets to start from, and the with methods
+ * adjust any formatter, e.g. for France:
+ *
+ *     (new Formatter(',', "\xc2\xa0", 'd/m/Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€")->withPercentFormat("%s\xc2\xa0%%")
+ *
  * Addresses follow their party's country whichever convention is used: 75002 Paris, but New York, NY 10118.
  */
 class Formatter
@@ -48,7 +50,12 @@ class Formatter
 	/**
 	 * @var string[]
 	 */
-	private $currencyFormats;
+	private $currencyFormats = [];
+
+	/**
+	 * @var string
+	 */
+	private $percentFormat = '%s%%';
 
 	/**
 	 * @var string[]
@@ -59,19 +66,13 @@ class Formatter
 	 * @param string $decimalPoint
 	 * @param string $thousandsSeparator
 	 * @param string $dateFormat As DateTimeInterface::format() takes it
-	 * @param string[] $currencyFormats A sprintf() format for amounts in each ISO 4217 currency, e.g. ['USD' => '$%s'];
-	 *                                  others are written with their code after them
-	 * @param string[] $localityFormats The address line of the postcode, city and state in each ISO 3166-1 country, from
-	 *                                  {postcode}, {city} and {subdivision}, over the built-in ones for AU, CA, GB and
-	 *                                  US; others are written {postcode} {city} {subdivision}
 	 */
-	public function __construct($decimalPoint = '.', $thousandsSeparator = ',', $dateFormat = 'Y-m-d', array $currencyFormats = [], array $localityFormats = [])
+	public function __construct($decimalPoint = '.', $thousandsSeparator = ',', $dateFormat = 'Y-m-d')
 	{
 		$this->decimalPoint = $decimalPoint;
 		$this->thousandsSeparator = $thousandsSeparator;
 		$this->dateFormat = $dateFormat;
-		$this->currencyFormats = $currencyFormats;
-		$this->localityFormats = $localityFormats + self::$countryLocalityFormats;
+		$this->localityFormats = self::$countryLocalityFormats;
 	}
 
 	/**
@@ -81,21 +82,70 @@ class Formatter
 	 */
 	public static function usd()
 	{
-		return new self('.', ',', 'm/d/Y', ['USD' => '$%s']);
+		return (new self('.', ',', 'm/d/Y'))->withCurrencyFormat('USD', '$%s');
 	}
 
 	/**
-	 * The convention of Germany and much of the euro area: 1.021,11 € and 23.09.2026
+	 * The German convention, shared by much of the euro area: 1.021,11 € and 23.09.2026. Countries that write euros
+	 * otherwise, such as France, build their own.
 	 *
 	 * @return self
 	 */
 	public static function eur()
 	{
-		return new self(',', '.', 'd.m.Y', ['EUR' => "%s\xc2\xa0€"]);
+		return (new self(',', '.', 'd.m.Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€");
 	}
 
 	/**
-	 * A quantity or rate, to at most four decimals and without trailing zeros
+	 * A copy writing amounts in a currency by a format of its own; a currency without one has its code after the amount
+	 *
+	 * @param string $currency ISO 4217 code
+	 * @param string $format A sprintf() format for the amount, e.g. '$%s'
+	 *
+	 * @return self
+	 */
+	public function withCurrencyFormat($currency, $format)
+	{
+		$formatter = clone $this;
+		$formatter->currencyFormats[$currency] = $format;
+
+		return $formatter;
+	}
+
+	/**
+	 * A copy writing rates by another format
+	 *
+	 * @param string $format A sprintf() format for the rate, '%s%%' by default
+	 *
+	 * @return self
+	 */
+	public function withPercentFormat($format)
+	{
+		$formatter = clone $this;
+		$formatter->percentFormat = $format;
+
+		return $formatter;
+	}
+
+	/**
+	 * A copy writing the addresses of a country with their postcode, city and state in another order. AU, CA, GB and
+	 * US are built in, and any other country is written {postcode} {city} {subdivision}.
+	 *
+	 * @param string $country ISO 3166-1 alpha-2 code
+	 * @param string $format From {postcode}, {city} and {subdivision}
+	 *
+	 * @return self
+	 */
+	public function withLocalityFormat($country, $format)
+	{
+		$formatter = clone $this;
+		$formatter->localityFormats[$country] = $format;
+
+		return $formatter;
+	}
+
+	/**
+	 * A quantity, to at most four decimals and without trailing zeros
 	 *
 	 * @param float $number
 	 *
@@ -107,6 +157,18 @@ class Formatter
 		$point = strpos($decimal, '.');
 
 		return number_format((float) $decimal, $point === false ? 0 : strlen($decimal) - $point - 1, $this->decimalPoint, $this->thousandsSeparator);
+	}
+
+	/**
+	 * A rate, such as a VAT rate, as a number with its percent sign
+	 *
+	 * @param float $rate
+	 *
+	 * @return string
+	 */
+	public function percent($rate)
+	{
+		return sprintf($this->percentFormat, $this->number($rate));
 	}
 
 	/**
@@ -145,7 +207,8 @@ class Formatter
 			'{subdivision}' => (string) $party->getCountrySubdivision(),
 		]);
 
-		return trim(preg_replace(['/\s+/', '/\s+,/', '/,(?=,)/'], [' ', ',', ''], $line), ' ,');
+		// Close the gaps the missing parts leave, then any comma left at either end
+		return trim(preg_replace(['/\s+/', '/ ?(, ?)+/'], [' ', ', '], $line), ' ,');
 	}
 
 	/**

@@ -315,7 +315,7 @@ class HtmlInvoiceWriter implements WriterInterface
 	 */
 	private function rate($category, $rate)
 	{
-		return $category === LineItem::NOT_SUBJECT_TO_VAT ? $category : $this->formatter->number($rate) . '%';
+		return $category === LineItem::NOT_SUBJECT_TO_VAT ? $category : $this->formatter->percent($rate);
 	}
 
 	/**

@@ -8,8 +8,8 @@ use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
 use Mpdf\Invoice\Formatter;
 
 /**
- * A credit note in French: every label replaced, a decimal comma, no-break spaces between thousands, the euro sign
- * after the amount and dates written day first
+ * A credit note in French: every label replaced, a decimal comma, no-break spaces between thousands and before the
+ * euro and percent signs, and dates written day first
  *
  * @group snapshot
  */
@@ -63,7 +63,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 			'iban' => 'IBAN',
 			'bic' => 'BIC',
 			'accountName' => 'Titulaire du compte',
-		], new Formatter(',', "\xc2\xa0", 'd/m/Y', ['EUR' => "%s\xc2\xa0€"]));
+		], (new Formatter(',', "\xc2\xa0", 'd/m/Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€")->withPercentFormat("%s\xc2\xa0%%"));
 	}
 
 }

@@ -168,6 +168,7 @@ class CiiInvoiceWriter extends CiiWriter
 			$this->appendIfSet($address, 'ram:CityName', $party->getCity());
 		}
 		$this->append($address, 'ram:CountryID', $party->getCountryCode());
+		// The schema puts the state after the country, so it cannot join the lines above
 		if ($detailed) {
 			$this->appendIfSet($address, 'ram:CountrySubDivisionName', $party->getCountrySubdivision());
 		}

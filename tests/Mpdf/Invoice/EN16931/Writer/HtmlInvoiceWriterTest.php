@@ -5,7 +5,6 @@ namespace Mpdf\Invoice\EN16931\Writer;
 use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
 use Mpdf\Invoice\Formatter;
-use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
@@ -53,18 +52,17 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The formatter given writes every number, amount and date: quantities, prices, VAT rates, totals and due dates
+	 * The formatter given writes every quantity, amount, rate and date
 	 */
 	public function testWritesWithTheFormatter()
 	{
-		$invoice = $this->invoice()->addLine(new LineItem('Screws', 1500.25, 0.02, 20));
-		$html = (new HtmlInvoiceWriter([], Formatter::eur()))->write($invoice);
+		$formatter = (new Formatter(',', '.', 'd.m.Y'))->withCurrencyFormat('EUR', '€%s')->withPercentFormat('%s pc');
+		$html = (new HtmlInvoiceWriter([], $formatter))->write($this->invoice());
 
-		$this->assertStringContainsString('>1.500,25<', $html);
-		$this->assertStringContainsString(">0,02\xc2\xa0€<", $html);
-		$this->assertStringContainsString('>5,5%<', $html);
-		$this->assertStringContainsString(">-100,00\xc2\xa0€<", $html);
-		$this->assertStringContainsString("<strong>1.057,12\xc2\xa0€</strong>", $html);
+		$this->assertStringContainsString('>7,5<', $html);
+		$this->assertStringContainsString('>€12,99<', $html);
+		$this->assertStringContainsString('>5,5 pc<', $html);
+		$this->assertStringContainsString('<strong>€1.021,11</strong>', $html);
 		$this->assertStringContainsString('<td>Due date</td><td>23.10.2026</td>', $html);
 	}
 

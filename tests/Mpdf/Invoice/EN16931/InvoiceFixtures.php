@@ -57,17 +57,12 @@ trait InvoiceFixtures
 	 */
 	private function blankInvoice()
 	{
-		$seller = (new Party('Seller SARL', 'FR'))
-			->setAddress('12 rue de la Paix', '75002', 'Paris')
-			->setVatId('FR32123456789')
-			->setLegalId('12345678900012', '0002')
-			->setEmail('billing@seller.example');
 		$buyer = (new Party('Buyer GmbH & Co. KG', 'DE'))
 			->setAddress('Hauptstraße 1', '10115', 'Berlin', 'Gebäude <B>')
 			->setVatId('DE123456789')
 			->setEmail('ap@buyer.example');
 
-		$invoice = new Invoice('INV-2026-0001', new \DateTime('2026-09-23'), 'EUR', $seller, $buyer);
+		$invoice = new Invoice('INV-2026-0001', new \DateTime('2026-09-23'), 'EUR', $this->seller(), $buyer);
 
 		return $invoice->setDeliveryDate(new \DateTime('2026-09-20'))
 			->setDueDate(new \DateTime('2026-10-23'))
@@ -77,6 +72,20 @@ trait InvoiceFixtures
 			->setBuyerReference('BR-42')
 			->setOrderReference('PO-1234')
 			->addNote('Late payment penalty: 3x the legal interest rate');
+	}
+
+	/**
+	 * The French seller of every invoice
+	 *
+	 * @return \Mpdf\Invoice\Party
+	 */
+	private function seller()
+	{
+		return (new Party('Seller SARL', 'FR'))
+			->setAddress('12 rue de la Paix', '75002', 'Paris')
+			->setVatId('FR32123456789')
+			->setLegalId('12345678900012', '0002')
+			->setEmail('billing@seller.example');
 	}
 
 }
