@@ -27,7 +27,7 @@ class ColorEmojiColrV1SnapshotTest extends Snapshot
 		['&#x1F1E6;', 'Regional indicator A', 'A blue square, turned a little and moved by an affine transform.'],
 		['&#x1F1FA;', 'Regional indicator U', 'The A drawn inside it by PaintColrGlyph, with a red stripe over it.'],
 		['&#x1F3F4;', 'Black flag', 'The flag skewed, then rotated.'],
-		['&#x1F3FD;', 'Skin tone', 'A sweep gradient, which mPDF does not draw yet, so it is a plain square in the colour of its middle stop.'],
+		['&#x1F3FD;', 'Skin tone', 'A sweep gradient about the square\'s centre, from skin tone round to red at the left and back, drawn as a mesh of thin wedges.'],
 		['&#x1F44D;', 'Thumbs up', 'Turned about its centre and cut off by its clip box, so the top of the thumb is missing on purpose.'],
 		['&#x1F468;&#x200D;&#x1F469;&#x200D;&#x1F467;', 'Family', 'Three faces multiplied onto a yellow square.'],
 		['&#x1F1E6;&#x1F1FA;', 'Flag of A and U', 'A linear gradient from blue to green, with a white stripe over it.'],

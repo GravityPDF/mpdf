@@ -69,15 +69,24 @@ class Geometry
 	 */
 	public static function bounds(array $matrix, array $box)
 	{
-		list($xMin, $yMin, $xMax, $yMax) = $box;
 		$xs = [];
 		$ys = [];
-		foreach ([[$xMin, $yMin], [$xMin, $yMax], [$xMax, $yMin], [$xMax, $yMax]] as $corner) {
+		foreach (self::corners($box) as $corner) {
 			$xs[] = $matrix[0] * $corner[0] + $matrix[2] * $corner[1] + $matrix[4];
 			$ys[] = $matrix[1] * $corner[0] + $matrix[3] * $corner[1] + $matrix[5];
 		}
 
 		return [min($xs), min($ys), max($xs), max($ys)];
+	}
+
+	/**
+	 * @param float[] $box [xMin, yMin, xMax, yMax]
+	 *
+	 * @return float[][] Its four corners, each [x, y]
+	 */
+	public static function corners(array $box)
+	{
+		return [[$box[0], $box[1]], [$box[0], $box[3]], [$box[2], $box[1]], [$box[2], $box[3]]];
 	}
 
 	/**
