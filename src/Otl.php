@@ -2814,13 +2814,14 @@ class Otl
 	}
 
 	/**
-	 * Move the recorded ligature and mark attachments up, after a substitution made the text longer.
+	 * Move the recorded ligature and mark attachments along, after a substitution changed the length
+	 * of the text.
 	 *
 	 * The attachments are held by position, so anything after the substitution has to be renumbered
 	 * or a mark would come out attached to the wrong base.
 	 *
 	 * @param int $pos Where the substitution happened
-	 * @param int $n   How many positions the text grew by
+	 * @param int $n   How many positions the text grew by, negative where it shrank
 	 */
 	function _updateLigatureMarks($pos, $n)
 	{
@@ -2831,54 +2832,92 @@ class Otl
 			return;
 		}
 
-		if ($n > 0) {
-			// Update position of Ligatures and associated Marks
-			// Foreach lig/assocMarks
-			// Any position lpos or mpos > $pos + count($substitute)
-			//  $this->assocMarks = array();    // assocMarks[$pos mpos] => array(compID, ligPos)
-			//  $this->assocLigs = array(); // Ligatures[$pos lpos] => nc
-			for ($p = count($this->OTLdata) - 1; $p >= ($pos + $n); $p--) {
-				if (isset($this->assocLigs[$p])) {
-					$tmp = $this->assocLigs[$p];
-					unset($this->assocLigs[$p]);
-					$this->assocLigs[($p + $n)] = $tmp;
-				}
-			}
-			for ($p = count($this->OTLdata) - 1; $p >= 0; $p--) {
-				if (isset($this->assocMarks[$p])) {
-					if ($this->assocMarks[$p]['ligPos'] >= ($pos + $n)) {
-						$this->assocMarks[$p]['ligPos'] += $n;
-					}
-					if ($p >= ($pos + $n)) {
-						$tmp = $this->assocMarks[$p];
-						unset($this->assocMarks[$p]);
-						$this->assocMarks[($p + $n)] = $tmp;
-					}
-				}
-			}
-		} elseif ($n < 1) { // glyphs removed
-			$nrem = -$n;
-			// Update position of pre-existing Ligatures and associated Marks
-			for ($p = ($pos + 1); $p < count($this->OTLdata); $p++) {
-				if (isset($this->assocLigs[$p])) {
-					$tmp = $this->assocLigs[$p];
-					unset($this->assocLigs[$p]);
-					$this->assocLigs[($p - $nrem)] = $tmp;
-				}
-			}
-			for ($p = 0; $p < count($this->OTLdata); $p++) {
-				if (isset($this->assocMarks[$p])) {
-					if ($this->assocMarks[$p]['ligPos'] >= ($pos)) {
-						$this->assocMarks[$p]['ligPos'] -= $nrem;
-					}
-					if ($p > $pos) {
-						$tmp = $this->assocMarks[$p];
-						unset($this->assocMarks[$p]);
-						$this->assocMarks[($p - $nrem)] = $tmp;
-					}
-				}
+		if (!$n) {
+			return;
+		}
+
+		// Only positions inside the run are renumbered. A record an earlier deletion left past the end
+		// stays where it is, as it did when every position was walked. The thresholds are the ones
+		// those walks had, which differ between growing and shrinking.
+		$last = count($this->OTLdata) - 1;
+		$from = $n > 0 ? $pos + $n : $pos + 1;
+		$ligFrom = $n > 0 ? $pos + $n : $pos;
+
+		// A by-value foreach walks a copy, so the marks can be rewritten where they stand
+		foreach ($this->assocMarks as $p => $mark) {
+			if ($p >= 0 && $p <= $last && $mark['ligPos'] >= $ligFrom) {
+				$this->assocMarks[$p]['ligPos'] += $n;
 			}
 		}
+
+		$this->moveAssociations($this->assocLigs, $this->shifted($this->assocLigs, $from, $last, $n));
+		$this->moveAssociations($this->assocMarks, $this->shifted($this->assocMarks, $from, $last, $n));
+	}
+
+	/**
+	 * @param array $assoc assocLigs or assocMarks
+	 * @param int   $from  The first position to move
+	 * @param int   $last  The last position to move
+	 * @param int   $n     How far to move them
+	 *
+	 * @return int[] Old position => new position, for the records between $from and $last
+	 */
+	private function shifted(array $assoc, $from, $last, $n)
+	{
+		$moves = [];
+		foreach ($assoc as $p => $record) {
+			if ($p >= $from && $p <= $last) {
+				$moves[$p] = $p + $n;
+			}
+		}
+
+		return $moves;
+	}
+
+	/**
+	 * Renumber ligature or mark records by walking the ones there are, rather than every position
+	 * in the run.
+	 *
+	 * Every record being moved is taken out before any is put back. That lets one land where another
+	 * has just left, and lets one landing on a record that is not moving replace it - both as they
+	 * did when the positions were walked one by one.
+	 *
+	 * @param array $assoc assocLigs or assocMarks
+	 * @param int[] $moves Old position => new position
+	 */
+	private function moveAssociations(array &$assoc, array $moves)
+	{
+		$moved = [];
+		foreach ($moves as $old => $new) {
+			$moved[$new] = $assoc[$old];
+			unset($assoc[$old]);
+		}
+		foreach ($moved as $new => $record) {
+			$assoc[$new] = $record;
+		}
+	}
+
+	/**
+	 * How many of a ligature's components, the first one aside, stood before a position.
+	 *
+	 * @param int[] $GlyphPos The components' positions, in order
+	 * @param int   $p        The position asked about
+	 *
+	 * @return int
+	 */
+	private function componentsRemovedBefore(array $GlyphPos, $p)
+	{
+		$last = count($GlyphPos) - 1;
+		if ($p > $GlyphPos[$last]) {
+			return $last;
+		}
+
+		$removed = 0;
+		while ($GlyphPos[$removed + 1] < $p) {
+			$removed++;
+		}
+
+		return $removed;
 	}
 
 	/**
@@ -2908,7 +2947,8 @@ class Otl
 			// A font writes a deletion as a substitution to the empty sequence, and the splice below
 			// then has nothing to put in the glyph's place
 			$newOTLdata = [];
-			for ($i = 0; $i < count($substitute); $i++) {
+			$nsub = count($substitute);
+			for ($i = 0; $i < $nsub; $i++) {
 				$uni = $substitute[$i];
 				$newOTLdata[$i] = [];
 				$newOTLdata[$i]['uni'] = $uni;
@@ -2972,14 +3012,13 @@ class Otl
 
 			array_splice($this->OTLdata, $pos, 1, $newOTLdata); // Replace 1 with n
 			// Update position of Ligatures and associated Marks
-			// count($substitute)-1  is the number of glyphs added
-			$nadd = count($substitute) - 1;
-			$this->_updateLigatureMarks($pos, $nadd);
-			return count($substitute);
+			$this->_updateLigatureMarks($pos, $nsub - 1);
+			return $nsub;
 		} // LookupType 4: Ligature Substitution Subtable : n to 1
 		elseif ($Type == 4) {
 			// Create Ligatures and associated Marks
-			$firstGlyph = $this->OTLdata[$pos]['hex'];
+			$nComponents = count($GlyphPos);
+			$lastComponent = $GlyphPos[$nComponents - 1];
 
 			// If all components of the ligature are marks (and in the same syllable), we call this a mark ligature.
 			$contains_marks = false;
@@ -2989,7 +3028,7 @@ class Otl
 			} else {
 				$current_syllable = 0;
 			}
-			for ($i = 0; $i < count($GlyphPos); $i++) {
+			for ($i = 0; $i < $nComponents; $i++) {
 				// If subsequent components are not Marks as well - don't ligate
 				$unistr = $this->OTLdata[$GlyphPos[$i]]['hex'];
 				if ($this->restrictToSyllable && isset($this->OTLdata[$GlyphPos[$i]]['syllable']) && $this->OTLdata[$GlyphPos[$i]]['syllable'] != $current_syllable) {
@@ -3008,7 +3047,7 @@ class Otl
 					$firstMarkAssoc = $this->assocMarks[$pos];
 				}
 				// If all components of the ligature are marks, we call this a mark ligature.
-				for ($i = 1; $i < count($GlyphPos); $i++) {
+				for ($i = 1; $i < $nComponents; $i++) {
 					// If subsequent components are not Marks as well - don't ligate
 					//      $unistr = $this->OTLdata[$GlyphPos[$i]]['hex'];
 					//      if (strpos($this->GlyphClassMarks, $unistr )===false) { return; }
@@ -3047,8 +3086,6 @@ class Otl
 				 *   LAM,LAM,HEH ligature.
 				 */
 				// So if is_array($firstMarkAssoc) - the new (Mark) ligature should keep this association
-
-				$lastPos = $GlyphPos[(count($GlyphPos) - 1)];
 			} else {
 				/*
 				 * - Ligatures cannot be formed across glyphs attached to different components
@@ -3080,7 +3117,7 @@ class Otl
 				 */
 
 				$currComp = 0;
-				for ($i = 0; $i < count($GlyphPos); $i++) {
+				for ($i = 0; $i < $nComponents; $i++) {
 					if ($i > 0 && isset($this->assocLigs[$GlyphPos[$i]])) { // One of the other components is already a ligature
 						$nc = $this->assocLigs[$GlyphPos[$i]];
 					} else {
@@ -3089,7 +3126,7 @@ class Otl
 					// While next char to right is a mark (but not the next matched glyph)
 					// ?? + also include a Mark Ligature here
 					$ic = 1;
-					while ((($i == count($GlyphPos) - 1) || (isset($GlyphPos[$i + 1]) && ($GlyphPos[$i] + $ic) < $GlyphPos[$i + 1])) && isset($this->OTLdata[($GlyphPos[$i] + $ic)]) && $this->isMark($this->OTLdata[($GlyphPos[$i] + $ic)]['hex'])) {
+					while ((($i == $nComponents - 1) || (isset($GlyphPos[$i + 1]) && ($GlyphPos[$i] + $ic) < $GlyphPos[$i + 1])) && isset($this->OTLdata[($GlyphPos[$i] + $ic)]) && $this->isMark($this->OTLdata[($GlyphPos[$i] + $ic)]['hex'])) {
 						$newComp = $currComp;
 						if (isset($this->assocMarks[$GlyphPos[$i] + $ic])) { // One of the inbetween Marks is already associated with a Lig
 							// OK as long as it is associated with the current Lig
@@ -3101,7 +3138,6 @@ class Otl
 					}
 					$currComp += $nc;
 				}
-				$lastPos = $GlyphPos[(count($GlyphPos) - 1)] + $ic - 1;
 				$this->assocLigs[$pos] = $currComp; // Number of components in new Ligature
 			}
 
@@ -3132,8 +3168,8 @@ class Otl
 			// If previous/first component of ligature is a medial form, then keep this as a kashida point
 			// TEST (Arabic Typesetting) &#x64a;&#x64e;&#x646;&#x62a;&#x64f;&#x645;
 			$ka = 0;
-			if (isset($this->OTLdata[$GlyphPos[(count($GlyphPos) - 1)]]['GPOSinfo']['kashida'])) {
-				$ka = $this->OTLdata[$GlyphPos[(count($GlyphPos) - 1)]]['GPOSinfo']['kashida'];
+			if (isset($this->OTLdata[$lastComponent]['GPOSinfo']['kashida'])) {
+				$ka = $this->OTLdata[$lastComponent]['GPOSinfo']['kashida'];
 			}
 			if ($ka == 1 && isset($this->OTLdata[$pos]['form']) && $this->OTLdata[$pos]['form'] == 3) {
 				$newOTLdata[0]['GPOSinfo']['kashida'] = $ka;
@@ -3167,42 +3203,51 @@ class Otl
 
 			$this->recordLigatureText($substitute, $GlyphPos);
 
-			array_splice($this->OTLdata, $pos, 1, $newOTLdata);
+			// The components need not be contiguous, so the ligature and whatever stands between its
+			// components (the marks it skipped) replace the whole span in one splice
+			$span = [$newOTLdata[0]];
+			for ($p = $pos + 1, $i = 1; $p < $lastComponent; $p++) {
+				if ($p == $GlyphPos[$i]) {
+					$i++;
+				} else {
+					$span[] = $this->OTLdata[$p];
+				}
+			}
+			$runLength = count($this->OTLdata);
+			array_splice($this->OTLdata, $pos, $lastComponent - $pos + 1, $span);
 
-			// GlyphPos contains array of arr_pos to set null - not necessarily contiguous
-			// +- Remove any assocMarks or assocLigs from the main components (the ones that are deleted)
-			for ($i = count($GlyphPos) - 1; $i > 0; $i--) {
-				$gpos = $GlyphPos[$i];
-				array_splice($this->OTLdata, $gpos, 1);
-				unset($this->assocLigs[$gpos]);
-				unset($this->assocMarks[$gpos]);
+			for ($i = 1; $i < $nComponents; $i++) {
+				unset($this->assocLigs[$GlyphPos[$i]]);
+				unset($this->assocMarks[$GlyphPos[$i]]);
 			}
-			//  $this->assocLigs = array(); // Ligatures[$posarr lpos] => nc
-			//  $this->assocMarks = array();    // assocMarks[$posarr mpos] => array(compID, ligPos)
-			// Update position of pre-existing Ligatures and associated Marks
-			// Start after first GlyphPos
-			// count($GlyphPos)-1  is the number of glyphs removed from string
-			for ($p = ($GlyphPos[0] + 1); $p < (count($this->OTLdata) + count($GlyphPos) - 1); $p++) {
-				$nrem = 0; // Number of Glyphs removed at this point in the string
-				for ($i = 0; $i < count($GlyphPos); $i++) {
-					if ($i > 0 && $p > $GlyphPos[$i]) {
-						$nrem++;
+
+			// Records after the ligature move back by the number of components removed before them.
+			// A mark's ligPos moves by the count at the mark, not at its ligature.
+			$moves = [];
+			foreach ($this->assocLigs as $p => $nc) {
+				if ($p > $pos && $p < $runLength) {
+					$nrem = $this->componentsRemovedBefore($GlyphPos, $p);
+					if ($nrem) {
+						$moves[$p] = $p - $nrem;
 					}
 				}
-				if (isset($this->assocLigs[$p])) {
-					$tmp = $this->assocLigs[$p];
-					unset($this->assocLigs[$p]);
-					$this->assocLigs[($p - $nrem)] = $tmp;
-				}
-				if (isset($this->assocMarks[$p])) {
-					$tmp = $this->assocMarks[$p];
-					unset($this->assocMarks[$p]);
-					if ($tmp['ligPos'] > $GlyphPos[0]) {
-						$tmp['ligPos'] -= $nrem;
+			}
+			$this->moveAssociations($this->assocLigs, $moves);
+
+			$moves = [];
+			foreach ($this->assocMarks as $p => $mark) {
+				if ($p > $pos && $p < $runLength) {
+					$nrem = $this->componentsRemovedBefore($GlyphPos, $p);
+					if ($nrem) {
+						if ($mark['ligPos'] > $pos) {
+							$this->assocMarks[$p]['ligPos'] -= $nrem;
+						}
+						$moves[$p] = $p - $nrem;
 					}
-					$this->assocMarks[($p - $nrem)] = $tmp;
 				}
 			}
+			$this->moveAssociations($this->assocMarks, $moves);
+
 			return 1;
 		} else {
 			return 0;
