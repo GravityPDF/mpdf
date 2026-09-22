@@ -4039,13 +4039,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Override with values from config_font.php
 		if (isset($this->fontdata[$family]['Ascent']) && $this->fontdata[$family]['Ascent']) {
-			$desc['Ascent'] = $this->fontdata[$family]['Ascent'];
+			$font['desc']['Ascent'] = $this->fontdata[$family]['Ascent'];
 		}
 		if (isset($this->fontdata[$family]['Descent']) && $this->fontdata[$family]['Descent']) {
-			$desc['Descent'] = $this->fontdata[$family]['Descent'];
+			$font['desc']['Descent'] = $this->fontdata[$family]['Descent'];
 		}
 		if (isset($this->fontdata[$family]['Leading']) && $this->fontdata[$family]['Leading']) {
-			$desc['Leading'] = $this->fontdata[$family]['Leading'];
+			$font['desc']['Leading'] = $this->fontdata[$family]['Leading'];
 		}
 
 		$i = count($this->fonts) + $this->extraFontSubsets + 1;
@@ -4173,7 +4173,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$ttffile = $this->fontFileFinder->findFontFile($this->fontdata[$family][$stylekey]);
 		$ttfstat = stat($ttffile);
 
-		$TTCfontID = isset($this->fontdata[$family]['TTCfontID'][$stylekey]) ? isset($this->fontdata[$family]['TTCfontID'][$stylekey]) : 0;
+		$TTCfontID = isset($this->fontdata[$family]['TTCfontID'][$stylekey]) ? $this->fontdata[$family]['TTCfontID'][$stylekey] : 0;
 		$fontUseOTL = isset($this->fontdata[$family]['useOTL']) ? $this->fontdata[$family]['useOTL'] : false;
 		$BMPonly = in_array($family, $this->BMPonly) ? true : false;
 
@@ -4195,6 +4195,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->fontDescriptor != $font['fontmetrics']) {
 			$regenerate = true;
 		} // mPDF 6
+
+		/* The cache may hold another font of the same collection. Compared as integers because caches
+		 * written from v7.1.8 until #321 stored true for every configured TTCfontID, and true == 2 */
+		if ((int) (isset($font['TTCfontID']) ? $font['TTCfontID'] : 0) !== (int) $TTCfontID) {
+			$regenerate = true;
+		}
 
 		// A cache written by a release that laid its files out differently cannot be read by this one
 		if (!MetricsGenerator::isCurrent($font)) {
