@@ -16,7 +16,19 @@ class MetricsGenerator
 	 * holds, the keys of an array — is served the old shape and reads it as the new one. Raise this
 	 * whenever that happens. Mpdf::AddFont() compares it and regenerates on a mismatch.
 	 */
-	const CACHE_FORMAT = 6;
+	const CACHE_FORMAT = 7;
+
+	/**
+	 * Whether cached metrics are in the shape this release writes - see CACHE_FORMAT
+	 *
+	 * @param array|null $metrics A font's metrics, as the cache held them
+	 *
+	 * @return bool
+	 */
+	public static function isCurrent($metrics)
+	{
+		return isset($metrics['cacheFormat']) && $metrics['cacheFormat'] === self::CACHE_FORMAT;
+	}
 
 	private $fontCache;
 
@@ -77,6 +89,8 @@ class MetricsGenerator
 			'GPOSLookups' => $ttf->GPOSLookups,
 			'kerninfo' => $ttf->kerninfo,
 			'colorFormats' => $ttf->colorFormats,
+			'hasOutlines' => $ttf->hasOutlines,
+			'selectorsInSequences' => $ttf->selectorsInSequences,
 			'tagChars' => $ttf->tagChars,
 			'cacheFormat' => self::CACHE_FORMAT,
 		];

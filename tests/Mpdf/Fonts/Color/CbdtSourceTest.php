@@ -54,7 +54,7 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->reader = $ttf->openFont(__DIR__ . '/../../../data/ttf/color/TestEmoji-CBDT.ttf');
 
 		$this->logger = new TestLogger();
-		$this->source = new CbdtSource($ttf, $this->reader, 1000, $this->logger);
+		$this->source = new CbdtSource(new ColorFontFile($ttf, $this->reader, 1000, $this->logger));
 		$this->resources = new RecordingResources();
 	}
 
@@ -360,7 +360,7 @@ class CbdtSourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($ttf, $reader) = $this->openFont(isset($tables['font']) ? $tables['font'] : $this->sfnt($tables, $cut));
 
-		return new CbdtSource($ttf, $reader, 1000, $this->logger);
+		return new CbdtSource(new ColorFontFile($ttf, $reader, 1000, $this->logger));
 	}
 
 	/**

@@ -2,6 +2,7 @@
 
 namespace Mpdf\Writer;
 
+use Mpdf\Fonts\Color\ColorFontFile;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\Color\ColorGlyphSource;
 use Mpdf\Fonts\Color\GlyphResources;
@@ -24,12 +25,14 @@ use Psr\Log\LoggerInterface;
  * the space word spacing stretches.
  *
  * Each glyph procedure starts d0 rather than d1, which is what lets it set colours. One that sets no
- * colour is drawn in the colour of the text.
+ * colour is drawn in the colour of the text. A glyph is drawn by the first source that has it: the
+ * colour format, then the glyph's outline, so a glyph with no colour of its own - a digit, say - is
+ * its outline in the colour of the text.
  *
- * Each subset has a resource dictionary of its own, listing the images its glyphs draw. It cannot be
- * the page's: that lists the font itself, which Acrobat refuses to load. The images are written after
- * the fonts, so the dictionary's object number is set aside as the subset is written and the
- * dictionary is written once the images have numbers - see writeResources().
+ * Each subset has a resource dictionary of its own, listing the images and graphics states its glyphs
+ * draw with. It cannot be the page's: that lists the font itself, which Acrobat refuses to load. The
+ * images are written after the fonts, so the dictionary's object number is set aside as the subset is
+ * written and the dictionary is written once the images have numbers - see writeResources().
  *
  * @see https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf 9.6.5
  */
@@ -74,14 +77,14 @@ class Type3FontWriter implements GlyphResources
 	private $undrawable = [];
 
 	/**
-	 * @var string[] The keys in Mpdf::$images of the images drawn by the glyphs of the subset being
-	 *               written, each once
+	 * @var string[][] What the glyphs of the subset being written draw with, each once: 'images', keys
+	 *                 in Mpdf::$images, and 'states', numbers in Mpdf::$extgstates
 	 */
 	private $drawn = [];
 
 	/**
-	 * @var string[][] Each resource dictionary still to be written, by the object number set aside for
-	 *                 it: the images its subset's glyphs draw
+	 * @var string[][][] Each resource dictionary still to be written, by the object number set aside
+	 *                   for it: what its subset's glyphs draw with, as $drawn holds it
 	 */
 	private $resources = [];
 
@@ -104,8 +107,9 @@ class Type3FontWriter implements GlyphResources
 	/**
 	 * Writes each subset of one colour font, and records the object number of each on the font.
 	 *
-	 * Where the document may not draw colour, each glyph is written as a procedure that draws nothing -
-	 * see ColorFormats::blank() - so the text keeps its place and still copies out.
+	 * Where the document may not draw colour, each glyph is drawn from its outline, and where the font
+	 * has none as a procedure that draws nothing - see ColorFormats::blank() - so the text keeps its
+	 * place and still copies out.
 	 *
 	 * @param string $k    The font's key in Mpdf::$fonts
 	 * @param array  $font The font
@@ -115,10 +119,10 @@ class Type3FontWriter implements GlyphResources
 		$this->fontkey = $font['fontkey'];
 		$charToGlyph = $this->fontCache->jsonLoad($font['fontkey'] . '.ctg.json');
 		$text = $this->ligatureText($font);
-		$format = ColorFormats::drawn($font, $this->mpdf);
+		$classes = ColorFormats::sources($font, $this->mpdf);
 
-		if ($format === '') {
-			$this->writeSubsets($k, $font, null, $charToGlyph, $text);
+		if (!$classes) {
+			$this->writeSubsets($k, $font, [], $charToGlyph, $text);
 
 			return;
 		}
@@ -127,7 +131,13 @@ class Type3FontWriter implements GlyphResources
 		$reader = $ttf->openFont($font['ttffile'], $font['TTCfontID']);
 
 		try {
-			$this->writeSubsets($k, $font, ColorFormats::source($format, $ttf, $reader, $font['unitsPerEm'], $this->logger), $charToGlyph, $text);
+			$file = new ColorFontFile($ttf, $reader, $font['unitsPerEm'], $this->logger);
+			$sources = [];
+			foreach ($classes as $class) {
+				$sources[] = new $class($file);
+			}
+
+			$this->writeSubsets($k, $font, $sources, $charToGlyph, $text);
 		} finally {
 			$reader->close();
 		}
@@ -136,16 +146,17 @@ class Type3FontWriter implements GlyphResources
 	/**
 	 * Writes each subset of a font, and records the object number of each on the font
 	 *
-	 * @param string                $k            The font's key in Mpdf::$fonts
-	 * @param array                 $font         The font
-	 * @param ColorGlyphSource|null $source       What draws each glyph, or null where none is drawn
-	 * @param int[]                 $charToGlyph  Character => glyph, Private Use codes included
-	 * @param int[][]               $ligatureText Ligature character => the characters it was formed from
+	 * @param string             $k            The font's key in Mpdf::$fonts
+	 * @param array              $font         The font
+	 * @param ColorGlyphSource[] $sources      What draws a glyph, the first that has it; none where
+	 *                                         every glyph is drawn blank
+	 * @param int[]              $charToGlyph  Character => glyph, Private Use codes included
+	 * @param int[][]            $ligatureText Ligature character => the characters it was formed from
 	 */
-	private function writeSubsets($k, array $font, $source, array $charToGlyph, array $ligatureText)
+	private function writeSubsets($k, array $font, array $sources, array $charToGlyph, array $ligatureText)
 	{
 		foreach ($font['subsetfontids'] as $sfid => $fid) {
-			$this->mpdf->fonts[$k]['n'][$sfid] = $this->writeSubset($font, $font['subsets'][$sfid], $source, $charToGlyph, $ligatureText);
+			$this->mpdf->fonts[$k]['n'][$sfid] = $this->writeSubset($font, $font['subsets'][$sfid], $sources, $charToGlyph, $ligatureText);
 		}
 	}
 
@@ -197,10 +208,25 @@ class Type3FontWriter implements GlyphResources
 			$this->mpdf->images[$key] = $image + ['i' => count($this->mpdf->images) + 1];
 		}
 
-		$this->drawn[$key] = $key;
+		$this->drawn['images'][$key] = $key;
 		$image = $this->mpdf->images[$key];
 
 		return ['/I' . $image['i'], $image['w'], $image['h']];
+	}
+
+	/**
+	 * Registers a graphics state filling at an opacity, once however many glyphs fill at it
+	 *
+	 * @param float $opacity From 0, transparent, to 1
+	 *
+	 * @return string Content setting fills to that opacity, e.g. '/GS2 gs'
+	 */
+	public function alpha($opacity)
+	{
+		$state = $this->mpdf->AddExtGState(['BM' => '/Normal', 'ca' => $opacity]);
+		$this->drawn['states'][$state] = $state;
+
+		return sprintf('/GS%d gs', $state);
 	}
 
 	/**
@@ -257,22 +283,53 @@ class Type3FontWriter implements GlyphResources
 
 	/**
 	 * Writes the resource dictionary of each subset written here, under the object number set aside for
-	 * it. Called once the images are written, which is when they have object numbers to be named by.
+	 * it. Called once the images are written, which is when they have object numbers to be named by,
+	 * and writes the graphics states the glyphs registered after the document's were written.
 	 */
 	public function writeResources()
 	{
-		foreach ($this->resources as $object => $keys) {
-			$images = '';
-			foreach ($keys as $key) {
-				$images .= '/I' . $this->mpdf->images[$key]['i'] . ' ' . $this->mpdf->images[$key]['n'] . ' 0 R ';
+		if (!$this->resources) {
+			return;
+		}
+
+		$this->mpdf->_putextgstates();
+
+		foreach ($this->resources as $object => $drawn) {
+			$images = [];
+			foreach ($drawn['images'] as $key) {
+				$images['I' . $this->mpdf->images[$key]['i']] = $this->mpdf->images[$key]['n'];
+			}
+			$states = [];
+			foreach ($drawn['states'] as $state) {
+				$states['GS' . $state] = $this->mpdf->extgstates[$state]['n'];
 			}
 
 			$this->writer->object($object);
-			$this->writer->write('<</XObject <<' . $images . '>>>>');
+			$this->writer->write('<<' . $this->dictionary('XObject', $images) . $this->dictionary('ExtGState', $states) . '>>');
 			$this->writer->write('endobj');
 		}
 
 		$this->resources = [];
+	}
+
+	/**
+	 * @param string $type    A kind of resource, e.g. 'XObject'
+	 * @param int[]  $objects Name => the object number it names
+	 *
+	 * @return string The entry of a resource dictionary naming them, or nothing where there are none
+	 */
+	private function dictionary($type, array $objects)
+	{
+		if (!$objects) {
+			return '';
+		}
+
+		$entries = '';
+		foreach ($objects as $name => $object) {
+			$entries .= '/' . $name . ' ' . $object . ' 0 R ';
+		}
+
+		return '/' . $type . ' <<' . $entries . '>>';
 	}
 
 	/**
@@ -336,15 +393,15 @@ class Type3FontWriter implements GlyphResources
 	}
 
 	/**
-	 * @param array                 $font         The font, as Mpdf::$fonts holds it
-	 * @param int[]                 $subset       Byte => the character it is written for
-	 * @param ColorGlyphSource|null $source       What draws each glyph, or null where none is drawn
-	 * @param int[]                 $charToGlyph  Character => glyph, Private Use codes included
-	 * @param int[][]               $ligatureText Ligature character => the characters it was formed from
+	 * @param array              $font         The font, as Mpdf::$fonts holds it
+	 * @param int[]              $subset       Byte => the character it is written for
+	 * @param ColorGlyphSource[] $sources      What draws a glyph, the first that has it
+	 * @param int[]              $charToGlyph  Character => glyph, Private Use codes included
+	 * @param int[][]            $ligatureText Ligature character => the characters it was formed from
 	 *
 	 * @return int The object number of the font
 	 */
-	private function writeSubset(array $font, array $subset, $source, array $charToGlyph, array $ligatureText)
+	private function writeSubset(array $font, array $subset, array $sources, array $charToGlyph, array $ligatureText)
 	{
 		// Glyph space is font units, so widths laid out in thousandths of an em are scaled into it
 		$scale = $font['unitsPerEm'] / 1000;
@@ -353,7 +410,7 @@ class Type3FontWriter implements GlyphResources
 		$widths = [];
 		$procedures = [];
 		$differences = '';
-		$this->drawn = [];
+		$this->drawn = ['images' => [], 'states' => []];
 		foreach ($subset as $code => $char) {
 			$width = '0.000';
 			if ($char && isset($charToGlyph[$char])) {
@@ -362,15 +419,15 @@ class Type3FontWriter implements GlyphResources
 				$width = sprintf('%.3F', $this->mpdf->_getCharWidth($font['cw'], $char, false) * $scale);
 				$differences .= $code . ' /g' . $glyph . ' ';
 				if (!isset($procedures[$glyph])) {
-					$procedures[$glyph] = $width . " 0 d0\n" . ($source ? $source->draw($glyph, $this) : '');
+					$procedures[$glyph] = $width . " 0 d0\n" . $this->draw($glyph, $sources);
 				}
 			}
 			$widths[] = $width;
 		}
 
-		// A subset whose glyphs draw no image - one drawn blank, say - names no resource
+		// A subset whose glyphs draw no image nor graphics state - one drawn blank, say - names no resource
 		$resources = '<<>>';
-		if ($this->drawn) {
+		if ($this->drawn['images'] || $this->drawn['states']) {
 			$this->writer->object(false, true);
 			$this->resources[$this->mpdf->n] = $this->drawn;
 			$resources = $this->mpdf->n . ' 0 R';
@@ -421,6 +478,24 @@ class Type3FontWriter implements GlyphResources
 		}
 
 		return $fontObject;
+	}
+
+	/**
+	 * @param int                $glyph   The glyph id
+	 * @param ColorGlyphSource[] $sources What draws a glyph, the first that has it
+	 *
+	 * @return string The glyph as the first source that has it draws it, or nothing
+	 */
+	private function draw($glyph, array $sources)
+	{
+		foreach ($sources as $source) {
+			$content = $source->draw($glyph, $this);
+			if ($content !== null) {
+				return $content;
+			}
+		}
+
+		return '';
 	}
 
 	/**

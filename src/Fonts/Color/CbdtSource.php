@@ -2,10 +2,7 @@
 
 namespace Mpdf\Fonts\Color;
 
-use Mpdf\Fonts\FileReader;
 use Mpdf\Log\Context as LogContext;
-use Mpdf\TTFontFile;
-use Psr\Log\LoggerInterface;
 
 /**
  * Colour glyphs as PNG bitmaps, in CBDT with CBLC to index them: Noto Color Emoji's format.
@@ -39,16 +36,14 @@ class CbdtSource extends BitmapSource
 	private $subtables = [];
 
 	/**
-	 * @param TTFontFile      $font       The font, its table directory read
-	 * @param FileReader      $reader     The font file
-	 * @param int             $unitsPerEm
-	 * @param LoggerInterface $logger     Told of a bitmap in an image format mPDF does not draw
+	 * @param ColorFontFile $file The font, whose logger is told of a bitmap in an image format mPDF does
+	 *                            not draw
 	 */
-	public function __construct(TTFontFile $font, FileReader $reader, $unitsPerEm, LoggerInterface $logger)
+	public function __construct(ColorFontFile $file)
 	{
-		parent::__construct($reader, $logger);
-		$cblc = $font->getTablePosition('CBLC')[0];
-		list($cbdt, $cbdtLength) = $font->getTablePosition('CBDT');
+		parent::__construct($file);
+		$cblc = $file->table('CBLC')[0];
+		list($cbdt, $cbdtLength) = $file->table('CBDT');
 		$this->cbdtEnd = $cbdt + $cbdtLength;
 
 		$header = $this->reader->fieldsAt($cblc + 4, 4, 'N');
@@ -74,7 +69,7 @@ class CbdtSource extends BitmapSource
 		}
 
 		list($ppem, $array, $subtableCount) = $strike;
-		$this->scale = $unitsPerEm / $ppem;
+		$this->scale = $file->unitsPerEm / $ppem;
 
 		for ($i = 0; $i < $subtableCount; $i++) {
 			// The array ends with the file, if not before

@@ -2,6 +2,8 @@
 
 namespace Mpdf\Fonts;
 
+use Mpdf\Fonts\Table\Loca;
+
 // Work out the profile tables - head's bounding box, maxp's point and contour maxima, OS/2's
 // character range - from the glyphs the subset actually holds, rather than copying what the original
 // font stated. A host can set it before mPDF loads; nothing in mPDF sets it.
@@ -568,7 +570,7 @@ class FontSubsetter
 						$glyphSet[$glyphIdx] = count($glyphMap);
 						$glyphMap[] = $glyphIdx;
 					}
-					$this->reader->skip(self::componentArgumentsLength($flags));
+					$this->reader->skip(GlyphOperator::argumentsLength($flags));
 				}
 			}
 		}
@@ -963,7 +965,7 @@ class FontSubsetter
 					$up = unpack('n', substr($data, $pos_in_glyph + 2, 2));
 					$glyphIdx = $up[1];
 					$data = TableWriter::setUInt16($data, $pos_in_glyph + 2, $glyphSet[$glyphIdx]);
-					$pos_in_glyph += 4 + self::componentArgumentsLength($flags);
+					$pos_in_glyph += 4 + GlyphOperator::argumentsLength($flags);
 				}
 			}
 
@@ -1077,7 +1079,7 @@ class FontSubsetter
 					$nComponentElements += 1;
 					$flags = $this->reader->readUInt16();
 					$this->glyphdata[$originalGlyphIdx]['compGlyphs'][] = $this->reader->readUInt16();
-					$this->reader->skip(self::componentArgumentsLength($flags));
+					$this->reader->skip(GlyphOperator::argumentsLength($flags));
 				}
 				$profile['maxComponentElements'] = max($profile['maxComponentElements'], $nComponentElements);
 			} else {
@@ -1106,27 +1108,6 @@ class FontSubsetter
 	}
 
 	/**
-	 * How many bytes of a compound glyph's component record follow its flags and glyph index: the two
-	 * arguments, as words or bytes, then whichever transformation the flags say is there.
-	 *
-	 * @param int $flags The component's flags
-	 */
-	private static function componentArgumentsLength($flags)
-	{
-		$length = ($flags & GlyphOperator::WORDS) ? 4 : 2;
-
-		if ($flags & GlyphOperator::SCALE) {
-			$length += 2;
-		} elseif ($flags & GlyphOperator::XYSCALE) {
-			$length += 4;
-		} elseif ($flags & GlyphOperator::TWOBYTWO) {
-			$length += 8;
-		}
-
-		return $length;
-	}
-
-	/**
 	 * Move the reader to where a table starts, which is the start of the file where the font has none.
 	 *
 	 * @return int Where the table starts
@@ -1151,23 +1132,7 @@ class FontSubsetter
 	 */
 	private function getLOCA($indexToLocFormat, $numGlyphs)
 	{
-		$start = $this->seekTable('loca');
-		$this->glyphPos = [];
-		if ($indexToLocFormat == 0) {
-			$data = $this->reader->bytesAt($start, ($numGlyphs * 2) + 2);
-			$arr = unpack("n*", $data);
-			for ($n = 0; $n <= $numGlyphs; $n++) {
-				$this->glyphPos[] = ($arr[$n + 1] * 2);
-			}
-		} elseif ($indexToLocFormat == 1) {
-			$data = $this->reader->bytesAt($start, ($numGlyphs * 4) + 4);
-			$arr = unpack("N*", $data);
-			for ($n = 0; $n <= $numGlyphs; $n++) {
-				$this->glyphPos[] = ($arr[$n + 1]);
-			}
-		} else {
-			throw new \Mpdf\Exception\FontException('Unknown location table format ' . $indexToLocFormat);
-		}
+		$this->glyphPos = Loca::offsets($this->reader, $this->seekTable('loca'), $indexToLocFormat, $numGlyphs);
 	}
 
 	/**
@@ -1206,7 +1171,7 @@ class FontSubsetter
 				$savepos = $this->reader->tell();
 				$this->getGlyphs($glyphIdx, $start, $glyphSet, $subsetglyphs);
 				$this->reader->seek($savepos);
-				$this->reader->skip(self::componentArgumentsLength($flags));
+				$this->reader->skip(GlyphOperator::argumentsLength($flags));
 			}
 		}
 	}

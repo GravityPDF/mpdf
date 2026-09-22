@@ -3,9 +3,9 @@
 namespace Mpdf\Fonts\Color;
 
 /**
- * What a colour glyph's drawing can use besides paths and colours. The Type3 font a glyph is drawn in
- * shares the document's resource dictionary, so each of these is registered where a page would
- * register it.
+ * What a colour glyph's drawing can use besides paths and colours. Each is registered on the document,
+ * once however many glyphs use it, and named in the resource dictionary of the Type3 font the glyph is
+ * drawn in.
  */
 interface GlyphResources
 {
@@ -17,4 +17,11 @@ interface GlyphResources
 	 *                    pixels, its height in pixels], or null where the image cannot be drawn
 	 */
 	public function image($data);
+
+	/**
+	 * @param float $opacity From 0, transparent, to 1
+	 *
+	 * @return string Content setting fills to that opacity, e.g. '/GS2 gs'
+	 */
+	public function alpha($opacity);
 }

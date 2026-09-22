@@ -2,11 +2,8 @@
 
 namespace Mpdf\Fonts\Color;
 
-use Mpdf\Fonts\FileReader;
 use Mpdf\Fonts\FontReader;
 use Mpdf\Log\Context as LogContext;
-use Mpdf\TTFontFile;
-use Psr\Log\LoggerInterface;
 
 /**
  * Colour glyphs as bitmaps in sbix: Apple Color Emoji's format.
@@ -40,21 +37,19 @@ class SbixSource extends BitmapSource
 	private $numGlyphs = 0;
 
 	/**
-	 * @param TTFontFile      $font       The font, its table directory read
-	 * @param FileReader      $reader     The font file
-	 * @param int             $unitsPerEm
-	 * @param LoggerInterface $logger     Told of a record in a graphic type mPDF does not draw
+	 * @param ColorFontFile $file The font, whose logger is told of a record in a graphic type mPDF does
+	 *                            not draw
 	 */
-	public function __construct(TTFontFile $font, FileReader $reader, $unitsPerEm, LoggerInterface $logger)
+	public function __construct(ColorFontFile $file)
 	{
-		parent::__construct($reader, $logger);
+		parent::__construct($file);
 
-		$maxp = $this->reader->fieldsAt($font->getTablePosition('maxp')[0] + 4, 2, 'n');
+		$maxp = $this->reader->fieldsAt($file->table('maxp')[0] + 4, 2, 'n');
 		if ($maxp !== null) {
 			$this->numGlyphs = $maxp[0];
 		}
 
-		list($sbix, $sbixLength) = $font->getTablePosition('sbix');
+		list($sbix, $sbixLength) = $file->table('sbix');
 		$this->sbixEnd = $sbix + $sbixLength;
 
 		// The strike offsets end with the table, if not before
@@ -72,7 +67,7 @@ class SbixSource extends BitmapSource
 		}
 
 		if ($ppem) {
-			$this->scale = $unitsPerEm / $ppem;
+			$this->scale = $file->unitsPerEm / $ppem;
 		}
 	}
 

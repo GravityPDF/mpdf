@@ -42,6 +42,54 @@ class GsubOutputs
 	}
 
 	/**
+	 * Whether a glyph is among the components of any ligature after its first, which is where U+FE0F
+	 * stands in a sequence that includes it
+	 *
+	 * @param FontReader $reader  The font
+	 * @param array      $lookups As glyphs() takes them
+	 * @param int        $glyph   The glyph id
+	 *
+	 * @return bool
+	 */
+	public static function inLigatures(FontReader $reader, array $lookups, $glyph)
+	{
+		foreach ($lookups as $lookup) {
+			if ($lookup['Type'] != 4) {
+				continue;
+			}
+			foreach ($lookup['Subtables'] as $subtable) {
+				foreach (self::ligatures($reader, $subtable) as $ligature) {
+					// ligatureGlyph, componentCount, then the components after the first
+					$reader->seek($ligature + 2);
+					if (in_array($glyph, SequenceRule::values($reader, $reader->readUInt16() - 1), true)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param FontReader $reader   The font
+	 * @param int        $subtable A Ligature Substitution subtable's absolute offset
+	 *
+	 * @return int[] Where each of its Ligature tables starts
+	 */
+	private static function ligatures(FontReader $reader, $subtable)
+	{
+		// ligatureSetCount, past the format and coverageOffset
+		$reader->seek($subtable + 4);
+		$sets = [[]];
+		foreach (SequenceRule::coverageOffsets($reader, $subtable, $reader->readUInt16()) as $set) {
+			$sets[] = SequenceRule::ruleOffsets($reader, $set);
+		}
+
+		return call_user_func_array('array_merge', $sets);
+	}
+
+	/**
 	 * @param FontReader $reader   The font
 	 * @param int        $type     The lookup type, extensions resolved
 	 * @param int        $subtable The subtable's absolute offset
@@ -81,13 +129,10 @@ class GsubOutputs
 				return $outputs;
 
 			case 4:
-				$reader->skip(2); // coverageOffset
 				$outputs = [];
-				foreach (SequenceRule::coverageOffsets($reader, $subtable, $reader->readUInt16()) as $set) {
-					foreach (SequenceRule::ruleOffsets($reader, $set) as $ligature) {
-						$reader->seek($ligature);
-						$outputs[] = $reader->readUInt16();
-					}
+				foreach (self::ligatures($reader, $subtable) as $ligature) {
+					$reader->seek($ligature);
+					$outputs[] = $reader->readUInt16();
 				}
 
 				return $outputs;

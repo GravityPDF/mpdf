@@ -141,24 +141,42 @@ class FontSubstitution
 			return $this->drawnWidths($this->mpdf->fonts[$family]);
 		}
 
-		// Only a font written as Type3 has its glyph map cached, and one of those draws nothing where
-		// the document may not draw colour
+		if (isset($this->widths[$family])) {
+			return $this->widths[$family];
+		}
+
+		// Only a font written as Type3 has its glyph map cached, and one of those with no outlines draws
+		// nothing where the document may not draw colour. Metrics cached by another release are not
+		// trusted to say which, and the font is loaded instead, which caches them again.
 		if (!ColorFormats::inColor($this->mpdf) && $this->fontCache->jsonHas($family . '.ctg.json')) {
-			return '';
-		}
-
-		if (!isset($this->widths[$family])) {
-			$cw = $this->fontCache->loadIfPresent($family . '.cw.dat');
-			if (null === $cw) {
-				$this->loadFont($family);
-
-				return isset($this->mpdf->fonts[$family]) ? $this->drawnWidths($this->mpdf->fonts[$family]) : null;
+			$metrics = $this->fontCache->jsonLoadIfPresent($family . '.mtx.json');
+			if (!MetricsGenerator::isCurrent($metrics)) {
+				return $this->loadedWidths($family);
 			}
-
-			$this->widths[$family] = $cw;
+			if (ColorFormats::blank($metrics, $this->mpdf)) {
+				return '';
+			}
 		}
 
-		return $this->widths[$family];
+		$cw = $this->fontCache->loadIfPresent($family . '.cw.dat');
+		if (null === $cw) {
+			return $this->loadedWidths($family);
+		}
+
+		return $this->widths[$family] = $cw;
+	}
+
+	/**
+	 * @param string $family The font's key in fontdata
+	 *
+	 * @return string|null What drawnWidths() gives for the font, loaded to find them, or null where there
+	 *                     is no such font
+	 */
+	private function loadedWidths($family)
+	{
+		$this->loadFont($family);
+
+		return isset($this->mpdf->fonts[$family]) ? $this->drawnWidths($this->mpdf->fonts[$family]) : null;
 	}
 
 	/**

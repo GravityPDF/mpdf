@@ -8,12 +8,14 @@ render the same text through every format and expect the same glyphs; only how a
 differs.
 
     TestEmoji-COLRv0.ttf  glyf outlines, COLR version 0 layers, CPAL with two palettes
+    TestEmoji-FE0F.ttf    the COLRv0 font with Twemoji's GSUB: U+FE0F inside its sequences
     TestEmoji-COLRv1.ttf  glyf outlines, COLR version 1 paints (and the version 0 records)
     TestEmoji-CBDT.ttf    no outlines at all, PNG bitmaps in CBDT/CBLC at two strikes
     TestEmoji-sbix.ttf    empty outlines, PNG and JPEG bitmaps in sbix at two strikes
 
 The GSUB is the shape Noto's is: one 'ccmp' feature under DFLT, ligatures for a ZWJ family, a flag, a
-keycap, a skin tone and a subdivision flag, none of them with U+FE0F in the sequence.
+keycap, a skin tone and a subdivision flag, none of them with U+FE0F in the sequence. TestEmoji-FE0F
+forms its keycap from the fully qualified sequence instead, digit, U+FE0F, U+20E3, as Twemoji does.
 
 The CBDT strike at 64ppem holds one glyph per index subtable format (1 to 5), and so exercises every
 image format mPDF reads (17, 18 and 19). The sbix strike at 64ppem holds a glyph of each graphic type
@@ -245,22 +247,22 @@ def base_font(with_outlines=True):
     return fb
 
 
-def name_font(fb, style):
+def name_font(fb, style, features=FEATURES):
     fb.setupNameTable({'familyName': 'Test Emoji ' + style, 'styleName': 'Regular',
                        'psName': 'TestEmoji-' + style, 'uniqueFontIdentifier': 'TestEmoji-' + style})
-    addOpenTypeFeaturesFromString(fb.font, FEATURES)
+    addOpenTypeFeaturesFromString(fb.font, features)
 
 
 def colr_layers():
     return {name: [(layer, colour) for layer, colour in layers] for name, _, layers in EMOJI}
 
 
-def build_colrv0():
+def build_colrv0(style='COLRv0', features=FEATURES):
     fb = base_font()
-    name_font(fb, 'COLRv0')
+    name_font(fb, style, features)
     fb.font['COLR'] = buildCOLR(colr_layers(), version=0)
     fb.font['CPAL'] = buildCPAL([[tuple(c / 255 for c in (r, g, b, a)) for r, g, b, a in palette] for palette in PALETTES])
-    fb.save(os.path.join(HERE, 'TestEmoji-COLRv0.ttf'))
+    fb.save(os.path.join(HERE, 'TestEmoji-' + style + '.ttf'))
 
 
 def build_colrv1():
@@ -525,6 +527,7 @@ def build_sbix():
 
 if __name__ == '__main__':
     build_colrv0()
+    build_colrv0('FE0F', FEATURES.replace('sub one uni20E3 by', 'sub one uniFE0F uni20E3 by'))
     build_colrv1()
     build_cbdt()
     build_sbix()

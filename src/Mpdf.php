@@ -4003,6 +4003,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'GPOSLookups' => [],
 			'rtlPUAstr' => '',
 			'colorFormats' => [],
+			'hasOutlines' => false,
+			'selectorsInSequences' => false,
 			'tagChars' => [],
 			'cacheFormat' => 0,
 		];
@@ -4040,8 +4042,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // mPDF 6
 
 		// A cache written by a release that laid its files out differently cannot be read by this one
-		$cacheFormat = isset($font['cacheFormat']) ? $font['cacheFormat'] : 0;
-		if ($cacheFormat !== MetricsGenerator::CACHE_FORMAT) {
+		if (!MetricsGenerator::isCurrent($font)) {
 			$regenerate = true;
 		}
 
@@ -4138,6 +4139,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'haskernGPOS' => $font['haskernGPOS'],
 			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
 			'colorFormats' => $font['colorFormats'],
+			'hasOutlines' => $font['hasOutlines'],
+			'selectorsInSequences' => $font['selectorsInSequences'],
 			'ligatureText' => [],
 			'tagChars' => $font['tagChars'],
 		];
@@ -23456,9 +23459,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/////////////////////////END OF TABLE CODE//////////////////////////////////
 	/* -- END TABLES -- */
 
+	/**
+	 * Writes each graphics state not written yet: a colour font's glyphs register theirs as the fonts
+	 * are written, after the rest have been
+	 */
 	function _putextgstates()
 	{
 		for ($i = 1; $i <= count($this->extgstates); $i++) {
+			if (isset($this->extgstates[$i]['n'])) {
+				continue;
+			}
 			$this->writer->object();
 			$this->extgstates[$i]['n'] = $this->n;
 			$this->writer->write('<</Type /ExtGState');
