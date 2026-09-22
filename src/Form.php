@@ -729,23 +729,19 @@ class Form
 		return $total;
 	}
 
-	// In _putpages
-	function countPageForms($n, &$totaladdnum)
+	/**
+	 * Numbers the widgets of page $n from $id, adding each to the page's annotations
+	 *
+	 * @param int $n
+	 * @param int[] $annots the objects the page lists in /Annots
+	 * @param int $id the first widget's object number, left at the next free one
+	 */
+	function addFormIds($n, array &$annots, &$id)
 	{
 		foreach ($this->forms as $form) {
 			if ($form['page'] == $n) {
-				$totaladdnum += $this->getCountItems($form);
-			}
-		}
-	}
-
-	// In _putpages
-	function addFormIds($n, &$s, &$annotid)
-	{
-		foreach ($this->forms as $form) {
-			if ($form['page'] == $n) {
-				$s .= $annotid . ' 0 R ';
-				$annotid += $this->getCountItems($form);
+				$annots[] = $id;
+				$id += $this->getCountItems($form);
 			}
 		}
 	}
