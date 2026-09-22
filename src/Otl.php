@@ -2563,7 +2563,7 @@ class Otl
 	 */
 	private function _applyGSUBchainContextSubstFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		foreach ($this->chainedRuleSet($subtable_offset, $LuCoverage[$currGID]) as $rule) {
+		foreach ($this->chainedRuleSet($subtable_offset, $LuCoverage[$currGID], true) as $rule) {
 			list($Backtrack, $inputChars, $Lookahead, $SubstCount, $records) = $rule;
 
 			// Position 0 is the glyph the Coverage table selected this rule set by
@@ -2766,30 +2766,34 @@ class Otl
 	}
 
 	/**
-	 * The rules of a Format 1 chained context subtable that start with one glyph, decoded, for the
-	 * life of the document.
+	 * The rules of a Format 1 chained context subtable, GSUB Type 6 or GPOS Type 8, that start with
+	 * one glyph, decoded, for the life of the document.
 	 *
-	 * @param int $offset        Where the subtable starts; the reader is just past its format
-	 * @param int $coverageIndex The first glyph's index in the subtable's Coverage table
+	 * @param int  $offset        Where the subtable starts; the reader is just past its format
+	 * @param int  $coverageIndex The first glyph's index in the subtable's Coverage table
+	 * @param bool $followNull    Whether a null rule set offset is followed to the subtable's own
+	 *                            start rather than read as a glyph that begins no context, as GSUB
+	 *                            has always read it
 	 *
 	 * @return array Each rule in the order the font lists them, as [$backtrack, $input, $lookahead,
 	 *               $recordCount, $recordsAt]: the characters of each sequence, the input from
 	 *               position 1, how many lookup records the rule names, and where they start
 	 */
-	private function chainedRuleSet($offset, $coverageIndex)
+	private function chainedRuleSet($offset, $coverageIndex, $followNull = false)
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['chainedRuleSet'][$offset][$coverageIndex])) {
-			// Neither the count nor a null offset is tested, which is how this format has always been
-			// read here
+			// The count is not tested, which is how this format has always been read here
 			$this->reader->skip(4 + $coverageIndex * 2); // coverageOffset and chainedSeqRuleSetCount
-			$ruleSet = $offset + $this->reader->readUInt16();
+			$ruleSet = $this->reader->readUInt16();
 
 			$rules = [];
-			foreach (SequenceRule::ruleOffsets($this->reader, $ruleSet) as $rule) {
-				$this->reader->seek($rule);
-				list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
-				$recordCount = $this->reader->readUInt16();
-				$rules[] = [$this->charsOf($backtrack), $this->charsOf($input), $this->charsOf($lookahead), $recordCount, $this->reader->tell()];
+			if ($ruleSet || $followNull) {
+				foreach (SequenceRule::ruleOffsets($this->reader, $offset + $ruleSet) as $rule) {
+					$this->reader->seek($rule);
+					list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
+					$recordCount = $this->reader->readUInt16();
+					$rules[] = [$this->charsOf($backtrack), $this->charsOf($input), $this->charsOf($lookahead), $recordCount, $this->reader->tell()];
+				}
 			}
 
 			$this->LuDataCache[$this->otlCacheKey]['chainedRuleSet'][$offset][$coverageIndex] = $rules;
@@ -2799,8 +2803,8 @@ class Otl
 	}
 
 	/**
-	 * A Format 2 chained context subtable's classes and rule sets, decoded, for the life of the
-	 * document.
+	 * The classes and rule sets of a Format 2 chained context subtable, GSUB Type 6 or GPOS Type 8,
+	 * decoded, for the life of the document.
 	 *
 	 * @param int $offset Where the subtable starts; the reader is just past its format
 	 *
@@ -4400,37 +4404,15 @@ class Otl
 	 */
 	private function _applyGPOSchainContextPosFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
-		$CoverageTableOffset = $subtable_offset + $this->reader->readUInt16();
-		$ChainPosRuleSetCount = $this->reader->readUInt16();
+		foreach ($this->chainedRuleSet($subtable_offset, $LuCoverage[$currGID]) as $rule) {
+			list($Backtrack, $inputChars, $Lookahead, $PosCount, $records) = $rule;
 
-		// All of the ChainPosRule tables defining contexts that begin with the same first glyph are grouped together in a ChainPosRuleSet table
-		$GlyphPos = $LuCoverage[$currGID];
-		$this->reader->skip($GlyphPos * 2);
-		$offset = $this->reader->readUInt16();
-		if ($offset == 0x0000) {
-			return null; // No context begins with this glyph
-		}
-
-		$ChainPosRuleSet = $subtable_offset + $offset;
-		$this->reader->seek($ChainPosRuleSet);
-		$ChainPosRuleCount = $this->reader->readUInt16();
-		$ChainPosRule = [];
-		for ($s = 0; $s < $ChainPosRuleCount; $s++) {
-			$ChainPosRule[$s] = $ChainPosRuleSet + $this->reader->readUInt16();
-		}
-
-		for ($s = 0; $s < $ChainPosRuleCount; $s++) {  // EACH RULE
-			$this->reader->seek($ChainPosRule[$s]);
-			list($backtrackGlyphIDs, $inputGlyphIDs, $lookaheadGlyphIDs) = SequenceRule::chained($this->reader);
-
-			$Backtrack = $this->charsOf($backtrackGlyphIDs);
 			// Position 0 is the glyph the Coverage table selected this rule set by
-			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
-			$Lookahead = $this->charsOf($lookaheadGlyphIDs);
+			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $inputChars);
 
 			$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
 			if ($matched) {
-				$PosCount = $this->reader->readUInt16();
+				$this->reader->seek($records);
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
 					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
@@ -4454,60 +4436,26 @@ class Otl
 	 */
 	private function _applyGPOSchainContextPosFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
-		$CoverageTableOffset = $subtable_offset + $this->reader->readUInt16();
-		$BacktrackClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$InputClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$LookaheadClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$ChainPosClassSetCnt = $this->reader->readUInt16();
-		$ChainPosClassSetOffset = [];
-		for ($b = 0; $b < $ChainPosClassSetCnt; $b++) {
-			$offset = $this->reader->readUInt16();
-			if ($offset == 0x0000) {
-				$ChainPosClassSetOffset[] = $offset;
-			} else {
-				$ChainPosClassSetOffset[] = $subtable_offset + $offset;
+		list($classes, $ruleSets, $class0excl, $bclass0excl, $lclass0excl) = $this->chainedClassContext($subtable_offset);
+
+		foreach ($ruleSets as $s => $ruleSet) { // ordered by input class
+			// Select the rule set if currGlyph is in First Input Class
+			if (!isset($classes[1][$s][$currGID])) {
+				continue;
 			}
-		}
 
-		$BacktrackClasses = $this->_getClasses($BacktrackClassDefOffset);
-		$InputClasses = $this->_getClasses($InputClassDefOffset);
-		$LookaheadClasses = $this->_getClasses($LookaheadClassDefOffset);
+			foreach ($this->chainedClassRules($ruleSet, $s, $classes) as $rule) {
+				list($backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, $PosCount, $records) = $rule;
 
-		for ($s = 0; $s < $ChainPosClassSetCnt; $s++) { // $ChainPosClassSet is ordered by input class-may be NULL
-			// Select $ChainPosClassSet if currGlyph is in First Input Class
-			if ($ChainPosClassSetOffset[$s] > 0 && isset($InputClasses[$s][$currGID])) {
-				$this->reader->seek($ChainPosClassSetOffset[$s]);
-				$ChainPosClassRuleCnt = $this->reader->readUInt16();
-				$ChainPosClassRule = [];
-				for ($b = 0; $b < $ChainPosClassRuleCnt; $b++) {
-					$ChainPosClassRule[$b] = $ChainPosClassSetOffset[$s] + $this->reader->readUInt16();
-				}
-
-				for ($b = 0; $b < $ChainPosClassRuleCnt; $b++) {  // EACH RULE
-					$this->reader->seek($ChainPosClassRule[$b]);
-					list($backtrackClassIndices, $inputClassIndices, $lookaheadClassIndices) = SequenceRule::chained($this->reader);
-
-					// The rule set array is indexed by the class of the first input glyph, so the loop
-					// index over it is that class, and that class is position 0
-					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
-					$backtrackGlyphs = $this->classSets($BacktrackClasses, $backtrackClassIndices);
-					$lookaheadGlyphs = $this->classSets($LookaheadClasses, $lookaheadClassIndices);
-
-					// Class 0 contains all the glyphs NOT in the other classes, one set per sequence
-					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
-					$bclass0excl = $this->getClassZeroExclusions($BacktrackClassDefOffset);
-					$lclass0excl = $this->getClassZeroExclusions($LookaheadClassDefOffset);
-
-					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
-					if ($matched) {
-						$PosCount = $this->reader->readUInt16();
-						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
-						if ($this->debugOTL) {
-							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
-						}
-
-						return $shift;
+				$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
+				if ($matched) {
+					$this->reader->seek($records);
+					$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
+					if ($this->debugOTL) {
+						echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 					}
+
+					return $shift;
 				}
 			}
 		}

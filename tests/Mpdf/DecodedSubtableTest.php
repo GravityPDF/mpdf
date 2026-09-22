@@ -67,6 +67,10 @@ class DecodedSubtableTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			// KHA with a nukta and the UU sign; KA with a nukta and the U sign
 			'GPOS 7 format 2, Noto Sans Sharada' => ['sharadatext', 'NotoSansSharada-Subset.ttf', "\xF0\x91\x86\x92\xF0\x91\x87\x8A\xF0\x91\x86\xB7 \xF0\x91\x86\x91\xF0\x91\x87\x8A\xF0\x91\x86\xB6", 'GPOS', 'plainClassRules'],
 			'GPOS 7 format 3, synthetic' => ['contexttext', 'NotoSans-ContextCoverage-Synthetic.ttf', 'ab bca ba', 'GPOS', 'plainCoverage'],
+			// PA, virama, RA, AA, PA, virama, TA
+			'GPOS 8 format 1, Noto Sans Takri' => ['takritext', 'NotoSansTakri-Subset.ttf', "\xF0\x91\x9A\x9E\xF0\x91\x9A\xB6\xF0\x91\x9A\xA4\xF0\x91\x9A\xAD\xF0\x91\x9A\x9E\xF0\x91\x9A\xB6\xF0\x91\x9A\x99", 'GPOS', 'chainedRuleSet'],
+			// CA and SHA, each with the UU sign
+			'GPOS 8 format 2, Noto Sans Sharada' => ['sharadatext', 'NotoSansSharada-Subset.ttf', "\xF0\x91\x86\x96\xF0\x91\x86\xB7 \xF0\x91\x86\xAD\xF0\x91\x86\xB7", 'GPOS', 'chainedClassRules'],
 			'GPOS 8 format 3, Taamey David' => ['taameydavidclm', null, 'בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ', 'GPOS', 'chainedCoverage'],
 		];
 	}
