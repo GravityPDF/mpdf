@@ -4,7 +4,6 @@ namespace Mpdf\Writer;
 
 use Mpdf\Strict;
 use Mpdf\Mpdf;
-use Mpdf\Form;
 
 final class PageWriter
 {
@@ -17,11 +16,6 @@ final class PageWriter
 	private $mpdf;
 
 	/**
-	 * @var \Mpdf\Form
-	 */
-	private $form;
-
-	/**
 	 * @var \Mpdf\Writer\BaseWriter
 	 */
 	private $writer;
@@ -31,10 +25,9 @@ final class PageWriter
 	 */
 	private $metadataWriter;
 
-	public function __construct(Mpdf $mpdf, Form $form, BaseWriter $writer, MetadataWriter $metadataWriter)
+	public function __construct(Mpdf $mpdf, BaseWriter $writer, MetadataWriter $metadataWriter)
 	{
 		$this->mpdf = $mpdf;
-		$this->form = $form;
 		$this->writer = $writer;
 		$this->metadataWriter = $metadataWriter;
 	}
@@ -52,42 +45,7 @@ final class PageWriter
 			$defhPt = $this->mpdf->fwPt;
 		}
 
-		$annotid = (3 + 2 * $nb);
-
-		$this->metadataWriter->settleAnnotations();
-
-		// Active Forms
-		$totaladdnum = 0;
-		for ($n = 1; $n <= $nb; $n++) {
-			if (isset($this->mpdf->PageLinks[$n])) {
-				$totaladdnum += count($this->mpdf->PageLinks[$n]);
-			}
-
-			/* -- ANNOTATIONS -- */
-			if (isset($this->mpdf->PageAnnots[$n])) {
-				foreach ($this->mpdf->PageAnnots[$n] as $k => $pl) {
-					$totaladdnum += $this->metadataWriter->annotationObjectCount($pl);
-				}
-			}
-			/* -- END ANNOTATIONS -- */
-
-			/* -- FORMS -- */
-			if (count($this->form->forms) > 0) {
-				$this->form->countPageForms($n, $totaladdnum);
-			}
-			/* -- END FORMS -- */
-		}
-
-		/* -- FORMS -- */
-		// Make a note in the radio button group of the obj_id it will have
-		$ctr = 0;
-		if (count($this->form->form_radio_groups)) {
-			foreach ($this->form->form_radio_groups as $name => $frg) {
-				$this->form->form_radio_groups[$name]['obj_id'] = $annotid + $totaladdnum + $ctr;
-				$ctr++;
-			}
-		}
-		/* -- END FORMS -- */
+		$annots = $this->metadataWriter->numberAnnotations(3 + 2 * $nb);
 
 		// Select unused fonts (usually default font)
 		$unused = [];
@@ -196,51 +154,11 @@ final class PageWriter
 				}
 			}
 
-			$annotsnum = 0;
-			$annots = []; // Offsets of the objects that are annotations, as against embedded files and appearances
-
-			if (!empty($this->mpdf->PageLinks[$n])) {
-				$annotsnum = count($this->mpdf->PageLinks[$n]);
-				$annots = range(0, $annotsnum - 1);
-			}
-
-			if (isset($this->mpdf->PageAnnots[$n])) {
-				foreach ($this->mpdf->PageAnnots[$n] as $k => $pl) {
-					$annots[] = $annotsnum;
-					if (!empty($pl['opt']['popup']) && empty($pl['opt']['file'])) {
-						$annots[] = $annotsnum + 1;
-					}
-					$annotsnum += $this->metadataWriter->annotationObjectCount($pl);
-					$this->mpdf->PageAnnots[$n][$k]['pageobj'] = $this->mpdf->n;
-				}
-			}
-
-			// Active Forms
-			$formsnum = 0;
-			if (count($this->form->forms) > 0) {
-				foreach ($this->form->forms as $val) {
-					if ($val['page'] == $n) {
-						$formsnum++;
-					}
-				}
-			}
-
-			if ($annotsnum || $formsnum) {
-
+			if ($annots[$n]) {
 				$s = '/Annots [ ';
-
-				foreach ($annots as $i) {
-					$s .= ($annotid + $i) . ' 0 R ';
+				foreach ($annots[$n] as $id) {
+					$s .= $id . ' 0 R ';
 				}
-
-				$annotid += $annotsnum;
-
-				/* -- FORMS -- */
-				if (count($this->form->forms) > 0) {
-					$this->form->addFormIds($n, $s, $annotid);
-				}
-				/* -- END FORMS -- */
-
 				$s .= '] ';
 				$this->writer->write($s);
 			}
