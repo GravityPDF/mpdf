@@ -24,16 +24,16 @@ if (!defined('_RECALC_PROFILE')) {
  * builds a font program, takes a file path, and knows nothing about the document.
  *
  * It takes a parser rather than being one, through FontSourceInterface. What it borrows is the table
- * directory and the two readers built on it that the metrics path also uses, getCMAP4 and getHMTX,
- * so the parser is handed the same open file and asked for those; everything else here is its own.
- * The borrowed readers hand back what they read, so nothing the subsetter does shows up on the
+ * directory and the cmap reader built on it that the metrics path also uses, getCMAP4, so the
+ * parser is handed the same open file and asked for those; everything else here is its own.
+ * The borrowed reader hands back what it reads, so nothing the subsetter does shows up on the
  * parser afterwards.
  */
 class FontSubsetter
 {
 
 	/**
-	 * The parser, for the table directory and the readers shared with the metrics path
+	 * The parser, for the table directory and the cmap reader shared with the metrics path
 	 *
 	 * @var FontSourceInterface
 	 */
@@ -101,15 +101,28 @@ class FontSubsetter
 	 * The highest character the subset covers, counting past the Basic Multilingual Plane.
 	 *
 	 * Worked out by whichever cmap reader ran - the parser's getCMAP4, or makeSubsetSIP's own format
-	 * 12 reader - and then raised by every glyph mapped into the Private Use Area. getHMTX sizes the
-	 * width table from it, so there is one of it rather than one per half.
+	 * 12 reader - and then raised by every glyph mapped into the Private Use Area. There is
+	 * one of it rather than one per half.
 	 *
 	 * @var int
 	 */
 	public $maxUniChar;
 
 	/**
-	 * @param FontSourceInterface $font The parser to borrow the table directory and the shared readers from
+	 * What readSipCmap() last read, [$charToGlyph, $maxUniChar], and the font and useOTL setting it
+	 * was read for
+	 *
+	 * @var array|null
+	 */
+	private $sipCmap;
+
+	/**
+	 * @var string|null
+	 */
+	private $sipCmapKey;
+
+	/**
+	 * @param FontSourceInterface $font The parser to borrow the table directory and the cmap reader from
 	 */
 	public function __construct(FontSourceInterface $font)
 	{
@@ -119,7 +132,7 @@ class FontSubsetter
 	/**
 	 * Start reading one font, and start a font program to write.
 	 *
-	 * The parser is handed the reader so that the table directory it reads, and the two readers built
+	 * The parser is handed the reader so that the table directory it reads, and the cmap reader built
 	 * on it that this borrows, are reading the file this is subsetting.
 	 */
 	private function open($file)
@@ -279,18 +292,13 @@ class FontSubsetter
 					if ($bctr > 0xF8FF) {
 						throw new \Mpdf\Exception\FontException($this->file . " : WARNING - Font cannot map all included glyphs into Private Use Area U+E000 - U+F8FF; cannot use useOTL on this font");
 					}
-					$glyphToChar[$gid][] = $bctr;
 					$charToGlyph[$bctr] = $gid;
 					$bctr++;
 				}
 			}
 		}
 
-		// hmtx - Horizontal metrics table. What the subset wants out of it is the default width -
-		// glyph 0's advance - which is worked out alongside the per-character widths the metrics
-		// path is after and this one has no use for.
-		$scale = 1; // not used
-		list(, $this->defaultWidth) = $this->font->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale, $this->maxUniChar);
+		$this->defaultWidth = $this->readDefaultWidth($numberOfHMetrics);
 
 		// loca - Index to location
 		$this->getLOCA($indexToLocFormat, $numGlyphs);
@@ -410,7 +418,7 @@ class FontSubsetter
 		try {
 			$this->readTableDirectory($TTCfontID, $debug);
 
-			return $this->buildSubsetSIP($subset, $useOTL);
+			return $this->buildSubsetSIP($subset, $TTCfontID, $useOTL);
 		} finally {
 			$this->reader->close();
 		}
@@ -419,104 +427,20 @@ class FontSubsetter
 	/**
 	 * @return string See makeSubsetSIP
 	 */
-	private function buildSubsetSIP(array $subset, $useOTL)
+	private function buildSubsetSIP(array $subset, $TTCfontID, $useOTL)
 	{
 		list($indexToLocFormat, $numberOfHMetrics, $numGlyphs) = $this->readHeaders();
 
-		// cmap - Character to glyph index mapping table
-		$cmap_offset = $this->seekTable('cmap');
-		$this->reader->skip(2);
-		$cmapTableCount = $this->reader->readUInt16();
-		$unicode_cmap_offset = 0;
-		for ($i = 0; $i < $cmapTableCount; $i++) {
-
-			$platformID = $this->reader->readUInt16();
-			$encodingID = $this->reader->readUInt16();
-			$offset = $this->reader->readUInt32();
-			$save_pos = $this->reader->tell();
-
-			if (($platformID == 3 && $encodingID == 10) || $platformID == 0) { // Microsoft, Unicode Format 12 table HKCS
-				$format = $this->reader->uint16At($cmap_offset + $offset);
-				if ($format == 12) {
-					$unicode_cmap_offset = $cmap_offset + $offset;
-					break;
-				}
-			}
-
-			if (($platformID == 3 && $encodingID == 1) || $platformID == 0) { // Microsoft, Unicode
-				$format = $this->reader->uint16At($cmap_offset + $offset);
-				if ($format == 4) {
-					$unicode_cmap_offset = $cmap_offset + $offset;
-				}
-			}
-
-			$this->reader->seek($save_pos);
+		// A document past 255 characters is written as several subset fonts of the one font, each
+		// built by its own call, and the cmap they are all mapped from is read once for all of them
+		$key = $this->file . "\0" . $TTCfontID . "\0" . ($useOTL ? 1 : 0);
+		if ($this->sipCmapKey !== $key) {
+			$this->sipCmap = $this->readSipCmap($numGlyphs, $useOTL);
+			$this->sipCmapKey = $key;
 		}
+		list($charToGlyph, $this->maxUniChar) = $this->sipCmap;
 
-		if (!$unicode_cmap_offset) {
-			throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)', $this->file));
-		}
-
-		// Format 12 CMAP does characters above Unicode BMP i.e. some HKCS characters U+20000 and above
-		if ($format == 12) {
-			$this->maxUniChar = 0;
-			$this->reader->seek($unicode_cmap_offset + 4);
-			$length = $this->reader->readUInt32();
-			$limit = $unicode_cmap_offset + $length;
-			$this->reader->skip(4);
-
-			$nGroups = $this->reader->readUInt32();
-
-			$glyphToChar = [];
-			$charToGlyph = [];
-			for ($i = 0; $i < $nGroups; $i++) {
-				$startCharCode = $this->reader->readUInt32();
-				$endCharCode = $this->reader->readUInt32();
-				$startGlyphCode = $this->reader->readUInt32();
-				$offset = 0;
-				for ($unichar = $startCharCode; $unichar <= $endCharCode; $unichar++) {
-					$glyph = $startGlyphCode + $offset;
-					$offset++;
-					// ZZZ98
-					if ($unichar < 0x30000) {
-						$charToGlyph[$unichar] = $glyph;
-						$this->maxUniChar = max($unichar, $this->maxUniChar);
-						$glyphToChar[$glyph][] = $unichar;
-					}
-				}
-			}
-		} else {
-			$glyphToChar = [];
-			$charToGlyph = [];
-			$this->maxUniChar = $this->font->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
-		}
-
-		// Map Unmapped glyphs - from $numGlyphs
-		if ($useOTL) {
-			$bctr = 0xE000;
-			for ($gid = 1; $gid < $numGlyphs; $gid++) {
-				if (!isset($glyphToChar[$gid])) {
-					while (isset($charToGlyph[$bctr])) {
-						$bctr++;
-					} // Avoid overwriting a glyph already mapped in PUA
-					// ZZZ98
-					if ($bctr > 0xF8FF && $bctr < 0x2CEB0) {
-						$bctr = 0x2CEB0;
-						while (isset($charToGlyph[$bctr])) {
-							$bctr++;
-						}
-					}
-					$glyphToChar[$gid][] = $bctr;
-					$charToGlyph[$bctr] = $gid;
-					$this->maxUniChar = max($bctr, $this->maxUniChar);
-					$bctr++;
-				}
-			}
-		}
-
-		// hmtx - Horizontal metrics table, for the default width; @see makeSubset
-		$scale = 1; // not used here
-		list(, $this->defaultWidth) = $this->font->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale, $this->maxUniChar);
+		$this->defaultWidth = $this->readDefaultWidth($numberOfHMetrics);
 
 		// loca - Index to location
 		$this->getLOCA($indexToLocFormat, $numGlyphs);
@@ -653,6 +577,109 @@ class FontSubsetter
 		$this->addGlyphTables($glyphMap, $glyphSet, $numberOfHMetrics, null);
 
 		return $this->writer->program();
+	}
+
+	/**
+	 * Read a SIP font's character map: its format 12 cmap subtable where it has one, and its format
+	 * 4 one where it has not, with every glyph left unmapped given a character of its own where the
+	 * document laid the font out with OTL.
+	 *
+	 * @param int $numGlyphs maxp's glyph count
+	 * @param int $useOTL    Whether the document laid the font out with its OTL tables
+	 *
+	 * @return array [$charToGlyph, $maxUniChar]
+	 *
+	 * @throws \Mpdf\Exception\FontException Where the font carries no Unicode cmap to read
+	 */
+	private function readSipCmap($numGlyphs, $useOTL)
+	{
+		// cmap - Character to glyph index mapping table
+		$cmap_offset = $this->seekTable('cmap');
+		$this->reader->skip(2);
+		$cmapTableCount = $this->reader->readUInt16();
+		$unicode_cmap_offset = 0;
+		for ($i = 0; $i < $cmapTableCount; $i++) {
+
+			$platformID = $this->reader->readUInt16();
+			$encodingID = $this->reader->readUInt16();
+			$offset = $this->reader->readUInt32();
+			$save_pos = $this->reader->tell();
+
+			if (($platformID == 3 && $encodingID == 10) || $platformID == 0) { // Microsoft, Unicode Format 12 table HKCS
+				$format = $this->reader->uint16At($cmap_offset + $offset);
+				if ($format == 12) {
+					$unicode_cmap_offset = $cmap_offset + $offset;
+					break;
+				}
+			}
+
+			if (($platformID == 3 && $encodingID == 1) || $platformID == 0) { // Microsoft, Unicode
+				$format = $this->reader->uint16At($cmap_offset + $offset);
+				if ($format == 4) {
+					$unicode_cmap_offset = $cmap_offset + $offset;
+				}
+			}
+
+			$this->reader->seek($save_pos);
+		}
+
+		if (!$unicode_cmap_offset) {
+			throw new \Mpdf\Exception\FontException(sprintf('Font "%s" does not have cmap for Unicode (platform 3, encoding 1, format 4, or platform 0, any encoding, format 4)', $this->file));
+		}
+
+		// Format 12 CMAP does characters above Unicode BMP i.e. some HKCS characters U+20000 and above
+		if ($format == 12) {
+			$maxUniChar = 0;
+			$this->reader->seek($unicode_cmap_offset + 12); // past format, reserved, length and language
+			$nGroups = $this->reader->readUInt32();
+
+			$glyphToChar = [];
+			$charToGlyph = [];
+			for ($i = 0; $i < $nGroups; $i++) {
+				$startCharCode = $this->reader->readUInt32();
+				$endCharCode = $this->reader->readUInt32();
+				$startGlyphCode = $this->reader->readUInt32();
+				$offset = 0;
+				for ($unichar = $startCharCode; $unichar <= $endCharCode; $unichar++) {
+					$glyph = $startGlyphCode + $offset;
+					$offset++;
+					// ZZZ98
+					if ($unichar < 0x30000) {
+						$charToGlyph[$unichar] = $glyph;
+						$maxUniChar = max($unichar, $maxUniChar);
+						$glyphToChar[$glyph] = true; // only asked whether a glyph is mapped
+					}
+				}
+			}
+		} else {
+			$glyphToChar = [];
+			$charToGlyph = [];
+			$maxUniChar = $this->font->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
+		}
+
+		// Map Unmapped glyphs - from $numGlyphs
+		if ($useOTL) {
+			$bctr = 0xE000;
+			for ($gid = 1; $gid < $numGlyphs; $gid++) {
+				if (!isset($glyphToChar[$gid])) {
+					while (isset($charToGlyph[$bctr])) {
+						$bctr++;
+					} // Avoid overwriting a glyph already mapped in PUA
+					// ZZZ98
+					if ($bctr > 0xF8FF && $bctr < 0x2CEB0) {
+						$bctr = 0x2CEB0;
+						while (isset($charToGlyph[$bctr])) {
+							$bctr++;
+						}
+					}
+					$charToGlyph[$bctr] = $gid;
+					$maxUniChar = max($bctr, $maxUniChar);
+					$bctr++;
+				}
+			}
+		}
+
+		return [$charToGlyph, $maxUniChar];
 	}
 
 	/**
@@ -1118,6 +1145,30 @@ class FontSubsetter
 		$this->reader->seek($offset);
 
 		return $offset;
+	}
+
+	/**
+	 * Glyph 0's advance, which is the width a character the subset has no width of its own for is
+	 * drawn at.
+	 *
+	 * Read directly rather than through the parser's getHMTX, which builds the whole per-character
+	 * width table to get the same number - once per subset font, of which a SIP document can need
+	 * dozens. An advance of 2^15 or more is read as 0, as getHMTX reads it.
+	 *
+	 * @param int $numberOfHMetrics hhea's count of full metric records
+	 *
+	 * @return int
+	 */
+	private function readDefaultWidth($numberOfHMetrics)
+	{
+		if ($numberOfHMetrics < 1) {
+			return 0;
+		}
+
+		list($start) = $this->font->getTablePosition('hmtx');
+		$advance = $this->reader->uint16At($start);
+
+		return $advance >= (1 << 15) ? 0 : $advance;
 	}
 
 	/**

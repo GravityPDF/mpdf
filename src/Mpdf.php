@@ -4154,6 +4154,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// The range below is the encoding rather than a seed - a character is written as the CID
 			// it holds in subsets - so it stays where it is
 			$this->fonts[$fontkey]['subsets'] = [0 => range(0, 127)];
+			$this->fonts[$fontkey]['subsetCodes'] = [];
+			foreach (range(0, 127) as $c) {
+				$this->fonts[$fontkey]['subsetCodes'][$c] = [0, $c];
+			}
 			$this->fonts[$fontkey]['subsetfontids'] = [$i];
 		}
 
@@ -5742,35 +5746,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// Prepare Text and Select Font ID
 			if ($sipset) {
-				for ($j = 0; $j < 99; $j++) {
-					$init = array_search($c, $this->CurrentFont['subsets'][$j]);
-					if ($init !== false) {
-						if ($this->CurrentFont['subsetfontids'][$j] != $last_fontid) {
-							$groupBreak = true;
-							$fontid = $this->CurrentFont['subsetfontids'][$j];
-						}
-						$tx = sprintf("%02s", strtoupper(dechex($init)));
-
-						break;
+				$position = $this->subsetPosition($c);
+				if ($position !== null) {
+					list($j, $code) = $position;
+					if ($this->CurrentFont['subsetfontids'][$j] != $last_fontid) {
+						$groupBreak = true;
+						$fontid = $this->CurrentFont['subsetfontids'][$j];
 					}
-
-					if (count($this->CurrentFont['subsets'][$j]) < 255) {
-						$n = count($this->CurrentFont['subsets'][$j]);
-						$this->CurrentFont['subsets'][$j][$n] = $c;
-						if ($this->CurrentFont['subsetfontids'][$j] != $last_fontid) {
-							$groupBreak = true;
-							$fontid = $this->CurrentFont['subsetfontids'][$j];
-						}
-						$tx = sprintf("%02s", strtoupper(dechex($n)));
-
-						break;
-					}
-
-					if (!isset($this->CurrentFont['subsets'][($j + 1)])) {
-						$this->CurrentFont['subsets'][($j + 1)] = [0 => 0];
-						$this->CurrentFont['subsetfontids'][($j + 1)] = count($this->fonts) + $this->extraFontSubsets + 1;
-						$this->extraFontSubsets++;
-					}
+					$tx = sprintf("%02s", strtoupper(dechex($code)));
 				}
 
 			} else {
@@ -5840,36 +5823,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				// Prepare Text and Select Font ID
 				if ($sipset) {
-
-					for ($j = 0; $j < 99; $j++) {
-
-						$init = array_search($c, $this->CurrentFont['subsets'][$j]);
-
-						if ($init !== false) {
-							if ($this->CurrentFont['subsetfontids'][$j] != $last_fontid) {
-								$fontid = $this->CurrentFont['subsetfontids'][$j];
-							}
-							$tx = sprintf("%02s", strtoupper(dechex($init)));
-
-							break;
+					$position = $this->subsetPosition($c);
+					if ($position !== null) {
+						list($j, $code) = $position;
+						if ($this->CurrentFont['subsetfontids'][$j] != $last_fontid) {
+							$fontid = $this->CurrentFont['subsetfontids'][$j];
 						}
-
-						if (count($this->CurrentFont['subsets'][$j]) < 255) {
-							$n = count($this->CurrentFont['subsets'][$j]);
-							$this->CurrentFont['subsets'][$j][$n] = $c;
-							if ($this->CurrentFont['subsetfontids'][$j] != $last_fontid) {
-								$fontid = $this->CurrentFont['subsetfontids'][$j];
-							}
-							$tx = sprintf("%02s", strtoupper(dechex($n)));
-
-							break;
-						}
-
-						if (!isset($this->CurrentFont['subsets'][($j + 1)])) {
-							$this->CurrentFont['subsets'][($j + 1)] = [0 => 0];
-							$this->CurrentFont['subsetfontids'][($j + 1)] = count($this->fonts) + $this->extraFontSubsets + 1;
-							$this->extraFontSubsets++;
-						}
+						$tx = sprintf("%02s", strtoupper(dechex($code)));
 					}
 				} else {
 					$tx = UtfString::code2utf($c);
@@ -11037,33 +10997,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (!$this->_charDefined($this->CurrentFont['cw'], $c)) {
 				$c = 0;
 			} // mPDF 6
-			for ($i = 0; $i < 99; $i++) {
-				// return c as decimal char
-				$init = array_search($c, $this->CurrentFont['subsets'][$i]);
-				if ($init !== false) {
-					if ($this->CurrentFont['subsetfontids'][$i] != $last_fid) {
-						$ret .= '> Tj /F' . $this->CurrentFont['subsetfontids'][$i] . ' ' . $this->FontSizePt . ' Tf <';
-						$last_fid = $this->CurrentFont['subsetfontids'][$i];
-					}
-					$ret .= sprintf("%02s", strtoupper(dechex($init)));
-					break;
-				} // TrueType embedded SUBSETS
-				elseif (count($this->CurrentFont['subsets'][$i]) < 255) {
-					$n = count($this->CurrentFont['subsets'][$i]);
-					$this->CurrentFont['subsets'][$i][$n] = $c;
-					if ($this->CurrentFont['subsetfontids'][$i] != $last_fid) {
-						$ret .= '> Tj /F' . $this->CurrentFont['subsetfontids'][$i] . ' ' . $this->FontSizePt . ' Tf <';
-						$last_fid = $this->CurrentFont['subsetfontids'][$i];
-					}
-					$ret .= sprintf("%02s", strtoupper(dechex($n)));
-					break;
-				} elseif (!isset($this->CurrentFont['subsets'][($i + 1)])) {
-					// TrueType embedded SUBSETS
-					$this->CurrentFont['subsets'][($i + 1)] = [0 => 0];
-					$new_fid = count($this->fonts) + $this->extraFontSubsets + 1;
-					$this->CurrentFont['subsetfontids'][($i + 1)] = $new_fid;
-					$this->extraFontSubsets++;
+			$position = $this->subsetPosition($c);
+			if ($position !== null) {
+				list($i, $code) = $position;
+				if ($this->CurrentFont['subsetfontids'][$i] != $last_fid) {
+					$ret .= '> Tj /F' . $this->CurrentFont['subsetfontids'][$i] . ' ' . $this->FontSizePt . ' Tf <';
+					$last_fid = $this->CurrentFont['subsetfontids'][$i];
 				}
+				$ret .= sprintf("%02s", strtoupper(dechex($code)));
 			}
 		}
 		$ret .= '>';
@@ -11071,6 +11012,45 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$ret .= ' Tj /F' . $orig_fid . ' ' . $this->FontSizePt . ' Tf <> ';
 		}
 		return $ret;
+	}
+
+	/**
+	 * Which subset font of the current SIP or SMP font draws a character, and its code in that font.
+	 *
+	 * A character not yet in a subset is appended to the first subset with room, and a subset is
+	 * opened once the last one is full. Held both ways, 'subsets' as each subset's characters by code
+	 * for FontWriter and 'subsetCodes' as each character's place, so a character already placed is
+	 * one lookup rather than a search of every subset. Both live on the font, so whatever puts the
+	 * fonts back after a measuring pass puts the two back together.
+	 *
+	 * @param int $c The character, as a code point
+	 *
+	 * @return int[]|null [subset, code], or null where all 99 subsets are full
+	 */
+	private function subsetPosition($c)
+	{
+		$font = &$this->CurrentFont;
+
+		if (isset($font['subsetCodes'][$c])) {
+			return $font['subsetCodes'][$c];
+		}
+
+		for ($j = 0; $j < 99; $j++) {
+			$code = count($font['subsets'][$j]);
+			if ($code < 255) {
+				$font['subsets'][$j][$code] = $c;
+
+				return $font['subsetCodes'][$c] = [$j, $code];
+			}
+
+			if (!isset($font['subsets'][$j + 1])) {
+				$font['subsets'][$j + 1] = [0 => 0];
+				$font['subsetfontids'][$j + 1] = count($this->fonts) + $this->extraFontSubsets + 1;
+				$this->extraFontSubsets++;
+			}
+		}
+
+		return null;
 	}
 
 	/* -- CJK-FONTS -- */
