@@ -3659,9 +3659,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		// Get width of a single character in the current Non-Core font
 		$c = (string) $c;
-		$w = 0;
 		$unicode = $this->UTF8StringToArray($c, $addSubset);
-		$char = $unicode[0];
+
+		return $this->codePointWidthNonCore($unicode[0], $c == ' ');
+	}
+
+	/**
+	 * Width of one code point in the current non-core font, in user units.
+	 *
+	 * @param int $char The code point.
+	 * @param bool $isSpace Whether the character is a space, which also takes the word spacing.
+	 *
+	 * @return float|int
+	 */
+	private function codePointWidthNonCore($char, $isSpace)
+	{
+		$w = 0;
 		/* -- CJK-FONTS -- */
 		if ($this->CurrentFont['type'] == 'Type0') { // CJK Adobe fonts
 			if ($char == 173) {
@@ -3706,14 +3719,40 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // *CJK-FONTS*
 		$w *= ($this->FontSize / 1000);
 		if ($this->minwSpacing || $this->fixedlSpacing) {
-			if ($c == ' ') {
-				$nb_spaces = 1;
-			} else {
-				$nb_spaces = 0;
-			}
-			$w += $this->fixedlSpacing + ($nb_spaces * $this->minwSpacing);
+			$w += $this->fixedlSpacing + ($isSpace ? $this->minwSpacing : 0);
 		}
 		return ($w);
+	}
+
+	/**
+	 * Split a UTF-8 string into its characters and their code points, index for index.
+	 *
+	 * UTF8StringToArray() skips stray bytes that mb_substr() counts as characters, so a string that is not
+	 * valid UTF-8 is split one mb_substr() character at a time, as WriteFlowingBlock() always did.
+	 *
+	 * @param string $s
+	 *
+	 * @return array The characters, then the code points.
+	 */
+	private function splitCharacters($s)
+	{
+		$chars = preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);
+		if ($chars !== false) {
+			// Valid UTF-8, so the code points are what UTF8StringToArray() would give, decoded in C
+			return [$chars, $chars ? array_values(unpack('N*', mb_convert_encoding($s, 'UTF-32BE', 'UTF-8'))) : []];
+		}
+
+		$chars = [];
+		$codePoints = [];
+		$clen = mb_strlen($s, $this->mb_enc);
+		for ($i = 0; $i < $clen; $i++) {
+			$c = mb_substr($s, $i, 1, $this->mb_enc);
+			$unicode = $this->UTF8StringToArray($c, false);
+			$chars[] = $c;
+			$codePoints[] = isset($unicode[0]) ? $unicode[0] : null;
+		}
+
+		return [$chars, $codePoints];
 	}
 
 	function GetCharWidth($c, $addSubset = true)
@@ -8101,7 +8140,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->usingCoreFont) {
 			$clen = strlen($s);
 		} else {
-			$clen = mb_strlen($s, $this->mb_enc);
+			list($chars, $codePoints) = $this->splitCharacters($s);
+			$clen = count($chars);
 		}
 
 		// for every character in the string
@@ -8118,8 +8158,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 			} else {
-				$c = mb_substr($s, $i, 1, $this->mb_enc);
-				$cw = ($this->GetCharWidthNonCore($c, false) * Mpdf::SCALE);
+				$c = $chars[$i];
+				$cw = ($this->codePointWidthNonCore($codePoints[$i], $c == ' ') * Mpdf::SCALE);
 				// mPDF 5.7.1
 				// Use OTL GPOS
 				if (isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0xFF)) {
@@ -8131,11 +8171,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 				if (($this->textvar & TextVars::FC_KERNING) && $i > 0) { // mPDF 5.7.1
-					$lastc = mb_substr($s, ($i - 1), 1, $this->mb_enc);
-					$ulastc = $this->UTF8StringToArray($lastc, false);
-					$uc = $this->UTF8StringToArray($c, false);
-					if (isset($this->CurrentFont['kerninfo'][$ulastc[0]][$uc[0]])) {
-						$cw += ($this->CurrentFont['kerninfo'][$ulastc[0]][$uc[0]] * $this->FontSizePt / 1000 );
+					if (isset($this->CurrentFont['kerninfo'][$codePoints[$i - 1]][$codePoints[$i]])) {
+						$cw += ($this->CurrentFont['kerninfo'][$codePoints[$i - 1]][$codePoints[$i]] * $this->FontSizePt / 1000 );
 					}
 				}
 			}
@@ -8247,7 +8284,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if ($this->usingCoreFont) {
 							$followingchar = $s[$i + 1];
 						} else {
-							$followingchar = mb_substr($s, $i + 1, 1, $this->mb_enc);
+							$followingchar = $chars[$i + 1];
 						}
 					}
 
@@ -8296,7 +8333,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if ($this->usingCoreFont) {
 							$addc = substr($s, $ac, 1);
 						} else {
-							$addc = mb_substr($s, $ac, 1, $this->mb_enc);
+							$addc = $chars[$ac];
 						}
 						if ($addc == ' ') {
 							break;
