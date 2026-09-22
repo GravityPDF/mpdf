@@ -34,7 +34,7 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	}
 
 	/**
-	 * Whether the file attachment is allowed
+	 * Whether the file attachment is allowed, for what the form field makes no difference to
 	 *
 	 * @return array[]
 	 */
@@ -55,9 +55,11 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	public function testEveryObjectThePageListsAsAnAnnotationIsOne($allow, $field)
 	{
 		$pdf = $this->document($allow, $field);
+		$refs = $this->annotationRefs($pdf);
 
-		foreach ($this->listedAnnotations($pdf) as $number => $object) {
-			$this->assertStringContainsString('/Type /Annot', $object, "Object $number is listed in /Annots and should be an annotation");
+		$this->assertNotSame([], $refs[0], 'The page should list its annotations');
+		foreach ($refs[0] as $number) {
+			$this->assertStringContainsString('/Type /Annot', $this->object($pdf, $number), "Object $number is listed in /Annots and should be an annotation");
 		}
 	}
 
@@ -73,66 +75,41 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 		$pdf = $this->document($allow, true);
 
 		$this->assertSame(1, substr_count($pdf, '/Subtype /Widget'), 'The document should carry one widget');
-		$this->assertSame(1, substr_count(implode('', $this->listedAnnotations($pdf)), '/Subtype /Widget'), 'The page should list the widget');
+		$this->assertSame(1, substr_count($this->annotations($pdf)[0], '/Subtype /Widget'), 'The page should list the widget');
 	}
 
 	/**
 	 * What the gate itself decides: the attachment is embedded, and the annotation announces it, only where
 	 * the configuration allows it
 	 *
-	 * @dataProvider attachments
+	 * @dataProvider permissions
 	 *
 	 * @param bool $allow
-	 * @param bool $field
 	 */
-	public function testTheFileIsEmbeddedOnlyWhereItIsAllowed($allow, $field)
+	public function testTheFileIsEmbeddedOnlyWhereItIsAllowed($allow)
 	{
-		$pdf = $this->document($allow, $field);
-		$listed = implode('', $this->listedAnnotations($pdf));
+		$pdf = $this->document($allow, true);
 
 		$this->assertSame($allow ? 1 : 0, substr_count($pdf, '/Type /EmbeddedFile'), 'The file should be embedded only where it is allowed');
-		$this->assertStringContainsString($allow ? '/Subtype /FileAttachment' : '/Subtype /Text', $listed);
-		$this->assertStringNotContainsString('/Type /EmbeddedFile', $listed, 'The stream of an embedded file is not an annotation');
+		$this->assertStringContainsString($allow ? '/Subtype /FileAttachment' : '/Subtype /Text', $this->annotations($pdf)[0]);
 	}
 
 	/**
-	 * A popup is written for every annotation that asks for one and has no embedded file, and is left out
-	 * for every annotation that has one - which is the pair of cases the count already agreed with, whether
-	 * the attachment was allowed or rejected. The popup is an annotation in its own right, so the page lists
-	 * it where it is written
+	 * A popup is written for every annotation that asks for one and has no embedded file, and is left out for
+	 * every annotation that has one - the pair of cases the count agreed with all along, whether the
+	 * attachment was allowed or rejected. The popup is an annotation in its own right, so the page lists it
+	 * wherever it is written
 	 *
-	 * @dataProvider attachments
+	 * @dataProvider permissions
 	 *
 	 * @param bool $allow
-	 * @param bool $field
 	 */
-	public function testAPopupIsListedWhereverItIsWritten($allow, $field)
+	public function testAPopupIsListedWhereverItIsWritten($allow)
 	{
-		$pdf = $this->document($allow, $field, true);
-		$listed = implode('', $this->listedAnnotations($pdf));
+		$pdf = $this->document($allow, true, true);
 
 		$this->assertSame($allow ? 0 : 1, substr_count($pdf, '/Subtype /Popup'), 'A popup should be written only where the file is not');
-		$this->assertSame($allow ? 0 : 1, substr_count($listed, '/Subtype /Popup'), 'The page should list the popup it has');
-	}
-
-	/**
-	 * The objects the first page lists in its /Annots array, keyed by object number
-	 *
-	 * @param string $pdf
-	 *
-	 * @return string[]
-	 */
-	private function listedAnnotations($pdf)
-	{
-		$refs = $this->annotationRefs($pdf);
-		$this->assertNotSame([], $refs[0], 'The page should list its annotations');
-
-		$objects = [];
-		foreach ($refs[0] as $number) {
-			$objects[$number] = $this->object($pdf, $number);
-		}
-
-		return $objects;
+		$this->assertSame($allow ? 0 : 1, substr_count($this->annotations($pdf)[0], '/Subtype /Popup'), 'The page should list the popup it has');
 	}
 
 	/**

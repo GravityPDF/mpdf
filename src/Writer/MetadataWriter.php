@@ -535,12 +535,29 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Whether the file an annotation attaches is embedded in the document.
+	 * The number of objects writeAnnotations() writes an annotation as, which PageWriter reserves that many
+	 * object numbers for before any of them exists.
 	 *
-	 * The `allowAnnotationFiles` configuration gates it. Where it does not allow the file, writeAnnotations()
-	 * writes the annotation as a plain text annotation and leaves the embedded file stream out, so the
-	 * annotation takes one object where an embedded file takes two - which is what PageWriter has to reserve
-	 * the object numbers for, so it reads the gate through here rather than reading the configuration again.
+	 * The annotation itself is one, and either the stream of its embedded file or its popup is a second. The
+	 * two cannot both be written, so an annotation asking for both still takes two objects.
+	 *
+	 * @param array $annotation An entry of Mpdf::$PageAnnots
+	 *
+	 * @return int
+	 */
+	public function countAnnotationObjects(array $annotation)
+	{
+		if ($this->embedsFileAttachment($annotation) || $this->writesPopup($annotation)) {
+			return 2;
+		}
+
+		return 1;
+	}
+
+	/**
+	 * Whether the file an annotation attaches is embedded in the document, which the `allowAnnotationFiles`
+	 * configuration gates. Where it is not, the annotation is written as a plain text annotation and the
+	 * stream of the file is left out
 	 *
 	 * @param array $annotation An entry of Mpdf::$PageAnnots
 	 *
@@ -549,6 +566,19 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	public function embedsFileAttachment(array $annotation)
 	{
 		return $this->mpdf->allowAnnotationFiles && !empty($annotation['opt']['file']);
+	}
+
+	/**
+	 * Whether a popup is written for an annotation. Only an annotation with no embedded file carries one,
+	 * the file taking the object the popup would have been written as
+	 *
+	 * @param array $annotation An entry of Mpdf::$PageAnnots
+	 *
+	 * @return bool
+	 */
+	private function writesPopup(array $annotation)
+	{
+		return !$this->embedsFileAttachment($annotation) && !empty($annotation['opt']['popup']);
 	}
 
 	/**
@@ -767,7 +797,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							if (!$this->mpdf->PDFA && !$this->mpdf->PDFX && isset($pl['opt']['subj'])) {
 								$annot .= ' /Subj ' . $this->writer->utf16BigEndianTextString($pl['opt']['subj']);
 							}
-							if (!empty($pl['opt']['popup'])) {
+							if ($this->writesPopup($pl)) {
 								$annot .= ' /Open true';
 								$annot .= ' /Popup ' . ($this->mpdf->n + 1) . ' 0 R';
 							} else {
@@ -796,7 +826,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$this->writer->stream($filestream);
 							$this->writer->write('endobj');
 
-						} elseif (!empty($pl['opt']['popup'])) {
+						} elseif ($this->writesPopup($pl)) {
 							$this->writer->object();
 							$annot = '';
 							if (is_array($pl['opt']['popup']) && isset($pl['opt']['popup'][0])) {

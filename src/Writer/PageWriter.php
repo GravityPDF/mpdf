@@ -64,7 +64,7 @@ final class PageWriter
 			/* -- ANNOTATIONS -- */
 			if (isset($this->mpdf->PageAnnots[$n])) {
 				foreach ($this->mpdf->PageAnnots[$n] as $pl) {
-					$totaladdnum += $this->countAnnotationObjects($pl);
+					$totaladdnum += $this->metadataWriter->countAnnotationObjects($pl);
 				}
 			}
 			/* -- END ANNOTATIONS -- */
@@ -206,7 +206,7 @@ final class PageWriter
 					if ($this->metadataWriter->embedsFileAttachment($pl)) {
 						$embeddedfiles[$annotsnum + 1] = true;
 					} // mPDF 5.7.2 /EmbeddedFiles
-					$annotsnum += $this->countAnnotationObjects($pl);
+					$annotsnum += $this->metadataWriter->countAnnotationObjects($pl);
 					$this->mpdf->PageAnnots[$n][$k]['pageobj'] = $this->mpdf->n;
 				}
 			}
@@ -272,27 +272,6 @@ final class PageWriter
 		$this->writer->write(sprintf('/MediaBox [0 0 %.3F %.3F]', $defwPt, $defhPt));
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
-	}
-
-	/**
-	 * The number of objects an annotation is written as, which has to agree with what
-	 * MetadataWriter::writeAnnotations() writes: an embedded file or a popup takes a second object beside the
-	 * annotation itself, and nothing else does.
-	 *
-	 * A popup is written only where the annotation has no embedded file, so an annotation that asks for both
-	 * still takes two objects.
-	 *
-	 * @param array $annotation An entry of Mpdf::$PageAnnots
-	 *
-	 * @return int
-	 */
-	private function countAnnotationObjects(array $annotation)
-	{
-		if ($this->metadataWriter->embedsFileAttachment($annotation) || !empty($annotation['opt']['popup'])) {
-			return 2;
-		}
-
-		return 1;
 	}
 
 }
