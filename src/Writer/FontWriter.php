@@ -381,9 +381,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				$toUni .= "1 begincodespacerange\n";
 				$toUni .= "<0000> <FFFF>\n";
 				$toUni .= "endcodespacerange\n";
-				$toUni .= "1 beginbfrange\n";
-				$toUni .= "<0000> <FFFF> <0000>\n";
-				$toUni .= "endbfrange\n";
+				$toUni .= $this->identityRanges($font);
 				$toUni .= "endcmap\n";
 				$toUni .= "CMapName currentdict /CMap defineresource pop\n";
 				$toUni .= "end\n";
@@ -497,6 +495,64 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $drawn;
+	}
+
+	/**
+	 * The bfrange entries of an Identity-H font's ToUnicode CMap: every code the document drew in the
+	 * font, and the 32-127 range each subset carries, mapped to itself.
+	 *
+	 * An Identity-H font takes its codes from the text rather than from the font's own encoding, so a
+	 * code is the Unicode value it stands for and each range maps to where it starts. A range may run
+	 * no further than the end of the high byte it begins in: ISO 32000-1 9.10.3 increments the last
+	 * byte of the destination for each code, and asks that the byte is no more than
+	 * 255 - (srcCode2 - srcCode1), which mapping the whole two-byte space in one range cannot meet.
+	 *
+	 * @param array $font The font as the document holds it, whose subset is the codes drawn
+	 *
+	 * @return string The bfrange blocks, of the hundred entries a block may hold
+	 */
+	private function identityRanges(array $font)
+	{
+		$codes = array_fill_keys(range(32, 127), true);
+
+		foreach ($font['subset'] as $u) {
+			if ($u > 0xFFFF && $u <= 0x10FFFF) {
+				// Written as a surrogate pair, which is two codes of its own to a reader
+				$codes[0xD800 + (($u - 0x10000) >> 10)] = true;
+				$codes[0xDC00 + (($u - 0x10000) & 0x3FF)] = true;
+			} elseif ($u > 0 && $u <= 0xFFFF) {
+				$codes[$u] = true;
+			}
+		}
+
+		ksort($codes);
+
+		$ranges = [];
+		$start = null;
+		$end = null;
+
+		foreach (array_keys($codes) as $code) {
+			if (null !== $start && $code === $end + 1 && ($code >> 8) === ($start >> 8)) {
+				$end = $code;
+				continue;
+			}
+
+			if (null !== $start) {
+				$ranges[] = sprintf("<%04X> <%04X> <%04X>\n", $start, $end, $start);
+			}
+
+			$start = $code;
+			$end = $code;
+		}
+
+		$ranges[] = sprintf("<%04X> <%04X> <%04X>\n", $start, $end, $start);
+
+		$cmap = '';
+		foreach (array_chunk($ranges, 100) as $block) {
+			$cmap .= count($block) . " beginbfrange\n" . implode('', $block) . "endbfrange\n";
+		}
+
+		return $cmap;
 	}
 
 	/**
