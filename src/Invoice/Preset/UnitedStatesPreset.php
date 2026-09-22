@@ -3,9 +3,9 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * The United States convention: $1,021.11 and 09/23/2026
+ * How the United States writes numbers and dates, and its dollars: $1,021.11 and 09/23/2026
  */
-class UsdPreset extends DefaultPreset
+class UnitedStatesPreset extends DefaultPreset
 {
 
 	/**

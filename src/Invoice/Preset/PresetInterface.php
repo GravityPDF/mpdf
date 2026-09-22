@@ -3,7 +3,7 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * A convention for writing numbers, amounts, rates and dates, which a Formatter starts from
+ * How a country writes numbers, amounts, rates and dates, which a Formatter starts from
  */
 interface PresetInterface
 {

@@ -3,10 +3,9 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * The French convention, a preset of the kind the preset docblocks suggest writing: 1 021,11 €, 5,5 % and 23/09/2026,
- * with no-break spaces
+ * How Germany writes numbers and dates, and its euros: 1.021,11 € and 23.09.2026
  */
-class FrenchPreset extends DefaultPreset
+class GermanyPreset extends DefaultPreset
 {
 
 	/**
@@ -22,7 +21,7 @@ class FrenchPreset extends DefaultPreset
 	 */
 	public function getThousandsSeparator()
 	{
-		return "\xc2\xa0";
+		return '.';
 	}
 
 	/**
@@ -30,7 +29,7 @@ class FrenchPreset extends DefaultPreset
 	 */
 	public function getDateFormat()
 	{
-		return 'd/m/Y';
+		return 'd.m.Y';
 	}
 
 	/**
@@ -39,14 +38,6 @@ class FrenchPreset extends DefaultPreset
 	public function getCurrencyFormats()
 	{
 		return ['EUR' => "%s\xc2\xa0€"];
-	}
-
-	/**
-	 * @return string
-	 */
-	public function getPercentFormat()
-	{
-		return "%s\xc2\xa0%%";
 	}
 
 }

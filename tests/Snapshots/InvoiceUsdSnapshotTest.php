@@ -8,10 +8,10 @@ use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
 use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Party;
-use Mpdf\Invoice\Preset\UsdPreset;
+use Mpdf\Invoice\Preset\UnitedStatesPreset;
 
 /**
- * An export to the United States invoiced in dollars with UsdPreset: the amounts after a dollar sign with commas between thousands,
+ * An export to the United States invoiced in dollars with UnitedStatesPreset: the amounts after a dollar sign with commas between thousands,
  * the prepayment as -$, dates month first, the buyer's state before its ZIP code, and no VAT on the export with the
  * reason beside it
  *
@@ -59,7 +59,7 @@ class InvoiceUsdSnapshotTest extends InvoiceSnapshot
 	 */
 	protected function getWriter()
 	{
-		return new HtmlInvoiceWriter([], new Formatter(new UsdPreset()));
+		return new HtmlInvoiceWriter([], new Formatter(new UnitedStatesPreset()));
 	}
 
 }

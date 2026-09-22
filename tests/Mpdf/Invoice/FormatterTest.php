@@ -2,9 +2,9 @@
 
 namespace Mpdf\Invoice;
 
-use Mpdf\Invoice\Preset\EurPreset;
-use Mpdf\Invoice\Preset\FrenchPreset;
-use Mpdf\Invoice\Preset\UsdPreset;
+use Mpdf\Invoice\Preset\FrancePreset;
+use Mpdf\Invoice\Preset\GermanyPreset;
+use Mpdf\Invoice\Preset\UnitedStatesPreset;
 use Mpdf\MpdfException;
 
 class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
@@ -20,9 +20,9 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'default' => [new Formatter(), 'EUR', '1,500.25', '1,021.11 EUR', '-100.00 EUR', '5.5%', '2026-09-23'],
-			'USD' => [new Formatter(new UsdPreset()), 'USD', '1,500.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
-			'EUR' => [new Formatter(new EurPreset()), 'EUR', '1.500,25', "1.021,11\xc2\xa0€", "-100,00\xc2\xa0€", '5,5%', '23.09.2026'],
-			'French' => [new Formatter(new FrenchPreset()), 'EUR', "1\xc2\xa0500,25", "1\xc2\xa0021,11\xc2\xa0€", "-100,00\xc2\xa0€", "5,5\xc2\xa0%", '23/09/2026'],
+			'United States' => [new Formatter(new UnitedStatesPreset()), 'USD', '1,500.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
+			'Germany' => [new Formatter(new GermanyPreset()), 'EUR', '1.500,25', "1.021,11\xc2\xa0€", "-100,00\xc2\xa0€", '5,5%', '23.09.2026'],
+			'France' => [new Formatter(new FrancePreset()), 'EUR', "1\xc2\xa0500,25", "1\xc2\xa0021,11\xc2\xa0€", "-100,00\xc2\xa0€", "5,5\xc2\xa0%", '23/09/2026'],
 		];
 	}
 
@@ -53,8 +53,8 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testWritesAnotherCurrencyByItsCode()
 	{
-		$this->assertSame('1,021.11 EUR', (new Formatter(new UsdPreset()))->money(1021.11, 'EUR'));
-		$this->assertSame('1.021,11 USD', (new Formatter(new EurPreset()))->money(1021.11, 'USD'));
+		$this->assertSame('1,021.11 EUR', (new Formatter(new UnitedStatesPreset()))->money(1021.11, 'EUR'));
+		$this->assertSame('1.021,11 USD', (new Formatter(new GermanyPreset()))->money(1021.11, 'USD'));
 	}
 
 	/**
@@ -62,12 +62,12 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAdjustsACopy()
 	{
-		$eur = new Formatter(new EurPreset());
-		$withPounds = $eur->withCurrencyFormat('GBP', '£%s');
+		$germany = new Formatter(new GermanyPreset());
+		$withPounds = $germany->withCurrencyFormat('GBP', '£%s');
 
 		$this->assertSame('£1.021,11', $withPounds->money(1021.11, 'GBP'));
 		$this->assertSame("1.021,11\xc2\xa0€", $withPounds->money(1021.11, 'EUR'));
-		$this->assertSame('1.021,11 GBP', $eur->money(1021.11, 'GBP'));
+		$this->assertSame('1.021,11 GBP', $germany->money(1021.11, 'GBP'));
 	}
 
 	/**
@@ -109,7 +109,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		$this->assertSame($expected, (new Formatter())->locality($party));
-		$this->assertSame($expected, (new Formatter(new UsdPreset()))->locality($party));
+		$this->assertSame($expected, (new Formatter(new UnitedStatesPreset()))->locality($party));
 	}
 
 	/**

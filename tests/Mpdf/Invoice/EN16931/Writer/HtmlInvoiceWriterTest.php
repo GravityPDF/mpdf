@@ -5,7 +5,7 @@ namespace Mpdf\Invoice\EN16931\Writer;
 use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
 use Mpdf\Invoice\Formatter;
-use Mpdf\Invoice\Preset\EurPreset;
+use Mpdf\Invoice\Preset\GermanyPreset;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
@@ -57,7 +57,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testWritesWithTheFormatter()
 	{
-		$formatter = (new Formatter(new EurPreset()))->withCurrencyFormat('EUR', '€%s')->withPercentFormat('%s pc');
+		$formatter = (new Formatter(new GermanyPreset()))->withCurrencyFormat('EUR', '€%s')->withPercentFormat('%s pc');
 		$html = (new HtmlInvoiceWriter([], $formatter))->write($this->invoice());
 
 		$this->assertStringContainsString('>7,5<', $html);

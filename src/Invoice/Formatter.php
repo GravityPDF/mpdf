@@ -11,10 +11,10 @@ use Mpdf\Utils\NumericString;
 /**
  * How a printed trade document writes its numbers, amounts, rates, dates and addresses
  *
- * It follows a preset: DefaultPreset (1,021.11 EUR, 20% and 2026-09-23) unless given UsdPreset, EurPreset or a
- * convention of your own. The with methods adjust it further:
+ * It follows a country's preset, such as UnitedStatesPreset, GermanyPreset or FrancePreset, or DefaultPreset
+ * (1,021.11 EUR, 20% and 2026-09-23) when given none. The with methods adjust it further:
  *
- *     (new Formatter(new EurPreset()))->withCurrencyFormat('GBP', '£%s')
+ *     (new Formatter(new GermanyPreset()))->withCurrencyFormat('GBP', '£%s')
  *
  * Addresses follow their party's country whichever preset is used: 75002 Paris, but New York, NY 10118.
  */

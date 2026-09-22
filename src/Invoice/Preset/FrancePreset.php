@@ -3,10 +3,10 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * The German convention, shared by much of the euro area: 1.021,11 € and 23.09.2026. Countries that write euros
- * otherwise, such as France, extend DefaultPreset with their own.
+ * How France writes numbers, rates and dates, and its euros: 1 021,11 €, 5,5 % and 23/09/2026, with no-break spaces
+ * between thousands and before the signs
  */
-class EurPreset extends DefaultPreset
+class FrancePreset extends DefaultPreset
 {
 
 	/**
@@ -22,7 +22,7 @@ class EurPreset extends DefaultPreset
 	 */
 	public function getThousandsSeparator()
 	{
-		return '.';
+		return "\xc2\xa0";
 	}
 
 	/**
@@ -30,7 +30,7 @@ class EurPreset extends DefaultPreset
 	 */
 	public function getDateFormat()
 	{
-		return 'd.m.Y';
+		return 'd/m/Y';
 	}
 
 	/**
@@ -39,6 +39,14 @@ class EurPreset extends DefaultPreset
 	public function getCurrencyFormats()
 	{
 		return ['EUR' => "%s\xc2\xa0€"];
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getPercentFormat()
+	{
+		return "%s\xc2\xa0%%";
 	}
 
 }
