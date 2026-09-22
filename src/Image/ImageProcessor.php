@@ -252,6 +252,30 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 		return $this->processUnknownType($data, $file, $firstTime, $interpolation);
 	}
 
+	/**
+	 * An RGB colour as the four bytes of a CMYK image sample
+	 *
+	 * Inks are rounded, not truncated: 100 * 2.55 is 254.99999999999997, which truncates to 254. The pixel loop
+	 * inlines this, and both must round alike for a transparent colour to match its pixels.
+	 *
+	 * @param int $r
+	 * @param int $g
+	 * @param int $b
+	 *
+	 * @return int[]
+	 */
+	private function cmykBytes($r, $g, $b)
+	{
+		$cmyk = $this->colorModeConverter->rgb2cmyk([3, $r, $g, $b]);
+
+		return [
+			(int) ($cmyk[1] * 2.55 + 0.5),
+			(int) ($cmyk[2] * 2.55 + 0.5),
+			(int) ($cmyk[3] * 2.55 + 0.5),
+			(int) ($cmyk[4] * 2.55 + 0.5),
+		];
+	}
+
 	private function convertImage(&$data, $colspace, $targetcs, $w, $h, $dpi, $mask, $gamma_correction = false, $pngcolortype = false)
 	{
 		if (!function_exists('gd_info')) {
@@ -364,12 +388,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 						$trns[2] = $this->translateValue(substr($t, 4, 2), $bpc);
 						$trnsrgb = $trns;
 						if ($targetcs === 'DeviceCMYK') {
-							$col = $this->colorModeConverter->rgb2cmyk([3, $trns[0], $trns[1], $trns[2]]);
-							$c1 = (int) ($col[1] * 2.55);
-							$c2 = (int) ($col[2] * 2.55);
-							$c3 = (int) ($col[3] * 2.55);
-							$c4 = (int) ($col[4] * 2.55);
-							$trns = [$c1, $c2, $c3, $c4];
+							$trns = $this->cmykBytes($trns[0], $trns[1], $trns[2]);
 						} elseif ($targetcs === 'DeviceGray') {
 							$c = (int) (($trns[0] * .21) + ($trns[1] * .71) + ($trns[2] * .07));
 							$trns = [$c];
@@ -384,12 +403,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 							$trns = [$r, $g, $b]; // ****
 							$trnsrgb = $trns;
 							if ($targetcs === 'DeviceCMYK') {
-								$col = $this->colorModeConverter->rgb2cmyk([3, $r, $g, $b]);
-								$c1 = (int) ($col[1] * 2.55);
-								$c2 = (int) ($col[2] * 2.55);
-								$c3 = (int) ($col[3] * 2.55);
-								$c4 = (int) ($col[4] * 2.55);
-								$trns = [$c1, $c2, $c3, $c4];
+								$trns = $this->cmykBytes($r, $g, $b);
 							} elseif ($targetcs === 'DeviceGray') {
 								$c = (int) (($r * .21) + ($g * .71) + ($b * .07));
 								$trns = [$c];
@@ -422,11 +436,13 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if ($toCmyk) {
+						// cmykBytes() inline, as a call and an array for every pixel cost a third of the conversion. The
+						// inks are never negative, so adding a half before the cast rounds them without calling round()
 						$col = $this->colorModeConverter->rgb2cmyk([3, $r, $g, $b]);
-						$c1 = (int) ($col[1] * 2.55);
-						$c2 = (int) ($col[2] * 2.55);
-						$c3 = (int) ($col[3] * 2.55);
-						$c4 = (int) ($col[4] * 2.55);
+						$c1 = (int) ($col[1] * 2.55 + 0.5);
+						$c2 = (int) ($col[2] * 2.55 + 0.5);
+						$c3 = (int) ($col[3] * 2.55 + 0.5);
+						$c4 = (int) ($col[4] * 2.55 + 0.5);
 						// original pixel was not set as transparent but processed color does match
 						if ($trnsrgb && ($r !== $tr || $g !== $tg || $b !== $tb)
 							&& $c1 === $trns[0] && $c2 === $trns[1] && $c3 === $trns[2] && $c4 === $trns[3]) {
