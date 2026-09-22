@@ -166,6 +166,10 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					throw new \Mpdf\MpdfException('Core fonts are not allowed in PDF/A1-b or PDFX/1-a files (Times, Helvetica, Courier etc.)');
 				}
 
+				if ($this->mpdf->PDFUA) {
+					throw new \Mpdf\MpdfException('Core fonts are not allowed in PDF/UA-1 files, which embed every font (Times, Helvetica, Courier etc.)');
+				}
+
 				$this->writer->object();
 				$this->writer->write('<</Type /Font');
 				$this->writer->write('/BaseFont /' . $name);
@@ -381,15 +385,18 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				$toUni .= "1 begincodespacerange\n";
 				$toUni .= "<0000> <FFFF>\n";
 				$toUni .= "endcodespacerange\n";
-				$toUni .= "1 beginbfrange\n";
-				$toUni .= "<0000> <FFFF> <0000>\n";
-				$toUni .= "endbfrange\n";
+				$toUni .= $this->mpdf->PDFUA ? $this->identityRanges($font) :"1 beginbfrange\n<0000> <FFFF> <0000>\nendbfrange\n";
 				$toUni .= "endcmap\n";
 				$toUni .= "CMapName currentdict /CMap defineresource pop\n";
 				$toUni .= "end\n";
 				$toUni .= "end\n";
 
-				$this->writer->write('<</Length ' . strlen($toUni) . '>>');
+				if ($this->mpdf->compress) {
+					$toUni = gzcompress($toUni);
+					$this->writer->write('<</Length ' . strlen($toUni) . ' /Filter /FlateDecode>>');
+				} else {
+					$this->writer->write('<</Length ' . strlen($toUni) . '>>');
+				}
 				$this->writer->stream($toUni);
 				$this->writer->write('endobj');
 
@@ -497,6 +504,56 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $drawn;
+	}
+
+	/**
+	 * The bfrange entries of an Identity-H ToUnicode CMap: each code the font drew, and the 32-127 range
+	 * every subset carries, mapped to itself.
+	 *
+	 * The ends of a bfrange may differ only in their last byte (ISO 32000-1 §9.10.3), so the single
+	 * <0000> <FFFF> range written otherwise is malformed, and veraPDF then finds no Unicode value
+	 * for any glyph. A supplementary character is shown as its two surrogates, each mapped to itself.
+	 *
+	 * @param array $font
+	 *
+	 * @return string
+	 */
+	private function identityRanges(array $font)
+	{
+		$codes = array_fill_keys(range(32, 127), true);
+		foreach ($font['subset'] as $u) {
+			if ($u > 0xFFFF && $u <= 0x10FFFF) {
+				$codes[0xD800 + (($u - 0x10000) >> 10)] = true;
+				$codes[0xDC00 + (($u - 0x10000) & 0x3FF)] = true;
+			} elseif ($u > 0 && $u <= 0xFFFF) {
+				$codes[$u] = true;
+			}
+		}
+		ksort($codes);
+
+		// Consecutive codes that share a high byte make one range
+		$ranges = [];
+		$start = $end = null;
+		foreach (array_keys($codes) as $code) {
+			if ($start !== null && $code === $end + 1 && ($code >> 8) === ($start >> 8)) {
+				$end = $code;
+				continue;
+			}
+			if ($start !== null) {
+				$ranges[] = sprintf("<%04X> <%04X> <%04X>\n", $start, $end, $start);
+			}
+			$start = $end = $code;
+		}
+		if ($start !== null) {
+			$ranges[] = sprintf("<%04X> <%04X> <%04X>\n", $start, $end, $start);
+		}
+
+		$cmap = '';
+		foreach (array_chunk($ranges, 100) as $chunk) {
+			$cmap .= count($chunk) . " beginbfrange\n" . implode('', $chunk) . "endbfrange\n";
+		}
+
+		return $cmap;
 	}
 
 	/**

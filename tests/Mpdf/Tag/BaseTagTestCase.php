@@ -76,7 +76,8 @@ class BaseTagTestCase extends TestCase
 			$this->getService('sizeConverter'),
 			$this->getService('colorConverter'),
 			$this->getService('imageProcessor'),
-			$this->getService('languageToFont')
+			$this->getService('languageToFont'),
+			$this->getService('ua')
 		);
 	}
 }

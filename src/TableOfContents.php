@@ -599,6 +599,10 @@ class TableOfContents
 			/* -- END BOOKMARKS -- */
 		}
 
+		if ($this->mpdf->PDFUA && $notocs) {
+			$this->mpdf->getPdfUaStructureTree()->orderByPage($this->mpdf->pageDim);
+		}
+
 		// Delete empty page that was inserted earlier
 		if ($extrapage) {
 			unset($this->mpdf->pages[count($this->mpdf->pages)]);
