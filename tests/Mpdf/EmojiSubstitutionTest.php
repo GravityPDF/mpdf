@@ -89,10 +89,37 @@ class EmojiSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAFlagAndASkinToneStayWithTheEmojiTheyQualify()
 	{
-		$pieces = $this->drawn([0x1F1E6, 0x1F1FA, 0x20, 0x1F44D, 0x1F3FD], ['coloremoji']);
+		$pieces = $this->drawn([0x1F1E6, 0x1F1FA, 0x1F44D, 0x1F3FD], ['coloremoji']);
 
+		$this->assertCount(1, $pieces);
 		$this->assertSame('coloremoji', $pieces[0][0]);
-		$this->assertCount(3, $pieces[0][1], 'the flag, the space the run carries, and the thumb');
+		$this->assertCount(2, $pieces[0][1], 'the flag and the thumb');
+	}
+
+	/**
+	 * A space between two emoji is the document font's, which has one, and not carried into the run
+	 * of the font the emoji go to: an emoji font's space can be as wide as an emoji, as Noto Color
+	 * Emoji's is. The recorder leaves out a piece that is only a space, so the space shows as the two
+	 * runs either side of it.
+	 */
+	public function testASpaceBetweenEmojiStaysInTheDocumentFont()
+	{
+		$pieces = $this->drawn([0x1F1E6, 0x1F1FA, 0x20, 0x1F44D], ['coloremoji']);
+
+		$this->assertCount(2, $pieces, 'a run either side of the space');
+		$this->assertSame('coloremoji', $pieces[0][0]);
+		$this->assertCount(1, $pieces[0][1], 'the flag, without the space');
+		$this->assertSame(['coloremoji', [0x1F44D]], $pieces[1]);
+	}
+
+	/**
+	 * A space in a core font's text is the core font's too, and ends the run a backup font draws
+	 */
+	public function testASpaceBetweenWordsACoreFontLacksStaysInTheCoreFont()
+	{
+		$pieces = $this->drawn([0x61, 0x416, 0x416, 0x20, 0x416, 0x62], ['dejavusans'], ['default_font' => 'chelvetica']);
+
+		$this->assertSame([['chelvetica', [0x61]], ['dejavusans', [0x416, 0x416]], ['dejavusans', [0x416]], ['chelvetica', [0x62]]], $pieces);
 	}
 
 	/**

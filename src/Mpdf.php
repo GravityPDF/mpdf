@@ -25776,7 +25776,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		foreach ($unicode as $c => $char) {
 
-			if (($char > 127 || ($flag == 1 && $char == 32)) && $char != 173 && (!isset($this->subArrMB['a'][$char]) || ($flag == 1 && $char == 32)) && ($char < 1536 || ($char > 1791 && $char < 2304) || $char > 3455)) {
+			if ($char > 127 && $char != 173 && !isset($this->subArrMB['a'][$char]) && ($char < 1536 || ($char > 1791 && $char < 2304) || $char > 3455)) {
 				if ($flag == 0) {
 					$start = $c;
 				}
@@ -25803,7 +25803,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		foreach ($this->backupSubsFont as $bsfctr => $bsf) {
 
-			if ($this->fonttrans[$bsf] == 'chelvetica' || $this->fonttrans[$bsf] == 'ctimes' || $this->fonttrans[$bsf] == 'ccourier') {
+			// A backup font that is a core font's name draws nothing a core font does not
+			if (isset($this->fonttrans[$bsf]) && in_array($this->fonttrans[$bsf], ['chelvetica', 'ctimes', 'ccourier'], true)) {
 				continue;
 			}
 
@@ -25880,25 +25881,30 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$ftype = '';
 		$u = [];
 		// Every emoji is outside ASCII, a keycap's U+20E3 included
-		$emojiClusters = preg_match('/[^\x00-\x7F]/', $writehtml_e) ? Emoji::clusters($unicode) : [];
+		$mayHaveEmoji = preg_match('/[^\x00-\x7F]/', $writehtml_e) === 1;
+		// Each emoji up to where the run ends, by where it starts: found as the scan reaches it, since the
+		// rest of the text is scanned again on the next pass
+		$emojiClusters = [];
 		$codepointCount = count($unicode);
 
 		// Not foreach, so the loop can jump past the rest of a multi-codepoint sequence once it has been handled
 		for ($c = 0; $c < $codepointCount; $c++) {
 			$char = $unicode[$c];
+			$cluster = $mayHaveEmoji ? Emoji::clusterAt($unicode, $c, $codepointCount) : null;
 
 			// An emoji moves whole or not at all, so its joiners and selectors go with it to the font
 			// whose GSUB joins them
-			if (isset($emojiClusters[$c])) {
+			if ($cluster !== null) {
 				// An emoji ends a SIP run; it is handled on the next pass
 				if ($flag == 2) {
 					break;
 				}
 
-				$length = $emojiClusters[$c][0];
+				$emojiClusters[$c] = $cluster;
+				$length = $cluster[0];
 				$emoji = array_slice($unicode, $c, $length);
 
-				if ($this->fontSubstitution->emojiWantsAnotherFont($emoji, $emojiClusters[$c][1])) {
+				if ($this->fontSubstitution->emojiWantsAnotherFont($emoji, $cluster[1])) {
 					if ($flag == 0) {
 						$start = $c;
 					}
@@ -25912,7 +25918,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				continue;
 			}
 
-			if (($flag == 0 || $flag == 2) && (!$this->_charDefined($cw, $char) || ($flag == 2 && $char == 32)) && $this->checkSIP && $char > 131071) {  // Unicode Plane 2 (SIP)
+			if (($flag == 0 || $flag == 2) && !$this->_charDefined($cw, $char) && $this->checkSIP && $char > 131071) {  // Unicode Plane 2 (SIP)
 
 				if (in_array($this->FontFamily, $this->available_CJK_fonts)) {
 					return 0;
@@ -25925,9 +25931,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$flag = 2;
 				$u[] = $char;
 
-				// elseif (($flag == 0 || $flag==1) && $char != 173 && !$this->_charDefined($cw,$char) && ($char<1423 ||  ($char>3583 && $char < 11263))) {
-
-			} elseif (($flag == 0 || $flag == 1) && $char != 173 && (!$this->_charDefined($cw, $char) || ($flag == 1 && $char == 32)) && ($char < 1536 || ($char > 1791 && $char < 2304) || $char > 3455)) {
+			} elseif (($flag == 0 || $flag == 1) && $char != 173 && !$this->_charDefined($cw, $char) && ($char < 1536 || ($char > 1791 && $char < 2304) || $char > 3455)) {
 
 				if ($flag == 0) {
 					$start = $c;
