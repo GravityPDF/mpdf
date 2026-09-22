@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf\EInvoice\EN16931;
+namespace Mpdf\Invoice\EN16931;
 
 use Mpdf\Invoice\LineItem;
 use Mpdf\MpdfException;

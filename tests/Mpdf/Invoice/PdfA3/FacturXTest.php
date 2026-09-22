@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf\EInvoice\PdfA3;
+namespace Mpdf\Invoice\PdfA3;
 
 use Mpdf\MpdfException;
 use Mpdf\PageStreams;
@@ -36,7 +36,7 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function invoiceDocument()
 	{
-		$mpdf = $this->mpdf(['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B']);
+		$mpdf = $this->pdfA3();
 		$mpdf->WriteHTML('<h1>Invoice INV-2026-0001</h1>');
 		$mpdf->SetFacturX($this->invoice());
 

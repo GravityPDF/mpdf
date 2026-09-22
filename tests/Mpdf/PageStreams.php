@@ -17,6 +17,16 @@ trait PageStreams
 		return $mpdf;
 	}
 
+	/**
+	 * A PDF/A-3 document, the kind that can carry a Factur-X invoice
+	 *
+	 * @return \Mpdf\Mpdf
+	 */
+	private function pdfA3()
+	{
+		return $this->mpdf(['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B']);
+	}
+
 	private function render($html, $config = [])
 	{
 		$mpdf = $this->mpdf($config);

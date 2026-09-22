@@ -1,9 +1,10 @@
 <?php
 
-namespace Mpdf\EInvoice\EN16931\Cii;
+namespace Mpdf\Invoice\EN16931\Writer;
 
-use Mpdf\EInvoice\EN16931\Invoice;
-use Mpdf\EInvoice\PdfA3\FacturX;
+use Mpdf\Invoice\EN16931\Invoice;
+use Mpdf\Invoice\LineItem;
+use Mpdf\Invoice\PdfA3\FacturX;
 use Mpdf\Invoice\Party;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\MpdfException;
@@ -14,10 +15,9 @@ use Mpdf\MpdfException;
  * MINIMUM carries the parties and totals, BASIC WL adds addresses, the VAT breakdown and payment details,
  * and EN 16931 adds the lines.
  *
- *     $xml = (new InvoiceGenerator(FacturX::EN16931))->generate($invoice);
- *     $mpdf->SetFacturX($xml);
+ *     $mpdf->WriteInvoice($invoice, [new CiiInvoiceWriter(FacturX::EN16931)]);
  */
-class InvoiceGenerator extends CiiGenerator
+class CiiInvoiceWriter extends CiiWriter
 {
 
 	/**
@@ -35,7 +35,7 @@ class InvoiceGenerator extends CiiGenerator
 	 *
 	 * @throws \Mpdf\MpdfException
 	 */
-	public function generate(TradeDocument $document)
+	public function write(TradeDocument $document)
 	{
 		if (!$document instanceof Invoice) {
 			throw new MpdfException(sprintf('%s writes invoices, not %s', __CLASS__, get_class($document)));
@@ -78,7 +78,7 @@ class InvoiceGenerator extends CiiGenerator
 
 	/**
 	 * @param \DOMElement $transaction
-	 * @param \Mpdf\EInvoice\EN16931\Invoice $invoice
+	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
 	 */
 	private function appendLines(\DOMElement $transaction, Invoice $invoice)
 	{
@@ -107,7 +107,7 @@ class InvoiceGenerator extends CiiGenerator
 
 	/**
 	 * @param \DOMElement $transaction
-	 * @param \Mpdf\EInvoice\EN16931\Invoice $invoice
+	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
 	 */
 	private function appendAgreement(\DOMElement $transaction, Invoice $invoice)
 	{
@@ -182,7 +182,7 @@ class InvoiceGenerator extends CiiGenerator
 
 	/**
 	 * @param \DOMElement $transaction
-	 * @param \Mpdf\EInvoice\EN16931\Invoice $invoice
+	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
 	 */
 	private function appendDelivery(\DOMElement $transaction, Invoice $invoice)
 	{
@@ -195,7 +195,7 @@ class InvoiceGenerator extends CiiGenerator
 
 	/**
 	 * @param \DOMElement $transaction
-	 * @param \Mpdf\EInvoice\EN16931\Invoice $invoice
+	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
 	 */
 	private function appendSettlement(\DOMElement $transaction, Invoice $invoice)
 	{
@@ -252,7 +252,7 @@ class InvoiceGenerator extends CiiGenerator
 	private function appendCategory(\DOMElement $tax, $category, $rate)
 	{
 		$this->append($tax, 'ram:CategoryCode', $category);
-		if ($category !== 'O') {
+		if ($category !== LineItem::NOT_SUBJECT_TO_VAT) {
 			$this->append($tax, 'ram:RateApplicablePercent', $this->decimal($rate));
 		}
 	}
@@ -261,7 +261,7 @@ class InvoiceGenerator extends CiiGenerator
 	 * A credit transfer to the seller's account: SEPA (58) for euros, any other (30) otherwise. BASIC WL carries only the IBAN.
 	 *
 	 * @param \DOMElement $settlement
-	 * @param \Mpdf\EInvoice\EN16931\Invoice $invoice
+	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
 	 */
 	private function appendPaymentMeans(\DOMElement $settlement, Invoice $invoice)
 	{

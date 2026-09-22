@@ -1,17 +1,17 @@
 <?php
 
-namespace Mpdf\EInvoice\EN16931\Cii;
+namespace Mpdf\Invoice\EN16931\Writer;
 
-use Mpdf\Invoice\XmlGeneratorInterface;
+use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
 use Mpdf\Strict;
 use Mpdf\Utils\NumericString;
 
 /**
- * The parts shared by UN/CEFACT Cross Industry generators: the ram and udt namespaces, the date and amount formats,
+ * The parts shared by UN/CEFACT Cross Industry writers: the ram and udt namespaces, the date and amount formats,
  * and the profile that decides how much of a document is written
  */
-abstract class CiiGenerator implements XmlGeneratorInterface
+abstract class CiiWriter implements WriterInterface
 {
 
 	use Strict;
@@ -45,11 +45,19 @@ abstract class CiiGenerator implements XmlGeneratorInterface
 	}
 
 	/**
-	 * The profiles the generator writes, from the one carrying least to the one carrying most
+	 * The profiles the writer writes, from the one carrying least to the one carrying most
 	 *
 	 * @return string[]
 	 */
 	abstract protected function getProfiles();
+
+	/**
+	 * @return string
+	 */
+	public function getFormat()
+	{
+		return self::XML;
+	}
 
 	/**
 	 * @return string
@@ -86,7 +94,7 @@ abstract class CiiGenerator implements XmlGeneratorInterface
 	protected function createRoot($root, $rsmNamespace)
 	{
 		if (!class_exists('DOMDocument')) {
-			throw new MpdfException('Generating e-invoice XML requires the DOM extension');
+			throw new MpdfException('Writing invoice XML requires the DOM extension');
 		}
 
 		$dom = new \DOMDocument('1.0', 'UTF-8');

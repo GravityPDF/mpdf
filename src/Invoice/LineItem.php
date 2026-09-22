@@ -14,6 +14,11 @@ class LineItem
 	use Strict;
 
 	/**
+	 * The VAT category of a supply outside the scope of VAT, which has no rate
+	 */
+	const NOT_SUBJECT_TO_VAT = 'O';
+
+	/**
 	 * The UNTDID 5305 VAT category codes EN 16931 accepts
 	 *
 	 * @var string[]

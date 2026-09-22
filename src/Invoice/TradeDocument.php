@@ -7,7 +7,7 @@ use Mpdf\Strict;
 /**
  * The data every trade document holds (number, date, currency, parties and lines) and the totals of its lines
  *
- * The totals are worked out here rather than by a generator, so a document printed from them and the XML embedded
+ * The totals are worked out here rather than by a writer, so a document printed from them and the XML embedded
  * alongside it cannot disagree.
  */
 abstract class TradeDocument

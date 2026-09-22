@@ -1,18 +1,17 @@
 <?php
 
-namespace Mpdf\EInvoice\EN16931\Cii;
+namespace Mpdf\Invoice\EN16931\Writer;
 
-use Mpdf\EInvoice\EN16931\InvoiceFixtures;
-use Mpdf\EInvoice\PdfA3\FacturX;
+use Mpdf\Invoice\EN16931\InvoiceFixtures;
+use Mpdf\Invoice\PdfA3\FacturX;
 use Mpdf\Invoice\TradeDocument;
+use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
-use Mpdf\PageStreams;
 
-class InvoiceGeneratorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
+class CiiInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	use InvoiceFixtures;
-	use PageStreams;
 
 	/**
 	 * Each profile's invoice and the fixture Mustang validated it as
@@ -40,23 +39,12 @@ class InvoiceGeneratorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testWritesTheValidatedInvoice($profile, $invoice, $fixture)
 	{
-		$xml = (new InvoiceGenerator($profile))->generate($this->$invoice());
+		$writer = new CiiInvoiceWriter($profile);
+		$xml = $writer->write($this->$invoice());
 
-		$this->assertStringEqualsFile(__DIR__ . '/../../../../data/xml/einvoice/' . $fixture, $xml);
-	}
+		$this->assertSame(WriterInterface::XML, $writer->getFormat());
 
-	/**
-	 * The XML generated is the XML SetFacturX() needs: it finds the profile from it and embeds it
-	 */
-	public function testMakesTheXmlSetFacturXTakes()
-	{
-		$mpdf = $this->mpdf(['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B']);
-		$mpdf->WriteHTML('<h1>Invoice INV-2026-0001</h1>');
-		$mpdf->SetFacturX((new InvoiceGenerator(FacturX::BASIC_WL))->generate($this->invoice()));
-		$output = $this->output($mpdf);
-
-		$this->assertStringContainsString('<fx:ConformanceLevel>BASIC WL</fx:ConformanceLevel>', $output);
-		$this->assertStringContainsString('/EmbeddedFiles << /Names [(factur-x.xml)', $output);
+		$this->assertStringEqualsFile(__DIR__ . '/../../../../data/invoice/' . $fixture, $xml);
 	}
 
 	/**
@@ -87,7 +75,7 @@ class InvoiceGeneratorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectException(MpdfException::class);
 		$this->expectExceptionMessage($message);
 
-		(new InvoiceGenerator($profile))->generate($this->$invoice());
+		(new CiiInvoiceWriter($profile))->write($this->$invoice());
 	}
 
 	/**
@@ -100,7 +88,7 @@ class InvoiceGeneratorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectException(MpdfException::class);
 		$this->expectExceptionMessage('writes invoices, not');
 
-		(new InvoiceGenerator('EN 16931'))->generate($document);
+		(new CiiInvoiceWriter('EN 16931'))->write($document);
 	}
 
 }

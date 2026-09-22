@@ -1,0 +1,17 @@
+<style>
+.invoice-details td { padding: 0 4mm 0.5mm 0; }
+.invoice-parties { margin-top: 4mm; }
+.invoice-parties td { vertical-align: top; }
+.invoice-lines { border-collapse: collapse; margin: 6mm 0 4mm; }
+.invoice-lines th { border-bottom: 0.3mm solid #444; padding: 1.5mm; }
+.invoice-lines td { border-bottom: 0.1mm solid #ccc; padding: 1.5mm; vertical-align: top; }
+.invoice-lines .invoice-total td { border-bottom: none; padding: 0.8mm 1.5mm; }
+.invoice-text { text-align: left; }
+.invoice-number { text-align: right; }
+</style>
+<h1>Invoice INV-2026-0001</h1>
+<table class="invoice-details"><tr><td>Issue date</td><td>2026-09-23</td></tr><tr><td>Delivery date</td><td>2026-09-20</td></tr><tr><td>Due date</td><td>2026-10-23</td></tr><tr><td>Your reference</td><td>BR-42</td></tr><tr><td>Order</td><td>PO-1234</td></tr></table>
+<table class="invoice-parties" width="100%"><tr><td width="50%"><strong>From</strong><br>Seller SARL<br>12 rue de la Paix<br>75002 Paris<br>FR<br>VAT ID FR32123456789<br>billing@seller.example</td><td width="50%"><strong>To</strong><br>Buyer GmbH &amp; Co. KG<br>Hauptstraße 1<br>Gebäude &lt;B&gt;<br>10115 Berlin<br>DE<br>VAT ID DE123456789<br>ap@buyer.example</td></tr></table>
+<table class="invoice-lines" width="100%"><thead><tr><th class="invoice-text">Item</th><th class="invoice-number">Quantity</th><th class="invoice-number">Unit price</th><th class="invoice-number">VAT</th><th class="invoice-number">Amount</th></tr></thead><tbody><tr><td class="invoice-text">Consulting<br><small>September retainer</small></td><td class="invoice-number">7.5</td><td class="invoice-number">120.00 EUR</td><td class="invoice-number">20%</td><td class="invoice-number">900.00 EUR</td></tr><tr><td class="invoice-text">Book</td><td class="invoice-number">3</td><td class="invoice-number">12.99 EUR</td><td class="invoice-number">5.5%</td><td class="invoice-number">38.97 EUR</td></tr></tbody><tfoot><tr class="invoice-total"><td colspan="4" class="invoice-number">Total excluding VAT</td><td class="invoice-number">938.97 EUR</td></tr><tr class="invoice-total"><td colspan="4" class="invoice-number">VAT 20% on 900.00 EUR</td><td class="invoice-number">180.00 EUR</td></tr><tr class="invoice-total"><td colspan="4" class="invoice-number">VAT 5.5% on 38.97 EUR</td><td class="invoice-number">2.14 EUR</td></tr><tr class="invoice-total"><td colspan="4" class="invoice-number">Total including VAT</td><td class="invoice-number">1,121.11 EUR</td></tr><tr class="invoice-total"><td colspan="4" class="invoice-number">Paid in advance</td><td class="invoice-number">-100.00 EUR</td></tr><tr class="invoice-total"><td colspan="4" class="invoice-number">Amount due</td><td class="invoice-number"><strong>1,021.11 EUR</strong></td></tr></tfoot></table>
+<p>30 days net<br>Payment reference: INV-2026-0001<br>IBAN: FR7630006000011234567890189<br>BIC: AGRIFRPP<br>Account name: Seller SARL</p>
+<p>Late payment penalty: 3x the legal interest rate</p>

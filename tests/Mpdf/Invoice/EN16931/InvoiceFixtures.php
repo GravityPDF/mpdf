@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf\EInvoice\EN16931;
+namespace Mpdf\Invoice\EN16931;
 
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Party;
@@ -14,7 +14,7 @@ trait InvoiceFixtures
 	/**
 	 * A French seller billing a German buyer at two VAT rates, less a prepayment
 	 *
-	 * @return \Mpdf\EInvoice\EN16931\Invoice
+	 * @return \Mpdf\Invoice\EN16931\Invoice
 	 */
 	private function invoice()
 	{
@@ -29,7 +29,7 @@ trait InvoiceFixtures
 	/**
 	 * The same invoice with nothing prepaid, which MINIMUM needs as it cannot say what was
 	 *
-	 * @return \Mpdf\EInvoice\EN16931\Invoice
+	 * @return \Mpdf\Invoice\EN16931\Invoice
 	 */
 	private function minimumInvoice()
 	{
@@ -39,7 +39,7 @@ trait InvoiceFixtures
 	/**
 	 * The same invoice for services under the reverse charge, so with no VAT and a reason for none
 	 *
-	 * @return \Mpdf\EInvoice\EN16931\Invoice
+	 * @return \Mpdf\Invoice\EN16931\Invoice
 	 */
 	private function reverseChargeInvoice()
 	{
@@ -53,7 +53,7 @@ trait InvoiceFixtures
 	/**
 	 * The parties, dates and payment details both invoices share, with no lines yet
 	 *
-	 * @return \Mpdf\EInvoice\EN16931\Invoice
+	 * @return \Mpdf\Invoice\EN16931\Invoice
 	 */
 	private function blankInvoice()
 	{

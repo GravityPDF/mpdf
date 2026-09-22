@@ -12,7 +12,9 @@ use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Output\Destination;
-use Mpdf\EInvoice\PdfA3\FacturX;
+use Mpdf\Invoice\PdfA3\FacturX;
+use Mpdf\Invoice\TradeDocument;
+use Mpdf\Invoice\WriterInterface;
 use Mpdf\PsrLogAwareTrait\MpdfPsrLogAwareTrait;
 use Mpdf\QrCode;
 use Mpdf\Shaper\OtlData;
@@ -830,7 +832,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $additionalXmpRdf; // additional rdf added in xmp
 
 	/**
-	 * @var \Mpdf\EInvoice\PdfA3\FacturX|null
+	 * @var \Mpdf\Invoice\PdfA3\FacturX|null
 	 */
 	var $facturX; // see SetFacturX below
 
@@ -2003,6 +2005,47 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function SetFacturX($xml, $conformanceLevel = null)
 	{
 		$this->facturX = new FacturX($xml, $conformanceLevel);
+	}
+
+	/**
+	 * Write an invoice with each of the writers given: HTML onto the page, and XML embedded with SetFacturX()
+	 *
+	 * Every writer runs before the document is touched, so one that cannot express the invoice leaves it as it was.
+	 *
+	 *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter(), new CiiInvoiceWriter(FacturX::EN16931)]);
+	 *
+	 * @param \Mpdf\Invoice\TradeDocument $document
+	 * @param \Mpdf\Invoice\WriterInterface[] $writers
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	function WriteInvoice(TradeDocument $document, array $writers)
+	{
+		$outputs = [WriterInterface::HTML => [], WriterInterface::XML => []];
+		foreach ($writers as $writer) {
+			if (!$writer instanceof WriterInterface) {
+				throw new \Mpdf\MpdfException('Each invoice writer must implement ' . WriterInterface::class);
+			}
+
+			$format = $writer->getFormat();
+			if (!isset($outputs[$format])) {
+				throw new \Mpdf\MpdfException(sprintf('Invoice writer format "%s" is not one mPDF can write', $format));
+			}
+
+			if ($format === WriterInterface::XML && $outputs[$format]) {
+				throw new \Mpdf\MpdfException('A Factur-X document embeds one invoice XML, so takes one XML writer');
+			}
+
+			$outputs[$format][] = $writer->write($document);
+		}
+
+		foreach ($outputs[WriterInterface::XML] as $xml) {
+			$this->SetFacturX($xml);
+		}
+
+		foreach ($outputs[WriterInterface::HTML] as $html) {
+			$this->WriteHTML($html);
+		}
 	}
 
 	function SetAnchor2Bookmark($x)

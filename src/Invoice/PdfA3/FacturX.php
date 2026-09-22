@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf\EInvoice\PdfA3;
+namespace Mpdf\Invoice\PdfA3;
 
 use Mpdf\MpdfException;
 use Mpdf\Strict;
