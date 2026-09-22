@@ -805,12 +805,6 @@ parameters:
 			path: src/Mpdf.php
 
 		-
-			message: '#^Variable \$ChainSubRule might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
-
-		-
 			message: '#^Variable \$GlyphID might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1

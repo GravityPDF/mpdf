@@ -2469,43 +2469,20 @@ class Otl
 	 */
 	private function _applyGSUBcontextSubstFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		$CoverageTableOffset = $subtable_offset + $this->reader->readUInt16();
-		$SubRuleSetCount = $this->reader->readUInt16();
-		$SubRuleSetOffset = [];
-		for ($b = 0; $b < $SubRuleSetCount; $b++) {
-			$offset = $this->reader->readUInt16();
-			if ($offset == 0x0000) {
-				$SubRuleSetOffset[] = $offset;
-			} else {
-				$SubRuleSetOffset[] = $subtable_offset + $offset;
-			}
-		}
+		foreach ($this->plainRuleSet($subtable_offset, $LuCoverage[$currGID]) as $rule) {
+			list($inputChars, $SubstCount, $records) = $rule;
 
-		// SubRuleSet tables: All contexts beginning with the same glyph
-		// Select the SubRuleSet required using the position of the glyph in the coverage table
-		$GlyphPos = $LuCoverage[$currGID];
-		if ($SubRuleSetOffset[$GlyphPos] > 0) {
-			$this->reader->seek($SubRuleSetOffset[$GlyphPos]);
-			$SubRuleCnt = $this->reader->readUInt16();
-			$SubRule = [];
-			for ($b = 0; $b < $SubRuleCnt; $b++) {
-				$SubRule[$b] = $SubRuleSetOffset[$GlyphPos] + $this->reader->readUInt16();
-			}
-			for ($b = 0; $b < $SubRuleCnt; $b++) {  // EACH RULE
-				$this->reader->seek($SubRule[$b]);
-				list($inputGlyphIDs, $SubstCount) = SequenceRule::plain($this->reader);
+			// Position 0 is the glyph the Coverage table selected this rule set by
+			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $inputChars);
 
-				// Position 0 is the glyph the Coverage table selected this rule set by
-				$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
-
-				// Type 5 is a plain context: it has no backtrack or lookahead sequence
-				$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
-				if ($matched) {
-					if ($this->debugOTL) {
-						echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
-					}
-					return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
+			// Type 5 is a plain context: it has no backtrack or lookahead sequence
+			$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
+			if ($matched) {
+				if ($this->debugOTL) {
+					echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
+				$this->reader->seek($records);
+				return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 			}
 		}
 		return null;
@@ -2523,49 +2500,24 @@ class Otl
 	 */
 	private function _applyGSUBcontextSubstFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		$CoverageTableOffset = $subtable_offset + $this->reader->readUInt16();
-		$InputClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$SubClassSetCnt = $this->reader->readUInt16();
-		$SubClassSetOffset = [];
-		for ($b = 0; $b < $SubClassSetCnt; $b++) {
-			$offset = $this->reader->readUInt16();
-			if ($offset == 0x0000) {
-				$SubClassSetOffset[] = $offset;
-			} else {
-				$SubClassSetOffset[] = $subtable_offset + $offset;
+		list($InputClasses, $ruleSets, $class0excl) = $this->plainClassContext($subtable_offset);
+
+		foreach ($ruleSets as $s => $ruleSet) { // ordered by input class
+			// Select the rule set if currGlyph is in First Input Class
+			if (!isset($InputClasses[$s][$currGID])) {
+				continue;
 			}
-		}
 
-		$InputClasses = $this->_getClasses($InputClassDefOffset);
+			foreach ($this->plainClassRules($ruleSet, $s, $InputClasses) as $rule) {
+				list($inputGlyphs, $SubstCount, $records) = $rule;
 
-		for ($s = 0; $s < $SubClassSetCnt; $s++) { // $SubClassSet is ordered by input class-may be NULL
-			// Select $SubClassSet if currGlyph is in First Input Class
-			if ($SubClassSetOffset[$s] > 0 && isset($InputClasses[$s][$currGID])) {
-				$this->reader->seek($SubClassSetOffset[$s]);
-				$SubClassRuleCnt = $this->reader->readUInt16();
-				$SubClassRule = [];
-				for ($b = 0; $b < $SubClassRuleCnt; $b++) {
-					$SubClassRule[$b] = $SubClassSetOffset[$s] + $this->reader->readUInt16();
-				}
-
-				for ($b = 0; $b < $SubClassRuleCnt; $b++) {  // EACH RULE
-					$this->reader->seek($SubClassRule[$b]);
-					list($inputClassIndices, $SubstCount) = SequenceRule::plain($this->reader);
-
-					// The rule set array is indexed by the class of the first input glyph, so the loop
-					// index over it is that class, and that class is position 0
-					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
-
-					// Class 0 contains all the glyphs NOT in the other classes
-					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
-
-					$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
-					if ($matched) {
-						if ($this->debugOTL) {
-							echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
-						}
-						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
+				$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
+				if ($matched) {
+					if ($this->debugOTL) {
+						echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 					}
+					$this->reader->seek($records);
+					return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 				}
 			}
 		}
@@ -2584,13 +2536,7 @@ class Otl
 	 */
 	private function _applyGSUBcontextSubstFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		// NB Unlike Lookup Type 6 Format 3, the count of substitutions precedes the Coverage table offsets
-		$InputGlyphCount = $this->reader->readUInt16();
-		$SubstCount = $this->reader->readUInt16();
-		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $InputGlyphCount);
-		$save_pos = $this->reader->tell(); // Save the point just after the Coverage table offsets
-
-		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
+		list($CoverageInputGlyphs, $SubstCount, $records) = $this->plainCoverageContext($subtable_offset);
 
 		// Type 5 is a plain context: it has no backtrack or lookahead sequence
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, [], [], $ignore, $ptr);
@@ -2599,7 +2545,7 @@ class Otl
 				echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 			}
 
-			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
+			$this->reader->seek($records);
 			return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 		}
 
@@ -2617,34 +2563,18 @@ class Otl
 	 */
 	private function _applyGSUBchainContextSubstFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		$Coverage = $subtable_offset + $this->reader->readUInt16();
-		$GlyphPos = $LuCoverage[$currGID];
-		$ChainSubRuleSetCount = $this->reader->readUInt16();
-		// All of the ChainSubRule tables defining contexts that begin with the same first glyph are grouped together and defined in a ChainSubRuleSet table
-		$this->reader->skip($GlyphPos * 2);
-		$ChainSubRuleSet = $subtable_offset + $this->reader->readUInt16();
-		$this->reader->seek($ChainSubRuleSet);
-		$ChainSubRuleCount = $this->reader->readUInt16();
+		foreach ($this->chainedRuleSet($subtable_offset, $LuCoverage[$currGID]) as $rule) {
+			list($Backtrack, $inputChars, $Lookahead, $SubstCount, $records) = $rule;
 
-		for ($s = 0; $s < $ChainSubRuleCount; $s++) {
-			$ChainSubRule[$s] = $ChainSubRuleSet + $this->reader->readUInt16();
-		}
-
-		for ($s = 0; $s < $ChainSubRuleCount; $s++) {
-			$this->reader->seek($ChainSubRule[$s]);
-			list($backtrackGlyphIDs, $inputGlyphIDs, $lookaheadGlyphIDs) = SequenceRule::chained($this->reader);
-
-			$Backtrack = $this->charsOf($backtrackGlyphIDs);
 			// Position 0 is the glyph the Coverage table selected this rule set by
-			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
-			$Lookahead = $this->charsOf($lookaheadGlyphIDs);
+			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $inputChars);
 
 			$matched = $this->checkContextMatch($Input, $Backtrack, $Lookahead, $ignore, $ptr);
 			if ($matched) {
 				if ($this->debugOTL) {
 					echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
-				$SubstCount = $this->reader->readUInt16();
+				$this->reader->seek($records);
 				return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 			}
 		}
@@ -2662,60 +2592,24 @@ class Otl
 	 */
 	private function _applyGSUBchainContextSubstFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		// NB Format 2 specifies fixed class assignments (identical for each position in the backtrack, input, or lookahead sequence) and exclusive classes (a glyph cannot be in more than one class at a time)
+		list($classes, $ruleSets, $class0excl, $bclass0excl, $lclass0excl) = $this->chainedClassContext($subtable_offset);
 
-		$CoverageTableOffset = $subtable_offset + $this->reader->readUInt16();
-		$BacktrackClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$InputClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$LookaheadClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$ChainSubClassSetCnt = $this->reader->readUInt16();
-		$ChainSubClassSetOffset = [];
-		for ($b = 0; $b < $ChainSubClassSetCnt; $b++) {
-			$offset = $this->reader->readUInt16();
-			if ($offset == 0x0000) {
-				$ChainSubClassSetOffset[] = $offset;
-			} else {
-				$ChainSubClassSetOffset[] = $subtable_offset + $offset;
+		foreach ($ruleSets as $s => $ruleSet) { // ordered by input class
+			// Select the rule set if currGlyph is in First Input Class
+			if (!isset($classes[1][$s][$currGID])) {
+				continue;
 			}
-		}
 
-		$BacktrackClasses = $this->_getClasses($BacktrackClassDefOffset);
-		$InputClasses = $this->_getClasses($InputClassDefOffset);
-		$LookaheadClasses = $this->_getClasses($LookaheadClassDefOffset);
+			foreach ($this->chainedClassRules($ruleSet, $s, $classes) as $rule) {
+				list($backtrackGlyphs, $inputGlyphs, $lookaheadGlyphs, $SubstCount, $records) = $rule;
 
-		for ($s = 0; $s < $ChainSubClassSetCnt; $s++) { // $ChainSubClassSet is ordered by input class-may be NULL
-			// Select $ChainSubClassSet if currGlyph is in First Input Class
-			if ($ChainSubClassSetOffset[$s] > 0 && isset($InputClasses[$s][$currGID])) {
-				$this->reader->seek($ChainSubClassSetOffset[$s]);
-				$ChainSubClassRuleCnt = $this->reader->readUInt16();
-				$ChainSubClassRule = [];
-				for ($b = 0; $b < $ChainSubClassRuleCnt; $b++) {
-					$ChainSubClassRule[$b] = $ChainSubClassSetOffset[$s] + $this->reader->readUInt16();
-				}
-
-				for ($b = 0; $b < $ChainSubClassRuleCnt; $b++) {  // EACH RULE
-					$this->reader->seek($ChainSubClassRule[$b]);
-					list($backtrackClassIndices, $inputClassIndices, $lookaheadClassIndices) = SequenceRule::chained($this->reader);
-
-					// The rule set array is indexed by the class of the first input glyph, so the loop
-					// index over it is that class, and that class is position 0
-					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
-					$backtrackGlyphs = $this->classSets($BacktrackClasses, $backtrackClassIndices);
-					$lookaheadGlyphs = $this->classSets($LookaheadClasses, $lookaheadClassIndices);
-
-					// Class 0 contains all the glyphs NOT in the other classes, one set per sequence
-					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
-					$bclass0excl = $this->getClassZeroExclusions($BacktrackClassDefOffset);
-					$lclass0excl = $this->getClassZeroExclusions($LookaheadClassDefOffset);
-
-					$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
-					if ($matched) {
-						if ($this->debugOTL) {
-							echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
-						}
-						$SubstCount = $this->reader->readUInt16();
-						return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
+				$matched = $this->checkContextMatchMultiple($inputGlyphs, $backtrackGlyphs, $lookaheadGlyphs, $ignore, $ptr, $class0excl, $bclass0excl, $lclass0excl);
+				if ($matched) {
+					if ($this->debugOTL) {
+						echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 					}
+					$this->reader->seek($records);
+					return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 				}
 			}
 		}
@@ -2747,6 +2641,252 @@ class Otl
 		}
 
 		return null;
+	}
+
+	/**
+	 * The rules of a Format 1 plain context subtable that start with one glyph, decoded, for the life
+	 * of the document.
+	 *
+	 * @param int $offset        Where the subtable starts; the reader is just past its format
+	 * @param int $coverageIndex The first glyph's index in the subtable's Coverage table
+	 *
+	 * @return array Each rule in the order the font lists them, as [$input, $recordCount, $recordsAt]:
+	 *               the characters from input position 1, how many lookup records the rule names, and
+	 *               where they start
+	 */
+	private function plainRuleSet($offset, $coverageIndex)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['plainRuleSet'][$offset][$coverageIndex])) {
+			$rules = [];
+
+			$this->reader->skip(2); // coverageOffset
+			if ($coverageIndex < $this->reader->readUInt16()) {
+				$this->reader->skip($coverageIndex * 2);
+				$ruleSet = $this->reader->readUInt16();
+
+				// A null offset is a glyph no context begins with
+				if ($ruleSet) {
+					foreach (SequenceRule::ruleOffsets($this->reader, $offset + $ruleSet) as $rule) {
+						$this->reader->seek($rule);
+						list($input, $recordCount) = SequenceRule::plain($this->reader);
+						$rules[] = [$this->charsOf($input), $recordCount, $this->reader->tell()];
+					}
+				}
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['plainRuleSet'][$offset][$coverageIndex] = $rules;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['plainRuleSet'][$offset][$coverageIndex];
+	}
+
+	/**
+	 * A Format 2 plain context subtable's classes and rule sets, decoded, for the life of the document.
+	 *
+	 * @param int $offset Where the subtable starts; the reader is just past its format
+	 *
+	 * @return array [$inputClasses, $ruleSets, $class0excl]: the input ClassDef as _getClasses() gives
+	 *               it, where each rule set starts by the input class it is for, and the input class 0
+	 *               exclusions
+	 */
+	private function plainClassContext($offset)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['plainClassContext'][$offset])) {
+			$this->reader->skip(2); // coverageOffset
+			$inputClassDef = $offset + $this->reader->readUInt16();
+			$ruleSets = $this->classRuleSets($offset);
+
+			$this->LuDataCache[$this->otlCacheKey]['plainClassContext'][$offset] = [
+				$this->_getClasses($inputClassDef),
+				$ruleSets,
+				$this->getClassZeroExclusions($inputClassDef),
+			];
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['plainClassContext'][$offset];
+	}
+
+	/**
+	 * The rules of one rule set of a Format 2 plain context subtable, decoded, for the life of the
+	 * document.
+	 *
+	 * @param int   $ruleSet      Where the rule set starts, as plainClassContext() gives it
+	 * @param int   $class        The input class the rule set is for
+	 * @param array $inputClasses The input ClassDef, as plainClassContext() gives it
+	 *
+	 * @return array Each rule in the order the font lists them, as [$input, $recordCount, $recordsAt]:
+	 *               one set per input position from 0, how many lookup records the rule names, and
+	 *               where they start
+	 */
+	private function plainClassRules($ruleSet, $class, array $inputClasses)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['plainClassRules'][$ruleSet][$class])) {
+			$rules = [];
+			foreach (SequenceRule::ruleOffsets($this->reader, $ruleSet) as $rule) {
+				$this->reader->seek($rule);
+				list($inputClassIndices, $recordCount) = SequenceRule::plain($this->reader);
+
+				// The rule set is chosen by the class of the first input glyph, so that class is position 0
+				$rules[] = [
+					array_merge([$inputClasses[$class]], $this->classSets($inputClasses, $inputClassIndices)),
+					$recordCount,
+					$this->reader->tell(),
+				];
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['plainClassRules'][$ruleSet][$class] = $rules;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['plainClassRules'][$ruleSet][$class];
+	}
+
+	/**
+	 * A Format 3 plain context subtable, decoded, for the life of the document. Unlike Format 3 of a
+	 * chained context, the count of lookup records precedes the Coverage table offsets.
+	 *
+	 * @param int $offset Where the subtable starts; the reader is just past its format
+	 *
+	 * @return array [$input, $recordCount, $recordsAt]: one set per input position as coverageSets()
+	 *               gives it, how many lookup records the rule names, and where they start
+	 */
+	private function plainCoverageContext($offset)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['plainCoverage'][$offset])) {
+			$inputCount = $this->reader->readUInt16();
+			$recordCount = $this->reader->readUInt16();
+			$input = SequenceRule::coverageOffsets($this->reader, $offset, $inputCount);
+			$recordsAt = $this->reader->tell();
+
+			$this->LuDataCache[$this->otlCacheKey]['plainCoverage'][$offset] = [$this->coverageSets($input), $recordCount, $recordsAt];
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['plainCoverage'][$offset];
+	}
+
+	/**
+	 * The rules of a Format 1 chained context subtable that start with one glyph, decoded, for the
+	 * life of the document.
+	 *
+	 * @param int $offset        Where the subtable starts; the reader is just past its format
+	 * @param int $coverageIndex The first glyph's index in the subtable's Coverage table
+	 *
+	 * @return array Each rule in the order the font lists them, as [$backtrack, $input, $lookahead,
+	 *               $recordCount, $recordsAt]: the characters of each sequence, the input from
+	 *               position 1, how many lookup records the rule names, and where they start
+	 */
+	private function chainedRuleSet($offset, $coverageIndex)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['chainedRuleSet'][$offset][$coverageIndex])) {
+			// Neither the count nor a null offset is tested, which is how this format has always been
+			// read here
+			$this->reader->skip(4 + $coverageIndex * 2); // coverageOffset and chainedSeqRuleSetCount
+			$ruleSet = $offset + $this->reader->readUInt16();
+
+			$rules = [];
+			foreach (SequenceRule::ruleOffsets($this->reader, $ruleSet) as $rule) {
+				$this->reader->seek($rule);
+				list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
+				$recordCount = $this->reader->readUInt16();
+				$rules[] = [$this->charsOf($backtrack), $this->charsOf($input), $this->charsOf($lookahead), $recordCount, $this->reader->tell()];
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['chainedRuleSet'][$offset][$coverageIndex] = $rules;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['chainedRuleSet'][$offset][$coverageIndex];
+	}
+
+	/**
+	 * A Format 2 chained context subtable's classes and rule sets, decoded, for the life of the
+	 * document.
+	 *
+	 * @param int $offset Where the subtable starts; the reader is just past its format
+	 *
+	 * @return array [$classes, $ruleSets, $class0excl, $bclass0excl, $lclass0excl]: the backtrack,
+	 *               input and lookahead ClassDefs as _getClasses() gives them, where each rule set starts
+	 *               by the input class it is for, and the class 0 exclusions of the input, backtrack and
+	 *               lookahead ClassDefs
+	 */
+	private function chainedClassContext($offset)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['chainedClassContext'][$offset])) {
+			$this->reader->skip(2); // coverageOffset
+			$backtrackClassDef = $offset + $this->reader->readUInt16();
+			$inputClassDef = $offset + $this->reader->readUInt16();
+			$lookaheadClassDef = $offset + $this->reader->readUInt16();
+			$ruleSets = $this->classRuleSets($offset);
+
+			$this->LuDataCache[$this->otlCacheKey]['chainedClassContext'][$offset] = [
+				[$this->_getClasses($backtrackClassDef), $this->_getClasses($inputClassDef), $this->_getClasses($lookaheadClassDef)],
+				$ruleSets,
+				$this->getClassZeroExclusions($inputClassDef),
+				$this->getClassZeroExclusions($backtrackClassDef),
+				$this->getClassZeroExclusions($lookaheadClassDef),
+			];
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['chainedClassContext'][$offset];
+	}
+
+	/**
+	 * The rules of one rule set of a Format 2 chained context subtable, decoded, for the life of the
+	 * document.
+	 *
+	 * @param int   $ruleSet Where the rule set starts, as chainedClassContext() gives it
+	 * @param int   $class   The input class the rule set is for
+	 * @param array $classes The backtrack, input and lookahead ClassDefs, as chainedClassContext() gives
+	 *                       them
+	 *
+	 * @return array Each rule in the order the font lists them, as [$backtrack, $input, $lookahead,
+	 *               $recordCount, $recordsAt]: one set per position of each sequence, the input from
+	 *               position 0, how many lookup records the rule names, and where they start
+	 */
+	private function chainedClassRules($ruleSet, $class, array $classes)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['chainedClassRules'][$ruleSet][$class])) {
+			list($backtrackClasses, $inputClasses, $lookaheadClasses) = $classes;
+
+			$rules = [];
+			foreach (SequenceRule::ruleOffsets($this->reader, $ruleSet) as $rule) {
+				$this->reader->seek($rule);
+				list($backtrackClassIndices, $inputClassIndices, $lookaheadClassIndices) = SequenceRule::chained($this->reader);
+				$recordCount = $this->reader->readUInt16();
+
+				// The rule set is chosen by the class of the first input glyph, so that class is position 0
+				$rules[] = [
+					$this->classSets($backtrackClasses, $backtrackClassIndices),
+					array_merge([$inputClasses[$class]], $this->classSets($inputClasses, $inputClassIndices)),
+					$this->classSets($lookaheadClasses, $lookaheadClassIndices),
+					$recordCount,
+					$this->reader->tell(),
+				];
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['chainedClassRules'][$ruleSet][$class] = $rules;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['chainedClassRules'][$ruleSet][$class];
+	}
+
+	/**
+	 * Where each rule set of a class-based context subtable starts, by the input class it is for.
+	 *
+	 * @param int $offset Where the subtable starts; the reader is at its count of rule sets
+	 *
+	 * @return int[] class => offset, leaving out the classes whose offset is null
+	 */
+	private function classRuleSets($offset)
+	{
+		$ruleSets = [];
+		$count = $this->reader->readUInt16();
+		for ($class = 0; $class < $count; $class++) {
+			$ruleSet = $this->reader->readUInt16();
+			if ($ruleSet) {
+				$ruleSets[$class] = $offset + $ruleSet;
+			}
+		}
+
+		return $ruleSets;
 	}
 
 	/**
