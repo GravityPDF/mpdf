@@ -129,6 +129,62 @@ class ColorModeConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A neutral colour is the black ink alone, black included: painting black as all four inks at once
+	 * is 400% total area coverage, past what any press allows, and a jump away from every colour near it
+	 *
+	 * @dataProvider blackProvider
+	 *
+	 * @param int   $grey  The red, green and blue of a neutral colour
+	 * @param float $black The percentage of black ink it is made of
+	 */
+	public function testANeutralColourIsTheBlackInkAlone($grey, $black)
+	{
+		$cmyk = $this->converter->rgb2cmyk([ColorConverter::MODE_RGB, $grey, $grey, $grey]);
+
+		$this->assertSame(ColorConverter::MODE_CMYK, $cmyk[0]);
+		$this->assertEqualsWithDelta([0, 0, 0], [$cmyk[1], $cmyk[2], $cmyk[3]], 0.001, 'no cyan, magenta or yellow');
+		$this->assertEqualsWithDelta($black, $cmyk[4], 0.05);
+	}
+
+	/**
+	 * @return array[] Neutral colours from black upwards, and the black ink each is made of
+	 */
+	public function blackProvider()
+	{
+		return [
+			'black' => [0, 100.0],
+			'all but black' => [1, 99.6],
+			'near black' => [8, 96.9],
+			'mid grey' => [128, 49.8],
+		];
+	}
+
+	/**
+	 * Black is continuous with the colours beside it, rather than jumping from one ink to four
+	 */
+	public function testBlackIsContinuousWithTheColoursBesideIt()
+	{
+		$black = $this->converter->rgb2cmyk([ColorConverter::MODE_RGB, 0, 0, 0]);
+		$next = $this->converter->rgb2cmyk([ColorConverter::MODE_RGB, 1, 1, 1]);
+
+		$this->assertEqualsWithDelta($next[1], $black[1], 0.5);
+		$this->assertEqualsWithDelta($next[2], $black[2], 0.5);
+		$this->assertEqualsWithDelta($next[3], $black[3], 0.5);
+		$this->assertEqualsWithDelta($next[4], $black[4], 0.5);
+	}
+
+	/**
+	 * Black with transparency keeps its alpha, and is the black ink alone
+	 */
+	public function testBlackWithTransparencyIsTheBlackInkAlone()
+	{
+		$this->assertSame(
+			[ColorConverter::MODE_CMYKA, 0, 0, 0, 100, 50],
+			$this->converter->rgb2cmyk([ColorConverter::MODE_RGBA, 0, 0, 0, 50])
+		);
+	}
+
+	/**
 	 * @dataProvider cmyk2rgbProvider
 	 *
 	 * @param string $input
