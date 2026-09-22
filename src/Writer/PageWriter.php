@@ -54,6 +54,8 @@ final class PageWriter
 
 		$annotid = (3 + 2 * $nb);
 
+		$this->metadataWriter->settleAnnotations();
+
 		// Active Forms
 		$totaladdnum = 0;
 		for ($n = 1; $n <= $nb; $n++) {
@@ -64,7 +66,7 @@ final class PageWriter
 			/* -- ANNOTATIONS -- */
 			if (isset($this->mpdf->PageAnnots[$n])) {
 				foreach ($this->mpdf->PageAnnots[$n] as $pl) {
-					$totaladdnum += $this->metadataWriter->countAnnotationObjects($pl);
+					$totaladdnum += $this->metadataWriter->annotationObjectCount($pl);
 				}
 			}
 			/* -- END ANNOTATIONS -- */
@@ -184,7 +186,7 @@ final class PageWriter
 			$this->writer->write('/Resources 2 0 R');
 
 			// Important to keep in RGB colorSpace when using transparency
-			if (!$this->mpdf->PDFA && !$this->mpdf->PDFX) {
+			if ($this->mpdf->transparencyAllowed()) {
 				if ($this->mpdf->restrictColorSpace === 3) {
 					$this->writer->write('/Group << /Type /Group /S /Transparency /CS /DeviceCMYK >> ');
 				} elseif ($this->mpdf->restrictColorSpace === 1) {
@@ -195,18 +197,20 @@ final class PageWriter
 			}
 
 			$annotsnum = 0;
-			$embeddedfiles = []; // mPDF 5.7.2 /EmbeddedFiles
+			$annots = []; // Offsets of the objects that are annotations, as against embedded files and appearances
 
-			if (isset($this->mpdf->PageLinks[$n])) {
-				$annotsnum += count($this->mpdf->PageLinks[$n]);
+			if (!empty($this->mpdf->PageLinks[$n])) {
+				$annotsnum = count($this->mpdf->PageLinks[$n]);
+				$annots = range(0, $annotsnum - 1);
 			}
 
 			if (isset($this->mpdf->PageAnnots[$n])) {
 				foreach ($this->mpdf->PageAnnots[$n] as $k => $pl) {
-					if ($this->metadataWriter->embedsFileAttachment($pl)) {
-						$embeddedfiles[$annotsnum + 1] = true;
-					} // mPDF 5.7.2 /EmbeddedFiles
-					$annotsnum += $this->metadataWriter->countAnnotationObjects($pl);
+					$annots[] = $annotsnum;
+					if (!empty($pl['opt']['popup']) && empty($pl['opt']['file'])) {
+						$annots[] = $annotsnum + 1;
+					}
+					$annotsnum += $this->metadataWriter->annotationObjectCount($pl);
 					$this->mpdf->PageAnnots[$n][$k]['pageobj'] = $this->mpdf->n;
 				}
 			}
@@ -225,10 +229,8 @@ final class PageWriter
 
 				$s = '/Annots [ ';
 
-				for ($i = 0; $i < $annotsnum; $i++) {
-					if (!isset($embeddedfiles[$i])) {
-						$s .= ($annotid + $i) . ' 0 R ';
-					} // mPDF 5.7.2 /EmbeddedFiles
+				foreach ($annots as $i) {
+					$s .= ($annotid + $i) . ' 0 R ';
 				}
 
 				$annotid += $annotsnum;

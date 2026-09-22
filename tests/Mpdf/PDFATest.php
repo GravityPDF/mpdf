@@ -63,8 +63,62 @@ class PDFATest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		try {
 			$this->mpdf->Output(null, 'S');
 		} catch (\Exception $e) {
-			$this->assertSame('PDFA version (11) is not valid. (Use: 1-B, 3-B, etc.)', $e->getMessage());
+			$this->assertSame('PDFA version (11) is not valid. (Use: 1-B, 2-B, 2-U, 3-B or 3-U)', $e->getMessage());
 		}
+	}
+
+	/**
+	 * PDF/A-2 at levels B and U declares its part and level in the XMP metadata, without the PDF/A-1 amendment
+	 *
+	 * @dataProvider pdfa2Levels
+	 */
+	public function testPDFA_2_DeclaresItsPartAndLevel($version, $conformance)
+	{
+		$this->mpdf->PDFAversion = $version;
+
+		$output = $this->mpdf->Output(null, 'S');
+
+		$this->assertStringContainsString("<pdfaid:part>2</pdfaid:part>\n    <pdfaid:conformance>" . $conformance . "</pdfaid:conformance>\n   </rdf:Description>", $output);
+	}
+
+	/**
+	 * The PDF/A-2 levels mPDF produces, as written in PDFAversion and as the metadata declares them
+	 *
+	 * @return string[][]
+	 */
+	public function pdfa2Levels()
+	{
+		return [
+			['2-B', 'B'],
+			['2-U', 'U'],
+			['2-u', 'U'],
+		];
+	}
+
+	/**
+	 * A part or level mPDF does not produce is refused rather than claimed: level A needs tagged PDF, and PDF/A-1
+	 * has no level U
+	 *
+	 * @dataProvider unsupportedVersions
+	 */
+	public function testPDFA_UnsupportedVersionIsRefused($version)
+	{
+		$this->mpdf->PDFAversion = $version;
+
+		$this->expectException(MpdfException::class);
+		$this->expectExceptionMessage(sprintf('PDFA version (%s) is not valid.', $version));
+
+		$this->mpdf->Output(null, 'S');
+	}
+
+	/**
+	 * PDFAversion values naming a part or level mPDF cannot produce
+	 *
+	 * @return string[][]
+	 */
+	public function unsupportedVersions()
+	{
+		return [['1-A'], ['1-U'], ['2-A'], ['3-A'], ['4'], ['2B']];
 	}
 
 	public function testOriginalPDFA_3B()

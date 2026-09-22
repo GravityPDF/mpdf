@@ -145,13 +145,14 @@ class ConfigVariables
 			// Overrides warnings making changes when possible to force PDFX1-a compliance
 			'PDFXauto' => false,
 
-			// PDFA1-b Compliant files
-			// true=Forces compliance with PDFA-1b spec
+			// PDF/A Compliant files
+			// true=Forces compliance with the PDF/A part and level PDFAversion names
 			// Can use with 'restrictColorSpace'=3 (for a CMYK file)
 			// Any other settings, uses RGB profile
 			'PDFA' => false,
-			// Overrides warnings making changes when possible to force PDFA1-b compliance
+			// Overrides warnings making changes when possible to force PDF/A compliance
 			'PDFAauto' => false,
+			// 1-B, 2-B, 2-U, 3-B or 3-U. PDF/A-2 and PDF/A-3 permit transparency, PDF/A-1 does not
 			'PDFAversion' => '1-B',
 
 			// Colour profile OutputIntent
