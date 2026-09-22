@@ -3,8 +3,10 @@
 namespace Mpdf\Invoice;
 
 use Mpdf\Invoice\Preset\AustraliaPreset;
-use Mpdf\Invoice\Preset\BelgiumPreset;
-use Mpdf\Invoice\Preset\CanadaPreset;
+use Mpdf\Invoice\Preset\BelgiumDutchPreset;
+use Mpdf\Invoice\Preset\BelgiumFrenchPreset;
+use Mpdf\Invoice\Preset\CanadaEnglishPreset;
+use Mpdf\Invoice\Preset\CanadaQuebecPreset;
 use Mpdf\Invoice\Preset\ChinaPreset;
 use Mpdf\Invoice\Preset\CzechiaPreset;
 use Mpdf\Invoice\Preset\FrancePreset;
@@ -18,6 +20,7 @@ use Mpdf\Invoice\Preset\PolandPreset;
 use Mpdf\Invoice\Preset\PortugalPreset;
 use Mpdf\Invoice\Preset\RomaniaPreset;
 use Mpdf\Invoice\Preset\SpainPreset;
+use Mpdf\Invoice\Preset\SwedenPreset;
 use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\Invoice\Preset\UnitedStatesPreset;
 
@@ -36,7 +39,8 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		return [
 			'United States' => [new UnitedStatesPreset(), 'USD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
-			'Canada' => [new CanadaPreset(), 'CAD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '2026-09-23'],
+			'Canada, English' => [new CanadaEnglishPreset(), 'CAD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '2026-09-23'],
+			'Canada, Quebec' => [new CanadaQuebecPreset(), 'CAD', "1{$nbsp}234{$nbsp}567,25", "1{$nbsp}021,11{$nbsp}$", "-100,00{$nbsp}$", "5,5{$nbsp}%", '2026-09-23'],
 			'Australia' => [new AustraliaPreset(), 'AUD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '23/09/2026'],
 			'New Zealand' => [new NewZealandPreset(), 'NZD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '23/09/2026'],
 			'United Kingdom' => [new UnitedKingdomPreset(), 'GBP', '1,234,567.25', '£1,021.11', '-£100.00', '5.5%', '23/09/2026'],
@@ -50,9 +54,11 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'Poland' => [new PolandPreset(), 'PLN', "1{$nbsp}234{$nbsp}567,25", "1021,11{$nbsp}zł", "-100,00{$nbsp}zł", '5,5%', '23.09.2026'],
 			'Romania' => [new RomaniaPreset(), 'RON', '1.234.567,25', "1.021,11{$nbsp}lei", "-100,00{$nbsp}lei", "5,5{$nbsp}%", '23.09.2026'],
 			'Netherlands' => [new NetherlandsPreset(), 'EUR', '1.234.567,25', "€{$nbsp}1.021,11", "-€{$nbsp}100,00", '5,5%', '23-09-2026'],
-			'Belgium' => [new BelgiumPreset(), 'EUR', '1.234.567,25', "€{$nbsp}1.021,11", "-€{$nbsp}100,00", '5,5%', '23/09/2026'],
+			'Belgium, Dutch' => [new BelgiumDutchPreset(), 'EUR', '1.234.567,25', "€{$nbsp}1.021,11", "-€{$nbsp}100,00", '5,5%', '23/09/2026'],
+			'Belgium, French' => [new BelgiumFrenchPreset(), 'EUR', '1.234.567,25', "1.021,11{$nbsp}€", "-100,00{$nbsp}€", "5,5{$nbsp}%", '23/09/2026'],
 			'Czechia' => [new CzechiaPreset(), 'CZK', "1{$nbsp}234{$nbsp}567,25", "1{$nbsp}021,11{$nbsp}Kč", "-100,00{$nbsp}Kč", "5,5{$nbsp}%", '23.09.2026'],
 			'Portugal' => [new PortugalPreset(), 'EUR', "1{$nbsp}234{$nbsp}567,25", "1021,11{$nbsp}€", "-100,00{$nbsp}€", '5,5%', '23/09/2026'],
+			'Sweden' => [new SwedenPreset(), 'SEK', "1{$nbsp}234{$nbsp}567,25", "1{$nbsp}021,11{$nbsp}kr", "-100,00{$nbsp}kr", "5,5{$nbsp}%", '2026-09-23'],
 		];
 	}
 
@@ -115,59 +121,76 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Addresses in countries that write the postcode first and in those that do not, down to one with none of its parts
+	 * An address in each country whose layout differs, and in two that share the usual one, down to one with nothing
+	 * but its country
 	 *
 	 * @return mixed[]
 	 */
-	public function localityProvider()
+	public function addressProvider()
 	{
 		return [
-			'France' => ['FR', '75002', 'Paris', null, '75002 Paris'],
-			'Italy with a province' => ['IT', '00144', 'Roma', 'RM', '00144 Roma RM'],
-			'United States' => ['US', '10118', 'New York', 'NY', 'New York, NY 10118'],
-			'United States without a state' => ['US', '10118', 'New York', null, 'New York, 10118'],
-			'United States without a city' => ['US', '10118', null, 'NY', 'NY 10118'],
-			'Canada' => ['CA', 'M5V 2T6', 'Toronto', 'ON', 'Toronto ON M5V 2T6'],
-			'United Kingdom' => ['GB', 'SW1A 1AA', 'London', null, 'London SW1A 1AA'],
-			'none' => ['US', null, null, null, ''],
+			'France' => ['FR', '12 rue de la Paix', '75002', 'Paris', null, ['12 rue de la Paix', '75002 Paris', 'FR']],
+			'Italy with a province' => ['IT', 'Via Roma 1', '00144', 'Roma', 'RM', ['Via Roma 1', '00144 Roma RM', 'IT']],
+			'United States' => ['US', '350 Fifth Avenue', '10118', 'New York', 'NY', ['350 Fifth Avenue', 'New York, NY 10118', 'US']],
+			'United States without a state' => ['US', '350 Fifth Avenue', '10118', 'New York', null, ['350 Fifth Avenue', 'New York, 10118', 'US']],
+			'Canada' => ['CA', '1 Front Street', 'M5V 2T6', 'Toronto', 'ON', ['1 Front Street', 'Toronto ON M5V 2T6', 'CA']],
+			'Australia' => ['AU', '1 George Street', '2000', 'Sydney', 'NSW', ['1 George Street', 'Sydney NSW 2000', 'AU']],
+			'New Zealand' => ['NZ', '1 Queen Street', '1010', 'Auckland', null, ['1 Queen Street', 'Auckland 1010', 'NZ']],
+			'United Kingdom' => ['GB', '10 Downing Street', 'SW1A 2AA', 'London', null, ['10 Downing Street', 'London', 'SW1A 2AA', 'GB']],
+			'India' => ['IN', '1 Marine Drive', '400020', 'Mumbai', 'Maharashtra', ['1 Marine Drive', 'Mumbai 400020', 'Maharashtra', 'IN']],
+			'China' => ['CN', '1 Jianguomenwai Avenue', '100020', 'Chaoyang District', 'Beijing', ['1 Jianguomenwai Avenue', 'Chaoyang District, Beijing 100020', 'CN']],
+			'Japan' => ['JP', '1-1 Chiyoda', '100-0001', 'Chiyoda-ku', 'Tokyo', ['1-1 Chiyoda', 'Chiyoda-ku, Tokyo 100-0001', 'JP']],
+			'nothing but the country' => ['US', null, null, null, null, ['US']],
 		];
 	}
 
 	/**
-	 * The postcode, city and state are written in the order of the party's country, closed up around whichever are
-	 * missing, whatever the preset
+	 * An address is laid out as its party's country lays them out, each line closed up around the parts missing from it
+	 * and the lines left empty dropped, whatever the preset
 	 *
-	 * @dataProvider localityProvider
+	 * @dataProvider addressProvider
 	 *
 	 * @param string $country
+	 * @param string|null $street
 	 * @param string|null $postcode
 	 * @param string|null $city
 	 * @param string|null $subdivision
-	 * @param string $expected
+	 * @param string[] $expected
 	 */
-	public function testWritesTheLocalityOfTheCountry($country, $postcode, $city, $subdivision, $expected)
+	public function testLaysOutTheAddressOfTheCountry($country, $street, $postcode, $city, $subdivision, array $expected)
 	{
-		$party = (new Party('Buyer', $country))->setAddress('1 Main Street', $postcode, $city);
+		$party = (new Party('Buyer', $country))->setAddress($street, $postcode, $city);
 		if ($subdivision !== null) {
 			$party->setCountrySubdivision($subdivision);
 		}
 
-		$this->assertSame($expected, (new Formatter(new UnitedStatesPreset()))->locality($party));
-		$this->assertSame($expected, (new Formatter(new GermanyPreset()))->locality($party));
+		$this->assertSame($expected, (new Formatter(new UnitedStatesPreset()))->address($party));
+		$this->assertSame($expected, (new Formatter(new GermanyPreset()))->address($party));
 	}
 
 	/**
-	 * A country's format given replaces the built-in one or adds one, and a comma left beside a missing part is closed up
+	 * A country's layout given replaces the built-in one or adds one, and a comma left beside a missing part is closed up
 	 */
-	public function testTakesLocalityFormats()
+	public function testTakesAddressFormats()
 	{
 		$formatter = (new Formatter(new UnitedStatesPreset()))
-			->withLocalityFormat('US', '{postcode} {city}')
-			->withLocalityFormat('BR', '{city}, {subdivision}, {postcode}');
+			->withAddressFormat('US', ['{street}', '{postcode} {city}'])
+			->withAddressFormat('BR', ['{street}', '{city}, {subdivision}, {postcode}', '{country}']);
+		$us = (new Party('Buyer', 'US'))->setAddress('350 Fifth Avenue', '10118', 'New York', 'Suite 4200');
 
-		$this->assertSame('10118 New York', $formatter->locality((new Party('Buyer', 'US'))->setAddress('1 Main Street', '10118', 'New York')));
-		$this->assertSame('São Paulo, SP, 01310-100', $formatter->locality($this->brazilian()->setCountrySubdivision('SP')));
-		$this->assertSame('São Paulo, 01310-100', $formatter->locality($this->brazilian()));
+		$this->assertSame(['350 Fifth Avenue', '10118 New York'], $formatter->address($us));
+		$this->assertSame(['Avenida Paulista 1', 'São Paulo, SP, 01310-100', 'BR'], $formatter->address($this->brazilian()->setCountrySubdivision('SP')));
+		$this->assertSame(['Avenida Paulista 1', 'São Paulo, 01310-100', 'BR'], $formatter->address($this->brazilian()));
+	}
+
+	/**
+	 * A second street line goes after the first
+	 */
+	public function testKeepsTheSecondStreetLine()
+	{
+		$party = (new Party('Buyer', 'GB'))->setAddress('Flat 2', 'SW1A 2AA', 'London', '10 Downing Street');
+
+		$this->assertSame(['Flat 2', '10 Downing Street', 'London', 'SW1A 2AA', 'GB'], (new Formatter(new UnitedKingdomPreset()))->address($party));
 	}
 
 	/**
@@ -192,7 +215,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function brazilian()
 	{
-		return (new Party('Buyer', 'BR'))->setAddress('1 Main Street', '01310-100', 'São Paulo');
+		return (new Party('Buyer', 'BR'))->setAddress('Avenida Paulista 1', '01310-100', 'São Paulo');
 	}
 
 }

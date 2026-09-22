@@ -162,15 +162,10 @@ class HtmlInvoiceWriter implements WriterInterface
 	 */
 	private function party($label, Party $party)
 	{
-		$lines = [
-			$party->getName(),
-			$party->getStreet(),
-			$party->getAdditionalStreet(),
-			$this->formatter->locality($party),
-			$party->getCountryCode(),
+		$lines = array_merge([$party->getName()], $this->formatter->address($party), [
 			$party->getVatId() !== null ? $this->labels['vatId'] . ' ' . $party->getVatId() : null,
 			$party->getEmail(),
-		];
+		]);
 
 		return '<td width="50%"><strong>' . $this->escape($label) . '</strong><br>'
 			. implode('<br>', array_map([$this, 'escape'], $this->filled($lines)))

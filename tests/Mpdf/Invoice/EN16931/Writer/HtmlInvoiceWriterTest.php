@@ -5,6 +5,8 @@ namespace Mpdf\Invoice\EN16931\Writer;
 use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
 use Mpdf\Invoice\Formatter;
+use Mpdf\Invoice\LineItem;
+use Mpdf\Invoice\Party;
 use Mpdf\Invoice\Preset\GermanyPreset;
 use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\Invoice\TradeDocument;
@@ -78,6 +80,26 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('>5,5 pc<', $html);
 		$this->assertStringContainsString('<strong>€1.021,11</strong>', $html);
 		$this->assertStringContainsString('<td>Due date</td><td>23.10.2026</td>', $html);
+	}
+
+	/**
+	 * A party's address is laid out as its country lays them out: a British postcode on a line of its own
+	 */
+	public function testLaysOutTheAddressesByCountry()
+	{
+		$this->assertStringContainsString('<br>10 Downing Street<br>London<br>SW1A 2AA<br>GB</td>', $this->writer()->write($this->ukInvoice()));
+	}
+
+	/**
+	 * The fixture invoice to a British buyer
+	 *
+	 * @return \Mpdf\Invoice\EN16931\Invoice
+	 */
+	private function ukInvoice()
+	{
+		$invoice = new Invoice('INV-2026-0003', new \DateTime('2026-09-23'), 'GBP', $this->seller(), (new Party('Buyer Ltd', 'GB'))->setAddress('10 Downing Street', 'SW1A 2AA', 'London'));
+
+		return $invoice->addLine(new LineItem('Consulting', 1, 100, 20));
 	}
 
 	/**

@@ -14,8 +14,8 @@ use Mpdf\Utils\NumericString;
  *
  *     (new Formatter(new GermanyPreset()))->withCurrencyFormat('GBP', '£%s')
  *
- * Amounts are to the cent but in a currency without one, such as the yen, and addresses follow their party's country
- * whichever preset is used: 75002 Paris, but New York, NY 10118.
+ * Amounts are to the cent but in a currency without one, such as the yen. An address is laid out as its party's
+ * country lays them out, whichever preset is used: 75002 Paris, but New York, NY 10118.
  */
 class Formatter
 {
@@ -23,16 +23,28 @@ class Formatter
 	use Strict;
 
 	/**
-	 * The address line of the postcode, city and state in the countries that do not write the postcode first
+	 * The lines of an address in the countries that do not write the postcode, city and state on one line after the
+	 * street, in that order. A Latin-script address in China or Japan follows the Western order.
+	 *
+	 * @var string[][]
+	 */
+	private static $countryAddressFormats = [
+		'AU' => ['{street}', '{additional}', '{city} {subdivision} {postcode}', '{country}'],
+		'CA' => ['{street}', '{additional}', '{city} {subdivision} {postcode}', '{country}'],
+		'CN' => ['{street}', '{additional}', '{city}, {subdivision} {postcode}', '{country}'],
+		'GB' => ['{street}', '{additional}', '{city}', '{postcode}', '{country}'],
+		'IN' => ['{street}', '{additional}', '{city} {postcode}', '{subdivision}', '{country}'],
+		'JP' => ['{street}', '{additional}', '{city}, {subdivision} {postcode}', '{country}'],
+		'NZ' => ['{street}', '{additional}', '{city} {postcode}', '{country}'],
+		'US' => ['{street}', '{additional}', '{city}, {subdivision} {postcode}', '{country}'],
+	];
+
+	/**
+	 * The lines of an address in every other country
 	 *
 	 * @var string[]
 	 */
-	private static $countryLocalityFormats = [
-		'AU' => '{city} {subdivision} {postcode}',
-		'CA' => '{city} {subdivision} {postcode}',
-		'GB' => '{city} {subdivision} {postcode}',
-		'US' => '{city}, {subdivision} {postcode}',
-	];
+	private static $defaultAddressFormat = ['{street}', '{additional}', '{postcode} {city} {subdivision}', '{country}'];
 
 	/**
 	 * The ISO 4217 currencies with no minor unit, whose amounts are written whole
@@ -77,9 +89,9 @@ class Formatter
 	private $percentFormat;
 
 	/**
-	 * @var string[]
+	 * @var string[][]
 	 */
-	private $localityFormats;
+	private $addressFormats;
 
 	/**
 	 * @param \Mpdf\Invoice\Preset\PresetInterface $preset
@@ -93,7 +105,7 @@ class Formatter
 		$this->dateFormat = $preset->getDateFormat();
 		$this->currencyFormats = $preset->getCurrencyFormats();
 		$this->percentFormat = $preset->getPercentFormat();
-		$this->localityFormats = self::$countryLocalityFormats;
+		$this->addressFormats = self::$countryAddressFormats;
 	}
 
 	/**
@@ -128,18 +140,18 @@ class Formatter
 	}
 
 	/**
-	 * A copy writing the addresses of a country with their postcode, city and state in another order. AU, CA, GB and
-	 * US are built in, and any other country is written {postcode} {city} {subdivision}.
+	 * A copy laying out the addresses of a country another way
 	 *
 	 * @param string $country ISO 3166-1 alpha-2 code
-	 * @param string $format From {postcode}, {city} and {subdivision}
+	 * @param string[] $lines Each line from {street}, {additional}, {postcode}, {city}, {subdivision} and {country},
+	 *                        e.g. ['{street}', '{city} {postcode}', '{country}']
 	 *
 	 * @return self
 	 */
-	public function withLocalityFormat($country, $format)
+	public function withAddressFormat($country, array $lines)
 	{
 		$formatter = clone $this;
-		$formatter->localityFormats[$country] = $format;
+		$formatter->addressFormats[$country] = $lines;
 
 		return $formatter;
 	}
@@ -190,26 +202,37 @@ class Formatter
 	}
 
 	/**
-	 * The address line of a party's postcode, city and state in the order of its country, closed up around whichever of
-	 * them it has none of
+	 * A party's address as the lines its country lays it out in, each closed up around the parts it has none of, and
+	 * without the lines left empty
 	 *
 	 * @param \Mpdf\Invoice\Party $party
 	 *
-	 * @return string Empty when it has none of them
+	 * @return string[]
 	 */
-	public function locality(Party $party)
+	public function address(Party $party)
 	{
 		$country = $party->getCountryCode();
-		$format = isset($this->localityFormats[$country]) ? $this->localityFormats[$country] : '{postcode} {city} {subdivision}';
+		$lines = isset($this->addressFormats[$country]) ? $this->addressFormats[$country] : self::$defaultAddressFormat;
 
-		$line = strtr($format, [
+		$parts = [
+			'{street}' => (string) $party->getStreet(),
+			'{additional}' => (string) $party->getAdditionalStreet(),
 			'{postcode}' => (string) $party->getPostcode(),
 			'{city}' => (string) $party->getCity(),
 			'{subdivision}' => (string) $party->getCountrySubdivision(),
-		]);
+			'{country}' => $country,
+		];
 
-		// Close the gaps the missing parts leave, then any comma left at either end
-		return trim(preg_replace(['/\s+/', '/ ?(, ?)+/'], [' ', ', '], $line), ' ,');
+		$address = [];
+		foreach ($lines as $line) {
+			// Close the gaps the missing parts leave, then any comma left at either end
+			$line = trim(preg_replace(['/\s+/', '/ ?(, ?)+/'], [' ', ', '], strtr($line, $parts)), ' ,');
+			if ($line !== '') {
+				$address[] = $line;
+			}
+		}
+
+		return $address;
 	}
 
 	/**

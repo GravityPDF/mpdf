@@ -3,10 +3,9 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How Dutch-speaking Belgium, the larger of its language communities writes numbers, amounts, rates and dates: €
- * 1.021,11, 5,5% and 23/09/2026
+ * How Dutch-speaking Belgium writes numbers, amounts, rates and dates: € 1.021,11, 5,5% and 23/09/2026
  */
-class BelgiumPreset extends AbstractPreset
+class BelgiumDutchPreset extends AbstractPreset
 {
 
 	/**
