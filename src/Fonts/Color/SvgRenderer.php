@@ -370,7 +370,7 @@ class SvgRenderer
 			$set[] = sprintf('[%s] %s d', Geometry::numbers($dashes), Geometry::number($this->length($style['stroke-dashoffset'], 0)));
 		}
 		if ($rgb !== null) {
-			$set[] = vsprintf('%.3F %.3F %.3F RG', $rgb);
+			$set[] = $this->resources->rgb($rgb, true);
 		}
 
 		return 'q ' . implode(' ', $set) . "\n" . $outline . "S\nQ\n";

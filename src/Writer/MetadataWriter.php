@@ -67,6 +67,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		if (!empty($this->mpdf->keywords)) {
 			$m .= '    <pdf:Keywords>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</pdf:Keywords>' . "\n";
 		}
+		if ($this->mpdf->isPdfx4()) {
+			$m .= '    <pdf:Trapped>False</pdf:Trapped>' . "\n";
+		}
 		$m .= '   </rdf:Description>' . "\n";
 
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:xmp="http://ns.adobe.com/xap/1.0/">' . "\n";
@@ -115,8 +118,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$m .= $this->mpdf->additionalXmpRdf;
 		}
 
-		// This bit is specific to PDFX-1a
-		if ($this->mpdf->PDFX) {
+		if ($this->mpdf->isPdfx4()) {
+			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/" pdfxid:GTS_PDFXVersion="PDF/X-4"/>' . "\n";
+		} elseif ($this->mpdf->PDFX) {
 			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdfx="http://ns.adobe.com/pdfx/1.3/" pdfx:Apag_PDFX_Checkup="1.3" pdfx:GTS_PDFXConformance="PDF/X-1a:2003" pdfx:GTS_PDFXVersion="PDF/X-1:2003"/>' . "\n";
 		} // This bit is specific to PDFA-1b
 		elseif ($this->mpdf->PDFA) {
@@ -137,6 +141,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/">' . "\n";
 		$m .= '    <xmpMM:DocumentID>uuid:' . $uuid . '</xmpMM:DocumentID>' . "\n";
+		if ($this->mpdf->isPdfx4()) {
+			$m .= '    <xmpMM:InstanceID>uuid:' . $uuid . '</xmpMM:InstanceID>' . "\n";
+			$m .= '    <xmpMM:VersionID>1</xmpMM:VersionID>' . "\n";
+			$m .= '    <xmpMM:RenditionClass>default</xmpMM:RenditionClass>' . "\n";
+		}
 		$m .= '   </rdf:Description>' . "\n";
 		$m .= '  </rdf:RDF>' . "\n";
 		$m .= ' </x:xmpmeta>' . "\n";
@@ -179,7 +188,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('/ModDate ' . $this->writer->dateString());
 		if ($this->mpdf->PDFX) {
 			$this->writer->write('/Trapped/False');
-			$this->writer->write('/GTS_PDFXVersion(PDF/X-1a:2003)');
+			$this->writer->write('/GTS_PDFXVersion(' . $this->mpdf->pdfxVersionLabel() . ')');
 		}
 	}
 
@@ -203,10 +212,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				$this->writer->write('/OutputCondition ()');
 			}
 			$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
-		} elseif ($this->mpdf->PDFX) { // always a CMYK profile
+		} elseif ($this->mpdf->PDFX) { // a CMYK profile, except where PDF/X-4 names another
 			$this->writer->write('/S /GTS_PDFX');
-			if ($this->mpdf->ICCProfile) {
-				$this->writer->write('/Info (' . $ICCProfile . ')');
+			if ($this->mpdf->ICCProfile || $this->mpdf->isPdfx4()) {
+				// PDF/X-4 embeds its profile, which is SWOP where the document names none
+				$this->writer->write('/Info (' . ($this->mpdf->ICCProfile ? $ICCProfile : 'SWOP2006 Coated3v2') . ')');
 				$this->writer->write('/OutputConditionIdentifier (Custom)');
 				$this->writer->write('/OutputCondition ()');
 				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
@@ -220,7 +230,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
-		if ($this->mpdf->PDFX && !$this->mpdf->ICCProfile) {
+		if ($this->mpdf->PDFX && !$this->mpdf->ICCProfile && !$this->mpdf->isPdfx4()) {
 			return;
 		}
 
@@ -231,6 +241,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				throw new \Mpdf\MpdfException(sprintf('Unable to find ICC profile "%s"', $this->mpdf->ICCProfile));
 			}
 			$s = file_get_contents($this->mpdf->ICCProfile);
+		} elseif ($this->mpdf->isPdfx4()) {
+			$s = file_get_contents(__DIR__ . '/../../data/iccprofiles/SWOP2006_Coated3v2.icc');
 		} else {
 			$s = file_get_contents(__DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc');
 		}
@@ -241,7 +253,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write('<<');
 
-		if ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
+		if ($this->mpdf->PDFX) {
+			$this->writer->write('/N ' . $this->mpdf->pdfxOutputChannels());
+		} elseif ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3) {
 			$this->writer->write('/N 4');
 		} else {
 			$this->writer->write('/N 3');
@@ -337,6 +351,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			if ((int) $part >= 2) {
 				$this->writer->write('/Version /1.7');
 			}
+		}
+
+		// PDF/X-4 is based on PDF 1.6, which a header written before PDFX was set is older than
+		if ($this->mpdf->isPdfx4() && version_compare($this->mpdf->pdf_version, '1.6', '<')) {
+			$this->writer->write('/Version /1.6');
 		}
 
 		$this->writer->write('/Pages 1 0 R');
@@ -496,6 +515,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			}
 
 			$this->writer->write("/OCProperties <</OCGs [$p $v $h $lall] /D <</ON [$p $l] /OFF [$v $h $loff] ");
+
+			// PDF/X-4 has each configuration named
+			if ($this->mpdf->isPdfx4()) {
+				$this->writer->write('/Name ' . $this->writer->string('Layers') . ' ');
+			}
 			$this->writer->write("/Order [$v $p $h $lall] ");
 
 			if ($as) {

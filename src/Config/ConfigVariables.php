@@ -138,11 +138,12 @@ class ConfigVariables
 			// 3 - allow CMYK / SPOT COLOR / Grayscale [convert RGB->CMYK]
 			'restrictColorSpace' => 0,
 
-			// PDFX/1-a Compliant files
-			// true=Forces compliance with PDFX-1a spec
+			// PDF/X Compliant files
+			// true or '1a'=Forces compliance with PDF/X-1a:2003
+			// '4'=Forces compliance with PDF/X-4, which permits transparency and layers
 			// Cannot be used with 'restrictColorSpace' (i.e. no RGB)
 			'PDFX' => false,
-			// Overrides warnings making changes when possible to force PDFX1-a compliance
+			// Overrides warnings making changes when possible to force PDF/X compliance
 			'PDFXauto' => false,
 
 			// PDFA1-b Compliant files
@@ -156,7 +157,8 @@ class ConfigVariables
 
 			// Colour profile OutputIntent
 			// sRGB_IEC61966-2-1 (=default if blank and PDFA), or other added .icc profile
-			// Must be CMYK for PDFX, or appropriate type for PDFA(RGB or CMYK)
+			// Must be CMYK for PDF/X-1a, or appropriate type for PDFA(RGB or CMYK) or PDF/X-4
+			// PDF/X-4 embeds SWOP2006_Coated3v2 where blank
 			'ICCProfile' => '',
 
 			'spotColors' => [],

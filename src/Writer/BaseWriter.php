@@ -27,6 +27,11 @@ final class BaseWriter
 	 */
 	private $protection;
 
+	/**
+	 * @var int|null The object number of the ICC-based sRGB colour space, once written
+	 */
+	private $calibratedRgb;
+
 	public function __construct(Mpdf $mpdf, Protection $protection)
 	{
 		$this->mpdf = $mpdf;
@@ -262,6 +267,42 @@ final class BaseWriter
 		}
 
 		return $this->date;
+	}
+
+	/**
+	 * The colour space RGB is written in where it may not be DeviceRGB: PDF/X-4 permits DeviceRGB only
+	 * where its output intent is RGB, so otherwise RGB is written in an ICC-based sRGB colour space. It is
+	 * written the first time it is asked for, and so is asked for only between objects.
+	 *
+	 * @return int|null The object number of the ICC-based colour space, or null where RGB is DeviceRGB
+	 */
+	public function calibratedRgb()
+	{
+		if (!$this->mpdf->isPdfx4() || $this->mpdf->pdfxRgbIntent()) {
+			return null;
+		}
+
+		if ($this->calibratedRgb === null) {
+			$profile = file_get_contents(__DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc');
+			$filter = '';
+			if ($this->mpdf->compress) {
+				$profile = gzcompress($profile);
+				$filter = '/Filter /FlateDecode ';
+			}
+
+			$this->object();
+			$this->write('<</N 3 ' . $filter . '/Length ' . strlen($profile) . '>>');
+			$this->stream($profile);
+			$this->write('endobj');
+
+			$this->object();
+			$this->write('[/ICCBased ' . ($this->mpdf->n - 1) . ' 0 R]');
+			$this->write('endobj');
+
+			$this->calibratedRgb = $this->mpdf->n;
+		}
+
+		return $this->calibratedRgb;
 	}
 
 	/**

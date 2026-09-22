@@ -47,7 +47,7 @@ class Bmp
 			$info['bpc'] = 8;
 		}
 
-		if ($this->mpdf->restrictColorSpace == 1 || $this->mpdf->PDFX || $this->mpdf->restrictColorSpace == 3) {
+		if ($this->mpdf->restrictColorSpace == 1 || ($this->mpdf->PDFX && !$this->mpdf->isPdfx4()) || $this->mpdf->restrictColorSpace == 3) {
 			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$this->mpdf->PDFAXwarnings[] = "Image cannot be converted to suitable colour space for PDFA or PDFX file - $file - (Image replaced by 'no-image'.)";
 			}

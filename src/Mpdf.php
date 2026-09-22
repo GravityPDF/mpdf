@@ -87,6 +87,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $PDFX;
 	var $PDFXauto;
 
+	/**
+	 * @var int[] The number of colour components of each ICC profile read, by path
+	 */
+	private $iccChannels = [];
+
 	var $PDFA;
 	var $PDFAversion;
 	var $PDFAauto;
@@ -1093,6 +1098,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$originalConfig = $config;
 		$config = $this->initConfig($originalConfig);
 
+		if (is_string($this->PDFX) && !in_array($this->PDFX, ['1a', '4'], true)) {
+			throw new \Mpdf\MpdfException(sprintf('PDFX "%s" is not valid. (Use: true or \'1a\' for PDF/X-1a:2003, \'4\' for PDF/X-4)', $this->PDFX));
+		}
+
+		if ($this->isPdfx4() && version_compare($this->pdf_version, '1.6', '<')) {
+			$this->pdf_version = '1.6';
+		}
+
 		$serviceFactory = new ServiceFactory($container);
 		$services = $serviceFactory->getServices(
 			$this,
@@ -1617,6 +1630,53 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $config;
 	}
 
+	/**
+	 * @return bool Whether the document is PDF/X-4, which unlike PDF/X-1a allows transparency and layers
+	 */
+	public function isPdfx4()
+	{
+		return $this->PDFX === '4';
+	}
+
+	/**
+	 * @return string The PDF/X version the document conforms to, as warnings and its metadata name it
+	 */
+	public function pdfxVersionLabel()
+	{
+		return $this->isPdfx4() ? 'PDF/X-4' : 'PDF/X-1a:2003';
+	}
+
+	/**
+	 * The number of colour components of the PDF/X output intent: four for PDF/X-1a, and for PDF/X-4 as
+	 * many as its profile has, the bundled CMYK profile where it names none
+	 *
+	 * @return int 1 for grey, 3 for RGB or Lab, 4 for CMYK
+	 */
+	public function pdfxOutputChannels()
+	{
+		if (!$this->isPdfx4() || !$this->ICCProfile) {
+			return 4;
+		}
+
+		if (!isset($this->iccChannels[$this->ICCProfile])) {
+			$header = is_readable($this->ICCProfile) ? (string) file_get_contents($this->ICCProfile, false, null, 0, 20) : '';
+			$channels = ['GRAY' => 1, 'RGB ' => 3, 'Lab ' => 3];
+			$space = substr($header, 16, 4);
+			$this->iccChannels[$this->ICCProfile] = isset($channels[$space]) ? $channels[$space] : 4;
+		}
+
+		return $this->iccChannels[$this->ICCProfile];
+	}
+
+	/**
+	 * @return bool Whether the document is PDF/X-4 printed to an RGB output intent, where RGB colour is
+	 *              written as it is and CMYK is converted to it
+	 */
+	public function pdfxRgbIntent()
+	{
+		return $this->isPdfx4() && $this->pdfxOutputChannels() === 3;
+	}
+
 	private function initConstructorParams(array $config)
 	{
 		$constructor = [
@@ -2008,7 +2068,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		//          HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity
 		// set alpha for stroking (CA) and non-stroking (ca) operations
 		// mode determines F (fill) S (stroke) B (both)
-		if (($this->PDFA || $this->PDFX) && $alpha != 1) {
+		if (($this->PDFA || ($this->PDFX && !$this->isPdfx4())) && $alpha != 1) {
 			if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
 				$this->PDFAXwarnings[] = "Image opacity must be 100% (Opacity changed to 100%)";
 			}
@@ -2885,7 +2945,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if (!isset($this->layers[$id])) {
 			$this->layers[$id] = ['name' => 'Layer ' . ($id)];
-			if (($this->PDFA || $this->PDFX)) {
+			if ($this->PDFA || ($this->PDFX && !$this->isPdfx4())) {
 				$this->PDFAXwarnings[] = "Cannot use layers when using PDFA or PDFX";
 				return '';
 			} elseif (!$this->PDFA && !$this->PDFX) {
@@ -4291,11 +4351,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (($family == 'csymbol') || ($family == 'czapfdingbats') || ($family == 'ctimes') || ($family == 'ccourier') || ($family == 'chelvetica')) {
 			if ($this->PDFA || $this->PDFX) {
 				if ($family == 'csymbol' || $family == 'czapfdingbats') {
-					throw new \Mpdf\MpdfException("Symbol and Zapfdingbats cannot be embedded in mPDF (required for PDFA1-b or PDFX/1-a).");
+					throw new \Mpdf\MpdfException("Symbol and Zapfdingbats cannot be embedded in mPDF (required for PDFA1-b or " . $this->pdfxVersionLabel() . ").");
 				}
 				if ($family == 'ctimes' || $family == 'ccourier' || $family == 'chelvetica') {
 					if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
-						$this->PDFAXwarnings[] = "Core Adobe font " . ucfirst($family) . " cannot be embedded in mPDF, which is required for PDFA1-b or PDFX/1-a. (Embedded font will be substituted.)";
+						$this->PDFAXwarnings[] = "Core Adobe font " . ucfirst($family) . " cannot be embedded in mPDF, which is required for PDFA1-b or " . $this->pdfxVersionLabel() . ". (Embedded font will be substituted.)";
 					}
 					if ($family == 'chelvetica') {
 						$family = 'sans';
@@ -4451,7 +4511,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->setMBencoding('UTF-8');
 		} else {  // if using core fonts
 			if ($this->PDFA || $this->PDFX) {
-				throw new \Mpdf\MpdfException('Core Adobe fonts cannot be embedded in mPDF (required for PDFA1-b or PDFX/1-a) - cannot use option to use core fonts.');
+				throw new \Mpdf\MpdfException('Core Adobe fonts cannot be embedded in mPDF (required for PDFA1-b or ' . $this->pdfxVersionLabel() . ') - cannot use option to use core fonts.');
 			}
 			$this->setMBencoding('windows-1252');
 
@@ -9819,7 +9879,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if (($this->PDFA || $this->PDFX) && $this->encrypted) {
-			throw new \Mpdf\MpdfException('PDF/A1-b or PDF/X1-a does not permit encryption of documents.');
+			throw new \Mpdf\MpdfException(sprintf('%s does not permit encryption of documents.', $this->PDFA ? 'PDF/A1-b' : $this->pdfxVersionLabel()));
 		}
 
 		if (count($this->PDFAXwarnings) && (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto))) {
@@ -9827,7 +9887,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$standard = 'PDFA/1-b';
 				$option = '$mpdf->PDFAauto';
 			} else {
-				$standard = 'PDFX/1-a ';
+				$standard = $this->pdfxVersionLabel();
 				$option = '$mpdf->PDFXauto';
 			}
 
@@ -10249,7 +10309,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->PDFA || $this->PDFX) {
 			if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
-				$this->PDFAXwarnings[] = "Annotation markers cannot be semi-transparent in PDFA1-b or PDFX/1-a, so they may make underlying text unreadable. (Annotation markers moved to right margin)";
+				$this->PDFAXwarnings[] = "Annotation markers cannot be semi-transparent in PDFA1-b or " . $this->pdfxVersionLabel() . ", so they may make underlying text unreadable. (Annotation markers moved to right margin)";
 			}
 			$x = ($this->w) - $this->rMargin * 0.66;
 		}
@@ -10292,6 +10352,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function _enddoc()
 	{
+		// PDF/X permits no JavaScript
+		if ($this->PDFX && $this->js !== null) {
+			if (!$this->PDFXauto) {
+				$this->PDFAXwarnings[] = 'JavaScript is not permitted in ' . $this->pdfxVersionLabel() . ' files. (JavaScript removed)';
+			}
+			$this->js = null;
+		}
+
 		// @log Writing Headers & Footers
 
 		$this->_puthtmlheaders();
@@ -10834,7 +10902,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// add a watermark
 	function watermark($texte, $angle = 45, $fontsize = 96, $alpha = 0.2)
 	{
-		if ($this->PDFA || $this->PDFX) {
+		if ($this->PDFA || ($this->PDFX && !$this->isPdfx4())) {
 			throw new \Mpdf\MpdfException('PDFA and PDFX do not permit transparency, so mPDF does not allow Watermarks!');
 		}
 
@@ -10913,7 +10981,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function watermarkImg($src, $alpha = 0.2)
 	{
-		if ($this->PDFA || $this->PDFX) {
+		if ($this->PDFA || ($this->PDFX && !$this->isPdfx4())) {
 			throw new \Mpdf\MpdfException('PDFA and PDFX do not permit transparency, so mPDF does not allow Watermarks!');
 		}
 
@@ -11155,7 +11223,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 
 		if ($this->PDFA || $this->PDFX) {
-			throw new \Mpdf\MpdfException("Adobe CJK fonts cannot be embedded in mPDF (required for PDFA1-b and PDFX/1-a).");
+			throw new \Mpdf\MpdfException("Adobe CJK fonts cannot be embedded in mPDF (required for PDFA1-b and " . $this->pdfxVersionLabel() . ").");
 		}
 		if ($family == 'big5') {
 			$this->AddBig5Font();

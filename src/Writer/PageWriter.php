@@ -41,6 +41,10 @@ final class PageWriter
 
 	public function writePages() // _putpages
 	{
+		if ($this->mpdf->PDFX) {
+			$this->removePdfxAnnotations();
+		}
+
 		$nb = $this->mpdf->page;
 		$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
 
@@ -188,7 +192,11 @@ final class PageWriter
 			$this->writer->write('/Resources 2 0 R');
 
 			// Important to keep in RGB colorSpace when using transparency
-			if (!$this->mpdf->PDFA && !$this->mpdf->PDFX) {
+			if ($this->mpdf->isPdfx4()) {
+				// Blended in the colour space of the output intent
+				$spaces = [1 => '/DeviceGray', 3 => '/DeviceRGB', 4 => '/DeviceCMYK'];
+				$this->writer->write('/Group << /Type /Group /S /Transparency /CS ' . $spaces[$this->mpdf->pdfxOutputChannels()] . ' >> ');
+			} elseif (!$this->mpdf->PDFA && !$this->mpdf->PDFX) {
 				if ($this->mpdf->restrictColorSpace === 3) {
 					$this->writer->write('/Group << /Type /Group /S /Transparency /CS /DeviceCMYK >> ');
 				} elseif ($this->mpdf->restrictColorSpace === 1) {
@@ -280,6 +288,80 @@ final class PageWriter
 		$this->writer->write(sprintf('/MediaBox [0 0 %.3F %.3F]', $defwPt, $defhPt));
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
+	}
+
+	/**
+	 * PDF/X permits no interactive form field, no file attachment, and no other annotation within the
+	 * area printed: the BleedBox, or the TrimBox where there is no bleed. Each is removed before the
+	 * annotations are counted, which numbers their objects.
+	 */
+	private function removePdfxAnnotations()
+	{
+		$removed = count($this->form->forms) > 0 || count($this->form->form_radio_groups) > 0;
+		$this->form->forms = [];
+		$this->form->form_radio_groups = [];
+
+		for ($n = 1; $n <= $this->mpdf->page; $n++) {
+			$area = $this->printedArea($n);
+
+			if (isset($this->mpdf->PageLinks[$n])) {
+				foreach ($this->mpdf->PageLinks[$n] as $key => $pl) {
+					if (self::overlaps([$pl[0], $pl[1] - $pl[3], $pl[0] + $pl[2], $pl[1]], $area)) {
+						unset($this->mpdf->PageLinks[$n][$key]);
+						$removed = true;
+					}
+				}
+			}
+
+			if (isset($this->mpdf->PageAnnots[$n])) {
+				$widthPt = $this->mpdf->pageDim[$n]['w'] * Mpdf::SCALE;
+				$heightPt = $this->mpdf->pageDim[$n]['h'] * Mpdf::SCALE;
+				foreach ($this->mpdf->PageAnnots[$n] as $key => $pl) {
+					// The marker, placed as MetadataWriter::writeAnnotations() places it
+					$x = $pl['x'];
+					if ($this->mpdf->annotMargin != 0 || $x <= 0) {
+						$x = $widthPt / Mpdf::SCALE - $this->mpdf->annotMargin;
+					}
+					$left = $x * Mpdf::SCALE;
+					$top = $heightPt - $pl['y'] * Mpdf::SCALE;
+
+					if (!empty($pl['opt']['file']) || self::overlaps([$left, $top - 20, $left + 20, $top], $area)) {
+						unset($this->mpdf->PageAnnots[$n][$key]);
+						$removed = true;
+					}
+				}
+			}
+		}
+
+		if ($removed && !$this->mpdf->PDFXauto) {
+			$this->mpdf->PDFAXwarnings[] = 'Form fields, file attachments and annotations within the TrimBox or BleedBox are not permitted in ' . $this->mpdf->pdfxVersionLabel() . ' files. (Removed)';
+		}
+	}
+
+	/**
+	 * @param int $n A page
+	 *
+	 * @return float[] [xMin, yMin, xMax, yMax] of its BleedBox, or its TrimBox where it has no bleed, in points
+	 */
+	private function printedArea($n)
+	{
+		$dim = $this->mpdf->pageDim[$n];
+		$x = $dim['outer_width_LR'] * Mpdf::SCALE;
+		$y = $dim['outer_width_TB'] * Mpdf::SCALE;
+		$bleed = $x || $y ? $dim['bleedMargin'] * Mpdf::SCALE : 0;
+
+		return [$x - $bleed, $y - $bleed, $dim['w'] * Mpdf::SCALE - $x + $bleed, $dim['h'] * Mpdf::SCALE - $y + $bleed];
+	}
+
+	/**
+	 * @param float[] $a [xMin, yMin, xMax, yMax]
+	 * @param float[] $b [xMin, yMin, xMax, yMax]
+	 *
+	 * @return bool Whether the two rectangles overlap
+	 */
+	private static function overlaps(array $a, array $b)
+	{
+		return $a[0] < $b[2] && $a[2] > $b[0] && $a[1] < $b[3] && $a[3] > $b[1];
 	}
 
 }

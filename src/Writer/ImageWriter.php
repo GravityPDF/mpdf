@@ -32,6 +32,8 @@ final class ImageWriter
 
 		foreach ($this->mpdf->images as $file => $info) {
 
+			$rgb = empty($info['icc']) && ($info['cs'] === 'DeviceRGB' || $info['cs'] === 'Indexed') ? $this->writer->calibratedRgb() : null;
+
 			$this->writer->object();
 
 			$this->mpdf->images[$file]['n'] = $this->mpdf->n;
@@ -41,7 +43,8 @@ final class ImageWriter
 			$this->writer->write('/Width ' . $info['w']);
 			$this->writer->write('/Height ' . $info['h']);
 
-			if (isset($info['interpolation']) && $info['interpolation']) {
+			// PDF/X does not permit interpolation
+			if (isset($info['interpolation']) && $info['interpolation'] && !$this->mpdf->PDFX) {
 				$this->writer->write('/Interpolate true'); // mPDF 6 - image interpolation shall be performed by a conforming reader
 			}
 
@@ -56,12 +59,12 @@ final class ImageWriter
 				$icc = true;
 				$this->writer->write('/ColorSpace [/ICCBased ' . ($this->mpdf->n + 1) . ' 0 R]');
 			} elseif ($info['cs'] === 'Indexed') {
-				if ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
+				if (($this->mpdf->PDFX && !$this->mpdf->isPdfx4()) || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
 					throw new \Mpdf\MpdfException('PDFA1-b and PDFX/1-a files do not permit using mixed colour space (' . $file . ').');
 				}
-				$this->writer->write('/ColorSpace [/Indexed /DeviceRGB ' . (strlen($info['pal']) / 3 - 1) . ' ' . ($this->mpdf->n + 1) . ' 0 R]');
+				$this->writer->write('/ColorSpace [/Indexed ' . ($rgb ? $rgb . ' 0 R' : '/DeviceRGB') . ' ' . (strlen($info['pal']) / 3 - 1) . ' ' . ($this->mpdf->n + 1) . ' 0 R]');
 			} else {
-				$this->writer->write('/ColorSpace /' . $info['cs']);
+				$this->writer->write('/ColorSpace ' . ($rgb ? $rgb . ' 0 R' : '/' . $info['cs']));
 				if ($info['cs'] === 'DeviceCMYK') {
 					if ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace !== 3) {
 						throw new \Mpdf\MpdfException('PDFA1-b does not permit Images using mixed colour space (' . $file . ').');
@@ -69,7 +72,7 @@ final class ImageWriter
 					if ($info['type'] === 'jpg') {
 						$this->writer->write('/Decode [1 0 1 0 1 0 1 0]');
 					}
-				} elseif (($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) && $info['cs'] === 'DeviceRGB') {
+				} elseif ((($this->mpdf->PDFX && !$this->mpdf->isPdfx4()) || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) && $info['cs'] === 'DeviceRGB') {
 					throw new \Mpdf\MpdfException('PDFA1-b and PDFX/1-a files do not permit using mixed colour space (' . $file . ').');
 				}
 			}

@@ -82,7 +82,8 @@ class Type3FontWriter implements GlyphResources
 	 *              Mpdf::$images; 'states', numbers in Mpdf::$extgstates; 'shadings', keys in $shadings;
 	 *              'forms', each group by a key of its content, as ['name', 'content', 'box', 'group' =>
 	 *              what its /Group dictionary adds]; 'masks', each soft mask by a key, as ['name', 'form'
-	 *              => the name of the group it is drawn from, 'luminosity', 'inverted']
+	 *              => the name of the group it is drawn from, 'luminosity', 'inverted']; 'colorSpaces',
+	 *              name => object number of each colour space its content sets by name
 	 */
 	private $drawn = [];
 
@@ -227,6 +228,24 @@ class Type3FontWriter implements GlyphResources
 		$image = $this->mpdf->images[$key];
 
 		return ['/I' . $image['i'], $image['w'], $image['h']];
+	}
+
+	/**
+	 * RGB is DeviceRGB, or where the document may not use DeviceRGB, the ICC-based sRGB colour space
+	 * BaseWriter::calibratedRgb() writes, set by name
+	 *
+	 * @inheritdoc
+	 */
+	public function rgb(array $rgb, $stroking = false)
+	{
+		$calibrated = $this->writer->calibratedRgb();
+		if ($calibrated === null) {
+			return vsprintf('%.3F %.3F %.3F ', $rgb) . ($stroking ? 'RG' : 'rg');
+		}
+
+		$this->drawn['colorSpaces']['CsRGB'] = $calibrated;
+
+		return $stroking ? vsprintf('/CsRGB CS %.3F %.3F %.3F SC', $rgb) : vsprintf('/CsRGB cs %.3F %.3F %.3F sc', $rgb);
 	}
 
 	/**
@@ -399,7 +418,7 @@ class Type3FontWriter implements GlyphResources
 		}
 
 		foreach ($this->resources as $object => $drawn) {
-			$objects = ['XObject' => [], 'ExtGState' => [], 'Shading' => []];
+			$objects = ['XObject' => [], 'ExtGState' => [], 'Shading' => [], 'ColorSpace' => $drawn['colorSpaces']];
 			foreach ($drawn['images'] as $key) {
 				$objects['XObject']['I' . $this->mpdf->images[$key]['i']] = $this->mpdf->images[$key]['n'];
 			}
@@ -444,7 +463,7 @@ class Type3FontWriter implements GlyphResources
 		return sprintf(
 			'<</ShadingType %d /ColorSpace %s /Coords [%s] /Function %s /Extend [true true]>>',
 			count($shading['coords']) === 4 ? 2 : 3,
-			self::colourSpace($shading['stops']),
+			$this->colourSpace($shading['stops']),
 			self::values($shading['coords']),
 			self::stopFunction($shading['stops'])
 		);
@@ -486,7 +505,7 @@ class Type3FontWriter implements GlyphResources
 
 		$this->writeStream(sprintf(
 			'/ShadingType 4 /ColorSpace %s /BitsPerCoordinate 16 /BitsPerComponent 16 /BitsPerFlag 8 /Decode [%s 0 1] /Function %s',
-			self::colourSpace($shading['stops']),
+			$this->colourSpace($shading['stops']),
 			self::values($decode),
 			self::stopFunction($shading['stops'])
 		), $data);
@@ -497,11 +516,17 @@ class Type3FontWriter implements GlyphResources
 	/**
 	 * @param array[] $stops As GlyphResources::shading() takes them
 	 *
-	 * @return string /DeviceGray or /DeviceRGB, as the stops' colours are
+	 * @return string /DeviceGray or RGB, as the stops' colours are - see rgb()
 	 */
-	private static function colourSpace(array $stops)
+	private function colourSpace(array $stops)
 	{
-		return count($stops[0][1]) === 1 ? '/DeviceGray' : '/DeviceRGB';
+		if (count($stops[0][1]) === 1) {
+			return '/DeviceGray';
+		}
+
+		$calibrated = $this->writer->calibratedRgb();
+
+		return $calibrated === null ? '/DeviceRGB' : $calibrated . ' 0 R';
 	}
 
 	/**
@@ -637,7 +662,7 @@ class Type3FontWriter implements GlyphResources
 		$widths = [];
 		$procedures = [];
 		$differences = '';
-		$this->drawn = ['images' => [], 'states' => [], 'shadings' => [], 'forms' => [], 'masks' => []];
+		$this->drawn = ['images' => [], 'states' => [], 'shadings' => [], 'forms' => [], 'masks' => [], 'colorSpaces' => []];
 		foreach ($subset as $code => $char) {
 			$width = '0.000';
 			if ($char && isset($charToGlyph[$char])) {

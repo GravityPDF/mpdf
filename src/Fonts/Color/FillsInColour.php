@@ -29,7 +29,7 @@ trait FillsInColour
 			$operators[] = $resources->alpha($alpha);
 		}
 		if ($rgb !== null) {
-			$operators[] = vsprintf('%.3F %.3F %.3F rg', $rgb);
+			$operators[] = $resources->rgb($rgb);
 		}
 
 		return $operators ? 'q ' . implode(' ', $operators) . "\n" . $fill . "\nQ\n" : $fill . "\n";
