@@ -202,6 +202,36 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * An annotation keeps its subject under PDF/A-2 and PDF/A-3, which are based on PDF 1.7, and loses it under
+	 * PDF/A-1 and PDF/X-1a, which predate /Subj
+	 *
+	 * @dataProvider subjectConfigs
+	 */
+	public function testAnnotationSubject($config, $written)
+	{
+		$pdf = $this->render('<p>Note <annotation content="Body" subject="A subject" /></p>', $config + ['mode' => '']);
+
+		$this->assertSame(1, substr_count($pdf, '/Subtype /Text'));
+		$this->assertSame($written, strpos($pdf, '/Subj ') !== false);
+	}
+
+	/**
+	 * Configurations and whether an annotation written under them keeps its subject
+	 *
+	 * @return mixed[][]
+	 */
+	public function subjectConfigs()
+	{
+		return [
+			'plain' => [[], true],
+			'PDF/A-1b' => [$this->pdfaConfig('1-B'), false],
+			'PDF/A-2b' => [$this->pdfaConfig('2-B'), true],
+			'PDF/A-3b' => [$this->pdfaConfig('3-B'), true],
+			'PDF/X-1a' => [['PDFX' => true, 'PDFXauto' => true], false],
+		];
+	}
+
+	/**
 	 * PDF/A-2 embeds a file only if it is a PDF/A document, and says so of the file it leaves out
 	 */
 	public function testPdfa2EmbedsOnlyPdfaFiles()

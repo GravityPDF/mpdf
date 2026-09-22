@@ -734,8 +734,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						}
 
 						if (!$fileAttachment) {
-							// Subj is PDF 1.5 spec.
-							if (!$this->mpdf->PDFA && !$this->mpdf->PDFX && isset($pl['opt']['subj'])) {
+							// Subj is PDF 1.5 spec, after PDF/X-1a (PDF 1.3) and PDF/A-1 (PDF 1.4)
+							if (isset($pl['opt']['subj']) && !$this->mpdf->PDFX && (!$this->mpdf->PDFA || $this->mpdf->pdfaConformance()[0] !== '1')) {
 								$annot .= ' /Subj ' . $this->writer->utf16BigEndianTextString($pl['opt']['subj']);
 							}
 							if (!empty($pl['opt']['popup'])) {
