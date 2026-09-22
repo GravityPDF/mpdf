@@ -5,6 +5,7 @@ namespace Mpdf;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\GlyphString;
 use Mpdf\Fonts\Table\Anchor;
+use Mpdf\Fonts\Table\ClassDef;
 use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\MarkArray;
 use Mpdf\Fonts\Table\SequenceRule;
@@ -875,8 +876,8 @@ class OtlDump extends TTFontFile
 						// Format 2:
 						else {
 							if ($PosFormat == 2) {
-								$ClassDef1 = $subtable_offset + $this->reader->readUInt16();
-								$ClassDef2 = $subtable_offset + $this->reader->readUInt16();
+								$ClassDef1 = ClassDef::offset($this->reader, $subtable_offset);
+								$ClassDef2 = ClassDef::offset($this->reader, $subtable_offset);
 								$Class1Count = $this->reader->readUInt16();
 								$Class2Count = $this->reader->readUInt16();
 
@@ -885,8 +886,10 @@ class OtlDump extends TTFontFile
 
 								// NB Class1Count includes Class 0 even though it is not defined by $ClassDef1
 								// i.e. Class1Count = 5; Class1 will contain array(indices 1-4);
-								$Class1 = $this->_getClassDefinitionTable($ClassDef1);
-								$Class2 = $this->_getClassDefinitionTable($ClassDef2);
+								// A 0 offset is answered here rather than passed on, because
+								// _getClassDefinitionTable() reads it as "from where the reader is"
+								$Class1 = $ClassDef1 ? $this->_getClassDefinitionTable($ClassDef1) : [];
+								$Class2 = $ClassDef2 ? $this->_getClassDefinitionTable($ClassDef2) : [];
 
 								$this->reader->seek($subtable_offset + 16);
 
@@ -1302,7 +1305,7 @@ class OtlDump extends TTFontFile
 		$this->report .= '<div class="lookuptypesub">Format 2: Class-based Context Positioning</div>';
 
 		$this->reader->readUInt16(); // coverageOffset, which class 0 stands in for below
-		$InputClassDefOffset = $subtable_offset + $this->reader->readUInt16();
+		$InputClassDefOffset = ClassDef::offset($this->reader, $subtable_offset);
 		$PosClassSetCnt = $this->reader->readUInt16();
 		$PosClassSetOffset = [];
 		for ($b = 0; $b < $PosClassSetCnt; $b++) {
@@ -1445,9 +1448,9 @@ class OtlDump extends TTFontFile
 		$this->report .= '<div class="lookuptypesub">Format 2: Class-based Chaining Context Positioning</div>';
 
 		$this->reader->readUInt16(); // coverageOffset, which class 0 stands in for below
-		$BacktrackClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$InputClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$LookaheadClassDefOffset = $subtable_offset + $this->reader->readUInt16();
+		$BacktrackClassDefOffset = ClassDef::offset($this->reader, $subtable_offset);
+		$InputClassDefOffset = ClassDef::offset($this->reader, $subtable_offset);
+		$LookaheadClassDefOffset = ClassDef::offset($this->reader, $subtable_offset);
 		$ChainPosClassSetCnt = $this->reader->readUInt16();
 		$ChainPosClassSetOffset = [];
 		for ($b = 0; $b < $ChainPosClassSetCnt; $b++) {

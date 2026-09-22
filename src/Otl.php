@@ -2694,7 +2694,7 @@ class Otl
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['plainClassContext'][$offset])) {
 			$this->reader->skip(2); // coverageOffset
-			$inputClassDef = $offset + $this->reader->readUInt16();
+			$inputClassDef = ClassDef::offset($this->reader, $offset);
 			$ruleSets = $this->classRuleSets($offset);
 
 			$this->LuDataCache[$this->otlCacheKey]['plainClassContext'][$offset] = [
@@ -2817,9 +2817,9 @@ class Otl
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['chainedClassContext'][$offset])) {
 			$this->reader->skip(2); // coverageOffset
-			$backtrackClassDef = $offset + $this->reader->readUInt16();
-			$inputClassDef = $offset + $this->reader->readUInt16();
-			$lookaheadClassDef = $offset + $this->reader->readUInt16();
+			$backtrackClassDef = ClassDef::offset($this->reader, $offset);
+			$inputClassDef = ClassDef::offset($this->reader, $offset);
+			$lookaheadClassDef = ClassDef::offset($this->reader, $offset);
 			$ruleSets = $this->classRuleSets($offset);
 
 			$this->LuDataCache[$this->otlCacheKey]['chainedClassContext'][$offset] = [
@@ -3875,8 +3875,8 @@ class Otl
 	 */
 	private function _applyGPOSpairAdjustmentFormat2($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $level, $ignore, $PosFormat, $ValueFormat1, $ValueFormat2, $sizeOfPair)
 	{
-		$ClassDef1 = $subtable_offset + $this->reader->readUInt16();
-		$ClassDef2 = $subtable_offset + $this->reader->readUInt16();
+		$ClassDef1 = ClassDef::offset($this->reader, $subtable_offset);
+		$ClassDef2 = ClassDef::offset($this->reader, $subtable_offset);
 		$Class1Count = $this->reader->readUInt16();
 		$Class2Count = $this->reader->readUInt16();
 
@@ -4878,15 +4878,16 @@ class Otl
 	 * name is left out rather than put in class 0, which is how mPDF has always read it. Where two
 	 * glyphs stand for one character, the lower class is the one kept.
 	 *
+	 * @param int $offset Where the ClassDef starts, as ClassDef::offset() gives it
+	 *
 	 * @return int[] unicode => class
 	 */
 	private function pairPosClasses($offset)
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['classDef'][$offset])) {
-			$this->reader->seek($offset);
 			$classes = [];
 
-			foreach (ClassDef::pairs($this->reader) as $pair) {
+			foreach (ClassDef::pairsAt($this->reader, $offset) as $pair) {
 				list($glyphID, $class) = $pair;
 				$uni = $this->glyphToChar($glyphID);
 				if (!isset($classes[$uni]) || $class < $classes[$uni]) {
@@ -5130,15 +5131,16 @@ class Otl
 	 *
 	 * A glyph no character reaches is dropped too: there is no character for a rule to match.
 	 *
+	 * @param int $offset Where the ClassDef starts, as ClassDef::offset() gives it
+	 *
 	 * @return array class => map of unicode => 1
 	 */
 	private function _getClasses($offset)
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['classes'][$offset])) {
-			$this->reader->seek($offset);
 			$GlyphByClass = [];
 
-			foreach (ClassDef::pairs($this->reader) as $pair) {
+			foreach (ClassDef::pairsAt($this->reader, $offset) as $pair) {
 				list($glyphID, $class) = $pair;
 				$uni = $this->glyphToChar($glyphID);
 
@@ -5170,6 +5172,9 @@ class Otl
 	 * has always read: _getClasses() drops a class whose glyphs no character reaches, so the two are
 	 * not always the same, and a table with a gap in its class numbers leaves the classes above the
 	 * gap out of the set.
+	 *
+	 * @param int $offset Where the ClassDef starts, as ClassDef::offset() gives it. A subtable that
+	 *                    states no ClassDef excludes nothing, so class 0 matches every glyph
 	 *
 	 * @return array map of unicode => 1
 	 */
