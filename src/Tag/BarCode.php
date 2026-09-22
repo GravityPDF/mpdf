@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Ua\AriaIdResolver;
+
 use Mpdf\Mpdf;
 
 class BarCode extends Tag
@@ -247,13 +249,7 @@ class BarCode extends Tag
 			// struct element wrapping the barcode is created at render time
 			// (printobjectbuffer), not at parse time.
 			if ($this->mpdf->PDFUA) {
-				$objattr['pdfua_id'] = isset($attr['ID']) ? $attr['ID'] : null;
-				foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-					'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $ariaKey) {
-					if (!empty($attr[$ariaKey])) {
-						$objattr['pdfua_' . strtolower(str_replace('-', '_', $ariaKey))] = $attr[$ariaKey];
-					}
-				}
+				$objattr += AriaIdResolver::toObjattr($attr);
 			}
 
 			/* -- CSS-IMAGE-FLOAT -- */

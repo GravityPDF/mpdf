@@ -40,11 +40,4 @@ class Dd extends BlockTag
 		parent::open($attr, $ahtml, $ihtml);
 	}
 
-	public function close(&$ahtml, &$ihtml)
-	{
-		// BlockTag::close() pops LBody.
-		// The implicit LI stays open; it will be closed when the next DT opens
-		// (in Dt::open()) or when </dl> fires (in Dl::close()).
-		parent::close($ahtml, $ihtml);
-	}
 }

@@ -25,21 +25,13 @@ class Area extends Tag
 		if (!$this->mpdf->PDFUA) {
 			return;
 		}
-		if ($this->ua === null) {
-			// Guard the UaState dereference to match the null-checks used at the
-			// map-name and href-policy branches below; a PDFUA document with no
-			// UaState wired up has no image-map registry to append to.
-			return;
-		}
 		$registry = $this->ua->getImageMapRegistry();
 		$mapName  = $registry->getCurrentMapName();
 		if ($mapName === null) {
 			// <area> outside any open <map>. HTML5 §4.8.14 also permits <area>
 			// inside <picture>, but only the <map> case maps to a PDF link
 			// annotation.
-			if ($this->ua !== null) {
-				$this->ua->addWarning('PDF/UA-1: <area> outside <map>; ignored.');
-			}
+			$this->ua->addWarning('PDF/UA-1: <area> outside <map>; ignored.');
 			return;
 		}
 
@@ -63,14 +55,12 @@ class Area extends Tag
 					. 'to drop the area silently.'
 				);
 			}
-			if ($this->ua !== null) {
-				$this->ua->addWarning(
-					'PDF/UA-1: <area href="'
-					. UaPolicy::formatHrefForMessage($href)
-					. '"> stripped (no Link annotation emitted) — '
-					. 'scheme has no accessible alternative.'
-				);
-			}
+			$this->ua->addWarning(
+				'PDF/UA-1: <area href="'
+				. UaPolicy::formatHrefForMessage($href)
+				. '"> stripped (no Link annotation emitted) — '
+				. 'scheme has no accessible alternative.'
+			);
 			return;
 		}
 
@@ -87,17 +77,13 @@ class Area extends Tag
 				);
 			}
 			$alt = 'Link to ' . $href;
-			if ($this->ua !== null) {
-				$this->ua->addWarning('PDF/UA-1: <area> missing alt; synthesised "' . $alt . '" for Link/Alt.');
-			}
+			$this->ua->addWarning('PDF/UA-1: <area> missing alt; synthesised "' . $alt . '" for Link/Alt.');
 		}
 
 		if ($href === null || $href === '') {
 			// No href = no clickable region, so no annotation will be emitted
 			// and no 28-002 violation can occur. Warn but do not fail strict.
-			if ($this->ua !== null) {
-				$this->ua->addWarning('PDF/UA-1: <area> without href in <map name="' . $mapName . '"> — skipped (no clickable region).');
-			}
+			$this->ua->addWarning('PDF/UA-1: <area> without href in <map name="' . $mapName . '"> — skipped (no clickable region).');
 			return;
 		}
 

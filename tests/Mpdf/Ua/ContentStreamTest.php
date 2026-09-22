@@ -568,10 +568,8 @@ class ContentStreamTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A `<ul>` whose items span a page break must produce MCR dicts on at
-	 * least one of the LI struct elements that crosses the boundary — i.e.,
-	 * the LI's /K array contains /Type /MCR entries with /Pg refs to two
-	 * distinct page objects.
+	 * A list item whose text runs across a page break is tagged with MCR dicts on
+	 * its LBody, with /Pg refs to both pages.
 	 *
 	 * Matterhorn Protocol 1.1 condition 01-006 — untagged real content.
 	 *
@@ -581,9 +579,10 @@ class ContentStreamTest extends PdfUaTestCase
 	{
 		$mpdf = $this->makeMpdf();
 		$rows = '';
-		for ($i = 0; $i < 60; $i++) {
+		for ($i = 0; $i < 40; $i++) {
 			$rows .= '<li>Item ' . $i . ' — Lorem ipsum dolor sit amet, consectetur adipiscing elit.</li>';
 		}
+		$rows .= '<li>' . str_repeat('Lorem ipsum dolor sit amet, consectetur adipiscing elit. ', 60) . '</li>';
 		$output = $this->getOutput($mpdf, '<ul>' . $rows . '</ul>');
 
 		$this->assertGreaterThan(1, $mpdf->page, 'List must span more than one page');

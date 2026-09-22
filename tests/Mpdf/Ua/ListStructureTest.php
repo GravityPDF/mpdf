@@ -41,6 +41,23 @@ class ListStructureTest extends PdfUaTestCase
 	}
 
 	/**
+	 * The text of an item is content of its LBody, the marker of its Lbl, and the LI holds only the two.
+	 */
+	public function testItemTextBelongsToLBody()
+	{
+		$mpdf = $this->makeMpdf();
+		$this->getOutput($mpdf, '<ul><li>First</li></ul>');
+
+		$item = $this->findFirstOfType($mpdf->getPdfUaStructureTree()->getRoot(), 'LI');
+		$this->assertEmpty($item->getMcids());
+
+		$children = $item->getChildren();
+		$this->assertSame(['Lbl', 'LBody'], [$children[0]->getType(), $children[1]->getType()]);
+		$this->assertCount(1, $children[0]->getMcids());
+		$this->assertCount(1, $children[1]->getMcids());
+	}
+
+	/**
 	 * An unstyled <ol> defaults to decimal → /ListNumbering /Decimal.
 	 */
 	public function testDefaultOrderedListCarriesDecimalNumbering()

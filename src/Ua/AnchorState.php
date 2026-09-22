@@ -45,12 +45,6 @@ class AnchorState
 	 */
 	protected $strippedAnchorStack = [];
 
-	/**
-	 * Last-pushed anchor struct type: 'Link', 'Span', or null.
-	 *
-	 * @var string|null
-	 */
-	protected $anchorStructType = null;
 
 	/**
 	 * Innermost inline struct element (Link / Span / Ruby / RB / RT / RP) that
@@ -136,24 +130,7 @@ class AnchorState
 		return !empty($this->strippedAnchorStack);
 	}
 
-	/**
-	 * Record the struct type just pushed by Tag\A: 'Link', 'Span', or null.
-	 *
-	 * @param  string|null $type
-	 * @return void
-	 */
-	public function setAnchorStructType($type)
-	{
-		$this->anchorStructType = $type === null ? null : (string) $type;
-	}
 
-	/**
-	 * @return string|null
-	 */
-	public function getAnchorStructType()
-	{
-		return $this->anchorStructType;
-	}
 
 	/**
 	 * Set the innermost inline struct element owning the current content, or

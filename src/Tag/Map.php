@@ -21,9 +21,7 @@ class Map extends Tag
 		}
 		if (empty($attr['NAME'])) {
 			// HTML5 §4.8.13: name is required.
-			if ($this->ua !== null) {
-				$this->ua->addWarning('PDF/UA-1: <map> missing name attribute; ignored.');
-			}
+			$this->ua->addWarning('PDF/UA-1: <map> missing name attribute; ignored.');
 			return;
 		}
 		$name = strtolower($attr['NAME']);

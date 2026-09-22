@@ -514,15 +514,7 @@ abstract class BlockTag extends Tag
 						$closes = 2;
 					}
 					$this->pushCellBlockStructFrame('__struct__', $tag, $closes);
-					if (!empty($attr['ID'])) {
-						$this->ua->getAriaIdResolver()->registerId($attr['ID'], $elem);
-					}
-					foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-							  'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $k) {
-						if (!empty($attr[$k])) {
-							$this->ua->getAriaIdResolver()->queue($elem, strtolower($k), $attr[$k]);
-						}
-					}
+					$this->ua->getAriaIdResolver()->queueAriaRefs($elem, $attr);
 				} else {
 					$this->pushCellBlockStructFrame(null, $tag);
 				}
@@ -1334,15 +1326,7 @@ abstract class BlockTag extends Tag
 				// THIS block element each time content emits on a new page. Mirrors
 				// Tag/Td.php:434.
 				$currblk['pdfua_struct_elem'] = $elem;
-				if (!empty($attr['ID'])) {
-					$this->ua->getAriaIdResolver()->registerId($attr['ID'], $elem);
-				}
-				foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-						  'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $k) {
-					if (!empty($attr[$k])) {
-						$this->ua->getAriaIdResolver()->queue($elem, strtolower($k), $attr[$k]);
-					}
-				}
+				$this->ua->getAriaIdResolver()->queueAriaRefs($elem, $attr);
 			} else {
 				$currblk['pdfua_type']     = null;
 				$currblk['pdfua_artifact'] = false;

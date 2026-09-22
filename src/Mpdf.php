@@ -2039,30 +2039,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * Public accessor for the ImageMapRegistry. Tests use it to introspect
 	 * parsed <map>/<area> state; production callers go through UaState
-	 * directly. Returns null when PDFUA is off / UaState was never built.
+	 * directly.
 	 *
-	 * @return \Mpdf\Ua\ImageMap\ImageMapRegistry|null
+	 * @return \Mpdf\Ua\ImageMap\ImageMapRegistry
 	 */
 	public function getPdfUaImageMapRegistry()
 	{
-		if ($this->ua === null) {
-			return null;
-		}
 		return $this->ua->getImageMapRegistry();
-	}
-
-	/**
-	 * Public accessor for the AnchorState. Tests use it to introspect anchor
-	 * lifecycle; production callers go through UaState directly.
-	 *
-	 * @return \Mpdf\Ua\AnchorState|null
-	 */
-	public function getPdfUaAnchorState()
-	{
-		if ($this->ua === null) {
-			return null;
-		}
-		return $this->ua->getAnchorState();
 	}
 
 	/**
@@ -2080,9 +2063,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function getPdfUaNextStructParents()
 	{
-		if (!$this->PDFUA || $this->ua === null) {
-			return 0;
-		}
 		return $this->ua->nextStructParents();
 	}
 
@@ -4773,6 +4753,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * @return int The /StructParents key of the current page, allocated when the page began
+	 */
+	private function pdfuaStructParents()
+	{
+		return $this->pageDim[$this->page]['structParents'];
+	}
+
+	/**
 	 * The operator that selects the current font and size.
 	 *
 	 * Tf is allowed outside a text object. PDF/UA-1 drops the empty BT/ET around it, which veraPDF
@@ -6013,7 +6001,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Reached only when PDFUA mode is active; the helper is always wired by
 		// ServiceFactory but the wrapping cost (string comparisons per glyph) is
 		// only paid when $this->PDFUA is truthy.
-		$ligActualTextWriter = ($this->PDFUA && isset($this->ua))
+		$ligActualTextWriter = $this->PDFUA
 			? $this->ua->getLigatureActualTextWriter()
 			: null;
 
@@ -6950,13 +6938,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// finishFlowingBlock. Otherwise the global anchor state reflects
 		// only the LAST chunk's state and trailing non-link chunks erase the
 		// reference before the link annotation is created.
-		$saved['pdfuaLinkStructElem'] = $this->ua === null ? null : $this->ua->getAnchorState()->getLinkStructElem();
-		// UA1 audit E6 — capture the innermost inline struct element owning this
-		// chunk (Link / lang-Span / Abbr /E-Span / Ruby RB·RT·RP) so the emit
-		// loop can bracket the chunk's marked content in that element's own BDC.
-		// Restored per chunk by restoreFont(); distinct from the Link ref above,
-		// which the OBJR wiring needs even when the owner is a nested Span.
-		$saved['pdfuaInlineContentElem'] = $this->ua === null ? null : $this->ua->getAnchorState()->getInlineContentElem();
+		if ($this->PDFUA) {
+			$saved['pdfuaLinkStructElem'] = $this->ua->getAnchorState()->getLinkStructElem();
+			// UA1 audit E6 — capture the innermost inline struct element owning this
+			// chunk (Link / lang-Span / Abbr /E-Span / Ruby RB·RT·RP) so the emit
+			// loop can bracket the chunk's marked content in that element's own BDC.
+			// Restored per chunk by restoreFont(); distinct from the Link ref above,
+			// which the OBJR wiring needs even when the owner is a nested Span.
+			$saved['pdfuaInlineContentElem'] = $this->ua->getAnchorState()->getInlineContentElem();
+		}
 		$saved['textvar'] = $this->textvar; // mPDF 5.7.1
 		$saved['textshadow'] = $this->textshadow;
 		$saved['linewidth'] = $this->LineWidth;
@@ -6990,12 +6980,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// PDF/UA-1 — restore the Link struct element captured by saveFont() so
 		// Mpdf::Link() (called from Cell() further along this code path) sees
 		// the right reference even though the chunks were buffered earlier.
-		if (array_key_exists('pdfuaLinkStructElem', $saved) && $this->ua !== null) {
+		if (array_key_exists('pdfuaLinkStructElem', $saved)) {
 			$this->ua->getAnchorState()->setLinkStructElem($saved['pdfuaLinkStructElem']);
 		}
 		// UA1 audit E6 — restore the chunk's innermost inline struct element so
 		// the flowing-block emit loop attributes its MCID to that element.
-		if (array_key_exists('pdfuaInlineContentElem', $saved) && $this->ua !== null) {
+		if (array_key_exists('pdfuaInlineContentElem', $saved)) {
 			$this->ua->getAnchorState()->setInlineContentElem($saved['pdfuaInlineContentElem']);
 		}
 		$this->fixedlSpacing = $saved['fixedlSpacing'];
@@ -7067,29 +7057,31 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// (depth=2)" exception from multi-line <pre> blocks (and any other block
 		// that uses <BR> internally). ISO 32000-1 §14.6 — BDC/EMC must be balanced
 		// within the same content stream.
-		$this->closeBlockBdcIfOpen();
-		$this->flowingBlockAttr['pdfua_struct_open'] = false;
-		$this->flowingBlockAttr['pdfua_type'] = 'P';
-		$this->flowingBlockAttr['pdfua_artifact_open'] = false;
-		// Per-page lazy-open tracker. True iff a BDC for this block has been
-		// emitted on the current page and an EMC is owed before AddPage /
-		// endofblock. Independent of MarkedContentHelper::getDepth() (which is
-		// global across nested inline marks). Cleared by AddPage close-fences
-		// and by the EMC at endofblock.
-		$this->flowingBlockAttr['pdfua_bdc_active']  = false;
-		// Reference to the block's struct element, captured by BlockTag::open()
-		// onto $blk[$blklvl]['pdfua_struct_elem'] and restored here so
-		// ensureBlockBdcOpen() can call StructureTree::addContentForElement()
-		// against the BLOCK element (not the StructureTree stack top, which may
-		// belong to a nested inline span/link).
-		$this->flowingBlockAttr['pdfua_struct_elem'] = null;
-		// UA1 audit E6 — the struct element the currently-open BDC belongs to:
-		// null for the block's (or an Artifact's) BDC, or a specific inline
-		// element (Link / lang-Span / Abbr / Ruby RB·RT) when the emit loop has
-		// bracketed a chunk's text in that inline element's own marked content.
-		// Lets ensureInlineBdcOpen()/ensureBlockBdcOpen() switch the active BDC
-		// only when the owning element changes between chunks.
-		$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+		if ($this->PDFUA) {
+			$this->closeBlockBdcIfOpen();
+			$this->flowingBlockAttr['pdfua_struct_open'] = false;
+			$this->flowingBlockAttr['pdfua_type'] = 'P';
+			$this->flowingBlockAttr['pdfua_artifact_open'] = false;
+			// Per-page lazy-open tracker. True iff a BDC for this block has been
+			// emitted on the current page and an EMC is owed before AddPage /
+			// endofblock. Independent of MarkedContentHelper::getDepth() (which is
+			// global across nested inline marks). Cleared by AddPage close-fences
+			// and by the EMC at endofblock.
+			$this->flowingBlockAttr['pdfua_bdc_active']  = false;
+			// Reference to the block's struct element, captured by BlockTag::open()
+			// onto $blk[$blklvl]['pdfua_struct_elem'] and restored here so
+			// ensureBlockBdcOpen() can call StructureTree::addContentForElement()
+			// against the BLOCK element (not the StructureTree stack top, which may
+			// belong to a nested inline span/link).
+			$this->flowingBlockAttr['pdfua_struct_elem'] = null;
+			// UA1 audit E6 — the struct element the currently-open BDC belongs to:
+			// null for the block's (or an Artifact's) BDC, or a specific inline
+			// element (Link / lang-Span / Abbr / Ruby RB·RT) when the emit loop has
+			// bracketed a chunk's text in that inline element's own marked content.
+			// Lets ensureInlineBdcOpen()/ensureBlockBdcOpen() switch the active BDC
+			// only when the owning element changes between chunks.
+			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+		}
 	}
 
 	/**
@@ -7140,9 +7132,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($elem === null) {
 			return;
 		}
-		$structParents = isset($this->pageDim[$this->page]['structParents'])
-			? $this->pageDim[$this->page]['structParents']
-			: 0;
+		$structParents = $this->pdfuaStructParents();
 		$mcid = $this->ua->getStructureTree()->addContentForElement($elem, $structParents);
 		$this->ua->getMarkedContentHelper()->begin($this->flowingBlockAttr['pdfua_type'], $mcid);
 		$this->flowingBlockAttr['pdfua_bdc_active'] = true;
@@ -7196,9 +7186,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
 			return;
 		}
-		$structParents = isset($this->pageDim[$this->page]['structParents'])
-			? $this->pageDim[$this->page]['structParents']
-			: 0;
+		$structParents = $this->pdfuaStructParents();
 		$mcid = $this->ua->getStructureTree()->addContentForElement($elem, $structParents);
 		$this->ua->getMarkedContentHelper()->begin($elem->getType(), $mcid);
 		$this->flowingBlockAttr['pdfua_bdc_active'] = true;
@@ -8546,9 +8534,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						// parse time in Img::open() and carried through $objattr.
 						$figureElem = $this->ua->getStructureTree()->getCurrent();
 						$this->ua->getAriaIdResolver()->queueAriaRefs($figureElem, $objattr, true);
-						$structParents = isset($this->pageDim[$this->page]['structParents'])
-							? $this->pageDim[$this->page]['structParents']
-							: 0;
+						$structParents = $this->pdfuaStructParents();
 						$pdfuaImageMcid = $this->ua->getStructureTree()->addContent($structParents);
 					}
 					$this->ua->getMarkedContentHelper()->begin('Figure', $pdfuaImageMcid);
@@ -8687,8 +8673,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						// BarCode::open() and serialised into $objattr['pdfua_*'] fields.
 						$barcodeElem = $this->ua->getStructureTree()->getCurrent();
 						$this->ua->getAriaIdResolver()->queueAriaRefs($barcodeElem, $objattr, true);
-						$structParents = isset($this->pageDim[$this->page]['structParents'])
-							? $this->pageDim[$this->page]['structParents'] : 0;
+						$structParents = $this->pdfuaStructParents();
 						$mcid = $this->ua->getStructureTree()->addContent($structParents);
 						$this->ua->getMarkedContentHelper()->begin('Figure', $mcid);
 						$pdfuaBarcodeTagOpened = true;
@@ -8848,8 +8833,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						// TextCircle::open() and serialised into $objattr['pdfua_*'] fields.
 						$textCircleElem = $this->ua->getStructureTree()->getCurrent();
 						$this->ua->getAriaIdResolver()->queueAriaRefs($textCircleElem, $objattr, true);
-						$structParents = isset($this->pageDim[$this->page]['structParents'])
-							? $this->pageDim[$this->page]['structParents'] : 0;
+						$structParents = $this->pdfuaStructParents();
 						$mcid = $this->ua->getStructureTree()->addContent($structParents);
 						$this->ua->getMarkedContentHelper()->begin('Span', $mcid);
 						$pdfuaTextCircleTagOpened = true;
@@ -8894,9 +8878,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					&& !$this->ua->getStructureTree()->isInArtifact()
 					&& isset($this->blk[$this->blklvl]['pdfua_li_lbl_elem'])
 				) {
-					$structParents = isset($this->pageDim[$this->page]['structParents'])
-						? $this->pageDim[$this->page]['structParents']
-						: 0;
+					$structParents = $this->pdfuaStructParents();
 					$pdfuaLblMcid = $this->ua->getStructureTree()->addContentForElement(
 						$this->blk[$this->blklvl]['pdfua_li_lbl_elem'],
 						$structParents
@@ -10535,8 +10517,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						// Meaningful image — create Figure struct element with /BBox.
 						// ISO 32000-1 Table 344 / Matterhorn 13-008 — /BBox in /Layout
 						// attribute object locates the figure in page user space.
-						$structParents = isset($this->pageDim[$this->page]['structParents'])
-							? $this->pageDim[$this->page]['structParents'] : 0;
+						$structParents = $this->pdfuaStructParents();
 						$directImageBbox = [
 							round($x * Mpdf::SCALE, 3),
 							round(($this->h - ($y + $h)) * Mpdf::SCALE, 3),
@@ -18400,9 +18381,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->spanborder = false;
 			$this->spanborddet = [];
 			$this->HREF = '';
-			if ($this->ua !== null) {
-				$this->ua->getAnchorState()->clearLinkStructElem();
-			}
+			$this->ua->getAnchorState()->clearLinkStructElem();
 			$this->textparam = [];
 			$this->SetTextOutline();
 
@@ -19747,9 +19726,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->ResetStyles();
 
 		$this->HREF = '';
-		if ($this->ua !== null) {
-			$this->ua->getAnchorState()->clearLinkStructElem();
-		}
+		$this->ua->getAnchorState()->clearLinkStructElem();
 		$this->textparam = [];
 		$this->SetTextOutline();
 
@@ -24650,9 +24627,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if ($pdfuaCellRotated) {
 						// Rotated cell — bracket the single Text() string emitted below
 						// in the TD/TH's own marked content (audit E9).
-						$pdfuaCellStructParents = isset($this->pageDim[$this->page]['structParents'])
-							? $this->pageDim[$this->page]['structParents']
-							: 0;
+						$pdfuaCellStructParents = $this->pdfuaStructParents();
 						$pdfuaCellMcid = $this->ua->getStructureTree()->addContentForElement(
 							$pdfuaCellElem,
 							$pdfuaCellStructParents
@@ -27286,8 +27261,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->PDFUA) {
 			$inArtifactScope = $this->ua->getStructureTree()->isInArtifact();
 			if (!$inArtifactScope) {
-				$structParents = isset($this->pageDim[$this->page]['structParents'])
-					? $this->pageDim[$this->page]['structParents'] : 0;
+				$structParents = $this->pdfuaStructParents();
 				$this->ua->getStructureTree()->open('Span');
 				$mcid = $this->ua->getStructureTree()->addContent($structParents);
 				$this->ua->getMarkedContentHelper()->begin('Span', $mcid);

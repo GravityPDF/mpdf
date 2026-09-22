@@ -441,12 +441,8 @@ class UaState
 	public function restoreStateSnapshot(array $snapshot)
 	{
 		foreach ($snapshot as $entry) {
-			$restore = \Closure::bind(function (array $vars) {
-				foreach ($vars as $key => $value) {
-					$this->{$key} = $value;
-				}
-			}, $entry[0], get_class($entry[0]));
-			$restore($entry[1]);
+			$accessors = self::stateAccessors(get_class($entry[0]));
+			$accessors[1]($entry[0], $entry[1]);
 		}
 	}
 
@@ -472,14 +468,37 @@ class UaState
 		}
 
 		$seen[spl_object_hash($value)] = true;
-		$read = \Closure::bind(function () {
-			return get_object_vars($this);
-		}, $value, get_class($value));
-		$vars = $read();
+		$accessors = self::stateAccessors(get_class($value));
+		$vars = $accessors[0]($value);
 		$snapshot[] = [$value, $vars];
 
 		foreach ($vars as $var) {
 			$this->collectState($var, $snapshot, $seen);
 		}
+	}
+
+	/**
+	 * @param string $class
+	 *
+	 * @return \Closure[] What reads the properties of an object of the class, and what writes them back
+	 */
+	private static function stateAccessors($class)
+	{
+		static $accessors = [];
+
+		if (!isset($accessors[$class])) {
+			$accessors[$class] = [
+				\Closure::bind(static function ($object) {
+					return get_object_vars($object);
+				}, null, $class),
+				\Closure::bind(static function ($object, array $vars) {
+					foreach ($vars as $key => $value) {
+						$object->{$key} = $value;
+					}
+				}, null, $class),
+			];
+		}
+
+		return $accessors[$class];
 	}
 }

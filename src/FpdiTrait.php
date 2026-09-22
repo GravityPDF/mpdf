@@ -271,16 +271,14 @@ trait FpdiTrait
 		// Surface a UA-aware warning at this stage so callers inspecting
 		// getPdfUaWarnings() after Output() see the encrypted-source diagnostic
 		// even if importPage() is not subsequently called for some reason.
-		if ($this->ua !== null) {
-			$this->ua->addWarning(sprintf(
-				'Imported PDF source is encrypted (ISO 32000-1:2008 §7.6) and cannot be parsed by '
-				. 'vendor/setasign/fpdi. Auto-mode fallback: importPage() will return a synthetic '
-				. 'pageId and useImportedPage() will draw a Tier 0 /Artifact <</Type /Layout>> '
-				. 'visible placeholder (border + caption) for each of the %d source page(s) in place '
-				. 'of the original content. Matterhorn 01-007.',
-				$pageCount
-			));
-		}
+		$this->ua->addWarning(sprintf(
+			'Imported PDF source is encrypted (ISO 32000-1:2008 §7.6) and cannot be parsed by '
+			. 'vendor/setasign/fpdi. Auto-mode fallback: importPage() will return a synthetic '
+			. 'pageId and useImportedPage() will draw a Tier 0 /Artifact <</Type /Layout>> '
+			. 'visible placeholder (border + caption) for each of the %d source page(s) in place '
+			. 'of the original content. Matterhorn 01-007.',
+			$pageCount
+		));
 
 		// Return the (recovered) source page count so the caller's loop —
 		// typically `for ($i = 1; $i <= setSourceFile($file); $i++) importPage($i)` —
@@ -606,10 +604,8 @@ trait FpdiTrait
 				//     /Artifact and records a warning naming the source page.
 				$altText = is_string($importAlt) ? trim($importAlt) : null;
 				if ($altText !== null && $altText !== '') {
-					$structParents = isset($this->pageDim[$this->page]['structParents'])
-						? $this->pageDim[$this->page]['structParents'] : 0;
 					$this->ua->getStructureTree()->open('Figure', ['Alt' => $altText]);
-					$importMcid = $this->ua->getStructureTree()->addContent($structParents);
+					$importMcid = $this->ua->getStructureTree()->addContent($this->pdfuaStructParents());
 					$this->ua->getMarkedContentHelper()->begin('Figure', $importMcid);
 					$tier1Figure = true;
 				} elseif (empty($this->PDFUAauto)) {

@@ -246,18 +246,7 @@ class Form
 
 		} else {
 
-			// PDF/UA-1 §7.1: every byte in the content stream must be either
-			// real content (tagged via BDC/MCID) or an artifact. Legacy
-			// non-active form chrome is non-interactive decoration, so wrap
-			// it in /Artifact BMC ... EMC per ISO 32000-1 §14.8.2.2 and open
-			// a StructureTree artifact-suppression scope so any nested Cell
-			// or Rect call does not try to allocate an MCID.
-			$wrapArtifact = $this->mpdf->PDFUA
-				&& $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() === 0;
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaStructureTree()->openArtifact();
-				$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
-			}
+			$wrapArtifact = $this->beginChromeArtifact();
 
 			$w -= $this->form_element_spacing['input']['outer']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['input']['outer']['v'] * 2 / $k;
@@ -299,10 +288,7 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaMarkedContentHelper()->end();
-				$this->mpdf->getPdfUaStructureTree()->closeArtifact();
-			}
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -375,13 +361,7 @@ class Form
 
 		} else {
 
-			// Legacy <textarea> chrome — wrap as artifact (see print_ob_text comment).
-			$wrapArtifact = $this->mpdf->PDFUA
-				&& $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() === 0;
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaStructureTree()->openArtifact();
-				$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
-			}
+			$wrapArtifact = $this->beginChromeArtifact();
 
 			$w -= $this->form_element_spacing['textarea']['outer']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['textarea']['outer']['v'] * 2 / $k;
@@ -418,10 +398,7 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaMarkedContentHelper()->end();
-				$this->mpdf->getPdfUaStructureTree()->closeArtifact();
-			}
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -489,13 +466,7 @@ class Form
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
-			// Legacy <select> chrome — wrap as artifact (see print_ob_text comment).
-			$wrapArtifact = $this->mpdf->PDFUA
-				&& $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() === 0;
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaStructureTree()->openArtifact();
-				$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
-			}
+			$wrapArtifact = $this->beginChromeArtifact();
 
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			if (!empty($objattr['disabled'])) {
@@ -544,10 +515,7 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaMarkedContentHelper()->end();
-				$this->mpdf->getPdfUaStructureTree()->closeArtifact();
-			}
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -567,13 +535,7 @@ class Form
 			}
 			$this->SetJSButton($w, $h, $objattr['fieldname'], (isset($objattr['value']) ? $objattr['value'] : ''), $js, $objattr['ID'], $objattr['title'], $flags, (isset($objattr['Indexed']) ? $objattr['Indexed'] : false));
 		} else {
-			// Legacy <input type=image> chrome — wrap as artifact (see print_ob_text comment).
-			$wrapArtifact = $this->mpdf->PDFUA
-				&& $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() === 0;
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaStructureTree()->openArtifact();
-				$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
-			}
+			$wrapArtifact = $this->beginChromeArtifact();
 
 			$this->mpdf->y = $objattr['INNER-Y'];
 			$this->writer->write(sprintf('q %.3F 0 0 %.3F %.3F %.3F cm /I%d Do Q', $objattr['INNER-WIDTH'] * Mpdf::SCALE, $objattr['INNER-HEIGHT'] * Mpdf::SCALE, $objattr['INNER-X'] * Mpdf::SCALE, ($this->mpdf->h - ($objattr['INNER-Y'] + $objattr['INNER-HEIGHT'] )) * Mpdf::SCALE, $objattr['ID']));
@@ -581,10 +543,7 @@ class Form
 				$this->mpdf->PaintImgBorder($objattr, $is_table);
 			}
 
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaMarkedContentHelper()->end();
-				$this->mpdf->getPdfUaStructureTree()->closeArtifact();
-			}
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -627,13 +586,7 @@ class Form
 
 		} else {
 
-			// Legacy <button>/<input type=submit> chrome — wrap as artifact (see print_ob_text comment).
-			$wrapArtifact = $this->mpdf->PDFUA
-				&& $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() === 0;
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaStructureTree()->openArtifact();
-				$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
-			}
+			$wrapArtifact = $this->beginChromeArtifact();
 
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
@@ -667,10 +620,7 @@ class Form
 			$this->mpdf->Cell($w, $h, $texto, '', 0, 'C', 0, '', 0, 0, 0, 'M', 0, false, $OTLdata);
 			$this->mpdf->SetFColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaMarkedContentHelper()->end();
-				$this->mpdf->getPdfUaStructureTree()->closeArtifact();
-			}
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -698,13 +648,7 @@ class Form
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
 		} else {
-			// Legacy <input type=checkbox> chrome — wrap as artifact (see print_ob_text comment).
-			$wrapArtifact = $this->mpdf->PDFUA
-				&& $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() === 0;
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaStructureTree()->openArtifact();
-				$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
-			}
+			$wrapArtifact = $this->beginChromeArtifact();
 
 			$iw = $w * 0.7;
 			$ih = $h * 0.7;
@@ -732,10 +676,7 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaMarkedContentHelper()->end();
-				$this->mpdf->getPdfUaStructureTree()->closeArtifact();
-			}
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -763,13 +704,7 @@ class Form
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
 		} else {
-			// Legacy <input type=radio> chrome — wrap as artifact (see print_ob_text comment).
-			$wrapArtifact = $this->mpdf->PDFUA
-				&& $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() === 0;
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaStructureTree()->openArtifact();
-				$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
-			}
+			$wrapArtifact = $this->beginChromeArtifact();
 
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			$radius = $this->mpdf->FontSize * 0.35;
@@ -793,10 +728,7 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			if ($wrapArtifact) {
-				$this->mpdf->getPdfUaMarkedContentHelper()->end();
-				$this->mpdf->getPdfUaStructureTree()->closeArtifact();
-			}
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -2044,5 +1976,36 @@ f Q ';
 			}
 		}
 		return $n;
+	}
+
+	/**
+	 * Under PDF/UA, marks the drawing of an inactive form field as an artifact: it is decoration, not
+	 * content. Not inside marked content already open, where an artifact may not nest.
+	 *
+	 * @return bool Whether the artifact was opened
+	 */
+	private function beginChromeArtifact()
+	{
+		if (!$this->mpdf->PDFUA || $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() !== 0) {
+			return false;
+		}
+
+		$this->mpdf->getPdfUaStructureTree()->openArtifact();
+		$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
+
+		return true;
+	}
+
+	/**
+	 * @param bool $opened What beginChromeArtifact() returned
+	 *
+	 * @return void
+	 */
+	private function endChromeArtifact($opened)
+	{
+		if ($opened) {
+			$this->mpdf->getPdfUaMarkedContentHelper()->end();
+			$this->mpdf->getPdfUaStructureTree()->closeArtifact();
+		}
 	}
 }

@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Ua\AriaIdResolver;
+
 use Mpdf\Mpdf;
 
 class Img extends Tag
@@ -447,13 +449,7 @@ class Img extends Tag
 			// Carry id/aria-* through serialised $objattr because the Figure
 			// struct element is created at render time (printobjectbuffer),
 			// not at parse time.
-			$objattr['pdfua_id'] = isset($attr['ID']) ? $attr['ID'] : null;
-			foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-				'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $ariaKey) {
-				if (!empty($attr[$ariaKey])) {
-					$objattr['pdfua_' . strtolower(str_replace('-', '_', $ariaKey))] = $attr[$ariaKey];
-				}
-			}
+			$objattr += AriaIdResolver::toObjattr($attr);
 			// PDF/UA-1 audit E11 — the direct-string accessible-name sources
 			// (WAI-ARIA name computation: aria-label, then the host-language
 			// title). Carried through so printobjectbuffer() can name an <img>

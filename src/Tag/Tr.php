@@ -94,15 +94,7 @@ class Tr extends Tag
 			$tree->open('TR');
 
 			$trElem = $this->ua->getStructureTree()->getCurrent();
-			if (!empty($attr['ID'])) {
-				$this->ua->getAriaIdResolver()->registerId($attr['ID'], $trElem);
-			}
-			foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-				'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $ariaKey) {
-				if (!empty($attr[$ariaKey])) {
-					$this->ua->getAriaIdResolver()->queue($trElem, strtolower($ariaKey), $attr[$ariaKey]);
-				}
-			}
+			$this->ua->getAriaIdResolver()->queueAriaRefs($trElem, $attr);
 		}
 	}
 

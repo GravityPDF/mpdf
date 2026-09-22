@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Ua\AriaIdResolver;
+
 use Mpdf\Mpdf;
 use Mpdf\Utils\UtfString;
 
@@ -230,13 +232,7 @@ class TextCircle extends Tag
 		// element wrapping the textcircle is created at render time
 		// (printobjectbuffer), not at parse time.
 		if ($this->mpdf->PDFUA) {
-			$objattr['pdfua_id'] = isset($attr['ID']) ? $attr['ID'] : null;
-			foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-				'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $ariaKey) {
-				if (!empty($attr[$ariaKey])) {
-					$objattr['pdfua_' . strtolower(str_replace('-', '_', $ariaKey))] = $attr[$ariaKey];
-				}
-			}
+			$objattr += AriaIdResolver::toObjattr($attr);
 		}
 
 		$e = Mpdf::OBJECT_IDENTIFIER . "type=image,objattr=" . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;

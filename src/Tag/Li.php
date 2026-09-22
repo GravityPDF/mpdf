@@ -79,6 +79,7 @@ class Li extends BlockTag
 			$structureTree->open('LBody');
 			// Update pdfua_type so finishFlowingBlock() emits the BDC as LBody.
 			$this->mpdf->blk[$blklvl]['pdfua_type'] = 'LBody';
+			$this->mpdf->blk[$blklvl]['pdfua_struct_elem'] = $structureTree->getCurrent();
 			// Record that we owe an extra LI close (beyond BlockTag's own close call).
 			$this->mpdf->blk[$blklvl]['pdfua_li_lbody'] = true;
 		}

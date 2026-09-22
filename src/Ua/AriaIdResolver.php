@@ -205,6 +205,29 @@ class AriaIdResolver
 	}
 
 	/**
+	 * The id and ARIA references of an element whose structure element is opened when its object is
+	 * drawn, keyed as queueAriaRefs() reads them with $objattr set.
+	 *
+	 * @param array $attr HTML tag attributes, keys in upper case
+	 *
+	 * @return array<string, string>
+	 */
+	public static function toObjattr(array $attr)
+	{
+		$objattr = [];
+		if (!empty($attr['ID'])) {
+			$objattr['pdfua_id'] = $attr['ID'];
+		}
+		foreach (self::REFERENCE_ARIA_ATTRS as $ariaName) {
+			if (!empty($attr[strtoupper($ariaName)])) {
+				$objattr['pdfua_' . str_replace('-', '_', $ariaName)] = $attr[strtoupper($ariaName)];
+			}
+		}
+
+		return $objattr;
+	}
+
+	/**
 	 * Return the next synthetic TH /ID counter value.
 	 *
 	 * Used by Th.php when an HTML <th> has no explicit id="...". The counter

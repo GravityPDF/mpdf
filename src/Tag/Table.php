@@ -528,15 +528,7 @@ class Table extends Tag
 			$this->ua->getStructureTree()->open('Table');
 
 			$tableElem = $this->ua->getStructureTree()->getCurrent();
-			if (!empty($attr['ID'])) {
-				$this->ua->getAriaIdResolver()->registerId($attr['ID'], $tableElem);
-			}
-			foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-				'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $ariaKey) {
-				if (!empty($attr[$ariaKey])) {
-					$this->ua->getAriaIdResolver()->queue($tableElem, strtolower($ariaKey), $attr[$ariaKey]);
-				}
-			}
+			$this->ua->getAriaIdResolver()->queueAriaRefs($tableElem, $attr);
 		}
 	}
 

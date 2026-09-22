@@ -482,13 +482,8 @@ class Td extends Tag
 
 			$this->pdfuaRegisterCellId($attr, $cellElem);
 
-			// ISO 14289-1:2014 §7.1 — ARIA relationship attributes map to /A entries on struct elem.
-			foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-				'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $ariaKey) {
-				if (!empty($attr[$ariaKey])) {
-					$this->ua->getAriaIdResolver()->queue($cellElem, strtolower($ariaKey), $attr[$ariaKey]);
-				}
-			}
+			// The id is registered above, where a TH without one is given one
+			$this->ua->getAriaIdResolver()->queueAriaRefs($cellElem, array_diff_key($attr, ['ID' => true]));
 		}
 
 		// PDF/UA-1 (audit E9) — open this cell's block-frame scope so any block

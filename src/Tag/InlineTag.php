@@ -8,6 +8,12 @@ use Mpdf\Utils\UtfString;
 abstract class InlineTag extends Tag
 {
 
+	/**
+	 * @var string|null The structure type that tags the element under PDF/UA whatever its attributes
+	 */
+	protected $pdfuaStructType;
+
+
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -183,10 +189,13 @@ abstract class InlineTag extends Tag
 		// so close() pops the same number. Subclasses (e.g. Abbr for /E expansion
 		// text) call self::pushInlineUaStructDepth() after parent::open() to layer
 		// additional struct elements onto the same frame.
-		// $ua is null when Tag instances are constructed directly in unit tests
-		// outside the UA pipeline; skip the bracket bookkeeping in that case.
-		if ($this->ua !== null) {
-			$this->ua->getInlineStructStack()->pushFrame($tag, $this->openInlineUaStruct($attr) ? 1 : 0);
+		if ($this->mpdf->PDFUA) {
+			$depth = $this->openInlineUaStruct($attr) ? 1 : 0;
+			if ($this->pdfuaStructType !== null) {
+				$this->ua->getStructureTree()->open($this->pdfuaStructType);
+				$depth++;
+			}
+			$this->ua->getInlineStructStack()->pushFrame($tag, $depth);
 		}
 	}
 
@@ -227,9 +236,6 @@ abstract class InlineTag extends Tag
 	 */
 	protected function pushInlineUaStructDepth($count)
 	{
-		if ($this->ua === null) {
-			return;
-		}
 		$this->ua->getInlineStructStack()->addToTopFrame($this->getTagName(), $count);
 	}
 
@@ -291,9 +297,7 @@ abstract class InlineTag extends Tag
 		// (plus any subclass-pushed extras such as Abbr's /E Span). The stack is
 		// per-tag because HTML allows nested same-name tags
 		// (<span><span lang=fr>…</span></span>).
-		// $ua is null when Tag instances are constructed directly in unit tests
-		// outside the UA pipeline; nothing to pop in that case.
-		if ($this->ua !== null) {
+		if ($this->mpdf->PDFUA) {
 			$depth = $this->ua->getInlineStructStack()->popFrame($tag);
 			for ($i = 0; $i < $depth; $i++) {
 				$this->ua->getStructureTree()->close();

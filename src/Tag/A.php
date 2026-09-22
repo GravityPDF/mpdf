@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Ua\AriaIdResolver;
+
 use Mpdf\Mpdf;
 use Mpdf\Ua\UaPolicy;
 
@@ -123,7 +125,6 @@ class A extends Tag
 			// frame is still pushed so close() stays balanced.
 			if ($this->mpdf->PDFUA && $this->ua->getStructureTree()->isInArtifact()) {
 				$this->ua->getAnchorState()->pushStripFrame(false, 0);
-				$this->ua->getAnchorState()->setAnchorStructType(null);
 				return;
 			}
 
@@ -163,7 +164,6 @@ class A extends Tag
 				// Record this anchor on the stack as "not stripped" so close()
 				// pops a Link element here regardless of any nested anchor.
 				$this->ua->getAnchorState()->pushStripFrame(false, 0);
-				$this->ua->getAnchorState()->setAnchorStructType('Link');
 			}
 		} elseif ($this->mpdf->PDFUA) {
 			// Non-hyperlink <a> (destination anchor or empty/whitespace href).
@@ -184,7 +184,6 @@ class A extends Tag
 				$this->ua->getStructureTree()->open('Span', $structAttrs);
 				$elem = $this->ua->getStructureTree()->getCurrent();
 				$this->ua->getAriaIdResolver()->queueAriaRefs($elem, $attr);
-				$this->ua->getAnchorState()->setAnchorStructType('Span');
 				$spanDepth = 1;
 			}
 			// close() pops exactly one strip frame per PDFUA <a>; push one here so
@@ -268,15 +267,7 @@ class A extends Tag
 		// If there is no direct attribute that needs a Span and no ARIA ID
 		// reference to anchor, do not produce a Span — a stripped <a> with
 		// nothing to carry should render exactly like its inner text.
-		$hasAriaRef = false;
-		foreach (['ARIA-LABELLEDBY', 'ARIA-DESCRIBEDBY', 'ARIA-DETAILS',
-				 'ARIA-CONTROLS', 'ARIA-OWNS', 'ARIA-FLOWTO', 'ARIA-ACTIVEDESCENDANT'] as $ariaKey) {
-			if (!empty($attr[$ariaKey])) {
-				$hasAriaRef = true;
-				break;
-			}
-		}
-		if (empty($structAttrs) && !$hasAriaRef && empty($attr['ID'])) {
+		if (empty($structAttrs) && !AriaIdResolver::toObjattr($attr)) {
 			return false;
 		}
 		$this->ua->getStructureTree()->open('Span', $structAttrs);
