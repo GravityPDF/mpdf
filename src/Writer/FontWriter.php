@@ -10,6 +10,7 @@ use Mpdf\Fonts\FontSubsetter;
 use Mpdf\Mpdf;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
 use Mpdf\TTFontFile;
+use Mpdf\Utils\UtfString;
 use Psr\Log\LoggerInterface;
 
 class FontWriter implements \Psr\Log\LoggerAwareInterface
@@ -313,8 +314,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$ssfaid = 'A';
 					$subsetter = $this->subsetter();
 					$fontname = 'MPDFA' . $ssfaid . '+' . $font['name'];
-					// Every subset mPDF builds carries the 32-127 range whether the document drew it or not
-					$ascii = range(32, 127);
+					$ascii = $this->asciiRange();
 					$subset = array_combine($ascii, $ascii) + $font['subset'];
 					unset($subset[0]);
 					$ttfontstream = $subsetter->makeSubset($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']);
@@ -513,46 +513,52 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function identityRanges(array $font)
 	{
-		$codes = array_fill_keys(range(32, 127), true);
+		$codes = array_fill_keys($this->asciiRange(), true);
 
 		foreach ($font['subset'] as $u) {
-			if ($u > 0xFFFF && $u <= 0x10FFFF) {
-				// Written as a surrogate pair, which is two codes of its own to a reader
-				$codes[0xD800 + (($u - 0x10000) >> 10)] = true;
-				$codes[0xDC00 + (($u - 0x10000) & 0x3FF)] = true;
-			} elseif ($u > 0 && $u <= 0xFFFF) {
-				$codes[$u] = true;
+			if ($u > 0) {
+				// The code units the character is drawn as: one, or a surrogate pair above the basic plane
+				foreach (unpack('n*', mb_convert_encoding(UtfString::code2utf($u), 'UTF-16BE', 'UTF-8')) as $unit) {
+					$codes[$unit] = true;
+				}
 			}
 		}
 
 		ksort($codes);
 
+		// Codes that follow each other inside one high byte make a range
 		$ranges = [];
-		$start = null;
-		$end = null;
-
 		foreach (array_keys($codes) as $code) {
-			if (null !== $start && $code === $end + 1 && ($code >> 8) === ($start >> 8)) {
-				$end = $code;
+			$last = count($ranges) - 1;
+
+			if ($last >= 0 && $code === $ranges[$last][1] + 1 && ($code >> 8) === ($ranges[$last][0] >> 8)) {
+				$ranges[$last][1] = $code;
 				continue;
 			}
 
-			if (null !== $start) {
-				$ranges[] = sprintf("<%04X> <%04X> <%04X>\n", $start, $end, $start);
-			}
-
-			$start = $code;
-			$end = $code;
+			$ranges[] = [$code, $code];
 		}
-
-		$ranges[] = sprintf("<%04X> <%04X> <%04X>\n", $start, $end, $start);
 
 		$cmap = '';
 		foreach (array_chunk($ranges, 100) as $block) {
-			$cmap .= count($block) . " beginbfrange\n" . implode('', $block) . "endbfrange\n";
+			$cmap .= count($block) . " beginbfrange\n";
+			foreach ($block as $range) {
+				$cmap .= sprintf("<%04X> <%04X> <%04X>\n", $range[0], $range[1], $range[0]);
+			}
+			$cmap .= "endbfrange\n";
 		}
 
 		return $cmap;
+	}
+
+	/**
+	 * The 32-127 range every subset font carries, whether the document drew it or not.
+	 *
+	 * @return int[]
+	 */
+	private function asciiRange()
+	{
+		return range(32, 127);
 	}
 
 	/**
