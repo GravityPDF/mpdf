@@ -19,12 +19,6 @@ class ColorTable
 
 	var $m_arColors;
 
-	public function __construct()
-	{
-		unset($this->m_nColors);
-		unset($this->m_arColors);
-	}
-
 	function load($lpData, $num)
 	{
 		$this->m_nColors = 0;

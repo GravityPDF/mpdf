@@ -23,6 +23,7 @@ jobs:
       matrix:
         php-version:
           - "8.2"
+          - "8.5"
 
         operating-system: [ubuntu-latest]
 

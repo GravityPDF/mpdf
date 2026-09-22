@@ -38,20 +38,6 @@ class FileHeader
 	 */
 	var $m_colorTable;
 
-	public function __construct()
-	{
-		unset($this->m_lpVer);
-		unset($this->m_nWidth);
-		unset($this->m_nHeight);
-		unset($this->m_bGlobalClr);
-		unset($this->m_nColorRes);
-		unset($this->m_bSorted);
-		unset($this->m_nTableSize);
-		unset($this->m_nBgColor);
-		unset($this->m_nPixelRatio);
-		unset($this->m_colorTable);
-	}
-
 	function load($lpData, &$hdrLen)
 	{
 		$hdrLen = 0;

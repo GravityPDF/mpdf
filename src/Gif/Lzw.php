@@ -41,11 +41,6 @@ class Lzw
 	{
 		$this->MAX_LZW_BITS = 12;
 
-		unset($this->Next);
-		unset($this->Vals);
-		unset($this->Stack);
-		unset($this->Buf);
-
 		$this->Next = range(0, (1 << $this->MAX_LZW_BITS) - 1);
 		$this->Vals = range(0, (1 << $this->MAX_LZW_BITS) - 1);
 		$this->Stack = range(0, (1 << ($this->MAX_LZW_BITS + 1)) - 1);

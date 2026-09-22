@@ -3,6 +3,7 @@
 namespace Mpdf\Writer;
 
 use Mpdf\Strict;
+use Mpdf\Conversion\DecToAlpha;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\FontSubsetter;
@@ -191,19 +192,15 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					continue;
 				}
 
-				$ssfaid = 'AA';
 				$subsetter = $this->subsetter();
 				$subsetCount = count($font['subsetfontids']);
+				// AA, AB, ... AZ, BA: what incrementing the string 'AA' gave, counted from an integer since
+				// PHP 8.3 deprecates the string increment. The letter counter reaches AA at 27
+				$tags = new DecToAlpha();
 
 				for ($sfid = 0; $sfid < $subsetCount; $sfid++) {
 					$this->mpdf->fonts[$k]['n'][$sfid] = $this->mpdf->n + 1;  // NB an array for subset
-					$subsetname = 'MPDF' . $ssfaid . '+' . $font['name'];
-
-					if (function_exists('str_increment')) {
-						$ssfaid = str_increment($ssfaid);
-					} else {
-						$ssfaid++;
-					}
+					$subsetname = 'MPDF' . $tags->convert($sfid + 27) . '+' . $font['name'];
 
 					/* For some strange reason a subset ($sfid > 0) containing less than 97 characters causes an error
 					  so fill up the array */
