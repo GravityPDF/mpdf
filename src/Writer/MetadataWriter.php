@@ -37,6 +37,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $protection;
 
+	/**
+	 * @var int[][] The object number of each link, by page and then by its key in PageLinks
+	 */
+	private $linkIds = [];
+
 	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, LoggerInterface $logger)
 	{
 		$this->mpdf = $mpdf;
@@ -582,7 +587,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 					foreach ($this->mpdf->PageLinks[$n] as $key => $pl) {
 
-						$this->writer->object();
+						$this->beginObject($this->linkIds[$n][$key]);
 						$rect = sprintf('%.3F %.3F %.3F %.3F', $pl[0], $pl[1], $pl[0] + $pl[2], $pl[1] - $pl[3]);
 						$this->writer->write('<</Type /Annot /Subtype /Link /Rect [' . $rect . ']', false);
 
@@ -665,8 +670,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 					foreach ($this->mpdf->PageAnnots[$n] as $key => $pl) {
 
 						$fileAttachment = $this->embedsFileAttachment($pl);
+						$ids = $pl['ids'];
 
-						$this->writer->object();
+						$this->beginObject($ids['annot']);
 
 						$annot = '';
 						$pl['opt'] = array_change_key_case($pl['opt'], CASE_LOWER);
@@ -708,7 +714,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							if ($this->mpdf->PDFA) {
 								$annot .= ' /UF ' . $this->writer->string($f);
 							}
-							$annot .= '/EF <</F ' . ($this->mpdf->n + 1) . ' 0 R>>';
+							$annot .= '/EF <</F ' . $ids['file'] . ' 0 R>>';
 							$annot .= '>>';
 
 						} else {
@@ -745,7 +751,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						$appearanceWidth = $w;
 						$appearanceHeight = $h;
 						if ($this->mpdf->PDFA) {
-							$annot .= ' /AP <</N ' . ($this->mpdf->n + $this->annotationObjectCount($pl) - 1) . ' 0 R>>';
+							$annot .= ' /AP <</N ' . $ids['appearance'] . ' 0 R>>';
 						}
 
 						// Usually Author
@@ -775,7 +781,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							}
 							if ($this->writesPopup($pl)) {
 								$annot .= ' /Open true';
-								$annot .= ' /Popup ' . ($this->mpdf->n + 1) . ' 0 R';
+								$annot .= ' /Popup ' . $ids['popup'] . ' 0 R';
 							} else {
 								$annot .= ' /Open false';
 							}
@@ -794,7 +800,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							}
 
 							$filestream = gzcompress($file);
-							$this->writer->object();
+							$this->beginObject($ids['file']);
 							$this->writer->write('<</Type /EmbeddedFile');
 							$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
 							$this->writer->write('/Filter /FlateDecode');
@@ -803,7 +809,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$this->writer->write('endobj');
 
 						} elseif ($this->writesPopup($pl)) {
-							$this->writer->object();
+							$this->beginObject($ids['popup']);
 							$annot = '';
 							if (is_array($pl['opt']['popup']) && isset($pl['opt']['popup'][0])) {
 								$x = $pl['opt']['popup'][0] * Mpdf::SCALE;
@@ -831,14 +837,14 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
 								$annot .= ' /F 28';
 							}
-							$annot .= ' /Parent ' . ($this->mpdf->n - 1) . ' 0 R';
+							$annot .= ' /Parent ' . $ids['annot'] . ' 0 R';
 							$annot .= '>>';
 							$this->writer->write($annot);
 							$this->writer->write('endobj');
 						}
 
 						if ($this->mpdf->PDFA) {
-							$this->writeAnnotationAppearance($appearanceWidth, $appearanceHeight, $fill);
+							$this->writeAnnotationAppearance($ids['appearance'], $appearanceWidth, $appearanceHeight, $fill);
 						}
 					}
 				}
@@ -858,11 +864,64 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Drops each annotation's file where the configuration or the PDF/A part does not allow it to be embedded
+	 * Numbers the objects writeAnnotations() writes, in the order it writes them, starting at $id
 	 *
-	 * Runs before PageWriter numbers the annotation objects, so both count the same objects.
+	 * Each page gets its links, then its annotations, then its form widgets. An annotation's ids name the annotation
+	 * itself, its embedded file or else its popup, and its appearance under PDF/A. The radio groups come last.
+	 *
+	 * @param int $id the object number after the last page's
+	 *
+	 * @return int[][] the objects each page lists in /Annots, by page
 	 */
-	public function settleAnnotations()
+	public function numberAnnotations($id)
+	{
+		$this->settleAnnotations();
+
+		$this->linkIds = [];
+		$annots = [];
+
+		for ($n = 1; $n <= $this->mpdf->page; $n++) {
+			$annots[$n] = [];
+
+			if (isset($this->mpdf->PageLinks[$n])) {
+				foreach ($this->mpdf->PageLinks[$n] as $key => $pl) {
+					$this->linkIds[$n][$key] = $annots[$n][] = $id++;
+				}
+			}
+
+			if (isset($this->mpdf->PageAnnots[$n])) {
+				foreach ($this->mpdf->PageAnnots[$n] as $key => $pl) {
+					$ids = ['annot' => $annots[$n][] = $id++];
+
+					if ($pl['opt']['file']) {
+						$ids['file'] = $id++;
+					} elseif (!empty($pl['opt']['popup'])) {
+						$ids['popup'] = $annots[$n][] = $id++;
+					}
+
+					if ($this->mpdf->PDFA) {
+						$ids['appearance'] = $id++;
+					}
+
+					$this->mpdf->PageAnnots[$n][$key]['ids'] = $ids;
+					$this->mpdf->PageAnnots[$n][$key]['pageobj'] = 1 + 2 * $n;
+				}
+			}
+
+			$this->form->addFormIds($n, $annots[$n], $id);
+		}
+
+		foreach ($this->form->form_radio_groups as $name => $frg) {
+			$this->form->form_radio_groups[$name]['obj_id'] = $id++;
+		}
+
+		return $annots;
+	}
+
+	/**
+	 * Drops each annotation's file where the configuration or the PDF/A part does not allow it to be embedded
+	 */
+	private function settleAnnotations()
 	{
 		foreach ($this->mpdf->PageAnnots as $n => $annotations) {
 			foreach ($annotations as $key => $pl) {
@@ -884,15 +943,14 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * How many objects an annotation writes: itself, then its file or popup, then its appearance under PDF/A
+	 * Begins the object numberAnnotations() gave $id, which is the next after the objects already written
 	 *
-	 * @param mixed[] $pl
-	 *
-	 * @return int
+	 * @param int $id
 	 */
-	public function annotationObjectCount(array $pl)
+	private function beginObject($id)
 	{
-		return 1 + (!empty($pl['opt']['popup']) || !empty($pl['opt']['file']) ? 1 : 0) + ($this->mpdf->PDFA ? 1 : 0);
+		$this->writer->object($id);
+		$this->mpdf->n = $id;
 	}
 
 	/**
@@ -949,11 +1007,12 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * Writes the appearance PDF/A-2 requires of an annotation: a note icon in the annotation's colour
 	 *
+	 * @param int $id
 	 * @param float $w
 	 * @param float $h
 	 * @param string $fill the fill operator for the annotation's colour
 	 */
-	private function writeAnnotationAppearance($w, $h, $fill)
+	private function writeAnnotationAppearance($id, $w, $h, $fill)
 	{
 		$stream = sprintf("q %s 0 G 0.5 w 0.25 0.25 %.3F %.3F re B\n", $fill, $w - 0.5, $h - 0.5);
 		for ($line = 1; $line <= 3; $line++) {
@@ -962,7 +1021,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		}
 		$stream .= "S Q";
 
-		$this->writer->object();
+		$this->beginObject($id);
 		$this->writer->write(sprintf('<</Type /XObject /Subtype /Form /BBox [0 0 %.3F %.3F] /Length %d>>', $w, $h, strlen($stream)));
 		$this->writer->stream($stream);
 		$this->writer->write('endobj');
