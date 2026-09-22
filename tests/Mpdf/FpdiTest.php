@@ -152,6 +152,45 @@ class FpdiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals(5, strlen($writer->unescape($string)));
 	}
 
+	/**
+	 * An imported link is written from the one parsed object each time its page is used, so encrypting its strings
+	 * must leave that object as it was: the strings of every copy decrypt to what the source holds
+	 */
+	public function testImportedLinkStringsAreEncryptedOnceOnEveryPage()
+	{
+		$mpdf = new Mpdf();
+		$mpdf->compress = false;
+		$mpdf->SetProtection(['print'], 'user', 'owner', 128);
+		$mpdf->setSourceFile(__DIR__ . '/../data/pdfs/external-links/link-with-strings.pdf');
+		$tpl = $mpdf->importPage(1);
+
+		for ($i = 0; $i < 3; $i++) {
+			$mpdf->AddPage();
+			$mpdf->useTemplate($tpl);
+		}
+
+		$pdf = $mpdf->OutputBinaryData();
+
+		$property = new \ReflectionProperty('Mpdf\Mpdf', 'protection');
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
+		$protection = $property->getValue($mpdf);
+
+		preg_match_all('/\n(\d+) 0 obj\n(<<\/Type \/Annot \/Subtype \/Link(?:(?!endobj).)*)endobj/s', $pdf, $links, PREG_SET_ORDER);
+		$this->assertCount(3, $links);
+
+		foreach ($links as $link) {
+			$key = $protection->objectKey((int) $link[1]);
+
+			$this->assertSame(1, preg_match('/\/Contents \(((?:\\\\.|[^\\\\)])*)\)/s', $link[2], $contents));
+			$this->assertSame('A link to example.com', $protection->rc4($key, PdfString::unescape($contents[1])));
+
+			$this->assertSame(1, preg_match('/\/T <([0-9A-Fa-f]*)>/', $link[2], $title));
+			$this->assertSame("\xFE\xFF\x00A\x00u\x00t\x00h\x00o\x00r", $protection->rc4($key, hex2bin($title[1])));
+		}
+	}
+
 	public function testImportAndResolvingOfImportedResources()
 	{
 		$pdf = new Mpdf();
