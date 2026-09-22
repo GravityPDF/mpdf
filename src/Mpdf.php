@@ -2038,6 +2038,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $part !== '1';
 	}
 
+	/**
+	 * Whether the document may use optional content, which layers and the visibility property draw with: PDF/A-1 and
+	 * PDF/X-1a forbid it along with transparency, PDF/A-2 onwards allows it
+	 *
+	 * @return bool
+	 */
+	public function optionalContentAllowed()
+	{
+		return $this->transparencyAllowed();
+	}
+
 	function SetAlpha($alpha, $bm = 'Normal', $return = false, $mode = 'B')
 	{
 		// alpha: real value from 0 (transparent) to 1 (opaque)
@@ -2098,8 +2109,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetVisibility($v)
 	{
-		if (($this->PDFA || $this->PDFX) && $this->visibility != 'visible') {
-			$this->PDFAXwarnings[] = "Cannot set visibility to anything other than full when using PDFA or PDFX";
+		// PDF/A-2 forbids the /AS that switches print-only and screen-only content, but hidden content needs none
+		if ($v !== 'visible' && (!$this->optionalContentAllowed() || ($this->PDFA && $v !== 'hidden'))) {
+			$this->PDFAXwarnings[] = "Cannot set visibility to " . $v . " when using PDFA or PDFX";
 			return '';
 		} elseif (!$this->PDFA && !$this->PDFX) {
 			$this->pdf_version = '1.5';
@@ -2922,11 +2934,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return false;
 		}
 		if (!isset($this->layers[$id])) {
-			$this->layers[$id] = ['name' => 'Layer ' . ($id)];
-			if (($this->PDFA || $this->PDFX)) {
-				$this->PDFAXwarnings[] = "Cannot use layers when using PDFA or PDFX";
+			if (!$this->optionalContentAllowed()) {
+				$this->PDFAXwarnings[] = "Cannot use layers when using PDFA-1 or PDFX";
 				return '';
-			} elseif (!$this->PDFA && !$this->PDFX) {
+			}
+			$this->layers[$id] = ['name' => 'Layer ' . ($id)];
+			if (!$this->PDFA) {
 				$this->pdf_version = '1.5';
 			}
 		}

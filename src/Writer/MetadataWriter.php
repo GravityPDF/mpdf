@@ -497,10 +497,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 
-			$this->writer->write("/OCProperties <</OCGs [$p $v $h $lall] /D <</ON [$p $l] /OFF [$v $h $loff] ");
+			$this->writer->write("/OCProperties <</OCGs [$p $v $h $lall] /D <</Name " . $this->writer->string('Default') . " /ON [$p $l] /OFF [$v $h $loff] ");
 			$this->writer->write("/Order [$v $p $h $lall] ");
 
-			if ($as) {
+			// PDF/A forbids /AS, and so allows only hidden content, which needs no usage application
+			if ($as && !$this->mpdf->PDFA) {
 				$this->writer->write("/AS [$as] ");
 			}
 
