@@ -63,6 +63,7 @@ class DecodedSubtableTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'GSUB 6 format 3, Padauk Book' => ['padaukbook', null, 'မြန်မာဘာသာစကားသည် ကျွန်ုပ် မင်္ဂလာပါ', 'GSUB', 'chainedCoverage'],
 			'GPOS 2 format 1, Pothana' => ['pothana2000', null, 'తెలుగు భారతదేశంలో ఆంధ్రప్రదేశ్ స్త్రీ క్ష్మ ర్క్క', 'GPOS', 'pairSet'],
 			'GPOS 2 format 2, FreeSerif' => ['freeserif', null, 'क्षत्रिय श्रृंखला द्विज र्क्ष्म्य हिन्दी', 'GPOS', 'classDef'],
+			'GPOS 4, Taamey David' => ['taameydavidclm', null, 'בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ', 'GPOS', 'baseAnchor'],
 			'GPOS 7 format 1, Noto Sans Gurmukhi UI' => ['gurmukhitext', 'NotoSansGurmukhiUI-Subset.ttf', 'ਬੌੱਦੋਂ ਬਰਾਬਰ ਬੌੱਟੇ', 'GPOS', 'plainRuleSet'],
 			// KHA with a nukta and the UU sign; KA with a nukta and the U sign
 			'GPOS 7 format 2, Noto Sans Sharada' => ['sharadatext', 'NotoSansSharada-Subset.ttf', "\xF0\x91\x86\x92\xF0\x91\x87\x8A\xF0\x91\x86\xB7 \xF0\x91\x86\x91\xF0\x91\x87\x8A\xF0\x91\x86\xB6", 'GPOS', 'plainClassRules'],

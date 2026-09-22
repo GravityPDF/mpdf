@@ -3997,15 +3997,7 @@ class Otl
 	 */
 	private function _applyGPOSmarkToBase($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $is_old_spec, $PosFormat)
 	{
-		$MarkCoverage = $subtable_offset + $this->reader->readUInt16();
-		//$MarkCoverage is already set in $LuCoverage 00065|00073 etc
-		$BaseCoverage = $subtable_offset + $this->reader->readUInt16();
-		$ClassCount = $this->reader->readUInt16(); // Number of classes defined for marks = Number of mark glyphs in the MarkCoverage table
-		$MarkArray = $subtable_offset + $this->reader->readUInt16(); // Offset to MarkArray table
-		$BaseArray = $subtable_offset + $this->reader->readUInt16(); // Offset to BaseArray table
-
-		$this->reader->seek($BaseCoverage);
-		$BaseGlyphs = $this->coverageIndexByHex();
+		list($BaseGlyphs, $ClassCount, $MarkArray, $BaseArray) = $this->markToBase($subtable_offset);
 
 		$checkpos = $ptr;
 		$checkpos--;
@@ -4033,32 +4025,12 @@ class Otl
 		}
 
 		if ($matchedpos !== false) {
-			// Get the relevant MarkRecord
-			$MarkPos = $LuCoverage[$currGID];
-			$MarkRecord = MarkArray::record($this->reader, $MarkArray, $MarkPos); // e.g. Array ( [Class] => 0 [AnchorX] => -549 [AnchorY] => 1548 )
-			//Mark Class is = $MarkRecord['Class']
-			// Get the relevant BaseRecord
-			$this->reader->seek($BaseArray);
-			$BaseCount = $this->reader->readUInt16();
-			$BasePos = $BaseGlyphs[$this->OTLdata[$matchedpos]['hex']];
-
-			// Move to the BaseRecord we want
-			$nSkip = (2 * $BasePos * $ClassCount );
-			$this->reader->skip($nSkip);
-
-			// Read BaseRecord we want for appropriate Class
-			$nSkip = 2 * $MarkRecord['Class'];
-			$this->reader->skip($nSkip);
-			$offset = $this->reader->readUInt16();
-
-			// A NULL offset is how a base states that it offers marks of this class nothing to attach
-			// to. Added to the array start it would read the BaseArray's own header as an Anchor
-			if ($offset == 0) {
+			$MarkRecord = $this->markRecord($MarkArray, $LuCoverage[$currGID]); // e.g. Array ( [Class] => 0 [AnchorX] => -549 [AnchorY] => 1548 )
+			$BaseRecord = $this->baseAnchor($BaseArray, $BaseGlyphs[$this->OTLdata[$matchedpos]['hex']], $ClassCount, $MarkRecord['Class']);
+			if ($BaseRecord === null) {
 				return null;
 			}
 
-			list($x, $y) = Anchor::coordinates($this->reader, $BaseArray + $offset);
-			$BaseRecord = ['AnchorX' => $x, 'AnchorY' => $y]; // e.g. Array ( [AnchorX] => 660 [AnchorY] => 1556 )
 			// Need default XAdvance for Base glyph
 			$BaseWidth = $this->mpdf->_getCharWidth($this->mpdf->CurrentFont['cw'], $this->OTLdata[$matchedpos]['uni']) * $this->mpdf->CurrentFont['unitsPerEm'] / 1000; // convert back to font design units
 			$this->OTLdata[$ptr]['GPOSinfo']['BaseWidth'] = $BaseWidth;
@@ -4082,6 +4054,87 @@ class Otl
 			return 1;
 		}
 		return null;
+	}
+
+	/**
+	 * The header of a mark-to-base attachment subtable, decoded, for the life of the document: the
+	 * mark's Coverage table, the base's Coverage table, the number of mark classes, the MarkArray and
+	 * the BaseArray.
+	 *
+	 * Each mark a subtable covers is offered to it, and each offer read the header and followed it
+	 * to the base Coverage table again. Types 5 and 6 have the same header and still read it each
+	 * time: decoding theirs made no difference that could be measured.
+	 *
+	 * @param int $offset Where the subtable starts; the reader is just past its format
+	 *
+	 * @return array [$bases, $classCount, $markArray, $baseArray]: the base Coverage table as
+	 *               coverageIndexByHex() gives it, the number of mark classes, and where the two
+	 *               arrays start
+	 */
+	private function markToBase($offset)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['markToBase'][$offset])) {
+			$this->reader->skip(2); // markCoverageOffset, which $LuCoverage already holds
+			$baseCoverage = $offset + $this->reader->readUInt16();
+			$classCount = $this->reader->readUInt16();
+			$markArray = $offset + $this->reader->readUInt16();
+			$baseArray = $offset + $this->reader->readUInt16();
+
+			$this->reader->seek($baseCoverage);
+			$this->LuDataCache[$this->otlCacheKey]['markToBase'][$offset] = [$this->coverageIndexByHex(), $classCount, $markArray, $baseArray];
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['markToBase'][$offset];
+	}
+
+	/**
+	 * One mark's record in a MarkArray, decoded, for the life of the document.
+	 *
+	 * @param int $markArray Where the MarkArray starts
+	 * @param int $index     The mark's Coverage Index
+	 *
+	 * @return array As MarkArray::record() gives it: the mark's Class, AnchorX and AnchorY
+	 */
+	private function markRecord($markArray, $index)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['markRecord'][$markArray][$index])) {
+			$this->LuDataCache[$this->otlCacheKey]['markRecord'][$markArray][$index] = MarkArray::record($this->reader, $markArray, $index);
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['markRecord'][$markArray][$index];
+	}
+
+	/**
+	 * The anchor one base glyph of a BaseArray offers a class of mark, decoded, for the life of the
+	 * document. The array is a count, then per base an anchor offset per mark class, from the start
+	 * of the array.
+	 *
+	 * @param int $array      Where the BaseArray starts
+	 * @param int $index      The base's index in the subtable's base Coverage table
+	 * @param int $classCount The number of mark classes
+	 * @param int $class      The mark's class
+	 *
+	 * @return array|null The anchor's AnchorX and AnchorY, or null where the offset is NULL: how a
+	 *                    base states that it offers marks of this class nothing to attach to. Added
+	 *                    to the array start it would read the BaseArray's own header as an Anchor.
+	 */
+	private function baseAnchor($array, $index, $classCount, $class)
+	{
+		$record = $index * $classCount + $class;
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['baseAnchor'][$array]) || !array_key_exists($record, $this->LuDataCache[$this->otlCacheKey]['baseAnchor'][$array])) {
+			$this->reader->seek($array + 2 + $record * 2); // past the count, to the record
+			$offset = $this->reader->readUInt16();
+
+			$anchor = null;
+			if ($offset != 0) {
+				list($x, $y) = Anchor::coordinates($this->reader, $array + $offset);
+				$anchor = ['AnchorX' => $x, 'AnchorY' => $y];
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['baseAnchor'][$array][$record] = $anchor;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['baseAnchor'][$array][$record];
 	}
 
 	/**
