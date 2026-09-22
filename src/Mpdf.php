@@ -3741,8 +3741,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$chars = preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);
 		if ($chars !== false) {
-			// Valid UTF-8, so the code points are what UTF8StringToArray() would give, decoded in C
-			return [$chars, $chars ? array_values(unpack('N*', mb_convert_encoding($s, 'UTF-32BE', 'UTF-8'))) : []];
+			// preg_split() settled the string is valid UTF-8, so the code points need no second check
+			return [$chars, $this->codePointsOfValidUtf8($s)];
 		}
 
 		$chars = [];
@@ -11131,7 +11131,60 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/* -- END DIRECTW -- */
 
+	/**
+	 * The code points of a string, and each of them in the current font's subset.
+	 *
+	 * Valid UTF-8 is decoded by mbstring. Anything else keeps the byte loop, which reads malformed input
+	 * the way mPDF always has: a stray byte is dropped, an overlong sequence or a surrogate is the number
+	 * its bytes spell, and a lead byte takes whatever follows it, where mb_convert_encoding() would put
+	 * the substitute character in place of each. Malformed input does arrive: layout cuts a line into
+	 * chunks by byte, so a chunk can end half way through a character.
+	 *
+	 * @param string $str
+	 * @param bool $addSubset Whether to register the characters in the current font's subset
+	 *
+	 * @return int[]
+	 */
 	function UTF8StringToArray($str, $addSubset = true)
+	{
+		// Below a length the check and the conversion are two passes the loop does in one. Twelve bytes is
+		// where mbstring is ahead of the loop for every kind of text on PHP 7.4, which is what this is set
+		// from: it sits between the 5.6 and the 8.5 this fork supports, and neither end pays much for it.
+		$out = strlen($str) > 11 && mb_check_encoding($str, 'UTF-8')
+			? $this->codePointsOfValidUtf8($str)
+			: $this->codePointsOfAnyBytes($str);
+
+		if ($addSubset && isset($this->CurrentFont['subset'])) {
+			// Held by reference so that a line is not walked back to the font once per character
+			$subset = &$this->CurrentFont['subset'];
+			foreach ($out as $uni) {
+				$subset[$uni] = $uni;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * The code points of a string the caller has already established is valid UTF-8.
+	 *
+	 * @param string $str
+	 *
+	 * @return int[]
+	 */
+	private function codePointsOfValidUtf8($str)
+	{
+		return array_values(unpack('N*', mb_convert_encoding($str, 'UTF-32BE', 'UTF-8')));
+	}
+
+	/**
+	 * The code points of any bytes at all, read as UTF-8 as far as they go.
+	 *
+	 * @param string $str
+	 *
+	 * @return int[]
+	 */
+	private function codePointsOfAnyBytes($str)
 	{
 		$out = [];
 		$len = strlen($str);
@@ -11151,11 +11204,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			if ($uni >= 0) {
 				$out[] = $uni;
-				if ($addSubset && isset($this->CurrentFont['subset'])) {
-					$this->CurrentFont['subset'][$uni] = $uni;
-				}
 			}
 		}
+
 		return $out;
 	}
 
