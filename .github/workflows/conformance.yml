@@ -1,0 +1,71 @@
+# https://help.github.com/en/categories/automating-your-workflow-with-github-actions
+
+name: "Conformance Tests"
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "master"
+      - "development"
+      - "test"
+      - "gravitypdf"
+
+jobs:
+
+  tests:
+
+    name: "Tests"
+
+    runs-on: ubuntu-latest
+
+    env:
+      # veraPDF validates against PDF/A, PDF/UA and WTPDF; tests in the conformance group choose the flavour
+      VERAPDF_VERSION: "1.30.2"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v7"
+
+      - name: "Install Java"
+        uses: "actions/setup-java@v6"
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: "Cache veraPDF"
+        id: "verapdf-cache"
+        uses: "actions/cache@v6"
+        with:
+          path: "~/verapdf"
+          key: "verapdf-${{ env.VERAPDF_VERSION }}"
+
+      - name: "Install veraPDF"
+        if: steps.verapdf-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -sSfL -o verapdf-installer.zip "https://software.verapdf.org/releases/${VERAPDF_VERSION%.*}/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip"
+          unzip -q verapdf-installer.zip
+          echo "INSTALL_PATH=$HOME/verapdf" > verapdf.properties
+          java -jar "verapdf-greenfield-${VERAPDF_VERSION}/verapdf-izpack-installer-${VERAPDF_VERSION}.jar" -options verapdf.properties
+          rm -r verapdf-installer.zip verapdf.properties "verapdf-greenfield-${VERAPDF_VERSION}"
+
+      - name: "Put veraPDF on the PATH"
+        run: |
+          echo "$HOME/verapdf" >> "$GITHUB_PATH"
+          "$HOME/verapdf/verapdf" --version
+
+      - name: "Install PHP"
+        uses: "shivammathur/setup-php@v2"
+        with:
+          coverage: "none"
+          php-version: "8.5"
+          extensions: "mbstring, gd, bcmath, bz2"
+          tools: composer:v2
+          ini-values: error_reporting=-1
+
+      - name: "Install dependencies"
+        run: "composer install --no-interaction --no-progress"
+
+      # A skip here means veraPDF could not be run, so it fails the job
+      - name: "Conformance Tests"
+        run: composer test -- --group=conformance --fail-on-skipped
