@@ -18,8 +18,18 @@ class PDFATest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->mpdf->PDFAauto = true;
 	}
 
+	/**
+	 * Without a version, a PDF/A document is PDF/A-2b
+	 */
+	public function testDefaultIsPDFA_2B()
+	{
+		$this->assertSame(['2', 'B'], $this->mpdf->pdfaConformance());
+	}
+
 	public function testOriginalPDFA_1B()
 	{
+		$this->mpdf->PDFAversion = '1-B';
+
 		$output = $this->mpdf->Output(null, 'S');
 		$output = preg_replace('/rdf:about="uuid:[\w-]+"/', 'rdf:about="uuid:fake-uuid"', $output);
 
@@ -34,6 +44,8 @@ class PDFATest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	public function testPDFA_1B_DoesNotSetCatalogVersion()
 	{
+		$this->mpdf->PDFAversion = '1-B';
+
 		$output = $this->mpdf->Output(null, 'S');
 
 		$this->assertStringNotContainsString('/Version /1.7', $output);

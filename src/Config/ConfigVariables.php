@@ -152,8 +152,18 @@ class ConfigVariables
 			'PDFA' => false,
 			// Overrides warnings making changes when possible to force PDF/A compliance
 			'PDFAauto' => false,
-			// 1-B, 2-B, 2-U, 3-B or 3-U. PDF/A-2 and PDF/A-3 permit transparency, PDF/A-1 does not
-			'PDFAversion' => '1-B',
+			// The PDF/A part and conformance level to write. B (basic) preserves how the document looks; U (Unicode)
+			// also maps every character to Unicode, so its text can be searched and copied reliably
+			//   1-B  PDF/A-1b (ISO 19005-1, PDF 1.4). For archives that accept only the first part: no transparency,
+			//        watermarks or attachments, and translucent content is drawn opaque
+			//   2-B  PDF/A-2b (ISO 19005-2, PDF 1.7). The general choice for long-term archiving, and the level
+			//        archives and validators most often expect. Allows transparency, and attachments that are PDF/A
+			//   2-U  PDF/A-2u. PDF/A-2b with searchable, copyable text
+			//   3-B  PDF/A-3b (ISO 19005-3). PDF/A-2b that may carry attachments of any type (see SetAssociatedFiles),
+			//        as e-invoices such as ZUGFeRD, Factur-X and XRechnung carry their XML
+			//   3-U  PDF/A-3u. PDF/A-3b with searchable, copyable text
+			// Level A (accessible) needs tagged PDF, which mPDF does not write
+			'PDFAversion' => '2-B',
 
 			// Colour profile OutputIntent
 			// sRGB_IEC61966-2-1 (=default if blank and PDFA), or other added .icc profile
