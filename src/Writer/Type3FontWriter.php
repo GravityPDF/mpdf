@@ -29,10 +29,11 @@ use Psr\Log\LoggerInterface;
  * colour format, then the glyph's outline, so a glyph with no colour of its own - a digit, say - is
  * its outline in the colour of the text.
  *
- * Each subset has a resource dictionary of its own, listing the images and graphics states its glyphs
- * draw with. It cannot be the page's: that lists the font itself, which Acrobat refuses to load. The
- * images are written after the fonts, so the dictionary's object number is set aside as the subset is
- * written and the dictionary is written once the images have numbers - see writeResources().
+ * Each subset has a resource dictionary of its own, listing the images, graphics states, shadings,
+ * groups and soft masks its glyphs draw with. It cannot be the page's: that lists the font itself,
+ * which Acrobat refuses to load. The images are written after the fonts, so the dictionary's object
+ * number is set aside as the subset is written and the dictionary is written once the images have
+ * numbers - see writeResources(). A group or soft mask draws with its subset's dictionary too.
  *
  * @see https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf 9.6.5
  */
@@ -77,16 +78,30 @@ class Type3FontWriter implements GlyphResources
 	private $undrawable = [];
 
 	/**
-	 * @var string[][] What the glyphs of the subset being written draw with, each once: 'images', keys
-	 *                 in Mpdf::$images, and 'states', numbers in Mpdf::$extgstates
+	 * @var array[] What the glyphs of the subset being written draw with, each once: 'images', keys in
+	 *              Mpdf::$images; 'states', numbers in Mpdf::$extgstates; 'shadings', keys in $shadings;
+	 *              'forms', each group by a key of its content, as ['name', 'content', 'box', 'group' =>
+	 *              what its /Group dictionary adds]; 'masks', each soft mask by a key, as ['name', 'form'
+	 *              => the name of the group it is drawn from, 'luminosity', 'inverted']
 	 */
 	private $drawn = [];
 
 	/**
-	 * @var string[][][] Each resource dictionary still to be written, by the object number set aside
-	 *                   for it: what its subset's glyphs draw with, as $drawn holds it
+	 * @var array[][] Each resource dictionary still to be written, by the object number set aside for
+	 *                it: what its subset's glyphs draw with, as $drawn holds it
 	 */
 	private $resources = [];
+
+	/**
+	 * @var array[] Each shading the glyphs draw, by a key of it, written once for every subset: ['name',
+	 *              'shading' as GlyphResources::shading() takes it, 'n' once written]
+	 */
+	private $shadings = [];
+
+	/**
+	 * @var int How many shadings, groups and soft masks have been named, so each is named apart
+	 */
+	private $named = 0;
 
 	/**
 	 * @param Mpdf            $mpdf           The document, whose fonts, images and resources are written to
@@ -223,10 +238,90 @@ class Type3FontWriter implements GlyphResources
 	 */
 	public function alpha($opacity)
 	{
-		$state = $this->mpdf->AddExtGState(['BM' => '/Normal', 'ca' => $opacity]);
+		return $this->state(['BM' => '/Normal', 'ca' => $opacity]);
+	}
+
+	/**
+	 * Registers a graphics state blending what is painted with what is under it, once however many
+	 * glyphs blend so
+	 *
+	 * @param string $mode A PDF blend mode, e.g. 'SoftLight'
+	 *
+	 * @return string Content setting it, e.g. '/GS3 gs'
+	 */
+	public function blend($mode)
+	{
+		return $this->state(['BM' => '/' . $mode]);
+	}
+
+	/**
+	 * @param array $parameters The graphics state's entries, as Mpdf::AddExtGState() takes them
+	 *
+	 * @return string Content setting it, e.g. '/GS3 gs'
+	 */
+	private function state(array $parameters)
+	{
+		$state = $this->mpdf->AddExtGState($parameters);
 		$this->drawn['states'][$state] = $state;
 
 		return sprintf('/GS%d gs', $state);
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function shading(array $shading)
+	{
+		$key = md5(serialize($shading));
+		if (!isset($this->shadings[$key])) {
+			$this->shadings[$key] = ['name' => 'Sh' . ++$this->named, 'shading' => $shading];
+		}
+		$this->drawn['shadings'][$key] = $key;
+
+		return '/' . $this->shadings[$key]['name'];
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function group($content, array $box, $isolated = false)
+	{
+		return '/' . $this->form($content, $box, $isolated ? ' /I true' : '');
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function softMask($content, array $box, $luminosity = false, $inverted = false)
+	{
+		// A mask of brightness is drawn in grey
+		$form = $this->form($content, $box, $luminosity ? ' /CS /DeviceGray' : '');
+		$key = $form . ($luminosity ? '-luminosity' : '-alpha') . ($inverted ? '-inverted' : '');
+		if (!isset($this->drawn['masks'][$key])) {
+			$this->drawn['masks'][$key] = ['name' => 'SM' . ++$this->named, 'form' => $form, 'luminosity' => $luminosity, 'inverted' => $inverted];
+		}
+
+		return '/' . $this->drawn['masks'][$key]['name'] . ' gs';
+	}
+
+	/**
+	 * Registers a transparency group on the subset being written, once however many of its glyphs draw
+	 * the same
+	 *
+	 * @param string  $content What the group draws
+	 * @param float[] $box     [xMin, yMin, xMax, yMax] it is drawn within
+	 * @param string  $group   What its /Group dictionary adds to /S /Transparency
+	 *
+	 * @return string Its name, e.g. 'Fx4'
+	 */
+	private function form($content, array $box, $group)
+	{
+		$key = md5($content . serialize($box) . $group);
+		if (!isset($this->drawn['forms'][$key])) {
+			$this->drawn['forms'][$key] = ['name' => 'Fx' . ++$this->named, 'content' => $content, 'box' => $box, 'group' => $group];
+		}
+
+		return $this->drawn['forms'][$key]['name'];
 	}
 
 	/**
@@ -283,8 +378,9 @@ class Type3FontWriter implements GlyphResources
 
 	/**
 	 * Writes the resource dictionary of each subset written here, under the object number set aside for
-	 * it. Called once the images are written, which is when they have object numbers to be named by,
-	 * and writes the graphics states the glyphs registered after the document's were written.
+	 * it, with the shadings, groups and soft masks it names. Called once the images are written, which
+	 * is when they have object numbers to be named by, and writes the graphics states the glyphs
+	 * registered after the document's were written.
 	 */
 	public function writeResources()
 	{
@@ -294,22 +390,83 @@ class Type3FontWriter implements GlyphResources
 
 		$this->mpdf->_putextgstates();
 
-		foreach ($this->resources as $object => $drawn) {
-			$images = [];
-			foreach ($drawn['images'] as $key) {
-				$images['I' . $this->mpdf->images[$key]['i']] = $this->mpdf->images[$key]['n'];
+		foreach ($this->shadings as $key => $shading) {
+			if (!isset($shading['n'])) {
+				$this->shadings[$key]['n'] = $this->writeObject($this->shadingDictionary($shading['shading']));
 			}
-			$states = [];
+		}
+
+		foreach ($this->resources as $object => $drawn) {
+			$objects = ['XObject' => [], 'ExtGState' => [], 'Shading' => []];
+			foreach ($drawn['images'] as $key) {
+				$objects['XObject']['I' . $this->mpdf->images[$key]['i']] = $this->mpdf->images[$key]['n'];
+			}
 			foreach ($drawn['states'] as $state) {
-				$states['GS' . $state] = $this->mpdf->extgstates[$state]['n'];
+				$objects['ExtGState']['GS' . $state] = $this->mpdf->extgstates[$state]['n'];
+			}
+			foreach ($drawn['shadings'] as $key) {
+				$objects['Shading'][$this->shadings[$key]['name']] = $this->shadings[$key]['n'];
+			}
+
+			// Each group draws with this dictionary, and each mask from a group
+			foreach ($drawn['forms'] as $form) {
+				list($xMin, $yMin, $xMax, $yMax) = $form['box'];
+				$this->writeStream(sprintf('/Type /XObject /Subtype /Form /BBox [%.3F %.3F %.3F %.3F] /Group <</S /Transparency%s>> /Resources %d 0 R', $xMin, $yMin, $xMax, $yMax, $form['group'], $object), $form['content']);
+				$objects['XObject'][$form['name']] = $this->mpdf->n;
+			}
+			foreach ($drawn['masks'] as $mask) {
+				// An inverted mask lets through what its group does not cover
+				$objects['ExtGState'][$mask['name']] = $this->writeObject(sprintf('<</Type /ExtGState /SMask <</Type /Mask /S /%s /G %d 0 R%s>>>>', $mask['luminosity'] ? 'Luminosity' : 'Alpha', $objects['XObject'][$mask['form']], $mask['inverted'] ? ' /TR <</FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1>>' : ''));
 			}
 
 			$this->writer->object($object);
-			$this->writer->write('<<' . $this->dictionary('XObject', $images) . $this->dictionary('ExtGState', $states) . '>>');
+			$dictionaries = '';
+			foreach ($objects as $type => $named) {
+				$dictionaries .= $this->dictionary($type, $named);
+			}
+			$this->writer->write('<<' . $dictionaries . '>>');
 			$this->writer->write('endobj');
 		}
 
 		$this->resources = [];
+	}
+
+	/**
+	 * @param array $shading As GlyphResources::shading() takes it
+	 *
+	 * @return string The shading's dictionary: axial from two points, or radial from two circles, its
+	 *                colours stitched from one stop to the next, and extended past both ends
+	 */
+	private function shadingDictionary(array $shading)
+	{
+		$colour = function ($colour) {
+			return implode(' ', array_map(function ($value) {
+				return sprintf('%.3F', $value);
+			}, $colour));
+		};
+
+		$stops = $shading['stops'];
+		$functions = [];
+		$bounds = [];
+		for ($i = 0; $i < count($stops) - 1; $i++) {
+			$functions[] = sprintf('<</FunctionType 2 /Domain [0 1] /C0 [%s] /C1 [%s] /N 1>>', $colour($stops[$i][1]), $colour($stops[$i + 1][1]));
+			if ($i > 0) {
+				$bounds[] = sprintf('%.4F', $stops[$i][0]);
+			}
+		}
+
+		$function = $functions[0];
+		if (count($functions) > 1) {
+			$function = sprintf('<</FunctionType 3 /Domain [0 1] /Functions [%s] /Bounds [%s] /Encode [%s]>>', implode(' ', $functions), implode(' ', $bounds), trim(str_repeat('0 1 ', count($functions))));
+		}
+
+		return sprintf(
+			'<</ShadingType %d /ColorSpace /Device%s /Coords [%s] /Function %s /Extend [true true]>>',
+			count($shading['coords']) === 4 ? 2 : 3,
+			count($stops[0][1]) === 1 ? 'Gray' : 'RGB',
+			$colour($shading['coords']),
+			$function
+		);
 	}
 
 	/**
@@ -410,7 +567,7 @@ class Type3FontWriter implements GlyphResources
 		$widths = [];
 		$procedures = [];
 		$differences = '';
-		$this->drawn = ['images' => [], 'states' => []];
+		$this->drawn = ['images' => [], 'states' => [], 'shadings' => [], 'forms' => [], 'masks' => []];
 		foreach ($subset as $code => $char) {
 			$width = '0.000';
 			if ($char && isset($charToGlyph[$char])) {
@@ -425,9 +582,10 @@ class Type3FontWriter implements GlyphResources
 			$widths[] = $width;
 		}
 
-		// A subset whose glyphs draw no image nor graphics state - one drawn blank, say - names no resource
+		// A subset whose glyphs draw with nothing but paths and colours - one drawn blank, say - names no
+		// resource
 		$resources = '<<>>';
-		if ($this->drawn['images'] || $this->drawn['states']) {
+		if (array_filter($this->drawn)) {
 			$this->writer->object(false, true);
 			$this->resources[$this->mpdf->n] = $this->drawn;
 			$resources = $this->mpdf->n . ' 0 R';
@@ -455,29 +613,51 @@ class Type3FontWriter implements GlyphResources
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
-		$this->writer->object();
 		$entries = '';
 		foreach (array_keys($procedures) as $i => $glyph) {
 			$entries .= '/g' . $glyph . ' ' . ($procedureObject + $i) . ' 0 R ';
 		}
-		$this->writer->write('<<' . $entries . '>>');
-		$this->writer->write('endobj');
+		$this->writeObject('<<' . $entries . '>>');
 
 		$this->writeToUnicode($codes, $subset, $ligatureText);
 
 		foreach ($procedures as $content) {
-			$this->writer->object();
-			if ($this->mpdf->compress) {
-				$content = gzcompress($content);
-				$this->writer->write('<</Filter /FlateDecode /Length ' . strlen($content) . '>>');
-			} else {
-				$this->writer->write('<</Length ' . strlen($content) . '>>');
-			}
-			$this->writer->stream($content);
-			$this->writer->write('endobj');
+			$this->writeStream('', $content);
 		}
 
 		return $fontObject;
+	}
+
+	/**
+	 * @param string $body The object, e.g. a dictionary
+	 *
+	 * @return int Its object number
+	 */
+	private function writeObject($body)
+	{
+		$this->writer->object();
+		$this->writer->write($body);
+		$this->writer->write('endobj');
+
+		return $this->mpdf->n;
+	}
+
+	/**
+	 * Writes a stream object, deflated where the document is compressed
+	 *
+	 * @param string $dictionary What its dictionary holds besides its length and filter
+	 * @param string $content
+	 */
+	private function writeStream($dictionary, $content)
+	{
+		$this->writer->object();
+		if ($this->mpdf->compress) {
+			$content = gzcompress($content);
+			$dictionary .= ' /Filter /FlateDecode';
+		}
+		$this->writer->write('<<' . ltrim($dictionary . ' /Length ' . strlen($content)) . '>>');
+		$this->writer->stream($content);
+		$this->writer->write('endobj');
 	}
 
 	/**

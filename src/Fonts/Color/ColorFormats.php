@@ -12,9 +12,14 @@ class ColorFormats
 
 	/**
 	 * The formats mPDF can draw, each with the ColorGlyphSource that draws it, in the order a font that
-	 * carries several is drawn in
+	 * carries several is drawn in.
+	 *
+	 * Whether a font is drawable is kept in its cached metrics - see drawable() - so adding a format
+	 * here calls for raising MetricsGenerator::CACHE_FORMAT, or a font of that format cached before is
+	 * served as one that is not.
 	 */
 	const SOURCES = [
+		'COLRv1' => 'Mpdf\Fonts\Color\ColrV1Source',
 		'COLRv0' => 'Mpdf\Fonts\Color\ColrV0Source',
 		'CBDT' => 'Mpdf\Fonts\Color\CbdtSource',
 		'sbix' => 'Mpdf\Fonts\Color\SbixSource',
@@ -51,21 +56,24 @@ class ColorFormats
 	}
 
 	/**
-	 * The format a document draws a font in
+	 * Whether a document draws a font in colour: it carries a format mPDF draws, and the document may
+	 * draw colour
 	 *
 	 * @param array $font The font, as Mpdf::$fonts holds it
 	 * @param Mpdf  $mpdf The document
 	 *
-	 * @return string The format, or '' where the font is not drawn in colour
+	 * @return bool
 	 */
-	public static function drawn(array $font, Mpdf $mpdf)
+	public static function drawsInColor(array $font, Mpdf $mpdf)
 	{
-		return empty($font['colorFormats']) ? '' : self::choose($font['colorFormats'], self::inColor($mpdf));
+		return !empty($font['colorFormats']) && self::drawable($font['colorFormats']) && self::inColor($mpdf);
 	}
 
 	/**
-	 * What draws a font's glyphs in a document, each glyph by the first that has it: the format it is
-	 * drawn in, where the document may draw colour, then its outlines, where it has any
+	 * What draws a font's glyphs in a document, each glyph by the first that has it: each format the
+	 * font carries, in the order of SOURCES, where the document may draw colour, then its outlines,
+	 * where it has any. A COLR version 1 font's glyph with no paint is so drawn from its version 0
+	 * layers.
 	 *
 	 * @param array $font The font, as Mpdf::$fonts holds it
 	 * @param Mpdf  $mpdf The document
@@ -74,8 +82,10 @@ class ColorFormats
 	 */
 	public static function sources(array $font, Mpdf $mpdf)
 	{
-		$format = self::drawn($font, $mpdf);
-		$sources = $format === '' ? [] : [self::SOURCES[$format]];
+		$sources = [];
+		if (!empty($font['colorFormats']) && self::inColor($mpdf)) {
+			$sources = array_values(array_intersect_key(self::SOURCES, array_flip($font['colorFormats'])));
+		}
 		if (!empty($font['hasOutlines'])) {
 			$sources[] = 'Mpdf\Fonts\Color\OutlineSource';
 		}
@@ -95,20 +105,5 @@ class ColorFormats
 	public static function blank(array $font, Mpdf $mpdf)
 	{
 		return !empty($font['colorFormats']) && self::drawable($font['colorFormats']) && !self::sources($font, $mpdf);
-	}
-
-	/**
-	 * The format a font is drawn in: the first of SOURCES that it carries
-	 *
-	 * @param string[] $fontFormats The formats the font carries
-	 * @param bool     $color       Whether the document may use colour
-	 *
-	 * @return string The format, or '' where the font is drawn without colour
-	 */
-	public static function choose(array $fontFormats, $color)
-	{
-		$formats = $color ? array_intersect(array_keys(self::SOURCES), $fontFormats) : [];
-
-		return $formats ? reset($formats) : '';
 	}
 }

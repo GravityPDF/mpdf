@@ -29,6 +29,7 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				'cbdt' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
 				'sbix' => ['R' => 'TestEmoji-sbix.ttf', 'useOTL' => 0xFF],
 				'colr' => ['R' => 'TestEmoji-COLRv0.ttf', 'useOTL' => 0xFF],
+				'colrv1' => ['R' => 'TestEmoji-COLRv1.ttf', 'useOTL' => 0xFF],
 				'notoemoji' => ['R' => 'NotoEmoji-Regular.ttf'],
 			],
 			'default_font' => 'cbdt',
@@ -235,6 +236,35 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(1, preg_match('/\/ExtGState <<\/GS' . $gs[1] . ' (\d+) 0 R >>/', $resources, $state));
 		$this->assertStringNotContainsString('/XObject', $resources, 'the font draws no image');
 		$this->assertMatchesRegularExpression('/\/Type \/ExtGState\s*\/BM \/Normal\s*\/ca 0\.50/', $objects[(int) $state[1]]);
+	}
+
+	/**
+	 * TestEmoji-COLRv1's heart is a gradient kept to the heart by SRC_IN, and its keycap a square with
+	 * the digit cut out by DEST_OUT: each is a group drawn through a soft mask, both named by the font's
+	 * own resources beside the gradient's shading, and drawing with those same resources
+	 */
+	public function testAColrV1GlyphsShadingsGroupsAndMasksAreTheFontsResources()
+	{
+		$objects = $this->objects([0x2764, 0x31, 0x20E3], ['default_font' => 'colrv1']);
+		$font = $this->objectMatching($objects, '/\/Subtype \/Type3/');
+		$resources = $this->referenced($objects, $font, 'Resources');
+
+		$this->assertSame(1, preg_match('/q \/(SM\d+) gs \/(Fx\d+) Do Q/', $this->procedure($objects, 13), $heart));
+		$mask = $this->referenced($objects, $resources, $heart[1]);
+		$group = $this->referenced($objects, $resources, $heart[2]);
+		$shading = $this->referenced($objects, $resources, 'Sh1');
+
+		$this->assertMatchesRegularExpression('/^<<\/Type \/ExtGState \/SMask <<\/Type \/Mask \/S \/Alpha \/G \d+ 0 R>>>>$/', $mask);
+		$this->assertStringContainsString("500 -50 m\n80 400 l\n", $this->referenced($objects, $mask, 'G'), 'the mask is the heart');
+		$this->assertStringContainsString("W n\n/Sh1 sh\n", $group, 'the group is the gradient');
+		$this->assertMatchesRegularExpression('/^<<\/Type \/XObject \/Subtype \/Form \/BBox \[20\.000 -100\.000 980\.000 850\.000\] \/Group <<\/S \/Transparency>> \/Resources \d+ 0 R /', $group);
+		$this->assertStringStartsWith('<</ShadingType 2 /ColorSpace /DeviceRGB /Coords [500.000 750.000 500.000 -50.000] /Function <</FunctionType 2 /Domain [0 1] /C0 [0.878 0.141 0.369] /C1 [1.000 0.800 0.200] /N 1>> /Extend [true true]>>', $shading);
+
+		$this->assertSame(1, preg_match('/q \/(SM\d+) gs/', $this->procedure($objects, 24), $keycap));
+		$this->assertStringContainsString('/TR <</FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1>>', $this->referenced($objects, $resources, $keycap[1]), 'the digit is cut out');
+
+		// The groups draw with the font's resources
+		$this->assertSame($resources, $this->referenced($objects, $group, 'Resources'));
 	}
 
 	/**

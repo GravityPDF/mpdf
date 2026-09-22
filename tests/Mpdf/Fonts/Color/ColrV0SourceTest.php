@@ -160,16 +160,6 @@ class ColrV0SourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @return string A CPAL table of one palette of one colour, opaque red
-	 */
-	private function cpal()
-	{
-		// version, numPaletteEntries, numPalettes, numColorRecords, colorRecordsArrayOffset, then the
-		// palette's first colour record and the colour, blue, green, red, alpha
-		return pack('n4Nn', 0, 1, 1, 1, 14, 0) . "\0\0\xFF\xFF";
-	}
-
-	/**
 	 * @param string $colr The COLR table
 	 * @param string $cpal The CPAL table
 	 *
