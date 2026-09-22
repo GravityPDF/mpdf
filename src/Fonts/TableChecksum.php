@@ -19,6 +19,12 @@ class TableChecksum
 {
 
 	/**
+	 * How many bytes of a table are unpacked at once: a multiple of four, and small enough that no
+	 * sum below overflows within one
+	 */
+	const CHUNK = 65536;
+
+	/**
 	 * @param string $data One table's bytes, padded to a multiple of four as the spec requires
 	 *
 	 * @return int[] The high and low 16 bits of the sum of the table read as uint32s
@@ -29,18 +35,56 @@ class TableChecksum
 			$data .= str_repeat("\0", 4 - (strlen($data) % 4));
 		}
 
-		$len = strlen($data);
-		$hi = 0x0000;
-		$lo = 0x0000;
-
-		for ($i = 0; $i < $len; $i += 4) {
-			$hi += (ord($data[$i]) << 8) + ord($data[$i + 1]);
-			$lo += (ord($data[$i + 2]) << 8) + ord($data[$i + 3]);
-			$hi += ($lo >> 16) & 0xFFFF;
-			$lo &= 0xFFFF;
+		if (PHP_INT_SIZE >= 8) {
+			return self::sumWords($data);
 		}
 
-		$hi &= 0xFFFF;
+		return self::sumHalves($data);
+	}
+
+	/**
+	 * Sum the table as uint32s, a chunk at a time, where a PHP integer is wide enough to hold one.
+	 *
+	 * A chunk's sum stays below 2^46, so it is cut to 32 bits once per chunk rather than per word.
+	 *
+	 * @return int[] See of()
+	 */
+	private static function sumWords($data)
+	{
+		$len = strlen($data);
+		$sum = 0;
+
+		for ($i = 0; $i < $len; $i += self::CHUNK) {
+			$sum = ($sum + array_sum(unpack('N*', substr($data, $i, self::CHUNK)))) & 0xFFFFFFFF;
+		}
+
+		return [$sum >> 16, $sum & 0xFFFF];
+	}
+
+	/**
+	 * Sum the table as pairs of uint16s, carrying from the low half into the high one per chunk.
+	 *
+	 * For a 32-bit build, where unpack('N') gives a word of 2^31 or more back as a negative number.
+	 * Neither half of one chunk's sum can reach 2^31.
+	 *
+	 * @return int[] See of()
+	 */
+	private static function sumHalves($data)
+	{
+		$len = strlen($data);
+		$hi = 0;
+		$lo = 0;
+
+		for ($i = 0; $i < $len; $i += self::CHUNK) {
+			$words = unpack('n*', substr($data, $i, self::CHUNK));
+			$count = count($words);
+			for ($j = 1; $j < $count; $j += 2) {
+				$hi += $words[$j];
+				$lo += $words[$j + 1];
+			}
+			$hi = ($hi + ($lo >> 16)) & 0xFFFF;
+			$lo &= 0xFFFF;
+		}
 
 		return [$hi, $lo];
 	}

@@ -83,11 +83,4 @@ class DelegatingFontSource implements FontSourceInterface
 		return $this->parser->getCMAP4($unicode_cmap_offset, $glyphToChar, $charToGlyph);
 	}
 
-	public function getHMTX($numberOfHMetrics, $numGlyphs, &$glyphToChar, $scale, $maxUniChar)
-	{
-		$this->calls[] = __FUNCTION__;
-
-		return $this->parser->getHMTX($numberOfHMetrics, $numGlyphs, $glyphToChar, $scale, $maxUniChar);
-	}
-
 }

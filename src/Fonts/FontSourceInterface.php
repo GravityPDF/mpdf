@@ -4,12 +4,12 @@ namespace Mpdf\Fonts;
 
 /**
  * The font file FontSubsetter builds a program from: the file opened, its table directory read, and
- * the two readers the metrics path has that the subsetter uses as well.
+ * the cmap reader the metrics path has that the subsetter uses as well.
  *
  * TTFontFile is the implementation. The subsetter reads the table bytes itself, through the reader
- * open() hands back, so what it needs from the parser is where each table is and those two readers.
- * That reader is shared: selectFont(), readTableDirectory(), getCMAP4() and getHMTX() read through it
- * too, from wherever the subsetter left it, so a source hands back the reader it reads itself.
+ * open() hands back, so what it needs from the parser is where each table is and getCMAP4().
+ * The file reader is shared: selectFont(), readTableDirectory() and getCMAP4() read through it too,
+ * from wherever the subsetter left it, so a source hands back the reader it reads itself.
  */
 interface FontSourceInterface
 {
@@ -64,18 +64,5 @@ interface FontSourceInterface
 	 * @return int The highest character the subtable covers
 	 */
 	public function getCMAP4($unicode_cmap_offset, &$glyphToChar, &$charToGlyph);
-
-	/**
-	 * The width of every character the font maps, and the width to draw one it does not.
-	 *
-	 * @param int   $numberOfHMetrics hhea's count of full metric records
-	 * @param int   $numGlyphs        maxp's glyph count
-	 * @param array $glyphToChar      The characters each glyph id is mapped from
-	 * @param float $scale            What each width is multiplied by
-	 * @param int   $maxUniChar       The highest character mapped, which sizes the width table
-	 *
-	 * @return array [$charWidths, $defaultWidth]
-	 */
-	public function getHMTX($numberOfHMetrics, $numGlyphs, &$glyphToChar, $scale, $maxUniChar);
 
 }
