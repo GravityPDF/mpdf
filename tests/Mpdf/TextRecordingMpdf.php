@@ -44,4 +44,17 @@ class TextRecordingMpdf extends Mpdf
 		return $this->UTF8StringToArray($this->drawnText[$i], false);
 	}
 
+	/**
+	 * @return array[] Each piece of text drawn, in order: [font family, its codepoints]
+	 */
+	public function drawnPieces()
+	{
+		$pieces = [];
+		foreach (array_keys($this->drawnText) as $i) {
+			$pieces[] = [$this->drawnFontFamily[$i], $this->drawnCodepoints($i)];
+		}
+
+		return $pieces;
+	}
+
 }
