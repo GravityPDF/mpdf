@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: "Checkout"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v7"
 
       - name: Update sources and install ghostscript
-        uses: awalsh128/cache-apt-pkgs-action@master
+        uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: ghostscript
           version: 1.0
@@ -51,7 +51,7 @@ jobs:
       - name: "Snapshot Tests"
         run: composer test -- --group=snapshot
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ failure() }}
         with:
           name: "phpunit-artifact"
