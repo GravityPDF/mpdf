@@ -85,32 +85,32 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:dc="http://purl.org/dc/elements/1.1/">' . "\n";
 		$m .= '    <dc:format>application/pdf</dc:format>' . "\n";
 		if (!empty($this->mpdf->title)) {
-			$m .= '    <dc:title>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->title, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:title>' . "\n";
+			$m .= '    <dc:title>' . "\n";
+			$m .= "\t <rdf:Alt>\n";
+			$m .= "\t  " . '<rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->title, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Alt>\n";
+			$m .= "\t</dc:title>\n";
 		}
 		if (!empty($this->mpdf->keywords)) {
-			$m .= '    <dc:subject>
-	 <rdf:Bag>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Bag>
-	</dc:subject>' . "\n";
+			$m .= '    <dc:subject>' . "\n";
+			$m .= "\t <rdf:Bag>\n";
+			$m .= "\t  " . '<rdf:li>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Bag>\n";
+			$m .= "\t</dc:subject>\n";
 		}
 		if (!empty($this->mpdf->subject)) {
-			$m .= '    <dc:description>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->subject, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:description>' . "\n";
+			$m .= '    <dc:description>' . "\n";
+			$m .= "\t <rdf:Alt>\n";
+			$m .= "\t  " . '<rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->subject, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Alt>\n";
+			$m .= "\t</dc:description>\n";
 		}
 		if (!empty($this->mpdf->author)) {
-			$m .= '    <dc:creator>
-	 <rdf:Seq>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->author, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Seq>
-	</dc:creator>' . "\n";
+			$m .= '    <dc:creator>' . "\n";
+			$m .= "\t <rdf:Seq>\n";
+			$m .= "\t  " . '<rdf:li>' . htmlspecialchars($this->mpdf->author, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Seq>\n";
+			$m .= "\t</dc:creator>\n";
 		}
 		$m .= '   </rdf:Description>' . "\n";
 

@@ -313,6 +313,7 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$logger = new TestLogger();
 		$mpdf = $this->mpdf($config + ['default_font' => 'colr']);
+		$mpdf->SetTitle('Document'); // PDF/X asks for one, and would warn of its own accord
 		$mpdf->setLogger($logger);
 		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
 
@@ -358,6 +359,7 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$logger = new TestLogger();
 		$mpdf = $this->mpdf($config);
+		$mpdf->SetTitle('Document'); // PDF/X asks for one, and would warn of its own accord
 		$mpdf->setLogger($logger);
 		$mpdf->WriteHTML('<p>' . UtfString::code2utf(0x1F600) . '</p>');
 

@@ -50,6 +50,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	const OBJECT_IDENTIFIER = "\xbb\xa4\xac";
 
+	/**
+	 * The name a document is sent under where Output() is given none
+	 */
+	const DEFAULT_OUTPUT_NAME = 'mpdf.pdf';
+
 	var $useFixedNormalLineHeight; // mPDF 6
 	var $useFixedTextBaseline; // mPDF 6
 	var $adjustFontDescLineheight; // mPDF 6
@@ -1688,6 +1693,38 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	public function pdfxRgbIntent()
 	{
 		return $this->pdfxOutputChannels() === 3;
+	}
+
+	/**
+	 * PDF/X requires a document title, which SetTitle() sets. Where none is set the document does not
+	 * conform, so mPDF says so; and where it is to fix the document it titles it after the name the
+	 * document is written under, so that what is produced conforms rather than is merely tolerated.
+	 *
+	 * Asked before the document is closed, since the title is written to the Info dictionary and to the
+	 * XMP metadata as it closes.
+	 *
+	 * @param string|null $name The name Output() was given, which may name no file
+	 */
+	private function requirePdfxTitle($name)
+	{
+		if (!$this->PDFX || !empty($this->title)) {
+			return;
+		}
+
+		$title = pathinfo((string) $name, PATHINFO_FILENAME);
+		if ($title === '') {
+			$title = pathinfo(self::DEFAULT_OUTPUT_NAME, PATHINFO_FILENAME);
+		}
+
+		$this->PDFAXwarnings[] = sprintf(
+			'A document title is required in %s files, and SetTitle() set none. (Title set to the file name "%s")',
+			$this->pdfxVersionLabel(),
+			$title
+		);
+
+		if ($this->PDFXauto) {
+			$this->title = $title;
+		}
 	}
 
 	private function initConstructorParams(array $config)
@@ -9871,6 +9908,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->logger->debug(sprintf('PDF generated in %.6F seconds', microtime(true) - $this->time0), ['context' => LogContext::STATISTICS]);
 
+		// Before the Info dictionary and the metadata are written, which Close() writes
+		$this->requirePdfxTitle($name);
+
 		// Finish document if necessary
 		if ($this->state < 3) {
 			$this->Close();
@@ -9928,7 +9968,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$dest = strtoupper($dest);
 		if (empty($dest)) {
 			if (empty($name)) {
-				$name = 'mpdf.pdf';
+				$name = self::DEFAULT_OUTPUT_NAME;
 				$dest = Destination::INLINE;
 			} else {
 				$dest = Destination::FILE;

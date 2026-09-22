@@ -60,12 +60,13 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * @param array $config Merged over automatic fixing and no compression
 	 *
-	 * @return Mpdf
+	 * @return Mpdf A document titled, as PDF/X requires - the fallback where it is not is tested below
 	 */
 	private function mpdf(array $config = [])
 	{
 		$mpdf = new Mpdf($config + ['mode' => 'utf-8', 'PDFXauto' => true]);
 		$mpdf->SetCompression(false);
+		$mpdf->SetTitle('Document');
 
 		return $mpdf;
 	}
@@ -485,6 +486,143 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectExceptionMessage('PDF/X-4 does not permit encryption of documents.');
 
 		$mpdf->OutputBinaryData();
+	}
+
+	/**
+	 * PDF/X requires a document title, so an untitled document is refused where mPDF is not to fix it
+	 *
+	 * @param string $version As the PDFX setting names it
+	 *
+	 * @dataProvider pdfxVersions
+	 */
+	public function testAnUntitledPdfxDocumentIsRefused($version)
+	{
+		$file = sys_get_temp_dir() . '/mpdf-test-untitled.pdf';
+
+		$mpdf = $this->untitled(['PDFX' => $version, 'PDFXauto' => false]);
+		$mpdf->WriteHTML('<p>Text</p>');
+
+		$refused = null;
+		try {
+			$mpdf->OutputFile($file);
+		} catch (MpdfException $e) {
+			$refused = $e;
+		}
+
+		$this->assertNotNull($refused, 'the untitled document was written');
+		$this->assertStringContainsString('PDFA/PDFX warnings generated', $refused->getMessage());
+		$this->assertContains(
+			sprintf('A document title is required in %s files, and SetTitle() set none. (Title set to the file name "mpdf-test-untitled")', $mpdf->pdfxVersionLabel()),
+			$mpdf->PDFAXwarnings
+		);
+
+		$titled = $this->untitled(['PDFX' => $version, 'PDFXauto' => false]);
+		$titled->SetTitle('Document');
+		$titled->WriteHTML('<p>Text</p>');
+		$titled->OutputFile($file);
+
+		$this->assertFileExists($file, 'the same document with a title is written');
+		unlink($file);
+	}
+
+	/**
+	 * @return array[] Each PDF/X version, as the PDFX setting names it
+	 */
+	public function pdfxVersions()
+	{
+		return ['PDF/X-1a' => ['1a'], 'PDF/X-4' => ['4']];
+	}
+
+	/**
+	 * Where mPDF is to fix the document, an untitled one is titled after the file it is written to, so
+	 * that what is produced conforms rather than is merely tolerated
+	 */
+	public function testAnUntitledPdfxDocumentIsTitledAfterItsFile()
+	{
+		$file = sys_get_temp_dir() . '/Quarterly Report.pdf';
+
+		$mpdf = $this->untitled(['PDFX' => '4']);
+		$mpdf->WriteHTML('<p>Text</p>');
+		$mpdf->OutputFile($file);
+
+		$pdf = file_get_contents($file);
+		unlink($file);
+
+		$this->assertStringContainsString('<rdf:li xml:lang="x-default">Quarterly Report</rdf:li>', $pdf);
+		$this->assertStringContainsString('/Title ' . $this->textString('Quarterly Report'), $pdf);
+	}
+
+	/**
+	 * Written to no file, an untitled document is titled after the name mPDF sends a document under
+	 */
+	public function testAnUntitledPdfxDocumentWrittenToNoFileTakesThePdfxDefaultName()
+	{
+		$mpdf = $this->untitled(['PDFX' => '4']);
+		$mpdf->WriteHTML('<p>Text</p>');
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertStringContainsString('<rdf:li xml:lang="x-default">mpdf</rdf:li>', $pdf);
+		$this->assertStringContainsString('/Title ' . $this->textString('mpdf'), $pdf);
+	}
+
+	/**
+	 * A title the document sets is the title, whatever file it is written to
+	 */
+	public function testASetTitleIsKept()
+	{
+		$file = sys_get_temp_dir() . '/mpdf-test-titled.pdf';
+
+		$mpdf = $this->untitled(['PDFX' => '4']);
+		$mpdf->SetTitle('Annual Accounts');
+		$mpdf->WriteHTML('<p>Text</p>');
+		$mpdf->OutputFile($file);
+
+		$pdf = file_get_contents($file);
+		unlink($file);
+
+		$this->assertStringContainsString('<rdf:li xml:lang="x-default">Annual Accounts</rdf:li>', $pdf);
+		$this->assertStringNotContainsString('mpdf-test-titled', $pdf);
+	}
+
+	/**
+	 * A document that is not PDF/X is titled only where it says so
+	 */
+	public function testANonPdfxDocumentIsNotTitled()
+	{
+		$file = sys_get_temp_dir() . '/mpdf-test-plain.pdf';
+
+		$mpdf = $this->untitled([]);
+		$mpdf->WriteHTML('<p>Text</p>');
+		$mpdf->OutputFile($file);
+
+		$pdf = file_get_contents($file);
+		unlink($file);
+
+		$this->assertStringNotContainsString('/Title', $pdf);
+		$this->assertStringNotContainsString('<dc:title>', $pdf);
+	}
+
+	/**
+	 * @param array $config Merged over automatic fixing and no compression
+	 *
+	 * @return Mpdf A document with no title of its own
+	 */
+	private function untitled(array $config)
+	{
+		$mpdf = new Mpdf($config + ['mode' => 'utf-8', 'PDFXauto' => true]);
+		$mpdf->SetCompression(false);
+
+		return $mpdf;
+	}
+
+	/**
+	 * @param string $text
+	 *
+	 * @return string That text as the Info dictionary carries it, UTF-16BE behind a byte order mark
+	 */
+	private function textString($text)
+	{
+		return '(' . "\xFE\xFF" . mb_convert_encoding($text, 'UTF-16BE', 'UTF-8') . ')';
 	}
 
 	/**
