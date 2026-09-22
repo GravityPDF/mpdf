@@ -37,9 +37,10 @@ interface GlyphResources
 
 	/**
 	 * @param array $shading 'coords' => the shading's /Coords, four for an axial shading's two points or
-	 *                       six for a radial one's two circles; 'stops' => each [offset from 0 to 1,
-	 *                       colour], the colour [red, green, blue] or [grey], from 0 to 1, the first
-	 *                       stop at 0 and the last at 1
+	 *                       six for a radial one's two circles, or instead 'mesh' => triangles, each
+	 *                       three corners [x, y, offset from 0 to 1]; 'stops' => each [offset from 0
+	 *                       to 1, colour], the colour [red, green, blue] or [grey], from 0 to 1, the
+	 *                       first stop at 0 and the last at 1
 	 *
 	 * @return string The name the content paints it by with sh, e.g. '/Sh2'
 	 */

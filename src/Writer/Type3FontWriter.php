@@ -392,7 +392,9 @@ class Type3FontWriter implements GlyphResources
 
 		foreach ($this->shadings as $key => $shading) {
 			if (!isset($shading['n'])) {
-				$this->shadings[$key]['n'] = $this->writeObject($this->shadingDictionary($shading['shading']));
+				$this->shadings[$key]['n'] = isset($shading['shading']['mesh'])
+					? $this->writeMesh($shading['shading'])
+					: $this->writeObject($this->shadingDictionary($shading['shading']));
 			}
 		}
 
@@ -439,34 +441,102 @@ class Type3FontWriter implements GlyphResources
 	 */
 	private function shadingDictionary(array $shading)
 	{
-		$colour = function ($colour) {
-			return implode(' ', array_map(function ($value) {
-				return sprintf('%.3F', $value);
-			}, $colour));
+		return sprintf(
+			'<</ShadingType %d /ColorSpace %s /Coords [%s] /Function %s /Extend [true true]>>',
+			count($shading['coords']) === 4 ? 2 : 3,
+			self::colourSpace($shading['stops']),
+			self::values($shading['coords']),
+			self::stopFunction($shading['stops'])
+		);
+	}
+
+	/**
+	 * Writes a free-form triangle mesh, ShadingType 4, each corner an offset its function takes to a
+	 * colour, the coordinates as 16-bit fractions of the area the mesh covers
+	 *
+	 * @param array $shading As GlyphResources::shading() takes it, with a mesh
+	 *
+	 * @return int The shading's object number
+	 */
+	private function writeMesh(array $shading)
+	{
+		$xs = [];
+		$ys = [];
+		foreach ($shading['mesh'] as $triangle) {
+			foreach ($triangle as $corner) {
+				$xs[] = $corner[0];
+				$ys[] = $corner[1];
+			}
+		}
+		$decode = [min($xs), max($xs), min($ys), max($ys)];
+
+		// Rounded by floor() rather than round(), which before PHP 8.4 rounds a value within 15 digits
+		// of a half differently, and would change the bytes from one version to the next
+		$fraction = function ($value, $min, $max) {
+			return (int) floor(($max > $min ? ($value - $min) / ($max - $min) : 0) * 0xFFFF + 0.5);
 		};
 
-		$stops = $shading['stops'];
+		// Each corner a flag of 0, a triangle's own, then x, y and the offset
+		$data = '';
+		foreach ($shading['mesh'] as $triangle) {
+			foreach ($triangle as $corner) {
+				$data .= pack('Cn3', 0, $fraction($corner[0], $decode[0], $decode[1]), $fraction($corner[1], $decode[2], $decode[3]), $fraction($corner[2], 0, 1));
+			}
+		}
+
+		$this->writeStream(sprintf(
+			'/ShadingType 4 /ColorSpace %s /BitsPerCoordinate 16 /BitsPerComponent 16 /BitsPerFlag 8 /Decode [%s 0 1] /Function %s',
+			self::colourSpace($shading['stops']),
+			self::values($decode),
+			self::stopFunction($shading['stops'])
+		), $data);
+
+		return $this->mpdf->n;
+	}
+
+	/**
+	 * @param array[] $stops As GlyphResources::shading() takes them
+	 *
+	 * @return string /DeviceGray or /DeviceRGB, as the stops' colours are
+	 */
+	private static function colourSpace(array $stops)
+	{
+		return count($stops[0][1]) === 1 ? '/DeviceGray' : '/DeviceRGB';
+	}
+
+	/**
+	 * @param array[] $stops As GlyphResources::shading() takes them
+	 *
+	 * @return string A function from 0 to 1 to the stops' colours, stitched from one stop to the next
+	 */
+	private static function stopFunction(array $stops)
+	{
 		$functions = [];
 		$bounds = [];
 		for ($i = 0; $i < count($stops) - 1; $i++) {
-			$functions[] = sprintf('<</FunctionType 2 /Domain [0 1] /C0 [%s] /C1 [%s] /N 1>>', $colour($stops[$i][1]), $colour($stops[$i + 1][1]));
+			$functions[] = sprintf('<</FunctionType 2 /Domain [0 1] /C0 [%s] /C1 [%s] /N 1>>', self::values($stops[$i][1]), self::values($stops[$i + 1][1]));
 			if ($i > 0) {
 				$bounds[] = sprintf('%.4F', $stops[$i][0]);
 			}
 		}
 
-		$function = $functions[0];
-		if (count($functions) > 1) {
-			$function = sprintf('<</FunctionType 3 /Domain [0 1] /Functions [%s] /Bounds [%s] /Encode [%s]>>', implode(' ', $functions), implode(' ', $bounds), trim(str_repeat('0 1 ', count($functions))));
+		if (count($functions) === 1) {
+			return $functions[0];
 		}
 
-		return sprintf(
-			'<</ShadingType %d /ColorSpace /Device%s /Coords [%s] /Function %s /Extend [true true]>>',
-			count($shading['coords']) === 4 ? 2 : 3,
-			count($stops[0][1]) === 1 ? 'Gray' : 'RGB',
-			$colour($shading['coords']),
-			$function
-		);
+		return sprintf('<</FunctionType 3 /Domain [0 1] /Functions [%s] /Bounds [%s] /Encode [%s]>>', implode(' ', $functions), implode(' ', $bounds), trim(str_repeat('0 1 ', count($functions))));
+	}
+
+	/**
+	 * @param float[] $values
+	 *
+	 * @return string The values to three places, spaced
+	 */
+	private static function values(array $values)
+	{
+		return implode(' ', array_map(function ($value) {
+			return sprintf('%.3F', $value);
+		}, $values));
 	}
 
 	/**

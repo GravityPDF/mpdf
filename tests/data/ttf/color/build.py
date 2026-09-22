@@ -330,7 +330,7 @@ def build_colrv1():
         # Skewed, then rotated
         'u1F3F4': {'Format': 24, 'angle': -10, 'Paint': {'Format': 28, 'xSkewAngle': 15, 'ySkewAngle': 0,
                                                           'Paint': glyph('layer.pole', solid(BLACK))}},
-        # A sweep gradient, which mPDF draws in the colour of its middle stop
+        # A sweep gradient, skin tone round to red and back
         'u1F3FD': glyph('layer.square', {'Format': 8, 'ColorLine': line([(0.0, SKIN, 1.0), (0.5, RED, 1.0), (1.0, SKIN, 1.0)]),
                                          'centerX': 500, 'centerY': 350, 'startAngle': 0, 'endAngle': 360}),
         # Turned about its centre, and cut off by its clip box

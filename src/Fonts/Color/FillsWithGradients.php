@@ -5,9 +5,10 @@ namespace Mpdf\Fonts\Color;
 /**
  * Filling the clip with a gradient, the way both vector formats draw one: an axial or a radial
  * shading, its stops written out over as many spans as cover the area for REPEAT and REFLECT, and
- * where its alpha varies, masked by the brightness of a grey shading of the same shape. The colours are
- * interpolated premultiplied by alpha, as CPAL asks of COLR and SVG alike - see ColorLine - and a
- * radial gradient is cut where its radius reaches 0, since a shading cannot take a negative radius.
+ * where its alpha varies, masked by the brightness of a grey shading of the same shape. A COLR sweep
+ * gradient's mesh is painted the same way - see SweepGradient. The colours are interpolated
+ * premultiplied by alpha, as CPAL asks of COLR and SVG alike - see ColorLine - and a radial gradient
+ * is cut where its radius reaches 0, since a shading cannot take a negative radius.
  *
  * @see https://learn.microsoft.com/en-us/typography/opentype/spec/cpal#interpolation-of-colors
  */
@@ -32,6 +33,22 @@ trait FillsWithGradients
 		}
 		list($coords, $stops) = $cut;
 
+		return $this->shaded(['coords' => $coords], $stops, $line->opacity(), $box, $resources);
+	}
+
+	/**
+	 * @param array          $shape     The shading's shape, as GlyphResources::shading() takes it
+	 *                                  without its stops: 'coords' or 'mesh'
+	 * @param array[]        $stops     Each as [offset from 0 to 1, colour, alpha], in order
+	 * @param float|null     $opacity   The alpha every stop has, or null where they differ
+	 * @param float[]        $box       The area to cover, in the gradient's space
+	 * @param GlyphResources $resources Where the shadings, and a mask, are registered
+	 *
+	 * @return string Content painting the shading in the stops' colours, masked by their alphas where
+	 *                they vary, or nothing where it is transparent
+	 */
+	private function shaded(array $shape, array $stops, $opacity, array $box, GlyphResources $resources)
+	{
 		$colours = [];
 		foreach (ColorLine::premultiplied($stops) as $stop) {
 			$colours[] = [$stop[0], $stop[1]];
@@ -41,10 +58,9 @@ trait FillsWithGradients
 			$alphas[] = [$stop[0], [$stop[2]]];
 		}
 
-		$content = $resources->shading(['coords' => $coords, 'stops' => $colours]) . " sh\n";
-		$opacity = $line->opacity();
+		$content = $resources->shading($shape + ['stops' => $colours]) . " sh\n";
 		if ($opacity === null) {
-			$mask = $resources->shading(['coords' => $coords, 'stops' => $alphas]) . " sh\n";
+			$mask = $resources->shading($shape + ['stops' => $alphas]) . " sh\n";
 
 			return sprintf("q %s\n", $resources->softMask($mask, $box, true)) . $content . "Q\n";
 		}
@@ -66,7 +82,7 @@ trait FillsWithGradients
 	 */
 	private static function spans(array $geometry, array $box)
 	{
-		$corners = [[$box[0], $box[1]], [$box[0], $box[3]], [$box[2], $box[1]], [$box[2], $box[3]]];
+		$corners = Geometry::corners($box);
 
 		if (count($geometry) === 4) {
 			// Each corner's offset along the axis

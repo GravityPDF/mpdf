@@ -18,8 +18,8 @@ use Mpdf\Fonts\FontReader;
  *   turning the colour's lines off the perpendicular; they are folded into two by moving the second
  *   onto the line through the first that runs parallel to them.
  * - PaintRadialGradient, a radial shading, ShadingType 3, which is defined the same way
- * - PaintSweepGradient, which a PDF shading cannot draw short of a function of the angle; it is drawn
- *   in the colour of its middle stop, with a warning. No Noto emoji has one.
+ * - PaintSweepGradient, which no PDF shading draws as it stands, as a free-form triangle mesh of thin
+ *   wedges, ShadingType 4 - see SweepGradient. No Noto emoji has one.
  * - The transforms - PaintTransform, Translate, Scale, Rotate, Skew and those around a centre - cm
  * - PaintComposite: a blend mode through /BM, and the Porter-Duff modes through soft masks drawn from
  *   the alpha of the source or the backdrop - see COMPOSITES. Where the mask is one glyph in an opaque
@@ -444,12 +444,12 @@ class ColrV1Source implements ColorGlyphSource
 			return '';
 		}
 
-		if ($format === 8) {
-			$this->file->warn($this->glyph, 'a sweep gradient, which is drawn in the colour of its middle stop');
+		if (count($line->stops) === 1) {
+			return $this->fill($line->middle(), $matrix);
 		}
 
-		if (count($line->stops) === 1 || $format === 8) {
-			return $this->fill($line->middle(), $matrix);
+		if ($format === 8) {
+			return $this->sweep($paint, $line, $box);
 		}
 
 		list($first, $last) = $line->span();
@@ -474,6 +474,48 @@ class ColrV1Source implements ColorGlyphSource
 		}
 
 		return $this->gradientFill($line, $geometry, $box, $this->resources);
+	}
+
+	/**
+	 * @param string    $paint A PaintSweepGradient's bytes
+	 * @param ColorLine $line  Its stops
+	 * @param float[]   $box   The area to cover, in the paint's space
+	 *
+	 * @return string Content filling the clip with the gradient
+	 */
+	private function sweep($paint, ColorLine $line, array $box)
+	{
+		// F2Dot14, biased: stored as degrees / 180 - 1, so a whole turn fits
+		$start = (self::f2dot14($paint, 8) + 1) * 180;
+		$end = (self::f2dot14($paint, 10) + 1) * 180;
+
+		// The angles of the first stop and the last
+		list($first, $last) = $line->span();
+		$from = $start + $first * ($end - $start);
+		$to = $start + $last * ($end - $start);
+
+		// Repeated or reflected, the stops are spread over the spans the turn takes in, as far as
+		// MAX_REPEATS each way
+		$spans = [0, 1];
+		if ($line->extend !== ColorLine::PAD) {
+			if ($from === $to) {
+				return '';
+			}
+			$ends = [-$from / ($to - $from), (360 - $from) / ($to - $from)];
+			$spans = [(int) max(-ColorLine::MAX_REPEATS, floor(min($ends))), (int) min(ColorLine::MAX_REPEATS, ceil(max($ends)))];
+		}
+		$stops = $line->normalised($spans[0], $spans[1]);
+
+		$triangles = SweepGradient::triangles(
+			self::int16At($paint, 4),
+			self::int16At($paint, 6),
+			$from + $spans[0] * ($to - $from),
+			$from + $spans[1] * ($to - $from),
+			array_column($stops, 0),
+			$box
+		);
+
+		return $this->shaded(['mesh' => $triangles], $stops, $line->opacity(), $box, $this->resources);
 	}
 
 	/**

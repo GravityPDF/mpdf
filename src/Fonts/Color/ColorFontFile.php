@@ -116,7 +116,7 @@ class ColorFontFile
 	 * Logs part of a glyph that is not drawn as the font asks, once however many times it is met
 	 *
 	 * @param int    $glyph
-	 * @param string $what  What it is, e.g. 'a sweep gradient, which is drawn in one colour'
+	 * @param string $what  What it is, e.g. 'a paint of format 33, which is not in the spec'
 	 */
 	public function warn($glyph, $what)
 	{

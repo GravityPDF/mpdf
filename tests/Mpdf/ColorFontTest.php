@@ -264,6 +264,22 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * TestEmoji-COLRv1's skin tone, a sweep gradient, is a free-form triangle mesh of 90 wedges whose
+	 * corners carry an offset its function takes from skin tone to red and back, 7 bytes to a corner: a
+	 * flag, x and y, and the offset
+	 */
+	public function testAColrV1SweepGradientIsATriangleMesh()
+	{
+		$objects = $this->objects([0x1F3FD], ['default_font' => 'colrv1']);
+		$resources = $this->referenced($objects, $this->objectMatching($objects, '/\/Subtype \/Type3/'), 'Resources');
+		$mesh = $this->referenced($objects, $resources, 'Sh1');
+
+		$this->assertStringStartsWith('<</ShadingType 4 /ColorSpace /DeviceRGB /BitsPerCoordinate 16 /BitsPerComponent 16 /BitsPerFlag 8 /Decode [', $mesh);
+		$this->assertStringContainsString(' 0 1] /Function <</FunctionType 3 /Domain [0 1] /Functions [<</FunctionType 2 /Domain [0 1] /C0 [0.776 0.525 0.259] /C1 [0.878 0.141 0.369] /N 1>> ', $mesh);
+		$this->assertStringContainsString('/Length ' . 90 * 3 * 7 . '>>', $mesh);
+	}
+
+	/**
 	 * TestEmoji-SVG's girl is a PNG, its heart a gradient and its woman clipped by a mask: each is named
 	 * by the font's own resources, and the glyphs draw them by those names. The flag of England, which
 	 * has no SVG document, is its outline.

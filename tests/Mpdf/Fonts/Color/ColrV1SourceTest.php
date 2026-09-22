@@ -251,12 +251,73 @@ class ColrV1SourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The skin tone is a sweep gradient, which is filled in its middle stop's colour, and logged
+	 * The skin tone is a sweep gradient about 500,350 from 0 to 360 degrees, skin tone to red and back:
+	 * a mesh of wedges inside the square, red at 180 degrees, and nothing logged
 	 */
-	public function testASweepGradientIsItsMiddleStopAndIsLogged()
+	public function testASweepGradientIsAMesh()
 	{
-		$this->assertSame(self::CLIP . "q\n50 -100 m\n50 800 l\n950 800 l\n950 -100 l\nh\nW n\nq 0.878 0.141 0.369 rg\n20 -100 960 950 re f\nQ\nQ\nQ\n", $this->source->draw(20, $this->resources));
-		$this->assertTrue($this->logger->hasWarningThatContains('Colour glyph 20 has a sweep gradient'));
+		$this->assertSame(self::CLIP . "q\n50 -100 m\n50 800 l\n950 800 l\n950 -100 l\nh\nW n\n/Sh1 sh\nQ\nQ\n", $this->source->draw(20, $this->resources));
+		$this->assertFalse($this->logger->hasWarningThatContains('sweep'));
+
+		$shading = $this->resources->shadings[0];
+		$this->assertSame([0, 0.5, 1], array_column($shading['stops'], 0));
+		$this->assertSame([0.878, 0.141, 0.369], array_map(function ($value) {
+			return round($value, 3);
+		}, $shading['stops'][1][1]), 'red in the middle');
+
+		// Each wedge from the centre out to its two corners, the red stop's on the left of the centre
+		$this->assertCount(90, $shading['mesh']);
+		$red = null;
+		foreach ($shading['mesh'] as $triangle) {
+			$this->assertSame([500, 350], array_slice($triangle[0], 0, 2));
+			if ($triangle[1][2] === 0.5) {
+				$red = $triangle[1];
+			}
+		}
+		$this->assertLessThan(0, $red[0]);
+		$this->assertEqualsWithDelta(350, $red[1], 1e-9);
+	}
+
+	/**
+	 * A sweep gradient repeated or reflected from 0 to 90 degrees has its stops, opaque then half
+	 * transparent, spread over the four spans the turn takes in, the reflected ones back to front every
+	 * other span, and its mesh runs from 0 to 1 over the whole turn
+	 *
+	 * @dataProvider sweepsSpread
+	 *
+	 * @param int     $extend ColorLine::REPEAT or REFLECT
+	 * @param float[] $alphas The alpha of each stop spread over the turn
+	 */
+	public function testARepeatedOrReflectedSweepSpreadsItsStopsOverTheTurn($extend, array $alphas)
+	{
+		$this->assertNotNull($this->synthetic($this->paintGlyph() . $this->sweepQuarter($extend))->draw(1, $this->resources));
+
+		list($colours, $mask) = $this->resources->shadings;
+		$this->assertSame([0, 0.25, 0.25, 0.5, 0.5, 0.75, 0.75, 1], array_column($mask['stops'], 0));
+		$this->assertSame($alphas, array_column(array_column($mask['stops'], 1), 0));
+
+		$this->assertSame($mask['mesh'], $colours['mesh']);
+		$this->assertSame(0.0, $colours['mesh'][0][1][2], 'offset 0 at 0 degrees');
+		$this->assertSame(1.0, end($colours['mesh'])[2][2], 'and 1 at 360');
+	}
+
+	/**
+	 * @return array[] Each extend mode, and the alphas its stops are spread with
+	 */
+	public function sweepsSpread()
+	{
+		return [
+			'repeated' => [ColorLine::REPEAT, [1, 0.5, 1, 0.5, 1, 0.5, 1, 0.5]],
+			'reflected' => [ColorLine::REFLECT, [1, 0.5, 0.5, 1, 1, 0.5, 0.5, 1]],
+		];
+	}
+
+	/**
+	 * A repeated sweep gradient whose two angles are one has no span to repeat, and draws nothing
+	 */
+	public function testARepeatedSweepOfNoAngleDrawsNothing()
+	{
+		$this->assertNull($this->synthetic($this->paintGlyph() . $this->sweepQuarter(ColorLine::REPEAT, 0xC000))->draw(1, $this->resources));
 	}
 
 	/**
@@ -463,6 +524,19 @@ class ColrV1SourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function solidTriangle()
 	{
 		return $this->paintGlyph() . pack('Cnn', 2, 0, 0x4000);
+	}
+
+	/**
+	 * @param int $extend ColorLine::PAD, REPEAT or REFLECT
+	 * @param int $end    The end angle, as an F2Dot14's bits: 90 degrees unless another is given
+	 *
+	 * @return string A PaintSweepGradient about 500,500 from 0 degrees, and its ColorLine of the
+	 *                palette's red, opaque at 0 and half transparent at 1
+	 */
+	private function sweepQuarter($extend, $end = 0xE000)
+	{
+		return pack('C', 8) . self::u24(12) . pack('n4', 500, 500, 0xC000, $end)
+			. pack('Cn', $extend, 2) . pack('n3', 0, 0, 0x4000) . pack('n3', 0x4000, 0, 0x2000);
 	}
 
 	/**
