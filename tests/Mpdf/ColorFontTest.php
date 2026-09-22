@@ -240,31 +240,26 @@ class ColorFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * TestEmoji-COLRv1's heart is a gradient kept to the heart by SRC_IN, and its keycap a square with
-	 * the digit cut out by DEST_OUT: each is a group drawn through a soft mask, both named by the font's
-	 * own resources beside the gradient's shading, and drawing with those same resources
+	 * TestEmoji-COLRv1's heart is a gradient kept to the heart by SRC_IN, its woman a gradient whose
+	 * alpha varies, and its family faces multiplied onto a square. The heart's shading, the woman's soft
+	 * mask and the family's groups are each named by the font's own resources, and the groups draw with
+	 * those same resources.
 	 */
 	public function testAColrV1GlyphsShadingsGroupsAndMasksAreTheFontsResources()
 	{
-		$objects = $this->objects([0x2764, 0x31, 0x20E3], ['default_font' => 'colrv1']);
+		$objects = $this->objects([0x2764, 0x1F469, 0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467], ['default_font' => 'colrv1']);
 		$font = $this->objectMatching($objects, '/\/Subtype \/Type3/');
 		$resources = $this->referenced($objects, $font, 'Resources');
 
-		$this->assertSame(1, preg_match('/q \/(SM\d+) gs \/(Fx\d+) Do Q/', $this->procedure($objects, 13), $heart));
-		$mask = $this->referenced($objects, $resources, $heart[1]);
-		$group = $this->referenced($objects, $resources, $heart[2]);
-		$shading = $this->referenced($objects, $resources, 'Sh1');
+		$this->assertSame(1, preg_match('/W n\n\/(Sh\d+) sh\n/', $this->procedure($objects, 13), $heart));
+		$this->assertStringStartsWith('<</ShadingType 2 /ColorSpace /DeviceRGB /Coords [500.000 750.000 500.000 -50.000] /Function <</FunctionType 2 /Domain [0 1] /C0 [0.878 0.141 0.369] /C1 [1.000 0.800 0.200] /N 1>> /Extend [true true]>>', $this->referenced($objects, $resources, $heart[1]));
 
-		$this->assertMatchesRegularExpression('/^<<\/Type \/ExtGState \/SMask <<\/Type \/Mask \/S \/Alpha \/G \d+ 0 R>>>>$/', $mask);
-		$this->assertStringContainsString("500 -50 m\n80 400 l\n", $this->referenced($objects, $mask, 'G'), 'the mask is the heart');
-		$this->assertStringContainsString("W n\n/Sh1 sh\n", $group, 'the group is the gradient');
-		$this->assertMatchesRegularExpression('/^<<\/Type \/XObject \/Subtype \/Form \/BBox \[20\.000 -100\.000 980\.000 850\.000\] \/Group <<\/S \/Transparency>> \/Resources \d+ 0 R /', $group);
-		$this->assertStringStartsWith('<</ShadingType 2 /ColorSpace /DeviceRGB /Coords [500.000 750.000 500.000 -50.000] /Function <</FunctionType 2 /Domain [0 1] /C0 [0.878 0.141 0.369] /C1 [1.000 0.800 0.200] /N 1>> /Extend [true true]>>', $shading);
+		$this->assertSame(1, preg_match('/q \/(SM\d+) gs\n/', $this->procedure($objects, 15), $woman));
+		$this->assertMatchesRegularExpression('/^<<\/Type \/ExtGState \/SMask <<\/Type \/Mask \/S \/Luminosity \/G \d+ 0 R>>>>$/', $this->referenced($objects, $resources, $woman[1]));
 
-		$this->assertSame(1, preg_match('/q \/(SM\d+) gs/', $this->procedure($objects, 24), $keycap));
-		$this->assertStringContainsString('/TR <</FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1>>', $this->referenced($objects, $resources, $keycap[1]), 'the digit is cut out');
-
-		// The groups draw with the font's resources
+		$this->assertSame(1, preg_match('/\/(Fx\d+) Do/', $this->procedure($objects, 22), $family));
+		$group = $this->referenced($objects, $resources, $family[1]);
+		$this->assertMatchesRegularExpression('/^<<\/Type \/XObject \/Subtype \/Form \/BBox \[20\.000 -100\.000 980\.000 850\.000\] \/Group <<\/S \/Transparency \/I true>> \/Resources \d+ 0 R /', $group);
 		$this->assertSame($resources, $this->referenced($objects, $group, 'Resources'));
 	}
 

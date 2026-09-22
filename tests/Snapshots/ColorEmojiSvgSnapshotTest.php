@@ -17,6 +17,8 @@ namespace Snapshots;
 class ColorEmojiSvgSnapshotTest extends Snapshot
 {
 
+	use EmojiTable;
+
 	/**
 	 * Each emoji of the font, what it is, and what it tests
 	 */
@@ -63,25 +65,6 @@ class ColorEmojiSvgSnapshotTest extends Snapshot
 			'backupSubsFont' => ['svg'],
 		]);
 
-		$rows = '';
-		foreach (self::GLYPHS as $i => $glyph) {
-			$rows .= sprintf(
-				'<tr><td style="width: 8mm; color: #666">%d</td><td style="width: 16mm; font-size: 24pt">%s</td><td><b>%s</b><br>%s</td></tr>',
-				$i + 1,
-				$glyph[0],
-				$glyph[1],
-				$glyph[2]
-			);
-		}
-
-		$emoji = implode(' ', array_column(self::GLYPHS, 0));
-
-		$this->mpdf->WriteHTML(
-			'<h3>TestEmoji-SVG: each emoji tests part of SVG, and may look unfinished</h3>'
-			. '<table style="font-size: 9pt; border-collapse: collapse" cellpadding="3">' . $rows . '</table>'
-			. '<p style="font-size: 28pt">Emoji ' . $emoji . ' end</p>'
-			. '<p style="font-size: 11pt; text-align: justify">' . str_repeat('Text with emoji ' . $emoji . ' in it. ', 4) . '</p>'
-			. '<p style="font-size: 16pt; color: #c00">Red text keeps its emoji in colour: ' . $emoji . '</p>'
-		);
+		$this->writeEmojiTable('TestEmoji-SVG: each emoji tests part of SVG, and may look unfinished', self::GLYPHS);
 	}
 }

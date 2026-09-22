@@ -89,6 +89,19 @@ class GlyphOutlineTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A glyph counts the contours its path draws: one for the triangle, two for two triangles, and none
+	 * for a glyph with no outline
+	 */
+	public function testAGlyphCountsTheContoursItDraws()
+	{
+		$outline = $this->outline([$this->triangle(), $this->twoTriangles(), '']);
+
+		$this->assertSame(1, $outline->contourCount(0));
+		$this->assertSame(2, $outline->contourCount(1));
+		$this->assertSame(0, $outline->contourCount(2));
+	}
+
+	/**
 	 * A glyph that runs short of what it says it holds draws nothing and warns of nothing, rather than
 	 * reading past its end
 	 *
