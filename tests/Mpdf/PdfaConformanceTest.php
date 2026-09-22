@@ -3,14 +3,14 @@
 namespace Mpdf;
 
 /**
- * Documents mPDF writes as PDF/A-2 and PDF/A-3 pass veraPDF, the reference validator
+ * Documents mPDF writes as PDF/A-2 and PDF/A-3 pass veraPDF
  *
- * Needs `verapdf` on the PATH, and is skipped where it is not.
- *
- * @group pdfa
+ * @group conformance
  */
 class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
+
+	use VeraPdf;
 
 	/**
 	 * @var string
@@ -18,15 +18,10 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private $file;
 
 	/**
-	 * Skip unless veraPDF can be run
+	 * Name the document to validate
 	 */
 	protected function set_up()
 	{
-		exec('verapdf --version 2>&1', $output, $status);
-		if ($status !== 0) {
-			$this->markTestSkipped('veraPDF is not on the PATH');
-		}
-
 		$this->file = sys_get_temp_dir() . '/mpdf-pdfa-' . uniqid() . '.pdf';
 	}
 
@@ -64,14 +59,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		);
 		$mpdf->Output($this->file, 'F');
 
-		exec('verapdf --flavour ' . strtolower(str_replace('-', '', $version)) . ' --format xml ' . escapeshellarg($this->file) . ' 2>&1', $report);
-		$report = implode("\n", $report);
-
-		preg_match_all('/<rule [^>]*clause="([^"]+)" testNumber="(\d+)" status="failed"/', $report, $failed, PREG_SET_ORDER);
-		$this->assertSame([], array_map(function ($rule) {
-			return $rule[1] . '-' . $rule[2];
-		}, $failed), 'veraPDF found the document does not conform');
-		$this->assertStringContainsString('isCompliant="true"', $report);
+		$this->assertConforms($this->file, strtolower(str_replace('-', '', $version)));
 	}
 
 	/**
