@@ -18,15 +18,19 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private $files = [];
 
 	/**
+	 * Skip before building a document veraPDF is not there to check
+	 */
+	protected function set_up()
+	{
+		$this->skipWithoutVeraPdf();
+	}
+
+	/**
 	 * Remove the documents written
 	 */
 	protected function tear_down()
 	{
-		foreach ($this->files as $file) {
-			if (file_exists($file)) {
-				unlink($file);
-			}
-		}
+		array_map('unlink', $this->files);
 	}
 
 	/**
@@ -39,7 +43,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$img = __DIR__ . '/../data/img/';
 
-		$mpdf = new Mpdf($config + ['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => $version]);
+		$mpdf = $this->pdfa($version, $config);
 		$mpdf->SetWatermarkText('DRAFT');
 		$mpdf->showWatermarkText = true;
 		$mpdf->WriteHTML(
@@ -53,9 +57,8 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<img src="' . $img . 'truecolour-trns.png" /> <img style="opacity: 0.5" src="' . $img . 'tiger.jpg" width="20" />'
 			. '<img src="' . $img . 'demo.svg" width="40" />'
 		);
-		$file = $this->write($mpdf);
 
-		$this->assertConforms($file, $this->flavour($version));
+		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
 	}
 
 	/**
@@ -65,9 +68,9 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAttachmentsConform($version)
 	{
-		$attachment = $this->write(new Mpdf(['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B']));
+		$attachment = $this->write($this->pdfa('2-B'));
 
-		$mpdf = new Mpdf(['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => $version, 'allowAnnotationFiles' => true]);
+		$mpdf = $this->pdfa($version, ['allowAnnotationFiles' => true]);
 		$mpdf->WriteHTML(
 			'<p>PDF/A <annotation content="PDF/A" file="' . $attachment . '" /></p>'
 			. '<p>Plain <annotation content="Plain" file="' . __DIR__ . '/../data/pdfs/2-Page-PDF_1_4.pdf" /></p>'
@@ -75,7 +78,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$file = $this->write($mpdf);
 
 		$this->assertSame(1, substr_count(file_get_contents($file), '/Type /EmbeddedFile'));
-		$this->assertConforms($file, $this->flavour($version));
+		$this->assertConforms($file, $this->flavour($mpdf));
 	}
 
 	/**
@@ -107,6 +110,19 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A PDF/A document of the given version that fixes what it can
+	 *
+	 * @param string $version
+	 * @param mixed[] $config
+	 *
+	 * @return \Mpdf\Mpdf
+	 */
+	private function pdfa($version, $config = [])
+	{
+		return new Mpdf($config + ['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => $version]);
+	}
+
+	/**
 	 * Writes a document to a temporary file, removed after the test
 	 *
 	 * @param \Mpdf\Mpdf $mpdf
@@ -123,15 +139,15 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The veraPDF flavour of a PDFAversion: '2-B' is '2b'
+	 * The veraPDF flavour a PDF/A document claims: PDF/A-2b is '2b'
 	 *
-	 * @param string $version
+	 * @param \Mpdf\Mpdf $mpdf
 	 *
 	 * @return string
 	 */
-	private function flavour($version)
+	private function flavour(Mpdf $mpdf)
 	{
-		return strtolower(str_replace('-', '', $version));
+		return strtolower(implode('', $mpdf->pdfaConformance()));
 	}
 
 }

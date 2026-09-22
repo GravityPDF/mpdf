@@ -236,7 +236,8 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(1, substr_count($pdf, '/Type /EmbeddedFile'));
 		$this->assertSame(1, substr_count($pdf, '/Subtype /FileAttachment'));
-		$this->assertStringContainsString('/F (mpdfpdfa2attachment.pdf) /UF (mpdfpdfa2attachment.pdf)', $pdf);
+		$name = str_replace('-', '', basename($pdfa)); // mPDF keeps letters, digits, dots and underscores
+		$this->assertStringContainsString('/F (' . $name . ') /UF (' . $name . ')', $pdf);
 	}
 
 	/**
@@ -257,7 +258,7 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function pdfaFile()
 	{
-		$file = sys_get_temp_dir() . '/mpdf-pdfa2-attachment.pdf';
+		$file = sys_get_temp_dir() . '/mpdf-pdfa2-' . uniqid() . '.pdf';
 		$this->pdfa('2-B')->Output($file, 'F');
 
 		return $file;
@@ -273,10 +274,7 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function pdfa($version, $config = [])
 	{
-		$mpdf = new Mpdf($config + ['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => $version]);
-		$mpdf->compress = false;
-
-		return $mpdf;
+		return $this->mpdf($config + $this->pdfaConfig($version));
 	}
 
 	/**
@@ -289,10 +287,20 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function renderPdfa($version, $html)
 	{
-		$mpdf = $this->pdfa($version);
-		$mpdf->WriteHTML($html);
+		return $this->render($html, $this->pdfaConfig($version));
+	}
 
-		return $mpdf->Output('', 'S');
+	/**
+	 * The configuration of a PDF/A document that fixes what it can, in the embedded fonts PDF/A needs rather than the
+	 * core fonts PageStreams defaults to
+	 *
+	 * @param string $version
+	 *
+	 * @return mixed[]
+	 */
+	private function pdfaConfig($version)
+	{
+		return ['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => $version];
 	}
 
 }
