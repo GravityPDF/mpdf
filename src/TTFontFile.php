@@ -2035,7 +2035,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 					$glyphs = Coverage::glyphs($this->reader);
 					for ($g = 0; $g < count($glyphs); $g++) {
 						$replace = [];
-						$replace[] = GlyphString::of($this->glyphToChar[$glyphs[$g]][0]);
+						$replace[] = GlyphString::of($this->charOf($glyphs[$g]));
 						// Flag = Ignore
 						if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $replace[0], $Lookup[$i]['MarkFilteringSet'])) {
 							continue;
@@ -2105,7 +2105,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 							}
 							for ($l = 1; $l < $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['CompCount']; $l++) {
 								$gid = $Lookup[$i]['Subtable'][$c]['LigSet'][$s]['Ligature'][$g]['GlyphID'][$l];
-								$rpl = GlyphString::of($this->glyphToChar[$gid][0]);
+								$rpl = GlyphString::of($this->charOf($gid));
 								// Flag = Ignore
 								if ($this->_checkGSUBignore($Lookup[$i]['Flag'], $rpl, $Lookup[$i]['MarkFilteringSet'])) {
 									continue 2;
@@ -2299,7 +2299,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 	{
 		$strings = [];
 		foreach ($glyphIDs as $position => $glyphID) {
-			$strings[$position] = GlyphString::of($this->glyphToChar[$glyphID][0]);
+			$strings[$position] = GlyphString::of($this->charOf($glyphID));
 		}
 
 		return $strings;
