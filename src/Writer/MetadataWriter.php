@@ -268,7 +268,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$this->writer->object();
 			$this->mpdf->associatedFiles[$k]['_root'] = $this->mpdf->n; // we store the root ref of object for future reference (e.g. /EmbeddedFiles catalog)
 			$this->writer->write('<</F ' . $this->writer->string($file['name']));
-			if ($file['description']) {
+			if (!empty($file['description'])) {
 				$this->writer->write('/Desc ' . $this->writer->string($file['description']));
 			}
 			$this->writer->write('/Type /Filespec');
@@ -276,7 +276,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$this->writer->write('/F ' . ($this->mpdf->n + 1) . ' 0 R');
 			$this->writer->write('/UF ' . ($this->mpdf->n + 1) . ' 0 R');
 			$this->writer->write('>>');
-			if ($file['AFRelationship']) {
+			if (!empty($file['AFRelationship'])) {
 				$this->writer->write('/AFRelationship /' . $file['AFRelationship']);
 			}
 			$this->writer->write('/UF ' . $this->writer->string($file['name']));
@@ -291,13 +291,13 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if (!$fileContent) {
-				throw new \Mpdf\MpdfException(sprintf('Cannot access associated file - %s', $file['path']));
+				throw new \Mpdf\MpdfException(sprintf('Cannot access associated file - %s', isset($file['path']) ? $file['path'] : $file['name']));
 			}
 
 			$filestream = gzcompress($fileContent);
 			$this->writer->object();
 			$this->writer->write('<</Type /EmbeddedFile');
-			if ($file['mime']) {
+			if (!empty($file['mime'])) {
 				$this->writer->write('/Subtype /' . $this->writer->escapeSlashes($file['mime']));
 			}
 			$this->writer->write('/Length ' . strlen($filestream));
