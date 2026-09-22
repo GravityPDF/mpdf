@@ -36,19 +36,6 @@ class ImageHeader
 	 */
 	var $m_colorTable;
 
-	public function __construct()
-	{
-		unset($this->m_nLeft);
-		unset($this->m_nTop);
-		unset($this->m_nWidth);
-		unset($this->m_nHeight);
-		unset($this->m_bLocalClr);
-		unset($this->m_bInterlace);
-		unset($this->m_bSorted);
-		unset($this->m_nTableSize);
-		unset($this->m_colorTable);
-	}
-
 	function load($lpData, &$hdrLen)
 	{
 		$hdrLen = 0;
