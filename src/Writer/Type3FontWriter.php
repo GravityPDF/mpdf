@@ -243,9 +243,9 @@ class Type3FontWriter implements GlyphResources
 			return vsprintf('%.3F %.3F %.3F ', $rgb) . ($stroking ? 'RG' : 'rg');
 		}
 
-		$this->drawn['colorSpaces']['CsRGB'] = $calibrated;
+		$this->drawn['colorSpaces'][BaseWriter::CALIBRATED_RGB] = $calibrated;
 
-		return '/CsRGB ' . ($stroking ? 'CS ' : 'cs ') . vsprintf('%.3F %.3F %.3F ', $rgb) . ($stroking ? 'SC' : 'sc');
+		return '/' . BaseWriter::CALIBRATED_RGB . ' ' . ($stroking ? 'CS ' : 'cs ') . vsprintf('%.3F %.3F %.3F ', $rgb) . ($stroking ? 'SC' : 'sc');
 	}
 
 	/**

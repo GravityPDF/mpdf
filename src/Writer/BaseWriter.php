@@ -28,6 +28,12 @@ final class BaseWriter
 	private $protection;
 
 	/**
+	 * The name the ICC-based sRGB colour space is set by. It is upper case throughout, because mPDF
+	 * makes a stroking operator out of a filling one by upper-casing the whole of it.
+	 */
+	const CALIBRATED_RGB = 'CSRGB';
+
+	/**
 	 * @var int|null The object number of the ICC-based sRGB colour space, once written
 	 */
 	private $calibratedRgb;
@@ -278,7 +284,7 @@ final class BaseWriter
 	 */
 	public function calibratedRgb()
 	{
-		if (!$this->mpdf->isPdfx4() || $this->mpdf->pdfxRgbIntent()) {
+		if (!$this->mpdf->writesCalibratedRgb()) {
 			return null;
 		}
 

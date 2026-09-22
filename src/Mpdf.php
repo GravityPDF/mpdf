@@ -97,6 +97,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $iccChannels = [];
 
+	/**
+	 * @var bool Whether the content sets colour in the ICC-based sRGB colour space, which the page's
+	 *           resource dictionary then names - see SetColor()
+	 */
+	private $usesCalibratedRgb = false;
+
 	var $PDFA;
 	var $PDFAversion;
 	var $PDFAauto;
@@ -1693,6 +1699,28 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	public function pdfxRgbIntent()
 	{
 		return $this->pdfxOutputChannels() === 3;
+	}
+
+	/**
+	 * PDF/X-4 printing to a CMYK or grey output condition may not use DeviceRGB, so rather than convert
+	 * its RGB with a formula that knows nothing of the press - no profile, no rendering intent, no black
+	 * generation, no ink limit - mPDF writes it in an ICC-based sRGB colour space and leaves the press
+	 * one colour-managed conversion to make, of the colours in the content and in the images alike.
+	 *
+	 * @return bool Whether RGB is written in that colour space rather than in DeviceRGB
+	 */
+	public function writesCalibratedRgb()
+	{
+		return $this->isPdfx4() && !$this->pdfxRgbIntent();
+	}
+
+	/**
+	 * @return bool Whether the content has set a colour in the ICC-based sRGB colour space, so that the
+	 *              page's resource dictionary must name it
+	 */
+	public function usesCalibratedRgb()
+	{
+		return $this->usesCalibratedRgb;
 	}
 
 	/**
@@ -3591,6 +3619,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (!$col) {
 			return '';
 		} // mPDF 6
+
+		// Where DeviceRGB is not permitted, RGB is set in the ICC-based sRGB colour space the page's
+		// resources name. An annotation's colour array is a device colour and stays one; PDF/X writes
+		// no annotations anyway.
+		if (($col[0] == 3 || $col[0] == 5) && $type !== 'CodeOnly' && $this->writesCalibratedRgb()) {
+			$this->usesCalibratedRgb = true;
+
+			return sprintf(
+				'/%s %s %.3F %.3F %.3F %s',
+				Writer\BaseWriter::CALIBRATED_RGB,
+				$type === 'Draw' ? 'CS' : 'cs',
+				ord($col[1]) / 255,
+				ord($col[2]) / 255,
+				ord($col[3]) / 255,
+				$type === 'Draw' ? 'SC' : 'sc'
+			);
+		}
+
 		if ($col[0] == 3 || $col[0] == 5) { // RGB / RGBa
 			$out = sprintf('%.3F %.3F %.3F rg', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255);
 		} elseif ($col[0] == 1) { // GRAYSCALE

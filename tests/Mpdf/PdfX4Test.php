@@ -309,7 +309,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('/ca 0.5', $pdf);
 
 		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
-		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $cmyk);
+		$this->assertStringContainsString('/CSRGB cs 1.000 0.000 0.000 sc', $cmyk);
 		$this->assertStringContainsString('/ca 0.5', $cmyk);
 
 		$this->assertStringNotContainsString('/ca 0.5', $this->pdf(['PDFX' => true], $html));
@@ -418,18 +418,83 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * RGB is written as it is for the RGB output intent, and converted to CMYK for a CMYK one
+	 * RGB is DeviceRGB for the RGB output intent, and written in the ICC-based sRGB colour space the
+	 * page's resources name for a CMYK one, rather than converted to CMYK by a formula that knows
+	 * nothing of the press. PDF/X-1a, which permits no ICC-based colour space, still converts it.
 	 */
-	public function testRgbIsKeptOnlyForAnRgbOutputIntent()
+	public function testRgbIsWrittenColourManagedForACmykOutputIntent()
 	{
 		$html = '<p style="color: #ff0000">Text</p>';
 
 		$rgb = $this->pdf(['PDFX' => '4'], $html);
 		$this->assertStringContainsString('1.000 0.000 0.000 rg', $rgb);
+		$this->assertStringNotContainsString('CSRGB', $rgb);
 
 		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
-		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $cmyk);
-		$this->assertStringNotContainsString('1.000 0.000 0.000 rg', $cmyk);
+		$this->assertStringContainsString('/CSRGB cs 1.000 0.000 0.000 sc', $cmyk);
+		$this->assertStringNotContainsString('0.000 1.000 1.000 0.000 k', $cmyk);
+
+		$this->assertSame(1, preg_match('/\/ColorSpace <<\n\/CSRGB (\d+) 0 R/', $cmyk, $match), 'the page resources name it');
+		$this->assertSame(1, preg_match('/^\[\/ICCBased (\d+) 0 R\]/', $this->object($cmyk, $match[1]), $profile));
+		$this->assertStringStartsWith('<</N 3 /Length 3052>>', $this->object($cmyk, $profile[1]));
+
+		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $this->pdf(['PDFX' => true], $html));
+	}
+
+	/**
+	 * A neutral colour goes to DeviceGray, which a CMYK output condition takes as its black separation,
+	 * so that black text is printed from one plate rather than made out of four
+	 */
+	public function testBlackIsTheBlackInkAlone()
+	{
+		$html = '<p style="color: #000000">Black</p><p style="color: #808080">Grey</p>';
+
+		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
+		$this->assertStringContainsString('0.000 g', $cmyk);
+		$this->assertStringContainsString('0.502 g', $cmyk);
+		$this->assertStringNotContainsString('0.000 0.000 0.000 sc', $cmyk);
+
+		$this->assertStringContainsString('0.000 0.000 0.000 1.000 k', $this->pdf(['PDFX' => true], $html));
+	}
+
+	/**
+	 * A colour the document gives as CMYK is left in CMYK for a CMYK output intent
+	 */
+	public function testACmykColourIsLeftAloneForACmykOutputIntent()
+	{
+		$html = '<p style="color: cmyk(10, 20, 30, 40)">Text</p>';
+
+		$this->assertStringContainsString('0.100 0.200 0.300 0.400 k', $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html));
+	}
+
+	/**
+	 * Nothing is converted, so an RGB colour is no longer a conformance issue for PDF/X-4, where it
+	 * still is for PDF/X-1a
+	 */
+	public function testAnRgbColourIsNoConformanceIssueForPdfx4()
+	{
+		$html = '<p style="color: #ff0000">Text</p>';
+
+		$strict = ['PDFX' => '4', 'PDFXauto' => false, 'ICCProfile' => $this->cmykProfile];
+		$this->assertStringContainsString('/CSRGB cs', $this->pdf($strict, $html));
+
+		$this->expectException(MpdfException::class);
+		$this->pdf(['PDFX' => true, 'PDFXauto' => false], $html);
+	}
+
+	/**
+	 * A gradient's stops are in the same colour space as the colours beside them
+	 */
+	public function testAGradientIsWrittenInTheSameColourSpaceAsTheContent()
+	{
+		$html = '<div style="background: linear-gradient(#ff0000, #0000ff); height: 20mm">Text</div>';
+
+		$this->assertStringContainsString('/ColorSpace /DeviceRGB', $this->pdf(['PDFX' => '4'], $html));
+
+		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
+		$this->assertStringNotContainsString('/ColorSpace /DeviceRGB', $cmyk);
+		$this->assertSame(1, preg_match('/\/ShadingType \d\n\/ColorSpace (\d+) 0 R/', $cmyk, $match));
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($cmyk, $match[1]));
 	}
 
 	/**
@@ -440,7 +505,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$html = '<p style="color: cmyk(0, 100, 100, 0)">Text</p>';
 
 		$this->assertStringContainsString('1.000 0.000 0.000 rg', $this->pdf(['PDFX' => '4'], $html));
-		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html));
+		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html), 'a CMYK intent leaves it alone');
 	}
 
 	/**
@@ -464,12 +529,12 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$rgb = $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false, 'default_font' => 'colr']);
 		$this->assertStringContainsString('1.000 0.800 0.200 rg', $rgb, 'the face, yellow');
-		$this->assertStringNotContainsString('CsRGB', $rgb);
+		$this->assertStringNotContainsString('CSRGB', $rgb);
 
 		$pdf = $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false, 'default_font' => 'colr', 'ICCProfile' => $this->cmykProfile]);
 		$this->assertStringNotContainsString(' rg', $pdf);
-		$this->assertStringContainsString('/CsRGB cs 1.000 0.800 0.200 sc', $pdf, 'the face, yellow');
-		$this->assertSame(1, preg_match('/\/ColorSpace <<\/CsRGB (\d+) 0 R >>/', $pdf, $match));
+		$this->assertStringContainsString('/CSRGB cs 1.000 0.800 0.200 sc', $pdf, 'the face, yellow');
+		$this->assertSame(1, preg_match('/\/ColorSpace <<\/CSRGB (\d+) 0 R >>/', $pdf, $match));
 		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[1]));
 	}
 

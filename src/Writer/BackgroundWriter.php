@@ -321,14 +321,21 @@ final class BackgroundWriter
 
 			if (empty($grad['is_mask'])) {
 
+				$colorspace = isset($grad['colorspace']) ? $grad['colorspace'] : 'RGB';
+
+				// Where DeviceRGB is not permitted, the stops are in the ICC-based sRGB colour space the
+				// content sets its own RGB in. It is an object of its own, so it is written before the
+				// shading that names it - see Mpdf::writesCalibratedRgb()
+				$calibratedRgb = $colorspace === 'RGB' ? $this->writer->calibratedRgb() : null;
+
 				$this->writer->object();
 				$this->writer->write('<<');
 				$this->writer->write('/ShadingType ' . $grad['type']);
 
-				if (isset($grad['colorspace'])) {
-					$this->writer->write('/ColorSpace /Device' . $grad['colorspace']);  // Can use CMYK if all C0 and C1 above have 4 values
+				if ($calibratedRgb) {
+					$this->writer->write('/ColorSpace ' . $calibratedRgb . ' 0 R');
 				} else {
-					$this->writer->write('/ColorSpace /DeviceRGB');
+					$this->writer->write('/ColorSpace /Device' . $colorspace);  // Can use CMYK if all C0 and C1 above have 4 values
 				}
 
 				if ($grad['type'] == 2) {
