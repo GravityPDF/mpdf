@@ -2719,18 +2719,7 @@ class Otl
 	 */
 	private function _applyGSUBchainContextSubstFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		// Each of the three sequences is a count and then one Coverage table offset per position.
-		// NB Unlike Lookup Type 5 Format 3, the count of substitutions follows them rather than
-		// preceding them.
-		$CoverageBacktrackOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
-		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
-		$CoverageLookaheadOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
-		$SubstCount = $this->reader->readUInt16();
-		$save_pos = $this->reader->tell(); // Save the point just after SubstCount
-
-		$CoverageBacktrackGlyphs = $this->coverageSets($CoverageBacktrackOffset);
-		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
-		$CoverageLookaheadGlyphs = $this->coverageSets($CoverageLookaheadOffset);
+		list($CoverageBacktrackGlyphs, $CoverageInputGlyphs, $CoverageLookaheadGlyphs, $SubstCount, $records) = $this->chainedCoverageContext($subtable_offset);
 
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
@@ -2738,11 +2727,49 @@ class Otl
 				echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 			}
 
-			$this->reader->seek($save_pos); // Return to just after SubstCount
+			$this->reader->seek($records);
 			return $this->_applyGSUBlookupRecords($SubstCount, $matched, $currentTag, $is_old_spec, $tagInt);
 		}
 
 		return null;
+	}
+
+	/**
+	 * A chained context Format 3 subtable, decoded, for the life of the document.
+	 *
+	 * The subtable is offered every glyph its input Coverage table matches, which in a font such as
+	 * Padauk is over a million times for a few pages of text, and it holds one rule. Following its
+	 * offsets to the Coverage sets each time was most of the cost of shaping Myanmar and Hebrew.
+	 *
+	 * Each of the three sequences is a count and then one Coverage table offset per position. Unlike
+	 * Format 3 of a plain context, the count of lookup records follows them rather than preceding
+	 * them.
+	 *
+	 * @param int $offset Where the subtable starts; the reader is just past its format
+	 *
+	 * @return array [$backtrack, $input, $lookahead, $recordCount, $recordsAt]: one set per position of
+	 *               each sequence as coverageSets() gives it, how many lookup records the rule names,
+	 *               and where they start
+	 */
+	private function chainedCoverageContext($offset)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['chainedCoverage'][$offset])) {
+			$backtrack = SequenceRule::coverageOffsets($this->reader, $offset, $this->reader->readUInt16());
+			$input = SequenceRule::coverageOffsets($this->reader, $offset, $this->reader->readUInt16());
+			$lookahead = SequenceRule::coverageOffsets($this->reader, $offset, $this->reader->readUInt16());
+			$recordCount = $this->reader->readUInt16();
+			$recordsAt = $this->reader->tell();
+
+			$this->LuDataCache[$this->otlCacheKey]['chainedCoverage'][$offset] = [
+				$this->coverageSets($backtrack),
+				$this->coverageSets($input),
+				$this->coverageSets($lookahead),
+				$recordCount,
+				$recordsAt,
+			];
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['chainedCoverage'][$offset];
 	}
 
 	/**
