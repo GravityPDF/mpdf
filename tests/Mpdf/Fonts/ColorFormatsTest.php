@@ -78,14 +78,11 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * No fixture carries SVG, so the sbix table of one is renamed to stand in for it: the format is
-	 * found by the table's tag alone
+	 * An SVG table is found by its tag
 	 */
 	public function testAnSvgTableIsFound()
 	{
-		$file = $this->patched('TestEmoji-sbix.ttf', 'sbix', null, 'SVG ');
-
-		$this->assertSame(['SVG'], $this->colorFormats($file));
+		$this->assertSame(['SVG'], $this->read('TestEmoji-SVG.ttf')->colorFormats);
 	}
 
 	/**
@@ -111,7 +108,8 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertTrue(ColorFormats::drawsInColor(['colorFormats' => ['SVG', 'CBDT', 'sbix']], $mpdf));
 		$this->assertTrue(ColorFormats::drawsInColor(['colorFormats' => ['COLRv1', 'COLRv0']], $mpdf));
-		$this->assertFalse(ColorFormats::drawsInColor(['colorFormats' => ['SVG']], $mpdf), 'a format mPDF does not draw yet is not drawn');
+		$this->assertTrue(ColorFormats::drawsInColor(['colorFormats' => ['SVG']], $mpdf));
+		$this->assertFalse(ColorFormats::drawsInColor(['colorFormats' => ['COLRv2']], $mpdf), 'a format mPDF does not know is not drawn');
 		$this->assertFalse(ColorFormats::drawsInColor(['colorFormats' => []], $mpdf), 'nor is a font with no colour');
 
 		$mpdf->PDFA = true;
@@ -156,7 +154,7 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$colr = ['colorFormats' => ['COLRv1', 'COLRv0'], 'hasOutlines' => true];
 
 		$this->assertSame(['Mpdf\Fonts\Color\ColrV1Source', 'Mpdf\Fonts\Color\ColrV0Source', 'Mpdf\Fonts\Color\OutlineSource'], ColorFormats::sources($colr, $mpdf), 'a glyph with no version 1 paint drawn from its version 0 layers');
-		$this->assertSame(['Mpdf\Fonts\Color\CbdtSource', 'Mpdf\Fonts\Color\SbixSource'], ColorFormats::sources(['colorFormats' => ['sbix', 'SVG', 'CBDT'], 'hasOutlines' => false], $mpdf), 'in the order of SOURCES, less what mPDF does not draw');
+		$this->assertSame(['Mpdf\Fonts\Color\SvgSource', 'Mpdf\Fonts\Color\CbdtSource', 'Mpdf\Fonts\Color\SbixSource'], ColorFormats::sources(['colorFormats' => ['sbix', 'COLRv2', 'SVG', 'CBDT'], 'hasOutlines' => false], $mpdf), 'in the order of SOURCES, less what mPDF does not draw');
 		$this->assertSame(['Mpdf\Fonts\Color\CbdtSource'], ColorFormats::sources(['colorFormats' => ['CBDT'], 'hasOutlines' => false], $mpdf));
 
 		$mpdf->PDFA = true;
@@ -172,7 +170,7 @@ class ColorFormatsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertTrue(ColorFormats::blank(['colorFormats' => ['CBDT'], 'hasOutlines' => false], $mpdf));
 		$this->assertFalse(ColorFormats::blank(['colorFormats' => ['COLRv0'], 'hasOutlines' => true], $mpdf));
-		$this->assertFalse(ColorFormats::blank(['colorFormats' => ['SVG'], 'hasOutlines' => false], $mpdf), 'a format mPDF does not draw is not written as Type3');
+		$this->assertFalse(ColorFormats::blank(['colorFormats' => ['COLRv2'], 'hasOutlines' => false], $mpdf), 'a format mPDF does not draw is not written as Type3');
 
 		$mpdf->restrictColorSpace = 0;
 		$this->assertFalse(ColorFormats::blank(['colorFormats' => ['CBDT'], 'hasOutlines' => false], $mpdf), 'nor with colour on');

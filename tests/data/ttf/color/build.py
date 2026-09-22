@@ -12,6 +12,7 @@ differs.
     TestEmoji-COLRv1.ttf  glyf outlines, COLR version 1 paints of every kind (and the version 0 records)
     TestEmoji-CBDT.ttf    no outlines at all, PNG bitmaps in CBDT/CBLC at two strikes
     TestEmoji-sbix.ttf    empty outlines, PNG and JPEG bitmaps in sbix at two strikes
+    TestEmoji-SVG.ttf     glyf outlines, an SVG document per emoji, CPAL for their var() colours
 
 The GSUB is the shape Noto's is: one 'ccmp' feature under DFLT, ligatures for a ZWJ family, a flag, a
 keycap, a skin tone and a subdivision flag, none of them with U+FE0F in the sequence. TestEmoji-FE0F
@@ -23,9 +24,13 @@ beside the PNGs: the woman is a 'dupe' of the man, the girl a 'jpg ', the region
 'flip' of the thumb, so that the mirroring shows, and the skin tone a 'tiff', which mPDF does not
 draw.
 
+Each SVG document shows another part of what an OpenType SVG glyph can say - see build_svg(). The
+England flag has none, so it is drawn from its outline.
+
 The fonts are committed; this is kept so they can be rebuilt and so what is in them can be read.
 """
 
+import base64
 import io
 import os
 import struct
@@ -37,6 +42,7 @@ from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import newTable
 from fontTools.ttLib.tables.DefaultTable import DefaultTable
+from fontTools.ttLib.tables.S_V_G_ import SVGDocument
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphComponent
 from fontTools.ttLib.tables.otTables import CompositeMode, ExtendMode
 from fontTools.ttLib.tables.sbixGlyph import Glyph as SbixGlyph
@@ -581,9 +587,115 @@ def build_sbix():
     fb.save(os.path.join(HERE, 'TestEmoji-sbix.ttf'))
 
 
+SVG_ROOT = '<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"%s>%s</svg>'
+
+
+def svg_points(points, flip=lambda y: -y):
+    """Font units, y up, as SVG's y-down user space has them."""
+    return ' '.join('%d,%d' % (x, flip(y)) for x, y in points)
+
+
+def svg_documents():
+    """Each emoji's SVG document, as (glyph ids, document, gzipped). In SVG, y runs down from the
+    baseline, so a design in font units is drawn with its y negated."""
+    gid = {name: i for i, name in enumerate(glyph_order())}
+    face = '<circle cx="500" cy="-350" r="450"/>'
+    square = '<rect x="50" y="-800" width="900" height="900"%s/>'
+    image = base64.b64encode(render('u1F467', 64)).decode('ascii')
+
+    documents = [
+        # The document's root is the glyph. A CPAL colour, a use of a shape with its x and y, and the
+        # mouth in the colour of the text.
+        ([gid['u1F600']], SVG_ROOT % (' id="glyph%d"' % gid['u1F600'],
+            '<defs><rect id="eye" width="90" height="160"/></defs>'
+            '<circle cx="500" cy="-350" r="450" fill="var(--color0, #ff0000)"/>'
+            '<use xlink:href="#eye" x="330" y="-560" fill="#000000"/><use xlink:href="#eye" x="580" y="-560"/>'
+            '<polygon points="%s" fill="currentColor"/>' % svg_points(SHAPES['layer.mouth'][1][0])), False),
+        # Every path command, filled with a gradient in user space, and a rounded shine at half opacity
+        ([gid['uni2764']], SVG_ROOT % (' id="glyph%d"' % gid['uni2764'],
+            '<linearGradient id="heart" gradientUnits="userSpaceOnUse" x1="500" y1="-750" x2="500" y2="50">'
+            '<stop offset="0" stop-color="#e0245e"/><stop offset="1" stop-color="#ffcc33"/></linearGradient>'
+            '<path fill="url(#heart)" d="M500 50 L80 -400 Q120 -700 250 -750 T500 -600 c60 -120 190 -170 250 -150 '
+            'S900 -600 920 -400 C880 -250 640 -100 580 -30 h-40 v20 A60 60 0 0 1 500 50 Z"/>'
+            '<rect x="250" y="-580" width="130" height="130" rx="30" fill="white" opacity="0.5"/>'), False),
+        # A radial gradient in the face's bounding box, its focus off centre, and stroked eyes
+        ([gid['u1F468']], SVG_ROOT % (' id="glyph%d"' % gid['u1F468'],
+            '<radialGradient id="man" fx="30%" fy="30%" r="60%"><stop offset="0.2" stop-color="#ffffff"/>'
+            '<stop offset="100%" stop-color="#3366cc"/></radialGradient>'
+            '<circle cx="500" cy="-350" r="450" fill="url(#man)"/>'
+            '<ellipse cx="375" cy="-480" rx="45" ry="80" fill="black" stroke="#ffffff" stroke-width="15"/>'
+            '<ellipse cx="625" cy="-480" rx="45" ry="80" fill="black" stroke="#ffffff" stroke-width="15" stroke-opacity="0.5"/>'), False),
+        # A clip path of two shapes, and a group whose opacity is the group's, not each shape's
+        ([gid['u1F469']], SVG_ROOT % (' id="glyph%d"' % gid['u1F469'],
+            '<clipPath id="halves"><rect x="0" y="-900" width="480" height="1000"/><rect x="520" y="-900" width="480" height="1000"/></clipPath>'
+            '<circle cx="500" cy="-350" r="450" fill="#e0245e" clip-path="url(#halves)"/>'
+            '<g opacity="0.8"><circle cx="400" cy="-480" r="90" fill="black"/><circle cx="480" cy="-480" r="90" fill="black"/></g>'), False),
+        # A PNG
+        ([gid['u1F467']], SVG_ROOT % (' id="glyph%d"' % gid['u1F467'],
+            '<image x="0" y="-900" width="1000" height="1000" xlink:href="data:image/png;base64,%s"/>' % image), False),
+        # A reflected gradient across the bounding box, its stops' opacity from the style attribute
+        ([gid['u1F1E6']], SVG_ROOT % (' id="glyph%d"' % gid['u1F1E6'],
+            '<linearGradient id="a" x2="0.25" spreadMethod="reflect"><stop offset="0" style="stop-color: #3366cc; stop-opacity: 0.2"/>'
+            '<stop offset="1" style="stop-color: #3366cc"/></linearGradient>' + square % ' fill="url(#a)"'), False),
+        # A repeated radial gradient, turned
+        ([gid['u1F1FA']], SVG_ROOT % (' id="glyph%d"' % gid['u1F1FA'],
+            '<radialGradient id="u" gradientUnits="userSpaceOnUse" cx="500" cy="-350" r="150" spreadMethod="repeat" '
+            'gradientTransform="rotate(30 500 -350) scale(1 0.5)"><stop offset="0" stop-color="#e0245e"/>'
+            '<stop offset="1" stop-color="#ffffff"/></radialGradient>' + square % ' fill="url(#u)"'), False),
+        # A dashed stroke, and what is not drawn: text, a mask
+        ([gid['u1F3F4']], SVG_ROOT % (' id="glyph%d"' % gid['u1F3F4'],
+            '<mask id="m"><rect width="1000" height="1000" fill="white"/></mask>'
+            '<polygon points="%s" fill="black" stroke="#999999" stroke-width="30" stroke-dasharray="60 30" stroke-linejoin="round"/>'
+            '<text x="100" y="0">flag</text><rect x="0" y="-100" width="50" height="50" mask="url(#m)"/>'
+            % svg_points(SHAPES['layer.pole'][1][1])), False),
+        # A style element, whose rules are not applied, and the style attribute, which is
+        ([gid['u1F3FD']], SVG_ROOT % (' id="glyph%d"' % gid['u1F3FD'],
+            '<style>rect { fill: red; }</style>' + square % ' style="fill: #c68642; fill-opacity: 1"'), False),
+        # Drawn as if the baseline were at y = 1000, and the viewBox moving it back
+        ([gid['u1F44D']], SVG_ROOT % (' id="glyph%d" viewBox="0 1000 1000 1000"' % gid['u1F44D'],
+            '<polygon points="%s" fill="var(--color0, #ff0000)"/>' % svg_points(SHAPES['layer.thumb'][1][0], lambda y: 1000 - y)), False),
+        # One document for two glyphs, apart. The family's element is inside a group whose transform and
+        # fill it takes; the keycap's frame is drawn with evenodd.
+        ([gid['u1F468_200D_u1F469_200D_u1F467'], gid['one_uni20E3']], SVG_ROOT % ('',
+            '<defs><g id="face">%s</g></defs>' % face +
+            '<g transform="translate(0 -50)" fill="#3366cc"><g id="glyph%d">' % gid['u1F468_200D_u1F469_200D_u1F467'] +
+            '<use xlink:href="#face" transform="translate(0 -300) scale(0.4)"/>'
+            '<use xlink:href="#face" transform="translate(300 0) scale(0.4)" fill="#22aa44"/>'
+            '<use xlink:href="#face" transform="translate(600 -300) scale(0.4)" fill="#e0245e"/></g></g>'
+            '<g id="glyph%d"><path fill="#999999" fill-rule="evenodd" d="M50 100 H950 V-800 H50 Z M150 0 V-700 H850 V0 Z"/>' % gid['one_uni20E3'] +
+            '<polygon points="%s"/></g>' % svg_points(PLAIN[3][3])), False),
+        # Gzipped
+        ([gid['u1F1E6_u1F1FA']], SVG_ROOT % (' id="glyph%d"' % gid['u1F1E6_u1F1FA'],
+            '<desc>The flag of the regional indicators A and U, gzipped as a font may gzip any SVG document</desc>' +
+            square % ' fill="#3366cc"' + '<rect x="50" y="-450" width="900" height="200" fill="#ffffff"/>'), True),
+        # A gradient taking its stops from another by href, and a clip path in the shape's bounding box
+        ([gid['u1F44D_u1F3FD']], SVG_ROOT % (' id="glyph%d"' % gid['u1F44D_u1F3FD'],
+            '<linearGradient id="stops"><stop offset="0" stop-color="#c68642"/><stop offset="1" stop-color="#ffcc33"/></linearGradient>'
+            '<linearGradient id="skin" xlink:href="#stops" x1="0" y1="1" x2="0" y2="0"/>'
+            '<clipPath id="top" clipPathUnits="objectBoundingBox"><rect width="1" height="0.5"/></clipPath>'
+            '<polygon points="%s" fill="url(#skin)" clip-path="url(#top)"/>' % svg_points(SHAPES['layer.thumb'][1][0])), False),
+    ]
+    return documents
+
+
+def build_svg():
+    fb = base_font()
+    name_font(fb, 'SVG')
+    fb.font['CPAL'] = buildCPAL([[tuple(c / 255 for c in (r, g, b, a)) for r, g, b, a in palette] for palette in PALETTES])
+    svg = newTable('SVG ')
+    svg.docList = []
+    for gids, document, gzipped in svg_documents():
+        for glyph in gids:
+            svg.docList.append(SVGDocument(document, glyph, glyph, gzipped))
+    svg.docList.sort(key=lambda doc: doc.startGlyphID)
+    fb.font['SVG '] = svg
+    fb.save(os.path.join(HERE, 'TestEmoji-SVG.ttf'))
+
+
 if __name__ == '__main__':
     build_colrv0()
     build_colrv0('FE0F', FEATURES.replace('sub one uni20E3 by', 'sub one uniFE0F uni20E3 by'))
     build_colrv1()
     build_cbdt()
     build_sbix()
+    build_svg()

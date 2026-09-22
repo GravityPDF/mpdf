@@ -3,7 +3,6 @@
 namespace Mpdf\Fonts\Color;
 
 use Mpdf\Fonts\FontReader;
-use Mpdf\Log\Context as LogContext;
 
 /**
  * Colour glyphs as COLR version 1 paint graphs: Noto Color Emoji's vector build, the one Google Fonts
@@ -45,17 +44,12 @@ class ColrV1Source implements ColorGlyphSource
 {
 
 	use FillsInColour;
+	use FillsWithGradients;
 
 	/**
 	 * How deep a paint graph may run. Noto's deepest is 9.
 	 */
 	const MAX_DEPTH = 64;
-
-	/**
-	 * The most times a repeated or reflected gradient's stops are drawn over, either way from the stops
-	 * themselves
-	 */
-	const MAX_REPEATS = 64;
 
 	/**
 	 * Each paint's bytes, by format, less the varIndexBase a Var paint has after them
@@ -96,8 +90,6 @@ class ColrV1Source implements ColorGlyphSource
 	 */
 	const PLUS = 12;
 
-	const IDENTITY = [1, 0, 0, 1, 0, 0];
-
 	/**
 	 * @var ColorFontFile
 	 */
@@ -129,11 +121,6 @@ class ColrV1Source implements ColorGlyphSource
 	private $clips = [];
 
 	/**
-	 * @var int[] The font's bounding box, [xMin, yMin, xMax, yMax], for a glyph with no clip box
-	 */
-	private $bbox;
-
-	/**
 	 * @var string[] Each paint's bytes, by where it is, read once however many glyphs share it: as many
 	 *               as the longest paint's fields take, or as COLR has left
 	 */
@@ -160,10 +147,6 @@ class ColrV1Source implements ColorGlyphSource
 	public function __construct(ColorFontFile $file)
 	{
 		$this->file = $file;
-
-		$head = $file->table('head')[0];
-		$bbox = $file->reader->fieldsAt($head + 36, 8, 'n4');
-		$this->bbox = $bbox === null ? [0, 0, 0, 0] : array_map([__CLASS__, 'signed'], $bbox);
 
 		list($colr, $length) = $file->table('COLR');
 		$this->end = $colr + $length;
@@ -213,12 +196,12 @@ class ColrV1Source implements ColorGlyphSource
 		$this->glyph = $glyph;
 		$this->box = $this->clipBox($glyph);
 
-		$content = $this->paint($this->baseGlyphs[$glyph], self::IDENTITY, []);
+		$content = $this->paint($this->baseGlyphs[$glyph], Geometry::IDENTITY, []);
 		if ($content === '') {
 			return null;
 		}
 
-		return 'q ' . $this->rectangle($this->box) . " re W n\n" . $content . "Q\n";
+		return 'q ' . Geometry::rectangle($this->box) . " re W n\n" . $content . "Q\n";
 	}
 
 	/**
@@ -231,7 +214,7 @@ class ColrV1Source implements ColorGlyphSource
 	private function paint($offset, array $matrix, array $path)
 	{
 		if (isset($path[$offset]) || count($path) >= self::MAX_DEPTH) {
-			$this->warn('a paint graph that loops or nests too deep, which is drawn only so far');
+			$this->file->warn($this->glyph, 'a paint graph that loops or nests too deep, which is drawn only so far');
 
 			return '';
 		}
@@ -248,7 +231,7 @@ class ColrV1Source implements ColorGlyphSource
 		$base = $var ? $format - 1 : $format;
 
 		if (!array_key_exists($base, self::SIZES)) {
-			$this->warn(sprintf('a paint of format %d, which is not in the spec', $format));
+			$this->file->warn($this->glyph, sprintf('a paint of format %d, which is not in the spec', $format));
 
 			return '';
 		}
@@ -287,9 +270,9 @@ class ColrV1Source implements ColorGlyphSource
 			return '';
 		}
 
-		$content = $this->paint($child, self::multiply($transform, $matrix), $path);
+		$content = $this->paint($child, Geometry::multiply($transform, $matrix), $path);
 
-		return $content === '' ? '' : sprintf("q %s cm\n", self::numbers($transform)) . $content . "Q\n";
+		return $content === '' ? '' : sprintf("q %s cm\n", Geometry::numbers($transform)) . $content . "Q\n";
 	}
 
 	/**
@@ -350,18 +333,18 @@ class ColrV1Source implements ColorGlyphSource
 	 */
 	private function composite($offset, $paint, array $matrix, array $path)
 	{
-		$box = $this->boxIn($matrix);
+		$box = Geometry::boxIn($matrix, $this->box);
 		if ($box === null) {
 			return '';
 		}
 
 		$mode = ord($paint[4]);
 		if ($mode === self::PLUS) {
-			$this->warn('composite mode PLUS, which is drawn as the source over the backdrop');
+			$this->file->warn($this->glyph, 'composite mode PLUS, which is drawn as the source over the backdrop');
 			$mode = 3;
 		} elseif ($mode > 2 && !array_key_exists($mode, self::BLEND_MODES) && !array_key_exists($mode, self::COMPOSITES)) {
 			// The spec draws a mode it does not define as CLEAR
-			$this->warn(sprintf('composite mode %d, which is not in the spec and draws nothing', $mode));
+			$this->file->warn($this->glyph, sprintf('composite mode %d, which is not in the spec and draws nothing', $mode));
 			$mode = 0;
 		}
 
@@ -429,19 +412,17 @@ class ColrV1Source implements ColorGlyphSource
 	private function gradient($format, $paint, $line, $var, array $matrix)
 	{
 		$line = $line === null ? null : $this->colorLine($line, $var);
-		$box = $this->boxIn($matrix);
+		$box = Geometry::boxIn($matrix, $this->box);
 		if ($line === null || !$line->stops || $box === null) {
 			return '';
 		}
 
 		if ($format === 8) {
-			$this->warn('a sweep gradient, which is drawn in the colour of its middle stop');
+			$this->file->warn($this->glyph, 'a sweep gradient, which is drawn in the colour of its middle stop');
 		}
 
 		if (count($line->stops) === 1 || $format === 8) {
-			$stop = $line->stops[(int) (count($line->stops) / 2)];
-
-			return $this->fill([$stop[1], $stop[2]], $matrix);
+			return $this->fill($line->middle(), $matrix);
 		}
 
 		list($first, $last) = $line->span();
@@ -465,38 +446,7 @@ class ColrV1Source implements ColorGlyphSource
 			return '';
 		}
 
-		list($from, $to) = $line->extend === ColorLine::PAD ? [0, 1] : $this->spans($geometry, $box);
-		$coords = self::along($geometry, $from, $to);
-		$stops = $line->normalised($from, $to);
-
-		$cut = self::nonNegative($coords, $stops);
-		if ($cut === null) {
-			return '';
-		}
-		list($coords, $stops) = $cut;
-
-		$colours = [];
-		foreach (ColorLine::premultiplied($stops) as $stop) {
-			$colours[] = [$stop[0], $stop[1]];
-		}
-		$alphas = [];
-		foreach ($stops as $stop) {
-			$alphas[] = [$stop[0], [$stop[2]]];
-		}
-
-		$content = $this->resources->shading(['coords' => $coords, 'stops' => $colours]) . " sh\n";
-		$opacity = $line->opacity();
-		if ($opacity === null) {
-			$mask = $this->resources->shading(['coords' => $coords, 'stops' => $alphas]) . " sh\n";
-
-			return sprintf("q %s\n", $this->resources->softMask($mask, $box, true)) . $content . "Q\n";
-		}
-
-		if ($opacity <= 0) {
-			return '';
-		}
-
-		return $opacity < 1 ? sprintf("q %s\n", $this->resources->alpha($opacity)) . $content . "Q\n" : $content;
+		return $this->gradientFill($line, $geometry, $box, $this->resources);
 	}
 
 	/**
@@ -526,115 +476,6 @@ class ColrV1Source implements ColorGlyphSource
 		$y3 = $y0 + $normal[1] * $along / $squared;
 
 		return self::along([$x0, $y0, $x3, $y3], $first, $last);
-	}
-
-	/**
-	 * The whole spans of a repeated or reflected gradient's stops needed to cover an area
-	 *
-	 * @param float[] $geometry The shading's coordinates for offsets 0 and 1: two points, or two circles
-	 * @param float[] $box      The area, in the gradient's space
-	 *
-	 * @return int[] [the first span, the span after the last], 0 being the stops' own
-	 */
-	private function spans(array $geometry, array $box)
-	{
-		$corners = [[$box[0], $box[1]], [$box[0], $box[3]], [$box[2], $box[1]], [$box[2], $box[3]]];
-
-		if (count($geometry) === 4) {
-			// Each corner's offset along the axis
-			list($x0, $y0, $x1, $y1) = $geometry;
-			$dx = $x1 - $x0;
-			$dy = $y1 - $y0;
-			$offsets = [];
-			foreach ($corners as $corner) {
-				$offsets[] = (($corner[0] - $x0) * $dx + ($corner[1] - $y0) * $dy) / ($dx * $dx + $dy * $dy);
-			}
-
-			return [(int) max(-self::MAX_REPEATS, floor(min($offsets))), (int) min(self::MAX_REPEATS, ceil(max($offsets)))];
-		}
-
-		// Out from the stops each way until a circle takes in every corner, or shrinks to nothing
-		$spans = [];
-		foreach ([-1, 1] as $direction) {
-			$span = $direction < 0 ? 0 : 1;
-			while (abs($span) < self::MAX_REPEATS) {
-				$circle = self::along($geometry, $span, $span);
-				if ($circle[2] <= 0 || self::covers($circle, $corners)) {
-					break;
-				}
-				$span += $direction;
-			}
-			$spans[] = $span;
-		}
-
-		return $spans;
-	}
-
-	/**
-	 * @param float[]   $circle  [x, y, r]
-	 * @param float[][] $corners
-	 *
-	 * @return bool Whether every corner lies within the circle
-	 */
-	private static function covers(array $circle, array $corners)
-	{
-		foreach ($corners as $corner) {
-			if (hypot($corner[0] - $circle[0], $corner[1] - $circle[1]) > $circle[2]) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	/**
-	 * A shading's coordinates moved to other offsets along it
-	 *
-	 * @param float[] $geometry Its coordinates for offsets 0 and 1: two points, or two circles
-	 * @param float   $from     The offset the new coordinates start at
-	 * @param float   $to       The offset they end at
-	 *
-	 * @return float[] The coordinates for offsets $from and $to; a radius may come out below 0
-	 */
-	private static function along(array $geometry, $from, $to)
-	{
-		$half = count($geometry) / 2;
-		$start = [];
-		$end = [];
-		for ($i = 0; $i < $half; $i++) {
-			$start[] = $geometry[$i] + $from * ($geometry[$i + $half] - $geometry[$i]);
-			$end[] = $geometry[$i] + $to * ($geometry[$i + $half] - $geometry[$i]);
-		}
-
-		return array_merge($start, $end);
-	}
-
-	/**
-	 * A radial shading cut to where its radius is not below 0, all a PDF shading can draw, its stops cut
-	 * to match. An axial shading is left as it is.
-	 *
-	 * @param float[] $coords Two points, or two circles as [x0, y0, r0, x1, y1, r1]
-	 * @param array[] $stops  The stops from the first to the second, from 0 to 1
-	 *
-	 * @return array|null [coords, stops], or null where the radius is nowhere above 0
-	 */
-	private static function nonNegative(array $coords, array $stops)
-	{
-		if (count($coords) === 4 || ($coords[2] >= 0 && $coords[5] >= 0)) {
-			return [$coords, $stops];
-		}
-
-		list(, , $r0, , , $r1) = $coords;
-		if ($r0 <= 0 && $r1 <= 0) {
-			return null;
-		}
-
-		$tip = $r0 / ($r0 - $r1);
-		list($from, $to) = $r0 < 0 ? [$tip, 1] : [0, $tip];
-		$cut = self::along($coords, $from, $to);
-		$cut[$r0 < 0 ? 2 : 5] = 0;
-
-		return [$cut, ColorLine::between($stops, $from, $to)];
 	}
 
 	/**
@@ -746,22 +587,12 @@ class ColrV1Source implements ColorGlyphSource
 	 */
 	private function fill(array $colour, array $matrix)
 	{
-		$box = $this->boxIn($matrix);
+		$box = Geometry::boxIn($matrix, $this->box);
 		if ($box === null) {
 			return '';
 		}
 
-		return $this->filled($colour, $this->rectangle($box) . ' re f', $this->resources);
-	}
-
-	/**
-	 * @param float[] $box [xMin, yMin, xMax, yMax]
-	 *
-	 * @return string The box's x, y, width and height, as re takes them
-	 */
-	private function rectangle(array $box)
-	{
-		return self::numbers([$box[0], $box[1], $box[2] - $box[0], $box[3] - $box[1]]);
+		return $this->filled($colour, Geometry::rectangle($box) . ' re f', $this->resources);
 	}
 
 	/**
@@ -814,55 +645,7 @@ class ColrV1Source implements ColorGlyphSource
 			}
 		}
 
-		return $this->bbox;
-	}
-
-	/**
-	 * @param float[] $matrix What takes a paint's space to glyph space
-	 *
-	 * @return float[]|null The clip box in the paint's space, as [xMin, yMin, xMax, yMax] around it, or
-	 *                      null where the space is flattened to a line or a point, and nothing in it
-	 *                      shows
-	 */
-	private function boxIn(array $matrix)
-	{
-		list($a, $b, $c, $d, $e, $f) = $matrix;
-		$determinant = $a * $d - $b * $c;
-		if (abs($determinant) < 1e-9) {
-			return null;
-		}
-
-		$inverse = [$d / $determinant, -$b / $determinant, -$c / $determinant, $a / $determinant, ($c * $f - $d * $e) / $determinant, ($b * $e - $a * $f) / $determinant];
-		list($xMin, $yMin, $xMax, $yMax) = $this->box;
-		$xs = [];
-		$ys = [];
-		foreach ([[$xMin, $yMin], [$xMin, $yMax], [$xMax, $yMin], [$xMax, $yMax]] as $corner) {
-			$xs[] = $inverse[0] * $corner[0] + $inverse[2] * $corner[1] + $inverse[4];
-			$ys[] = $inverse[1] * $corner[0] + $inverse[3] * $corner[1] + $inverse[5];
-		}
-
-		return [min($xs), min($ys), max($xs), max($ys)];
-	}
-
-	/**
-	 * @param float[] $first  A transform
-	 * @param float[] $second Another
-	 *
-	 * @return float[] The transform doing the first, then the second
-	 */
-	private static function multiply(array $first, array $second)
-	{
-		list($a, $b, $c, $d, $e, $f) = $first;
-		list($a2, $b2, $c2, $d2, $e2, $f2) = $second;
-
-		return [
-			$a * $a2 + $b * $c2,
-			$a * $b2 + $b * $d2,
-			$c * $a2 + $d * $c2,
-			$c * $b2 + $d * $d2,
-			$e * $a2 + $f * $c2 + $e2,
-			$e * $b2 + $f * $d2 + $f2,
-		];
+		return $this->file->bbox();
 	}
 
 	/**
@@ -891,38 +674,6 @@ class ColrV1Source implements ColorGlyphSource
 	private function fields($position, $length, $format)
 	{
 		return $position + $length > $this->end ? null : $this->file->reader->fieldsAt($position, $length, $format);
-	}
-
-	/**
-	 * Logs part of a glyph that is not drawn as the font asks
-	 *
-	 * @param string $what What it is
-	 */
-	private function warn($what)
-	{
-		$this->file->logger->warning(sprintf('Colour glyph %d has %s', $this->glyph, $what), ['context' => LogContext::FONTS]);
-	}
-
-	/**
-	 * @param float[] $values
-	 *
-	 * @return string The values as content writes them, spaced
-	 */
-	private static function numbers(array $values)
-	{
-		return implode(' ', array_map([__CLASS__, 'number'], $values));
-	}
-
-	/**
-	 * @param float $value
-	 *
-	 * @return string The value to five places and no more than it needs
-	 */
-	private static function number($value)
-	{
-		$number = rtrim(rtrim(sprintf('%.5F', $value), '0'), '.');
-
-		return $number === '-0' ? '0' : $number;
 	}
 
 	/**
