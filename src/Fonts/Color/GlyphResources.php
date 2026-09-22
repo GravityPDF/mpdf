@@ -13,8 +13,8 @@ interface GlyphResources
 	/**
 	 * @param string $data A PNG or a JPEG
 	 *
-	 * @return string|null The name the glyph's content draws it with Do by, e.g. '/I3', or null where
-	 *                     the image cannot be drawn
+	 * @return array|null [the name the glyph's content draws it with Do by, e.g. '/I3', its width in
+	 *                    pixels, its height in pixels], or null where the image cannot be drawn
 	 */
 	public function image($data);
 }

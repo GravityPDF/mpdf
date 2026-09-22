@@ -16,8 +16,10 @@ The GSUB is the shape Noto's is: one 'ccmp' feature under DFLT, ligatures for a 
 keycap, a skin tone and a subdivision flag, none of them with U+FE0F in the sequence.
 
 The CBDT strike at 64ppem holds one glyph per index subtable format (1 to 5), and so exercises every
-image format mPDF reads (17, 18 and 19). The sbix strike at 64ppem holds a 'dupe' and a 'jpg ' glyph
-beside the PNGs.
+image format mPDF reads (17, 18 and 19). The sbix strike at 64ppem holds a glyph of each graphic type
+beside the PNGs: the woman is a 'dupe' of the man, the girl a 'jpg ', the regional indicator U a
+'flip' of the thumb, so that the mirroring shows, and the skin tone a 'tiff', which mPDF does not
+draw.
 
 The fonts are committed; this is kept so they can be rebuilt and so what is in them can be read.
 """
@@ -36,6 +38,7 @@ from fontTools.ttLib.tables.DefaultTable import DefaultTable
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphComponent
 from fontTools.ttLib.tables.sbixGlyph import Glyph as SbixGlyph
 from fontTools.ttLib.tables.sbixStrike import Strike
+from fontTools.misc.timeTools import timestampFromString
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 UPEM = 1000
@@ -236,6 +239,9 @@ def base_font(with_outlines=True):
     fb.setupHorizontalHeader(ascent=ASCENT, descent=DESCENT)
     fb.setupOS2(sTypoAscender=ASCENT, sTypoDescender=DESCENT, usWinAscent=ASCENT, usWinDescent=-DESCENT)
     fb.setupPost()
+    # A fixed date, so rebuilding a font whose design has not changed writes the same bytes
+    fb.updateHead(created=timestampFromString('Sat Jan  1 00:00:00 2000'), modified=timestampFromString('Sat Jan  1 00:00:00 2000'))
+    fb.font.recalcTimestamp = False
     return fb
 
 
@@ -497,6 +503,15 @@ def build_sbix():
                 glyph = SbixGlyph(glyphName=name, graphicType='dupe')
                 glyph.referenceGlyphName = 'u1F468'
                 strike.glyphs[name] = glyph
+                continue
+            if ppem == 64 and name == 'u1F1FA':
+                glyph = SbixGlyph(glyphName=name, graphicType='flip')
+                glyph.referenceGlyphName = 'u1F44D'
+                strike.glyphs[name] = glyph
+                continue
+            if ppem == 64 and name == 'u1F3FD':
+                strike.glyphs[name] = SbixGlyph(glyphName=name, graphicType='tiff', imageData=b'II*\x00 not drawn',
+                                                originOffsetX=0, originOffsetY=0)
                 continue
             fmt = 'JPEG' if (ppem == 64 and name == 'u1F467') else 'PNG'
             graphic = 'jpg ' if fmt == 'JPEG' else 'png '

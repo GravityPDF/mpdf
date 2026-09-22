@@ -29,6 +29,6 @@ class RecordingResources implements GlyphResources
 
 		$this->images[] = $data;
 
-		return '/I' . count($this->images);
+		return ['/I' . count($this->images), 64, 64];
 	}
 }

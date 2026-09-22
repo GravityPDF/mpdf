@@ -91,6 +91,29 @@ class FontReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(20, $reader->tell(), 'the fixture is 20 bytes long');
 	}
 
+	/**
+	 * fieldsAt() unpacks from wherever it is asked and leaves the position past what it read, and a
+	 * read the font ends partway through gives null rather than what there was of it
+	 *
+	 * @dataProvider readerProvider
+	 *
+	 * @param string $which The backend
+	 */
+	public function testFieldsAreReadWholeOrNotAtAll($which)
+	{
+		$reader = $this->reader($which);
+
+		$this->assertSame([32768, 32767], $reader->fieldsAt(4, 4, 'n2'));
+		$this->assertSame(8, $reader->tell());
+		$this->assertSame(['GSUB'], $reader->fieldsAt(16, 4, 'a4'));
+		$this->assertSame([], $reader->fieldsAt(16, 0, 'a4'), 'nothing asked for');
+		$this->assertNull($reader->fieldsAt(18, 4, 'N'), 'two bytes short');
+		$this->assertNull($reader->fieldsAt(0x7FFFFF00, 2, 'n'), 'past the end');
+	}
+
+	/**
+	 * @return array[] Each backend
+	 */
 	public function readerProvider()
 	{
 		return ['file' => ['file'], 'blob' => ['blob']];
