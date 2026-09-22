@@ -136,7 +136,7 @@ class ColorSpaceRestrictor
 	 */
 	private function restrictCmykColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
-		if (($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) || $this->mpdf->pdfxRgbIntent()) {
+		if (($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) || ($this->mpdf->PDFX && $this->mpdf->pdfxRgbIntent())) {
 			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$PDFAXwarnings[] = "CMYK color specified '" . $color . "' (converted to RGB)";
 			}
@@ -159,15 +159,12 @@ class ColorSpaceRestrictor
 	 */
 	private function restrictRgbaColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
-		// PDF/X-4 keeps the transparency
+		// PDF/X-4 keeps the transparency, which the conversions carry through
 		if ($this->mpdf->isPdfx4()) {
-			if (!$this->mpdf->pdfxRgbIntent()) {
-				if (!$this->mpdf->PDFXauto) {
-					$PDFAXwarnings[] = "RGB color with transparency specified '" . $color . "' (converted to CMYK)";
-				}
-				$c = $this->colorModeConverter->rgb2cmyk($c);
-			}
-		} elseif ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace == 3)) {
+			return $this->restrictRgbColorSpace($c, $color, $PDFAXwarnings);
+		}
+
+		if ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace == 3)) {
 			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$PDFAXwarnings[] = "RGB color with transparency specified '" . $color . "' (converted to CMYK without transparency)";
 			}
@@ -198,13 +195,10 @@ class ColorSpaceRestrictor
 	private function restrictCmykaColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
 		if ($this->mpdf->isPdfx4()) {
-			if ($this->mpdf->pdfxRgbIntent()) {
-				if (!$this->mpdf->PDFXauto) {
-					$PDFAXwarnings[] = "CMYK color with transparency specified '" . $color . "' (converted to RGB)";
-				}
-				$c = $this->colorModeConverter->cmyk2rgb($c);
-			}
-		} elseif ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) {
+			return $this->restrictCmykColorSpace($c, $color, $PDFAXwarnings);
+		}
+
+		if ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) {
 			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$PDFAXwarnings[] = "CMYK color with transparency specified '" . $color . "' (converted to RGB without transparency)";
 			}

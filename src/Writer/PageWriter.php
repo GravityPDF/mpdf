@@ -314,13 +314,12 @@ final class PageWriter
 			}
 
 			if (isset($this->mpdf->PageAnnots[$n])) {
-				$widthPt = $this->mpdf->pageDim[$n]['w'] * Mpdf::SCALE;
 				$heightPt = $this->mpdf->pageDim[$n]['h'] * Mpdf::SCALE;
 				foreach ($this->mpdf->PageAnnots[$n] as $key => $pl) {
 					// The marker, placed as MetadataWriter::writeAnnotations() places it
 					$x = $pl['x'];
 					if ($this->mpdf->annotMargin != 0 || $x <= 0) {
-						$x = $widthPt / Mpdf::SCALE - $this->mpdf->annotMargin;
+						$x = $this->mpdf->pageDim[$n]['w'] - $this->mpdf->annotMargin;
 					}
 					$left = $x * Mpdf::SCALE;
 					$top = $heightPt - $pl['y'] * Mpdf::SCALE;

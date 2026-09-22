@@ -1639,6 +1639,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * @return bool Whether the document is PDF/X-1a, which permits no transparency, layers or RGB
+	 */
+	public function isPdfx1a()
+	{
+		return $this->PDFX && !$this->isPdfx4();
+	}
+
+	/**
 	 * @return string The PDF/X version the document conforms to, as warnings and its metadata name it
 	 */
 	public function pdfxVersionLabel()
@@ -1674,7 +1682,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function pdfxRgbIntent()
 	{
-		return $this->isPdfx4() && $this->pdfxOutputChannels() === 3;
+		return $this->pdfxOutputChannels() === 3;
 	}
 
 	private function initConstructorParams(array $config)
@@ -2068,7 +2076,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		//          HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity
 		// set alpha for stroking (CA) and non-stroking (ca) operations
 		// mode determines F (fill) S (stroke) B (both)
-		if (($this->PDFA || ($this->PDFX && !$this->isPdfx4())) && $alpha != 1) {
+		if (($this->PDFA || $this->isPdfx1a()) && $alpha != 1) {
 			if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
 				$this->PDFAXwarnings[] = "Image opacity must be 100% (Opacity changed to 100%)";
 			}
@@ -2945,7 +2953,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if (!isset($this->layers[$id])) {
 			$this->layers[$id] = ['name' => 'Layer ' . ($id)];
-			if ($this->PDFA || ($this->PDFX && !$this->isPdfx4())) {
+			if ($this->PDFA || $this->isPdfx1a()) {
 				$this->PDFAXwarnings[] = "Cannot use layers when using PDFA or PDFX";
 				return '';
 			} elseif (!$this->PDFA && !$this->PDFX) {
@@ -10902,7 +10910,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// add a watermark
 	function watermark($texte, $angle = 45, $fontsize = 96, $alpha = 0.2)
 	{
-		if ($this->PDFA || ($this->PDFX && !$this->isPdfx4())) {
+		if ($this->PDFA || $this->isPdfx1a()) {
 			throw new \Mpdf\MpdfException('PDFA and PDFX do not permit transparency, so mPDF does not allow Watermarks!');
 		}
 
@@ -10981,7 +10989,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function watermarkImg($src, $alpha = 0.2)
 	{
-		if ($this->PDFA || ($this->PDFX && !$this->isPdfx4())) {
+		if ($this->PDFA || $this->isPdfx1a()) {
 			throw new \Mpdf\MpdfException('PDFA and PDFX do not permit transparency, so mPDF does not allow Watermarks!');
 		}
 

@@ -32,7 +32,8 @@ final class ImageWriter
 
 		foreach ($this->mpdf->images as $file => $info) {
 
-			$rgb = empty($info['icc']) && ($info['cs'] === 'DeviceRGB' || $info['cs'] === 'Indexed') ? $this->writer->calibratedRgb() : null;
+			$calibrated = empty($info['icc']) && ($info['cs'] === 'DeviceRGB' || $info['cs'] === 'Indexed') ? $this->writer->calibratedRgb() : null;
+			$rgb = $calibrated ? $calibrated . ' 0 R' : '/DeviceRGB';
 
 			$this->writer->object();
 
@@ -59,12 +60,12 @@ final class ImageWriter
 				$icc = true;
 				$this->writer->write('/ColorSpace [/ICCBased ' . ($this->mpdf->n + 1) . ' 0 R]');
 			} elseif ($info['cs'] === 'Indexed') {
-				if (($this->mpdf->PDFX && !$this->mpdf->isPdfx4()) || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
+				if ($this->mpdf->isPdfx1a() || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
 					throw new \Mpdf\MpdfException('PDFA1-b and PDFX/1-a files do not permit using mixed colour space (' . $file . ').');
 				}
-				$this->writer->write('/ColorSpace [/Indexed ' . ($rgb ? $rgb . ' 0 R' : '/DeviceRGB') . ' ' . (strlen($info['pal']) / 3 - 1) . ' ' . ($this->mpdf->n + 1) . ' 0 R]');
+				$this->writer->write('/ColorSpace [/Indexed ' . $rgb . ' ' . (strlen($info['pal']) / 3 - 1) . ' ' . ($this->mpdf->n + 1) . ' 0 R]');
 			} else {
-				$this->writer->write('/ColorSpace ' . ($rgb ? $rgb . ' 0 R' : '/' . $info['cs']));
+				$this->writer->write('/ColorSpace ' . ($info['cs'] === 'DeviceRGB' ? $rgb : '/' . $info['cs']));
 				if ($info['cs'] === 'DeviceCMYK') {
 					if ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace !== 3) {
 						throw new \Mpdf\MpdfException('PDFA1-b does not permit Images using mixed colour space (' . $file . ').');
@@ -72,7 +73,7 @@ final class ImageWriter
 					if ($info['type'] === 'jpg') {
 						$this->writer->write('/Decode [1 0 1 0 1 0 1 0]');
 					}
-				} elseif ((($this->mpdf->PDFX && !$this->mpdf->isPdfx4()) || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) && $info['cs'] === 'DeviceRGB') {
+				} elseif (($this->mpdf->isPdfx1a() || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) && $info['cs'] === 'DeviceRGB') {
 					throw new \Mpdf\MpdfException('PDFA1-b and PDFX/1-a files do not permit using mixed colour space (' . $file . ').');
 				}
 			}

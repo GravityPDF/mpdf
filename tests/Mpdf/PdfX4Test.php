@@ -12,6 +12,13 @@ use Mpdf\Utils\UtfString;
 class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
+	use PageStreams;
+
+	/**
+	 * The bundled sRGB profile, for an RGB output intent
+	 */
+	const SRGB = __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc';
+
 	/**
 	 * @param array $config Merged over automatic fixing and no compression
 	 *
@@ -26,14 +33,18 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @param array  $config Merged over mpdf()'s configuration
-	 * @param string $html
+	 * @param array         $config Merged over mpdf()'s configuration
+	 * @param string        $html
+	 * @param callable|null $before Handed the document before the HTML is written
 	 *
 	 * @return string The document
 	 */
-	private function pdf(array $config, $html = '<p>Text</p>')
+	private function pdf(array $config, $html = '<p>Text</p>', $before = null)
 	{
 		$mpdf = $this->mpdf($config);
+		if ($before) {
+			$before($mpdf);
+		}
 		$mpdf->WriteHTML($html);
 
 		return $mpdf->OutputBinaryData();
@@ -44,11 +55,15 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testThePdfxSettingNamesTheVersion()
 	{
+		$pdfx1a = $this->mpdf(['PDFX' => '1a']);
+		$this->assertSame('PDF/X-1a:2003', $pdfx1a->pdfxVersionLabel());
+		$this->assertTrue($pdfx1a->isPdfx1a());
 		$this->assertSame('PDF/X-1a:2003', $this->mpdf(['PDFX' => true])->pdfxVersionLabel());
-		$this->assertSame('PDF/X-1a:2003', $this->mpdf(['PDFX' => '1a'])->pdfxVersionLabel());
-		$this->assertFalse($this->mpdf(['PDFX' => '1a'])->isPdfx4());
-		$this->assertSame('PDF/X-4', $this->mpdf(['PDFX' => '4'])->pdfxVersionLabel());
-		$this->assertTrue($this->mpdf(['PDFX' => '4'])->isPdfx4());
+
+		$pdfx4 = $this->mpdf(['PDFX' => '4']);
+		$this->assertSame('PDF/X-4', $pdfx4->pdfxVersionLabel());
+		$this->assertTrue($pdfx4->isPdfx4());
+		$this->assertFalse($pdfx4->isPdfx1a());
 	}
 
 	/**
@@ -97,7 +112,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('/S /GTS_PDFX', $pdf);
 		$this->assertStringContainsString('/Info (SWOP2006 Coated3v2)', $pdf);
 		$this->assertSame(1, preg_match('/\/DestOutputProfile (\d+) 0 R/', $pdf, $match));
-		$this->assertSame(1, preg_match('/\n' . $match[1] . ' 0 obj\n<<\n\/N 4\n\/Length 2747952>>/', $pdf));
+		$this->assertStringContainsString("\n" . $match[1] . " 0 obj\n<<\n/N 4\n/Length 2747952>>", $pdf, 'too long for PageStreams::object() to match');
 
 		$this->assertStringNotContainsString('/DestOutputProfile', $this->pdf(['PDFX' => true]), 'PDF/X-1a names a registered condition instead');
 	}
@@ -138,16 +153,14 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testJavaScriptIsRemoved()
 	{
-		$mpdf = $this->mpdf(['PDFX' => '4']);
-		$mpdf->SetJS('app.alert("x");');
-		$mpdf->WriteHTML('<p>Text</p>');
-		$this->assertStringNotContainsString('/JavaScript', $mpdf->OutputBinaryData());
+		$script = function (Mpdf $mpdf) {
+			$mpdf->SetJS('app.alert("x");');
+		};
 
-		$mpdf = $this->mpdf(['PDFX' => '4', 'PDFXauto' => false]);
-		$mpdf->SetJS('app.alert("x");');
-		$mpdf->WriteHTML('<p>Text</p>');
+		$this->assertStringNotContainsString('/JavaScript', $this->pdf(['PDFX' => '4'], '<p>Text</p>', $script));
+
 		$this->expectException(MpdfException::class);
-		$mpdf->OutputBinaryData();
+		$this->pdf(['PDFX' => '4', 'PDFXauto' => false], '<p>Text</p>', $script);
 	}
 
 	/**
@@ -196,15 +209,12 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testPdfx4KeepsOpacity()
 	{
-		$mpdf = $this->mpdf(['PDFX' => '4']);
-		$mpdf->SetAlpha(0.4);
-		$mpdf->WriteHTML('<p>Text</p>');
-		$this->assertStringContainsString('/ca 0.4', $mpdf->OutputBinaryData());
+		$alpha = function (Mpdf $mpdf) {
+			$mpdf->SetAlpha(0.4);
+		};
 
-		$mpdf = $this->mpdf(['PDFX' => true]);
-		$mpdf->SetAlpha(0.4);
-		$mpdf->WriteHTML('<p>Text</p>');
-		$this->assertStringNotContainsString('/ca 0.4', $mpdf->OutputBinaryData());
+		$this->assertStringContainsString('/ca 0.4', $this->pdf(['PDFX' => '4'], '<p>Text</p>', $alpha));
+		$this->assertStringNotContainsString('/ca 0.4', $this->pdf(['PDFX' => true], '<p>Text</p>', $alpha));
 	}
 
 	/**
@@ -226,18 +236,15 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testPdfx4PermitsAWatermark()
 	{
-		$mpdf = $this->mpdf(['PDFX' => '4']);
-		$mpdf->SetWatermarkText('DRAFT');
-		$mpdf->showWatermarkText = true;
-		$mpdf->WriteHTML('<p>Text</p>');
-		$this->assertStringContainsString('/ca 0.2', $mpdf->OutputBinaryData());
+		$watermark = function (Mpdf $mpdf) {
+			$mpdf->SetWatermarkText('DRAFT');
+			$mpdf->showWatermarkText = true;
+		};
 
-		$mpdf = $this->mpdf(['PDFX' => true]);
-		$mpdf->SetWatermarkText('DRAFT');
-		$mpdf->showWatermarkText = true;
-		$mpdf->WriteHTML('<p>Text</p>');
+		$this->assertStringContainsString('/ca 0.2', $this->pdf(['PDFX' => '4'], '<p>Text</p>', $watermark));
+
 		$this->expectException(MpdfException::class);
-		$mpdf->OutputBinaryData();
+		$this->pdf(['PDFX' => true], '<p>Text</p>', $watermark);
 	}
 
 	/**
@@ -258,8 +265,8 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('/SMask', $pdf);
 		$this->assertStringNotContainsString('/DeviceRGB', $pdf);
 		$this->assertSame(1, preg_match('/\/ColorSpace (\d+) 0 R/', $pdf, $space));
-		$this->assertSame(1, preg_match('/\n' . $space[1] . ' 0 obj\n\[\/ICCBased (\d+) 0 R\]/', $pdf, $profile));
-		$this->assertSame(1, preg_match('/\n' . $profile[1] . ' 0 obj\n<<\/N 3 \/Length 3052>>/', $pdf));
+		$this->assertSame(1, preg_match('/^\[\/ICCBased (\d+) 0 R\]/', $this->object($pdf, $space[1]), $profile));
+		$this->assertStringStartsWith('<</N 3 /Length 3052>>', $this->object($pdf, $profile[1]));
 
 		$pdfx1a = $this->pdf(['PDFX' => true], $html);
 		$this->assertStringNotContainsString('/SMask', $pdfx1a);
@@ -279,7 +286,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$pdf = $this->pdf(['PDFX' => '4'], $html);
 		$this->assertSame(1, preg_match('/\/ColorSpace \[\/Indexed (\d+) 0 R 0 /', $pdf, $match));
-		$this->assertSame(1, preg_match('/\n' . $match[1] . ' 0 obj\n\[\/ICCBased \d+ 0 R\]/', $pdf));
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[1]));
 	}
 
 	/**
@@ -313,7 +320,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$this->assertStringContainsString('/Group << /Type /Group /S /Transparency /CS /DeviceCMYK >>', $this->pdf(['PDFX' => '4']));
 
-		$rgb = $this->pdf(['PDFX' => '4', 'ICCProfile' => __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc']);
+		$rgb = $this->pdf(['PDFX' => '4', 'ICCProfile' => self::SRGB]);
 		$this->assertStringContainsString('/Group << /Type /Group /S /Transparency /CS /DeviceRGB >>', $rgb);
 
 		$this->assertStringNotContainsString('/Group', $this->pdf(['PDFX' => true]));
@@ -331,10 +338,10 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $cmyk);
 		$this->assertStringNotContainsString('1.000 0.000 0.000 rg', $cmyk);
 
-		$rgb = $this->pdf(['PDFX' => '4', 'ICCProfile' => __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc'], $html);
+		$rgb = $this->pdf(['PDFX' => '4', 'ICCProfile' => self::SRGB], $html);
 		$this->assertStringContainsString('1.000 0.000 0.000 rg', $rgb);
 		$this->assertSame(1, preg_match('/\/DestOutputProfile (\d+) 0 R/', $rgb, $match));
-		$this->assertSame(1, preg_match('/\n' . $match[1] . ' 0 obj\n<<\n\/N 3\n/', $rgb));
+		$this->assertStringStartsWith("<<\n/N 3\n", $this->object($rgb, $match[1]));
 	}
 
 	/**
@@ -347,7 +354,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringNotContainsString('/DeviceRGB', $pdf);
 		$this->assertStringContainsString('/SMask', $pdf);
 		$this->assertSame(1, preg_match('/\/ColorSpace (\d+) 0 R/', $pdf, $match));
-		$this->assertSame(1, preg_match('/\n' . $match[1] . ' 0 obj\n\[\/ICCBased \d+ 0 R\]/', $pdf));
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[1]));
 	}
 
 	/**
@@ -360,7 +367,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringNotContainsString(' rg', $pdf);
 		$this->assertStringContainsString('/CsRGB cs 1.000 0.800 0.200 sc', $pdf, 'the face, yellow');
 		$this->assertSame(1, preg_match('/\/ColorSpace <<\/CsRGB (\d+) 0 R >>/', $pdf, $match));
-		$this->assertSame(1, preg_match('/\n' . $match[1] . ' 0 obj\n\[\/ICCBased \d+ 0 R\]/', $pdf));
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[1]));
 	}
 
 	/**
@@ -368,7 +375,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAColourFontIsDrawnInDeviceRgbForAnRgbOutputIntent()
 	{
-		$pdf = $this->colourFontPdf(['PDFX' => '4', 'default_font' => 'colr', 'ICCProfile' => __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc']);
+		$pdf = $this->colourFontPdf(['PDFX' => '4', 'default_font' => 'colr', 'ICCProfile' => self::SRGB]);
 
 		$this->assertStringContainsString('1.000 0.800 0.200 rg', $pdf);
 		$this->assertStringNotContainsString('CsRGB', $pdf);

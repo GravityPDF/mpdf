@@ -54,7 +54,7 @@ class ColorFormats
 	 */
 	public static function inColor(Mpdf $mpdf)
 	{
-		return !$mpdf->PDFA && (!$mpdf->PDFX || $mpdf->isPdfx4()) && !$mpdf->restrictColorSpace;
+		return !$mpdf->PDFA && !$mpdf->isPdfx1a() && !$mpdf->restrictColorSpace;
 	}
 
 	/**
