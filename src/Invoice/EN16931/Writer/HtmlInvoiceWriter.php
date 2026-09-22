@@ -15,7 +15,7 @@ use Mpdf\Utils\NumericString;
  * Writes an invoice as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how to pay
  *
  * Pass labels to translate it, e.g. new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date']), and extend it
- * to format amounts and dates for a locale.
+ * to format numbers, amounts and dates for a locale.
  *
  *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter()]);
  */
@@ -192,7 +192,7 @@ class HtmlInvoiceWriter implements WriterInterface
 			}
 
 			$html .= $this->row('td', $item, [
-				NumericString::decimal($line->getQuantity(), 4),
+				$this->number($line->getQuantity()),
 				$this->money($line->getUnitPrice(), $currency),
 				$this->rate($line->getVatCategory(), $line->getVatRate()),
 				$this->money($line->getNetAmount(), $currency),
@@ -308,7 +308,19 @@ class HtmlInvoiceWriter implements WriterInterface
 	 */
 	private function rate($category, $rate)
 	{
-		return $category === LineItem::NOT_SUBJECT_TO_VAT ? $category : NumericString::decimal($rate, 4) . '%';
+		return $category === LineItem::NOT_SUBJECT_TO_VAT ? $category : $this->number($rate) . '%';
+	}
+
+	/**
+	 * A quantity or VAT rate, to at most four decimals; override to format it for a locale
+	 *
+	 * @param float $number
+	 *
+	 * @return string
+	 */
+	protected function number($number)
+	{
+		return NumericString::decimal($number, 4);
 	}
 
 	/**
