@@ -154,12 +154,15 @@ class Otl
 	var $lbdicts; // Line-breaking dictionaries
 
 	/**
-	 * Memoised Coverage and ClassDef tables, for the life of the document.
+	 * Memoised Coverage and ClassDef tables, and the subtables decoded from them, for the life of the
+	 * document.
 	 *
-	 * Keyed ["fontkey/GSUB"][reader][offset]. Both parts of that are load-bearing. The reader: a font
+	 * Keyed ["fontkey/GSUB"][reader][offset], where the reader is what the entry was read as - a
+	 * projection of a table, or a decoded subtable - and a decoded subtable may be keyed further by
+	 * the glyph or class it was decoded for. The first two parts are load-bearing. The reader: a font
 	 * may point both a PairPos ClassDef and a chained-context InputClassDef at one table, and
-	 * _getClassDefinitionTable returns class => list of unicodes where _getClasses returns
-	 * class => map of unicode => 1, so sharing by offset alone would hand one of them a shape it
+	 * pairPosClasses returns unicode => class where _getClasses returns class => map of
+	 * unicode => 1, so sharing by offset alone would hand one of them a shape it
 	 * cannot index. The table: offsets are relative to their own table, so GSUB offset 0x100 and GPOS
 	 * offset 0x100 are two different places that would otherwise share a key.
 	 */
@@ -3610,57 +3613,62 @@ class Otl
 	 */
 	private function _applyGPOSpairAdjustmentFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $ignore, $PosFormat, $ValueFormat1, $ValueFormat2, $sizeOfPair)
 	{
-		$PairSetCount = $this->reader->readUInt16();
-		$PairSetOffset = [];
-		for ($p = 0; $p < $PairSetCount; $p++) {
-			$PairSetOffset[] = $subtable_offset + $this->reader->readUInt16();
+		$pairs = $this->pairSet($subtable_offset, $LuCoverage[$currGID], $sizeOfPair);
+
+		$checkpos = $ptr + 1;
+		while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
+			$checkpos++;
 		}
-		for ($p = 0; $p < $PairSetCount; $p++) {
-			if ($LuCoverage[$currGID] == $p) {
-				$this->reader->seek($PairSetOffset[$p]);
-				//PairSet table
-				$PairValueCount = $this->reader->readUInt16();
-				for ($pv = 0; $pv < $PairValueCount; $pv++) {
-					//PairValueRecord
-					$gid = $this->reader->readUInt16();
-					$SecondGlyph = $this->glyphToChar($gid);
-					$FirstGlyph = $this->OTLdata[$ptr]['uni'];
+		if (!isset($this->OTLdata[$checkpos]) || !isset($pairs[$this->OTLdata[$checkpos]['uni']])) {
+			return null;
+		}
 
-					$checkpos = $ptr;
-					$checkpos++;
-					while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
-						$checkpos++;
-					}
-					if (isset($this->OTLdata[$checkpos]) && $this->OTLdata[$checkpos]['uni'] == $SecondGlyph) {
-						$matchedpos = $checkpos;
-					} else {
-						$matchedpos = false;
-					}
+		$shift = $this->applyPairValues($pairs[$this->OTLdata[$checkpos]['uni']], $ptr, $checkpos, $ValueFormat1, $ValueFormat2);
+		if ($this->debugOTL) {
+			echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+		}
 
-					if ($matchedpos !== false) {
-						$Value1 = ValueRecord::read($this->reader, $ValueFormat1);
-						$Value2 = ValueRecord::read($this->reader, $ValueFormat2);
-						if ($ValueFormat1) {
-							$this->_applyGPOSvaluerecord($ptr, $Value1);
-						}
-						if ($ValueFormat2) {
-							$this->_applyGPOSvaluerecord($matchedpos, $Value2);
-							if ($this->debugOTL) {
-								echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
-							}
-							return $matchedpos - $ptr + 1;
-						}
-						if ($this->debugOTL) {
-							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
-						}
-						return $matchedpos - $ptr;
-					} else {
-						$this->reader->skip($sizeOfPair);
+		return $shift;
+	}
+
+	/**
+	 * The second glyphs a Pair Adjustment Format 1 subtable pairs with one first glyph, decoded, for
+	 * the life of the document.
+	 *
+	 * The glyph that follows is the same whichever record is being tried, so the record that applies
+	 * is the first whose second glyph is that character. Each offer used to read the set from the font
+	 * and compare record after record; it is one lookup here.
+	 *
+	 * @param int $offset        Where the subtable starts; the reader is just past its two value formats
+	 * @param int $coverageIndex The first glyph's index in the subtable's Coverage table
+	 * @param int $sizeOfPair    Bytes of the two value records each pair carries
+	 *
+	 * @return int[] Second character => where its two value records start, the first record where two
+	 *               glyphs stand for one character
+	 */
+	private function pairSet($offset, $coverageIndex, $sizeOfPair)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['pairSet'][$offset][$coverageIndex])) {
+			$pairs = [];
+
+			if ($coverageIndex < $this->reader->readUInt16()) {
+				$this->reader->skip($coverageIndex * 2);
+				$this->reader->seek($offset + $this->reader->readUInt16());
+
+				$pairValueCount = $this->reader->readUInt16();
+				for ($pv = 0; $pv < $pairValueCount; $pv++) {
+					$secondGlyph = $this->glyphToChar($this->reader->readUInt16());
+					if (!isset($pairs[$secondGlyph])) {
+						$pairs[$secondGlyph] = $this->reader->tell();
 					}
+					$this->reader->skip($sizeOfPair);
 				}
 			}
+
+			$this->LuDataCache[$this->otlCacheKey]['pairSet'][$offset][$coverageIndex] = $pairs;
 		}
-		return null;
+
+		return $this->LuDataCache[$this->otlCacheKey]['pairSet'][$offset][$coverageIndex];
 	}
 
 	/**
@@ -3680,66 +3688,59 @@ class Otl
 		$Class1Count = $this->reader->readUInt16();
 		$Class2Count = $this->reader->readUInt16();
 
-		// Every (class1, class2) pair has a record, so the grid's size is known - but nothing needs to
-		// step over it, because each pair is reached by seeking to it rather than by reading in order
-		$sizeOfValueRecords = $Class1Count * $Class2Count * $sizeOfPair;
-
-		// NB Class1Count includes Class 0 even though it is not defined by $ClassDef1
-		// i.e. Class1Count = 5; Class1 will contain array(indices 1-4);
-		$Class1 = $this->_getClassDefinitionTable($ClassDef1);
-		$Class2 = $this->_getClassDefinitionTable($ClassDef2);
+		$Class1 = $this->pairPosClasses($ClassDef1);
+		$Class2 = $this->pairPosClasses($ClassDef2);
 		$FirstGlyph = $this->OTLdata[$ptr]['uni'];
-		$checkpos = $ptr;
-		$checkpos++;
+		$checkpos = $ptr + 1;
 		while (isset($this->OTLdata[$checkpos]) && isset($ignore[$this->OTLdata[$checkpos]['uni']])) {
 			$checkpos++;
 		}
-		if (isset($this->OTLdata[$checkpos])) {
-			$matchedpos = $checkpos;
-		} else {
+		if (!isset($this->OTLdata[$checkpos])) {
 			return null;
 		}
 
-		$SecondGlyph = $this->OTLdata[$matchedpos]['uni'];
-		for ($i = 0; $i < $Class1Count; $i++) {
-			if (isset($Class1[$i]) && count($Class1[$i])) {
-				$FirstClassPos = array_search($FirstGlyph, $Class1[$i]);
-				if ($FirstClassPos === false) {
-					continue;
-				} else {
-					for ($j = 0; $j < $Class2Count; $j++) {
-						if (isset($Class2[$j]) && count($Class2[$j])) {
-							$SecondClassPos = array_search($SecondGlyph, $Class2[$j]);
-							if ($SecondClassPos === false) {
-								continue;
-							}
+		$SecondGlyph = $this->OTLdata[$checkpos]['uni'];
 
-							// Get ValueRecord[$i][$j]
-							$offs = ($i * $Class2Count * $sizeOfPair) + ($j * $sizeOfPair);
-							$this->reader->seek($subtable_offset + 16 + $offs);
-
-							$Value1 = ValueRecord::read($this->reader, $ValueFormat1);
-							$Value2 = ValueRecord::read($this->reader, $ValueFormat2);
-							if ($ValueFormat1) {
-								$this->_applyGPOSvaluerecord($ptr, $Value1);
-							}
-							if ($ValueFormat2) {
-								$this->_applyGPOSvaluerecord($matchedpos, $Value2);
-								if ($this->debugOTL) {
-									echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
-								}
-								return $matchedpos - $ptr + 1;
-							}
-							if ($this->debugOTL) {
-								echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
-							}
-							return $matchedpos - $ptr;
-						}
-					}
-				}
-			}
+		// Class1Count and Class2Count include class 0, so a class at or beyond them names no record
+		if (!isset($Class1[$FirstGlyph]) || $Class1[$FirstGlyph] >= $Class1Count || !isset($Class2[$SecondGlyph]) || $Class2[$SecondGlyph] >= $Class2Count) {
+			return null;
 		}
-		return null;
+
+		// Every (class1, class2) pair has a record, reached by seeking to it: ValueRecord[$i][$j]
+		$offs = ($Class1[$FirstGlyph] * $Class2Count * $sizeOfPair) + ($Class2[$SecondGlyph] * $sizeOfPair);
+
+		$shift = $this->applyPairValues($subtable_offset + 16 + $offs, $ptr, $checkpos, $ValueFormat1, $ValueFormat2);
+		if ($this->debugOTL) {
+			echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
+		}
+
+		return $shift;
+	}
+
+	/**
+	 * Apply a pair's two value records, the first to the glyph at $ptr and the second to the one it
+	 * pairs with.
+	 *
+	 * @param int $recordsAt Where the pair's value records start
+	 * @param int $second    Position in OTLdata of the second glyph
+	 *
+	 * @return int Glyphs to advance by: past the second glyph too where its own record moved it
+	 */
+	private function applyPairValues($recordsAt, $ptr, $second, $ValueFormat1, $ValueFormat2)
+	{
+		$this->reader->seek($recordsAt);
+		$Value1 = ValueRecord::read($this->reader, $ValueFormat1);
+		$Value2 = ValueRecord::read($this->reader, $ValueFormat2);
+
+		if ($ValueFormat1) {
+			$this->_applyGPOSvaluerecord($ptr, $Value1);
+		}
+		if ($ValueFormat2) {
+			$this->_applyGPOSvaluerecord($second, $Value2);
+			return $second - $ptr + 1;
+		}
+
+		return $second - $ptr;
 	}
 
 	/**
@@ -4742,19 +4743,31 @@ class Otl
 	}
 
 	/**
-	 * A Class Definition table as a list per class, for GPOS pair positioning, which needs a glyph's
-	 * position within its class rather than only its membership.
+	 * A Class Definition table as the class of each character, for GPOS pair positioning, which
+	 * indexes its grid of value records by the classes of the two glyphs.
 	 *
-	 * Class 0 is kept here, unlike in _getClasses: a PairPos subtable counts it among its classes and
-	 * indexes its value records by class number.
+	 * Class 0 is kept where the table states it, unlike in _getClasses: a PairPos subtable counts it
+	 * among its classes and indexes its value records by class number. A glyph the table does not
+	 * name is left out rather than put in class 0, which is how mPDF has always read it. Where two
+	 * glyphs stand for one character, the lower class is the one kept.
 	 *
-	 * @return array class => list of unicodes, in the table's own order
+	 * @return int[] unicode => class
 	 */
-	private function _getClassDefinitionTable($offset)
+	private function pairPosClasses($offset)
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['classDef'][$offset])) {
 			$this->reader->seek($offset);
-			$this->LuDataCache[$this->otlCacheKey]['classDef'][$offset] = array_map([$this, 'charsOf'], ClassDef::glyphsByClass($this->reader));
+			$classes = [];
+
+			foreach (ClassDef::pairs($this->reader) as $pair) {
+				list($glyphID, $class) = $pair;
+				$uni = $this->glyphToChar($glyphID);
+				if (!isset($classes[$uni]) || $class < $classes[$uni]) {
+					$classes[$uni] = $class;
+				}
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['classDef'][$offset] = $classes;
 		}
 
 		return $this->LuDataCache[$this->otlCacheKey]['classDef'][$offset];
