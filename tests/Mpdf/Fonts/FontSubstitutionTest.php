@@ -2,7 +2,6 @@
 
 namespace Mpdf\Fonts;
 
-use Mpdf\Cache;
 use Mpdf\Mpdf;
 use Mpdf\Unicode\Emoji;
 
@@ -50,10 +49,7 @@ class FontSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		]);
 		$this->mpdf->SetFont('dejavusans');
 
-		$this->substitution = new FontSubstitution(
-			$this->mpdf,
-			new FontCache(new Cache($this->mpdf->tempDir . '/mpdf/ttfontdata'))
-		);
+		$this->substitution = new FontSubstitution($this->mpdf);
 	}
 
 	/**

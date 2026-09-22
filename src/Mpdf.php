@@ -4015,7 +4015,123 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException(sprintf('Font "%s%s%s" is not supported', $family, $style ? ' - ' : '', $style));
 		}
 
-		/* Setup defaults */
+		$font = $this->fontMetrics($family, $style);
+		$this->registerFont($fontkey, $family, $font);
+	}
+
+	/**
+	 * Adds a TrueType font to the document under the next font number, from the metrics fontMetrics()
+	 * gave for it
+	 *
+	 * @param string $fontkey The font's family and style, as Mpdf::$fonts is keyed
+	 * @param string $family  The font's key in fontdata, lower case
+	 * @param array  $font    What fontMetrics() returned for the font
+	 */
+	private function registerFont($fontkey, $family, array $font)
+	{
+		$fontUseOTL = isset($this->fontdata[$family]['useOTL']) ? $this->fontdata[$family]['useOTL'] : false;
+
+		if (isset($this->fontdata[$family]['sip-ext']) && $this->fontdata[$family]['sip-ext']) {
+			$sipext = $this->fontdata[$family]['sip-ext'];
+		} else {
+			$sipext = '';
+		}
+
+		// Override with values from config_font.php
+		if (isset($this->fontdata[$family]['Ascent']) && $this->fontdata[$family]['Ascent']) {
+			$desc['Ascent'] = $this->fontdata[$family]['Ascent'];
+		}
+		if (isset($this->fontdata[$family]['Descent']) && $this->fontdata[$family]['Descent']) {
+			$desc['Descent'] = $this->fontdata[$family]['Descent'];
+		}
+		if (isset($this->fontdata[$family]['Leading']) && $this->fontdata[$family]['Leading']) {
+			$desc['Leading'] = $this->fontdata[$family]['Leading'];
+		}
+
+		$i = count($this->fonts) + $this->extraFontSubsets + 1;
+
+		$this->fonts[$fontkey] = [
+			'i' => $i,
+			'name' => $font['name'],
+			'type' => $font['type'],
+			'desc' => $font['desc'],
+			'panose' => $font['panose'],
+			'unitsPerEm' => $font['unitsPerEm'],
+			'up' => $font['up'],
+			'ut' => $font['ut'],
+			'strs' => $font['strs'],
+			'strp' => $font['strp'],
+			'cw' => $font['cw'],
+			'ttffile' => $font['ttffile'],
+			'fontkey' => $fontkey,
+			'used' => false,
+			'sip' => $font['sip'],
+			'sipext' => $sipext,
+			'smp' => $font['smp'],
+			'TTCfontID' => $font['TTCfontID'],
+			'useOTL' => $fontUseOTL,
+			'useKashida' => (isset($this->fontdata[$family]['useKashida']) ? $this->fontdata[$family]['useKashida'] : false),
+			'GSUBScriptLang' => $font['GSUBScriptLang'],
+			'GSUBFeatures' => $font['GSUBFeatures'],
+			'GSUBLookups' => $font['GSUBLookups'],
+			'GPOSScriptLang' => $font['GPOSScriptLang'],
+			'GPOSFeatures' => $font['GPOSFeatures'],
+			'GPOSLookups' => $font['GPOSLookups'],
+			'rtlPUAstr' => $font['rtlPUAstr'],
+			'glyphIDtoUni' => $font['glyphIDtoUni'],
+			'haskerninfo' => $font['haskerninfo'],
+			'haskernGPOS' => $font['haskernGPOS'],
+			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
+			'colorFormats' => $font['colorFormats'],
+			'hasOutlines' => $font['hasOutlines'],
+			'selectorsInSequences' => $font['selectorsInSequences'],
+			'ligatureText' => [],
+			'tagChars' => $font['tagChars'],
+		];
+
+		if (!$font['sip'] && !$font['smp']) {
+			// What the document draws and nothing else; the ASCII range every subset font carries is
+			// unioned back in where the subset font is built
+			$this->fonts[$fontkey]['subset'] = [];
+		} else {
+			// The range below is the encoding rather than a seed - a character is written as the CID
+			// it holds in subsets - so it stays where it is
+			$this->fonts[$fontkey]['subsets'] = [0 => range(0, 127)];
+			$this->fonts[$fontkey]['subsetCodes'] = [];
+			foreach (range(0, 127) as $c) {
+				$this->fonts[$fontkey]['subsetCodes'][$c] = [0, $c];
+			}
+			$this->fonts[$fontkey]['subsetfontids'] = [$i];
+		}
+
+		if ($font['haskerninfo']) {
+			$this->fonts[$fontkey]['kerninfo'] = $font['kerninfo'];
+		}
+
+		$this->FontFiles[$fontkey] = [
+			'length1' => $font['originalsize'],
+			'type' => 'TTF',
+			'ttffile' => $font['ttffile'],
+			'sip' => $font['sip'],
+			'smp' => $font['smp'],
+		];
+	}
+
+	/**
+	 * A TrueType font's metrics as AddFont() registers them, read from the font cache, or generated
+	 * into it where the cache has none current for the font. The font is not added to the document.
+	 *
+	 * @param string $family The font's key in fontdata, lower case
+	 * @param string $style  '', 'B', 'I' or 'BI'
+	 *
+	 * @return array The cached metrics, with the font's character widths as 'cw', its glyph map as
+	 *               'glyphIDtoUni', and the 'ttffile' and 'TTCfontID' it is read from
+	 */
+	public function fontMetrics($family, $style)
+	{
+		$fontkey = $family . $style;
+		$stylekey = $style ? $style : 'R';
+
 		$font = [
 			'name' => '',
 			'type' => '',
@@ -4126,93 +4242,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		if (isset($this->fontdata[$family]['sip-ext']) && $this->fontdata[$family]['sip-ext']) {
-			$sipext = $this->fontdata[$family]['sip-ext'];
-		} else {
-			$sipext = '';
-		}
+		$font['cw'] = $cw;
+		$font['glyphIDtoUni'] = $glyphIDtoUni;
+		$font['ttffile'] = $ttffile;
+		$font['TTCfontID'] = $TTCfontID;
 
-		// Override with values from config_font.php
-		if (isset($this->fontdata[$family]['Ascent']) && $this->fontdata[$family]['Ascent']) {
-			$desc['Ascent'] = $this->fontdata[$family]['Ascent'];
-		}
-		if (isset($this->fontdata[$family]['Descent']) && $this->fontdata[$family]['Descent']) {
-			$desc['Descent'] = $this->fontdata[$family]['Descent'];
-		}
-		if (isset($this->fontdata[$family]['Leading']) && $this->fontdata[$family]['Leading']) {
-			$desc['Leading'] = $this->fontdata[$family]['Leading'];
-		}
-
-		$i = count($this->fonts) + $this->extraFontSubsets + 1;
-
-		$this->fonts[$fontkey] = [
-			'i' => $i,
-			'name' => $font['name'],
-			'type' => $font['type'],
-			'desc' => $font['desc'],
-			'panose' => $font['panose'],
-			'unitsPerEm' => $font['unitsPerEm'],
-			'up' => $font['up'],
-			'ut' => $font['ut'],
-			'strs' => $font['strs'],
-			'strp' => $font['strp'],
-			'cw' => $cw,
-			'ttffile' => $ttffile,
-			'fontkey' => $fontkey,
-			'used' => false,
-			'sip' => $font['sip'],
-			'sipext' => $sipext,
-			'smp' => $font['smp'],
-			'TTCfontID' => $TTCfontID,
-			'useOTL' => $fontUseOTL,
-			'useKashida' => (isset($this->fontdata[$family]['useKashida']) ? $this->fontdata[$family]['useKashida'] : false),
-			'GSUBScriptLang' => $font['GSUBScriptLang'],
-			'GSUBFeatures' => $font['GSUBFeatures'],
-			'GSUBLookups' => $font['GSUBLookups'],
-			'GPOSScriptLang' => $font['GPOSScriptLang'],
-			'GPOSFeatures' => $font['GPOSFeatures'],
-			'GPOSLookups' => $font['GPOSLookups'],
-			'rtlPUAstr' => $font['rtlPUAstr'],
-			'glyphIDtoUni' => $glyphIDtoUni,
-			'haskerninfo' => $font['haskerninfo'],
-			'haskernGPOS' => $font['haskernGPOS'],
-			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
-			'colorFormats' => $font['colorFormats'],
-			'hasOutlines' => $font['hasOutlines'],
-			'selectorsInSequences' => $font['selectorsInSequences'],
-			'ligatureText' => [],
-			'tagChars' => $font['tagChars'],
-		];
-
-
-		if (!$font['sip'] && !$font['smp']) {
-			// What the document draws and nothing else; the ASCII range every subset font carries is
-			// unioned back in where the subset font is built
-			$this->fonts[$fontkey]['subset'] = [];
-		} else {
-			// The range below is the encoding rather than a seed - a character is written as the CID
-			// it holds in subsets - so it stays where it is
-			$this->fonts[$fontkey]['subsets'] = [0 => range(0, 127)];
-			$this->fonts[$fontkey]['subsetCodes'] = [];
-			foreach (range(0, 127) as $c) {
-				$this->fonts[$fontkey]['subsetCodes'][$c] = [0, $c];
-			}
-			$this->fonts[$fontkey]['subsetfontids'] = [$i];
-		}
-
-		if ($font['haskerninfo']) {
-			$this->fonts[$fontkey]['kerninfo'] = $font['kerninfo'];
-		}
-
-		$this->FontFiles[$fontkey] = [
-			'length1' => $font['originalsize'],
-			'type' => 'TTF',
-			'ttffile' => $ttffile,
-			'sip' => $font['sip'],
-			'smp' => $font['smp'],
-		];
-
-		unset($cw);
+		return $font;
 	}
 
 	function SetFont($family, $style = '', $size = 0, $write = true, $forcewrite = false)
