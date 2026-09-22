@@ -6,6 +6,7 @@ use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
 use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
 use Mpdf\Invoice\Formatter;
+use Mpdf\Invoice\Preset\FrenchPreset;
 
 /**
  * A credit note in French: every label replaced, a decimal comma, no-break spaces between thousands and before the
@@ -63,7 +64,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 			'iban' => 'IBAN',
 			'bic' => 'BIC',
 			'accountName' => 'Titulaire du compte',
-		], (new Formatter(',', "\xc2\xa0", 'd/m/Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€")->withPercentFormat("%s\xc2\xa0%%"));
+		], new Formatter(new FrenchPreset()));
 	}
 
 }

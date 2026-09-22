@@ -2,23 +2,27 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\Invoice\Preset\EurPreset;
+use Mpdf\Invoice\Preset\FrenchPreset;
+use Mpdf\Invoice\Preset\UsdPreset;
+use Mpdf\MpdfException;
+
 class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
-	 * Each formatter with its currency, and what it makes of a quantity, an amount, a refund, a rate and a date
+	 * Each preset with its currency, and what a formatter following it makes of a quantity, an amount, a refund, a rate
+	 * and a date
 	 *
 	 * @return mixed[]
 	 */
 	public function formatterProvider()
 	{
-		$french = (new Formatter(',', "\xc2\xa0", 'd/m/Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€")->withPercentFormat("%s\xc2\xa0%%");
-
 		return [
 			'default' => [new Formatter(), 'EUR', '1,500.25', '1,021.11 EUR', '-100.00 EUR', '5.5%', '2026-09-23'],
-			'USD' => [Formatter::usd(), 'USD', '1,500.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
-			'EUR' => [Formatter::eur(), 'EUR', '1.500,25', "1.021,11\xc2\xa0€", "-100,00\xc2\xa0€", '5,5%', '23.09.2026'],
-			'French' => [$french, 'EUR', "1\xc2\xa0500,25", "1\xc2\xa0021,11\xc2\xa0€", "-100,00\xc2\xa0€", "5,5\xc2\xa0%", '23/09/2026'],
+			'USD' => [new Formatter(new UsdPreset()), 'USD', '1,500.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
+			'EUR' => [new Formatter(new EurPreset()), 'EUR', '1.500,25', "1.021,11\xc2\xa0€", "-100,00\xc2\xa0€", '5,5%', '23.09.2026'],
+			'French' => [new Formatter(new FrenchPreset()), 'EUR', "1\xc2\xa0500,25", "1\xc2\xa0021,11\xc2\xa0€", "-100,00\xc2\xa0€", "5,5\xc2\xa0%", '23/09/2026'],
 		];
 	}
 
@@ -49,8 +53,8 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testWritesAnotherCurrencyByItsCode()
 	{
-		$this->assertSame('1,021.11 EUR', Formatter::usd()->money(1021.11, 'EUR'));
-		$this->assertSame('1.021,11 USD', Formatter::eur()->money(1021.11, 'USD'));
+		$this->assertSame('1,021.11 EUR', (new Formatter(new UsdPreset()))->money(1021.11, 'EUR'));
+		$this->assertSame('1.021,11 USD', (new Formatter(new EurPreset()))->money(1021.11, 'USD'));
 	}
 
 	/**
@@ -58,7 +62,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAdjustsACopy()
 	{
-		$eur = Formatter::eur();
+		$eur = new Formatter(new EurPreset());
 		$withPounds = $eur->withCurrencyFormat('GBP', '£%s');
 
 		$this->assertSame('£1.021,11', $withPounds->money(1021.11, 'GBP'));
@@ -87,7 +91,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * The postcode, city and state are written in the order of the party's country, closed up around whichever are
-	 * missing, whatever the currency convention
+	 * missing, whatever the preset
 	 *
 	 * @dataProvider localityProvider
 	 *
@@ -105,7 +109,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		$this->assertSame($expected, (new Formatter())->locality($party));
-		$this->assertSame($expected, Formatter::usd()->locality($party));
+		$this->assertSame($expected, (new Formatter(new UsdPreset()))->locality($party));
 	}
 
 	/**
@@ -134,6 +138,17 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('3', $formatter->number(3.0));
 		$this->assertSame('0.00 EUR', $formatter->money(-0.001, 'EUR'));
 		$this->assertNull($formatter->date(null));
+	}
+
+	/**
+	 * A preset that does not implement PresetInterface is refused
+	 */
+	public function testRefusesWhatIsNotAPreset()
+	{
+		$this->expectException(MpdfException::class);
+		$this->expectExceptionMessage("A Formatter's preset must implement Mpdf\\Invoice\\Preset\\PresetInterface");
+
+		new Formatter('EUR');
 	}
 
 	/**

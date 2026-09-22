@@ -2,18 +2,21 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\Invoice\Preset\DefaultPreset;
+use Mpdf\Invoice\Preset\PresetInterface;
+use Mpdf\MpdfException;
 use Mpdf\Strict;
 use Mpdf\Utils\NumericString;
 
 /**
  * How a printed trade document writes its numbers, amounts, rates, dates and addresses
  *
- * The default writes 1,021.11 EUR, 20% and 2026-09-23. usd() and eur() are presets to start from, and the with methods
- * adjust any formatter, e.g. for France:
+ * It follows a preset: DefaultPreset (1,021.11 EUR, 20% and 2026-09-23) unless given UsdPreset, EurPreset or a
+ * convention of your own. The with methods adjust it further:
  *
- *     (new Formatter(',', "\xc2\xa0", 'd/m/Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€")->withPercentFormat("%s\xc2\xa0%%")
+ *     (new Formatter(new EurPreset()))->withCurrencyFormat('GBP', '£%s')
  *
- * Addresses follow their party's country whichever convention is used: 75002 Paris, but New York, NY 10118.
+ * Addresses follow their party's country whichever preset is used: 75002 Paris, but New York, NY 10118.
  */
 class Formatter
 {
@@ -50,12 +53,12 @@ class Formatter
 	/**
 	 * @var string[]
 	 */
-	private $currencyFormats = [];
+	private $currencyFormats;
 
 	/**
 	 * @var string
 	 */
-	private $percentFormat = '%s%%';
+	private $percentFormat;
 
 	/**
 	 * @var string[]
@@ -63,37 +66,26 @@ class Formatter
 	private $localityFormats;
 
 	/**
-	 * @param string $decimalPoint
-	 * @param string $thousandsSeparator
-	 * @param string $dateFormat As DateTimeInterface::format() takes it
+	 * @param \Mpdf\Invoice\Preset\PresetInterface|null $preset DefaultPreset when null
+	 *
+	 * @throws \Mpdf\MpdfException When the preset is not a PresetInterface
 	 */
-	public function __construct($decimalPoint = '.', $thousandsSeparator = ',', $dateFormat = 'Y-m-d')
+	public function __construct($preset = null)
 	{
-		$this->decimalPoint = $decimalPoint;
-		$this->thousandsSeparator = $thousandsSeparator;
-		$this->dateFormat = $dateFormat;
+		if ($preset === null) {
+			$preset = new DefaultPreset();
+		}
+
+		if (!$preset instanceof PresetInterface) {
+			throw new MpdfException('A Formatter\'s preset must implement ' . PresetInterface::class);
+		}
+
+		$this->decimalPoint = $preset->getDecimalPoint();
+		$this->thousandsSeparator = $preset->getThousandsSeparator();
+		$this->dateFormat = $preset->getDateFormat();
+		$this->currencyFormats = $preset->getCurrencyFormats();
+		$this->percentFormat = $preset->getPercentFormat();
 		$this->localityFormats = self::$countryLocalityFormats;
-	}
-
-	/**
-	 * The United States convention: $1,021.11 and 09/23/2026
-	 *
-	 * @return self
-	 */
-	public static function usd()
-	{
-		return (new self('.', ',', 'm/d/Y'))->withCurrencyFormat('USD', '$%s');
-	}
-
-	/**
-	 * The German convention, shared by much of the euro area: 1.021,11 € and 23.09.2026. Countries that write euros
-	 * otherwise, such as France, build their own.
-	 *
-	 * @return self
-	 */
-	public static function eur()
-	{
-		return (new self(',', '.', 'd.m.Y'))->withCurrencyFormat('EUR', "%s\xc2\xa0€");
 	}
 
 	/**
@@ -115,7 +107,7 @@ class Formatter
 	/**
 	 * A copy writing rates by another format
 	 *
-	 * @param string $format A sprintf() format for the rate, '%s%%' by default
+	 * @param string $format A sprintf() format for the rate, e.g. '%s%%'
 	 *
 	 * @return self
 	 */

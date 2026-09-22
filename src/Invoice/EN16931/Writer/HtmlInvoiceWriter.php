@@ -15,7 +15,7 @@ use Mpdf\Strict;
  * Writes an invoice as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how to pay
  *
  * Pass labels to translate it, and a Formatter for how its numbers, amounts and dates are written, e.g.
- * new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date'], Formatter::eur()).
+ * new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date'], new Formatter(new EurPreset())).
  *
  *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter()]);
  */
