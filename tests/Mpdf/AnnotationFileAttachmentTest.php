@@ -1,0 +1,157 @@
+<?php
+
+namespace Mpdf;
+
+/**
+ * A page lists its annotations by object number, and the numbers are reserved before the objects are written.
+ * The reservation and the writing have to agree on how many objects an annotation takes, or every annotation
+ * after the first one that disagrees is referenced by the number of something else.
+ *
+ * `allowAnnotationFiles` is where they disagreed: a rejected file attachment is written as one plain text
+ * annotation, with no stream for the file, but two numbers were reserved for it - so the widget of a form field
+ * on the same page went unreferenced and the page pointed at the ExtGState written after it instead. That is
+ * GravityPDF/mpdf#343.
+ */
+class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
+{
+
+	use PageStreams;
+
+	/**
+	 * Whether the file attachment is allowed, and whether the page also carries a form field. Only a page that
+	 * has something to reference after the annotation can show the miscount, but all four are pinned
+	 *
+	 * @return array[]
+	 */
+	public function attachments()
+	{
+		return [
+			'allowed, with a form field' => [true, true],
+			'allowed, without a form field' => [true, false],
+			'rejected, with a form field' => [false, true],
+			'rejected, without a form field' => [false, false],
+		];
+	}
+
+	/**
+	 * Whether the file attachment is allowed
+	 *
+	 * @return array[]
+	 */
+	public function permissions()
+	{
+		return [
+			'allowed' => [true],
+			'rejected' => [false],
+		];
+	}
+
+	/**
+	 * @dataProvider attachments
+	 *
+	 * @param bool $allow
+	 * @param bool $field
+	 */
+	public function testEveryObjectThePageListsAsAnAnnotationIsOne($allow, $field)
+	{
+		$pdf = $this->document($allow, $field);
+
+		foreach ($this->listedAnnotations($pdf) as $number => $object) {
+			$this->assertStringContainsString('/Type /Annot', $object, "Object $number is listed in /Annots and should be an annotation");
+		}
+	}
+
+	/**
+	 * The widget of the field is what the miscount left unreferenced
+	 *
+	 * @dataProvider permissions
+	 *
+	 * @param bool $allow
+	 */
+	public function testTheWidgetOfAFormFieldOnThePageIsListed($allow)
+	{
+		$pdf = $this->document($allow, true);
+
+		$this->assertSame(1, substr_count($pdf, '/Subtype /Widget'), 'The document should carry one widget');
+		$this->assertSame(1, substr_count(implode('', $this->listedAnnotations($pdf)), '/Subtype /Widget'), 'The page should list the widget');
+	}
+
+	/**
+	 * What the gate itself decides: the attachment is embedded, and the annotation announces it, only where
+	 * the configuration allows it
+	 *
+	 * @dataProvider attachments
+	 *
+	 * @param bool $allow
+	 * @param bool $field
+	 */
+	public function testTheFileIsEmbeddedOnlyWhereItIsAllowed($allow, $field)
+	{
+		$pdf = $this->document($allow, $field);
+		$listed = implode('', $this->listedAnnotations($pdf));
+
+		$this->assertSame($allow ? 1 : 0, substr_count($pdf, '/Type /EmbeddedFile'), 'The file should be embedded only where it is allowed');
+		$this->assertStringContainsString($allow ? '/Subtype /FileAttachment' : '/Subtype /Text', $listed);
+		$this->assertStringNotContainsString('/Type /EmbeddedFile', $listed, 'The stream of an embedded file is not an annotation');
+	}
+
+	/**
+	 * A popup is written for every annotation that asks for one and has no embedded file, and is left out
+	 * for every annotation that has one - which is the pair of cases the count already agreed with, whether
+	 * the attachment was allowed or rejected. The popup is an annotation in its own right, so the page lists
+	 * it where it is written
+	 *
+	 * @dataProvider attachments
+	 *
+	 * @param bool $allow
+	 * @param bool $field
+	 */
+	public function testAPopupIsListedWhereverItIsWritten($allow, $field)
+	{
+		$pdf = $this->document($allow, $field, true);
+		$listed = implode('', $this->listedAnnotations($pdf));
+
+		$this->assertSame($allow ? 0 : 1, substr_count($pdf, '/Subtype /Popup'), 'A popup should be written only where the file is not');
+		$this->assertSame($allow ? 0 : 1, substr_count($listed, '/Subtype /Popup'), 'The page should list the popup it has');
+	}
+
+	/**
+	 * The objects the first page lists in its /Annots array, keyed by object number
+	 *
+	 * @param string $pdf
+	 *
+	 * @return string[]
+	 */
+	private function listedAnnotations($pdf)
+	{
+		$refs = $this->annotationRefs($pdf);
+		$this->assertNotSame([], $refs[0], 'The page should list its annotations');
+
+		$objects = [];
+		foreach ($refs[0] as $number) {
+			$objects[$number] = $this->object($pdf, $number);
+		}
+
+		return $objects;
+	}
+
+	/**
+	 * A document holding an annotation that attaches a file, optionally with a form field in front of it and a
+	 * popup on it
+	 *
+	 * @param bool $allow Whether allowAnnotationFiles lets the file be embedded
+	 * @param bool $field Whether the page carries an active form field
+	 * @param bool $popup Whether the annotation asks for a popup
+	 *
+	 * @return string
+	 */
+	private function document($allow, $field, $popup = false)
+	{
+		$mpdf = $this->mpdf(['allowAnnotationFiles' => $allow, 'useActiveForms' => $field]);
+		$mpdf->WriteHTML($field ? '<p><input type="text" name="field" value="Hello" /></p>' : '<p>Text</p>');
+		$mpdf->Annotation('Attached', 0, 0, 'Paperclip', '', '', 0, false, $popup, __DIR__ . '/../data/xml/test.xml');
+
+		return $this->output($mpdf);
+	}
+
+}

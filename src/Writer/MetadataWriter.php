@@ -535,6 +535,23 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * Whether the file an annotation attaches is embedded in the document.
+	 *
+	 * The `allowAnnotationFiles` configuration gates it. Where it does not allow the file, writeAnnotations()
+	 * writes the annotation as a plain text annotation and leaves the embedded file stream out, so the
+	 * annotation takes one object where an embedded file takes two - which is what PageWriter has to reserve
+	 * the object numbers for, so it reads the gate through here rather than reading the configuration again.
+	 *
+	 * @param array $annotation An entry of Mpdf::$PageAnnots
+	 *
+	 * @return bool
+	 */
+	public function embedsFileAttachment(array $annotation)
+	{
+		return $this->mpdf->allowAnnotationFiles && !empty($annotation['opt']['file']);
+	}
+
+	/**
 	 * @since 5.7.2
 	 */
 	public function writeAnnotations() // _putannots
@@ -635,11 +652,10 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 					foreach ($this->mpdf->PageAnnots[$n] as $key => $pl) {
 
-						$fileAttachment = (bool) $pl['opt']['file'];
+						$fileAttachment = $this->embedsFileAttachment($pl);
 
-						if ($fileAttachment && !$this->mpdf->allowAnnotationFiles) {
+						if (!$fileAttachment && !empty($pl['opt']['file'])) {
 							$this->logger->warning('Embedded files for annotations have to be allowed explicitly with "allowAnnotationFiles" config key');
-							$fileAttachment = false;
 						}
 
 						$this->writer->object();
