@@ -86,37 +86,67 @@ class ColrV1SourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The heart is a gradient over a square, kept to the heart's outline by SRC_IN: the square drawn
-	 * as a group, through a soft mask of the heart's alpha
+	 * The heart is a gradient over a square, kept to the heart by SRC_IN. The heart is one glyph in an
+	 * opaque colour, so the square is clipped to its outline, with no soft mask
 	 */
-	public function testSrcInDrawsTheSourceThroughTheBackdropsAlpha()
+	public function testSrcInOfAnOpaqueGlyphClipsTheSourceToItsOutline()
 	{
 		$content = $this->source->draw(13, $this->resources);
 
-		$this->assertStringStartsWith(self::CLIP . "q /SM1 gs /Fx1 Do Q\n", $content);
-
-		list($mask, $box, $luminosity, $inverted) = $this->resources->masks[0];
-		$this->assertStringStartsWith("q 0.878 0.141 0.369 rg\n500 -50 m\n80 400 l\n", $mask, 'the heart');
-		$this->assertSame([20, -100, 980, 850], $box);
-		$this->assertFalse($luminosity);
-		$this->assertFalse($inverted);
-
-		$this->assertStringStartsWith("q\n50 -100 m\n50 800 l\n", $this->resources->groups[0][0], 'the square');
-		$this->assertStringEndsWith("W n\n/Sh1 sh\nQ\n", $this->resources->groups[0][0]);
+		$heart = "500 -50 m\n80 400 l\n250 750 l\n500 600 l\n750 750 l\n920 400 l\nh\n";
+		$this->assertStringStartsWith(self::CLIP . "q\n" . $heart . "W n\nq\n50 -100 m\n50 800 l\n", $content);
+		$this->assertStringContainsString("W n\n/Sh1 sh\nQ\nQ\n", $content, 'the square, filled with the gradient');
 		$this->assertSame([500, 750, 500, -50], $this->resources->shadings[0]['coords']);
+
+		$this->assertSame([], $this->resources->masks);
+		$this->assertSame([], $this->resources->groups);
 	}
 
 	/**
-	 * The keycap is a grey square with the digit cut out of it by DEST_OUT: the square through a mask of
-	 * where the digit is not
+	 * The keycap is a grey square with the digit cut out of it by DEST_OUT. The digit is one contour in
+	 * an opaque colour, so the square is clipped to the clip box less the digit, by even-odd
 	 */
-	public function testDestOutDrawsTheBackdropWhereTheSourceIsNot()
+	public function testDestOutOfAnOpaqueGlyphOfOneContourClipsTheBackdropToWhereItIsNot()
 	{
-		$this->assertSame(self::CLIP . "q /SM1 gs /Fx1 Do Q\nQ\n", $this->source->draw(24, $this->resources));
+		$digit = "250 0 m\n250 600 l\n150 500 l\n150 600 l\n300 700 l\n350 700 l\n350 0 l\nh\n";
+		$square = "q 0.600 0.600 0.600 rg\n50 -100 m\n50 800 l\n950 800 l\n950 -100 l\nh\nf\nQ\n";
 
-		$this->assertStringStartsWith("q 0.000 0.000 0.000 rg\n250 0 m\n", $this->resources->masks[0][0], 'the digit');
-		$this->assertTrue($this->resources->masks[0][3], 'inverted');
-		$this->assertStringStartsWith("q 0.600 0.600 0.600 rg\n50 -100 m\n", $this->resources->groups[0][0], 'the square');
+		$this->assertSame(
+			self::CLIP . "q 20 -100 960 950 re\n" . $digit . "W* n\n" . $square . "Q\nQ\n",
+			$this->source->draw(24, $this->resources)
+		);
+		$this->assertSame([], $this->resources->masks);
+	}
+
+	/**
+	 * A backdrop less than opaque is not its outline, so SRC_IN draws the source through a soft mask
+	 */
+	public function testSrcInOfAGlyphLessThanOpaqueIsASoftMask()
+	{
+		// PaintComposite SRC_IN, its source the red triangle, its backdrop the triangle in half-opaque red
+		$paints = pack('C', 32) . self::u24(8) . pack('C', 5) . self::u24(19) . $this->solidTriangle() . $this->paintGlyph() . pack('Cnn', 2, 0, 0x2000);
+
+		$this->assertSame("q 0 0 1000 1000 re W n\nq /SM1 gs /Fx1 Do Q\nQ\n", $this->synthetic($paints)->draw(1, $this->resources));
+
+		list($mask, , , $inverted) = $this->resources->masks[0];
+		$this->assertStringStartsWith("q /GS0.50 gs 1.000 0.000 0.000 rg\n0 0 m\n", $mask, 'the half-opaque triangle');
+		$this->assertFalse($inverted);
+	}
+
+	/**
+	 * A source of two triangles one over the other, which even-odd would leave empty, is cut out by
+	 * DEST_OUT through an inverted soft mask
+	 */
+	public function testDestOutOfAGlyphOfTwoContoursIsAnInvertedSoftMask()
+	{
+		// PaintComposite DEST_OUT, its source glyph 3 in red, its backdrop the red triangle
+		$paints = pack('C', 32) . self::u24(8) . pack('C', 8) . self::u24(19) . $this->paintGlyph(3) . pack('Cnn', 2, 0, 0x4000) . $this->solidTriangle();
+
+		$this->assertSame("q 0 0 1000 1000 re W n\nq /SM1 gs /Fx1 Do Q\nQ\n", $this->synthetic($paints, [], [$this->twoTriangles()])->draw(1, $this->resources));
+
+		list($mask, , , $inverted) = $this->resources->masks[0];
+		$this->assertSame(2, substr_count($mask, " m\n"), 'both triangles');
+		$this->assertTrue($inverted);
 	}
 
 	/**
@@ -456,14 +486,15 @@ class ColrV1SourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @param string $paints Glyph 1's paints, one after another from its root, each child offset
-	 *                       counted from the paint that names it
-	 * @param int[]  $layers The LayerList, as where each layer's paint is among $paints
+	 * @param string   $paints Glyph 1's paints, one after another from its root, each child offset
+	 *                         counted from the paint that names it
+	 * @param int[]    $layers The LayerList, as where each layer's paint is among $paints
+	 * @param string[] $glyphs Glyphs from 3 on, as glyf holds them
 	 *
-	 * @return ColrV1Source Over a font of glyphs 0 to 2, glyph 2 the triangle, and a COLR of those
-	 *                      paints beside a CPAL of one colour, opaque red
+	 * @return ColrV1Source Over a font of glyphs 0 to 2, glyph 2 the triangle, and any given after
+	 *                      them, and a COLR of those paints beside a CPAL of one colour, opaque red
 	 */
-	private function synthetic($paints, array $layers = [])
+	private function synthetic($paints, array $layers = [], array $glyphs = [])
 	{
 		// The header, the BaseGlyphList of glyph 1, the LayerList, then the paints
 		$start = 48 + 4 * count($layers);
@@ -474,7 +505,7 @@ class ColrV1SourceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$colr .= pack('N', $start + $at - 44);
 		}
 
-		$tables = $this->glyphTables(['', '', $this->triangle()]) + ['COLR' => $colr . $paints, 'CPAL' => $this->cpal()];
+		$tables = $this->glyphTables(array_merge(['', '', $this->triangle()], $glyphs)) + ['COLR' => $colr . $paints, 'CPAL' => $this->cpal()];
 		list($ttf, $reader) = $this->openFont($this->sfnt($tables));
 
 		return new ColrV1Source(new ColorFontFile($ttf, $reader, 1000, $this->logger));

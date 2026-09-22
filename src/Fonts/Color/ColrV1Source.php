@@ -22,8 +22,10 @@ use Mpdf\Fonts\FontReader;
  *   in the colour of its middle stop, with a warning. No Noto emoji has one.
  * - The transforms - PaintTransform, Translate, Scale, Rotate, Skew and those around a centre - cm
  * - PaintComposite: a blend mode through /BM, and the Porter-Duff modes through soft masks drawn from
- *   the alpha of the source or the backdrop - see COMPOSITES. PLUS, which PDF has no way to draw, is
- *   drawn as SRC_OVER, with a warning. A mode the spec does not define draws nothing, as CLEAR does.
+ *   the alpha of the source or the backdrop - see COMPOSITES. Where the mask is one glyph in an opaque
+ *   colour, its alpha is its outline, so the mask is a clip instead, since Preview draws a soft mask
+ *   inside a Type3 glyph wrongly or not at all. PLUS, which PDF has no way to draw, is drawn as
+ *   SRC_OVER, with a warning. A mode the spec does not define draws nothing, as CLEAR does.
  *
  * A gradient's stops are colour and alpha; the alpha, where it varies, is a soft mask drawn from a grey
  * shading of the same shape - see ColorLine for how the two are interpolated. A stop in the colour of
@@ -318,8 +320,17 @@ class ColrV1Source implements ColorGlyphSource
 			return $this->filled($solid, $outline . 'f', $this->resources);
 		}
 
-		$content = $this->paint($child, $matrix, $path);
+		return $this->inside($outline, $this->paint($child, $matrix, $path));
+	}
 
+	/**
+	 * @param string $outline A path
+	 * @param string $content What is drawn
+	 *
+	 * @return string The content clipped to the path, or nothing where it draws nothing
+	 */
+	private function inside($outline, $content)
+	{
 		return $content === '' ? '' : "q\n" . $outline . "W n\n" . $content . "Q\n";
 	}
 
@@ -358,10 +369,11 @@ class ColrV1Source implements ColorGlyphSource
 		$blend = array_key_exists($mode, self::BLEND_MODES);
 
 		$drawn = ['source' => '', 'backdrop' => ''];
+		$children = [];
 		foreach ([1 => 'source', 5 => 'backdrop'] as $at => $part) {
-			$child = self::child($offset, $paint, $at);
-			if ($child !== null) {
-				$drawn[$part] = $this->paint($child, $matrix, $path);
+			$children[$part] = self::child($offset, $paint, $at);
+			if ($children[$part] !== null) {
+				$drawn[$part] = $this->paint($children[$part], $matrix, $path);
 			}
 		}
 
@@ -377,24 +389,39 @@ class ColrV1Source implements ColorGlyphSource
 
 		$content = '';
 		foreach (self::COMPOSITES[$mode] as $part) {
-			$content .= isset($part[1]) ? $this->masked($drawn[$part[0]], $drawn[$part[1]], $part[2], $box) : $drawn[$part[0]];
+			$content .= isset($part[1]) ? $this->masked($drawn[$part[0]], $drawn[$part[1]], $part[2], $box, $children[$part[1]]) : $drawn[$part[0]];
 		}
 
 		return $content;
 	}
 
 	/**
-	 * @param string  $content  What is drawn
-	 * @param string  $mask     What it is drawn only where, by alpha
-	 * @param bool    $inverted Whether it is drawn only where the mask is not, instead
-	 * @param float[] $box      The area drawn, in the space it is drawn in
+	 * @param string   $content  What is drawn
+	 * @param string   $mask     What it is drawn only where, by alpha
+	 * @param bool     $inverted Whether it is drawn only where the mask is not, instead
+	 * @param float[]  $box      The area drawn, in the space it is drawn in
+	 * @param int|null $at       Where the mask's paint is
 	 *
 	 * @return string
 	 */
-	private function masked($content, $mask, $inverted, array $box)
+	private function masked($content, $mask, $inverted, array $box, $at)
 	{
 		if ($content === '' || $mask === '') {
 			return $inverted ? $content : '';
+		}
+
+		$glyph = $at === null ? null : $this->opaqueGlyph($at);
+		if ($glyph !== null) {
+			$outline = $this->file->outline();
+			if (!$inverted) {
+				return $this->inside($outline->path($glyph), $content);
+			}
+
+			// The box less the outline by even-odd, which fills as the outline's nonzero rule does only
+			// where it is one contour
+			if ($outline->contourCount($glyph) === 1) {
+				return 'q ' . Geometry::rectangle($box) . " re\n" . $outline->path($glyph) . "W* n\n" . $content . "Q\n";
+			}
 		}
 
 		return sprintf("q %s %s Do Q\n", $this->resources->softMask($mask, $box, false, $inverted), $this->resources->group($content, $box));
@@ -593,6 +620,25 @@ class ColrV1Source implements ColorGlyphSource
 		}
 
 		return $this->filled($colour, Geometry::rectangle($box) . ' re f', $this->resources);
+	}
+
+	/**
+	 * @param int $offset Where a paint is
+	 *
+	 * @return int|null The glyph, where the paint is a PaintGlyph in an opaque colour, whose alpha is
+	 *                  its outline; null otherwise
+	 */
+	private function opaqueGlyph($offset)
+	{
+		$paint = $this->paintAt($offset);
+		if (strlen($paint) < self::SIZES[10] || ord($paint[0]) !== 10) {
+			return null;
+		}
+
+		$child = self::child($offset, $paint, 1);
+		$solid = $child === null ? null : $this->solid($child);
+
+		return $solid !== null && $solid[1] >= 1 ? self::uint16($paint, 4) : null;
 	}
 
 	/**

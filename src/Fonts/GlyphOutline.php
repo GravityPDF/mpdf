@@ -69,6 +69,11 @@ class GlyphOutline
 	private $paths = [];
 
 	/**
+	 * @var int[] How many contours each path drawn so far has, by glyph id
+	 */
+	private $contourCounts = [];
+
+	/**
 	 * @param TTFontFile      $font   The font, its table directory read
 	 * @param FileReader      $reader The font file
 	 * @param LoggerInterface $logger Told of a component placed by matching points, which is not drawn
@@ -94,13 +99,29 @@ class GlyphOutline
 	{
 		if (!isset($this->paths[$glyph])) {
 			$path = '';
+			$count = 0;
 			foreach ($this->contours($glyph, 0) as $contour) {
-				$path .= $this->contourPath($contour);
+				$drawn = $this->contourPath($contour);
+				$path .= $drawn;
+				$count += $drawn === '' ? 0 : 1;
 			}
 			$this->paths[$glyph] = $path;
+			$this->contourCounts[$glyph] = $count;
 		}
 
 		return $this->paths[$glyph];
+	}
+
+	/**
+	 * @param int $glyph The glyph id
+	 *
+	 * @return int How many contours its path draws
+	 */
+	public function contourCount($glyph)
+	{
+		$this->path($glyph);
+
+		return $this->contourCounts[$glyph];
 	}
 
 	/**

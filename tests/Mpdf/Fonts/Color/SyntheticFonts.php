@@ -75,6 +75,16 @@ trait SyntheticFonts
 	}
 
 	/**
+	 * @return string A simple glyph of two contours, each the triangle, one over the other, laid out as
+	 *                triangle() is
+	 */
+	private function twoTriangles()
+	{
+		return pack('n5', 2, 0, 0, 1000, 700) . pack('n3', 2, 5, 0) . str_repeat("\1", 6)
+			. pack('n6', 0, 500, 500, 0x10000 - 1000, 500, 500) . pack('n6', 0, 700, 0x10000 - 700, 0, 700, 0x10000 - 700);
+	}
+
+	/**
 	 * @return string A CPAL table of one palette of one colour, opaque red
 	 */
 	private function cpal()
