@@ -25925,6 +25925,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return 0;
 	}
 
+	/**
+	 * Moves the characters the current font cannot draw into the backup fonts that can.
+	 *
+	 * The token is decoded and scanned once, so one holding several such runs is split into all of them
+	 * in one pass and their tokens are written in after it together.
+	 *
+	 * @param string[] $writehtml_a The tokens WriteHTML() is walking
+	 * @param int      $writehtml_i Where this token is among them
+	 * @param string   $writehtml_e The token's text
+	 *
+	 * @return int How many tokens were inserted after it
+	 */
 	function SubstituteCharsMB(&$writehtml_a, &$writehtml_i, &$writehtml_e)
 	{
 		// Ignore if in Textarea
@@ -25932,42 +25944,86 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return 0;
 		}
 
+		$text = $writehtml_e;
+		$unicode = $this->UTF8StringToArray($text, false);
+		// Every emoji is outside ASCII, a keycap's U+20E3 included
+		$clusters = preg_match('/[^\x00-\x7F]/', $text) === 1 ? Emoji::clusters($unicode) : [];
+		$fontCount = count($this->fonts);
+		$from = 0;
+		$pieces = [];
+
+		while (true) {
+
+			$run = $this->nextSubstitutionRun($text, $unicode, $from, $clusters);
+			if ($run === null) {
+				break;
+			}
+
+			$pieces[] = $run['before'];
+			$pieces = array_merge($pieces, $run['insert']);
+			$text = $run['rest'];
+			$from = $run['from'];
+
+			// Looking for the next run can add a font to the document, and so can the span just written,
+			// once the main loop reaches it. Taking both in one pass would swap them, and with them the
+			// order the document holds its fonts in, so the scan stops wherever either could happen.
+			if (!$run['batch'] || count($this->fonts) !== $fontCount) {
+				break;
+			}
+		}
+
+		if (!$pieces) {
+			return 0;
+		}
+
+		// Whatever is left after the last run becomes a token of its own, which the main loop offers to
+		// the scan again: another pass can reach what this one stopped at
+		$pieces[] = $text;
+		$writehtml_a[$writehtml_i] = $writehtml_e = array_shift($pieces);
+		array_splice($writehtml_a, $writehtml_i + 1, 0, $pieces);
+		$this->subPos = $writehtml_i + count($pieces) - 1;
+
+		return count($pieces);
+	}
+
+	/**
+	 * The next run of characters the current font cannot draw, and the tokens that move it.
+	 *
+	 * @param string  $text     What is left of the token
+	 * @param int[]   $unicode  The whole token, as codepoints
+	 * @param int     $from     Where $text starts among them
+	 * @param array[] $clusters Every emoji in the token, by the codepoint it starts at - see Emoji::clusters()
+	 *
+	 * @return array|null The run as substitutionStep() describes it, or null where nothing moves
+	 */
+	private function nextSubstitutionRun($text, array $unicode, $from, array $clusters)
+	{
 		$cw = $this->fontSubstitution->drawnWidths($this->CurrentFont);
-		$unicode = $this->UTF8StringToArray($writehtml_e, false);
 		$start = -1;
 		$flag = 0;
 		$ftype = '';
-		$u = [];
-		// Every emoji is outside ASCII, a keycap's U+20E3 included
-		$mayHaveEmoji = preg_match('/[^\x00-\x7F]/', $writehtml_e) === 1;
-		// Each emoji up to where the run ends, by where it starts: found as the scan reaches it, since the
-		// rest of the text is scanned again on the next pass
-		$emojiClusters = [];
 		$codepointCount = count($unicode);
 
 		// Not foreach, so the loop can jump past the rest of a multi-codepoint sequence once it has been handled
-		for ($c = 0; $c < $codepointCount; $c++) {
+		for ($c = $from; $c < $codepointCount; $c++) {
 			$char = $unicode[$c];
-			$cluster = $mayHaveEmoji ? Emoji::clusterAt($unicode, $c, $codepointCount) : null;
 
 			// An emoji moves whole or not at all, so its joiners and selectors go with it to the font
 			// whose GSUB joins them
-			if ($cluster !== null) {
-				// An emoji ends a SIP run; it is handled on the next pass
+			if (isset($clusters[$c])) {
+				// An emoji ends a SIP run; it is left to the run after it
 				if ($flag == 2) {
 					break;
 				}
 
-				$emojiClusters[$c] = $cluster;
-				$length = $cluster[0];
+				$length = $clusters[$c][0];
 				$emoji = array_slice($unicode, $c, $length);
 
-				if ($this->fontSubstitution->emojiWantsAnotherFont($emoji, $cluster[1])) {
+				if ($this->fontSubstitution->emojiWantsAnotherFont($emoji, $clusters[$c][1])) {
 					if ($flag == 0) {
 						$start = $c;
 					}
 					$flag = 1;
-					$u = array_merge($u, $emoji);
 				} elseif ($flag > 0) {
 					break;
 				}
@@ -25979,7 +26035,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (($flag == 0 || $flag == 2) && !$this->_charDefined($cw, $char) && $this->checkSIP && $char > 131071) {  // Unicode Plane 2 (SIP)
 
 				if (in_array($this->FontFamily, $this->available_CJK_fonts)) {
-					return 0;
+					return null;
 				}
 
 				if ($flag == 0) {
@@ -25987,7 +26043,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				$flag = 2;
-				$u[] = $char;
 
 			} elseif (($flag == 0 || $flag == 1) && $char != 173 && !$this->_charDefined($cw, $char) && ($char < 1536 || ($char > 1791 && $char < 2304) || $char > 3455)) {
 
@@ -25996,7 +26051,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				$flag = 1;
-				$u[] = $char;
 
 			} elseif ($flag > 0) {
 
@@ -26006,19 +26060,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if ($start == -1) {
-			return 0;
+			return null;
 		}
+
+		// Every codepoint from where the run starts to where the scan stopped: the loop breaks at the
+		// first one that does not belong to it
+		$u = array_slice($unicode, $start, $c - $start);
 
 		if ($flag == 2) { // SIP
 
 			// Check if current CJK font has a ext-B related font
 			if (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) {
 				$font = $this->CurrentFont['sipext'];
-				unset($cw);
 				$cw = $this->fontSubstitution->widths($font);
 
 				if (!$cw) {
-					return 0;
+					return null;
 				}
 
 				$l = 0;
@@ -26031,12 +26088,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				if ($l > 0) {
-					$patt = mb_substr($writehtml_e, $start, $l);
-					if (preg_match("/(.*?)(" . preg_quote($patt, '/') . ")(.*)/u", $writehtml_e, $m)) {
-						$writehtml_a[$writehtml_i] = $writehtml_e = $m[1];
-						array_splice($writehtml_a, $writehtml_i + 1, 0, ['span style="font-family: ' . $font . '"', $m[2], '/span', $m[3]]);
-						$this->subPos = $writehtml_i + 3;
-						return 4;
+					$step = $this->substitutionStep($text, $from, $start, $l, $font);
+					if ($step !== null) {
+						return $step;
 					}
 				}
 			}
@@ -26047,15 +26101,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if ($this->currentfontfamily != $this->backupSIPFont) {
 					$font = $this->backupSIPFont;
 				} else {
-					unset($cw);
-					return 0;
+					return null;
 				}
 
-				unset($cw);
 				$cw = $this->fontSubstitution->widths($font);
 
 				if (!$cw) {
-					return 0;
+					return null;
 				}
 
 				$l = 0;
@@ -26068,20 +26120,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				if ($l > 0) {
-					$patt = mb_substr($writehtml_e, $start, $l);
-					if (preg_match("/(.*?)(" . preg_quote($patt, '/') . ")(.*)/u", $writehtml_e, $m)) {
-						$writehtml_a[$writehtml_i] = $writehtml_e = $m[1];
-						array_splice($writehtml_a, $writehtml_i + 1, 0, ['span style="font-family: ' . $font . '"', $m[2], '/span', $m[3]]);
-						$this->subPos = $writehtml_i + 3;
-						return 4;
+					$step = $this->substitutionStep($text, $from, $start, $l, $font);
+					if ($step !== null) {
+						return $step;
 					}
 				}
 			}
 
-			return 0;
+			return null;
 		}
 
-		$presentation = isset($emojiClusters[$start]) ? $emojiClusters[$start][1] : Emoji::PRESENTATION_DEFAULT;
+		$presentation = isset($clusters[$start]) ? $clusters[$start][1] : Emoji::PRESENTATION_DEFAULT;
 		list($backupFonts, $preferred) = $this->fontSubstitution->backupFontOrder($presentation);
 
 		// FIRST TRY CORE FONTS (when appropriate), which draw no emoji in colour
@@ -26125,14 +26174,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 			if ($ftype == 'C') {
-				$patt = mb_substr($writehtml_e, $start, count($repl));
-				if (preg_match("/(.*?)(" . preg_quote($patt, '/') . ")(.*)/u", $writehtml_e, $m)) {
-					$writehtml_a[$writehtml_i] = $writehtml_e = $m[1];
-					array_splice($writehtml_a, $writehtml_i + 1, 0, [$font, implode('|', $repl), '/' . $font, $m[3]]); // e.g. <tts>
-					$this->subPos = $writehtml_i + 3;
-					return 4;
-				}
-				return 0;
+				return $this->substitutionStep($text, $from, $start, count($repl), $font, implode('|', $repl)); // e.g. <tts>
 			}
 		}
 
@@ -26143,7 +26185,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				continue;
 			}
 
-			unset($cw);
 			$cw = $this->fontSubstitution->widths($font);
 			if (!$cw) {
 				continue;
@@ -26154,8 +26195,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$l = 0;
 			$n = count($u);
 			while ($l < $n) {
-				if (isset($emojiClusters[$start + $l])) {
-					list($length, $clusterPresentation) = $emojiClusters[$start + $l];
+				if (isset($clusters[$start + $l])) {
+					list($length, $clusterPresentation) = $clusters[$start + $l];
 					$covered = ($l === 0 || $clusterPresentation === $presentation) && $this->fontSubstitution->fontCovers($cw, array_slice($u, $l, $length));
 				} else {
 					$length = 1;
@@ -26165,11 +26206,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				if (!$covered) {
 					if ($l == 0 && $bsfctr == $last) { // Not found even in last backup font
-						$cont = mb_substr($writehtml_e, $start + $length);
-						$writehtml_a[$writehtml_i] = $writehtml_e = mb_substr($writehtml_e, 0, $start + $length);
-						array_splice($writehtml_a, $writehtml_i + 1, 0, ['', $cont]);
-						$this->subPos = $writehtml_i + 1;
-						return 2;
+						$kept = $start - $from + $length;
+
+						return [
+							'before' => mb_substr($text, 0, $kept),
+							'insert' => [''],
+							'rest' => mb_substr($text, $kept),
+							'from' => $from + $kept,
+							'batch' => true,
+						];
 					}
 					break;
 				}
@@ -26178,19 +26223,75 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($l > 0) {
-				$patt = mb_substr($writehtml_e, $start, $l);
-				if (preg_match("/(.*?)(" . preg_quote($patt, '/') . ")(.*)/u", $writehtml_e, $m)) {
-					$writehtml_a[$writehtml_i] = $writehtml_e = $m[1];
-					array_splice($writehtml_a, $writehtml_i + 1, 0, ['span style="font-family: ' . $font . '"', $m[2], '/span', $m[3]]);
-					$this->subPos = $writehtml_i + 3;
-					return 4;
+				$step = $this->substitutionStep($text, $from, $start, $l, $font);
+				if ($step !== null) {
+					return $step;
 				}
 			}
 		}
 
-		unset($cw);
+		return null;
+	}
 
-		return 0;
+	/**
+	 * The tokens that move a run of text into another font: what comes before it, the run between the
+	 * tags that set the font, and what is left after it.
+	 *
+	 * @param string $text        What is left of the token
+	 * @param int    $from        Where it starts in the token, in codepoints
+	 * @param int    $start       Where the run starts, likewise
+	 * @param int    $l           How many codepoints of it move
+	 * @param string $font        The font they move into, or the core font tag that draws $replacement
+	 * @param string $replacement What a core font draws in place of the run, which is not the text it
+	 *                            replaces
+	 *
+	 * @return array|null ['before', 'insert', 'rest', 'from' => where 'rest' starts in the token,
+	 *                    'batch' => whether the scan may take another run in the same pass, which needs
+	 *                    'from' to be right and the tokens to leave the document's fonts alone], or null
+	 *                    where the run could not be found in the text
+	 */
+	private function substitutionStep($text, $from, $start, $l, $font, $replacement = null)
+	{
+		$patt = mb_substr($text, $start - $from, $l);
+
+		if (!preg_match("/(.*?)(" . preg_quote($patt, '/') . ")(.*)/u", $text, $m)) {
+			return null;
+		}
+
+		// A newline in $text stops the match short of the end of it, and then what is left no longer
+		// lines up with the codepoints the token was decoded to
+		$aligned = $m[0] === $text;
+
+		return [
+			'before' => $m[1],
+			'insert' => $replacement === null
+				? ['span style="font-family: ' . $font . '"', $m[2], '/span']
+				: [$font, $replacement, '/' . $font],
+			'rest' => $m[3],
+			'from' => $from + mb_strlen($m[1]) + mb_strlen($m[2]),
+			// What a core font tag adds to the document is left for the next pass to find out
+			'batch' => $aligned && $replacement === null && $this->spanAddsNoFont($font),
+		];
+	}
+
+	/**
+	 * Whether the span that moves a run into a font would leave the document's fonts as they are, which
+	 * it does where SetFont() has already added the one it asks for.
+	 *
+	 * @param string $font The font the run moves into
+	 *
+	 * @return bool
+	 */
+	private function spanAddsNoFont($font)
+	{
+		if (!isset($this->fonts[$font])) {
+			return false;
+		}
+
+		// A style the family has no font file for is dropped, and the one already added is used
+		$styled = $font . $this->FontStyle;
+
+		return isset($this->fonts[$styled]) || !in_array($styled, $this->available_unifonts, true);
 	}
 
 	/**
