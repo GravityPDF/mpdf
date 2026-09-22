@@ -89,6 +89,17 @@ class GlyphOutlineTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A composite scaled by F2DOT14's nearest to a third (0x1555) draws its fractional points to three
+	 * decimal places
+	 */
+	public function testAScaledCompositeIsDrawnToThreePlaces()
+	{
+		$composite = pack('n5', 0xFFFF, 0, 0, 1000, 700) . pack('n2', GlyphOperator::WORDS | GlyphOperator::XY_VALUES | GlyphOperator::SCALE, 0) . pack('n3', 0, 0, 0x1555);
+
+		$this->assertSame("0 0 m\n166.656 233.319 l\n333.313 0 l\nh\n", $this->outline([$this->triangle(), $composite])->path(1));
+	}
+
+	/**
 	 * A glyph that runs short of what it says it holds draws nothing and warns of nothing, rather than
 	 * reading past its end
 	 *

@@ -5,6 +5,7 @@ namespace Mpdf\Fonts;
 use Mpdf\Fonts\Table\Loca;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\TTFontFile;
+use Mpdf\Utils\NumericString;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -408,13 +409,6 @@ class GlyphOutline
 	 */
 	private function number($value)
 	{
-		// A simple glyph's points are whole font units
-		if (is_int($value)) {
-			return (string) $value;
-		}
-
-		$number = rtrim(rtrim(sprintf('%.3F', $value), '0'), '.');
-
-		return $number === '-0' ? '0' : $number;
+		return NumericString::decimal($value, 3);
 	}
 }
