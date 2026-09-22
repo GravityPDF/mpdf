@@ -115,6 +115,10 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$m .= $this->mpdf->additionalXmpRdf;
 		}
 
+		if ($this->mpdf->facturX) {
+			$m .= $this->mpdf->facturX->getXmpRdf('uuid:' . $uuid);
+		}
+
 		// This bit is specific to PDFX-1a
 		if ($this->mpdf->PDFX) {
 			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdfx="http://ns.adobe.com/pdfx/1.3/" pdfx:Apag_PDFX_Checkup="1.3" pdfx:GTS_PDFXConformance="PDF/X-1a:2003" pdfx:GTS_PDFXVersion="PDF/X-1:2003"/>' . "\n";

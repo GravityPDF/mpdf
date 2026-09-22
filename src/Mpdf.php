@@ -12,6 +12,7 @@ use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Output\Destination;
+use Mpdf\Pdf\FacturX;
 use Mpdf\PsrLogAwareTrait\MpdfPsrLogAwareTrait;
 use Mpdf\QrCode;
 use Mpdf\Shaper\OtlData;
@@ -827,6 +828,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	var $associatedFiles; // associated files (see SetAssociatedFiles below)
 	var $additionalXmpRdf; // additional rdf added in xmp
+
+	/**
+	 * @var \Mpdf\Pdf\FacturX|null
+	 */
+	var $facturX; // see SetFacturX below
 
 	var $aliasNbPg; // alias for total number of pages
 	var $aliasNbPgGp; // alias for total number of pages in page group
@@ -1981,6 +1987,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function SetAdditionalXmpRdf($s)
 	{
 		$this->additionalXmpRdf = $s;
+	}
+
+	/**
+	 * Embed a Factur-X / ZUGFeRD invoice, making the document an e-invoice
+	 *
+	 * The document must be PDF/A-3, e.g. ['PDFA' => true, 'PDFAversion' => '3-B'] in the constructor configuration.
+	 * The XML is embedded as factur-x.xml (xrechnung.xml for XRECHNUNG) ahead of any files set by SetAssociatedFiles().
+	 *
+	 * @param string $xml The EN 16931 Cross Industry Invoice XML
+	 * @param string|null $conformanceLevel MINIMUM, BASIC WL, BASIC, EN 16931, EXTENDED or XRECHNUNG; read from the invoice's guideline ID when null
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	function SetFacturX($xml, $conformanceLevel = null)
+	{
+		$this->facturX = new FacturX($xml, $conformanceLevel);
 	}
 
 	function SetAnchor2Bookmark($x)
@@ -10363,6 +10385,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
+
+		if ($this->facturX) {
+			list($part) = explode('-', $this->PDFAversion);
+			if (!$this->PDFA || (int) $part !== 3) {
+				throw new \Mpdf\MpdfException('A Factur-X invoice must be PDF/A-3. Set PDFA to true and PDFAversion to 3-B');
+			}
+
+			$this->associatedFiles = array_merge([$this->facturX->getAssociatedFile()], (array) $this->associatedFiles);
+		}
 
 		// METADATA
 		if ($this->PDFA || $this->PDFX) {
