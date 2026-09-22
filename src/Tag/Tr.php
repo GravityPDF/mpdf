@@ -7,6 +7,11 @@ use Mpdf\Css\Border;
 class Tr extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 
@@ -80,12 +85,8 @@ class Tr extends Tag
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['is_tfoot'][$this->mpdf->row] = true;
 		}
 
-		// Push TR beneath its row-grouping element (THead/TBody/TFoot). ISO
-		// 32000-1:2008 §14.8 Table 333 — TR belongs to a row group, not directly
-		// to Table. When the HTML wrote rows straight under <table> the stack top
-		// is the Table itself, so synthesise a TBody to hold the implicit rows; it
-		// stays open across consecutive group-less rows and is collapsed by
-		// Table::close() (or by the next explicit row group).
+		// A TR belongs to a row group. Rows written straight under <table> share a TBody made for
+		// them, closed by the table or by the next explicit row group.
 		if ($this->mpdf->PDFUA) {
 			$tree = $this->ua->getStructureTree();
 			if (!$tree->isInArtifact() && $tree->getCurrent()->getType() === 'Table') {
@@ -98,9 +99,12 @@ class Tr extends Tag
 		}
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
-		// ISO 32000-1:2008 §14.8 Table 333 — pop the TR struct element.
 		if ($this->mpdf->PDFUA) {
 			$this->ua->getStructureTree()->close();
 		}

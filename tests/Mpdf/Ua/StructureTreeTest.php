@@ -5,17 +5,7 @@ namespace Mpdf\Ua;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
- * Unit tests for StructureTree — element stack, MCID allocation, artifact scoping,
- * role mappings, and annotation struct parent allocation.
- *
- * No mPDF instantiation required for most cases; tests operate on plain
- * StructureTree / StructureElement instances.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.7.2 — Structure Hierarchy
- *   - ISO 32000-1:2008 §14.7.4.4 — ParentTree; dense MCID arrays
- *   - ISO 32000-1:2008 §14.8.2.2 — Real Content vs Artifacts
- *   - ISO 32000-1:2008 §14.7.3 — RoleMap (custom → standard type mapping)
+ * The element stack, MCID allocation, artifact scopes and role map of a StructureTree
  *
  * @group pdfua
  */
@@ -25,13 +15,16 @@ class StructureTreeTest extends TestCase
 	/** @var StructureTree */
 	private $tree;
 
+	/**
+	 * Start each test with an empty tree.
+	 */
 	protected function set_up()
 	{
 		$this->tree = new StructureTree();
 	}
 
 	/**
-	 * After construction the root element has type Document and is the current top.
+	 * A new tree has a Document root, and it is the current element.
 	 */
 	public function testOpenCreatesRootDocument()
 	{
@@ -40,7 +33,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * open() adds a child element under the current top and makes it current.
+	 * Opening an element adds it under the current one and makes it current.
 	 */
 	public function testOpenPushesChildElement()
 	{
@@ -53,7 +46,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * close() pops the top element and restores the previous one.
+	 * Closing an element makes its parent current again.
 	 */
 	public function testClosePoppsStack()
 	{
@@ -63,7 +56,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * close() when only the Document root is on the stack is a no-op (no underflow).
+	 * The Document root cannot be closed.
 	 */
 	public function testCloseWhenOnlyRootOnStackIsNoop()
 	{
@@ -72,7 +65,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * addContent() returns a non-negative MCID integer.
+	 * Content added to an element is given a non-negative MCID.
 	 */
 	public function testAddContentReturnsMcid()
 	{
@@ -82,7 +75,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * Two addContent() calls for the same /StructParents page return distinct MCIDs.
+	 * Two pieces of content on one page get different MCIDs.
 	 */
 	public function testMcidIsUnique()
 	{
@@ -94,18 +87,16 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * MCID resets to 0 for each new /StructParents key — counters are per-page.
-	 *
-	 * ISO 32000-1 §14.7.4.4 — MCIDs within one content stream must be dense
-	 * and 0-based; each /StructParents key has its own independent counter.
+	 * MCIDs count from 0 on each page, as a content stream's MCIDs must be dense and 0-based
+	 * (ISO 32000-1 §14.7.4.4).
 	 */
 	public function testMcidResetsToZeroPerPage()
 	{
 		$this->tree->open('P');
-		$mcid0a = $this->tree->addContent(0);  // page 0, MCID 0
-		$mcid0b = $this->tree->addContent(0);  // page 0, MCID 1
+		$mcid0a = $this->tree->addContent(0);
+		$mcid0b = $this->tree->addContent(0);
 
-		$mcid1a = $this->tree->addContent(1);  // page 1 — new key, should restart at 0
+		$mcid1a = $this->tree->addContent(1);
 
 		$this->assertSame(0, $mcid0a);
 		$this->assertSame(1, $mcid0b);
@@ -113,7 +104,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * addArtifact() returns the sentinel -1.
+	 * An artifact is given -1 in place of an MCID.
 	 */
 	public function testAddArtifactReturnsMinusOne()
 	{
@@ -121,7 +112,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * ParentTree is populated after addContent().
+	 * Added content is entered in the ParentTree under its page and MCID.
 	 */
 	public function testParentTreeIsPopulated()
 	{
@@ -134,7 +125,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * The struct element itself records the MCID in its getMcids() array.
+	 * The element records the page and MCID of the content added to it.
 	 */
 	public function testMcidsRecordedOnElement()
 	{
@@ -148,7 +139,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * openArtifact() suppresses struct element creation — open() becomes a no-op.
+	 * Inside an artifact no structure element is opened.
 	 */
 	public function testOpenArtifactSuppressesStructElements()
 	{
@@ -159,7 +150,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * addContent() in artifact scope returns -1 (Artifact sentinel).
+	 * Content added inside an artifact is given -1.
 	 */
 	public function testAddContentInArtifactContextReturnsMinusOne()
 	{
@@ -169,7 +160,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * closeArtifact() restores normal behaviour — open() works again.
+	 * Elements open again once the artifact is closed.
 	 */
 	public function testCloseArtifactRestoresNormalBehaviour()
 	{
@@ -180,32 +171,29 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * close() in artifact scope is a no-op — since open() was also a no-op,
-	 * nothing was pushed so nothing should be popped.
+	 * Inside an artifact a close pops nothing, as the open before it pushed nothing.
 	 */
 	public function testCloseInArtifactContextIsNoop()
 	{
 		$this->tree->openArtifact();
-		$this->tree->open('P');  // no-op — nothing pushed
-		$this->tree->close();    // no-op — nothing to pop
+		$this->tree->open('P');
+		$this->tree->close();
 		$this->assertSame($this->tree->getRoot(), $this->tree->getCurrent());
 		$this->tree->closeArtifact();
 	}
 
 	/**
-	 * Extra closeArtifact() calls are clamped at 0 and do NOT make
-	 * isInArtifact() return true after a matching open.
+	 * Closing an artifact that was never opened leaves the tree outside any artifact.
 	 */
 	public function testCloseArtifactWhenDepthIsZeroIsNoop()
 	{
 		$this->assertFalse($this->tree->isInArtifact());
-		$this->tree->closeArtifact(); // extra close — should be a no-op
+		$this->tree->closeArtifact();
 		$this->assertFalse($this->tree->isInArtifact());
 	}
 
 	/**
-	 * addContentForElement() in artifact scope returns -1 and does not modify
-	 * the target element.
+	 * Content added for a given element inside an artifact is given -1 and not recorded on it.
 	 */
 	public function testAddContentForElementInArtifactContextReturnsMinusOne()
 	{
@@ -221,8 +209,7 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * First addRoleMapping() call wins; a second call with a different type
-	 * is silently ignored (prevents conflicting RoleMap entries in veraPDF).
+	 * The first role mapping for a type is the one kept, so the RoleMap never conflicts with itself.
 	 */
 	public function testAddRoleMappingDuplicateFirstWins()
 	{
@@ -233,18 +220,18 @@ class StructureTreeTest extends TestCase
 	}
 
 	/**
-	 * isInArtifact() tracks the depth counter correctly across nested scopes.
+	 * Nested artifacts are left only when the outermost one closes.
 	 */
 	public function testIsInArtifactNested()
 	{
 		$this->assertFalse($this->tree->isInArtifact());
 		$this->tree->openArtifact();
 		$this->assertTrue($this->tree->isInArtifact());
-		$this->tree->openArtifact();  // nested
+		$this->tree->openArtifact();
 		$this->assertTrue($this->tree->isInArtifact());
-		$this->tree->closeArtifact(); // back to depth 1
+		$this->tree->closeArtifact();
 		$this->assertTrue($this->tree->isInArtifact());
-		$this->tree->closeArtifact(); // back to depth 0
+		$this->tree->closeArtifact();
 		$this->assertFalse($this->tree->isInArtifact());
 	}
 }

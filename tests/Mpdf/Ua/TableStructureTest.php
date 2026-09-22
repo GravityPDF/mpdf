@@ -3,20 +3,8 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 table row-grouping structure (audit E16).
- *
- * Before this fix Tr::open() pushed TR directly beneath the enclosing Table and
- * the <thead>/<tbody>/<tfoot> handlers emitted no struct element at all, so the
- * row-grouping semantics (and THead repetition) were lost. These tests assert
- * that:
- *   - <thead>/<tbody>/<tfoot> now open THead/TBody/TFoot struct elements with
- *     their TR rows nested beneath them (Table ▸ THead ▸ TR, etc.); and
- *   - a table that writes rows straight under <table> has a TBody synthesised so
- *     TR is never a direct child of Table.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.8 Table 333 — Table / THead / TBody / TFoot / TR
- *   - ISO 14289-1:2014 §7.2 — no empty structure elements
+ * The rows of a table are tagged in THead, TBody and TFoot groups, with a TBody made up for rows
+ * that have no group, so a TR is never a child of the Table itself
  *
  * @group pdfua
  */
@@ -24,8 +12,7 @@ class TableStructureTest extends PdfUaTestCase
 {
 
 	/**
-	 * A table with all three row groups nests each group's TR beneath the group
-	 * element: Table ▸ THead ▸ TR, Table ▸ TBody ▸ TR, Table ▸ TFoot ▸ TR.
+	 * A table with <thead>, <tbody> and <tfoot> has a THead, TBody and TFoot, each holding its TR.
 	 */
 	public function testExplicitRowGroupsNestTrBeneathGroupElements()
 	{
@@ -40,14 +27,12 @@ class TableStructureTest extends PdfUaTestCase
 		$table = $this->findFirstOfType($mpdf->getPdfUaStructureTree()->getRoot(), 'Table');
 		$this->assertNotNull($table, 'a Table struct element must exist');
 
-		// The Table's direct children are exactly the three row groups, in order.
 		$groups = [];
 		foreach ($table->getChildren() as $child) {
 			$groups[] = $child->getType();
 		}
 		$this->assertSame(['THead', 'TBody', 'TFoot'], $groups, 'Table must group its rows into THead/TBody/TFoot');
 
-		// Each group holds its TR (and nothing but TR).
 		foreach ($table->getChildren() as $group) {
 			$rowTypes = [];
 			foreach ($group->getChildren() as $row) {
@@ -63,8 +48,7 @@ class TableStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A table whose rows are written straight under <table> gets a synthesised
-	 * TBody so TR is never a direct child of Table.
+	 * Rows written straight under <table> are grouped in one TBody.
 	 */
 	public function testImplicitRowsAreWrappedInSynthesisedTbody()
 	{
@@ -81,7 +65,6 @@ class TableStructureTest extends PdfUaTestCase
 		}
 		$this->assertSame(['TBody'], $childTypes, 'group-less rows must live under a single synthesised TBody');
 
-		// Both rows collapse into the one synthetic TBody.
 		$tbody = $table->getChildren()[0];
 		$rowTypes = [];
 		foreach ($tbody->getChildren() as $row) {
@@ -89,16 +72,13 @@ class TableStructureTest extends PdfUaTestCase
 		}
 		$this->assertSame(['TR', 'TR'], $rowTypes, 'both implicit rows nest under the synthesised TBody');
 
-		// No TR is ever a direct child of the Table.
 		foreach ($table->getChildren() as $child) {
 			$this->assertNotSame('TR', $child->getType(), 'TR must not be a direct child of Table');
 		}
 	}
 
 	/**
-	 * A THead followed by group-less rows produces Table ▸ THead and a
-	 * Table ▸ TBody (synthesised) for the trailing rows — the two groups are
-	 * siblings, not nested.
+	 * Rows without a group after a <thead> go in a TBody beside the THead.
 	 */
 	public function testHeadThenImplicitRowsSynthesiseSiblingTbody()
 	{
@@ -121,8 +101,7 @@ class TableStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A nested table (Table-in-TD) keeps its own row group: the inner table's TR
-	 * nests under an inner TBody, not under the outer group.
+	 * A table in a cell groups its rows in a TBody of its own.
 	 */
 	public function testNestedTableGetsItsOwnRowGroup()
 	{
@@ -135,7 +114,6 @@ class TableStructureTest extends PdfUaTestCase
 		$outerTable = $this->findFirstOfType($mpdf->getPdfUaStructureTree()->getRoot(), 'Table');
 		$this->assertNotNull($outerTable);
 
-		// Outer: Table ▸ TBody ▸ TR ▸ TD ▸ Table(inner) ▸ TBody ▸ TR ▸ TD
 		$outerTbody = $this->firstChildOfType($outerTable, 'TBody');
 		$this->assertNotNull($outerTbody, 'outer table must have a TBody');
 		$outerTr = $this->firstChildOfType($outerTbody, 'TR');
@@ -151,11 +129,10 @@ class TableStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Return the first direct child of $node with the given struct type, or null.
+	 * @param \Mpdf\Ua\StructureElement $node
+	 * @param string                    $type
 	 *
-	 * @param  \Mpdf\Ua\StructureElement $node
-	 * @param  string                    $type
-	 * @return \Mpdf\Ua\StructureElement|null
+	 * @return \Mpdf\Ua\StructureElement|null The first child of the node of that type
 	 */
 	private function firstChildOfType($node, $type)
 	{
@@ -168,11 +145,10 @@ class TableStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Depth-first search for the first struct element of a given type.
+	 * @param \Mpdf\Ua\StructureElement $node
+	 * @param string                    $type
 	 *
-	 * @param  \Mpdf\Ua\StructureElement $node
-	 * @param  string                    $type
-	 * @return \Mpdf\Ua\StructureElement|null
+	 * @return \Mpdf\Ua\StructureElement|null The first element of that type below the node, depth first
 	 */
 	private function findFirstOfType($node, $type)
 	{
@@ -189,9 +165,9 @@ class TableStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Assert BDC + BMC operators equal EMC operators in the raw PDF output.
+	 * Assert every BDC and BMC in the PDF is closed by an EMC.
 	 *
-	 * @param string $output  raw PDF bytes
+	 * @param string $output
 	 */
 	private function assertBdcEmcBalanced($output)
 	{

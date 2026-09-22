@@ -65,11 +65,13 @@ final class BaseWriter
 		}
 	}
 
+	/**
+	 * @param string $s
+	 * @param bool   $encrypt False for a stream left readable in an encrypted document, such as the
+	 *                        XMP metadata that must declare PDF/UA conformance to any reader
+	 */
 	public function stream($s, $encrypt = true)
 	{
-		// ISO 32000-1 §14.3.2 — the XMP metadata stream must not be encrypted.
-		// PDF/UA-1 requires pdfuaid:part to be readable regardless of encryption state.
-		// Pass $encrypt=false when writing the XMP metadata stream with PDFUA+encrypted.
 		if ($this->mpdf->encrypted && $encrypt) {
 			$s = $this->protection->rc4($this->protection->objectKey($this->mpdf->currentObjectNumber), $s);
 		}
@@ -123,21 +125,12 @@ final class BaseWriter
 	}
 
 	/**
-	 * Escape a string so the result is a valid PDF Name token per
-	 * ISO 32000-1:2008 §7.3.5.
+	 * Any bytes as a valid PDF name: whatever is not printable ASCII, or is a delimiter or '#',
+	 * is written as #XX (ISO 32000-1 §7.3.5). A structure element id goes through
+	 * StructureElement::sanitiseIdForPdf() instead, which also caps the length.
 	 *
-	 * Any byte outside the printable range 0x21–0x7E, or in the regular-
-	 * character delimiter set ( ) < > [ ] { } / % # plus whitespace, is
-	 * encoded as `#XX` (two uppercase hex digits). The `#` itself is
-	 * encoded as `#23`.
+	 * @param string $name
 	 *
-	 * Use this for PDF Name production where the input is not pre-validated —
-	 * for instance custom-property keys that flow into the /Info dict
-	 * (UA1 audit H-3). For struct element IDs, prefer
-	 * StructureElement::sanitiseIdForPdf() which adds a length cap and
-	 * collision-resistant hash suffix.
-	 *
-	 * @param  string $name  raw bytes to escape
 	 * @return string
 	 */
 	public function escapeName($name)

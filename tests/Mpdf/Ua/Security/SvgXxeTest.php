@@ -6,20 +6,10 @@ use Mpdf\Ua\PdfUaTestCase;
 use Mpdf\Image\Svg;
 
 /**
- * Regression suite for UA1 audit finding M-3 — `Svg::extractAccessibleMetadata`
- * passed `LIBXML_NOENT` to `simplexml_load_string`, which expands character
- * AND external entities. Combined with a `<!DOCTYPE … SYSTEM "file://…">`
- * preamble it produced a classic XXE on PHP < 8.0 (where libxml has external
- * entity resolution enabled by default).
+ * Reading the title and description of an SVG resolves no external entity.
  *
- * The fix drops `LIBXML_NOENT`, adds `LIBXML_NONET`, and on PHP < 8.0 also
- * disables the libxml external-entity loader. `mergeStyles()` is hardened
- * the same way for consistency.
- *
- * extractAccessibleMetadata() is not called with a DOCTYPE through the
- * documented entry path (`ImageSVG()` strips it via regex), but the method
- * is `public` — third-party integrations that bypass `ImageSVG()` reach it
- * directly, so this is a live defence-in-depth concern.
+ * ImageSVG() strips the DOCTYPE first, but extractAccessibleMetadata() is public
+ * and can be handed one directly.
  *
  * @group pdfua
  * @group security
@@ -27,12 +17,18 @@ use Mpdf\Image\Svg;
 class SvgXxeTest extends PdfUaTestCase
 {
 
+	/**
+	 * @return Svg An SVG parser with no Mpdf behind it, enough for extractAccessibleMetadata()
+	 */
 	private function newSvgWithoutConstructor()
 	{
 		$ref = new \ReflectionClass(Svg::class);
 		return $ref->newInstanceWithoutConstructor();
 	}
 
+	/**
+	 * An entity naming a local file is not read into the title.
+	 */
 	public function testFileSystemEntityIsNotResolved()
 	{
 		$svg = $this->newSvgWithoutConstructor();
@@ -47,13 +43,14 @@ class SvgXxeTest extends PdfUaTestCase
 		$this->assertArrayHasKey('title', $result);
 		$title = (string) $result['title'];
 
-		// The hosts file invariably contains "localhost" or "127.0.0.1"; if
-		// either appears the entity was resolved and the parser leaked file
-		// content into the accessible name.
+		// A hosts file always names localhost
 		$this->assertStringNotContainsStringIgnoringCase('localhost', $title);
 		$this->assertStringNotContainsString('127.0.0.1', $title);
 	}
 
+	/**
+	 * An entity naming a URL is not fetched.
+	 */
 	public function testHttpEntityIsNotFetched()
 	{
 		$svg = $this->newSvgWithoutConstructor();
@@ -61,7 +58,6 @@ class SvgXxeTest extends PdfUaTestCase
 			. '<!DOCTYPE svg [<!ENTITY xxe SYSTEM "http://example.invalid/secret">]>'
 			. '<svg xmlns="http://www.w3.org/2000/svg"><title>&xxe;</title></svg>';
 
-		// Should not throw, should not block on network.
 		$start = microtime(true);
 		$result = $svg->extractAccessibleMetadata($payload);
 		$elapsed = microtime(true) - $start;
@@ -70,10 +66,11 @@ class SvgXxeTest extends PdfUaTestCase
 		$this->assertIsArray($result);
 	}
 
+	/**
+	 * Character entities in the title and description are still decoded.
+	 */
 	public function testCharacterEntitiesStillFunctionInBodyText()
 	{
-		// Dropping LIBXML_NOENT means &amp;, &#233; etc. must still resolve in
-		// element text via simplexml's default behaviour. Ensure regression-free.
 		$svg = $this->newSvgWithoutConstructor();
 		$payload = '<svg xmlns="http://www.w3.org/2000/svg">'
 			. '<title>foo &amp; bar</title>'
@@ -84,6 +81,9 @@ class SvgXxeTest extends PdfUaTestCase
 		$this->assertSame('caf' . "\xC3\xA9", $result['desc']);
 	}
 
+	/**
+	 * A plain title and description are read as written.
+	 */
 	public function testWellFormedSvgStillProducesTitle()
 	{
 		$svg = $this->newSvgWithoutConstructor();

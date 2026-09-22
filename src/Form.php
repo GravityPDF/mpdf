@@ -8,25 +8,8 @@ use Mpdf\Writer\BaseWriter;
 use Mpdf\Writer\FormWriter;
 
 /**
- * AcroForm widget rendering and legacy drawn-chrome rendering for HTML form
- * elements (`<input>`, `<textarea>`, `<select>`, `<button>`, checkbox, radio,
- * image-button). Each `print_ob_*` method has two branches:
- *
- *   - useActiveForms=true  — emits a real AcroForm widget annotation. Under
- *     PDFUA the widget is referenced by an /OBJR struct kid (see the
- *     `if ($this->mpdf->PDFUA)` blocks in _putform_*).
- *   - useActiveForms=false — draws inert chrome (Cell, Rect, glyphs)
- *     directly into the page content stream. There is no AcroForm field
- *     behind it; the visual is non-interactive. Under PDFUA each else-
- *     branch brackets its drawing in `/Artifact BMC ... EMC` per ISO
- *     32000-1 §14.8.2.2 so the chrome is classified as an artifact and
- *     ISO 14289-1 §7.1 / Matterhorn 01-006 (no untagged real content) is
- *     satisfied. The bracket is gated on
- *     `MarkedContentHelper::getDepth() === 0` because Matterhorn 01-001
- *     and 01-002 forbid nesting Artifact inside tagged content; when the
- *     widget is rendered inside an open `<p>`/list-item BDC the chrome
- *     simply flows as part of the enclosing tag's content, which is itself
- *     a conformant disposition.
+ * Draws HTML form fields, as AcroForm widgets when active forms are on and as plain drawing when
+ * they are off.
  */
 class Form
 {
@@ -493,9 +476,7 @@ class Form
 			$save_font = $this->mpdf->FontFamily;
 			$save_currentfont = $this->mpdf->currentfontfamily;
 			if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->PDFUA) {
-				// PDF/UA-1 §7.21 / Matterhorn 14-002 — core fonts cannot be
-				// embedded, so substitute the Unicode down-arrow glyph from
-				// the active font instead of the ZapfDingbats core font.
+				// ZapfDingbats is a core font and cannot be embedded, so the arrow comes from the current font
 				if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 					$this->mpdf->PDFAXwarnings[] = 'Core Adobe font Zapfdingbats cannot be embedded in mPDF - used in Form element: Select - which is required for PDFA1-b or PDFX/1-a. (Different character/font will be substituted.)';
 				}
@@ -857,11 +838,7 @@ class Form
 			$this->writer->write('/V /' . $state . ' ');
 			$this->writer->write('/DV /' . $state . ' ');
 			$this->writer->write('/T ' . $this->writer->string($name) . ' ');
-			// PDF/UA-1 §7.18.1 / Matterhorn 19-003 — every form field must have
-			// a non-empty /TU (alternate description). Radio groups inherit no
-			// title from per-kid widgets, so emit /TU explicitly here. Falls back
-			// to the field name when no explicit TU was supplied (matching the
-			// fallback in _putform_tx / _putform_bt / _putform_ch).
+			// Every field needs a /TU (ISO 14289-1 §7.18.1), and a radio group takes none from its buttons
 			if ($this->mpdf->PDFUA) {
 				$tu = isset($frg['TU']) ? $frg['TU'] : '';
 				if (strlen($tu) === 0 || $tu === "\xFE\xFF") {
@@ -1499,8 +1476,7 @@ class Form
 			$this->writer->write('/T ' . $this->writer->string($form['T']));
 		}
 
-		// PDF/UA-1 §7.18.1 — fall back to field name when /TU is empty
-		// (BOM-only treated as empty — see _putform_tx for the rationale).
+		// A /TU that is only a byte order mark is empty
 		$tu = isset($form['TU']) ? $form['TU'] : '';
 		if ($this->mpdf->PDFUA && (strlen($tu) === 0 || $tu === "\xFE\xFF")) {
 			$fallback = isset($form['T']) && $form['T'] !== '' ? $form['T']
@@ -1509,7 +1485,6 @@ class Form
 		}
 		$this->writer->write('/TU ' . $this->writer->string($tu));
 
-		// PDF/UA-1 — associate this button/checkbox widget annotation with its Form struct element.
 		if ($this->mpdf->PDFUA && isset($form['structParent'])) {
 			$this->writer->write('/StructParent ' . $form['structParent']);
 		}
@@ -1791,10 +1766,7 @@ f Q ';
 		$this->writer->write('/M ' . $this->writer->dateString());
 
 		$this->writer->write('/T ' . $this->writer->string($form['T']));
-		// PDF/UA-1 §7.18.1 (Matterhorn 11-002) — choice/select widgets must
-		// carry /TU. Fall back to the field name when no tooltip was supplied.
-		// $form['TU'] is normalised to UTF-16BE-with-BOM at intake; the 2-byte
-		// BOM means "empty" — see _putform_tx for the rationale.
+		// A /TU that is only a byte order mark is empty
 		if ($this->mpdf->PDFUA) {
 			$tu = isset($form['TU']) ? $form['TU'] : '';
 			if (strlen($tu) === 0 || $tu === "\xFE\xFF") {
@@ -1841,7 +1813,6 @@ f Q ';
 			$put_js = 1;
 		}
 
-		// PDF/UA-1 — associate this choice widget annotation with its Form struct element.
 		if ($this->mpdf->PDFUA && isset($form['structParent'])) {
 			$this->writer->write('/StructParent ' . $form['structParent']);
 		}
@@ -1896,13 +1867,8 @@ f Q ';
 		$this->writer->write('/MK <<' . $temp . ' >>');
 
 		$this->writer->write('/T ' . $this->writer->string($form['T']));
-		// PDF/UA-1 §7.18.1 (Matterhorn 11-002) — every form-widget annotation
-		// must carry a non-empty /TU (alternate description / tooltip) so AT
-		// can announce the field. mPDF normalises $form['TU'] to UTF-16BE with
-		// a BOM at intake (line 913 above), so an "empty" value is the 2-byte
-		// BOM `\xFE\xFF`. Treat strings ≤ 2 bytes as empty for the fallback
-		// check, then re-encode the field name through utf8ToUtf16BigEndian to
-		// preserve the same string format used for `T`.
+		// Every field needs a /TU to be announced by (ISO 14289-1 §7.18.1). It is stored as UTF-16BE
+		// with a byte order mark, so one that is only the mark is empty.
 		$tu = isset($form['TU']) ? $form['TU'] : '';
 		if ($this->mpdf->PDFUA && (strlen($tu) === 0 || $tu === "\xFE\xFF")) {
 			$fallback = isset($form['T']) && $form['T'] !== '' ? $form['T'] : 'Form field';
@@ -1910,8 +1876,6 @@ f Q ';
 		}
 		$this->writer->write('/TU ' . $this->writer->string($tu));
 
-		// PDF/UA-1 — associate this widget annotation with its Form struct element.
-		// /StructParent (singular) indexes the ParentTree to the owning struct element.
 		if ($this->mpdf->PDFUA && isset($form['structParent'])) {
 			$this->writer->write('/StructParent ' . $form['structParent']);
 		}
@@ -1998,8 +1962,6 @@ f Q ';
 
 	/**
 	 * @param bool $opened What beginChromeArtifact() returned
-	 *
-	 * @return void
 	 */
 	private function endChromeArtifact($opened)
 	{

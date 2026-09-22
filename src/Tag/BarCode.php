@@ -245,9 +245,7 @@ class BarCode extends Tag
 			$objattr['barcode_height'] = $h;
 			$objattr['barcode_width'] = $w;
 
-			// Carry id/aria-* through serialised $objattr because the Figure
-			// struct element wrapping the barcode is created at render time
-			// (printobjectbuffer), not at parse time.
+			// The Figure around the barcode is made when it is drawn, so its id and aria-* travel with it
 			if ($this->mpdf->PDFUA) {
 				$objattr += AriaIdResolver::toObjattr($attr);
 			}

@@ -3,22 +3,8 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 structure tagging for block-level tags inside a table cell (audit E9).
- *
- * Before this fix, BlockTag::open()'s struct-element creation was gated on
- * `!$this->mpdf->tableLevel`, so a `<td><h2>…</h2><ul><li>…</li></ul></td>`
- * produced only Table▸TR▸TD with the cell's content collapsed under a single
- * TD MCID — no H2, no L/LI — and the §7.4.2 heading-sequence tracker never saw
- * the cell's headings. These tests assert that a heading and a list inside a
- * cell now open their real struct elements beneath the TD, each owning its own
- * marked content, and that the cell's headings take part in the one
- * document-wide heading sequence.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.8 Table 333 — TD / list / heading struct types
- *   - ISO 32000-1:2008 §14.7.4.4 — one MCID maps to exactly one struct element
- *   - ISO 14289-1:2014 §7.2 — no empty structure elements
- *   - ISO 14289-1:2014 §7.4.2 — heading sequence
+ * Headings and lists inside a table cell are tagged beneath its TD, each with its own marked
+ * content, and the headings count towards the document's heading sequence
  *
  * @group pdfua
  */
@@ -26,7 +12,7 @@ class TableCellStructureTest extends PdfUaTestCase
 {
 
 	/**
-	 * A heading inside a cell opens a real H2 struct element beneath the TD.
+	 * A heading in a cell is an H2 beneath the TD.
 	 */
 	public function testHeadingInCellProducesH2UnderTd()
 	{
@@ -41,7 +27,7 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A list inside a cell opens L ▸ LI beneath the TD.
+	 * A list in a cell is an L beneath the TD, with an LI for each item.
 	 */
 	public function testListInCellProducesListStructureUnderTd()
 	{
@@ -64,7 +50,7 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The heading and the list coexist beneath the same TD: TD ▸ H2 and TD ▸ L ▸ LI.
+	 * A heading and a list in one cell are both children of its TD.
 	 */
 	public function testHeadingAndListCoexistUnderSameCell()
 	{
@@ -87,10 +73,7 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Each nested cell element owns its OWN content MCID rather than the whole
-	 * cell collapsing under one TD MCID (ISO 32000-1 §14.7.4.4). A list item's
-	 * text lives in its LBody (ISO 14289-1 §7.2 test 20 — LI content must be in
-	 * an LBody, not directly under LI).
+	 * The heading and each list item's LBody mark their own content, leaving the TD none of its own.
 	 */
 	public function testNestedCellElementsOwnTheirMarkedContent()
 	{
@@ -100,22 +83,18 @@ class TableCellStructureTest extends PdfUaTestCase
 			. '<ul><li>Item one</li><li>Item two</li></ul></td></tr></table>';
 		$output = $this->getOutput($mpdf, $html);
 
-		// The heading brackets its text in its own H2 BDC, and each list item's
-		// content brackets in its own LBody BDC.
 		$this->assertStringContainsString('/H2 <</MCID', $output);
 		$this->assertSame(
 			2,
 			substr_count($output, '/LBody <</MCID'),
 			'each <li> must own a distinct LBody marked-content sequence'
 		);
-		// The TD itself owns no direct content — all of it lives in the children.
 		$this->assertStringNotContainsString('/TD <</MCID', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * A list item's content and any nested list live in an LBody, so a nested
-	 * list is L ▸ LI ▸ LBody ▸ L (ISO 14289-1 §7.2 tests 18/20).
+	 * A list nested in a list item sits in the item's LBody, as LI content must.
 	 */
 	public function testNestedListInCellWrapsInnerListInLBody()
 	{
@@ -137,8 +116,8 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A definition list inside a cell wraps DT/DD in an implicit LI so the
-	 * structure is L ▸ LI ▸ (Lbl, LBody) even when the HTML omits end tags.
+	 * Each term and definition of a definition list in a cell are an Lbl and LBody in an LI of
+	 * their own, even when the end tags are left out.
 	 */
 	public function testDefinitionListInCellWrapsTermsInImplicitLi()
 	{
@@ -164,21 +143,18 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The heading-sequence tracker sees a cell heading: an H2 in a cell as the
-	 * document's FIRST heading is a §7.4.2 violation and throws in strict mode.
+	 * Without PDFUAauto, an H2 in a cell as the first heading of the document throws.
 	 */
 	public function testCellHeadingParticipatesInSequenceStrictThrows()
 	{
-		$mpdf = $this->makeMpdf(); // PDFUAauto defaults to false → strict
+		$mpdf = $this->makeMpdf();
 		$this->expectException(\Mpdf\MpdfException::class);
 		$this->expectExceptionMessageMatches('/first heading in the document must be H1/');
 		$mpdf->WriteHTML('<table><tr><td><h2>Cell heading</h2></td></tr></table>');
 	}
 
 	/**
-	 * In auto mode the same first-heading-is-H2 cell is promoted to H1 rather
-	 * than dropped, and a warning is recorded — proving the tracker runs for
-	 * cell headings.
+	 * With PDFUAauto, an H2 in a cell as the first heading becomes an H1, with a warning.
 	 */
 	public function testCellHeadingParticipatesInSequenceAutoPromotes()
 	{
@@ -193,8 +169,7 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Conformance gate — a heading + list inside a table cell validates as
-	 * PDF/UA-1 under veraPDF (see VeraPdfConformanceTest for the gated run).
+	 * A table whose cell holds a heading and a list keeps its Table and TD along with them.
 	 */
 	public function testHeadingAndListInCellRemainsWellFormed()
 	{
@@ -204,7 +179,6 @@ class TableCellStructureTest extends PdfUaTestCase
 			. '<ul><li>Item one</li><li>Item two</li></ul></td></tr></table>';
 		$output = $this->getOutput($mpdf, $html);
 
-		// Table structure is intact and headings/list are reachable.
 		$this->assertStringContainsString('/S /Table', $output);
 		$this->assertStringContainsString('/S /TD', $output);
 		$this->assertStringContainsString('/S /H2', $output);
@@ -213,12 +187,12 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Assert the first TD in the tree has a direct child of the given struct
-	 * type and return that child.
+	 * Assert the first TD in the tree has a child of the type.
 	 *
-	 * @param  \Mpdf\Mpdf $mpdf
-	 * @param  string     $type
-	 * @return \Mpdf\Ua\StructureElement
+	 * @param \Mpdf\Mpdf $mpdf
+	 * @param string     $type
+	 *
+	 * @return \Mpdf\Ua\StructureElement That child
 	 */
 	private function assertTdHasChildOfType(\Mpdf\Mpdf $mpdf, $type)
 	{
@@ -233,11 +207,10 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Return the first direct child of $node with the given struct type, or null.
+	 * @param \Mpdf\Ua\StructureElement $node
+	 * @param string                    $type
 	 *
-	 * @param  \Mpdf\Ua\StructureElement $node
-	 * @param  string                    $type
-	 * @return \Mpdf\Ua\StructureElement|null
+	 * @return \Mpdf\Ua\StructureElement|null The first child of the node of that type
 	 */
 	private function firstChildOfType($node, $type)
 	{
@@ -250,11 +223,10 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Depth-first search for the first struct element of a given type.
+	 * @param \Mpdf\Ua\StructureElement $node
+	 * @param string                    $type
 	 *
-	 * @param  \Mpdf\Ua\StructureElement $node
-	 * @param  string                    $type
-	 * @return \Mpdf\Ua\StructureElement|null
+	 * @return \Mpdf\Ua\StructureElement|null The first element of that type below the node, depth first
 	 */
 	private function findFirstOfType($node, $type)
 	{
@@ -271,9 +243,9 @@ class TableCellStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Assert BDC + BMC operators equal EMC operators in the raw PDF output.
+	 * Assert every BDC and BMC in the PDF is closed by an EMC.
 	 *
-	 * @param string $output  raw PDF bytes
+	 * @param string $output
 	 */
 	private function assertBdcEmcBalanced($output)
 	{

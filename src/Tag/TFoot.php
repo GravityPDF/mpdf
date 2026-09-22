@@ -7,6 +7,11 @@ namespace Mpdf\Tag;
 class TFoot extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$this->mpdf->lastoptionaltag = 'TFOOT'; // Save current HTML specified optional endtag
@@ -41,9 +46,7 @@ class TFoot extends Tag
 			$this->mpdf->tfoot_textalign_default = $properties['TEXT-ALIGN'];
 		}
 
-		// ISO 32000-1:2008 §14.8 Table 333 — TFoot is a table row-grouping
-		// element; the enclosed TR rows nest beneath it. Collapse any TBody that
-		// Tr::open() synthesised for preceding group-less rows first.
+		// Ends the TBody made for any rows written before it outside a group
 		if ($this->mpdf->PDFUA) {
 			$tree = $this->ua->getStructureTree();
 			$tree->closeRowGroup();
@@ -51,9 +54,12 @@ class TFoot extends Tag
 		}
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
-		// ISO 32000-1:2008 §14.8 Table 333 — pop the TFoot row-group element.
 		if ($this->mpdf->PDFUA) {
 			$this->ua->getStructureTree()->closeRowGroup();
 		}

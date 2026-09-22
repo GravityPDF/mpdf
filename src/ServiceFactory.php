@@ -158,11 +158,7 @@ class ServiceFactory
 			$logger
 		);
 
-		// Build the UA collaborators first; none of them take UaState — each
-		// receives only the specific pieces it needs (StructureTree,
-		// MarkedContentHelper, $writer, $mpdf) so there is no construction-time
-		// cycle when UaState is built below.
-		$structureTree            = new StructureTree();
+		$structureTree           = new StructureTree();
 		$markedContentHelper      = new MarkedContentHelper($writer);
 		$structureWriter          = new StructureWriter($mpdf, $writer, $structureTree);
 		$ariaIdResolver           = new AriaIdResolver($structureTree);
@@ -172,8 +168,6 @@ class ServiceFactory
 		$anchorState              = new AnchorState();
 		$imageMapRegistry         = new ImageMapRegistry($mpdf, $structureTree, $anchorState);
 
-		// Build the facade last — fully populated in a single constructor call,
-		// with no setter-based wiring needed afterwards.
 		$uaState = new UaState(
 			$structureTree,
 			$markedContentHelper,
@@ -186,16 +180,9 @@ class ServiceFactory
 			$imageMapRegistry
 		);
 
-		// Inject the facade back into StructureTree so its annotation-level
-		// ParentTree-key allocator (nextAnnotStructParent/reserveAnnotStructParent)
-		// shares the same counter as page /StructParents — see StructureTree
-		// docblock for the collision rationale.
+		// Annotations take their /StructParent keys from the same counter as pages, and image maps
+		// report through addWarning(); both need the state that is built from them
 		$structureTree->setUaState($uaState);
-
-		// Inject the facade into ImageMapRegistry so it can route PDFUAauto
-		// warnings through UaState::addWarning(). Done after the facade is fully
-		// built to avoid a construction-time cycle — same setter style as
-		// StructureTree::setUaState() above.
 		$imageMapRegistry->setUaState($uaState);
 
 		$tag = new Tag(

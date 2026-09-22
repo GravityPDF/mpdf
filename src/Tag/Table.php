@@ -8,6 +8,11 @@ use Mpdf\Mpdf;
 class Table extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$this->mpdf->tdbegin = false;
@@ -520,10 +525,7 @@ class Table extends Tag
 		$this->mpdf->plainCell_properties = [];
 		unset($table);
 
-		// Push the Table struct element after tableLevel is incremented so nested
-		// tables (tableLevel > 1) land as children of the enclosing TD on the stack.
-		//
-		// ISO 32000-1:2008 §14.8 Table 333 — Table grouping element.
+		// Opened only now so that a nested table lands inside the cell that holds it
 		if ($this->mpdf->PDFUA) {
 			$this->ua->getStructureTree()->open('Table');
 
@@ -532,6 +534,10 @@ class Table extends Tag
 		}
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
 
@@ -743,10 +749,7 @@ class Table extends Tag
 			$this->mpdf->tdbegin = true;
 			$this->mpdf->nestedtablejustfinished = true;
 			$this->mpdf->ignorefollowingspaces = true;
-			// Pop the Table struct element for nested tables. Top-level tables
-			// pop after _tableWrite() at the end of close(). Collapse any row
-			// group still open (synthetic TBody, or an explicit group whose
-			// optional end tag was omitted) so the pop lands on the Table.
+			// A row group can still be open, made for bare rows or left by an omitted end tag
 			if ($this->mpdf->PDFUA) {
 				$this->ua->getStructureTree()->closeRowGroup();
 				$this->ua->getStructureTree()->close();
@@ -1264,12 +1267,7 @@ class Table extends Tag
 			$this->mpdf->restoreInlineProperties($save_silp);
 		}
 
-		// Pop the Table struct element at the end of close() for top-level tables,
-		// after _tableWrite() has rendered all cells. Collapse any row group still
-		// open (synthetic TBody, or an explicit group whose optional end tag was
-		// omitted) so the pop lands on the Table.
-		//
-		// ISO 32000-1:2008 §14.8 Table 333 — Table grouping element.
+		// Closed only once the cells are drawn; a row group can still be open, as for a nested table
 		if ($this->mpdf->PDFUA) {
 			$this->ua->getStructureTree()->closeRowGroup();
 			$this->ua->getStructureTree()->close();

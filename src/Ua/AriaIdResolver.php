@@ -3,74 +3,29 @@
 namespace Mpdf\Ua;
 
 /**
- * Two-pass resolver for ID-referencing ARIA attributes.
+ * Resolves the ARIA attributes that refer to other elements by id.
  *
- * mPDF's HTML parse is sequential and single-pass, so a tag handler reading
- * `aria-labelledby="caption"` may not yet have seen the `<span id="caption">`
- * target. This resolver records every referencer during parse (Pass 1) and
- * resolves them against the id-element map at `_enddoc()` time (Pass 2),
- * BEFORE `StructureWriter::writeStructTree()` serialises the tree.
- *
- * Pass-2 mutations touch the in-memory `StructureElement::$attributes` and
- * relationship kids only — the page content stream is already flushed by
- * `_enddoc()` time, but that does not matter because /Alt, /E, and OBJR kids
- * live on the struct element dict (not in the content stream).
- *
- * Supported attributes (WAI-ARIA 1.2):
- *   - aria-labelledby   → /Alt (StructElem dict, ISO 32000-1 Table 322)
- *   - aria-describedby  → /E (expansion text, ISO 32000-1 Table 322)
- *   - aria-details      → /E (same treatment as aria-describedby)
- *   - aria-controls     → /Ref cross-reference (ISO 32000-2 §14.7 struct /Ref)
- *   - aria-owns         → /Ref cross-reference
- *   - aria-flowto       → no static PDF/UA-1 representation → visible warning
- *   - aria-activedescendant → no static PDF/UA-1 representation → visible warning
- *
- * Interactive-state ARIA (aria-live, aria-busy, aria-checked, …) has no
- * static-PDF analog and is intentionally out of scope.
- *
- * AriaIdResolver holds no UaState back-reference — unresolved-reference
- * diagnostics accumulate in $unresolvedWarnings and are flushed into
- * UaState::addWarning() by the Mpdf::_enddoc() caller after resolveAll().
- * This breaks the construction-time cycle that would otherwise require
- * setter-based wiring.
- *
- * One instance per Mpdf lifecycle, constructed by ServiceFactory and reached
- * via $this->ua->getAriaIdResolver().
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.7.2 Table 322 — /Alt and /E on struct elements
- *   - WAI-ARIA 1.1 §6.6 — aria-labelledby, aria-describedby ID reference semantics
- *
- * @see StructureElement::setAttribute()
- * @see StructureElement::addRelationship()
+ * The id an aria-labelledby names may come later in the HTML, so references are queued as the
+ * document is parsed and resolved when it ends, before the structure tree is written:
+ * aria-labelledby as /Alt, aria-describedby and aria-details as /E, and aria-owns and
+ * aria-controls as /Ref. aria-flowto and aria-activedescendant have nothing to become in a
+ * static PDF and are warned about.
  */
 class AriaIdResolver
 {
 
 	/**
-	 * Maximum byte length of an ARIA ID-list attribute value before queue()
-	 * rejects it. Defends against pathological inputs where a 1 MB
-	 * `aria-labelledby="a a a..."` would amplify to ~300 MB peak memory in
-	 * the resolver pending queue (UA1 audit M-1).
-	 *
-	 * 16 KiB is an order of magnitude beyond any legitimate use — even an
-	 * extreme accessibility annotation would not exceed a few hundred bytes.
+	 * The longest id list accepted, in bytes; far beyond any real use, and short of the memory a
+	 * list of a megabyte would take once split
 	 */
 	const MAX_ARIA_IDS_LENGTH = 16384;
 
 	/**
-	 * Maximum number of IDs split out of a single ARIA attribute. Bounds
-	 * the per-element memory footprint of the deferred resolution queue.
-	 *
-	 * 256 tokens is well beyond any plausible legitimate fan-in (a typical
-	 * `aria-labelledby` references one or two IDs).
+	 * The most ids taken from one attribute
 	 */
 	const MAX_ARIA_IDS_TOKENS = 256;
 
 	/**
-	 * ID-referencing ARIA attributes (canonical lowercase, hyphenated) queued
-	 * by queueAriaRefs() and resolved in the second pass by resolveAll().
-	 *
 	 * @var string[]
 	 */
 	const REFERENCE_ARIA_ATTRS = [
@@ -78,68 +33,44 @@ class AriaIdResolver
 		'aria-controls', 'aria-owns', 'aria-flowto', 'aria-activedescendant',
 	];
 
-	/** @var StructureTree  injected once; walked during resolveAll() to populate /Alt /E /Ref. */
+	/** @var StructureTree */
 	private $tree;
 
-	/** @var array<string, StructureElement>  id attribute value → struct element that carries it. */
+	/** @var array<string, StructureElement> Keyed by the lowercased id */
 	private $idMap = [];
 
 	/**
-	 * @var array  Pending [referencing element, aria attribute name (lowercase), target ID] tuples.
-	 *             Resolved in a second pass at _enddoc() time via resolveAll().
+	 * @var array [referring element, attribute name, target id]
 	 */
 	private $pending = [];
 
 	/**
-	 * @var string[]  Unresolved-reference diagnostics produced by resolveAll().
-	 *                Flushed into UaState by the _enddoc() caller.
+	 * @var string[] For ids nothing in the document has
 	 */
 	private $unresolvedWarnings = [];
 
 	/**
-	 * @var string[]  Name-resolution failures produced by resolveAll(): an
-	 *                aria-labelledby / aria-describedby / aria-details reference
-	 *                whose target is missing or carries no text. Emitting an /Alt
-	 *                or /E for these would write a BOM-only empty string that,
-	 *                per ISO 32000-1 Table 322, REPLACES the referring element's
-	 *                content for assistive technology and silently hides it
-	 *                (UA1 audit E8). The _enddoc() caller throws on these in
-	 *                strict mode and warns in PDFUAauto mode (Matterhorn
-	 *                13-004 / 28-002); resolveAll() never writes the empty value.
+	 * A name or description that points at nothing, or at something without text. An empty
+	 * /Alt or /E would hide the referring element's own content, so none is written, and the
+	 * document fails or, under PDFUAauto, warns.
+	 *
+	 * @var string[]
 	 */
 	private $nameResolutionErrors = [];
 
 	/**
-	 * @var string[]  Diagnostics produced by resolveAll() for resolved ARIA
-	 *                relationships that have no static PDF/UA-1 representation —
-	 *                aria-flowto (a reading-order override, determined here by
-	 *                structure-tree order) and aria-activedescendant (a transient
-	 *                interactive-focus relationship). Emitting nothing for these
-	 *                is correct — a static tagged PDF cannot carry the semantics —
-	 *                but they must be surfaced visibly rather than stored-and-
-	 *                dropped (UA1 audit E18). The _enddoc() caller flushes them
-	 *                into UaState::addWarning(); resolveAll() never stores the
-	 *                relationship on the element.
+	 * @var string[] For aria-flowto and aria-activedescendant, which a static PDF cannot express
 	 */
 	private $relationshipWarnings = [];
 
 	/**
-	 * @var int  Monotonic counter for synthesised TH /ID values.
-	 *           Two tables at the same nesting level on the same page would
-	 *           otherwise collide on `th-{tableLevel}-{row}-{col}` — the
-	 *           counter guarantees document-wide uniqueness so that TD
-	 *           /Headers references resolve to the intended TH.
+	 * @var int Numbers the ids made up for a TH without one, across the whole document so two
+	 *          tables cannot give theirs the same
 	 */
 	private $syntheticThCounter = 0;
 
 	/**
-	 * Construct with the structure tree that holds the /ID-tagged elements.
-	 *
-	 * Called once by ServiceFactory before UaState is constructed.
-	 * No UaState reference is held — warnings accumulate locally and are
-	 * flushed into UaState::addWarning() by the _enddoc() caller.
-	 *
-	 * @param StructureTree $tree  element stack / ParentTree accumulator
+	 * @param StructureTree $tree
 	 */
 	public function __construct(StructureTree $tree)
 	{
@@ -147,22 +78,16 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Record an HTML `id` attribute on a struct element.
+	 * The first element to use an id keeps it, as getElementById() does in a browser
 	 *
-	 * Called from any tag handler whose open() observes an `id` attribute.
-	 * First-declaration wins — duplicate IDs in malformed HTML silently keep
-	 * the first binding rather than throwing, matching typical browser
-	 * behaviour for getElementById.
+	 * @param string           $id
+	 * @param StructureElement $elem
 	 *
-	 * @param  string           $id    value of the HTML `id` attribute
-	 * @param  StructureElement $elem  struct element carrying this id
 	 * @return void
 	 */
 	public function registerId($id, StructureElement $elem)
 	{
-		// Normalize to lowercase for case-insensitive matching.
-		// mPDF's HTML parser uppercases the value of the id= attribute (Mpdf.php ~line 14204)
-		// but does NOT uppercase aria-* target values, so both sides must normalize.
+		// The HTML parser uppercases id="" but not the ids an aria attribute lists
 		$id = strtolower((string) $id);
 		if ($id !== '' && !isset($this->idMap[$id])) {
 			$this->idMap[$id] = $elem;
@@ -170,22 +95,16 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Register a struct element's HTML id and queue all of its ID-referencing
-	 * ARIA attributes in one call — collapsing the registerId() + per-attribute
-	 * queue() loop that was copy-pasted across Tag\A, Tag\InlineTag and the
-	 * image object paths (Figure / barcode / text-circle) in Mpdf.
+	 * Register an element's id and queue each of its ARIA references.
 	 *
-	 * Two source conventions carry the same data under different key spellings:
-	 *   - HTML tag handlers: uppercase, hyphenated — ID, ARIA-LABELLEDBY, …
-	 *   - image object buffer ($objattr = true): pdfua_-prefixed, lowercase,
-	 *     underscored — pdfua_id, pdfua_aria_labelledby, …. ($objattr also
-	 *     carries an unrelated integer 'ID' = Form XObject number, so the
-	 *     convention must be selected explicitly rather than sniffed.)
-	 * Either way the canonical lowercase-hyphenated name is passed to queue().
+	 * A tag passes its HTML attributes (ID, ARIA-LABELLEDBY…). An object drawn later passes what
+	 * toObjattr() made (pdfua_id, pdfua_aria_labelledby…) with $objattr set; that has to be said,
+	 * not guessed, as an object also carries an unrelated 'ID', its Form XObject number.
 	 *
-	 * @param  StructureElement $elem     struct element to bind the id / refs to
-	 * @param  array            $attr     source attribute array
-	 * @param  bool             $objattr  true → read pdfua_-prefixed keys; false → HTML tag keys
+	 * @param StructureElement $elem
+	 * @param array            $attr
+	 * @param bool             $objattr Whether the keys are those toObjattr() makes
+	 *
 	 * @return void
 	 */
 	public function queueAriaRefs(StructureElement $elem, array $attr, $objattr = false)
@@ -228,14 +147,7 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Return the next synthetic TH /ID counter value.
-	 *
-	 * Used by Th.php when an HTML <th> has no explicit id="...". The counter
-	 * increases monotonically across the entire document so two tables at the
-	 * same nesting level on the same page cannot produce identical synthesised
-	 * IDs (which would silently break TD /Headers cross-references).
-	 *
-	 * @return int next counter value (1-based)
+	 * @return int The number for the next id made up for a TH, from 1
 	 */
 	public function nextSyntheticThCounter()
 	{
@@ -243,24 +155,18 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Queue an ID-referencing ARIA attribute for deferred resolution.
+	 * Queue each id of a space-separated list
 	 *
-	 * Called from every tag handler that sees aria-labelledby, aria-describedby,
-	 * aria-details, aria-controls, aria-owns, aria-flowto, or
-	 * aria-activedescendant. ARIA allows space-separated ID lists; this splits
-	 * them and queues one pending entry per ID.
+	 * @param StructureElement $elem         The element carrying the attribute
+	 * @param string           $ariaAttrName Lowercase, e.g. 'aria-labelledby'
+	 * @param string           $targetIds
 	 *
-	 * @param  StructureElement $elem          element that owns the ARIA attribute
-	 * @param  string           $ariaAttrName  lowercase ARIA attribute name (e.g. 'aria-labelledby')
-	 * @param  string           $targetIds     raw attribute value; may be space-separated list
 	 * @return void
 	 */
 	public function queue(StructureElement $elem, $ariaAttrName, $targetIds)
 	{
 		$targetIds = (string) $targetIds;
 
-		// UA1 audit M-1 — reject oversized inputs at the call site rather
-		// than letting preg_split allocate millions of tuples in $pending.
 		if (strlen($targetIds) > self::MAX_ARIA_IDS_LENGTH) {
 			$this->unresolvedWarnings[] = $ariaAttrName
 				. ' attribute exceeded ' . self::MAX_ARIA_IDS_LENGTH
@@ -268,11 +174,6 @@ class AriaIdResolver
 			return;
 		}
 
-		// Normalize IDs to lowercase to match registerId() normalization.
-		// Both mPDF-uppercased ID values (from HTML id= attributes, Mpdf.php ~line 14204)
-		// and mixed-case aria-* target values resolve to the same key.
-		// Cap the split at MAX_ARIA_IDS_TOKENS so a value packed with whitespace
-		// cannot expand to an unbounded number of pending tuples.
 		$tokens = preg_split(
 			'/\s+/',
 			trim($targetIds),
@@ -295,22 +196,14 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Walk every queued reference and mutate the referencing struct element.
-	 *
-	 * Called exactly once from Mpdf::_enddoc(), before
-	 * UaState::getStructureWriter()->writeStructTree() serialises the tree.
-	 * Unresolved IDs append a PDFUAauto-mode diagnostic to
-	 * $this->unresolvedWarnings. The _enddoc() caller flushes those into
-	 * UaState::addWarning() immediately after resolveAll() returns.
+	 * Give each queued reference to the element it came from, once the document has ended and
+	 * before the structure tree is written
 	 *
 	 * @return void
 	 */
 	public function resolveAll()
 	{
-		// aria-labelledby → /Alt, aria-describedby / aria-details → /E. These are
-		// the "naming" attributes: an unresolved or empty target must NOT emit an
-		// /Alt or /E, because a BOM-only empty string replaces and hides the
-		// referring element's content (ISO 32000-1 Table 322, UA1 audit E8).
+		// These name or describe the element, and an empty /Alt or /E would hide its content
 		$namingAttrs = ['aria-labelledby', 'aria-describedby', 'aria-details'];
 
 		foreach ($this->pending as $pending) {
@@ -321,9 +214,6 @@ class AriaIdResolver
 			if (!isset($this->idMap[$id])) {
 				$msg = 'Unresolved ARIA reference: ' . $attr . '="' . $id
 					. '" has no matching id="' . $id . '" in the document';
-				// A naming attribute that resolves to nothing is a hard failure —
-				// route it so strict throws / auto warns rather than silently
-				// leaving the referring element unnamed.
 				if (in_array($attr, $namingAttrs, true)) {
 					$this->nameResolutionErrors[] = $msg;
 				} else {
@@ -334,15 +224,11 @@ class AriaIdResolver
 			$target = $this->idMap[$id];
 			switch ($attr) {
 				case 'aria-labelledby':
-					// ISO 32000-1 §14.7.2 Table 322 — /Alt is a direct StructElem key
-					// (NOT inside /A). Only fill if the element does not already carry
-					// Alt from an explicit alt="" or aria-label="" source.
+					// An alt="" or aria-label="" on the element itself comes first
 					$existing = $elem->getAttributes();
 					if (!isset($existing['Alt'])) {
 						$text = $this->collectText($target);
 						if ($text === '') {
-							// E8 — never write an empty /Alt: the BOM-only string would
-							// REPLACE and hide $elem's content for AT (Matterhorn 13-004).
 							$this->nameResolutionErrors[] = 'ARIA reference resolved to empty text: '
 								. $attr . '="' . $id . '" target carries no text content; '
 								. 'refusing to emit an empty /Alt (Matterhorn 13-004)';
@@ -353,10 +239,8 @@ class AriaIdResolver
 					break;
 				case 'aria-describedby':
 				case 'aria-details':
-					// ISO 32000-1 §14.7.2 Table 322 — /E carries expansion / description text.
 					$text = $this->collectText($target);
 					if ($text === '') {
-						// E8 — never write an empty /E (Matterhorn 28-002).
 						$this->nameResolutionErrors[] = 'ARIA reference resolved to empty text: '
 							. $attr . '="' . $id . '" target carries no text content; '
 							. 'refusing to emit an empty /E (Matterhorn 28-002)';
@@ -366,22 +250,12 @@ class AriaIdResolver
 					break;
 				case 'aria-owns':
 				case 'aria-controls':
-					// ISO 32000-2 §14.7 — /Ref cross-reference: this struct
-					// element refers to the resolved target struct element(s).
-					// aria-owns / aria-controls both express a structural
-					// reference and map cleanly to /Ref, which StructureWriter
-					// emits as `/Ref [N 0 R …]` on the referring element's dict.
 					$elem->addRelationship($attr, $target);
 					break;
 				case 'aria-flowto':
 				case 'aria-activedescendant':
-					// No static PDF/UA-1 (ISO 32000-1) representation: aria-flowto
-					// overrides reading order (which a tagged PDF derives from the
-					// structure-tree order) and aria-activedescendant names a
-					// transient interactive-focus target. There is nothing to emit,
-					// but the loss MUST be visible rather than store-and-drop
-					// (UA1 audit E18). Record a warning the _enddoc() caller flushes
-					// into UaState::addWarning(); do not store the relationship.
+					// A tagged PDF reads in the order of its structure tree and has no focus, so
+					// there is nothing to write; the loss is reported rather than kept quiet
 					$this->relationshipWarnings[] = 'ARIA relationship has no PDF/UA-1 representation: '
 						. $attr . '="' . $id . '" cannot be expressed in a static PDF/UA-1 '
 						. 'structure tree; the relationship was not emitted.';
@@ -391,25 +265,12 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Gather the accessible-name text of a struct element for use as /Alt or /E.
+	 * The text an element gives a reference to it: its /ActualText or /Alt when it has one,
+	 * otherwise the text it and its descendants draw, in order and joined by spaces
 	 *
-	 * Resolution order (first non-empty wins, matching the WAI-ARIA name
-	 * computation's preference for an explicit accessible name):
-	 *   1. the element's own /ActualText, then /Alt (an explicit accessible name);
-	 *   2. otherwise the element's own captured text plus every descendant's
-	 *      collected text, in document order, joined by single spaces.
+	 * @param StructureElement $elem
 	 *
-	 * The captured own-text comes from StructureElement::getOwnText(), which the
-	 * layout engine populates as it emits each line of the element's marked
-	 * content (UA1 audit E8). This replaces the former stub that returned only
-	 * the target's own ActualText/Alt and, for an ordinary text target, an empty
-	 * string — which resolveAll() then wrote as a content-hiding empty /Alt.
-	 *
-	 * Produces plain UTF-8 text suitable for StructureElement::setAttribute();
-	 * StructureWriter encodes it to a UTF-16BE PDF string at emit time.
-	 *
-	 * @param  StructureElement $elem
-	 * @return string  concatenated accessible-name text (may be empty)
+	 * @return string
 	 */
 	private function collectText(StructureElement $elem)
 	{
@@ -435,12 +296,7 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Diagnostics collected by resolveAll() for IDs that had no matching element.
-	 *
-	 * The _enddoc() caller flushes these into UaState::addWarning() —
-	 * AriaIdResolver itself holds no UaState reference.
-	 *
-	 * @return string[]
+	 * @return string[] For ids nothing in the document has
 	 */
 	public function getUnresolvedWarnings()
 	{
@@ -448,14 +304,8 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Name-resolution failures collected by resolveAll(): an aria-labelledby /
-	 * aria-describedby / aria-details reference whose target is missing or holds
-	 * no text.
-	 *
-	 * resolveAll() never emits an /Alt or /E for these (that would write a
-	 * content-hiding empty string — UA1 audit E8). The _enddoc() caller throws on
-	 * a non-empty list in strict mode and flushes the messages into
-	 * UaState::addWarning() in PDFUAauto mode (Matterhorn 13-004 / 28-002).
+	 * The names and descriptions that could not be given, which fail the document or, under
+	 * PDFUAauto, become warnings
 	 *
 	 * @return string[]
 	 */
@@ -465,14 +315,8 @@ class AriaIdResolver
 	}
 
 	/**
-	 * Diagnostics collected by resolveAll() for resolved ARIA relationships that
-	 * have no static PDF/UA-1 representation (aria-flowto / aria-activedescendant).
-	 *
-	 * These are not conformance violations — the emitted PDF is valid PDF/UA-1
-	 * either way — so they are surfaced as warnings in both strict and PDFUAauto
-	 * mode (like getUnresolvedWarnings()) rather than thrown. The _enddoc() caller
-	 * flushes them into UaState::addWarning(); AriaIdResolver holds no UaState
-	 * reference (UA1 audit E18).
+	 * The aria-flowto and aria-activedescendant references left out. The document conforms
+	 * without them, so they only ever warn.
 	 *
 	 * @return string[]
 	 */

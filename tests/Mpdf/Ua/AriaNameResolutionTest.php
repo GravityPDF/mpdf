@@ -3,37 +3,20 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 tests for ARIA accessible-name resolution (audit E8).
+ * The accessible name aria-labelledby and aria-describedby take from the text of the element they point at.
  *
- * aria-labelledby / aria-describedby / aria-details resolve to an accessible
- * name built from the target element's real text. Before the E8 fix
- * AriaIdResolver::collectText() was a stub that, for an ordinary text target,
- * returned "" — and resolveAll() wrote that empty string as /Alt (\376\377),
- * a BOM-only empty string that, per ISO 32000-1 Table 322, REPLACES the
- * referring element's content for assistive technology and silently hides it.
- *
- * These tests assert both halves of the fix:
- *   1. a text target resolves to its actual text (/Alt = "The caption");
- *   2. a missing or empty target never emits an empty /Alt or /E — strict mode
- *      throws (Matterhorn 13-004 / 28-002), PDFUAauto mode warns.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.7.2 Table 322 — /Alt and /E on struct elements
- *   - ISO 14289-1:2014 (Matterhorn Protocol 1.1) — 13-004, 28-002
- *   - WAI-ARIA 1.1 §6.6 — aria-labelledby / aria-describedby ID references
+ * An empty /Alt replaces the content of the element it sits on for assistive technology
+ * (ISO 32000-1 Table 322), so a target with no text must never produce one.
  *
  * @group pdfua
- * @see PdfUaTestCase  base class supplying makeMpdf() and getOutput()
  */
 class AriaNameResolutionTest extends PdfUaTestCase
 {
 
 	/**
-	 * UTF-16BE-with-BOM encoding of a UTF-8 string, matching how StructureWriter
-	 * serialises /Alt and /E values (ISO 32000-1 §7.9.2.2 text string, BOM \xfe\xff).
+	 * @param string $utf8
 	 *
-	 * @param  string $utf8
-	 * @return string
+	 * @return string The text as StructureWriter writes /Alt and /E: UTF-16BE behind a byte order mark
 	 */
 	private function utf16Be($utf8)
 	{
@@ -41,9 +24,7 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A BOM-only empty /Alt is the exact content-hiding value E8 forbids.
-	 *
-	 * @return string
+	 * @return string An /Alt holding only a byte order mark, which hides the content it is on
 	 */
 	private function emptyAltLiteral()
 	{
@@ -51,11 +32,7 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-labelledby pointing at a plain text element resolves to that text.
-	 *
-	 * `<p id="cap">The caption</p><div aria-labelledby="cap">…</div>` must emit
-	 * /Alt = "The caption" (UTF-16BE) on the div's struct element — not the empty
-	 * BOM-only string that hid the div's content before the E8 fix.
+	 * aria-labelledby pointing at a paragraph gives the element the paragraph's text as its /Alt.
 	 *
 	 * @return void
 	 */
@@ -83,7 +60,7 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-describedby pointing at a plain text element resolves to /E.
+	 * aria-describedby pointing at a paragraph gives the element the paragraph's text as its /E.
 	 *
 	 * @return void
 	 */
@@ -102,8 +79,7 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An aria-labelledby whose target does not exist must warn (PDFUAauto) and
-	 * must not emit an empty /Alt.
+	 * In PDFUAauto mode an aria-labelledby naming a missing id warns and writes no empty /Alt.
 	 *
 	 * @return void
 	 */
@@ -123,7 +99,7 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An aria-labelledby whose target does not exist must THROW in strict mode.
+	 * In strict mode an aria-labelledby naming a missing id throws.
 	 *
 	 * @return void
 	 */
@@ -135,8 +111,7 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An aria-labelledby whose target resolves but carries no text must warn
-	 * (PDFUAauto) and must not emit an empty /Alt.
+	 * In PDFUAauto mode an aria-labelledby pointing at an element with no text warns and writes no empty /Alt.
 	 *
 	 * @return void
 	 */
@@ -156,8 +131,7 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An aria-labelledby whose target resolves but carries no text must THROW in
-	 * strict mode.
+	 * In strict mode an aria-labelledby pointing at an element with no text throws.
 	 *
 	 * @return void
 	 */
@@ -169,16 +143,13 @@ class AriaNameResolutionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A multi-line target resolves to its full text with words separated across
-	 * the wrap boundary (own-text runs joined by a single space).
+	 * The lines of a target that wraps are joined by a space, not run together.
 	 *
 	 * @return void
 	 */
 	public function testMultiLineTargetJoinsTextWithSpaces()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
-		// A narrow paragraph forces a wrap; the two lines must not be run together
-		// (which would produce "worldSecond" instead of "world Second").
 		$html = '<p id="cap" style="width: 30mm;">Hello world '
 			. 'Second line follows here</p>'
 			. '<div aria-labelledby="cap">Region</div>';

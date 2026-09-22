@@ -5,21 +5,17 @@ namespace Mpdf\Tag;
 use Mpdf\Ua\UaPolicy;
 
 /**
- * HTML <area> handler (HTML5 §4.8.14): a clickable region inside a <map>.
- *
- * HTML-void; no rendering happens here. The handler validates inputs, enforces
- * the strict/auto missing-alt policy (Matterhorn 28-002), and appends the area
- * to the parent <map>'s registry. Actual Link annotations and Link struct
- * elements are emitted in Mpdf::printobjectbuffer() once the host <img usemap>
- * has been laid out.
- *
- * @see ISO 32000-1:2008 §12.5.6.5 (Link annotation /Rect /A /Contents).
- * @see ISO 32000-1:2008 §14.8 Table 335 (Link struct element).
- * @see ISO 14289-1:2014 §7.18 (interactive annotation tagging).
+ * A clickable region of a <map>, recorded against the map under PDF/UA. Its link annotation is
+ * drawn once the image that uses the map has been laid out.
  */
 class Area extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		if (!$this->mpdf->PDFUA) {
@@ -28,9 +24,6 @@ class Area extends Tag
 		$registry = $this->ua->getImageMapRegistry();
 		$mapName  = $registry->getCurrentMapName();
 		if ($mapName === null) {
-			// <area> outside any open <map>. HTML5 §4.8.14 also permits <area>
-			// inside <picture>, but only the <map> case maps to a PDF link
-			// annotation.
 			$this->ua->addWarning('PDF/UA-1: <area> outside <map>; ignored.');
 			return;
 		}
@@ -41,10 +34,7 @@ class Area extends Tag
 		$alt = isset($attr['ALT']) ? $attr['ALT'] : null;
 		$target = isset($attr['TARGET']) ? $attr['TARGET'] : null;
 
-		// PDF/UA-1 — javascript:/vbscript: (and friends) hrefs have no
-		// accessible alternative (Matterhorn 17-001 + 28-002). Mirror the
-		// Tag\A::open() policy: strict throws, auto skips the area entirely
-		// (unlike <a>, <area> is HTML-void with no inner text to preserve).
+		// As for <a>, except that with nothing inside an area to keep, the whole area goes
 		if ($href !== null && $href !== '' && UaPolicy::isPolicyBlockedHref($href)) {
 			if (empty($this->mpdf->PDFUAauto)) {
 				throw new \Mpdf\MpdfException(
@@ -64,10 +54,7 @@ class Area extends Tag
 			return;
 		}
 
-		// Missing alt becomes a Matterhorn 28-002 violation once the link
-		// annotation is emitted: reject in strict mode, synthesise in auto
-		// mode. Mirrors the <img> policy (Matterhorn 13-004) and Tag\A::open
-		// for empty <a href>.
+		// A link annotation needs a text alternative (Matterhorn 28-002)
 		if ($alt === null && ($href !== null && $href !== '')) {
 			if (empty($this->mpdf->PDFUAauto)) {
 				throw new \Mpdf\MpdfException(
@@ -81,8 +68,7 @@ class Area extends Tag
 		}
 
 		if ($href === null || $href === '') {
-			// No href = no clickable region, so no annotation will be emitted
-			// and no 28-002 violation can occur. Warn but do not fail strict.
+			// No link to draw, so nothing for strict mode to object to
 			$this->ua->addWarning('PDF/UA-1: <area> without href in <map name="' . $mapName . '"> — skipped (no clickable region).');
 			return;
 		}
@@ -90,20 +76,22 @@ class Area extends Tag
 		$registry->addArea($shape, $coords, $href, $alt, $target);
 	}
 
+	/**
+	 * <area> is void, so there is nothing to close.
+	 *
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
-		// <area> is HTML-void; WriteHTML's self-closing path calls this
-		// immediately after open().
 	}
 
 	/**
-	 * Parse a coords="x1,y1,…" attribute into an ordered list of floats.
-	 *
-	 * Tolerates whitespace and/or comma separators. Non-numeric tokens are
-	 * skipped; the shape-conversion step rejects under-sized results.
+	 * The numbers of a coords attribute, split on commas or whitespace. Anything not a number is
+	 * dropped, and a shape left with too few is rejected when it is drawn.
 	 *
 	 * @param string $raw
-	 * @return array
+	 * @return float[]
 	 */
 	private function parseCoords($raw)
 	{

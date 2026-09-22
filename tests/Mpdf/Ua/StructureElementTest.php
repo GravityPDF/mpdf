@@ -5,14 +5,7 @@ namespace Mpdf\Ua;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
- * Pure unit tests for StructureElement::sanitiseIdForPdf() — the id
- * normalisation used for /ID and /Headers cross-references.
- *
- * No mPDF instantiation is required; the method under test is static.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §7.3.5 — name object production (# must be followed
- *     by exactly two hexadecimal digits)
+ * How StructureElement::sanitiseIdForPdf() turns an id into the PDF name used by /ID and /Headers
  *
  * @group pdfua
  */
@@ -20,9 +13,10 @@ class StructureElementTest extends TestCase
 {
 
 	/**
-	 * A PDF name (after the leading '/') is a sequence of unrestricted safe
-	 * bytes and #xx escapes. Anything else — a bare '#', or a '#' followed by
-	 * fewer than two hex digits — is a malformed name.
+	 * A name is safe bytes and #xx escapes only; a '#' without two hex digits after it is malformed
+	 * (ISO 32000-1 §7.3.5).
+	 *
+	 * @param string $name
 	 */
 	private function assertValidPdfName($name)
 	{
@@ -34,8 +28,11 @@ class StructureElementTest extends TestCase
 	}
 
 	/**
-	 * Yoast polyfills expose assertMatchesRegularExpression on newer PHPUnit
-	 * and assertRegExp on older; wrap so this file runs on both.
+	 * assertMatchesRegularExpression() where PHPUnit has it, assertRegExp() where it does not.
+	 *
+	 * @param string $pattern
+	 * @param string $value
+	 * @param string $message
 	 */
 	private function assertMatchesRegex($pattern, $value, $message = '')
 	{
@@ -47,8 +44,7 @@ class StructureElementTest extends TestCase
 	}
 
 	/**
-	 * Short ids that fit under the byte cap pass through untouched (bar the
-	 * A-Z fold) — no truncation, no hash suffix.
+	 * An id under the length cap is only lowercased.
 	 */
 	public function testShortIdUnchanged()
 	{
@@ -56,11 +52,7 @@ class StructureElementTest extends TestCase
 	}
 
 	/**
-	 * The E14 reproduction: 107 ASCII bytes followed by eight two-byte UTF-8
-	 * characters. Each 'é' expands to two #xx tokens (#C3#A9), pushing the
-	 * output well past the 127-byte cap. A blind substr(…, 108) cut lands
-	 * one byte into the first '#C3' token and yields a bare '#'; the fixed
-	 * token-aware cut must stop on a complete token.
+	 * An overlong id whose cut would fall inside an #xx escape is cut before that escape instead.
 	 */
 	public function testLongNonAsciiIdEndsOnCompleteToken()
 	{
@@ -68,16 +60,11 @@ class StructureElementTest extends TestCase
 		$out = StructureElement::sanitiseIdForPdf($id);
 
 		$this->assertValidPdfName($out);
-		// suffix is the #2D-joined sha1 head; the byte before it must complete
-		// a token, i.e. the name must not contain a '#' with < 2 hex digits.
 		$this->assertStringEndsWith('#2D' . substr(sha1($id), 0, 16), $out);
 	}
 
 	/**
-	 * Every alignment of the truncation offset against a #xx token boundary
-	 * must produce a valid name. Sweeping the ASCII-prefix length around the
-	 * 108-byte cut point exercises the case where the offset would otherwise
-	 * split a multibyte escape.
+	 * Wherever the cut falls against the escapes, the name stays valid and within 127 bytes.
 	 */
 	public function testTruncationNeverSplitsEscapeAtAnyAlignment()
 	{
@@ -90,8 +77,7 @@ class StructureElementTest extends TestCase
 	}
 
 	/**
-	 * A wholly non-ASCII overlong id (every byte escaped) still truncates on a
-	 * token boundary rather than mid-escape.
+	 * An overlong id made only of escaped bytes is still cut on a whole escape.
 	 */
 	public function testAllNonAsciiIdIsValidName()
 	{
@@ -103,8 +89,7 @@ class StructureElementTest extends TestCase
 	}
 
 	/**
-	 * Two distinct overlong inputs sharing a long common prefix must still map
-	 * to distinct sanitised ids — the sha1 suffix disambiguates them.
+	 * Overlong ids that differ only after the cut stay distinct through their hash suffix.
 	 */
 	public function testOverlongInputsWithSharedPrefixStayDistinct()
 	{

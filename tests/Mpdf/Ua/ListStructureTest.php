@@ -3,21 +3,7 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 list numbering structure (audit E17).
- *
- * Before this fix StructureWriter::buildAttrObject()'s /List branch only fired
- * when a struct element carried a 'ListNumbering' attribute — but no tag handler
- * ever set that key, so ordered lists never produced the
- * /A <</O /List /ListNumbering …>> attribute object PDF/UA expects for an L
- * element with an ordered marker. These tests assert that the Ol/Ul struct path
- * now sets ListNumbering from the resolved CSS list-style-type so the writer
- * branch fires.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.8.5.3.3 Table 347 — /ListNumbering values
- *     (Decimal / UpperRoman / LowerRoman / UpperAlpha / LowerAlpha /
- *      Disc / Circle / Square)
- *   - ISO 14289-1:2014 §7.6 — list structure
+ * An L element carries the /ListNumbering its marker style maps to (ISO 32000-1 Table 347).
  *
  * @group pdfua
  */
@@ -25,8 +11,7 @@ class ListStructureTest extends PdfUaTestCase
 {
 
 	/**
-	 * <ol type="a"> maps list-style-type lower-latin onto /ListNumbering
-	 * /LowerAlpha, and the L element carries the /A <</O /List …>> object.
+	 * An <ol type="a"> is numbered /LowerAlpha in the /List attribute object of its L.
 	 */
 	public function testOrderedListTypeAlphaCarriesLowerAlphaNumbering()
 	{
@@ -58,7 +43,7 @@ class ListStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An unstyled <ol> defaults to decimal → /ListNumbering /Decimal.
+	 * An unstyled <ol> is numbered /Decimal.
 	 */
 	public function testDefaultOrderedListCarriesDecimalNumbering()
 	{
@@ -72,7 +57,7 @@ class ListStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Upper-roman and CSS-styled markers resolve to their Table 347 names.
+	 * Markers set by the type attribute or by CSS both map to their /ListNumbering names.
 	 */
 	public function testUpperRomanAndCssStyledMarkers()
 	{
@@ -88,7 +73,7 @@ class ListStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A default <ul> uses the disc glyph → /ListNumbering /Disc.
+	 * An unstyled <ul> is numbered /Disc.
 	 */
 	public function testUnorderedListCarriesDiscNumbering()
 	{
@@ -102,8 +87,8 @@ class ListStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A marker style outside Table 347 (lower-greek) carries no /ListNumbering,
-	 * so no /List attribute object is emitted for that list.
+	 * A marker with no /ListNumbering name, such as lower-greek, leaves the list without a
+	 * /List attribute object.
 	 */
 	public function testUnsupportedMarkerEmitsNoNumbering()
 	{
@@ -120,10 +105,11 @@ class ListStructureTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Depth-first search for the first struct element of a given type.
+	 * The first struct element of a type below a node, depth first.
 	 *
-	 * @param  \Mpdf\Ua\StructureElement $node
-	 * @param  string                    $type
+	 * @param \Mpdf\Ua\StructureElement $node
+	 * @param string                    $type
+	 *
 	 * @return \Mpdf\Ua\StructureElement|null
 	 */
 	private function findFirstOfType($node, $type)

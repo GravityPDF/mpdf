@@ -6,15 +6,10 @@ use Mpdf\Ua\PdfUaTestCase;
 use Mpdf\Ua\Import\FpdiStructMerger;
 
 /**
- * Regression for UA1 audit finding M-5 — the imported-string sanity gauntlet
- * (FpdiStructMerger::stringPassesSanityGauntlet) used a strict `> 0.5`
- * suspicious-codepoint threshold, so a string that is exactly half suspicious
- * (the classic 50 legible + 50 U+FFFD ciphertext-through-PDFDocEncoding shape)
- * slipped through. The threshold is now `>= 0.5`.
+ * A string read from an imported PDF is dropped when half or more of its characters
+ * are replacement or control characters, the shape of ciphertext decoded as text.
  *
- * The gauntlet is a forward-compatibility guard: FPDI refuses encrypted source
- * PDFs today, so a still-encrypted /Alt cannot reach it yet — but a future FPDI
- * release that lifts that refusal must not leak ciphertext into the host tree.
+ * FPDI refuses encrypted sources today, so this guards against a release that does not.
  *
  * @group pdfua
  * @group security
@@ -28,6 +23,9 @@ class SanityGauntletThresholdTest extends PdfUaTestCase
 	/** @var \ReflectionMethod */
 	private $gauntlet;
 
+	/**
+	 * Opens the merger's private string check for the tests to call.
+	 */
 	protected function set_up()
 	{
 		parent::set_up();
@@ -36,14 +34,18 @@ class SanityGauntletThresholdTest extends PdfUaTestCase
 		$this->gauntlet->setAccessible(true);
 	}
 
+	/**
+	 * @param string $decoded A UTF-8 string as read from an imported PDF
+	 *
+	 * @return bool Whether the merger would keep it
+	 */
 	private function passes($decoded)
 	{
 		return $this->gauntlet->invoke($this->merger, $decoded);
 	}
 
 	/**
-	 * 50 legible ASCII + 50 U+FFFD = exactly 50% suspicious codepoints. Under the
-	 * old `> 0.5` test this passed; it must now fail.
+	 * A string that is exactly half U+FFFD is dropped.
 	 */
 	public function testExactlyHalfSuspiciousIsRejected()
 	{

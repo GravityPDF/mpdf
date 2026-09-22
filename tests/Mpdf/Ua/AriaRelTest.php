@@ -3,34 +3,18 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 tests for resolved ARIA relationship attributes (audit E18).
+ * The ARIA attributes that relate one element to another.
  *
- * aria-controls / aria-owns / aria-flowto / aria-activedescendant were resolved
- * to their target struct element and stored under attributes['_aria_*'], but no
- * writer path emitted them — so the relationships were silently dropped and the
- * internal marker key never left the attribute map. E18 splits the four:
- *
- *   1. aria-owns / aria-controls map to a PDF /Ref entry (ISO 32000-2 §14.7) —
- *      an array of references to the struct elements this element refers to;
- *   2. aria-flowto / aria-activedescendant have no static PDF/UA-1
- *      representation and are surfaced as a visible warning (both modes) rather
- *      than store-and-dropped.
- *
- * In every case NO `_aria_*` marker key may appear in the emitted PDF.
- *
- * Spec references:
- *   - ISO 32000-2:2020 §14.7 — struct element /Ref relationship entries
- *   - WAI-ARIA 1.1 §6.6 — ID reference attributes
+ * aria-owns and aria-controls become a /Ref to the elements they name. aria-flowto and
+ * aria-activedescendant have no static PDF form, so they are reported as a warning.
  *
  * @group pdfua
- * @see PdfUaTestCase  base class supplying makeMpdf() and getOutput()
  */
 class AriaRelTest extends PdfUaTestCase
 {
 
 	/**
-	 * aria-controls resolving to an existing id emits a /Ref cross-reference and
-	 * leaves no `_aria_*` marker key in the output.
+	 * aria-controls naming an element writes a /Ref to it and no internal _aria key.
 	 *
 	 * @return void
 	 */
@@ -61,7 +45,7 @@ class AriaRelTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-owns resolving to an existing id emits a /Ref cross-reference.
+	 * aria-owns naming an element writes a /Ref to it.
 	 *
 	 * @return void
 	 */
@@ -81,7 +65,7 @@ class AriaRelTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-controls also emits /Ref in strict mode without throwing.
+	 * aria-controls writes its /Ref in strict mode too, without throwing.
 	 *
 	 * @return void
 	 */
@@ -97,9 +81,7 @@ class AriaRelTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-flowto has no static PDF/UA-1 representation: resolveAll() emits
-	 * nothing and records a visible warning (PDFUAauto) — never store-and-drop,
-	 * and no `_aria_*` marker key leaks into the output.
+	 * aria-flowto is reported as a warning and leaves no internal _aria key in the document.
 	 *
 	 * @return void
 	 */
@@ -125,9 +107,7 @@ class AriaRelTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-activedescendant likewise has no static PDF/UA-1 representation and is
-	 * surfaced as a warning even in strict mode (it is not a conformance
-	 * violation, so it must not throw).
+	 * aria-activedescendant is only a warning in strict mode, since dropping it breaks no rule of PDF/UA-1.
 	 *
 	 * @return void
 	 */

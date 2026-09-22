@@ -13,9 +13,7 @@ class Img extends Tag
 	{
 		$this->mpdf->ignorefollowingspaces = false;
 
-		// null = attribute absent (unknown intent); '' = author-declared decorative.
-		// Routed to printobjectbuffer() as /Alt on the Figure StructElem
-		// (ISO 32000-1:2008 §14.7.2 Table 322).
+		// null when there is no alt at all, which is not the same as alt="" marking the image decorative
 		$alt = isset($attr['ALT']) ? $attr['ALT'] : null;
 
 		$objattr = [];
@@ -438,23 +436,15 @@ class Img extends Tag
 
 			$objattr['pdfua_alt'] = $alt;
 
-			// HTML5 §4.8.13 — usemap value is "#" + map name; the leading "#"
-			// is optional. Resolved against the ImageMapRegistry at render time
-			// to emit one Link annotation + Link struct element per <area>.
+			// The areas of the map are linked when the image is drawn
 			if (isset($attr['USEMAP']) && $attr['USEMAP'] !== '') {
 				$um = ltrim($attr['USEMAP'], '#');
 				$objattr['pdfua_image_map_name'] = strtolower($um);
 			}
 
-			// Carry id/aria-* through serialised $objattr because the Figure
-			// struct element is created at render time (printobjectbuffer),
-			// not at parse time.
+			// The Figure is made when the image is drawn, so what names it travels with it: an image
+			// without alt but with an aria-label or title is named by that
 			$objattr += AriaIdResolver::toObjattr($attr);
-			// PDF/UA-1 audit E11 — the direct-string accessible-name sources
-			// (WAI-ARIA name computation: aria-label, then the host-language
-			// title). Carried through so printobjectbuffer() can name an <img>
-			// that has no alt="" but does carry an accessible name, rather than
-			// aborting (strict) or hiding it as a decorative Artifact (auto).
 			$objattr['pdfua_aria_label'] = isset($attr['ARIA-LABEL']) ? $attr['ARIA-LABEL'] : null;
 			$objattr['pdfua_title'] = isset($attr['TITLE']) ? $attr['TITLE'] : null;
 

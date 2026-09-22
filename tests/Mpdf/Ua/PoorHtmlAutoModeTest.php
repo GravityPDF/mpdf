@@ -3,38 +3,24 @@
 namespace Mpdf\Ua;
 
 /**
- * Poor-HTML auto-mode regression surface.
+ * Badly formed HTML rendered under PDFUAauto must not throw, and must pass veraPDF's ua1 profile
+ * when VERAPDF_BIN points at the validator.
  *
- * Each test feeds adversarial HTML through PDFUAauto, asserts the PDF
- * generates without throwing, then runs the result through veraPDF (when
- * VERAPDF_BIN is available) to confirm ua1 isCompliant=true.
- *
- * Skip behaviour:
- *   - Each test always asserts that the PDF generation does not throw.
- *   - veraPDF assertions are skipped silently when VERAPDF_BIN is unset
- *     or not executable, so the whole class still runs in CI environments
- *     that lack the validator (e.g. Windows + PHP 5.6 matrix legs).
- *
- * Group note: NOT @group verapdf — that group is excluded by phpunit.xml
- * by default, so the no-throw probe must run in @group pdfua. veraPDF
- * validation when available is a bonus assertion gated on the env var.
+ * Unlike VeraPdfConformanceTest nothing is skipped without veraPDF, so the no-throw half always runs.
  *
  * @group pdfua
  */
 class PoorHtmlAutoModeTest extends PdfUaTestCase
 {
 	/**
-	 * Path to the veraPDF CLI binary, resolved once per test in set_up().
-	 * Empty when unavailable; assertions auto-skip in that case.
+	 * The veraPDF binary, or an empty string when there is none to run
 	 *
 	 * @var string
 	 */
 	private $veraPdfBin = '';
 
 	/**
-	 * Resolve veraPDF binary path; remember it for assertVeraPdfCompliant().
-	 * Unlike VeraPdfConformanceTest, missing veraPDF does NOT skip the test
-	 * — the PDF generation half of the assertion still runs.
+	 * Picks up the veraPDF binary from VERAPDF_BIN.
 	 *
 	 * @return void
 	 */
@@ -47,18 +33,27 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * A table with no header cells renders conformantly.
+	 */
 	public function testTableWithoutThPasses()
 	{
 		$html = '<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>';
 		$this->generateAndCheck($html, 'table without <th>');
 	}
 
+	/**
+	 * A link with no text renders conformantly.
+	 */
 	public function testEmptyAnchorPasses()
 	{
 		$html = '<p>Before <a href="https://example.com"></a> after.</p>';
 		$this->generateAndCheck($html, 'empty <a href>');
 	}
 
+	/**
+	 * A link whose only content is a decorative image renders conformantly.
+	 */
 	public function testImageOnlyLinkPasses()
 	{
 		$png = $this->onePixelPng();
@@ -66,18 +61,27 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 		$this->generateAndCheck($html, 'image-only link with decorative inner image');
 	}
 
+	/**
+	 * More than one h1 renders conformantly.
+	 */
 	public function testMultipleH1Passes()
 	{
 		$html = '<h1>First top heading</h1><p>Body.</p><h1>Second top heading</h1><p>More body.</p>';
 		$this->generateAndCheck($html, 'multiple <h1> siblings');
 	}
 
+	/**
+	 * A heading that skips a level renders conformantly.
+	 */
 	public function testHeadingLevelSkipPasses()
 	{
 		$html = '<h1>One</h1><h3>Skipped two</h3><p>Body.</p>';
 		$this->generateAndCheck($html, '<h1> followed directly by <h3>');
 	}
 
+	/**
+	 * An image with no alt attribute renders conformantly.
+	 */
 	public function testImageWithNoAltPasses()
 	{
 		$png = $this->onePixelPng();
@@ -85,43 +89,63 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 		$this->generateAndCheck($html, '<img> with no alt');
 	}
 
+	/**
+	 * A span with role="button" renders conformantly.
+	 */
 	public function testDivButtonRolePasses()
 	{
 		$html = '<p><span role="button">Click me</span></p><p>Following body.</p>';
 		$this->generateAndCheck($html, '<span role="button">');
 	}
 
+	/**
+	 * A list faked with bullet characters and line breaks renders conformantly.
+	 */
 	public function testFakeListAsParagraphPasses()
 	{
 		$html = '<p>• item one<br>• item two<br>• item three</p>';
 		$this->generateAndCheck($html, 'bullet glyphs as fake list');
 	}
 
+	/**
+	 * Text with no block element around it renders conformantly.
+	 */
 	public function testBodyLevelTextWithoutWrapperPasses()
 	{
-		// Plain text outside any block element — mPDF must wrap it implicitly.
 		$html = 'Loose body text with no surrounding block element.';
 		$this->generateAndCheck($html, 'unwrapped body-level text');
 	}
 
+	/**
+	 * A span inside a heading renders conformantly.
+	 */
 	public function testHeadingInsideHeadingPasses()
 	{
 		$html = '<h1>Outer<span>middle</span>tail</h1><p>Body.</p>';
 		$this->generateAndCheck($html, 'inline span inside <h1>');
 	}
 
+	/**
+	 * An anchor with no href renders conformantly.
+	 */
 	public function testAnchorWithoutHrefPasses()
 	{
 		$html = '<p>Before <a>orphan anchor</a> after.</p>';
 		$this->generateAndCheck($html, '<a> without href');
 	}
 
+	/**
+	 * A form with a text input renders conformantly.
+	 */
 	public function testFormWithInputPasses()
 	{
 		$html = '<form><input type="text" name="q" value=""></form><p>Following body.</p>';
 		$this->generateAndCheck($html, '<form><input> (HIGH-5 path)');
 	}
 
+	/**
+	 * Header ids with characters a PDF name must escape render conformantly.
+	 */
 	public function testTableWithIllegalIdCharsPasses()
 	{
 		$html = '<table>'
@@ -131,6 +155,9 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 		$this->generateAndCheck($html, 'table with #-escaped TH ids');
 	}
 
+	/**
+	 * Tables nested three deep render conformantly.
+	 */
 	public function testNestedTablesPasses()
 	{
 		$html = '<table><tr><td>'
@@ -141,43 +168,56 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 		$this->generateAndCheck($html, 'nested tables 3 levels deep');
 	}
 
+	/**
+	 * A div with role="doc-title" renders conformantly.
+	 */
 	public function testDocTitleRolePasses()
 	{
 		$html = '<div role="doc-title">My Document Title</div><p>Body.</p>';
 		$this->generateAndCheck($html, '<div role="doc-title">');
 	}
 
+	/**
+	 * A span in another language mid-paragraph renders conformantly.
+	 */
 	public function testInlineLangSpanPasses()
 	{
-		// Mid-paragraph foreign-language run must propagate /Lang to a Span
-		// struct elem (Matterhorn 11-001/11-002).
 		$html = '<p>The French word <span lang="fr">bonjour</span> means hello.</p>';
 		$this->generateAndCheck($html, 'inline <span lang> mid-paragraph');
 	}
 
+	/**
+	 * A span with aria-label renders conformantly.
+	 */
 	public function testInlineAriaLabelSpanPasses()
 	{
 		$html = '<p>An icon <span aria-label="warning sign">!</span> after text.</p>';
 		$this->generateAndCheck($html, 'inline <span aria-label>');
 	}
 
+	/**
+	 * A fieldset and its legend leave no content untagged.
+	 */
 	public function testFieldsetLegendPasses()
 	{
-		// fieldset/legend/form must not produce untagged real content
-		// (ISO 14289-1 §7.1).
 		$html = '<fieldset><legend>Personal info</legend><p>Name: paragraph text.</p></fieldset>';
 		$this->generateAndCheck($html, '<fieldset><legend>');
 	}
 
+	/**
+	 * A form used as a block container renders conformantly.
+	 */
 	public function testFormContainerPasses()
 	{
 		$html = '<form><p>Email: paragraph text inside form.</p></form>';
 		$this->generateAndCheck($html, '<form> as block container');
 	}
 
+	/**
+	 * A header cell with scope="rowgroup" renders conformantly.
+	 */
 	public function testThScopeRowGroupPasses()
 	{
-		// scope=rowgroup must map to /Scope=Row, not Both.
 		$html = '<table>'
 			. '<tr><th scope="rowgroup">Group A</th><th scope="col">Col 1</th></tr>'
 			. '<tr><td>data</td><td>data</td></tr>'
@@ -185,21 +225,20 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 		$this->generateAndCheck($html, '<th scope="rowgroup">');
 	}
 
+	/**
+	 * A javascript: link loses its URI in auto mode but keeps its text.
+	 */
 	public function testJavascriptHrefStrippedInAutoMode()
 	{
-		// javascript:/vbscript: hrefs are stripped in auto mode. Visible text
-		// "here" still renders; the URI is gone.
 		$html = '<p>Click <a href="javascript:alert(1)">here</a> to fail.</p>';
 		$this->generateAndCheck($html, '<a href="javascript:..."> in auto mode');
 	}
 
+	/**
+	 * An image map declared after its image, with a rect, a circle and a poly area, renders conformantly.
+	 */
 	public function testImageMapPasses()
 	{
-		// <img usemap> + <map> + <area> path. The map appears AFTER the host
-		// image in source order (HTML5 §4.8.13) which is the harder of the
-		// two source-order cases for the deferred-emit path. With one rect,
-		// one circle, and one poly area we exercise all three shape-conversion
-		// branches in imageMapShapeToRect().
 		$png = $this->onePixelPng();
 		$html = '<p><img src="' . $png . '" alt="Floor plan" usemap="#rooms" width="200" height="200"></p>'
 			. '<map name="rooms">'
@@ -210,64 +249,76 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 		$this->generateAndCheck($html, '<img usemap> + <map> + <area> with rect, circle, and poly');
 	}
 
+	/**
+	 * An area with no alt, which auto mode fills in from its href, renders conformantly.
+	 */
 	public function testImageMapMissingAltSynthesisesPasses()
 	{
-		// Auto mode must synthesise alt from href when <area alt> is absent.
-		// The probe asserts that the auto-corrected path doesn't throw and
-		// the resulting PDF is veraPDF-compliant.
 		$png = $this->onePixelPng();
 		$html = '<p><img src="' . $png . '" alt="Plan" usemap="#m" width="100" height="100"></p>'
 			. '<map name="m"><area shape="rect" coords="0,0,50,50" href="https://example.com/x"></map>';
 		$this->generateAndCheck($html, '<area> missing alt (auto-synthesised)');
 	}
 
+	/**
+	 * Ruby annotation with rb, rt and rp renders conformantly.
+	 */
 	public function testRubyAnnotationPasses()
 	{
-		// ruby/rb/rt/rp tags must not crash and must produce conformant
-		// tagging via the Span fallback (HTML5 §4.5.21).
 		$html = '<p>Word <ruby><rb>kanji</rb><rp>(</rp><rt>furigana</rt><rp>)</rp></ruby> in context.</p>';
 		$this->generateAndCheck($html, '<ruby><rt> with <rp> fallbacks');
 	}
 
+	/**
+	 * Ruby inside a heading renders conformantly.
+	 */
 	public function testRubyInsideHeadingPasses()
 	{
 		$html = '<h1>Title with <ruby>kanji<rt>furigana</rt></ruby> annotation</h1><p>Body.</p>';
 		$this->generateAndCheck($html, '<ruby> inside <h1>');
 	}
 
+	/**
+	 * Ruby inside a link renders conformantly.
+	 */
 	public function testRubyInsideLinkPasses()
 	{
 		$html = '<p><a href="https://example.com">Link <ruby>kanji<rt>furigana</rt></ruby> text</a></p>';
 		$this->generateAndCheck($html, '<ruby> inside <a href>');
 	}
 
+	/**
+	 * Ruby whose base is bare text, with no rb, renders conformantly.
+	 */
 	public function testRubyWithoutRbPasses()
 	{
-		// HTML5 allows the ruby base to be bare text (no <rb>).
 		$html = '<p><ruby>kanji<rt>furigana</rt></ruby></p>';
 		$this->generateAndCheck($html, 'bare-text ruby base (no <rb>)');
 	}
 
+	/**
+	 * Ruby nested in ruby renders conformantly.
+	 */
 	public function testRubyNestedPasses()
 	{
-		// Degenerate but legal — ensure the per-tag InlineUaStruct stack
-		// handles same-name nesting without corruption.
 		$html = '<p><ruby><ruby>kanji<rt>inner</rt></ruby><rt>outer</rt></ruby></p>';
 		$this->generateAndCheck($html, 'nested <ruby><ruby></ruby></ruby>');
 	}
 
+	/**
+	 * An rtc grouping several rt renders conformantly.
+	 */
 	public function testRubyWithRtcPasses()
 	{
-		// HTML5 <rtc> groups multiple <rt> for compound bases.
 		$html = '<p><ruby>kanji<rtc><rt>semantic</rt><rt>phonetic</rt></rtc></ruby></p>';
 		$this->generateAndCheck($html, '<rtc> grouping multiple <rt>');
 	}
 
+	/**
+	 * An inline SVG takes its Figure /Alt from its own title and desc (Matterhorn 13-004).
+	 */
 	public function testInlineSvgWithTitleAndDescPasses()
 	{
-		// Inline SVG with <title>/<desc> must be tagged as a Figure with /Alt
-		// populated from the SVG's own accessibility metadata, satisfying
-		// Matterhorn 13-004 even though the synthesised <img> has no alt attribute.
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
 			 . '<title>Company logo</title>'
 			 . '<desc>A blue circle with the company initial in the centre.</desc>'
@@ -277,11 +328,10 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Common probe: feed HTML through PDFUAauto, assert no throw, then run
-	 * veraPDF when available.
+	 * Renders the HTML under PDFUAauto and checks the output with veraPDF when it is available.
 	 *
-	 * @param  string $html
-	 * @param  string $label  human-readable description for failure messages
+	 * @param string $html
+	 * @param string $label What the HTML is, for failure messages
 	 * @return void
 	 */
 	private function generateAndCheck($html, $label)
@@ -293,10 +343,7 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Tiny 1×1 transparent PNG used in image probes. Same byte string as
-	 * VeraPdfConformanceTest so producer behaviour is identical.
-	 *
-	 * @return string  data: URI
+	 * @return string A 1x1 transparent PNG as a data: URI, the same one VeraPdfConformanceTest uses
 	 */
 	private function onePixelPng()
 	{
@@ -304,18 +351,15 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 	}
 
 	/**
-	 * If VERAPDF_BIN is configured, run veraPDF on the PDF bytes and assert
-	 * isCompliant=true. Otherwise the assertion silently passes — the
-	 * PDFUAauto-doesn't-throw half of the probe still ran.
+	 * Asserts veraPDF finds the document ua1 compliant, or passes without a check when there is no veraPDF.
 	 *
-	 * @param  string $pdfBytes
-	 * @param  string $label
+	 * @param string $pdfBytes
+	 * @param string $label
 	 * @return void
 	 */
 	private function assertVeraPdfCompliant($pdfBytes, $label)
 	{
 		if ($this->veraPdfBin === '') {
-			// veraPDF not available — the no-throw assertion is the whole probe.
 			$this->assertTrue(true);
 			return;
 		}
@@ -345,13 +389,13 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Invoke veraPDF and parse the JSON report. Mirrors the implementation
-	 * in VeraPdfConformanceTest::runVeraPdf() — kept as a near-duplicate
-	 * intentionally so the poor-HTML probe is self-contained and changes
-	 * to the conformance gate cannot silently break this gate.
+	 * Runs veraPDF's ua1 profile over a file.
 	 *
-	 * @param  string $pdfPath
-	 * @return array  ['isCompliant' => bool, 'errors' => string[]]
+	 * A copy of VeraPdfConformanceTest::runVeraPdf(), kept separate so a change to that gate
+	 * cannot quietly weaken this one.
+	 *
+	 * @param string $pdfPath
+	 * @return array ['isCompliant' => bool, 'errors' => string[]]
 	 */
 	private function runVeraPdf($pdfPath)
 	{
@@ -379,12 +423,11 @@ class PoorHtmlAutoModeTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Parse the JSON report. Same schema handling as VeraPdfConformanceTest
-	 * — supports both veraPDF 1.26 (validationResult is an object) and 1.30+
-	 * (validationResult is a single-element array).
+	 * Reads veraPDF's JSON report, whose validationResult is an object up to 1.26 and a
+	 * one-element array from 1.30.
 	 *
-	 * @param  string $json
-	 * @return array
+	 * @param string $json
+	 * @return array ['isCompliant' => bool, 'errors' => string[]]
 	 */
 	private function parseVeraPdfJson($json)
 	{

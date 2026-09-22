@@ -3,49 +3,31 @@
 namespace Mpdf\Ua;
 
 /**
- * Tests for the PDF/UA-1 Tier 1 (untagged source) FPDI import path.
+ * Importing a page from a PDF with no structure tree into a PDF/UA document.
  *
- * An imported PDF page whose source carries no struct tree cannot be cloned
- * into the host structure tree (that is Tier 2). Historically FpdiTrait wrapped
- * such a page wholesale in /Artifact <</Type /Layout>> BDC … EMC — conformant
- * (Matterhorn 01-007: real content is marked as an artifact) but wholly
- * inaccessible with no signal, which the no-deferrals rule treats as a gap.
- *
- * UA1 audit E15 makes the behaviour signalled and, optionally, accessible:
- *   - auto mode  (PDFUAauto=true)  wraps as /Artifact AND records a
- *     getPdfUaWarnings() entry naming the source page;
- *   - strict mode (PDFUAauto=false) throws \Mpdf\MpdfException — the producer
- *     must supply a tagged source or an explicit /Alt;
- *   - either mode: an author-supplied /Alt via
- *     useImportedPage($id, ['alt' => …]) tags the whole page as a captioned
- *     Figure so it carries an accessible name instead of vanishing.
- *
- * The untagged source fixture is generated inline by a non-PDFUA mPDF instance
- * (no /StructTreeRoot ⇒ sourceIsTagged() returns false). An embedded TrueType
- * font is used so the imported Form XObject inherits an embedded font subset,
- * matching PDF/UA-1 §7.21.4.1.
- *
- * Spec references:
- *   - ISO 14289-1:2014 §7.1           — real content tagged or marked Artifact
- *   - ISO 14289-1:2014 §7.3           — Figure / /Alt
- *   - ISO 32000-1:2008 §14.7.4.4 T324 — MCR dict
- *   - Matterhorn Protocol 1.1 01-007  — real content not tagged or Artifact
- *   - Matterhorn Protocol 1.1 13-004  — Figure without /Alt
+ * Such a page has nothing to copy into the structure tree. It is marked as an artifact with a
+ * warning in PDFUAauto mode, refused in strict mode, and tagged as a Figure when given an /Alt.
  *
  * @group pdfua
  */
 class FpdiImportTest extends PdfUaTestCase
 {
 
-	/** @var string|null  path to an inline-generated untagged source PDF; deleted on tear_down() */
+	/** @var string|null The untagged source PDF, deleted in tear_down() */
 	private $untaggedPdf;
 
+	/**
+	 * Start with no source PDF.
+	 */
 	protected function set_up()
 	{
 		parent::set_up();
 		$this->untaggedPdf = null;
 	}
 
+	/**
+	 * Delete the source PDF a test made.
+	 */
 	protected function tear_down()
 	{
 		parent::tear_down();
@@ -56,13 +38,9 @@ class FpdiImportTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Generate an untagged source PDF on disk (no /StructTreeRoot).
+	 * Write a PDF with no structure tree, in an embedded font so the imported page passes PDF/UA's font rules.
 	 *
-	 * Built with a non-PDFUA mPDF instance so the output carries no structure
-	 * tree; an embedded TrueType font (mode='utf-8' + DejaVuSansCondensed)
-	 * keeps the imported Form XObject font-embedded.
-	 *
-	 * @return string  absolute path to the generated untagged PDF
+	 * @return string The path of the PDF
 	 */
 	private function makeUntaggedPdf()
 	{
@@ -74,9 +52,9 @@ class FpdiImportTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Auto mode: an untagged import is wrapped as /Artifact AND a warning naming
-	 * the source page is recorded (UA1 audit E15). The wrap is conformant; the
-	 * warning is what makes the content loss non-silent.
+	 * In PDFUAauto mode an untagged page is marked as an artifact and a warning names the page and file.
+	 *
+	 * @return void
 	 */
 	public function testUntaggedImportAutoModeWrapsArtifactAndWarnsNamingPage()
 	{
@@ -115,8 +93,9 @@ class FpdiImportTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Strict mode: an untagged import with no author-supplied /Alt throws
-	 * \Mpdf\MpdfException naming the source page and citing Matterhorn 01-007.
+	 * In strict mode an untagged page with no /Alt throws, naming the page and file.
+	 *
+	 * @return void
 	 */
 	public function testUntaggedImportStrictModeThrows()
 	{
@@ -139,10 +118,9 @@ class FpdiImportTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Author-supplied /Alt: useImportedPage($id, ['alt' => …]) tags the whole
-	 * imported page as a Figure struct element carrying that /Alt — a named,
-	 * accessible artifact — instead of an anonymous /Artifact. Works in strict
-	 * mode because the accessible name satisfies the requirement without a throw.
+	 * An untagged page given an 'alt' is tagged as a Figure with that /Alt, which strict mode accepts.
+	 *
+	 * @return void
 	 */
 	public function testUntaggedImportWithAuthorAltProducesNamedFigure()
 	{
@@ -154,7 +132,6 @@ class FpdiImportTest extends PdfUaTestCase
 		$pageId = $mpdf->importPage(1);
 		$mpdf->AddPage();
 
-		// Array-form call carrying the accessible name — must not throw in strict mode.
 		$mpdf->useImportedPage($pageId, ['x' => 0, 'y' => 0, 'width' => 150, 'alt' => $alt]);
 		$output = $mpdf->Output(null, 'S');
 
@@ -169,9 +146,7 @@ class FpdiImportTest extends PdfUaTestCase
 			'A named Figure must not also be wrapped as an anonymous Artifact'
 		);
 
-		// /Alt is written as a BOM-prefixed UTF-16BE PDF text string (BaseWriter::
-		// utf16BigEndianTextString): (<FEFF><UTF-16BE bytes>). Rebuild that exact
-		// token so the assertion proves the author's text reached the struct dict.
+		// As BaseWriter::utf16BigEndianTextString() writes it
 		$utf16    = "\xFE\xFF" . mb_convert_encoding($alt, 'UTF-16BE', 'UTF-8');
 		$escaped  = strtr($utf16, [')' => '\\)', '(' => '\\(', '\\' => '\\\\', chr(13) => '\r']);
 		$expected = '/Alt (' . $escaped . ')';
@@ -183,9 +158,9 @@ class FpdiImportTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Regression guard: an empty-string alt is treated as "no accessible name"
-	 * (decorative intent is not expressible for a whole imported page), so strict
-	 * mode still throws rather than emitting a nameless Figure.
+	 * A blank 'alt' counts as none, so strict mode still throws: a whole page cannot be decorative.
+	 *
+	 * @return void
 	 */
 	public function testUntaggedImportEmptyAltStillThrowsInStrictMode()
 	{

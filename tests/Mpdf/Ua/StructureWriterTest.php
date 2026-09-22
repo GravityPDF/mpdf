@@ -6,36 +6,24 @@ use Mpdf\Buffer;
 use Mpdf\Mpdf;
 
 /**
- * Unit tests for StructureWriter — focused on the ParentTree NumTree emission.
- *
- * ISO 32000-1:2008 §7.9.7 (number trees) + §14.7.4.4 (ParentTree): the /Nums
- * array maps /StructParents integers to per-page value arrays indexed by MCID.
- * Both the outer key sequence and the inner MCID index MUST survive gaps — a
- * skipped key or MCID must not shift any other entry, or content maps to the
- * wrong struct element (UA1 audit E23).
- *
- * These tests drive StructureWriter directly against a hand-built StructureTree
- * so the emitted /Nums bytes can be asserted without a full document render.
- * The private BaseWriter on the host Mpdf is reached by reflection; its
- * write() calls are routed into a fresh Buffer by leaving $mpdf->state at 0.
+ * What StructureWriter writes for a hand-built StructureTree, chiefly the ParentTree, whose
+ * /Nums entries are indexed by MCID and must not shift when a key or an MCID is missing
  *
  * @group pdfua
- * @see StructureWriter::writeParentTree() code under test
+ * @see StructureWriter::writeParentTree()
  */
 class StructureWriterTest extends PdfUaTestCase
 {
 
 	/**
-	 * Serialise a hand-built StructureTree via StructureWriter and return the
-	 * raw PDF bytes emitted into the host Mpdf's buffer.
+	 * @param StructureTree $tree
 	 *
-	 * @param  StructureTree $tree
-	 * @return string  Concatenated bytes written by writeStructTree().
+	 * @return string What writeStructTree() writes for the tree
 	 */
 	private function serialise(StructureTree $tree)
 	{
 		$mpdf = $this->makeMpdf();
-		// state 0 routes BaseWriter::write() into $mpdf->buffer (not a page).
+		// Outside a page, BaseWriter::write() writes to $mpdf->buffer
 		$mpdf->state  = 0;
 		$mpdf->buffer = new Buffer();
 
@@ -50,10 +38,9 @@ class StructureWriterTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Extract the raw contents of the ParentTree's /Nums array from PDF bytes.
+	 * @param string $pdf
 	 *
-	 * @param  string $pdf
-	 * @return string  Whitespace-normalised text between "/Nums [" and "]>>".
+	 * @return string The ParentTree's /Nums array, its whitespace collapsed
 	 */
 	private function numsBody($pdf)
 	{
@@ -62,12 +49,7 @@ class StructureWriterTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A single /StructParents key whose MCID map has a gap must emit the value
-	 * array with an explicit `null` at the missing index, so the surviving MCIDs
-	 * still land at their own positions.
-	 *
-	 * Without gap preservation the two refs would be appended positionally and
-	 * the second element would answer for MCID 1 instead of MCID 2.
+	 * A missing MCID is written as null, so the MCIDs after it keep their own positions.
 	 */
 	public function testSparseMcidGapIsPreservedWithNull()
 	{
@@ -79,8 +61,7 @@ class StructureWriterTest extends PdfUaTestCase
 		$second = $tree->getCurrent();
 		$tree->close();
 
-		// Imported MCRs carry source-PDF MCIDs verbatim (no allocator), so a key
-		// can hold a non-contiguous MCID set — here MCID 0 and MCID 2 (gap at 1).
+		// Imported content keeps the MCIDs of its source PDF, which can leave gaps
 		$tree->registerImportedMcr(0, 0, $first);
 		$tree->registerImportedMcr(0, 2, $second);
 
@@ -91,8 +72,7 @@ class StructureWriterTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Non-contiguous outer /StructParents keys must each be emitted as an
-	 * explicit "key value" pair, so a skipped key does not shift later entries.
+	 * Each /StructParents key is written with its value, so a skipped key shifts nothing after it.
 	 */
 	public function testNonContiguousStructParentsKeysResolveCorrectly()
 	{
@@ -104,7 +84,6 @@ class StructureWriterTest extends PdfUaTestCase
 		$b = $tree->getCurrent();
 		$tree->close();
 
-		// Keys 3 and 7 with a wide gap — e.g. an imported page reserving keys 4-6.
 		$tree->registerImportedMcr(3, 0, $a);
 		$tree->registerImportedMcr(7, 0, $b);
 
@@ -117,9 +96,7 @@ class StructureWriterTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A dense, 0-based MCID map produces a tightly packed value array with no
-	 * padding — the gap-preserving builder must be byte-identical for the
-	 * common case so existing conformant output does not change.
+	 * MCIDs without gaps are written without any null.
 	 */
 	public function testDenseMcidMapEmitsNoNullPadding()
 	{
@@ -144,12 +121,7 @@ class StructureWriterTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A /Layout /BBox carrying fractional user-space coordinates MUST be written
-	 * with '.' decimal separators regardless of the active LC_NUMERIC locale.
-	 *
-	 * Under a comma-decimal locale (de_DE / nl_NL) a bare float-to-string cast
-	 * emits "1,5" and corrupts the PDF number array; formatNumber()'s
-	 * sprintf('%.3F', …) must keep the output locale-independent (UA1 audit E24).
+	 * A /BBox is written with '.' decimals under a locale that uses a comma.
 	 */
 	public function testBBoxIsLocaleIndependent()
 	{

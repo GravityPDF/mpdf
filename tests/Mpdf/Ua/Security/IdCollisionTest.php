@@ -6,11 +6,8 @@ use Mpdf\Ua\PdfUaTestCase;
 use Mpdf\Ua\StructureElement;
 
 /**
- * Regression suite for UA1 audit finding M-2 — sanitiseIdForPdf() used a
- * 7-hex-char (28-bit) collision suffix, hitting the birthday bound at
- * ~2^14 distinct overlong IDs. The pen-tester demonstrated 5 collisions
- * in 58 050 random IDs sharing a 117-byte prefix; the fix widens the
- * suffix to 16 hex (64-bit) which moves the bound to ~2^32.
+ * An id too long for a PDF name is shortened with a 64-bit hash suffix, wide
+ * enough that distinct long ids sharing a prefix do not end up the same.
  *
  * @group pdfua
  * @group security
@@ -18,6 +15,9 @@ use Mpdf\Ua\StructureElement;
 class IdCollisionTest extends PdfUaTestCase
 {
 
+	/**
+	 * Sixty thousand distinct overlong ids sharing a prefix all shorten to distinct names.
+	 */
 	public function testWidenedSuffixAvoidsBirthdayCollisionsAt60k()
 	{
 		$prefix = str_repeat('a', 117);
@@ -26,8 +26,7 @@ class IdCollisionTest extends PdfUaTestCase
 		$N = 60000;
 
 		for ($i = 0; $i < $N; $i++) {
-			// Sufficiently random suffix so the inputs are distinct.
-			$id  = $prefix . sprintf('-%012d-%s', $i, bin2hex(random_bytes(6)));
+			$id = $prefix . sprintf('-%012d-%s', $i, bin2hex(random_bytes(6)));
 			$san = StructureElement::sanitiseIdForPdf($id);
 			if (isset($seen[$san])) {
 				$collisions++;
@@ -42,13 +41,19 @@ class IdCollisionTest extends PdfUaTestCase
 		);
 	}
 
+	/**
+	 * A long id is shortened to fit the 127-byte limit on a PDF name.
+	 */
 	public function testSanitisedIdFitsPdfNameLengthLimit()
 	{
-		$long = str_repeat('xyzABC123', 200); // 1800 bytes
+		$long = str_repeat('xyzABC123', 200);
 		$out = StructureElement::sanitiseIdForPdf($long);
 		$this->assertLessThanOrEqual(127, strlen($out));
 	}
 
+	/**
+	 * Two long ids differing only after the cut-off shorten to different names.
+	 */
 	public function testTwoPrefixSharingOverlongIdsRemainDistinct()
 	{
 		$prefix = str_repeat('z', 200);
@@ -57,10 +62,11 @@ class IdCollisionTest extends PdfUaTestCase
 		$this->assertNotSame($a, $b);
 	}
 
+	/**
+	 * Ids are lower-cased, so a TH id and a TD headers entry differing only in case still match.
+	 */
 	public function testCaseFoldingStillNormalises()
 	{
-		// Existing M-2-unrelated property: A-Z → a-z so TH ID and TD headers
-		// match byte-for-byte.
 		$this->assertSame(
 			StructureElement::sanitiseIdForPdf('My-ID'),
 			StructureElement::sanitiseIdForPdf('my-id')

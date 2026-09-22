@@ -5,12 +5,8 @@ namespace Mpdf\Ua\Security;
 use Mpdf\Ua\PdfUaTestCase;
 
 /**
- * Regression suite for UA1 audit finding H-3 — `AddCustomProperty($key, $value)`
- * concatenated `$key` raw into the /Info dict, allowing the key to smuggle
- * additional name/value entries (e.g. an attacker-controlled /Producer).
- *
- * The fix runs the key through BaseWriter::escapeName() before emission and
- * rejects empty / oversized keys at the setter.
+ * The key of a custom property is written as one escaped name, so it cannot add
+ * entries of its own to the /Info dictionary.
  *
  * @group pdfua
  * @group security
@@ -18,14 +14,15 @@ use Mpdf\Ua\PdfUaTestCase;
 class CustomPropertyInjectionTest extends PdfUaTestCase
 {
 
+	/**
+	 * A key carrying a newline, delimiters and a second name is written as a single escaped name.
+	 */
 	public function testInjectedKeyIsEscapedToSingleNameToken()
 	{
 		$mpdf = $this->makeMpdf();
-		// Attempt to inject extra /Info entries via the key.
 		$mpdf->AddCustomProperty("good\n/Producer (pwned) /Title", 'value');
 		$output = $this->getOutput($mpdf, '<p>x</p>');
 
-		// Locate the /Info dict body.
 		$startMarker = "/Producer";
 		$start = strpos($output, $startMarker);
 		$this->assertNotFalse($start, 'PDF must contain a /Producer line');
@@ -34,17 +31,16 @@ class CustomPropertyInjectionTest extends PdfUaTestCase
 		$this->assertNotFalse($end, 'PDF must contain /CreationDate after /Info entries');
 		$infoBlock = substr($output, $start, $end - $start);
 
-		// Within the /Info entries written by the customProperties loop,
-		// the dangerous bytes `\n`, `(`, `)`, `/` and space MUST appear
-		// only in #XX-escaped form on the key side.
 		$this->assertStringNotContainsString("\n/Producer (pwned)", $infoBlock);
 		$this->assertStringNotContainsString("(pwned)", $infoBlock);
-		$this->assertStringNotContainsString("/Title (FE", $infoBlock); // would be the smuggled entry
+		$this->assertStringNotContainsString("/Title (FE", $infoBlock);
 
-		// The escaped key should appear as a single token.
 		$this->assertStringContainsString('good#0A#2FProducer#20#28pwned#29#20#2FTitle', $infoBlock);
 	}
 
+	/**
+	 * An empty key is refused in a PDF/UA document.
+	 */
 	public function testEmptyKeyIsRejected()
 	{
 		$this->expectException(\Mpdf\MpdfException::class);
@@ -52,6 +48,9 @@ class CustomPropertyInjectionTest extends PdfUaTestCase
 		$mpdf->AddCustomProperty('', 'v');
 	}
 
+	/**
+	 * A key longer than 127 bytes, the limit on a PDF name, is refused in a PDF/UA document.
+	 */
 	public function testOversizedKeyIsRejected()
 	{
 		$this->expectException(\Mpdf\MpdfException::class);
@@ -60,9 +59,7 @@ class CustomPropertyInjectionTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The empty/over-127-byte key rejection is scoped to PDFUA documents (audit
-	 * E-P3a): a non-UA document keeps the pre-UA "accept any key" behaviour, so
-	 * neither an empty nor an oversized key throws there.
+	 * A document that is not PDF/UA accepts an empty or oversized key, as it always has.
 	 */
 	public function testKeyValidationIsScopedToPdfUa()
 	{
@@ -72,6 +69,9 @@ class CustomPropertyInjectionTest extends PdfUaTestCase
 		$this->assertTrue(true, 'Non-UA AddCustomProperty accepts empty/oversized keys.');
 	}
 
+	/**
+	 * A plain key is written unchanged.
+	 */
 	public function testBenignKeyPassesThrough()
 	{
 		$mpdf = $this->makeMpdf();
@@ -81,6 +81,9 @@ class CustomPropertyInjectionTest extends PdfUaTestCase
 		$this->assertStringContainsString('/Department ', $output);
 	}
 
+	/**
+	 * A control byte in a key is written as a #XX escape.
+	 */
 	public function testKeyWithControlBytesIsEscaped()
 	{
 		$mpdf = $this->makeMpdf();

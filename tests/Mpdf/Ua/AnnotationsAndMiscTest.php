@@ -3,18 +3,7 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 tests for sticky-note annotations, form widget annotations,
- * barcode Figure tagging, watermark Artifact tagging, and textcircle Span tagging.
- *
- * All tests render small HTML snippets against a PDFUA-enabled Mpdf instance
- * (compress=false so content-stream bytes are directly matchable without
- * FlateDecode decompression).
- *
- * Spec references:
- *   - ISO 14289-1:2014 §7.18 — annotation /Contents requirements
- *   - ISO 32000-1:2008 §14.7.4.4.2 Table 338 — OBJR dict
- *   - ISO 32000-1:2008 §14.8.2.2 — Artifact marking
- *   - ISO 32000-1:2008 §14.7.2 Table 322 — StructElem /K entries
+ * Tagging of sticky notes, form widgets, barcodes, watermarks and textcircle.
  *
  * @group pdfua
  */
@@ -22,12 +11,8 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 {
 
 	/**
-	 * A sticky-note annotation produces /S /Annot in the struct tree.
-	 *
-	 * ISO 14289-1:2014 §7.18.1 (Matterhorn 02-001) — Text and FileAttachment
-	 * annotations must be nested within an Annot struct element. The previous
-	 * implementation used Note, which is the footnote tag and triggers a
-	 * §7.9 / Matterhorn 09-006 failure (Note tag must have /ID).
+	 * A sticky note sits in an Annot struct element (ISO 14289-1 §7.18.1); Note is for footnotes
+	 * and would need an /ID.
 	 */
 	public function testAnnotationProducesAnnotStructElement()
 	{
@@ -40,11 +25,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A sticky-note annotation has /StructParent (singular) on its dict.
-	 *
-	 * /StructParent (singular integer) on the annotation object associates it
-	 * with the Note struct element via the ParentTree — distinct from the
-	 * /StructParents (plural) on page dicts.
+	 * A sticky note carries the /StructParent that finds its struct element in the ParentTree.
 	 */
 	public function testAnnotationHasStructParentKey()
 	{
@@ -57,10 +38,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A sticky-note annotation has /F 28 in PDFUA mode.
-	 *
-	 * ISO 14289-1:2014 §7.18 — annotations must have /F bit 3 (Print) and
-	 * bit 2 (NoZoom) and bit 1 (NoRotate) set, collectively /F 28.
+	 * A sticky note is flagged /F 28: Print, NoZoom and NoRotate.
 	 */
 	public function testAnnotationHasFlagF28()
 	{
@@ -73,10 +51,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The Annot struct element has an OBJR kid pointing at the annotation object.
-	 *
-	 * /Type /OBJR in the /K array of the Annot struct element is how the struct
-	 * tree references the annotation object — not an MCID-based content item.
+	 * A sticky note's Annot struct element points at the annotation with an OBJR.
 	 */
 	public function testAnnotationAnnotStructElementHasObjr()
 	{
@@ -89,18 +64,13 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A file-attachment annotation also produces an Annot struct element.
-	 *
-	 * ISO 14289-1:2014 §7.18 — all annotation subtypes (except hidden, outside
-	 * CropBox, or Popup) must be in the structure tree. /FileAttachment is not in
-	 * the exempt list; when allowAnnotationFiles=true the annotation is a real
-	 * PDF object and must carry /StructParent and appear in the struct tree.
+	 * A file attachment annotation is tagged Annot like a sticky note, since only hidden, Popup
+	 * and off-page annotations may stay out of the structure tree (ISO 14289-1 §7.18.1).
 	 */
 	public function testFileAttachmentAnnotationProducesAnnotStructElement()
 	{
 		$mpdf = $this->makeMpdf(['allowAnnotationFiles' => true]);
 		$mpdf->WriteHTML('<p>See attached</p>');
-		// Use the API directly — the HTML tag is a thin wrapper around this call.
 		$mpdf->Annotation(
 			'Attached file',
 			0,
@@ -120,10 +90,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A barcode produces /S /Figure in the struct tree.
-	 *
-	 * Barcodes encode meaningful data so they are tagged as Figure with Alt text,
-	 * not as Artifact or decorative content.
+	 * A barcode carries data, so it is tagged Figure rather than drawn as an artifact.
 	 */
 	public function testBarcodeProducesFigureStructElement()
 	{
@@ -136,11 +103,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A barcode's Figure struct element carries /Alt.
-	 *
-	 * The Alt text is "Barcode: <code>" when no aria-label is present.
-	 * The value is emitted as a UTF-16BE PDF string so we check for the
-	 * /Alt key rather than the raw ASCII digits of the code.
+	 * Without an aria-label, a barcode's /Alt is "Barcode: <code>".
 	 */
 	public function testBarcodeAltTextContainsCode()
 	{
@@ -150,15 +113,12 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 			'<barcode code="9780954224608" type="EAN13"/>'
 		);
 		$this->assertStringContainsString('/Alt', $output);
-		// "Barcode: 9780954224608" in UTF-16BE — spot-check the "Barcode" label bytes.
-		// UTF-16BE for 'B' is 0x0042, for 'a' is 0x0061, etc.
+		// "Barcode" in UTF-16BE
 		$this->assertStringContainsString("\x00B\x00a\x00r\x00c\x00o\x00d\x00e", $output);
 	}
 
 	/**
-	 * A barcode emits /Figure BDC … EMC in the page content stream.
-	 *
-	 * The BDC/EMC pair must wrap the entire bar + text rendering block.
+	 * A barcode is drawn inside a balanced Figure BDC/EMC.
 	 */
 	public function testBarcodeBdcEmcWrapsRender()
 	{
@@ -173,12 +133,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A barcode inside a multi-column layout must still be tagged as a Figure.
-	 *
-	 * The guard used to suppress all graphical-object tagging while $ColActive was
-	 * set, leaving barcodes/images in columns as untagged real content (veraPDF
-	 * clause 7.1 test 3). The column buffer replays each object's BDC…EMC pair
-	 * intact, so the tag survives — assert /S /Figure appears and brackets balance.
+	 * A barcode in columns is still tagged Figure: the column buffer replays its BDC/EMC intact.
 	 */
 	public function testBarcodeInsideColumnsProducesFigure()
 	{
@@ -196,12 +151,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A text watermark is tagged as an Artifact with /Type /Background.
-	 *
-	 * Watermarks are decorative repeating elements; they must be outside the
-	 * logical structure and tagged with /Artifact so AT can ignore them.
-	 * Background is the correct Artifact /Type per ISO 32000-1 §14.8.2.2
-	 * Table 329 for decorative overlays.
+	 * A text watermark is a Background artifact.
 	 */
 	public function testWatermarkTextIsArtifact()
 	{
@@ -215,8 +165,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An image watermark (in front, watermarkImgBehind=false) is tagged as Artifact
-	 * with /Type /Background per ISO 32000-1 §14.8.2.2 Table 329.
+	 * An image watermark drawn in front of the page content is a Background artifact.
 	 */
 	public function testWatermarkImageFrontIsArtifact()
 	{
@@ -231,11 +180,8 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An image watermark (behind the page, watermarkImgBehind=true) is tagged as
-	 * Artifact with /Type /Background per ISO 32000-1 §14.8.2.2 Table 329.
-	 *
-	 * The behind-watermark path injects content before the ___BACKGROUND___PATTERNS
-	 * marker via preg_replace; BDC/EMC must be part of the injected string.
+	 * An image watermark drawn behind the page content, which is spliced in at the background
+	 * marker, is a Background artifact.
 	 */
 	public function testWatermarkImageBehindIsArtifact()
 	{
@@ -250,10 +196,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A text input form field produces /S /Form in the struct tree.
-	 *
-	 * Requires useActiveForms=true (the default is false; without it mPDF
-	 * renders form fields as non-interactive placeholder text).
+	 * An active text input is tagged Form.
 	 */
 	public function testTextInputProducesFormStructElement()
 	{
@@ -266,10 +209,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A text input form field widget dict has /StructParent (singular).
-	 *
-	 * /StructParent (singular) on the widget annotation object associates it
-	 * with the Form struct element via the ParentTree.
+	 * A text input's widget carries the /StructParent that finds its Form element in the ParentTree.
 	 */
 	public function testTextInputHasStructParentKey()
 	{
@@ -282,10 +222,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A text input form field's Form struct element has an OBJR kid.
-	 *
-	 * The widget annotation is referenced from the Form struct element via
-	 * an OBJR (/Type /OBJR) dict — the same mechanism as sticky-note Notes.
+	 * A text input's Form struct element points at its widget with an OBJR.
 	 */
 	public function testTextInputFormStructElementHasObjr()
 	{
@@ -298,11 +235,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Multiple widget annotations each produce their own /S /Form struct element.
-	 *
-	 * ISO 14289-1:2014 §7.18.4 — each individual widget annotation must be
-	 * associated with its own Form struct element. Two text inputs in a form
-	 * must therefore produce at least two /S /Form struct elements.
+	 * Each widget has a Form struct element of its own (ISO 14289-1 §7.18.4).
 	 */
 	public function testMultipleWidgetsProduceMultipleFormStructElements()
 	{
@@ -322,12 +255,9 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Each radio button kid widget in a group gets its own /S /Form struct element.
+	 * Each radio button in a group has a Form struct element of its own.
 	 *
-	 * ISO 14289-1:2014 §7.18.4 — each individual radio kid widget annotation
-	 * must be associated with a Form struct element. In PDFUA mode, ZapfDingbats
-	 * is suppressed (it is a non-embeddable core font) and appearance streams are
-	 * drawn with paths, so radio buttons render without an exception.
+	 * Their appearances are drawn with paths, since ZapfDingbats is a core font and cannot be embedded.
 	 */
 	public function testRadioGroupKidsProduceFormStructElements()
 	{
@@ -347,10 +277,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A textcircle element produces /S /Span in the struct tree.
-	 *
-	 * Circular text is real rendered text; it must be tagged as Span
-	 * (not Figure or Artifact) so assistive technology can read it.
+	 * Text drawn round a circle is real text and is tagged Span.
 	 */
 	public function testTextCircleProducesSpanStructElement()
 	{
@@ -363,12 +290,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A textcircle element carries /ActualText on its Span struct element.
-	 *
-	 * The ActualText value is the concatenation of top-text, divider, and
-	 * bottom-text so that copy-paste and AT read-out produce the full string.
-	 * The value is stored as a UTF-16BE PDF string; we check for the /ActualText
-	 * key rather than the raw text bytes.
+	 * A textcircle's Span carries /ActualText, the top text, divider and bottom text read in order.
 	 */
 	public function testTextCircleHasActualText()
 	{
@@ -381,12 +303,8 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A widget annotation for a form field must carry /TU (tooltip / user name).
-	 *
-	 * /TU provides a human-readable alternative to /T (partial field name) so
-	 * that assistive technology can announce the field's purpose to the user.
-	 * ISO 14289-1:2014 §7.18 — all widget annotations must have /TU.
-	 * Matterhorn Protocol 1.1 condition 11-002 — /TU missing from widget dict.
+	 * A field's widget carries its title as /TU, the name assistive technology announces in
+	 * place of the field name /T.
 	 *
 	 * @group pdfua
 	 */
@@ -397,15 +315,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 			$mpdf,
 			'<form method="post"><input type="text" name="email" title="Email address"/></form>'
 		);
-		// /TU must appear in the annotation dict with the field's title value.
 		$this->assertStringContainsString('/TU', $output);
-		// The title value is written as a UTF-16BE PDF string with BOM (0xFEFF).
-		// utf16BigEndianTextString() prepends the BOM then encodes each character as
-		// two bytes big-endian: "Email address" → FEFF 0045 006D 0061 0069 006C ...
-		// We spot-check the BOM + first word "Email" in raw binary to confirm the
-		// value was encoded correctly (not written as plain ASCII).
-		// Pattern: /TU <whitespace> ( <BOM><E><m><a><i><l> — matching Example in
-		// testLangAttributeProducesLangOnStructElement which uses \xfe\xff\x00f\x00r.
 		$this->assertStringContainsString(
 			"/TU (\xfe\xff\x00E\x00m\x00a\x00i\x00l",
 			$output,
@@ -414,14 +324,7 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The /StructParent integer on an annotation dict must resolve through the
-	 * ParentTree to a struct element whose /S is /Note.
-	 *
-	 * This test verifies the full bidirectional round-trip:
-	 *   annotation dict /StructParent N → ParentTree key N → struct elem ref → /S /Note
-	 *
-	 * ISO 32000-1:2008 §14.7.4.4 — /StructParent (singular) on annotation dicts.
-	 * ISO 32000-1:2008 §7.9.7 — NumTree format for the ParentTree.
+	 * A sticky note's /StructParent key leads through the ParentTree to an Annot struct element.
 	 *
 	 * @group pdfua
 	 */
@@ -433,27 +336,17 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 			'<p>Text<annotation content="Note text" title="Author"/></p>'
 		);
 
-		// Step 1: find /StructParent N on the annotation dict.
 		$found = preg_match('/\/StructParent (\d+)/', $output, $spMatch);
 		$this->assertSame(1, $found, '/StructParent must appear on the annotation dict');
 		$spIndex = (int) $spMatch[1];
 
-		// Step 2: find the ParentTree /Nums array and look up index $spIndex.
-		// The NumTree leaf for annotation entries is: index REF (single ref, no array wrapper).
-		// Pattern: key followed by "N 0 R" (not wrapped in []).
-		// Note: the /Nums array contains both page-level entries (`N [REFS]` with
-		// nested brackets) and annotation-level entries (`N M 0 R`). A naive
-		// `\[([^\]]+)\]` would stop at the first nested `]`. The closing of the
-		// outer /Nums array is `]>>` (followed by /Limits or end-of-dict), so
-		// match up to that exact terminator.
+		// Pages map to an array of refs and annotations to a single ref, so /Nums holds nested
+		// brackets and only `]>>` closes it
 		$numsFound = preg_match('/\/Nums \[(.*?)\]\s*>>/s', $output, $numsMatch);
 		$this->assertSame(1, $numsFound, '/Nums array must exist in the ParentTree');
 		$numsContent = $numsMatch[1];
 
-		// Find the value for our specific index in the NumTree.
-		// Annotation entries: "N  M 0 R" (single ref); page entries: "N [...]".
-		// Anchor on a leading whitespace/newline to avoid matching inside a
-		// page-level array element with the same trailing digit.
+		// Anchored on whitespace so a ref inside a page's array cannot match
 		$entryPattern = '/(^|\s)' . $spIndex . '\s+(\d+)\s+0\s+R\b/m';
 		$entryFound = preg_match($entryPattern, $numsContent, $entryMatch);
 		$this->assertSame(
@@ -461,14 +354,8 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 			$entryFound,
 			'ParentTree must have a single-ref entry at index ' . $spIndex . ' for the annotation'
 		);
-		// $entryMatch[1] is the leading whitespace/anchor; $entryMatch[2] is the
-		// struct element object number captured by the second `(\d+)` group.
 		$structElemObjNum = (int) $entryMatch[2];
 
-		// Step 3: find the struct element object and confirm /S /Annot.
-		// ISO 14289-1 §7.18.1 (Matterhorn 02-001) — sticky-note annotations are
-		// nested in an Annot struct element (Note is the footnote tag and triggers
-		// §7.9 / Matterhorn 09-006 because the Note tag requires /ID).
 		$objPattern = '/' . $structElemObjNum . '\s+0\s+obj\s*<<([^>]+(?:>[^>]+)*?)>>/';
 		$objFound = preg_match($objPattern, $output, $objMatch);
 		$this->assertSame(
@@ -484,9 +371,9 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Count BDC, BMC, and EMC operators; assert they balance.
+	 * Asserts every BDC and BMC in the output has an EMC.
 	 *
-	 * @param  string $output  raw PDF bytes
+	 * @param string $output Raw PDF bytes
 	 * @return void
 	 */
 	private function assertBdcEmcBalanced($output)

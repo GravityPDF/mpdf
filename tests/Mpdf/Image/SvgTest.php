@@ -92,10 +92,7 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * extractAccessibleMetadata() is exercised directly so the tests stay
-	 * focused on the SimpleXML extractor and avoid the rest of the SVG path
-	 * walker (which the existing ImageSVG-based tests already cover with
-	 * richer fixtures).
+	 * The title that is a direct child of the root is read.
 	 */
 	public function testAccessibleMetadataExtractsTopLevelTitle()
 	{
@@ -109,6 +106,9 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertNull($meta['desc']);
 	}
 
+	/**
+	 * The desc that is a direct child of the root is read.
+	 */
 	public function testAccessibleMetadataExtractsTopLevelDesc()
 	{
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
@@ -121,6 +121,9 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('Long description body.', $meta['desc']);
 	}
 
+	/**
+	 * A title and a desc are both read.
+	 */
 	public function testAccessibleMetadataExtractsBoth()
 	{
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
@@ -134,6 +137,9 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('Blue circle.', $meta['desc']);
 	}
 
+	/**
+	 * A title inside a group labels the group, not the image, and is not read.
+	 */
 	public function testAccessibleMetadataIgnoresNestedTitle()
 	{
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
@@ -147,10 +153,11 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertNull($meta['desc']);
 	}
 
+	/**
+	 * An SVG that is not well formed gives neither, without a warning.
+	 */
 	public function testAccessibleMetadataMalformedSvgReturnsNulls()
 	{
-		// Unclosed <title> — SimpleXML must fail and the extractor must
-		// return [null, null] without raising warnings or throwing.
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
 			 . '<title>Unclosed'
 			 . '<circle cx="10" cy="10" r="8" fill="blue"/>'
@@ -161,6 +168,9 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertNull($meta['desc']);
 	}
 
+	/**
+	 * Entities and CDATA sections are decoded.
+	 */
 	public function testAccessibleMetadataDecodesEntitiesAndCdata()
 	{
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
@@ -174,9 +184,11 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame("Caf\xC3\xA9", $meta['desc']);
 	}
 
+	/**
+	 * An empty title counts as no title.
+	 */
 	public function testAccessibleMetadataEmptyTitleTreatedAsNull()
 	{
-		// <title></title> with empty body — author signal is "no metadata".
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
 			 . '<title></title>'
 			 . '<circle cx="10" cy="10" r="8" fill="blue"/>'
@@ -187,10 +199,11 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertNull($meta['desc']);
 	}
 
+	/**
+	 * Runs of whitespace in a title collapse to one space and the ends are trimmed.
+	 */
 	public function testAccessibleMetadataTitleWhitespaceCollapsed()
 	{
-		// Multi-line title from pretty-printed SVG: whitespace runs collapse to
-		// a single space; outer whitespace trimmed.
 		$svg = "<svg width=\"20\" height=\"20\" xmlns=\"http://www.w3.org/2000/svg\">\n"
 			 . "  <title>\n    Pretty\n    Printed\n  </title>\n"
 			 . "  <circle cx=\"10\" cy=\"10\" r=\"8\" fill=\"blue\"/>\n"
@@ -200,9 +213,11 @@ class SvgTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('Pretty Printed', $meta['title']);
 	}
 
+	/**
+	 * Input that is not SVG gives neither.
+	 */
 	public function testAccessibleMetadataNoSvgRootReturnsNulls()
 	{
-		// Empty / non-SVG input is a no-op — must not throw.
 		$meta = $this->svg->extractAccessibleMetadata('not an svg');
 		$this->assertNull($meta['title']);
 		$this->assertNull($meta['desc']);

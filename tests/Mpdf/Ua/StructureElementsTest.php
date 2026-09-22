@@ -3,19 +3,7 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 structure-element tagging tests.
- *
- * Tests that block-level HTML tags produce the correct PDF struct element types
- * in the output, and that BDC/EMC operators are balanced. These tests render
- * small HTML snippets and assert on the raw PDF bytes.
- *
- * All tests use PdfUaTestCase::makeMpdf() which sets PDFUA=true, mode='en-GB',
- * and compress=false so content-stream bytes are directly matchable.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.7.2 Table 322 — struct element dictionary entries
- *   - ISO 32000-1:2008 §14.8 Table 333/334/335 — standard struct types
- *   - ISO 14289-1:2014 §7 — document-level PDF/UA requirements
+ * The struct element types HTML elements are tagged with, and the attributes carried on them.
  *
  * @group pdfua
  */
@@ -23,7 +11,7 @@ class StructureElementsTest extends PdfUaTestCase
 {
 
 	/**
-	 * <h1> produces /S /H1 struct element in the PDF output.
+	 * h1 is tagged H1.
 	 */
 	public function testH1ProducesH1StructElement()
 	{
@@ -32,10 +20,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <h2> produces /S /H2 struct element (preceded by <h1> for a valid heading sequence).
-	 *
-	 * ISO 14289-1:2014 §7.4.2 rule 1 — the first heading must be H1.
-	 * A stand-alone <h2> without a prior H1 would be a conformance violation.
+	 * h2 is tagged H2; an h1 comes first because a document may not open on a lower heading.
 	 */
 	public function testH2ProducesH2StructElement()
 	{
@@ -44,7 +29,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <p> produces /S /P struct element.
+	 * p is tagged P.
 	 */
 	public function testParagraphProducesPStructElement()
 	{
@@ -53,10 +38,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <p> produces /P BDC in the page content stream.
-	 *
-	 * BlockTag::open() pushes a struct element and sets pdfua_struct_open,
-	 * which causes finishFlowingBlock() to emit the BDC operator.
+	 * A paragraph's text is marked /P with an MCID in the content stream.
 	 */
 	public function testParagraphProducesPBdc()
 	{
@@ -67,7 +49,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <blockquote> produces /S /BlockQuote struct element (not /BLOCKQUOTE).
+	 * blockquote is tagged with the standard type's spelling, BlockQuote.
 	 */
 	public function testBlockquoteProducesBlockQuoteStructType()
 	{
@@ -77,23 +59,19 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * HTML lang attribute on a block element produces /Lang in the struct element dict.
+	 * A lang attribute on a block sets /Lang on its struct element.
 	 */
 	public function testLangAttributeProducesLangOnStructElement()
 	{
 		$output = $this->getOutput($this->makeMpdf(), '<p lang="fr">Bonjour</p>');
-		// StructureWriter writes /Lang values as UTF-16BE PDF strings with the BOM (\xfe\xff).
-		// The catalog carries /Lang (en-GB) from makeMpdf()'s mode argument. Asserting the
-		// UTF-16BE bytes for "fr" proves the P struct element (not just the catalog) carries
-		// the French language tag. Note: asserting bare 'fr' is insufficient — it also matches
-		// 'beginbfrange'/'endbfrange' in the font CMap section of the PDF output.
+		// Matched in UTF-16BE: a bare "fr" is also found in the beginbfrange of a font's CMap
 		$this->assertStringContainsString('/Lang', $output);
-		$utf16BeFr = "\xfe\xff\x00f\x00r"; // UTF-16BE for "fr"
+		$utf16BeFr = "\xfe\xff\x00f\x00r";
 		$this->assertStringContainsString($utf16BeFr, $output);
 	}
 
 	/**
-	 * <ul><li> produces /S /L and /S /LI struct elements.
+	 * ul and li are tagged L and LI.
 	 */
 	public function testUnorderedListProducesLStructElement()
 	{
@@ -104,12 +82,8 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A <dl> nested inside a <dd> must get its own implicit LI, independent of
-	 * the outer list. Each <dl> level owns its implicit-LI frame, so both the
-	 * outer and inner definition pairs produce an LI — two /S /LI total. Before
-	 * the per-<dl> frame fix the inner <dt> closed the inner L instead of a
-	 * previous implicit LI, dropping the inner LI and nesting Lbl/LBody directly
-	 * under L (veraPDF clause 7.2 test 18: "LBody should be contained in LI").
+	 * A dl inside a dd wraps its own term and definition in an LI, as the outer list does, since
+	 * an LBody must sit in an LI.
 	 */
 	public function testNestedDefinitionListCreatesImplicitLiPerLevel()
 	{
@@ -124,8 +98,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <abbr title="HyperText Markup Language">HTML</abbr> produces Span struct element
-	 * with /E expansion text.
+	 * abbr is tagged Span with its title as the /E expansion.
 	 */
 	public function testAbbrTitleProducesExpansionAttribute()
 	{
@@ -139,9 +112,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Inline lang= on a <span> mid-paragraph produces a Span struct element
-	 * carrying /Lang. Matterhorn 11-001/11-002 require every text fragment
-	 * whose language differs from the document default to carry a /Lang entry.
+	 * A span with its own lang mid-paragraph is tagged Span with that /Lang (Matterhorn 11-001).
 	 */
 	public function testInlineSpanLangAttributeProducesLangOnStructElement()
 	{
@@ -149,17 +120,14 @@ class StructureElementsTest extends PdfUaTestCase
 			$this->makeMpdf(),
 			'<p>Plain English. <span lang="fr">bonjour</span> tail.</p>'
 		);
-		// The Span around "bonjour" must carry /Lang.
 		$this->assertStringContainsString('/S /Span', $output);
-		$utf16BeFr = "\xfe\xff\x00f\x00r"; // UTF-16BE for "fr"
+		$utf16BeFr = "\xfe\xff\x00f\x00r";
 		$this->assertStringContainsString($utf16BeFr, $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * Inline aria-label= on a <span> emits /Alt on a Span struct element.
-	 * ISO 32000-1 Table 322 — /Alt provides alternative description for screen
-	 * readers when visible glyphs convey meaning that's not in the text stream.
+	 * A span with aria-label is tagged Span with the label as /Alt.
 	 */
 	public function testInlineSpanAriaLabelProducesAltOnStructElement()
 	{
@@ -169,15 +137,13 @@ class StructureElementsTest extends PdfUaTestCase
 		);
 		$this->assertStringContainsString('/S /Span', $output);
 		$this->assertStringContainsString('/Alt', $output);
-		// /Alt value is encoded as UTF-16BE PDF string.
 		$utf16BeAlt = "\xfe\xff\x00w\x00a\x00r\x00n\x00i\x00n\x00g";
 		$this->assertStringContainsString($utf16BeAlt, $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * <fieldset> emits /S /Sect — closes the "untagged real content" hole
-	 * for HTML form-grouping elements.
+	 * fieldset is tagged Sect, so its content is not left untagged.
 	 */
 	public function testFieldsetProducesSectStructElement()
 	{
@@ -190,8 +156,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <form> emits /S /Div as a logical container — the inline 'Form' struct
-	 * type is reserved for individual widgets emitted by Mpdf\Form per-widget.
+	 * form is tagged Div, the Form type being for each widget.
 	 */
 	public function testFormContainerProducesDivStructElement()
 	{
@@ -204,9 +169,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <th scope="rowgroup"> maps to /Scope=Row, not /Scope=Both.
-	 * ISO 32000-1 Table 349 only permits Row|Column|Both; HTML rowgroup's
-	 * axis is rows, so PDF /Scope=Row is the spec-correct mapping.
+	 * scope="rowgroup" becomes /Scope /Row, since PDF has no row group scope.
 	 */
 	public function testThScopeRowgroupMapsToScopeRow()
 	{
@@ -223,8 +186,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <th scope="colgroup"> maps to /Scope=Column (the default for TH cells)
-	 * rather than /Scope=Both — colgroup's axis is columns.
+	 * scope="colgroup" becomes /Scope /Column, not Both.
 	 */
 	public function testThScopeColgroupMapsToScopeColumn()
 	{
@@ -236,16 +198,12 @@ class StructureElementsTest extends PdfUaTestCase
 			. '</table>'
 		);
 		$this->assertStringContainsString('/Scope /Column', $output);
-		// /Scope /Both must NOT appear from the colgroup TH (HTML5 has no scope=both).
 		$this->assertStringNotContainsString('/Scope /Both', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * role="heading" aria-level="2" on a div produces /S /H2 struct element.
-	 *
-	 * A valid H1 is placed first so the document satisfies §7.4.2 rule 1
-	 * (first heading must be H1) in strict mode.
+	 * A div with role="heading" and aria-level="2" is tagged H2.
 	 */
 	public function testRoleHeadingOverridesTag()
 	{
@@ -258,7 +216,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * role="presentation" produces Artifact wrap instead of struct element.
+	 * role="presentation" draws the content as an artifact.
 	 */
 	public function testRolePresentationProducesArtifact()
 	{
@@ -266,19 +224,13 @@ class StructureElementsTest extends PdfUaTestCase
 			$this->makeMpdf(),
 			'<div role="presentation">Decorative</div>'
 		);
-		// Content should be Artifact-tagged, not have a P or Div struct element
 		$this->assertStringContainsString('BMC', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * A floated <div> carrying real text is tagged in reading order with its
-	 * normal struct type (Div), NOT demoted to Artifact.
-	 *
-	 * A CSS float is a visual-positioning hint, not an accessibility one — the
-	 * floated content is real content that assistive technology must reach
-	 * (Matterhorn 01-001). Before the E10 fix the whole subtree was marked
-	 * /Artifact and excluded from the structure tree, silently dropping it.
+	 * A floated div is tagged Div like any other: floating says where content goes, not that it
+	 * is decorative (Matterhorn 01-001).
 	 */
 	public function testFloatedDivIsTaggedNotArtifact()
 	{
@@ -286,16 +238,13 @@ class StructureElementsTest extends PdfUaTestCase
 			$this->makeMpdf(),
 			'<div style="float:left; width:54%;">Real floated content.</div>'
 		);
-		// The floated block must produce a real Div struct element in reading order.
 		$this->assertStringContainsString('/S /Div', $output);
-		// Its content must be tagged (BDC), not wrapped as an artifact (BMC only).
 		$this->assertStringContainsString('/Div <</MCID', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * A floated block with role="presentation" is still the explicit opt-out —
-	 * it is Artifact-wrapped (no Div struct element), unlike a plain float.
+	 * A floated div with role="presentation" is still drawn as an artifact.
 	 */
 	public function testFloatedDivWithRolePresentationStaysArtifact()
 	{
@@ -308,7 +257,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-hidden="true" on a block element produces Artifact wrap.
+	 * aria-hidden="true" on a block draws its content as an artifact.
 	 */
 	public function testAriaHiddenProducesArtifactBmc()
 	{
@@ -321,7 +270,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <a href> produces /S /Link struct element.
+	 * A link is tagged Link.
 	 */
 	public function testLinkProducesLinkStructElement()
 	{
@@ -334,7 +283,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * OverWrite() throws MpdfException in PDF/UA mode.
+	 * OverWrite() is refused in PDF/UA mode.
 	 */
 	public function testOverWriteThrowsInPdfuaMode()
 	{
@@ -344,11 +293,8 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * SetProtection() with no permissions force-adds 'extract' in PDFUAauto mode.
-	 * The resulting /P value in the encryption dict must have bit 10 set.
-	 *
-	 * In PDFUAauto=true mode the violation is auto-corrected (extract added silently).
-	 * Strict mode (PDFUAauto=false) throws — tested in DirectPhpAndAriaTest.
+	 * SetProtection() with no permissions gets 'extract' added in auto mode, so bit 10 of the
+	 * encryption dictionary's /P is set.
 	 */
 	public function testEncryptionForcesExtractPermission()
 	{
@@ -356,28 +302,21 @@ class StructureElementsTest extends PdfUaTestCase
 		$mpdf->SetProtection([], '', 'owner_pass');
 		$mpdf->WriteHTML('<p>Encrypted</p>');
 		$output = $mpdf->Output(null, 'S');
-		// The /P value encodes permissions; bit 10 (value 512) for extract must be set.
-		// Find /P value in the /Encrypt dict (/Filter /Standard section) and check
-		// the integer contains bit 10. The regex skips /P N 0 R references by
-		// requiring the value is NOT followed by a space+digit+space+'R' (object ref).
 		preg_match('/\/Filter \/Standard.*?\/P (-?\d+)/s', $output, $m);
 		if (!empty($m[1])) {
 			$pValue = (int) $m[1];
-			// Bit 10 (0-indexed = bit 9) is value 512.
-			// In PDF, /P is typically a large unsigned 32-bit integer on 64-bit PHP.
-			// Cast to unsigned 32-bit before testing the bit.
+			// /P may be written negative; bit 10 is 0x200
 			$pValue32 = $pValue & 0xFFFFFFFF;
 			$this->assertTrue(
 				($pValue32 & 0x200) !== 0,
 				'Extract permission bit (bit 10) must be set. /P = ' . $pValue
 			);
 		}
-		// Also check the XMP metadata is readable (pdfuaid:part must be plaintext)
 		$this->assertStringContainsString('pdfuaid:part', $output);
 	}
 
 	/**
-	 * BDC+BMC count equals EMC count when a paragraph is inside a layer.
+	 * Marked content stays balanced round a paragraph drawn in a layer.
 	 */
 	public function testBdcEmcBalanceWithOcgLayers()
 	{
@@ -392,13 +331,12 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Image() called with non-empty $alt produces Figure struct element and BDC in stream.
+	 * Image() given alt text tags the image Figure.
 	 */
 	public function testImageMethodWithAlt()
 	{
 		$mpdf = $this->makeMpdf();
 		$mpdf->AddPage();
-		// Use the bundled test fixture image
 		$imgFile = __DIR__ . '/../../data/img/bayeux2.jpg';
 		if (!file_exists($imgFile)) {
 			$this->markTestSkipped('Test image not available');
@@ -411,7 +349,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Image() with empty $alt produces Artifact BMC (no Figure struct element).
+	 * Image() given empty alt text draws the image as an artifact.
 	 */
 	public function testImageMethodWithEmptyAlt()
 	{
@@ -428,7 +366,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Image() without $alt adds a warning and emits Artifact BMC.
+	 * Image() given no alt text draws the image as an artifact and warns in auto mode.
 	 */
 	public function testImageMethodWithoutAlt()
 	{
@@ -447,7 +385,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * AutosizeText() produces Span struct element and BDC/EMC in page stream.
+	 * AutosizeText() tags its text as a Span.
 	 */
 	public function testAutosizeTextProducesSpanStructElement()
 	{
@@ -461,7 +399,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <abbr title=""> produces Span struct element with /E expansion text.
+	 * abbr is tagged Span with its title as the /E expansion.
 	 */
 	public function testAbbrProducesSpanWithExpansionText()
 	{
@@ -470,15 +408,12 @@ class StructureElementsTest extends PdfUaTestCase
 			'<p><abbr title="World Wide Web Consortium">W3C</abbr></p>'
 		);
 		$this->assertStringContainsString('/S /Span', $output);
-		// /E should appear in the struct element dict
 		$this->assertStringContainsString('/E', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * <ruby><rb>kanji</rb><rt>furigana</rt></ruby> emits the standard ruby
-	 * struct types — Ruby container with RB (base) and RT (annotation) children
-	 * (ISO 32000-1 §14.8.5.6 Table 337) — rather than anonymous Spans.
+	 * ruby, rb and rt are tagged with the standard Ruby, RB and RT types rather than as Spans.
 	 */
 	public function testRubyAnnotationProducesRubyStructElements()
 	{
@@ -493,8 +428,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * <rp> fallback parentheses are tagged as RP struct elements beneath the
-	 * Ruby container (ISO 32000-1 §14.8.5.6 Table 337).
+	 * rp fallback parentheses are tagged RP inside the Ruby.
 	 */
 	public function testRubyParenthesisProducesRpStructElement()
 	{
@@ -508,8 +442,7 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Text watermark produces Background Artifact BDC/EMC in the page content
-	 * stream (ISO 32000-1 §14.8.2.2 Table 329).
+	 * A text watermark is marked as a Background artifact in the content stream.
 	 */
 	public function testWatermarkTextIsArtifact()
 	{
@@ -523,10 +456,9 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Assert that the number of BDC + BMC operators equals the number of EMC operators
-	 * in the raw PDF output.
+	 * Asserts every BDC and BMC in the output has an EMC.
 	 *
-	 * @param string $output  raw PDF bytes
+	 * @param string $output Raw PDF bytes
 	 */
 	private function assertBdcEmcBalanced($output)
 	{

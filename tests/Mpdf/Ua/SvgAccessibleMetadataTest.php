@@ -3,14 +3,7 @@
 namespace Mpdf\Ua;
 
 /**
- * SVG <title>/<desc> are promoted to the Figure /Alt key when the host
- * <img> has no alt attribute (W3C SVG 1.1 §5.4 names; PDF/UA-1 §7.3
- * Figure structure element with /Alt).
- *
- * Each test feeds an inline-<svg> or external-.svg HTML fragment through
- * Mpdf with PDFUA enabled, then asserts the resulting PDF carries the
- * expected /S /Figure + /Alt (FEFF…UTF-16BE bytes…) — or, for the
- * decorative cases, /Artifact BMC and no /S /Figure.
+ * The top-level <title> and <desc> of an SVG give its Figure the /Alt an <img> alt did not
  *
  * @group pdfua
  */
@@ -18,7 +11,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 {
 
 	/**
-	 * SVG with only <title> → /Figure /Alt = svgTitle.
+	 * An SVG with only a <title> takes it as its /Alt.
 	 */
 	public function testSvgWithTitleOnlyPopulatesFigureAlt()
 	{
@@ -32,7 +25,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * SVG with only <desc> → /Figure /Alt = svgDesc.
+	 * An SVG with only a <desc> takes it as its /Alt.
 	 */
 	public function testSvgWithDescOnlyPopulatesFigureAlt()
 	{
@@ -46,7 +39,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * SVG with both <title> and <desc> → /Figure /Alt = title + "\n\n" + desc.
+	 * An SVG with both takes its title and description, a blank line between them, as its /Alt.
 	 */
 	public function testSvgWithTitleAndDescConcatenatesIntoAlt()
 	{
@@ -59,7 +52,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * SVG with neither title nor desc, auto mode → /Artifact + warning.
+	 * With PDFUAauto, an SVG with neither is drawn as an artifact.
 	 */
 	public function testSvgWithNeitherFallsBackToArtifactInAutoMode()
 	{
@@ -71,7 +64,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * SVG with neither title nor desc, strict mode → throws.
+	 * Without PDFUAauto, an SVG with neither throws for its missing alt.
 	 */
 	public function testSvgWithNeitherThrowsInStrictMode()
 	{
@@ -84,10 +77,9 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Explicit non-empty alt on <img> wins over SVG <title>/<desc>.
+	 * The alt of the <img> is preferred to the SVG's own title.
 	 *
-	 * Uses an external SVG file because the inline-<svg> rewrite path in
-	 * Mpdf::WriteHTML() never attaches alt to the synthesised <img>.
+	 * An SVG file is used as an inline <svg> becomes an <img> without an alt.
 	 */
 	public function testHtmlAltOverridesSvgTitle()
 	{
@@ -101,12 +93,11 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 
 		$this->assertStringContainsString('/S /Figure', $pdf);
 		$this->assertContainsUtf16BeAlt($pdf, 'HtmlOverride');
-		// Confirm the SVG-internal title did NOT bleed into /Alt.
 		$this->assertNotContainsUtf16BeSubstring($pdf, 'SvgTitle');
 	}
 
 	/**
-	 * Explicit alt="" on <img> still forces /Artifact even when the SVG has metadata.
+	 * An empty alt on the <img> makes the SVG an artifact even when it has a title.
 	 */
 	public function testHtmlEmptyAltStillForcesArtifact()
 	{
@@ -123,10 +114,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Inline <svg> with no surrounding <img alt> uses the SVG's own <title>.
-	 *
-	 * Inline SVG is rewritten to <img src="…tempSVG…"/> with no alt attribute,
-	 * so the SVG-internal <title> is the only available accessible-name source.
+	 * An inline <svg> takes its /Alt from its own <title>, the only name it can have.
 	 */
 	public function testInlineSvgUsesItsOwnTitle()
 	{
@@ -139,34 +127,27 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A nested <title> inside a child <g> must NOT be hoisted as the
-	 * SVG-document accessible name (W3C SVG 1.1 §5.4).
+	 * An SVG without a top-level <title> or <desc> is drawn as an artifact.
+	 *
+	 * That a nested <title> is not taken is pinned in SvgTest, as a nested <title> here would be
+	 * read as the document title.
 	 */
 	public function testNestedTitleInGroupIsIgnored()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
-		// Top-level has no <title>; only the nested <g><title> exists.
-		// (Plain text outside any <title>/<desc> so mPDF's ReadMetaTags
-		// HTML-title sniffer cannot mistake nested SVG markup for a doc title.)
 		$svg = '<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg">'
 			 . '<g>'
 			 . '<circle cx="10" cy="10" r="8" fill="blue"/>'
 			 . '</g>'
 			 . '</svg>';
-		// Add a nested element with a label that is NOT a <title> child of <svg> —
-		// the extractor's job is to skip non-direct-child <title>/<desc>. We
-		// assert via the unit-level test (testAccessibleMetadataIgnoresNestedTitle)
-		// that the parser correctly returns null for nested-only metadata; here we
-		// assert the Artifact fallback fires when there is no top-level metadata.
 		$pdf = $this->getOutput($mpdf, '<p>' . $svg . '</p>');
 
-		// No accessible metadata at the top level — auto-mode falls back to Artifact.
 		$this->assertStringContainsString('/Artifact BMC', $pdf);
 		$this->assertStringNotContainsString('/S /Figure', $pdf);
 	}
 
 	/**
-	 * CDATA inside <title> is extracted as plain text.
+	 * A <title> in CDATA is read as plain text.
 	 */
 	public function testTitleWithCdataIsExtractedCorrectly()
 	{
@@ -182,11 +163,9 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Numeric character entities (&#233;) are decoded by LIBXML_NOENT.
+	 * A numeric character reference in a <title> is decoded.
 	 *
-	 * SimpleXML does not auto-decode named HTML entities like &eacute; without
-	 * a DTD, but numeric entities like &#233; are part of XML 1.0 and ARE
-	 * decoded — that's the case worth asserting on a best-effort basis.
+	 * Named HTML entities are not, as XML has no DTD for them here.
 	 */
 	public function testTitleWithNumericEntityIsDecoded()
 	{
@@ -198,13 +177,11 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 		$pdf = $this->getOutput($mpdf, '<p>' . $svg . '</p>');
 
 		$this->assertStringContainsString('/S /Figure', $pdf);
-		// "Café" — the é is U+00E9 = 0x00E9 in UTF-16BE.
 		$this->assertContainsUtf16BeAlt($pdf, "Caf\xC3\xA9");
 	}
 
 	/**
-	 * Strict mode must NOT throw when the SVG carries <title> (the SVG
-	 * supplies the accessible name even though the host <img> lacks alt).
+	 * Without PDFUAauto, an SVG with a <title> needs no alt.
 	 */
 	public function testStrictModeDoesNotThrowWhenSvgHasTitle()
 	{
@@ -217,7 +194,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Strict mode still throws when there is neither HTML alt nor SVG metadata.
+	 * Without PDFUAauto, an SVG with no alt, title or description throws.
 	 */
 	public function testStrictModeStillThrowsWhenSvgHasNeitherAndNoHtmlAlt()
 	{
@@ -230,11 +207,12 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Build a minimal inline-SVG string with optional <title>/<desc>.
+	 * An inline SVG of one circle.
 	 *
-	 * @param  string|null $title  Top-level <title> text, or null to omit.
-	 * @param  string|null $desc   Top-level <desc> text, or null to omit.
-	 * @return string  Inline <svg>…</svg> markup.
+	 * @param string|null $title Its <title>, if any
+	 * @param string|null $desc  Its <desc>, if any
+	 *
+	 * @return string
 	 */
 	private function buildInlineSvg($title, $desc)
 	{
@@ -250,11 +228,11 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Write an SVG body (everything inside <svg>…</svg>) to a temp .svg file
-	 * and return the absolute path.
+	 * Write an SVG of one circle to a temporary file.
 	 *
-	 * @param  string $body  Inner SVG markup (title/desc/shapes).
-	 * @return string
+	 * @param string $body What goes before the circle inside <svg>
+	 *
+	 * @return string The file's path
 	 */
 	private function writeTempSvg($body)
 	{
@@ -271,13 +249,10 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Assert the PDF output contains the expected text encoded as the body of
-	 * a UTF-16BE PDF text string (FEFF BOM + 2-bytes-per-char). Used because
-	 * StructureWriter writes /Alt via utf16BigEndianTextString().
+	 * Assert the PDF holds the text as UTF-16BE, the encoding /Alt is written in.
 	 *
-	 * @param  string $pdf       Raw PDF bytes.
-	 * @param  string $expected  Expected UTF-8 text equivalent of /Alt.
-	 * @return void
+	 * @param string $pdf
+	 * @param string $expected The /Alt text in UTF-8
 	 */
 	private function assertContainsUtf16BeAlt($pdf, $expected)
 	{
@@ -290,12 +265,10 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Inverse of assertContainsUtf16BeAlt — used to confirm SVG-internal
-	 * metadata did NOT leak into /Alt when HTML alt was supposed to win.
+	 * Assert the PDF does not hold the text as UTF-16BE.
 	 *
-	 * @param  string $pdf
-	 * @param  string $needle
-	 * @return void
+	 * @param string $pdf
+	 * @param string $needle The text in UTF-8
 	 */
 	private function assertNotContainsUtf16BeSubstring($pdf, $needle)
 	{
@@ -308,21 +281,16 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Convert UTF-8 to a UTF-16BE byte string (no BOM). Mirrors the body
-	 * portion of BaseWriter::utf8ToUtf16BigEndian().
+	 * The text as UTF-16BE without a BOM, which is how it appears in a PDF text string when it
+	 * has nothing to escape.
 	 *
-	 * @param  string $text
+	 * @param string $text
+	 *
 	 * @return string
 	 */
 	private function utf8ToUtf16BeBytes($text)
 	{
-		// PHP's mb_convert_encoding produces a BOM-free UTF-16BE byte string,
-		// matching the body bytes that StructureWriter emits between the BOM
-		// and the closing ')'.
 		$bytes = mb_convert_encoding($text, 'UTF-16BE', 'UTF-8');
-		// BaseWriter::escape() escapes "(", ")", "\\". Test strings here use
-		// only ASCII letters, spaces, "&", ".", and one "é" — none of which
-		// trigger escape(), so the raw bytes appear verbatim in the PDF.
 		return $bytes;
 	}
 }

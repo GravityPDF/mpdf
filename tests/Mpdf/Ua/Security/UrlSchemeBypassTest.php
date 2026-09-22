@@ -6,22 +6,8 @@ use Mpdf\Ua\PdfUaTestCase;
 use Mpdf\Ua\UaPolicy;
 
 /**
- * Regression suite for UA1 audit finding H-1 — bypasses against the URL scheme
- * blocklist. Each case here corresponds to a working PoC under /tmp/ua1-audit/.
- *
- * The bypass classes covered:
- *   - Unicode invisible prefixes (NBSP, ZWSP, ZWJ/ZWNJ, BOM).
- *   - HTML entity-encoded scheme bytes (&Tab;, &#x6A;, &#58;).
- *   - Percent-encoded scheme bytes (%6A, %20).
- *   - Schemes outside the original `(?:javascript|vbscript)` regex
- *     (`livescript:`, `mocha:`, `vbs:`, `view-source:`).
- *   - `data:` URLs whose MIME carries active content
- *     (text/html, application/x-javascript, image/svg+xml, ...).
- *   - <area href> reaching the same policy decision (was previously not
- *     gated by UaPolicy at all).
- *
- * These complement the existing 19 happy-case assertions in
- * Mpdf\Ua\JavascriptUrlHandlingTest.
+ * A script URL disguised by invisible characters, entities, percent-encoding, case
+ * or an unusual scheme is still refused, in a link and in an image map area.
  *
  * @group pdfua
  * @group security
@@ -30,6 +16,8 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 {
 
 	/**
+	 * A disguised script URL is refused by the policy.
+	 *
 	 * @dataProvider bypassedSchemeProvider
 	 */
 	public function testBypassedSchemeIsBlocked($href)
@@ -40,10 +28,13 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		);
 	}
 
+	/**
+	 * @return array[] Script URLs, each disguised a different way
+	 */
 	public function bypassedSchemeProvider()
 	{
 		return [
-			// --- Unicode invisible prefixes ---
+			// Invisible characters before the scheme
 			'NBSP'             => ["\xC2\xA0javascript:alert(1.0)"],
 			'NBSP-vbscript'    => ["\xC2\xA0vbscript:msgbox(1)"],
 			'ZWSP'             => ["\xE2\x80\x8Bjavascript:alert(1.0)"],
@@ -53,38 +44,36 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 			'NULL'             => ["\x00javascript:alert(1.0)"],
 			'multiple-mixed'   => ["\xC2\xA0\xE2\x80\x8B \tjavascript:alert(1.0)"],
 
-			// --- HTML entity-encoded scheme bytes ---
+			// Entity-encoded scheme
 			'tab-entity'       => ['&Tab;javascript:alert(1.0)'],
 			'newline-entity'   => ['&NewLine;javascript:alert(1.0)'],
 			'first-letter-hex' => ['&#x6A;avascript:alert(1.0)'],
 			'first-letter-dec' => ['&#106;avascript:alert(1.0)'],
 			'colon-entity'     => ['javascript&#58;alert(1.0)'],
 
-			// --- Percent-encoded scheme bytes ---
+			// Percent-encoded scheme
 			'percent-letter'   => ['%6Aavascript:alert(1.0)'],
 			'percent-prefix'   => ['%20javascript:alert(1.0)'],
 
-			// --- Bytes inside the scheme name itself ---
+			// Characters inside the scheme name
 			'newline-in-scheme' => ["java\nscript:alert(1.0)"],
 			'space-in-scheme'   => ['j a v a s c r i p t :alert(1.0)'],
 			'tab-in-scheme'     => ["java\tscript:alert(1.0)"],
 			'nul-in-scheme'     => ["java\x00script:alert(1.0)"],
 
-			// --- Case folding (must survive a byte-safe A-Z→a-z fold, no
-			//     locale-dependent strtolower(); the `I` bytes below are what a
-			//     Turkish-locale strtolower() on PHP < 8 would have mangled) ---
+			// Upper and mixed case
 			'upper-scheme'     => ['JAVASCRIPT:alert(1.0)'],
 			'mixed-scheme'     => ['JaVaScRiPt:alert(1.0)'],
 			'upper-vbscript'   => ['VBSCRIPT:msgbox(1)'],
 			'upper-livescript' => ['LIVESCRIPT:alert(1.0)'],
 
-			// --- Extra schemes ---
+			// Other script schemes
 			'livescript'       => ['livescript:alert(1.0)'],
 			'mocha'            => ['mocha:alert(1.0)'],
 			'vbs'              => ['vbs:msgbox(1)'],
 			'view-source'      => ['view-source:javascript:alert(1)'],
 
-			// --- data: with active-content MIME ---
+			// data: URLs of a type that can run script
 			'data-html'        => ['data:text/html,<script>alert(1)</script>'],
 			'data-html-base64' => ['data:text/html;base64,PHNjcmlwdD4='],
 			'data-x-js'        => ['data:application/x-javascript,alert(1)'],
@@ -96,11 +85,8 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Defence-in-depth: the case fold in UaPolicy::normaliseHref() must be
-	 * byte-safe (strtr A-Z→a-z), not the locale-dependent strtolower(). Under a
-	 * Turkish locale, PHP < 8's strtolower() mapped `I` to a dotless `ı`, which
-	 * could stop `JAVASCRIPT:` matching the lowercase deny-list. Pin the locale
-	 * to tr_TR (when available) and assert the uppercase scheme is still blocked.
+	 * An upper-case scheme is still refused under a Turkish locale, where strtolower()
+	 * before PHP 8 turned I into a dotless i.
 	 */
 	public function testUppercaseSchemeBlockedUnderTurkishLocale()
 	{
@@ -118,6 +104,8 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 	}
 
 	/**
+	 * An ordinary URL is let through by the policy.
+	 *
 	 * @dataProvider permittedSchemeProvider
 	 */
 	public function testPermittedHrefIsNotBlocked($href)
@@ -128,6 +116,9 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		);
 	}
 
+	/**
+	 * @return array[] URLs that run no script
+	 */
 	public function permittedSchemeProvider()
 	{
 		return [
@@ -149,14 +140,12 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 	}
 
 	/**
-	 * End-to-end: confirm dangerous bytes never land in the PDF /URI sink for
-	 * any bypass class. Strict-mode assertion: the document must throw.
+	 * Runs $body with HTTP_HOST unset.
 	 *
-	 * HTTP_HOST is unset for the duration of these tests because mPDF's
-	 * GetFullPath() uses it to absorb leading whitespace into a basepath
-	 * (rewriting `\xC2\xA0javascript:...` to `http://host/ javascript:...`),
-	 * which would mask the bypass at parse time. The audit's threat model
-	 * targets cases where no basepath is in scope.
+	 * With a host set, GetFullPath() turns a URL with a leading invisible character into
+	 * a relative path under that host, which would hide the script URL from the policy.
+	 *
+	 * @param callable $body
 	 */
 	private function withCleanHttpHost(callable $body)
 	{
@@ -171,6 +160,9 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * A link to a script URL behind a no-break space throws in strict mode.
+	 */
 	public function testNbspPrefixThrowsInStrictMode()
 	{
 		$this->withCleanHttpHost(function () {
@@ -183,6 +175,9 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		});
 	}
 
+	/**
+	 * A link to a script URL with an entity-encoded scheme throws in strict mode.
+	 */
 	public function testEntityEncodedSchemeThrowsInStrictMode()
 	{
 		$this->withCleanHttpHost(function () {
@@ -195,6 +190,9 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		});
 	}
 
+	/**
+	 * A link to a text/html data: URL throws in strict mode.
+	 */
 	public function testDataTextHtmlThrowsInStrictMode()
 	{
 		$this->withCleanHttpHost(function () {
@@ -207,6 +205,9 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		});
 	}
 
+	/**
+	 * A link to a livescript: URL throws in strict mode.
+	 */
 	public function testLivescriptThrowsInStrictMode()
 	{
 		$this->withCleanHttpHost(function () {
@@ -216,6 +217,9 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		});
 	}
 
+	/**
+	 * A link to a script URL behind a no-break space is dropped in auto mode.
+	 */
 	public function testNbspPrefixStrippedInAutoMode()
 	{
 		$savedHost = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : null;
@@ -237,8 +241,7 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Tag/Area used to skip UaPolicy entirely. Strict mode must now throw and
-	 * auto mode must drop the area.
+	 * An image map area linking to a script URL throws in strict mode.
 	 */
 	public function testAreaJavascriptHrefThrowsInStrictMode()
 	{
@@ -250,6 +253,9 @@ class UrlSchemeBypassTest extends PdfUaTestCase
 		$this->getOutput($mpdf, $html);
 	}
 
+	/**
+	 * An image map area linking to a script URL is dropped with a warning in auto mode.
+	 */
 	public function testAreaJavascriptHrefStrippedInAutoMode()
 	{
 		$savedHost = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : null;

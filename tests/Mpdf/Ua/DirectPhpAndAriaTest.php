@@ -3,27 +3,8 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 tests for direct PHP methods, ARIA attributes, and lang propagation.
- *
- * Covers:
- *   - AutosizeText() Span struct element instrumentation
- *   - OCG (layer) BDC/EMC nesting with struct BDC/EMC balance
- *   - ARIA attribute wiring: aria-hidden, aria-labelledby, aria-describedby
- *   - HTML lang attribute propagation to struct elements
- *   - SetProtection() accessibility permission bit enforcement
- *   - XMP metadata stream Identity crypt filter when encrypted
- *
- * All tests disable content-stream compression ($mpdf->compress = false, set by
- * PdfUaTestCase::makeMpdf()) so content-stream assertions can match raw bytes
- * without decompressing FlateDecode streams.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.6   — BDC/EMC marked-content operators
- *   - ISO 32000-1:2008 §14.8   — struct element types
- *   - ISO 32000-1:2008 §14.7.2 — /Alt, /E on struct elements
- *   - ISO 32000-1:2008 §7.6.5  — Identity crypt filter
- *   - ISO 14289-1:2014 §7.1    — ARIA / lang mapping
- *   - Matterhorn 07-001         — accessibility permission bit
+ * Tagging of content drawn through the PHP API (AutosizeText, layers, Link), ARIA naming and lang
+ * attributes, and the permission and XMP rules that apply when a PDF/UA document is encrypted.
  *
  * @group pdfua
  */
@@ -31,10 +12,7 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 {
 
 	/**
-	 * AutosizeText() must produce a /Span struct element in the PDF output.
-	 *
-	 * The Span wraps the single Cell() call so AT can read the text.
-	 * ISO 32000-1:2008 §14.8 Table 333 — Span inline element.
+	 * AutosizeText() tags its text as a Span.
 	 */
 	public function testAutosizeTextProducesSpanStruct()
 	{
@@ -46,10 +24,7 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The BDC/EMC operators around AutosizeText() must be balanced.
-	 *
-	 * AutosizeText() must open exactly one BDC and close it with one EMC.
-	 * ISO 32000-1:2008 §14.6 — every BDC must have exactly one matching EMC.
+	 * The Span AutosizeText() opens in the content stream is closed again.
 	 */
 	public function testAutosizeTextSpanContainsRenderedText()
 	{
@@ -57,17 +32,12 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 		$mpdf->AddPage();
 		$mpdf->AutosizeText('Hello', 100, 'DejaVuSansCondensed', '');
 		$output = $mpdf->Output(null, 'S');
-		// /Span BDC must appear in the content stream
 		$this->assertStringContainsString('/Span <</MCID', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * A document with OCG layers must have balanced struct BDC/EMC operators.
-	 *
-	 * OCG BDC/EMC operators (e.g. /OCZ-index /ZI<id> BDC) are separate from struct
-	 * BDC/EMC; the balance check scopes only to struct-type and Artifact operators.
-	 * ISO 32000-1:2008 §14.6 — BDC/EMC nesting is valid for nested pairs.
+	 * Marked content stays balanced when a layer's own BDC/EMC is interleaved with it.
 	 */
 	public function testBdcEmcBalanceWithOcgLayers()
 	{
@@ -82,10 +52,7 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A paragraph inside an OCG layer produces a /P struct element.
-	 *
-	 * Struct tagging must work normally inside layers — OCG BDC is transparent
-	 * to the struct tree. ISO 32000-1:2008 §14.6 — nesting is valid.
+	 * A paragraph inside a layer is still tagged P.
 	 */
 	public function testLayerContainingParagraphPreservesStructure()
 	{
@@ -100,30 +67,19 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An element with aria-hidden="true" must produce /Artifact BMC (no struct element).
-	 *
-	 * aria-hidden removes the element from the accessibility tree — PDF/UA maps
-	 * this to an Artifact so screen readers skip it.
-	 * ISO 32000-1:2008 §14.8.2.2 — Artifact content sequences.
+	 * An element with aria-hidden="true" is drawn as an artifact, with no struct element.
 	 */
 	public function testAriaHiddenElementBecomesArtifact()
 	{
 		$mpdf = $this->makeMpdf();
 		$output = $this->getOutput($mpdf, '<p aria-hidden="true">Hidden text</p>');
 		$this->assertStringContainsString('/Artifact BMC', $output);
-		// Must NOT produce a /P struct element for the hidden paragraph
-		// (the only BDC allowed is the Artifact one; no /P <</MCID N>> BDC)
 		$this->assertStringNotContainsString('/P <</MCID', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * aria-labelledby pointing at an existing id must resolve without a warning.
-	 *
-	 * AriaIdResolver defers resolution to _enddoc(). When the target id exists,
-	 * resolveAll() populates /Alt on the referencing struct element and emits
-	 * no unresolved-reference warnings.
-	 * ISO 32000-1:2008 §14.7.2 Table 322 — /Alt on struct element.
+	 * aria-labelledby naming an id in the document resolves without a warning.
 	 */
 	public function testAriaLabelledbyResolvesToAlt()
 	{
@@ -132,18 +88,13 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 			. '<img src="' . __DIR__ . '/../../data/img/issue1609.png" '
 			. 'alt="placeholder" aria-labelledby="caption">';
 		$this->getOutput($mpdf, $html);
-		// No unresolved-reference warning must appear
 		$warnings = $mpdf->getPdfUaWarnings();
 		$combined = implode(' ', $warnings);
 		$this->assertStringNotContainsString('Unresolved ARIA reference', $combined);
 	}
 
 	/**
-	 * aria-describedby pointing at an existing id must resolve without a warning.
-	 *
-	 * When the target id exists, AriaIdResolver::resolveAll() populates /E
-	 * (expansion/description text) on the referencing struct element.
-	 * ISO 32000-1:2008 §14.7.2 Table 322 — /E on struct element.
+	 * aria-describedby naming an id in the document resolves without a warning.
 	 */
 	public function testAriaDescribedbyResolvesToE()
 	{
@@ -157,10 +108,7 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * aria-labelledby pointing at a non-existent id must produce an unresolved warning.
-	 *
-	 * When the target id is not found in the document, AriaIdResolver::resolveAll()
-	 * records an unresolved-reference diagnostic.
+	 * aria-labelledby naming an id the document lacks is reported, with the id.
 	 */
 	public function testUnresolvedAriaReferenceWarning()
 	{
@@ -174,15 +122,8 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An <img> with no alt but an aria-labelledby reference must open a Figure and
-	 * resolve its accessible name to /Alt — not abort (strict) or hide it (auto).
-	 *
-	 * Before audit E11 the alt-absent branch of printobjectbuffer() threw in strict
-	 * mode / demoted the image to a decorative Artifact in auto mode WITHOUT
-	 * consulting the ARIA naming attributes, so `<img aria-labelledby="figcap">`
-	 * (no alt) lost its accessible name even though one was available. The fix
-	 * derives the name through the same AriaIdResolver path the non-empty-alt branch
-	 * uses. ISO 32000-1:2008 §14.7.2 Table 322 — /Alt on the Figure struct element.
+	 * An image with no alt but an aria-labelledby is a Figure whose /Alt is the referenced text,
+	 * and strict mode does not throw for it.
 	 */
 	public function testImageNoAltWithAriaLabelledbyResolvesToFigureAlt()
 	{
@@ -190,24 +131,18 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 		$html = '<p id="figcap">Q3 revenue chart</p>'
 			. '<img src="' . __DIR__ . '/../../data/img/issue1609.png" '
 			. 'aria-labelledby="figcap">';
-		// Strict mode (PDFUAauto defaults to false): must NOT throw.
 		$output = $this->getOutput($mpdf, $html);
 
-		// The image must be tagged as a Figure (not demoted to a decorative Artifact).
 		$this->assertStringContainsString('/S /Figure', $output);
-		// The Figure's /Alt must carry the referenced caption text, UTF-16BE with BOM.
 		$utf16BeAlt = "\xfe\xff" . mb_convert_encoding('Q3 revenue chart', 'UTF-16BE', 'UTF-8');
 		$this->assertStringContainsString($utf16BeAlt, $output);
-		// No unresolved-reference warning must be recorded.
 		$combined = implode(' ', $mpdf->getPdfUaWarnings());
 		$this->assertStringNotContainsString('Unresolved ARIA reference', $combined);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * An <img> with no alt but an aria-label string must open a Figure named by that
-	 * string (WAI-ARIA name computation: aria-label supplies the accessible name
-	 * directly). Guards the direct-string half of the audit E11 fallback.
+	 * An image with no alt but an aria-label is a Figure named by that label.
 	 */
 	public function testImageNoAltWithAriaLabelResolvesToFigureAlt()
 	{
@@ -223,9 +158,7 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An <img> with neither alt nor any accessible-name source must still throw in
-	 * strict mode — the audit E11 fallback must not swallow the genuine missing-alt
-	 * violation. ISO 14289-1:2014 §7.3 / Matterhorn 13-004.
+	 * An image with no alt and nothing else to name it still throws in strict mode (Matterhorn 13-004).
 	 */
 	public function testImageNoAltNoNameStillThrowsInStrict()
 	{
@@ -238,31 +171,21 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A block element with a lang attribute must produce a /Lang entry on its struct element.
-	 *
-	 * ISO 14289-1:2014 §7.2 — language changes within a document are declared via
-	 * /Lang on struct elements. ISO 32000-1:2008 §14.7.2 Table 322 — /Lang key.
+	 * A lang attribute on a block sets /Lang on its struct element.
 	 */
 	public function testLangAttributePropagatesToStructElement()
 	{
 		$mpdf = $this->makeMpdf();
 		$output = $this->getOutput($mpdf, '<p lang="fr">Bonjour le monde</p>');
-		// The struct element dict for the <p lang="fr"> paragraph must carry a /Lang key
-		// whose value encodes "fr". StructureWriter writes /Lang values as UTF-16BE PDF
-		// strings with the BOM (\xfe\xff). The catalog carries /Lang (en-GB) from
-		// makeMpdf()'s mode argument — asserting the UTF-16BE bytes for "fr" proves the
-		// struct element (not just the catalog) carries the French language tag.
-		$utf16BeFr = "\xfe\xff\x00f\x00r"; // UTF-16BE encoding of the two-character string "fr"
+		// The catalog's /Lang is en-GB, so "fr" can only be the paragraph's own /Lang
+		$utf16BeFr = "\xfe\xff\x00f\x00r";
 		$this->assertStringContainsString($utf16BeFr, $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * SetProtection() without 'extract' must throw in strict mode (PDFUAauto=false).
-	 *
-	 * Matterhorn 07-001 — the accessibility permission bit (bit 10, 'extract') must
-	 * not be cleared. In strict mode the violation is unrecoverable and an exception
-	 * is thrown immediately.
+	 * SetProtection() without 'extract' throws in strict mode, since assistive technology needs
+	 * that permission (Matterhorn 07-001).
 	 */
 	public function testProtectionWithoutAccessibilityBitThrowsInStrict()
 	{
@@ -273,58 +196,36 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * SetProtection() without 'extract' must warn and force-add the bit in auto mode.
-	 *
-	 * In PDFUAauto=true mode, the violation is corrected silently (by force-adding
-	 * 'extract') and a diagnostic warning is recorded so the caller can inspect it.
-	 * Matterhorn 07-001 — the accessibility permission bit must not be cleared.
+	 * SetProtection() without 'extract' adds it back in auto mode and warns.
 	 */
 	public function testProtectionWithoutAccessibilityBitWarnsInAuto()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
-		// Must NOT throw in auto mode
 		$mpdf->SetProtection([], '', 'owner');
 		$output = $mpdf->Output(null, 'S');
 		$warnings = $mpdf->getPdfUaWarnings();
 		$combined = implode(' ', $warnings);
 		$this->assertStringContainsString('extract', $combined);
-		// The document must still be produced (not empty)
 		$this->assertNotEmpty($output);
 	}
 
 	/**
-	 * When PDFUA and encryption are both active, the XMP stream must use the
-	 * Identity crypt filter so readers can access pdfuaid metadata without decryption.
-	 *
-	 * ISO 32000-1:2008 §14.3.2 — XMP metadata shall not be encrypted.
-	 * ISO 32000-1:2008 §7.6.5  — /Filter [/Crypt] /DecodeParms /Name /Identity
-	 *                             signals the Identity (pass-through) crypt filter.
-	 *
-	 * Note: mPDF uses RC4-only encryption, not AES. The Identity filter declares
-	 * no-op decryption; the stream bytes themselves are NOT RC4-encrypted.
+	 * In an encrypted document the XMP stream goes through the Identity crypt filter, so the
+	 * pdfuaid metadata is readable without the key (ISO 32000-1 §14.3.2).
 	 */
 	public function testEncryptedXmpStreamUsesIdentityCryptFilter()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
-		// Force-add 'extract' to avoid the strict-mode throw, then encrypt.
 		$mpdf->SetProtection(['extract'], '', 'owner');
 		$output = $this->getOutput($mpdf, '<p>Encrypted PDF/UA document</p>');
-		// The XMP stream dict must carry /Filter[/Crypt] + /Name/Identity
 		$this->assertStringContainsString('/Filter[/Crypt]', $output);
 		$this->assertStringContainsString('/Name/Identity', $output);
-		// pdfuaid:part metadata must be readable as plaintext in the output
-		// (it appears before any RC4 encryption, in the unencrypted XMP stream)
 		$this->assertStringContainsString('pdfuaid:part', $output);
 	}
 
 	/**
-	 * A direct Mpdf::Link() PHP API call (no surrounding <a href>) must produce a
-	 * tagged Link struct element wired to the annotation via OBJR + /StructParent.
-	 *
-	 * Link annotations created outside a Tag\A scope carry no captured struct
-	 * element, so writeAnnotations() synthesises one. Without this the annotation
-	 * is untagged — veraPDF ISO 14289-1 §7.18.5 test 1 ("Links shall be tagged").
-	 * ISO 32000-1:2008 §14.7.4.4.2 Table 338 — OBJR; §14.8 Table 335 — Link.
+	 * A link made with Mpdf::Link(), outside any a tag, gets its own Link struct element joined to
+	 * the annotation by an OBJR and /StructParent.
 	 */
 	public function testDirectLinkApiProducesTaggedLinkStruct()
 	{
@@ -339,13 +240,7 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A page mixing an <a href> link with a direct Mpdf::Link() call must produce
-	 * exactly two Link struct elements — one from Tag\A, one synthesised — and must
-	 * not double-tag the anchor link.
-	 *
-	 * writeAnnotations() only synthesises a Link struct element when the PageLinks
-	 * entry has no captured struct element (6th array slot); the anchor link keeps
-	 * using the element Tag\A::open() pushed.
+	 * An a tag link and a Mpdf::Link() link on one page give one Link struct element each.
 	 */
 	public function testDirectLinkAndAnchorDoNotDoubleTag()
 	{
@@ -358,19 +253,11 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A hyperlink built inside a running header (an artifact scope) must NOT be
-	 * wired into the structure tree — its OBJR must never hang off the Document
-	 * root (audit E7).
+	 * A link in a running header is dropped with a warning, keeping its text as artifact content.
 	 *
-	 * During header rendering StructureTree::open('Link') is a suppressed no-op,
-	 * but getCurrent() returns the Document root; the old code captured that as the
-	 * link's struct element and writeAnnotations() attached an OBJR + /StructParent
-	 * to the Document root with no Link struct element — a silent ISO 14289-1
-	 * §7.18.5 / Matterhorn 02-003 failure. Artifact content is excluded from the
-	 * structure tree (ISO 32000-1 §14.8.2.2) yet every Link annotation must be
-	 * nested in a Link struct element, so the only conformant resolution is to drop
-	 * the annotation: no /Subtype /Link, no OBJR, no Link struct element. The
-	 * visible header text survives as artifact content.
+	 * Artifacts are outside the structure tree (ISO 32000-1 §14.8.2.2) but every Link annotation
+	 * must sit in a Link struct element (ISO 14289-1 §7.18.5), so the annotation cannot be kept; nor
+	 * may its OBJR be hung off the Document root.
 	 */
 	public function testHeaderLinkIsArtifactNotOnDocumentRoot()
 	{
@@ -378,25 +265,16 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 		$mpdf->SetHTMLHeader('<div>Header with <a href="https://example.com">a link</a></div>');
 		$output = $this->getOutput($mpdf, '<h1>Doc</h1><p>Body paragraph with no links.</p>');
 
-		// The header link annotation is dropped — no clickable Link annotation, no
-		// OBJR anywhere (the buggy code hung an OBJR off the Document root), and no
-		// Link struct element in the tree.
 		$this->assertStringNotContainsString('/Subtype /Link', $output);
 		$this->assertStringNotContainsString('/Type /OBJR', $output);
 		$this->assertStringNotContainsString('/S /Link', $output);
-		// The drop is surfaced as a warning, not silent.
 		$combined = implode(' ', $mpdf->getPdfUaWarnings());
 		$this->assertStringContainsString('running header/footer', $combined);
 		$this->assertBdcEmcBalanced($output);
 	}
 
 	/**
-	 * A body hyperlink must still self-tag (Link struct element + OBJR) even when a
-	 * header link in the same document is dropped as an artifact (audit E7).
-	 *
-	 * Exactly one Link annotation, one Link struct element, and one OBJR must
-	 * appear — the body link's — proving the artifact-scope drop is scoped to the
-	 * header and does not regress the normal B2 self-tagging path.
+	 * A body link is tagged as usual when a header link in the same document is dropped.
 	 */
 	public function testBodyLinkSelfTagsWhileHeaderLinkIsArtifact()
 	{
@@ -407,7 +285,6 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 			'<h1>Doc</h1><p>Body with <a href="https://body.test">a body link</a> here.</p>'
 		);
 
-		// Only the body link produces an annotation; the header link is dropped.
 		$this->assertSame(1, substr_count($output, '/Subtype /Link'));
 		$this->assertSame(1, substr_count($output, '/S /Link'));
 		$this->assertSame(1, substr_count($output, '/Type /OBJR'));
@@ -415,24 +292,17 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Assert that the struct-type BDC/BMC count equals the EMC count in the PDF output.
+	 * Asserts every tagging BDC/BMC in the output has an EMC.
 	 *
-	 * Scoped to known PDFUA struct operators to avoid counting OCG-layer BDC/EMC
-	 * operators (which use /OC and /ZI prefixes and are unrelated to struct tagging).
+	 * Only artifact and MCID operators count as openings; a layer's /OC BDC is not tagging.
 	 *
-	 * ISO 32000-1:2008 §14.6 — BDC/EMC pairs must be balanced within each content stream.
-	 *
-	 * @param string $output  raw PDF bytes
+	 * @param string $output Raw PDF bytes
 	 */
 	private function assertBdcEmcBalanced($output)
 	{
-		// Pagination Artifact BDC with dict: /Artifact <</Type /Pagination ...>> BDC
 		preg_match_all('|/Artifact <</Type /Pagination[^>]*>> BDC|', $output, $paginationBdc);
-		// Decorative Artifact BMC (no dict)
 		preg_match_all('|/Artifact BMC\b|', $output, $artifactBmc);
-		// Struct-type BDC: /<StructType> <</MCID N>> BDC
 		preg_match_all('|/\w+ <</MCID \d+>> BDC\b|', $output, $structBdc);
-		// All EMC occurrences
 		preg_match_all('/\bEMC\b/', $output, $emcMatches);
 
 		$opens  = count($paginationBdc[0]) + count($artifactBmc[0]) + count($structBdc[0]);

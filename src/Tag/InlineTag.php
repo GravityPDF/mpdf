@@ -14,6 +14,11 @@ abstract class InlineTag extends Tag
 	protected $pdfuaStructType;
 
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -181,14 +186,7 @@ abstract class InlineTag extends Tag
 			$this->mpdf->biDirectional = true;
 		}
 
-		// Propagate inline lang= and aria-label= as a Span struct element with
-		// /Lang and /Alt attributes — every text fragment whose natural language
-		// differs from the document default must carry a /Lang entry
-		// (ISO 14289-1:2014 §7.2, Matterhorn 11-001/11-002).
-		// The InlineStructStack records how many struct elements open() pushed,
-		// so close() pops the same number. Subclasses (e.g. Abbr for /E expansion
-		// text) call self::pushInlineUaStructDepth() after parent::open() to layer
-		// additional struct elements onto the same frame.
+		// Each tag records how many elements it opened, so close() ends as many
 		if ($this->mpdf->PDFUA) {
 			$depth = $this->openInlineUaStruct($attr) ? 1 : 0;
 			if ($this->pdfuaStructType !== null) {
@@ -200,11 +198,11 @@ abstract class InlineTag extends Tag
 	}
 
 	/**
-	 * Open a Span struct element with /Lang and /Alt when PDFUA + (lang | aria-label)
-	 * is present. Returns true if a struct element was pushed (so close() pops it).
+	 * Opens a Span carrying the language (Matterhorn 11-001) and the aria-label of an element
+	 * that has either.
 	 *
-	 * @param  array $attr  uppercase-keyed tag attributes
-	 * @return bool
+	 * @param array $attr
+	 * @return bool Whether a Span was opened
 	 */
 	protected function openInlineUaStruct($attr)
 	{
@@ -222,23 +220,25 @@ abstract class InlineTag extends Tag
 			return false;
 		}
 		$this->ua->getStructureTree()->open('Span', $structAttrs);
-		// ARIA: register HTML id (if any) and queue cross-references.
 		$elem = $this->ua->getStructureTree()->getCurrent();
 		$this->ua->getAriaIdResolver()->queueAriaRefs($elem, $attr);
 		return true;
 	}
 
 	/**
-	 * Subclass hook: increase the inline Span depth recorded for this tag so close()
-	 * pops the matching number of struct elements. Call after parent::open().
+	 * Counts elements a subclass opened after parent::open() among those close() ends.
 	 *
-	 * @param  int $count  number of struct elements pushed by the subclass
+	 * @param int $count
 	 */
 	protected function pushInlineUaStructDepth($count)
 	{
 		$this->ua->getInlineStructStack()->addToTopFrame($this->getTagName(), $count);
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -293,10 +293,7 @@ abstract class InlineTag extends Tag
 			}
 		}
 
-		// Pop the Span struct bracket(s) that open() pushed for lang= / aria-label=
-		// (plus any subclass-pushed extras such as Abbr's /E Span). The stack is
-		// per-tag because HTML allows nested same-name tags
-		// (<span><span lang=fr>…</span></span>).
+		// Counted per tag, as a tag can nest inside one of the same name
 		if ($this->mpdf->PDFUA) {
 			$depth = $this->ua->getInlineStructStack()->popFrame($tag);
 			for ($i = 0; $i < $depth; $i++) {

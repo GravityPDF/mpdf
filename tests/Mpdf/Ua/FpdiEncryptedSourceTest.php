@@ -3,45 +3,27 @@
 namespace Mpdf\Ua;
 
 /**
- * Tests for the FPDI encrypted-source detection / fallback path.
- *
- * Verifies the three-tier classification documented on FpdiStructMerger:
- *   - Tier 0 (encrypted source) — auto mode wraps a placeholder /Artifact pair
- *     and records a warning citing Matterhorn 01-007; strict mode throws
- *     \Mpdf\MpdfException with the same citation.
- *   - Tier 2 (tagged source, sanity check passes) — existing struct-merge path.
- *   - Tier 2 → Tier 1 demotion when a forward-compat sanity check on /Alt
- *     ciphertext fails — auto mode demotes + warns, strict mode throws.
- *
- * Encrypted fixtures are produced inline at set_up() time by generating a
- * tiny mPDF document and re-emitting it via SetProtection() with PDFUA off.
- * The garbage-/Alt fixture is hand-crafted as a minimal tagged PDF with a
- * /Alt value composed of bytes that fail the printable-codepoint gauntlet.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §7.6           — encryption (general)
- *   - ISO 32000-1:2008 §7.6.4         — standard security handler
- *   - ISO 32000-1:2008 §7.6.5         — crypt filters and strings-only encryption
- *   - ISO 32000-1:2008 §7.9.2.2       — text string type (decode rules)
- *   - ISO 32000-1:2008 §14.6          — marked content (BMC/EMC empty content)
- *   - ISO 32000-1:2008 §14.7.4.4 T324 — MCR dict
- *   - ISO 14289-1:2014 §7.1           — real content tagged or marked Artifact
- *   - Matterhorn Protocol 1.1 01-007  — real content not tagged or Artifact
+ * Importing an encrypted PDF, which FPDI cannot read, and a tagged PDF whose text strings look
+ * like ciphertext. Auto mode draws a placeholder or wraps the page as an artifact and warns;
+ * strict mode throws (Matterhorn 01-007).
  *
  * @group pdfua
  */
 class FpdiEncryptedSourceTest extends PdfUaTestCase
 {
 
-	/** @var string|null  path to an inline-generated encrypted PDF; deleted on tear_down() */
+	/** @var string|null An encrypted PDF made for the test, deleted in tear_down() */
 	private $encryptedPdf;
 
-	/** @var string|null  path to a hand-crafted tagged PDF with junk-byte /Alt */
+	/** @var string|null A hand-built tagged PDF whose /Alt is junk bytes */
 	private $garbageAltPdf;
 
-	/** @var string|null  path to an inline-generated clean tagged PDF (forward compat tests) */
+	/** @var string|null A tagged PDF with readable strings */
 	private $cleanTaggedPdf;
 
+	/**
+	 * Starts each test with no fixture files.
+	 */
 	protected function set_up()
 	{
 		parent::set_up();
@@ -50,6 +32,9 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$this->cleanTaggedPdf = null;
 	}
 
+	/**
+	 * Deletes the fixture files the test made.
+	 */
 	protected function tear_down()
 	{
 		parent::tear_down();
@@ -62,14 +47,11 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Generate an encrypted PDF on disk via mPDF + SetProtection().
+	 * Writes a one-page encrypted PDF, which FPDI rejects with CrossReferenceException::ENCRYPTED.
 	 *
-	 * Built with PDFUA disabled so SetProtection() does not refuse the
-	 * 'extract' permission requirement. The output PDF carries an /Encrypt
-	 * dictionary in its trailer — exactly the condition vendor/setasign/fpdi
-	 * rejects with CrossReferenceException::ENCRYPTED.
+	 * Made without PDFUA, which would insist on the 'extract' permission.
 	 *
-	 * @return string  absolute path to the generated encrypted PDF
+	 * @return string The file's path
 	 */
 	private function makeEncryptedPdf()
 	{
@@ -82,15 +64,11 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Generate a multi-page encrypted PDF on disk via mPDF + SetProtection().
+	 * Writes an encrypted PDF of several pages; its page count can still be read, since encryption
+	 * covers only strings and streams.
 	 *
-	 * Same shape as makeEncryptedPdf() but with $pages leaf pages, so the page
-	 * tree root carries /Type /Pages /Count $pages in cleartext (encryption
-	 * enciphers only strings and streams — ISO 32000-1:2008 §7.6.2). Drives the
-	 * UA1 audit E2 page-count recovery path.
-	 *
-	 * @param  int $pages  number of pages to emit (>= 1)
-	 * @return string      absolute path to the generated encrypted PDF
+	 * @param int $pages At least 1
+	 * @return string The file's path
 	 */
 	private function makeMultiPageEncryptedPdf($pages)
 	{
@@ -108,9 +86,9 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Generate a clean tagged PDF — used as the Tier 2 control fixture.
+	 * Writes a tagged PDF/UA document whose structure can be merged.
 	 *
-	 * @return string  absolute path
+	 * @return string The file's path
 	 */
 	private function makeCleanTaggedPdf()
 	{
@@ -122,35 +100,16 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Hand-craft a tiny tagged PDF whose first /Alt is a 1024-byte run of
-	 * 0x01 — bytes that decode (via PDFDocEncoding) to U+FFFD-laden output
-	 * which fails the printable-codepoint gauntlet.
+	 * Writes a one-page tagged PDF whose only P has an /Alt of 1024 0x01 bytes, which decode to
+	 * U+FFFD and fail the check that imported strings are readable.
 	 *
-	 * The PDF is intentionally minimal: one page, one struct element with
-	 * /S /P and a /Alt PdfHexString of 0x01 repeated 1024 times. Sufficient
-	 * for sourceIsTagged() to return true and for the sanity check to fail.
-	 *
-	 * Note: this is a conformance-corner fixture; it is not itself a valid
-	 * PDF/UA-1 document. It exists only to drive verifyAndPrepareMerge()
-	 * down its failure path.
-	 *
-	 * @return string  absolute path
+	 * @return string The file's path
 	 */
 	private function makeGarbageAltPdf()
 	{
-		// Build the /Alt as a hex string of 0x01 repeated; PDFDocEncoding 0x01
-		// is undefined → U+FFFD. 1024 bytes pushes the suspicious-byte ratio
-		// past the 50% threshold by a comfortable margin and stays within the
-		// 4 KiB length cap (so it fails on the printable-ratio check, not the
-		// length check).
+		// Under the 4 KiB length cap, so it fails on the share of unprintable characters instead
 		$altPayload = str_repeat('01', 1024);
 
-		// Object 1: catalog with a StructTreeRoot reference.
-		// Object 2: pages
-		// Object 3: page
-		// Object 4: page contents (empty)
-		// Object 5: StructTreeRoot
-		// Object 6: StructElem with /S /P and /Alt
 		$objs = [];
 		$objs[1] = "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R >>";
 		$objs[2] = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
@@ -180,17 +139,8 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * sourceIsEncrypted() returns true for a PDF whose trailer carries /Encrypt.
-	 *
-	 * Live FPDI parsers throw before this method's normal call path (during
-	 * setSourceFile()), so we exercise the helper directly via an in-memory
-	 * PDF reader bypass: the encrypted source is loaded with PDFUA enabled
-	 * but auto mode active, so setSourceFile() returns 1 instead of throwing
-	 * and importPage() returns a placeholder. The encrypted-source check then
-	 * runs against the underlying parser cache via getSourcePdfReader().
-	 *
-	 * Because the placeholder pageId carries no readerId, this test instead
-	 * verifies that getPdfUaWarnings() captures the encryption diagnostic.
+	 * In auto mode setSourceFile() on an encrypted PDF returns a page count instead of throwing,
+	 * and warns that the source is encrypted.
 	 */
 	public function testEncryptedSourceProducesUaWarningInAutoMode()
 	{
@@ -199,7 +149,6 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
 		$count = $mpdf->setSourceFile($this->encryptedPdf);
 
-		// Auto-mode setSourceFile() returns synthetic page count = 1 instead of throwing.
 		$this->assertSame(1, $count);
 
 		$warnings = $mpdf->getPdfUaWarnings();
@@ -217,7 +166,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * sourceIsEncrypted() returns false for an unencrypted PDF.
+	 * sourceIsEncrypted() is false for an unencrypted PDF.
 	 */
 	public function testSourceIsEncryptedReturnsFalseForCleanPdf()
 	{
@@ -238,9 +187,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Importing an encrypted PDF in PDFUA + PDFUAauto mode falls back to a Tier 0
-	 * Artifact placeholder. The output must contain an /Artifact <</Type /Layout>> BDC ... EMC
-	 * pair on the host page, and the call must not raise.
+	 * In auto mode a page imported from an encrypted PDF is a placeholder, drawn as a Layout artifact.
 	 */
 	public function testEncryptedImportAutoModeFallsBackToArtifact()
 	{
@@ -250,7 +197,6 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$mpdf->setSourceFile($this->encryptedPdf);
 		$pageId = $mpdf->importPage(1);
 
-		// importPage() must return a synthetic placeholder pageId.
 		$this->assertStringContainsString(
 			\Mpdf\Ua\Import\FpdiStructMerger::ENCRYPTED_PAGE_PLACEHOLDER_ID_PREFIX,
 			$pageId,
@@ -287,12 +233,8 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * UA1 audit E2 — a *multi-page* encrypted source must not collapse to a single
-	 * blank page. Auto-mode setSourceFile() recovers the real page count from the
-	 * cleartext page tree, so the caller's per-page loop reaches importPage() once
-	 * per page; each placement draws a *visible* placeholder (border + caption).
-	 * The output must therefore carry one Artifact placeholder per source page and
-	 * getPdfUaWarnings() must record the encrypted-source diagnostic.
+	 * In auto mode an encrypted PDF of three pages reports three pages, and each gives a visible
+	 * placeholder with a border.
 	 */
 	public function testMultiPageEncryptedSourceEmitsOnePlaceholderPerPageInAutoMode()
 	{
@@ -301,7 +243,6 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
 		$count = $mpdf->setSourceFile($this->encryptedPdf);
 
-		// The synthetic page count must honour the real source (3), not fake 1.
 		$this->assertSame(
 			3,
 			$count,
@@ -320,14 +261,12 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 
 		$output = $mpdf->Output(null, 'S');
 
-		// One /Artifact <</Type /Layout>> BDC per source page (N visible placeholders).
 		$this->assertSame(
 			3,
 			substr_count($output, '/Artifact <</Type /Layout>> BDC'),
 			'a 3-page encrypted source must emit exactly 3 visible Artifact placeholders'
 		);
 
-		// The placeholder must be *visible*: a stroked border (re … S) is drawn.
 		$this->assertMatchesRegularExpression(
 			'/re\s+S/',
 			$output,
@@ -349,10 +288,8 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * UA1 audit E2 — strict mode (PDFUAauto=false) still refuses a multi-page
-	 * encrypted source outright: setSourceFile() throws \Mpdf\MpdfException before
-	 * any page is imported, because an encrypted source cannot be made accessible
-	 * without decryption. Shares the A3 encrypted-import policy.
+	 * In strict mode setSourceFile() on an encrypted PDF of several pages throws before any page
+	 * is imported.
 	 */
 	public function testMultiPageEncryptedSourceThrowsInStrictMode()
 	{
@@ -371,11 +308,8 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Regression: an encrypted source set *before* a valid one must not blank the
-	 * later valid import. importPage() reads from the most recently set source, so
-	 * the Tier 0 placeholder decision keys on that source — not on whichever source
-	 * was most recently *flagged* encrypted. Before the fix a valid page imported
-	 * after any encrypted source was silently replaced by a placeholder (data loss).
+	 * A page imported from a readable source is not made a placeholder because an encrypted
+	 * source was set before it: importPage() reads from the source set last.
 	 */
 	public function testEncryptedSourceDoesNotBlankLaterValidImport()
 	{
@@ -383,8 +317,8 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$this->cleanTaggedPdf = $this->makeCleanTaggedPdf();
 
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
-		$mpdf->setSourceFile($this->encryptedPdf);   // flagged encrypted (auto mode)
-		$mpdf->setSourceFile($this->cleanTaggedPdf); // valid — now the active source
+		$mpdf->setSourceFile($this->encryptedPdf);
+		$mpdf->setSourceFile($this->cleanTaggedPdf);
 		$pageId = $mpdf->importPage(1);
 
 		$this->assertFalse(
@@ -403,12 +337,8 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Importing an encrypted PDF in strict PDFUA mode throws \Mpdf\MpdfException.
-	 *
-	 * The throw happens at setSourceFile() time because the FPDI parser hits
-	 * the encryption check during cross-reference loading. The message must
-	 * cite ISO 32000-1 §7.6 and Matterhorn 01-007 so callers know exactly
-	 * what to fix.
+	 * In strict mode setSourceFile() on an encrypted PDF throws, citing ISO 32000-1 §7.6 and
+	 * Matterhorn 01-007.
 	 */
 	public function testEncryptedImportStrictModeThrowsAtSetSourceFile()
 	{
@@ -427,9 +357,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Clean tagged sources pass verifyAndPrepareMerge() and produce the existing
-	 * Tier 2 struct merge — regression guard so the new gate does not break the
-	 * happy path.
+	 * A tagged source with readable strings passes verifyAndPrepareMerge(), so its structure is merged.
 	 */
 	public function testStringSanityCheckPassesForCleanTaggedSource()
 	{
@@ -451,11 +379,8 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * A tagged source whose /Alt is junk bytes (PDFDocEncoding 0x01 → U+FFFD)
-	 * fails the sanity gauntlet and demotes the page from Tier 2 to Tier 1
-	 * in auto mode. The output must therefore contain the Artifact wrap
-	 * (Tier 1 fallback) and the warnings must include the sanity-failure
-	 * citation.
+	 * In auto mode a tagged source whose /Alt is junk bytes fails the check, and its page is drawn
+	 * as a Layout artifact with a warning instead of having its structure merged.
 	 */
 	public function testStringSanityCheckDemotesOnGarbageAltAutoMode()
 	{
@@ -481,7 +406,6 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 			'wasSanityCheckFailed() must be true after the demotion'
 		);
 
-		// Render and assert the demoted Tier 1 Artifact wrap appears.
 		$mpdf->AddPage();
 		$mpdf->useImportedPage($pageId);
 		$output = $mpdf->Output(null, 'S');
@@ -506,9 +430,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Strict mode throws \Mpdf\MpdfException instead of demoting when the
-	 * sanity check fails — same payload as the auto-mode test but the throw
-	 * is asserted via try/catch.
+	 * In strict mode a tagged source whose /Alt is junk bytes throws instead.
 	 */
 	public function testStringSanityCheckDemotesOnGarbageAltStrictMode()
 	{
@@ -530,9 +452,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Non-PDFUA callers must still receive a raw CrossReferenceException for an
-	 * encrypted source — the new wrapper is gated on $this->PDFUA so legacy
-	 * users see no behaviour change.
+	 * Outside PDF/UA mode an encrypted source still throws FPDI's own CrossReferenceException.
 	 */
 	public function testNonPdfUaCallerStillReceivesCrossReferenceException()
 	{

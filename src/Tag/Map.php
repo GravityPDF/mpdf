@@ -3,24 +3,23 @@
 namespace Mpdf\Tag;
 
 /**
- * HTML <map> handler (HTML5 §4.8.13).
- *
- * Parser-side metadata only: produces no layout output and is not added to the
- * structure tree. The Link struct elements for each <area> are pushed under the
- * host image's Figure at image-render time. Ignored when PDFUA is off.
- *
- * @see ISO 32000-1:2008 §12.5.6.5 (Link annotation).
+ * An image map. Under PDF/UA it collects its areas so the image that uses it can link them; it
+ * draws nothing and has no structure element of its own.
  */
 class Map extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		if (!$this->mpdf->PDFUA) {
 			return;
 		}
 		if (empty($attr['NAME'])) {
-			// HTML5 §4.8.13: name is required.
 			$this->ua->addWarning('PDF/UA-1: <map> missing name attribute; ignored.');
 			return;
 		}
@@ -28,6 +27,10 @@ class Map extends Tag
 		$this->ua->getImageMapRegistry()->openMap($name);
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
 		if (!$this->mpdf->PDFUA) {

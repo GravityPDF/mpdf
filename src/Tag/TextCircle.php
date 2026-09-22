@@ -228,9 +228,7 @@ class TextCircle extends Tag
 		$objattr['width'] = $w + $extrawidth;
 		$objattr['type'] = 'textcircle';
 
-		// Carry id/aria-* through serialised $objattr because the Span struct
-		// element wrapping the textcircle is created at render time
-		// (printobjectbuffer), not at parse time.
+		// The Span around the text circle is made when it is drawn, so its id and aria-* travel with it
 		if ($this->mpdf->PDFUA) {
 			$objattr += AriaIdResolver::toObjattr($attr);
 		}

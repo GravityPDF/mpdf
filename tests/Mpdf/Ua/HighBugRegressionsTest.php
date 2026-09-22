@@ -3,18 +3,8 @@
 namespace Mpdf\Ua;
 
 /**
- * Regression tests for HIGH-severity PDF/UA-1 bugs.
- *
- *   - TH /ID was emitted as UTF-16BE text string while TD /Headers references
- *     were emitted as PDF names; readers could not resolve the cross-reference.
- *   - `role="doc-title"` mapped to the invalid struct type "Title" and crashed
- *     StructureTree::open() with MpdfException.
- *   - FpdiStructMerger stored imported /Alt /ActualText /Lang values verbatim;
- *     StructureWriter then double-encoded them, producing unreadable garbage
- *     on every imported tagged page with non-ASCII.
- *   - Th.php used the HTML id verbatim (potentially containing PDF-name-illegal
- *     bytes) and synthesised a (tableLevel,row,col) id that collided between
- *     two tables on the same page.
+ * Table header ids and the /Headers that point at them, role="doc-title", the decoding of text
+ * strings copied from an imported tagged PDF, and links with no href or no content.
  *
  * @group pdfua
  */
@@ -22,13 +12,8 @@ class HighBugRegressionsTest extends PdfUaTestCase
 {
 
 	/**
-	 * The /ID written on a TH StructElem must be byte-equivalent to the
-	 * matching reference in any TD's /Headers array — otherwise readers and
-	 * AT cannot resolve the cross-reference at all.
-	 *
-	 * ISO 32000-1 Table 322 — /ID is a byte string.
-	 * ISO 32000-1 Table 349 — /Headers is an array of names.
-	 * Matterhorn 09-004/09-005 — header-cell association.
+	 * A TH's /ID is the same bytes as the name a TD's /Headers uses for it, so the two can be
+	 * matched (Matterhorn 09-004/09-005).
 	 */
 	public function testThIdBytesEqualHeadersReferenceBytes()
 	{
@@ -38,49 +23,35 @@ class HighBugRegressionsTest extends PdfUaTestCase
 			. '</table>';
 		$output = $this->getOutput($this->makeMpdf(), $html);
 
-		// Pre-fix the TH /ID was emitted as `(\xFE\xFFr\x00a\x00t\x00e)`.
-		// After the fix it must be a paren byte string with the literal id.
-		// The sanitiser lowercases (mPDF uppercases id="..." values) so the
-		// byte sequence matches the un-uppercased headers="..." token.
+		// mPDF uppercases id="...", so the id is lowercased again to match the headers="..." token
 		$this->assertMatchesRegularExpression('@/ID\s*\(rate\)@', $output);
 		$this->assertMatchesRegularExpression('@/ID\s*\(qty\)@', $output);
 
-		// And the TD /Headers must reference the same bytes as PDF names.
 		$this->assertMatchesRegularExpression('@/Headers\s*\[\s*/rate\s*\]@', $output);
 		$this->assertMatchesRegularExpression('@/Headers\s*\[\s*/qty\s*\]@', $output);
 
-		// The pre-fix UTF-16BE form must NOT appear.
+		// A UTF-16BE /ID could never equal the name in /Headers
 		$this->assertStringNotContainsString("\xFE\xFFr\x00a\x00t\x00e", $output);
 	}
 
 	/**
-	 * An HTML id containing characters illegal in PDF names (ISO 32000-1
-	 * §7.3.5) must be #-escaped consistently in BOTH /ID and /Headers, so
-	 * the cross-reference still resolves and the PDF is well-formed.
+	 * An id with characters a PDF name cannot hold is #-escaped the same way in /ID and /Headers.
 	 */
 	public function testHeaderIdWithIllegalCharsSanitisedConsistently()
 	{
-		// 'col(1)' contains parens — illegal in both byte-string and name
-		// without escaping; '#28' is `(` and '#29' is `)`.
 		$html = '<table>'
 			. '<tr><th id="col(1)">A</th></tr>'
 			. '<tr><td headers="col(1)">x</td></tr>'
 			. '</table>';
 		$output = $this->getOutput($this->makeMpdf(), $html);
 
-		// Both the /ID byte string and the /Headers name must use the
-		// identical escaped form.  '(' = 0x28, ')' = 0x29; the sanitiser
-		// lowercases the rest so it matches the un-uppercased headers token.
-		// Result: col#281#29 (no separator — '#28' eats the '(', then '1'
-		// is literal, then '#29' eats the ')').
+		// ( is #28 and ) is #29
 		$this->assertStringContainsString('/ID (col#281#29)', $output);
 		$this->assertStringContainsString('/Headers [/col#281#29]', $output);
 	}
 
 	/**
-	 * Two <table>s on the same page with no explicit id="" on TH cells must
-	 * still produce unique /ID values across the document, otherwise TD
-	 * /Headers references silently address the wrong TH.
+	 * Header cells without an id get generated ids that do not repeat across two tables.
 	 */
 	public function testMultipleTablesProduceUniqueSyntheticThIds()
 	{
@@ -89,11 +60,9 @@ class HighBugRegressionsTest extends PdfUaTestCase
 			. '<table><tr><th>C</th><th>D</th></tr><tr><td>3</td><td>4</td></tr></table>';
 		$output = $this->getOutput($this->makeMpdf(), $html);
 
-		// Extract every /ID value emitted on a struct element.
 		preg_match_all('#/ID\s*\(([^)]+)\)#', $output, $matches);
 		$ids = $matches[1];
 		$this->assertNotEmpty($ids, 'expected at least one /ID emitted');
-		// Four TH cells across two tables ⇒ four unique synthesised ids.
 		$this->assertCount(
 			count(array_unique($ids)),
 			$ids,
@@ -102,31 +71,21 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * `<div role="doc-title">…</div>` must produce a PDF struct element and
-	 * not throw. Pre-fix it mapped to the literal struct type "Title" which
-	 * is not in ISO 32000-1 §14.8 Tables 333–335 and tripped
-	 * StructureTree::open()'s validity check.
+	 * role="doc-title" is tagged H1, since Title is not a standard structure type.
 	 */
 	public function testRoleDocTitleDoesNotCrash()
 	{
-		// Direct PHP API would also work, but the bug surfaced on real HTML.
 		$html = '<div role="doc-title">My Document Title</div><p>Body.</p>';
 		$output = $this->getOutput($this->makeMpdf(), $html);
 
-		// Should produce an H1 struct element (heading-as-doc-title is the
-		// natural mapping). Look for any /S /H1 in the struct tree output.
 		$this->assertStringContainsString('/S /H1', $output);
 
-		// And the literal invalid type must not have leaked through.
 		$this->assertStringNotContainsString('/S /Title', $output);
 	}
 
 	/**
-	 * UTF-16BE-with-BOM source values must round-trip to UTF-8 so that
-	 * StructureWriter's downstream utf16BigEndianTextString() produces a
-	 * single, correct encoding (not a double-BOMed garbage sequence).
-	 *
-	 * ISO 32000-1 §7.9.2.2 — text strings MAY use UTF-16BE prefixed by U+FEFF.
+	 * An imported UTF-16BE text string is decoded to UTF-8, so it is not encoded a second time on
+	 * the way out.
 	 */
 	public function testFpdiMergerDecodesUtf16BeAltText()
 	{
@@ -135,7 +94,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * UTF-8-with-BOM is also legal (ISO 32000-1 §7.9.2.2).
+	 * An imported UTF-8 text string loses its byte order mark.
 	 */
 	public function testFpdiMergerStripsUtf8Bom()
 	{
@@ -144,8 +103,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * No BOM → ASCII passthrough (PDFDocEncoding 0x00–0x7F == ASCII).
-	 * BCP-47 lang tags are the common case here.
+	 * An imported ASCII string with no byte order mark, such as a language tag, is kept as it is.
 	 */
 	public function testFpdiMergerPassesAsciiLangThrough()
 	{
@@ -154,20 +112,16 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * UTF-16LE-with-BOM is uncommon but legal in older producers.
+	 * An imported UTF-16LE string with a byte order mark, which some older producers write, is decoded.
 	 */
 	public function testFpdiMergerDecodesUtf16Le()
 	{
-		// "AB" in UTF-16LE with BOM = FF FE 41 00 42 00
 		$decoded = $this->invokeDecode($this->makeRawHexString("\xFF\xFEA\x00B\x00"));
 		$this->assertSame('AB', $decoded);
 	}
 
 	/**
-	 * `<a href="x"></a>` produces no rendered annotation and no inner
-	 * content. The Link struct element opened in Tag\A::open() ends up with
-	 * no kids, no MCRs, and no OBJR refs — Matterhorn 02-003 (ISO 14289-1
-	 * §7.18.5). PDFUAauto must silently prune it from the struct tree.
+	 * A link with no content is removed from the structure tree in auto mode (Matterhorn 02-003).
 	 */
 	public function testEmptyAnchorPrunedInAutoMode()
 	{
@@ -178,10 +132,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Same condition in strict mode (PDFUAauto=false) must throw with
-	 * guidance pointing at the offending href. (This fires only for non-empty
-	 * hrefs whose body produces no content / no annotation — empty hrefs are
-	 * no longer treated as hyperlinks.)
+	 * A link with an href but no content throws in strict mode.
 	 */
 	public function testEmptyAnchorThrowsInStrictMode()
 	{
@@ -192,10 +143,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * `<a name="x">Section</a>` (HTML5 destination anchor — no `href`) must
-	 * not open a Link struct element. The surrounding <p> tags the inner
-	 * text via MCID; the /Dests catalog (registered through the existing
-	 * NAME path in Tag\A) owns the destination registration.
+	 * A named anchor with no href is a destination, not a link, and opens no Link struct element.
 	 */
 	public function testNamedAnchorWithoutHrefDoesNotOpenLinkInAuto()
 	{
@@ -206,9 +154,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Same input in strict mode (PDFUAauto=false). The throw was never
-	 * reached previously (the `isset($attr['HREF'])` guard already excluded
-	 * NAME-only anchors); this regression locks in that behaviour.
+	 * A named anchor with no href does not throw in strict mode.
 	 */
 	public function testNamedAnchorWithoutHrefDoesNotThrowInStrict()
 	{
@@ -220,11 +166,8 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * `<a name="x" href="">Section</a>` — destination anchor with empty
-	 * `href` (common templating artefact). Previously this opened a Link
-	 * struct element, got pruned in auto mode, and threw in strict mode
-	 * quoting `<a href="">` — a confusing message for what is a legitimate
-	 * destination anchor. Now: no Link struct element, no throw.
+	 * A named anchor with an empty href, as templates often leave, is treated as a destination and
+	 * does not throw in strict mode.
 	 */
 	public function testNamedAnchorWithEmptyHrefDoesNotThrowInStrict()
 	{
@@ -236,9 +179,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * `<a href="   ">Section</a>` — whitespace-only `href`. HTML5 specifies
-	 * that whitespace-only hyperlink targets are not valid hyperlinks; mPDF
-	 * therefore must not open a Link struct element for them.
+	 * An href of only whitespace is not a hyperlink in HTML, so it opens no Link struct element.
 	 */
 	public function testWhitespaceHrefDoesNotOpenLink()
 	{
@@ -249,13 +190,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * `<a name="x" lang="fr">Section</a>` — non-hyperlink anchor that does
-	 * carry inline accessibility metadata. Tag\A emits a Span struct element
-	 * (not a Link) to host the /Lang entry — Matterhorn 11-001/11-002.
-	 *
-	 * The /Lang value is written by StructureWriter as a UTF-16BE-with-BOM
-	 * text string; the BOM-prefixed bytes are asserted directly so the test
-	 * does not depend on encoding internals.
+	 * A named anchor with a lang is tagged Span, which carries the /Lang (Matterhorn 11-001).
 	 */
 	public function testNamedAnchorWithLangOpensSpan()
 	{
@@ -264,20 +199,14 @@ class HighBugRegressionsTest extends PdfUaTestCase
 
 		$this->assertStringNotContainsString('/S /Link', $output);
 		$this->assertStringContainsString('/S /Span', $output);
-		// /Lang (<utf16-bom>fr) — BOM is FE FF, then 00 'f' 00 'r'.
 		$this->assertStringContainsString("/Lang (\xFE\xFF\x00f\x00r)", $output);
 	}
 
 	/**
-	 * Regression: a non-hyperlink `<a name="x" lang="fr">` opens a Span to host
-	 * its /Lang, but Tag\A::open() previously pushed no strip frame, so
-	 * Tag\A::close() never popped that Span off the struct-element stack. The
-	 * leaked Span then swallowed every following block: the second `<p>` nested
-	 * inside the first instead of being its sibling, corrupting reading order.
+	 * The Span a named anchor opens for its lang is closed with the anchor, leaving the next
+	 * paragraph a sibling of the one it was in.
 	 *
-	 * The corruption is invisible to veraPDF (P-inside-P is not a UA-1
-	 * violation), so this asserts the in-memory struct tree directly: both
-	 * paragraphs must be direct children of the Document root.
+	 * veraPDF does not object to a P inside a P, so this reads the structure tree directly.
 	 */
 	public function testNonHyperlinkAnchorSpanDoesNotLeakIntoFollowingBlocks()
 	{
@@ -299,13 +228,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Locked-in regression for the residual empty-link throw path: a
-	 * non-empty `href` whose body produces no MCRs and no OBJR refs is still
-	 * a Matterhorn 02-003 violation and must throw in strict mode.
-	 *
-	 * Identical input shape to {@see testEmptyAnchorThrowsInStrictMode}; kept
-	 * as a separate test so future audit replays confirm the defence-in-depth
-	 * pruning path remains live after the Tag\A rewrite.
+	 * A link with an href but no content throws in strict mode with the href in the message.
 	 */
 	public function testEmptyHyperlinkBodyThrowsInStrictMode()
 	{
@@ -316,8 +239,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Auto-mode counterpart to the strict-mode throw above: the empty Link
-	 * is pruned silently and no /S /Link makes it into the output.
+	 * A link with an href but no content leaves no Link struct element in auto mode.
 	 */
 	public function testEmptyHyperlinkBodyPrunedInAutoMode()
 	{
@@ -328,15 +250,8 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * `<a href="x"><img alt=""></a>` — decorative image inside a link.
-	 * The img renders inside an Artifact scope, so the Link struct element
-	 * receives no MCRs from descendants. Tag\A::open() in PDFUAauto mode
-	 * pre-sets /Alt = "Link to {href}" so any annotation that does get
-	 * attached has an accessible name — Matterhorn 28-002.
-	 *
-	 * The Link element may or may not survive pruning depending on
-	 * whether mPDF emits a clickable annotation; either way the synthesised
-	 * /Alt must appear in the PDF output (or no /S /Link at all).
+	 * A link around only a decorative image is either given an /Alt of "Link to {href}" in auto
+	 * mode, or removed (Matterhorn 28-002).
 	 */
 	public function testImageOnlyLinkSynthesisesAltInAutoMode()
 	{
@@ -347,13 +262,9 @@ class HighBugRegressionsTest extends PdfUaTestCase
 			'<p><a href="https://example.com/foo"><img src="' . $png . '" alt="" width="20" height="20"></a></p>'
 		);
 
-		// Acceptable outputs:
-		//   (a) Link struct survives with synthesised /Alt — assert /Alt present.
-		//   (b) Link struct pruned (no annotation drawn) — assert /S /Link absent.
 		$linkPresent = strpos($output, '/S /Link') !== false;
 		if ($linkPresent) {
-			// /Alt is utf16-encoded by the writer; check for the BOM-prefixed
-			// "Link to" prefix (UTF-16BE: 00 4C 00 69 00 6E 00 6B 00 20 00 74 00 6F).
+			// "Link to" in UTF-16BE after its byte order mark
 			$expectedPrefix = "\xFE\xFF\x00L\x00i\x00n\x00k\x00 \x00t\x00o";
 			$this->assertStringContainsString(
 				$expectedPrefix,
@@ -361,23 +272,13 @@ class HighBugRegressionsTest extends PdfUaTestCase
 				'PDFUAauto must synthesise /Alt on a Link wrapping only decorative content'
 			);
 		} else {
-			// Link pruned — that's also acceptable (Matterhorn 02-003 satisfied
-			// by removal). No further assertion needed.
 			$this->assertTrue(true);
 		}
 	}
 
 	/**
-	 * Same image-only link in strict mode — does NOT throw on its own. The
-	 * Link struct element ends up with one OBJR kid (the link annotation
-	 * Mpdf::Link generates over the image rect), so it satisfies the
-	 * empty-Link guard at write time. Accessibility is provided by the
-	 * annotation's own /Contents (synthesised from href by mPDF), per ISO
-	 * 32000-1 §12.5.6.5. PDFUAauto goes one step further and synthesises
-	 * a struct-level /Alt (asserted in testImageOnlyLinkSynthesisesAltInAutoMode).
-	 *
-	 * If a future stricter check is added that rejects image-only links
-	 * with no descendant accessible name, update this assertion.
+	 * A link around only a decorative image does not throw in strict mode: the link annotation
+	 * over the image is its content, and carries its own /Contents.
 	 */
 	public function testImageOnlyLinkDoesNotThrowInStrictMode()
 	{
@@ -387,16 +288,11 @@ class HighBugRegressionsTest extends PdfUaTestCase
 			$mpdf,
 			'<p><a href="https://example.com/foo"><img src="' . $png . '" alt="" width="20" height="20"></a></p>'
 		);
-		// Successful generation (no exception) is the assertion. The Link
-		// struct element should be present because Mpdf::Link attached an
-		// OBJR — but the precise output shape is implementation detail.
 		$this->assertNotEmpty($output);
 	}
 
 	/**
-	 * PDFDocEncoding 0xB7 is U+00B7 (middle dot) per ISO 32000-1 Annex D
-	 * Table D.2. The previous lossy fallback passed it through verbatim,
-	 * which then got double-encoded by utf16BigEndianTextString().
+	 * PDFDocEncoding 0xB7 decodes to U+00B7, the middle dot (ISO 32000-1 Annex D).
 	 */
 	public function testFpdiMergerDecodesPdfDocEncodingHighBytes()
 	{
@@ -405,8 +301,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * PDFDocEncoding 0x86 is U+2020 (dagger) per ISO 32000-1 Annex D Table
-	 * D.2 — a special PDF-only mapping that diverges from ISO-8859-1.
+	 * PDFDocEncoding 0x86 decodes to U+2020, the dagger, where it parts from ISO-8859-1.
 	 */
 	public function testFpdiMergerDecodesPdfDocEncodingSpecialBytes()
 	{
@@ -415,28 +310,22 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * PDFDocEncoding 0x7F is undefined; the decoder must produce a
-	 * replacement marker without throwing.
+	 * PDFDocEncoding 0x7F, which is undefined, decodes to U+FFFD.
 	 */
 	public function testFpdiMergerHandlesUndefinedPdfDocByte()
 	{
 		$decoded = $this->invokeDecode($this->makeRawHexString("\x7F"));
-		// Expect the Unicode replacement character U+FFFD (UTF-8 EF BF BD).
 		$this->assertSame("\xEF\xBF\xBD", $decoded, 'undefined PDFDocEncoding byte → U+FFFD');
 	}
 
 	/**
-	 * ISO 32000-1 §7.3.5 — PDF names are limited to 127 bytes after the
-	 * leading '/'. A 50-char UTF-8 input made entirely of multibyte chars
-	 * expands to ~150 bytes once #-escaped. The sanitiser must cap output
-	 * at 127 bytes while keeping different inputs distinct.
+	 * An id that #-escapes to more than a PDF name's 127 bytes is cut to fit, and two different
+	 * long ids stay different (ISO 32000-1 §7.3.5).
 	 */
 	public function testSanitiseIdHandlesOverlongInput()
 	{
-		// Build two distinct 200-char UTF-8 strings made of multibyte chars
-		// so #-escape expansion blows past 127 bytes for both.
-		$a = str_repeat("\xE2\x98\x85", 100); // 100 × ★ = 300 source bytes
-		$b = str_repeat("\xE2\x98\x86", 100); // 100 × ☆ = 300 source bytes (different glyph)
+		$a = str_repeat("\xE2\x98\x85", 100);
+		$b = str_repeat("\xE2\x98\x86", 100);
 
 		$sa = \Mpdf\Ua\StructureElement::sanitiseIdForPdf($a);
 		$sb = \Mpdf\Ua\StructureElement::sanitiseIdForPdf($b);
@@ -447,9 +336,8 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Build a PdfHexString whose ->value is the hex encoding of the supplied
-	 * UTF-8 input encoded as UTF-16BE-with-BOM (the most common source form
-	 * for /Alt and /ActualText in the wild).
+	 * @param string $utf8
+	 * @return \setasign\Fpdi\PdfParser\Type\PdfHexString The text as UTF-16BE with a byte order mark
 	 */
 	private function makeUtf16BeHexString($utf8)
 	{
@@ -458,7 +346,8 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Build a PdfHexString whose ->value is the hex encoding of $raw bytes.
+	 * @param string $raw
+	 * @return \setasign\Fpdi\PdfParser\Type\PdfHexString The bytes as a hex string
 	 */
 	private function makeRawHexString($raw)
 	{
@@ -468,7 +357,10 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Reflection trampoline into FpdiStructMerger::decodeImportedTextString().
+	 * Calls the private FpdiStructMerger::decodeImportedTextString().
+	 *
+	 * @param \setasign\Fpdi\PdfParser\Type\PdfHexString $node
+	 * @return string
 	 */
 	private function invokeDecode($node)
 	{

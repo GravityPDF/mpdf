@@ -5,11 +5,9 @@ namespace Mpdf\Ua\Security;
 use Mpdf\Ua\PdfUaTestCase;
 
 /**
- * Regression suite for UA1 audit findings H-2 (cyclic /K segfault) and
- * M-4 (sanity-walk node budget). Imports synthetic tagged PDFs whose struct
- * trees contain a cycle or pathological depth, and asserts the merger fails
- * gracefully — no segfault, no infinite loop, a warning surfaced via
- * getPdfUaWarnings().
+ * An imported tagged PDF whose structure tree loops back on itself, or runs
+ * deeper than the merger will follow, is imported with a warning instead of
+ * recursing without end.
  *
  * @group pdfua
  * @group security
@@ -20,6 +18,9 @@ class FpdiCycleTest extends PdfUaTestCase
 	/** @var string[] */
 	private $tempFiles = [];
 
+	/**
+	 * Removes the source PDFs the test wrote.
+	 */
 	protected function tear_down()
 	{
 		parent::tear_down();
@@ -31,6 +32,9 @@ class FpdiCycleTest extends PdfUaTestCase
 		$this->tempFiles = [];
 	}
 
+	/**
+	 * Two structure elements naming each other in /K produce a document and a cycle warning.
+	 */
 	public function testCyclicStructKDoesNotCrash()
 	{
 		$path = $this->writeTempPdf($this->buildCyclicPdf());
@@ -53,9 +57,11 @@ class FpdiCycleTest extends PdfUaTestCase
 		$this->assertTrue($cycleWarning, 'Expected a "cycle detected" warning from FpdiStructMerger.');
 	}
 
+	/**
+	 * A /K chain four times deeper than the merger's depth cap is imported quickly with a depth warning.
+	 */
 	public function testDeepStructKDoesNotCrash()
 	{
-		// 4096 levels — well past the 1024 cap configured in FpdiStructMerger.
 		$path = $this->writeTempPdf($this->buildDeepPdf(4096));
 
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
@@ -79,6 +85,11 @@ class FpdiCycleTest extends PdfUaTestCase
 		$this->assertTrue($depthWarning, 'Expected a "depth exceeded" warning from FpdiStructMerger.');
 	}
 
+	/**
+	 * @param string $bytes The PDF
+	 *
+	 * @return string The path of a temporary file holding it, removed in tear_down()
+	 */
 	private function writeTempPdf($bytes)
 	{
 		$path = tempnam(sys_get_temp_dir(), 'mpdf_cyclic_') . '.pdf';
@@ -88,8 +99,9 @@ class FpdiCycleTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Build a tagged PDF whose struct elements 6 and 7 reference each other
-	 * via /K, forming an A→B→A cycle. Adapted from the H-2 PoC.
+	 * A tagged PDF whose structure elements 6 and 7 each name the other in /K.
+	 *
+	 * @return string
 	 */
 	private function buildCyclicPdf()
 	{
@@ -107,9 +119,11 @@ class FpdiCycleTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Build a tagged PDF with a /K chain $depth deep. Each struct element's
-	 * /K is a single-element array referring to the next element by indirect
-	 * reference. The deepest element has /K [0] (a bare MCID).
+	 * A tagged PDF whose structure elements each hold the next in /K, the last holding MCID 0.
+	 *
+	 * @param int $depth How many elements the chain has
+	 *
+	 * @return string
 	 */
 	private function buildDeepPdf($depth)
 	{
@@ -130,6 +144,11 @@ class FpdiCycleTest extends PdfUaTestCase
 		return $this->assemblePdf($objects);
 	}
 
+	/**
+	 * @param string[] $objects Object bodies keyed by object number
+	 *
+	 * @return string The objects written out as a PDF with an xref table and trailer
+	 */
 	private function assemblePdf(array $objects)
 	{
 		$out     = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";

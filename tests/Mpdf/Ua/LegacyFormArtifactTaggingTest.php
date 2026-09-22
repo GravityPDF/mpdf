@@ -3,35 +3,19 @@
 namespace Mpdf\Ua;
 
 /**
- * Legacy-form artifact tagging — `useActiveForms=false` under PDFUA.
- *
- * When mPDF renders form widgets without active forms it draws inert chrome
- * (rectangles, text via Cell, ZapfDingbats glyphs) directly into the page
- * content stream. Previously that drawing produced "untagged real content"
- * which veraPDF rule 7.1#3 (ISO 14289-1:2014 §7.1) flags as a UA violation.
- *
- * The fix wraps every legacy `print_ob_*` else-branch in a /Artifact BMC ...
- * EMC bracket and a StructureTree artifact-suppression scope. The drawn
- * chrome is then a marked-content artifact (ISO 32000-1 §14.8.2.2) — outside
- * logical structure, conformant under PDF/UA-1.
- *
- * This file asserts both the conformance contract for the legacy path AND
- * cohabitation with the active-forms path.
+ * With useActiveForms off, a form control is only drawn, with no field behind it, so what is
+ * drawn is marked as an artifact.
  *
  * @group pdfua
- * @see   Form.php  print_ob_text/textarea/select/checkbox/radio/button/imageinput
  */
 class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 {
 
 	/**
-	 * Build a PDFUA mPDF in PDFUAauto mode WITHOUT useActiveForms.
+	 * A PDF/UA document in auto mode with useActiveForms off.
 	 *
-	 * Bypasses PdfUaTestCase::makeMpdf() so the legacy `useActiveForms=false`
-	 * path (which the parent helper does not exercise) becomes the canonical
-	 * setup for this file.
+	 * @param array $extraConfig
 	 *
-	 * @param  array $extraConfig
 	 * @return \Mpdf\Mpdf
 	 */
 	private function makeLegacyMpdf($extraConfig = [])
@@ -49,10 +33,11 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Render $html and return raw PDF bytes.
+	 * The document with the HTML written, as PDF bytes.
 	 *
-	 * @param  \Mpdf\Mpdf $mpdf
-	 * @param  string     $html
+	 * @param \Mpdf\Mpdf $mpdf
+	 * @param string     $html
+	 *
 	 * @return string
 	 */
 	private function render(\Mpdf\Mpdf $mpdf, $html)
@@ -62,19 +47,11 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Apply the four legacy-mode contract assertions to one widget render.
+	 * The control was drawn as an artifact, and nothing in the structure tree points at a
+	 * widget, since there is none.
 	 *
-	 *   1. PDF was produced (non-empty bytes).
-	 *   2. Output contains at least one /Artifact BMC marker — the legacy
-	 *      drawing path emitted at least one artifact bracket.
-	 *   3. Output contains a matching EMC.
-	 *   4. The struct tree carries NO /S /Form or /S /Annot — the legacy
-	 *      path has no AcroForm widget annotation behind the chrome, so
-	 *      no Form/Annot struct kid should reference one.
-	 *
-	 * @param  string $output  Raw PDF bytes
-	 * @param  string $widget  Human-readable widget label for assertion messages
-	 * @return void
+	 * @param string $output PDF bytes
+	 * @param string $widget The control, for the assertion messages
 	 */
 	private function assertLegacyArtifactContract($output, $widget)
 	{
@@ -101,6 +78,9 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		);
 	}
 
+	/**
+	 * A text input is drawn as an artifact.
+	 */
 	public function testInputTextWrappedInArtifact()
 	{
 		$mpdf = $this->makeLegacyMpdf();
@@ -108,6 +88,9 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		$this->assertLegacyArtifactContract($out, '<input type=text>');
 	}
 
+	/**
+	 * A textarea is drawn as an artifact.
+	 */
 	public function testTextareaWrappedInArtifact()
 	{
 		$mpdf = $this->makeLegacyMpdf();
@@ -118,6 +101,9 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		$this->assertLegacyArtifactContract($out, '<textarea>');
 	}
 
+	/**
+	 * A select is drawn as an artifact.
+	 */
 	public function testSelectWrappedInArtifact()
 	{
 		$mpdf = $this->makeLegacyMpdf();
@@ -128,6 +114,9 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		$this->assertLegacyArtifactContract($out, '<select>');
 	}
 
+	/**
+	 * A checkbox is drawn as an artifact.
+	 */
 	public function testCheckboxWrappedInArtifact()
 	{
 		$mpdf = $this->makeLegacyMpdf();
@@ -138,6 +127,9 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		$this->assertLegacyArtifactContract($out, '<input type=checkbox>');
 	}
 
+	/**
+	 * A radio button is drawn as an artifact.
+	 */
 	public function testRadioWrappedInArtifact()
 	{
 		$mpdf = $this->makeLegacyMpdf();
@@ -148,6 +140,9 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		$this->assertLegacyArtifactContract($out, '<input type=radio>');
 	}
 
+	/**
+	 * A submit button is drawn as an artifact.
+	 */
 	public function testButtonWrappedInArtifact()
 	{
 		$mpdf = $this->makeLegacyMpdf();
@@ -158,10 +153,12 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		$this->assertLegacyArtifactContract($out, '<input type=submit>');
 	}
 
+	/**
+	 * An image button is drawn as an artifact.
+	 */
 	public function testImageButtonWrappedInArtifact()
 	{
 		$mpdf = $this->makeLegacyMpdf();
-		// Tiny inline PNG so the test does not need network or filesystem fixtures.
 		$png = 'data:image/png;base64,'
 			. 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
 		$out = $this->render(
@@ -172,9 +169,7 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Strict mode (PDFUAauto=false) with useActiveForms=false must NOT throw.
-	 * The combination is a first-class legitimate config and the rendering
-	 * path tags itself correctly.
+	 * Strict mode accepts useActiveForms off, as the drawn controls are tagged correctly.
 	 */
 	public function testStrictModeLegacyFormsDoNotThrow()
 	{
@@ -184,8 +179,7 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * No useActiveForms warning should appear in PDFUAauto mode — there is
-	 * no auto-flip and the legacy path is silent.
+	 * Auto mode leaves useActiveForms off without warning about it.
 	 */
 	public function testAutoModeRecordsNoUseActiveFormsWarning()
 	{
@@ -201,23 +195,11 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * With useActiveForms=true the existing PDFUA-aware AcroForm code paths
-	 * in Form.php must continue to fire — i.e. real Widget annotations and
-	 * struct kids that reference them. This test catches accidental damage
-	 * to the active-form path from a future refactor of the artifact wrap.
-	 *
-	 * Asserts:
-	 *   - A widget annotation `/Subtype /Widget` appears (AcroForm field)
-	 *   - The struct tree references the widget via /Form (the canonical
-	 *     PDFUA struct type for an interactive form field per ISO 32000-1
-	 *     §14.8 Tables 333–335 and Matterhorn 19-005)
-	 *   - The legacy /Artifact BMC drawn-chrome path is NOT used (the
-	 *     content stream contains the active-form widget reference, not
-	 *     the drawn rectangle bracket)
+	 * With useActiveForms on, a text input is a widget annotation that a Form element in the
+	 * structure tree refers to.
 	 */
 	public function testActiveFormsStillProduceTaggedAnnotations()
 	{
-		// Build via PdfUaTestCase::makeMpdf() but force useActiveForms=true.
 		$mpdf = $this->makeMpdf(['useActiveForms' => true]);
 		$mpdf->WriteHTML('<p>Name: <input type="text" name="x" value="J" /></p>');
 		$out = $mpdf->Output(null, 'S');
@@ -235,9 +217,7 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Active-form select must also be conformant — it has its own PDFUA
-	 * code path and should produce a Widget + Form struct kid without
-	 * needing the artifact wrap.
+	 * With useActiveForms on, a select is a widget annotation that a Form element refers to.
 	 */
 	public function testActiveFormsSelectStillTagged()
 	{
@@ -251,9 +231,7 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Non-PDFUA documents with useActiveForms=false must be unchanged —
-	 * no /Artifact BMC bracket should appear around the form chrome,
-	 * because the wrap is gated on $this->PDFUA.
+	 * Without PDFUA a document with drawn form controls makes no PDF/UA claim.
 	 */
 	public function testNonPdfuaLegacyFormsNotWrapped()
 	{
@@ -262,12 +240,6 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 		$mpdf->WriteHTML('<p><input type="text" name="x" value="J" /></p>');
 		$out = $mpdf->Output(null, 'S');
 
-		// /Artifact BMC may still appear from other artifact-bound content
-		// (backgrounds), but specifically the form chrome must not be
-		// wrapped — sentinel: no MarkedContentHelper class is even active
-		// in this mode, so the form output must contain Cell-style text
-		// drawing without the BMC bracket. We can't easily distinguish
-		// per-call, but we CAN assert the document doesn't claim PDFUA.
 		$this->assertStringNotContainsString('<pdfuaid:part>1</pdfuaid:part>', $out);
 	}
 }

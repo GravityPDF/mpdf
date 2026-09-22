@@ -236,11 +236,7 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('>>');
 		$this->writer->write('endobj'); // end resource dictionary
 
-		// ISO 32000-1 §14.7.2 — write the struct tree before the catalog so
-		// MetadataWriter::writeCatalog() can emit /StructTreeRoot N 0 R.
-		// StructureWriter::writeStructTree() returns the StructTreeRoot object
-		// number; we feed it into UaState::setStructTreeRootObjNum() immediately
-		// so the runtime mutator round-trips the value to the catalog writer.
+		// Before the catalog, which refers to the tree's root
 		if ($this->mpdf->PDFUA) {
 			$this->ua->setStructTreeRootObjNum(
 				$this->ua->getStructureWriter()->writeStructTree(

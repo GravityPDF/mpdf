@@ -5,18 +5,13 @@ namespace Mpdf\Ua;
 use Mpdf\Output\Destination;
 
 /**
- * Exercises the strict-vs-auto two-path contract for PDF/UA-1 mode guards.
- *
- * Strict mode (PDFUAauto=false) must throw MpdfException on a violation; auto
- * mode (PDFUAauto=true) must record a warning via getPdfUaWarnings() and
- * proceed without throwing.
+ * A PDF/UA violation throws in strict mode and is recorded as a warning in auto mode.
  */
 class PdfUaModeTest extends PdfUaTestCase
 {
 
 	/**
-	 * OverWrite() cannot preserve the logical structure tree, so in strict
-	 * PDF/UA-1 mode it must throw (audit E21).
+	 * OverWrite() cannot keep the structure tree, so strict mode refuses it.
 	 */
 	public function testOverWriteInStrictModeThrows()
 	{
@@ -25,18 +20,15 @@ class PdfUaModeTest extends PdfUaTestCase
 		$this->expectException(\Mpdf\MpdfException::class);
 		$this->expectExceptionMessageMatches('/PDF\/UA-1 mode/');
 
-		// The strict guard fires before the input file is read, so the path
-		// does not need to exist.
+		// Refused before the file is read, so it need not exist
 		$mpdf->OverWrite('nonexistent.pdf', 'foo', 'bar', Destination::STRING_RETURN);
 	}
 
 	/**
-	 * In auto mode OverWrite() must warn that the accessibility guarantee is
-	 * lost and still perform the overwrite rather than throwing (audit E21).
+	 * In auto mode OverWrite() still overwrites, and warns that the structure tree is lost.
 	 */
 	public function testOverWriteInAutoModeWarnsAndReturns()
 	{
-		// Produce a valid PDF to overwrite.
 		$source = $this->makeMpdf();
 		$pdf = $this->getOutput($source, '<p>hello placeholder world</p>');
 

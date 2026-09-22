@@ -23,20 +23,16 @@ class Protection
 	private $useRC128Encryption;
 
 	/**
-	 * Whether to emit a /V 4 crypt-filter encryption dictionary (rather than the
-	 * legacy /V 1|2 RC4 handler). Required whenever the metadata stream must be
-	 * left genuinely unencrypted via the Identity crypt filter — the only valid
-	 * per-stream encryption bypass in ISO 32000-1 §7.6.5.
+	 * Whether a /V 4 crypt-filter dictionary is written in place of the /V 1 or 2 RC4 handler.
+	 * Only /V 4 has the Identity crypt filter that leaves the metadata stream unencrypted.
 	 *
 	 * @var bool
 	 */
 	private $useV4Encryption;
 
 	/**
-	 * Whether the document-level XMP metadata stream is encrypted. Mirrors the
-	 * /EncryptMetadata entry (ISO 32000-1 §7.6.3.3). When false — only possible
-	 * with /V 4 — the file encryption key derivation appends 0xFFFFFFFF per
-	 * Algorithm 2 step (g), and the metadata stream is written in plaintext.
+	 * The /EncryptMetadata entry: whether the document XMP metadata stream is encrypted.
+	 * It can only be false under /V 4.
 	 *
 	 * @var bool
 	 */
@@ -148,21 +144,11 @@ class Protection
 	}
 
 	/**
-	 * Switch the security handler to /V 4 crypt-filter encryption with an
-	 * unencrypted document metadata stream.
+	 * Encrypt with a /V 4 crypt filter and leave the XMP metadata stream in plaintext, so a
+	 * reader without the password can still find pdfuaid:part.
 	 *
-	 * ISO 32000-1 §14.3.2 recommends leaving the XMP metadata stream unencrypted
-	 * so its identifiers stay readable without the file key; PDF/UA-1 relies on
-	 * pdfuaid:part being recoverable by any processor. The Identity crypt filter
-	 * (§7.6.5) is the only valid per-stream bypass, and it exists only under a
-	 * /V 4 dictionary — the legacy /V 1|2 handler has no crypt filters, so a
-	 * declared Identity filter would be honoured by no reader.
-	 *
-	 * Must be called before setProtection() so generateEncryptionKey() folds the
-	 * 0xFFFFFFFF metadata marker (Algorithm 2 step (g)) into the file key. /V 4
-	 * requires the 128-bit key path, so RC128 is forced on as well.
-	 *
-	 * @return void
+	 * Call it before setProtection(): leaving the metadata out changes the file key. /V 4
+	 * needs the 128-bit key.
 	 */
 	public function useV4WithUnencryptedMetadata()
 	{
@@ -172,7 +158,7 @@ class Protection
 	}
 
 	/**
-	 * @return bool
+	 * @return bool Whether a /V 4 crypt-filter dictionary is written
 	 */
 	public function getUseV4Encryption()
 	{
@@ -180,7 +166,7 @@ class Protection
 	}
 
 	/**
-	 * @return bool
+	 * @return bool Whether the XMP metadata stream is encrypted
 	 */
 	public function getEncryptMetadata()
 	{
@@ -388,9 +374,8 @@ class Protection
 
 		$md5input = $user_pass . $this->oValue . $perms . $this->hexToString($this->uniqid);
 
-		// ISO 32000-1 §7.6.3.3 Algorithm 2 step (g): revision-4 handlers that do
-		// not encrypt the document metadata stream fold an extra 0xFFFFFFFF into
-		// the file key so the derived key differs from the metadata-encrypting one.
+		// A handler that leaves the metadata unencrypted adds 0xFFFFFFFF to the key
+		// (ISO 32000-1 §7.6.3.3, Algorithm 2 step g)
 		if ($this->useV4Encryption && !$this->encryptMetadata) {
 			$md5input .= "\xff\xff\xff\xff";
 		}

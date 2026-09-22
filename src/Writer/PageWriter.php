@@ -37,6 +37,13 @@ final class PageWriter
 	 */
 	private $ua;
 
+	/**
+	 * @param Mpdf           $mpdf
+	 * @param Form           $form
+	 * @param BaseWriter     $writer
+	 * @param MetadataWriter $metadataWriter
+	 * @param UaState        $ua
+	 */
 	public function __construct(Mpdf $mpdf, Form $form, BaseWriter $writer, MetadataWriter $metadataWriter, UaState $ua)
 	{
 		$this->mpdf = $mpdf;
@@ -149,8 +156,7 @@ final class PageWriter
 
 			// Page
 			$this->writer->object();
-			// ISO 32000-1:2008 §14.7.4.4 — StructureWriter::buildPageRefMap() looks up
-			// $mpdf->pageDim[$n]['n'] to resolve /Pg object numbers for MCR dicts.
+			// For the /Pg of the structure elements drawn on the page
 			$this->mpdf->pageDim[$n]['n'] = $this->mpdf->n;
 			$this->writer->write('<</Type /Page');
 			$this->writer->write('/Parent 1 0 R');
@@ -261,16 +267,8 @@ final class PageWriter
 				$this->writer->write($s);
 			}
 
-			// ISO 32000-1:2008 §14.7.4.4 — /StructParents integer key indexes into the
-			// ParentTree NumTree and must be present on every page dict when the document
-			// has a StructTreeRoot (Matterhorn Protocol 1.1 condition 28-002).
-			// /Tabs /S (structure order) is required on every page dict by ISO 14289-1:2014 §7.1
-			// (Matterhorn Protocol 1.1 condition 28-001) — NOT only on annotated pages.
-			//
-			// Mpdf::_beginpage() pre-allocates pageDim[$n]['structParents'] at page creation
-			// time so the value is available to addContentForElement() during HTML rendering;
-			// we read it back here. Fallback to nextStructParents() preserves behaviour for
-			// pages created via legacy paths that bypass _beginpage.
+			// Every page gets /StructParents and /Tabs /S, not only those with annotations. The key
+			// was allocated when the page began; a page made without _beginpage() takes one here.
 			if ($this->mpdf->PDFUA) {
 				if (isset($this->mpdf->pageDim[$n]['structParents'])) {
 					$structParents = $this->mpdf->pageDim[$n]['structParents'];

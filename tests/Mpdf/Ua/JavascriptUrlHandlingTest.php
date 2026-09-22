@@ -3,34 +3,22 @@
 namespace Mpdf\Ua;
 
 /**
- * PDF/UA-1 javascript:/vbscript: URL handling in <a href>.
+ * Links to a javascript: or vbscript: URL in a PDF/UA document.
  *
- * Strict mode (PDFUAauto=false): rejects the document with MpdfException
- * citing Matterhorn 17-001 / 28-002.
- *
- * Auto mode (PDFUAauto=true): strips the link entirely (no Link annotation,
- * no Link struct element, no /URI action), preserves the visible inner text,
- * preserves ARIA / lang as a Span struct element, and emits a single
- * warning per offending anchor.
- *
- * Defence in depth: MetadataWriter::writeAnnotations() also drops a /URI
- * action whose URI matches the policy regex, in case a third-party caller
- * (or FPDI-imported Link) reaches that branch with such a URI.
- *
- * Spec references:
- *   - ISO 14289-1:2014 §7.18 — interactive elements need accessible alternatives.
- *   - ISO 32000-1:2008 §12.6.4.7 — URI actions.
- *   - ISO 32000-1:2008 §14.7.2 Table 322 — Link /Alt fallback.
- *   - Matterhorn Protocol 1.1 condition 17-001 — document-level JavaScript prohibited
- *     (spirit applied to link-level URI actions with no fallback).
- *   - Matterhorn Protocol 1.1 condition 28-002 — Link annotation lacking text alternative.
- *   - WCAG 2.1 §2.1.1 — javascript: links are not keyboard-equivalent in PDF readers.
+ * Strict mode throws. PDFUAauto mode drops the link but keeps its text, keeping an aria-label
+ * or lang on a Span, and warns once per link. MetadataWriter also drops such a URI on a link
+ * added through Link() directly.
  *
  * @group pdfua
  */
 class JavascriptUrlHandlingTest extends PdfUaTestCase
 {
 
+	/**
+	 * In strict mode a javascript: link throws, naming the URL.
+	 *
+	 * @return void
+	 */
 	public function testJavascriptUrlThrowsInStrictMode()
 	{
 		$mpdf = $this->makeMpdf();
@@ -45,6 +33,11 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * In strict mode a javascript: link throws whatever the case of the scheme.
+	 *
+	 * @return void
+	 */
 	public function testCaseInsensitiveJavascriptDetectionStrict()
 	{
 		foreach (['JAVASCRIPT:foo()', 'JavaScript:bar()', 'jAvAsCrIpT:baz()'] as $href) {
@@ -59,15 +52,12 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Whitespace-prefixed schemes are caught by the UaPolicy regex directly.
-	 * (At the integration level, mPDF's HTML parser normalises hrefs through
-	 * GetFullPath() — when a `basepath` like `http://localhost/` is in scope,
-	 * a leading-space `javascript:` is rewritten to
-	 * `http://localhost/ javascript:foo()`, which is no longer a
-	 * policy-blocked scheme. The end-to-end behaviour therefore depends on
-	 * the document's basepath, but the policy unit must catch leading
-	 * whitespace whenever a raw href reaches it — e.g. via Mpdf::Link()
-	 * direct calls or a third-party PageLinks injection path.)
+	 * UaPolicy blocks a javascript: URL with whitespace in front of it.
+	 *
+	 * From HTML, GetFullPath() may already have joined such an href onto the base path; a call
+	 * to Link() hands it over as written.
+	 *
+	 * @return void
 	 */
 	public function testWhitespacePrefixedJavascriptCaughtByPolicy()
 	{
@@ -78,10 +68,13 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		$this->assertTrue(\Mpdf\Ua\UaPolicy::isPolicyBlockedHref('  javascript:foo()'));
 	}
 
+	/**
+	 * UaPolicy blocks script schemes in any case and spacing, and lets every other kind of href through.
+	 *
+	 * @return void
+	 */
 	public function testPolicyRegexCoversCaseAndWhitespaceVariants()
 	{
-		// Direct policy unit tests — these are the load-bearing assertions
-		// for the regex; integration tests below exercise the dispatch.
 		$blocked = [
 			'javascript:alert(1)',
 			'JAVASCRIPT:foo()',
@@ -121,6 +114,11 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * In strict mode a vbscript: link throws, naming the URL.
+	 *
+	 * @return void
+	 */
 	public function testVbscriptUrlAlsoBlockedStrict()
 	{
 		$mpdf = $this->makeMpdf();
@@ -132,24 +130,27 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * In PDFUAauto mode a javascript: link leaves no URL, URI action or Link element in the document.
+	 *
+	 * @return void
+	 */
 	public function testJavascriptUrlStrippedInAutoMode()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
 		$output = $this->getOutput($mpdf, '<p><a href="javascript:alert(1)">click here</a></p>');
 
-		// No throw. Visible text "click here" reaches the PDF — fonts may
-		// subset it as glyphs, but a TJ for the runs must exist; we assert
-		// the absence of the URI bytes anywhere in the document instead, which
-		// is the load-bearing privacy / safety property of the strip.
 		$this->assertStringNotContainsString('javascript:alert(1)', $output);
 		$this->assertStringNotContainsString('javascript:', $output);
-		// No URI action emitted.
 		$this->assertStringNotContainsString('/S /URI', $output);
-		// No Link struct element for this anchor (the surrounding <p> still
-		// produces a P struct element, but no /S /Link).
 		$this->assertStringNotContainsString('/S /Link', $output);
 	}
 
+	/**
+	 * A dropped javascript: link is warned about once.
+	 *
+	 * @return void
+	 */
 	public function testJavascriptUrlEmitsExactlyOneWarning()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
@@ -166,6 +167,11 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		$this->assertStringContainsString('stripped', $matching[0]);
 	}
 
+	/**
+	 * In PDFUAauto mode a javascript: link is dropped whatever the case of the scheme.
+	 *
+	 * @return void
+	 */
 	public function testCaseInsensitiveJavascriptDetectionAuto()
 	{
 		foreach (['JAVASCRIPT:foo()', 'JavaScript:bar()', 'jAvAsCrIpT:baz()'] as $href) {
@@ -176,14 +182,14 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * In PDFUAauto mode a javascript: link with whitespace in front of it is dropped.
+	 *
+	 * @return void
+	 */
 	public function testWhitespacePrefixedJavascriptDetectionAuto()
 	{
-		// At the integration level, mPDF's GetFullPath() may absorb leading
-		// whitespace (when a basepath is in scope) before our handler sees the
-		// href. In a clean test environment with no $_SERVER['HTTP_HOST'] /
-		// basepath, the whitespace survives — auto mode strips the link and
-		// no /URI action is emitted. (Direct UaPolicy unit coverage is in
-		// testWhitespacePrefixedJavascriptCaughtByPolicy.)
+		// With no HTTP_HOST there is no base path for GetFullPath() to join the href onto
 		$savedHost = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : null;
 		unset($_SERVER['HTTP_HOST']);
 		try {
@@ -198,6 +204,11 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * In PDFUAauto mode a vbscript: link is dropped.
+	 *
+	 * @return void
+	 */
 	public function testVbscriptUrlAlsoBlockedAuto()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
@@ -207,13 +218,13 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		$this->assertStringNotContainsString('/S /URI', $output);
 	}
 
+	/**
+	 * A dropped javascript: link whose text is split by inline tags is still warned about once.
+	 *
+	 * @return void
+	 */
 	public function testInlineSegmentedAnchorEmitsOneWarning()
 	{
-		// <a href="javascript:..."><b>bold</b> plain <i>italic</i></a>
-		// should emit a single warning, drop the link, render all three
-		// inline segments as plain text. Mpdf's tag dispatcher creates a NEW
-		// instance per open/close, so the warning must come from open(); we
-		// confirm exactly one warning is recorded.
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
 		$html = '<p><a href="javascript:foo()"><b>bold</b> plain <i>italic</i></a></p>';
 		$output = $this->getOutput($mpdf, $html);
@@ -232,6 +243,11 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		$this->assertStringNotContainsString('/S /Link', $output);
 	}
 
+	/**
+	 * The aria-label of a dropped link is kept as the /Alt of a Span.
+	 *
+	 * @return void
+	 */
 	public function testStrippedAnchorPreservesAriaLabel()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
@@ -240,14 +256,17 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 			'<p><a href="javascript:foo()" aria-label="Run">x</a></p>'
 		);
 
-		// No Link struct element.
 		$this->assertStringNotContainsString('/S /Link', $output);
-		// A Span struct element exists (with /Alt encoding "Run" in UTF-16BE).
 		$this->assertStringContainsString('/S /Span', $output);
-		// /Alt = "Run" → BOM + "R\0u\0n" → \xFE\xFF\x00R\x00u\x00n
+		// "Run" in UTF-16BE
 		$this->assertStringContainsString("\xFE\xFF\x00R\x00u\x00n", $output);
 	}
 
+	/**
+	 * The lang of a dropped link is kept on a Span.
+	 *
+	 * @return void
+	 */
 	public function testStrippedAnchorPreservesLang()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
@@ -258,12 +277,15 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 
 		$this->assertStringNotContainsString('/S /Link', $output);
 		$this->assertStringContainsString('/S /Span', $output);
-		// /Lang values are emitted as UTF-16BE PDF text strings (with BOM).
-		// "fr" → \xFE\xFF + \x00f\x00r.
 		$utf16BeFr = "\xFE\xFF\x00f\x00r";
 		$this->assertStringContainsString($utf16BeFr, $output);
 	}
 
+	/**
+	 * A dropped link with no aria-label or lang leaves its text in the paragraph, with no Span.
+	 *
+	 * @return void
+	 */
 	public function testStrippedAnchorWithoutAriaProducesNoExtraSpan()
 	{
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
@@ -272,13 +294,15 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 			'<p>Before <a href="javascript:foo()">plain</a> after.</p>'
 		);
 
-		// No Link, no extra Span — text flows inline under the parent P.
 		$this->assertStringNotContainsString('/S /Link', $output);
-		// A Span with /Alt or /Lang would appear in the structure tree; this
-		// anchor has neither, so no Span struct is emitted.
 		$this->assertStringNotContainsString('/S /Span', $output);
 	}
 
+	/**
+	 * A mailto: link is written as a Link with a URI action.
+	 *
+	 * @return void
+	 */
 	public function testMailtoUrlNotBlocked()
 	{
 		$mpdf = $this->makeMpdf();
@@ -288,30 +312,33 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		);
 		$this->assertStringContainsString('/S /Link', $output);
 		$this->assertStringContainsString('/S /URI', $output);
-		// The actual URI bytes appear in the /URI action.
 		$this->assertStringContainsString('mailto:foo@example.com', $output);
 	}
 
+	/**
+	 * A tel: link is kept as a Link, without a warning.
+	 *
+	 * @return void
+	 */
 	public function testTelUrlNotBlocked()
 	{
-		// `tel:` is permitted by the policy. mPDF's pre-existing href dispatch
-		// at Mpdf.php:17147 routes "no-dot" hrefs through the internal-link
-		// path (treating them as named anchors), so the resulting annotation
-		// is an internal Dest rather than a /URI action — but the salient
-		// property under test is "no throw, Link struct still produced, no
-		// policy strip". The legacy routing decision is out of scope.
+		// An href without a dot is taken for a named anchor, so this is an internal link, not a URI action
 		$mpdf = $this->makeMpdf();
 		$output = $this->getOutput(
 			$mpdf,
 			'<p><a href="tel:+1234567890">call</a></p>'
 		);
 		$this->assertStringContainsString('/S /Link', $output);
-		// Confirm no policy-blocked-scheme warning was recorded.
 		foreach ($mpdf->getPdfUaWarnings() as $w) {
 			$this->assertStringNotContainsString('tel:', $w);
 		}
 	}
 
+	/**
+	 * An https: link is written as a Link with a URI action.
+	 *
+	 * @return void
+	 */
 	public function testHttpsUrlUnchanged()
 	{
 		$mpdf = $this->makeMpdf();
@@ -324,16 +351,13 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		$this->assertStringContainsString('https://example.com', $output);
 	}
 
+	/**
+	 * A data: link is kept as a Link in strict mode, without a warning.
+	 *
+	 * @return void
+	 */
 	public function testDataUriNotBlocked()
 	{
-		// data: URIs are explicitly out of scope of the policy — they must NOT
-		// trigger the strict-mode throw or the auto-mode strip. Document
-		// generation must succeed and no PDF/UA warning must be recorded for
-		// the data: URL.
-		//
-		// (mPDF's pre-existing href dispatch at Mpdf.php:17147 may route this
-		// href through the internal-link path because the literal contains
-		// no `.`; the routing decision is unrelated to the policy.)
 		$mpdf = $this->makeMpdf();
 		$output = $this->getOutput(
 			$mpdf,
@@ -345,50 +369,50 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		}
 	}
 
+	/**
+	 * A link to a fragment is kept as a Link.
+	 *
+	 * @return void
+	 */
 	public function testInternalAnchorNotBlocked()
 	{
-		// `#fragment` is internal navigation, never a URI action.
 		$mpdf = $this->makeMpdf();
 		$output = $this->getOutput(
 			$mpdf,
 			'<p><a href="#section">jump</a></p>'
 		);
-		// Internal anchors do NOT emit /S /URI; they emit /Dest navigation.
-		// We just assert the document generates and a Link struct element is
-		// produced. (No throw is the assertion.)
 		$this->assertStringContainsString('/S /Link', $output);
 	}
 
+	/**
+	 * An a with a name and no href is a target, not a link, and makes no Link element.
+	 *
+	 * @return void
+	 */
 	public function testAnchorWithoutHrefStillFollowsExistingPath()
 	{
-		// <a name="anchor"> takes the bookmark path, no Link involvement.
 		$mpdf = $this->makeMpdf();
 		$output = $this->getOutput(
 			$mpdf,
 			'<p>Before <a name="anchor">marker</a> after.</p>'
 		);
-		// No struct element of type Link or Span is emitted by Tag/A for
-		// the bookmark path.
 		$this->assertStringNotContainsString('/S /Link', $output);
 	}
 
+	/**
+	 * A javascript: URL given to Link() directly, never seen by Tag\A, is dropped by MetadataWriter with a warning.
+	 *
+	 * @return void
+	 */
 	public function testThirdPartyJavascriptUriCaughtByAnnotationGuard()
 	{
-		// Simulate a third-party caller (or imported PDF) injecting a Link
-		// directly into Mpdf::Link() with a javascript: URI. Tag\A::open()
-		// is bypassed so the strict-throw / auto-strip does NOT run. The
-		// MetadataWriter guard must catch it.
 		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
-		// Render normal content first so a page exists.
 		$mpdf->WriteHTML('<p>preface</p>');
-		// Inject a Link annotation with a policy-blocked URI directly.
 		$mpdf->Link(10, 10, 100, 20, 'javascript:thirdParty(1)');
 		$output = $mpdf->Output(null, 'S');
 
-		// The /URI action must be stripped from the output bytes.
 		$this->assertStringNotContainsString('javascript:thirdParty(1)', $output);
 		$this->assertStringNotContainsString('/S /URI', $output);
-		// A warning must be recorded by the writer-side guard.
 		$warnings = $mpdf->getPdfUaWarnings();
 		$found = false;
 		foreach ($warnings as $w) {
@@ -400,25 +424,19 @@ class JavascriptUrlHandlingTest extends PdfUaTestCase
 		$this->assertTrue($found, 'MetadataWriter guard must record a warning for direct Link() injection.');
 	}
 
+	/**
+	 * Without PDFUA a javascript: link neither throws nor warns.
+	 *
+	 * @return void
+	 */
 	public function testJavascriptUrlUnchangedWhenPdfuaOff()
 	{
-		// Direct construction (no PDFUA), assert the legacy behaviour:
-		// document generation must NOT throw and no PDF/UA-1 warning must
-		// be recorded. (mPDF's pre-existing href dispatch at Mpdf.php:17147
-		// routes hrefs without a dot through the internal-link path, so the
-		// raw `javascript:alert(1)` literal does not survive into the PDF
-		// output even without our filter — that legacy quirk is unrelated
-		// to this feature. The load-bearing assertion is "no throw + no
-		// PDFUA warning" since PDFUA is off.)
 		$mpdf = new \Mpdf\Mpdf(['mode' => 'en-GB']);
 		$mpdf->compress = false;
 		$mpdf->WriteHTML('<p><a href="javascript:alert(1)">x</a></p>');
 		$output = $mpdf->Output(null, 'S');
 
 		$this->assertNotEmpty($output);
-		// PDF/UA warnings list belongs to the UaState — even when PDFUA is
-		// off the accessor returns an empty array. Assert no policy warning
-		// was recorded.
 		$warnings = $mpdf->getPdfUaWarnings();
 		$this->assertSame([], array_filter($warnings, function ($w) {
 			return stripos($w, 'javascript') !== false;

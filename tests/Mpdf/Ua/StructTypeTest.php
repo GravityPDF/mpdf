@@ -5,14 +5,7 @@ namespace Mpdf\Ua;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
- * Pure unit tests for StructType — HTML tag / CSS class → PDF struct type mapping.
- *
- * No mPDF instantiation is required; all methods under test are static.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.8 Tables 333–335 — standard PDF struct types
- *   - ISO 32000-1:2008 §14.7.3 — RoleMap (custom → standard type mapping)
- *   - Tagged PDF Best Practice Guide §4.2.3 — DL/DT/DD list treatment
+ * The structure type an HTML tag or an mPDF CSS class is tagged as.
  *
  * @group pdfua
  */
@@ -20,7 +13,7 @@ class StructTypeTest extends TestCase
 {
 
 	/**
-	 * Core tag-map entries for common block and inline tags.
+	 * Common block and inline tags map to their structure types.
 	 */
 	public function testFromHtmlTagReturnsCorrectType()
 	{
@@ -34,7 +27,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Unrecognised tags return null so callers know not to open a struct element.
+	 * A tag with no structure type maps to null, and opens no element.
 	 */
 	public function testFromHtmlTagUnknownReturnsNull()
 	{
@@ -44,8 +37,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * A valid ROLE attribute value (one that is itself a standard PDF struct type)
-	 * overrides the tag-map lookup — allowing ARIA role override.
+	 * A role that names a standard structure type overrides the tag's own type.
 	 */
 	public function testFromHtmlTagRoleOverride()
 	{
@@ -54,7 +46,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * An invalid ROLE attribute value is ignored and the tag-map fallback applies.
+	 * A role that names no standard structure type is ignored.
 	 */
 	public function testFromHtmlTagRoleInvalidIgnored()
 	{
@@ -63,7 +55,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Definition list tags map per Tagged PDF Best Practice Guide §4.2.3.
+	 * A definition list is a list whose terms are labels and whose definitions are bodies.
 	 */
 	public function testFromHtmlTagDl()
 	{
@@ -73,7 +65,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * HTML5 <figcaption> maps to PDF Caption struct type.
+	 * A <figcaption> is a Caption.
 	 */
 	public function testFromHtmlTagFigcaption()
 	{
@@ -91,8 +83,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * <a> maps to Link as its default (tag handler is responsible for only
-	 * calling open() when href is present).
+	 * An <a> is a Link; the tag opens one only when it has an href.
 	 */
 	public function testFromHtmlTagAnchor()
 	{
@@ -100,13 +91,8 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * <fieldset> / <legend> / <form> map to standard PDF struct types so that
-	 * BlockTag-based emission produces tagged real content rather than
-	 * untagged-content rule 7.1#3 violations.
-	 *
-	 * - FIELDSET → Sect : closest grouping element for related form controls.
-	 * - LEGEND   → Caption : Tagged PDF Best Practice — caption of a fieldset.
-	 * - FORM     → Div : reserves the 'Form' struct type for individual widgets.
+	 * A fieldset is a Sect captioned by its legend, and a form is a Div, as Form is kept for
+	 * the individual fields.
 	 */
 	public function testFromHtmlTagFormGrouping()
 	{
@@ -116,7 +102,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Exact match for the mPDF ToC container class.
+	 * The table of contents container is a TOC.
 	 */
 	public function testFromCssClassToc()
 	{
@@ -124,7 +110,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Prefix match for ToC level entries (mpdf_toc_level_0, mpdf_toc_level_1, …).
+	 * An entry at any level of the table of contents is a TOCI.
 	 */
 	public function testFromCssClassTociLevel()
 	{
@@ -133,8 +119,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * ToC link class must map to Link (not Reference) because it creates a real
-	 * PDF Link annotation requiring an OBJR kid.
+	 * A table of contents link is a Link, not a Reference, as it has a link annotation behind it.
 	 */
 	public function testFromCssClassTocA()
 	{
@@ -142,7 +127,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Prefix match for ToC page number label class.
+	 * A table of contents page number at any level is a Lbl.
 	 */
 	public function testFromCssClassTocPLevel()
 	{
@@ -151,7 +136,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Unrecognised CSS class returns null — not a ToC class.
+	 * Any other class maps to null.
 	 */
 	public function testFromCssClassUnknownReturnsNull()
 	{
@@ -161,7 +146,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * All common standard struct types must be accepted.
+	 * Standard structure types are valid.
 	 */
 	public function testIsValidKnownType()
 	{
@@ -175,17 +160,17 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Non-standard and misspelled type names must be rejected.
+	 * Non-standard names are not valid, and case matters.
 	 */
 	public function testIsValidUnknownType()
 	{
 		$this->assertFalse(StructType::isValid('BadType'));
-		$this->assertFalse(StructType::isValid('p'));     // case-sensitive
+		$this->assertFalse(StructType::isValid('p'));
 		$this->assertFalse(StructType::isValid('PARAGRAPH'));
 	}
 
 	/**
-	 * Grouping elements (ISO 32000-1 Table 333) must return true.
+	 * The grouping types of ISO 32000-1 Table 333 are grouping.
 	 */
 	public function testIsGroupingForGroupingTypes()
 	{
@@ -198,7 +183,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Leaf and block-level types (Table 334/335) must return false.
+	 * Block-level and inline types are not grouping.
 	 */
 	public function testIsGroupingForLeafTypes()
 	{
@@ -210,9 +195,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * Ruby annotation tags map to their standard PDF struct types
-	 * (ISO 32000-1 §14.8.5.6 Table 337). <rtc> has no PDF equivalent and falls
-	 * back to Span (only materialised when lang=/aria-label= forces an element).
+	 * Ruby tags map to the ruby structure types; <rtc>, which has none, is a Span.
 	 */
 	public function testFromHtmlTagRuby()
 	{
@@ -224,8 +207,7 @@ class StructTypeTest extends TestCase
 	}
 
 	/**
-	 * The ruby and warichu standard struct types are accepted by isValid()
-	 * so tag handlers and role= overrides can open them (ISO 32000-1 §14.8.5.6).
+	 * The ruby and warichu structure types are valid, so a role can name them.
 	 */
 	public function testIsValidRubyAndWarichuTypes()
 	{

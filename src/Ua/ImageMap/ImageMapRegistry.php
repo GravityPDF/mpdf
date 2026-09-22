@@ -8,34 +8,11 @@ use Mpdf\Ua\StructureTree;
 use Mpdf\Ua\UaState;
 
 /**
- * PDF/UA-1 — registry, deferred queue, and emission for HTML image maps
- * (`<img usemap="#name">` referencing `<map name="name">…<area>…</map>`).
+ * The <map> and <area> elements of a PDF/UA document, and the tagged Link annotations drawn over
+ * each <img usemap> that uses one.
  *
- * Replaces the legacy properties `$mpdf->pdfUaImageMaps`,
- * `$mpdf->pdfUaCurrentMapName`, `$mpdf->pdfUaDeferredImageMaps` and the three
- * private methods that lived on Mpdf.php (`processDeferredImageMaps`,
- * `emitImageMapLinks`, `imageMapShapeToRect`). Functionally identical, but
- * the state and behaviour live entirely under UaState now.
- *
- * Lifecycle:
- *   1. Tag\Map::open()  → openMap()  — register the named map.
- *   2. Tag\Area::open() → addArea()  — append a hotspot to the open map.
- *   3. Tag\Map::close() → closeMap() — clear the current-map cursor.
- *   4. Mpdf::printobjectbuffer() (image branch) → queueDeferred() — record
- *      the placed-image rectangle so we can emit Link annotations once the
- *      <map> registry is final (HTML5 §4.8.13 allows <map> after the host).
- *   5. Mpdf::WriteHTML() close path → drain() — process queued items.
- *
- * Spec references:
- *   - ISO 32000-1:2008 §12.5.6.5 — Link annotation /Rect /A /Contents
- *   - ISO 32000-1:2008 §14.8 Table 335 — Link struct element with OBJR kid
- *   - ISO 14289-1:2014 §7.18 — interactive content tagging
- *   - Matterhorn 28-002 — Link annotation needs a text alternative
- *
- * @see \Mpdf\Tag\Map
- * @see \Mpdf\Tag\Area
- * @see \Mpdf\Ua\StructureTree
- * @see \Mpdf\Ua\AnchorState
+ * A <map> may come after the image that uses it, so images are queued as they are placed and their
+ * links written once WriteHTML() has read the whole document.
  */
 class ImageMapRegistry
 {
@@ -50,50 +27,38 @@ class ImageMapRegistry
 	private $anchorState;
 
 	/**
-	 * map name (lowercased) → list of area descriptors:
-	 *   ['shape' => string, 'coords' => float[], 'href' => string,
-	 *    'alt' => string, 'target' => ?string]
+	 * The areas of each map by lowercased name, each with its shape, coords, href, alt and target
 	 *
 	 * @var array<string,array<int,array<string,mixed>>>
 	 */
 	private $maps = [];
 
 	/**
-	 * Lowercased name of the <map> currently being parsed, or null when no
-	 * <map> is open.
+	 * Lowercased name of the <map> being read, or null outside one
 	 *
 	 * @var string|null
 	 */
 	private $currentMapName = null;
 
 	/**
-	 * Deferred queue: one entry per <img usemap> seen in the layout pass that
-	 * is awaiting a final <map> registry before its Link annotations can be
-	 * emitted.
-	 *
-	 * Entry shape: ['mapName'=>string, 'page'=>int, 'pageHpt'=>float,
-	 * 'imgX'=>float, 'imgY'=>float, 'imgW'=>float, 'imgH'=>float,
-	 * 'origW'=>float, 'origH'=>float, 'transformCm'=>string,
-	 * 'figure'=>?StructureElement].
+	 * The images waiting for their map: where each was placed, its page and page height, its size in
+	 * pixels, any transform it was drawn with and its Figure element
 	 *
 	 * @var array<int,array<string,mixed>>
 	 */
 	private $deferred = [];
 
 	/**
-	 * UaState facade injected by setUaState() for warning emission. Injected
-	 * post-construction (not via the constructor) because UaState owns this
-	 * class, so accepting it as a constructor dep would be a build-time cycle
-	 * — mirrors StructureTree::setUaState().
+	 * Set after construction, as UaState is built from this class
 	 *
 	 * @var UaState|null
 	 */
 	private $uaState = null;
 
 	/**
-	 * @param Mpdf          $mpdf           host Mpdf for object-number allocation, page mutation, internal-link map
-	 * @param StructureTree $structureTree  push the host Figure / open Link struct elements
-	 * @param AnchorState   $anchorState    capture the per-area Link element ref for Mpdf::Link()
+	 * @param Mpdf          $mpdf
+	 * @param StructureTree $structureTree
+	 * @param AnchorState   $anchorState   Carries each area's Link element to Mpdf::Link()
 	 */
 	public function __construct(Mpdf $mpdf, StructureTree $structureTree, AnchorState $anchorState)
 	{
@@ -103,15 +68,9 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Inject the UaState facade for warning emission.
+	 * Give the registry somewhere to record warnings, once UaState has been built
 	 *
-	 * Used by ServiceFactory to break the construction cycle: UaState owns
-	 * this class, so we cannot accept it as a constructor dep. The factory
-	 * calls setUaState() after the facade has been built — mirroring
-	 * StructureTree::setUaState().
-	 *
-	 * @param  UaState $uaState
-	 * @return void
+	 * @param UaState $uaState
 	 */
 	public function setUaState(UaState $uaState)
 	{
@@ -119,11 +78,9 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Register a new map (Tag\Map::open). Idempotent — repeated open of the
-	 * same name preserves any areas already added.
+	 * Start reading a <map>. A second map of the same name adds to the areas of the first.
 	 *
-	 * @param  string $name  lowercased map name
-	 * @return void
+	 * @param string $name Lowercased
 	 */
 	public function openMap($name)
 	{
@@ -134,28 +91,23 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Clear the current-map cursor (Tag\Map::close).
-	 *
-	 * @return void
+	 * Stop reading the current <map>
 	 */
 	public function closeMap()
 	{
 		$this->currentMapName = null;
 	}
 
+	/**
+	 * @return string|null The lowercased name of the <map> being read, or null outside one
+	 */
 	public function getCurrentMapName()
 	{
 		return $this->currentMapName;
 	}
 
 	/**
-	 * Return the full registry (map name → list of area descriptors).
-	 *
-	 * Primarily intended for tests that introspect the parsed <map>/<area>
-	 * structure; production code should not snapshot the registry — it is
-	 * drained automatically at the end of WriteHTML().
-	 *
-	 * @return array<string,array<int,array<string,mixed>>>
+	 * @return array<string,array<int,array<string,mixed>>> The areas of each map by lowercased name
 	 */
 	public function getMaps()
 	{
@@ -163,16 +115,13 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Append a hotspot to the open map (Tag\Area::open). No-op if no map is
-	 * currently open — caller (Tag\Area) is responsible for warning when
-	 * <area> appears outside any <map>.
+	 * Add an <area> to the map being read. One outside any map is ignored here; Tag\Area warns of it.
 	 *
-	 * @param  string  $shape   'rect' | 'circle' | 'poly' | 'default'
-	 * @param  float[] $coords  numeric coords (already parsed by Tag\Area)
-	 * @param  string  $href
-	 * @param  string  $alt
-	 * @param  ?string $target
-	 * @return void
+	 * @param string      $shape  rect, circle, poly or default
+	 * @param float[]     $coords
+	 * @param string      $href
+	 * @param string      $alt
+	 * @param string|null $target
 	 */
 	public function addArea($shape, array $coords, $href, $alt, $target)
 	{
@@ -189,36 +138,28 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Record one host <img usemap> placement for later emission. Called from
-	 * Mpdf::printobjectbuffer() when the image's placed rectangle is known.
+	 * Hold an <img usemap> that has been placed until its map is known
 	 *
-	 * @param  array<string,mixed> $entry
-	 * @return void
+	 * @param array<string,mixed> $entry
 	 */
 	public function queueDeferred(array $entry)
 	{
 		$this->deferred[] = $entry;
 	}
 
+	/**
+	 * @return bool Whether any image is waiting for its map
+	 */
 	public function hasDeferred()
 	{
 		return !empty($this->deferred);
 	}
 
 	/**
-	 * Drain the deferred queue. Called from Mpdf::WriteHTML()'s close path
-	 * once the entire HTML has been parsed and the <map> registry is final.
+	 * Write the links of every waiting image, once the whole document has been read.
 	 *
-	 * For each queued image:
-	 *   1. Resolve the map by name (warn-and-skip if unknown).
-	 *   2. Push the host Figure struct element back onto the StructureTree
-	 *      stack so the Link kids parent under it.
-	 *   3. Switch $mpdf->page to the captured page so Mpdf::Link() routes
-	 *      the annotation onto the correct page's PageLinks array.
-	 *   4. Call emitForImage() to do the per-area work.
-	 *   5. Restore $mpdf->page and pop the Figure.
-	 *
-	 * @return void
+	 * Each image's page is made current again so Mpdf::Link() puts the annotation on it, and its
+	 * Figure is reopened so the Link elements are its children.
 	 */
 	public function drain()
 	{
@@ -236,10 +177,8 @@ class ImageMapRegistry
 			}
 			$figureElem = $deferred['figure'];
 			$this->mpdf->page = $deferred['page'];
-			// Mpdf::Link() flips y with the live $mpdf->hPt. At drain time hPt
-			// holds the *final* page's height, so restore the host image's page
-			// height too — otherwise hotspots land at the wrong y on documents
-			// that mix page sizes / orientations.
+			// Mpdf::Link() flips y with hPt, which by now is the last page's height; a document
+			// mixing page sizes needs the height of the image's own page
 			$this->mpdf->hPt = $deferred['pageHpt'];
 			if ($figureElem !== null) {
 				$this->structureTree->pushExisting($figureElem);
@@ -264,20 +203,16 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Emit one PDF Link annotation + Link struct element per <area> on a host
-	 * <img usemap>.
+	 * Write a Link annotation and Link element for each area of an image's map
 	 *
-	 * @param  array<int,array<string,mixed>> $areas
-	 * @param  float $imgX   inner-X of the placed image (user units)
-	 * @param  float $imgY   inner-Y of the placed image (user units, top-left)
-	 * @param  float $imgW   placed image width in user units
-	 * @param  float $imgH   placed image height in user units
-	 * @param  float $origW  source image width in pixels
-	 * @param  float $origH  source image height in pixels
-	 * @param  float[]|null $matrix  pixel-space -> device-space affine for a
-	 *                               rotated/transformed host (emits /QuadPoints),
-	 *                               or null for an axis-aligned host (plain /Rect)
-	 * @return void
+	 * @param array<int,array<string,mixed>> $areas
+	 * @param float        $imgX   Placed image, in user units from the top left
+	 * @param float        $imgY
+	 * @param float        $imgW
+	 * @param float        $imgH
+	 * @param float        $origW  Image width in pixels
+	 * @param float        $origH  Image height in pixels
+	 * @param float[]|null $matrix Pixel to device space for a rotated or transformed image, null otherwise
 	 */
 	private function emitForImage(array $areas, $imgX, $imgY, $imgW, $imgH, $origW, $origH, $matrix = null)
 	{
@@ -295,12 +230,7 @@ class ImageMapRegistry
 			}
 			list($x1, $y1, $x2, $y2) = $rect;
 
-			// PDF/UA-1 (audit E20) — a poly/polygon hotspot must not activate the
-			// whole bounding box. Tile the polygon interior with /QuadPoints (one
-			// degenerate quad per triangle) so the clickable region approximates
-			// the shape; /Rect stays the bounding box. Works for both axis-aligned
-			// hosts (synthesise the plain placement matrix) and rotated/transformed
-			// ones (reuse the captured render matrix — C2 machinery).
+			// A polygon is tiled with /QuadPoints so only its interior is clickable, not its bounding box
 			$poly = $this->polygonPoints($area['shape'], $area['coords']);
 			if ($poly !== null) {
 				$devMatrix = $matrix !== null
@@ -311,8 +241,7 @@ class ImageMapRegistry
 					$this->emitQuads($area, $quads);
 					continue;
 				}
-				// Non-simple/degenerate polygon that could not be triangulated:
-				// fall through to the bounding-box path so the link still emits.
+				// A self-intersecting or flat polygon keeps its bounding box
 			}
 
 			if ($matrix === null) {
@@ -329,10 +258,7 @@ class ImageMapRegistry
 				continue;
 			}
 
-			// Rotated/transformed host image: map the four pixel-space corners of
-			// the hotspot through the exact render matrix into device space and
-			// emit them as a /QuadPoints quad. /Rect is the quad's bounding box,
-			// back-converted to user space so Mpdf::Link() reproduces it.
+			// On a rotated or transformed image the area's corners go through the matrix it was drawn with
 			$c1 = $this->applyMatrix($matrix, $x1, $y1);
 			$c2 = $this->applyMatrix($matrix, $x2, $y1);
 			$c3 = $this->applyMatrix($matrix, $x2, $y2);
@@ -342,14 +268,10 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Emit one Link annotation for a hotspot already reduced to device-space
-	 * /QuadPoints (8·n floats, n≥1). /Rect is the quads' axis-aligned bounding
-	 * box back-converted to user space so Mpdf::Link() reproduces it. Shared by
-	 * the rotated single-quad path and the polygon-tiling path (audit E20).
+	 * Write the link of an area drawn as /QuadPoints, with the bounding box of the quads as its /Rect
 	 *
-	 * @param  array<string,mixed> $area
-	 * @param  float[]             $quads  device-space /QuadPoints (8·n floats)
-	 * @return void
+	 * @param array<string,mixed> $area
+	 * @param float[]             $quads Eight device space numbers per quad
 	 */
 	private function emitQuads(array $area, array $quads)
 	{
@@ -379,39 +301,29 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Emit one Link struct element + PDF Link annotation for a single <area>.
+	 * Write the Link element and Link annotation of one area
 	 *
-	 * Shared by the axis-aligned (/Rect) and rotated (/QuadPoints) paths: only
-	 * the geometry differs, so the struct-element open, href resolution and
-	 * Mpdf::Link() call live here. $quad is null for an axis-aligned hotspot.
-	 *
-	 * @param  array<string,mixed> $area
-	 * @param  float        $rx    annotation rect x (user units)
-	 * @param  float        $ry    annotation rect y (user units, top-left)
-	 * @param  float        $rw    annotation rect width (user units)
-	 * @param  float        $rh    annotation rect height (user units)
-	 * @param  float[]|null $quad  device-space /QuadPoints (8 floats), or null
-	 * @return void
+	 * @param array<string,mixed> $area
+	 * @param float        $rx   Annotation rectangle, in user units from the top left
+	 * @param float        $ry
+	 * @param float        $rw
+	 * @param float        $rh
+	 * @param float[]|null $quad Device space /QuadPoints, or null for a plain rectangle
 	 */
 	private function emitAreaLink(array $area, $rx, $ry, $rw, $rh, $quad)
 	{
-		// Open a Link struct element under the active Figure (top of stack).
-		// Mirrors Tag\A::open(): Alt is the area's alt text (Matterhorn 28-002),
-		// _href is stashed so any strict-mode pruning diagnostic can quote it.
+		// The alt text is the link's text alternative (Matterhorn 28-002), and _href lets a
+		// warning about the element name where it pointed
 		$this->structureTree->open('Link', ['Alt' => $area['alt']]);
 		$linkElem = $this->structureTree->getCurrent();
 		$linkElem->setAttribute('_href', $area['href']);
 		$this->anchorState->setLinkStructElem($linkElem);
 
-		// Resolve href: "#frag" is an internal GoTo, anything else a URI action.
 		$href = $area['href'];
 		if (isset($href[0]) && $href[0] === '#') {
 			$target = substr($href, 1);
-			// UA1 audit L-6 defence-in-depth iteration cap. Each iteration
-			// prepends a '#' so the loop terminates as soon as the prefixed key
-			// is unused; an adversarial $internallink shape could in theory keep
-			// extending it. 1024 prefix chars is far past any realistic anchor
-			// collision and well below memory pressure.
+			// Each pass prefixes another '#' until the key is free; the cap stops a pathological
+			// $internallink from growing it without end
 			$collisionGuard = 0;
 			while (array_key_exists($target, $this->mpdf->internallink)) {
 				$target = '#' . $target;
@@ -444,17 +356,12 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Build the device-space affine matrix mapping a host image's pixel-space
-	 * coordinates (origin top-left) to PDF default user space, or null when the
-	 * image is axis-aligned (no rotate/transform) and a plain /Rect suffices.
+	 * The matrix taking an image's pixels (from the top left) to device space, built from the same
+	 * cm operators the image was drawn with so the areas land on the pixels they name
 	 *
-	 * Replays the exact content-stream matrices mPDF draws the image with (the
-	 * image placement cm, then the captured $tr rotate + $tr2 CSS transform)
-	 * so every hotspot quad aligns with the drawn pixels by construction.
-	 * ISO 32000-1 Sec 8.3.4 (CTM concatenation).
+	 * @param array<string,mixed> $entry A waiting image
 	 *
-	 * @param  array<string,mixed> $entry  a drained deferred image-map entry
-	 * @return float[]|null                 [a, b, c, d, e, f], or null
+	 * @return float[]|null [a, b, c, d, e, f], or null when the image was neither rotated nor transformed
 	 */
 	private function buildHotspotMatrix(array $entry)
 	{
@@ -463,40 +370,36 @@ class ImageMapRegistry
 			return null;
 		}
 		$scale = Mpdf::SCALE;
-		// Image placement matrix: unit square to device rect (the raster
-		// "... cm /I Do" operator in Mpdf::printobjectbuffer()).
+		// The "cm /I Do" that places the image's unit square
 		$imageCm = [
 			$entry['imgW'] * $scale, 0.0,
 			0.0, $entry['imgH'] * $scale,
 			$entry['imgX'] * $scale,
 			$entry['pageHpt'] - ($entry['imgY'] + $entry['imgH']) * $scale,
 		];
-		// CTM at the Do = placement matrix pre-multiplied onto the captured
-		// matrices folded in issue order (each cm left-multiplies the CTM).
+		// Each cm left-multiplies the CTM, so fold them in the order they were written
 		$pre = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 		foreach ($this->parseCmMatrices($cm) as $m) {
 			$pre = $this->matmul($m, $pre);
 		}
 		$ctm = $this->matmul($imageCm, $pre);
-		// Pixel space (top-left origin) to image unit square (bottom-left).
+		// Pixels run down from the top left, the unit square up from the bottom left
 		$pixelToUnit = [1.0 / $entry['origW'], 0.0, 0.0, -1.0 / $entry['origH'], 0.0, 1.0];
 		return $this->matmul($pixelToUnit, $ctm);
 	}
 
 	/**
-	 * Build the pixel-space -> device-space affine for an axis-aligned host
-	 * image (no rotate/transform), so the polygon-tiling path (audit E20) can
-	 * map hotspot vertices the same way the rotated path maps them via
-	 * buildHotspotMatrix(). Pixel origin is top-left; device origin is
-	 * bottom-left (y up), matching Mpdf::Link()'s y-flip.
+	 * The matrix taking the pixels of an image that was neither rotated nor transformed to device
+	 * space, for tiling a polygon the same way buildHotspotMatrix() allows on one that was
 	 *
-	 * @param  float $imgX
-	 * @param  float $imgY
-	 * @param  float $imgW
-	 * @param  float $imgH
-	 * @param  float $origW
-	 * @param  float $origH
-	 * @return float[]  [a, b, c, d, e, f]
+	 * @param float $imgX
+	 * @param float $imgY
+	 * @param float $imgW
+	 * @param float $imgH
+	 * @param float $origW
+	 * @param float $origH
+	 *
+	 * @return float[] [a, b, c, d, e, f]
 	 */
 	private function buildAxisAlignedMatrix($imgX, $imgY, $imgW, $imgH, $origW, $origH)
 	{
@@ -507,11 +410,9 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Extract every "a b c d e f cm" matrix from a content-stream fragment, in
-	 * the order they appear.
+	 * @param string $cm Content stream
 	 *
-	 * @param  string $cm
-	 * @return array<int,float[]>  list of [a, b, c, d, e, f]
+	 * @return array<int,float[]> Each "a b c d e f cm" in it, in order
 	 */
 	private function parseCmMatrices($cm)
 	{
@@ -528,12 +429,12 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Multiply two affine matrices [a b c d e f] (row-vector convention, third
-	 * column implicitly [0 0 1]).
+	 * Multiply two PDF matrices [a b c d e f], which act on row vectors
 	 *
-	 * @param  float[] $a
-	 * @param  float[] $b
-	 * @return float[]  $a times $b
+	 * @param float[] $a
+	 * @param float[] $b
+	 *
+	 * @return float[] $a × $b
 	 */
 	private function matmul(array $a, array $b)
 	{
@@ -548,12 +449,11 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Apply an affine matrix to a point.
+	 * @param float[] $m
+	 * @param float   $x
+	 * @param float   $y
 	 *
-	 * @param  float[] $m
-	 * @param  float   $x
-	 * @param  float   $y
-	 * @return float[]  [x', y']
+	 * @return float[] The point [x, y] taken through $m
 	 */
 	private function applyMatrix(array $m, $x, $y)
 	{
@@ -564,14 +464,12 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Convert an HTML image-map shape + coords into an axis-aligned rectangle
-	 * in image-pixel space.
+	 * @param string  $shape
+	 * @param float[] $coords
+	 * @param float   $origW
+	 * @param float   $origH
 	 *
-	 * @param  string  $shape   'rect' | 'circle' | 'poly' | 'polygon' | 'default'
-	 * @param  float[] $coords
-	 * @param  float   $origW
-	 * @param  float   $origH
-	 * @return float[]|null  [x1, y1, x2, y2] in image-pixel space, or null if invalid
+	 * @return float[]|null The bounding box [x1, y1, x2, y2] of an area in pixels, or null when its coords are malformed
 	 */
 	private function shapeToRect($shape, $coords, $origW, $origH)
 	{
@@ -618,13 +516,10 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Return a poly/polygon area's vertices in image-pixel space, or null when
-	 * the shape is not a polygon or its coords are malformed. Used by the E20
-	 * tiling path; every other shape keeps the plain shapeToRect() bounding box.
+	 * @param string  $shape
+	 * @param float[] $coords
 	 *
-	 * @param  string  $shape
-	 * @param  float[] $coords
-	 * @return array<int,float[]>|null  list of [x, y] vertices, or null
+	 * @return array<int,float[]>|null The [x, y] vertices of a polygon in pixels, or null for any other shape or malformed coords
 	 */
 	private function polygonPoints($shape, array $coords)
 	{
@@ -643,16 +538,12 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Tile a polygon (pixel-space vertices) with device-space /QuadPoints: ear-clip
-	 * it into triangles, then map each triangle through $matrix and emit it as a
-	 * degenerate quad (its third vertex repeated as the fourth). The union of the
-	 * quads approximates the polygon interior. Returns null when the polygon is
-	 * non-simple/degenerate and cannot be triangulated, so the caller falls back to
-	 * the bounding box. ISO 32000-1 §12.5.6.5.
+	 * Tile a polygon with /QuadPoints, one quad per triangle it is cut into, the last corner repeated
 	 *
-	 * @param  array<int,float[]> $poly    pixel-space vertices [[x, y], …]
-	 * @param  float[]            $matrix  pixel-space -> device-space affine
-	 * @return float[]|null                flat list of 8·n device-space floats, or null
+	 * @param array<int,float[]> $poly   Vertices in pixels
+	 * @param float[]            $matrix Pixel to device space
+	 *
+	 * @return float[]|null Eight device space numbers per quad, or null when the polygon cannot be cut into triangles
 	 */
 	private function polygonQuads(array $poly, array $matrix)
 	{
@@ -675,13 +566,11 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Ear-clipping triangulation of a simple polygon (convex or concave), after
-	 * John W. Ratcliff's classic algorithm. Returns a list of index triples into
-	 * $pts, or an empty list when the polygon is non-simple/degenerate (self-
-	 * intersecting or zero-area) and no valid triangulation exists.
+	 * Cut a polygon into triangles by ear clipping, after John W. Ratcliff
 	 *
-	 * @param  array<int,float[]> $pts  vertices [[x, y], …]
-	 * @return array<int,int[]>         list of [i, j, k] index triples
+	 * @param array<int,float[]> $pts [x, y] vertices
+	 *
+	 * @return array<int,int[]> The vertex indexes of each triangle, or none for a self-intersecting or flat polygon
 	 */
 	private function triangulatePolygon(array $pts)
 	{
@@ -689,8 +578,7 @@ class ImageMapRegistry
 		if ($n < 3) {
 			return [];
 		}
-		// Orient the working index ring counter-clockwise so the ear-convexity
-		// sign test is consistent regardless of the source winding.
+		// Walk the vertices counter-clockwise whichever way they were given, as the ear test expects
 		$V = [];
 		if ($this->polygonArea($pts) > 0.0) {
 			for ($i = 0; $i < $n; $i++) {
@@ -703,18 +591,17 @@ class ImageMapRegistry
 		}
 		$tris = [];
 		$nv    = $n;
-		$count = 2 * $nv; // failsafe against a non-simple polygon looping forever
+		$count = 2 * $nv; // a self-intersecting polygon runs out of ears and would loop forever
 		$v = $nv - 1;
 		while ($nv > 2) {
 			if (($count--) <= 0) {
-				return []; // non-simple polygon: caller falls back to the bbox
+				return [];
 			}
 			$u = $v >= $nv ? 0 : $v;
 			$v = $u + 1 >= $nv ? 0 : $u + 1;
 			$w = $v + 1 >= $nv ? 0 : $v + 1;
 			if ($this->polygonSnip($pts, $V[$u], $V[$v], $V[$w], $nv, $V)) {
 				$tris[] = [$V[$u], $V[$v], $V[$w]];
-				// Remove the clipped ear tip (vertex v) from the ring.
 				for ($s = $v, $t = $v + 1; $t < $nv; $s++, $t++) {
 					$V[$s] = $V[$t];
 				}
@@ -726,10 +613,9 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Signed area of a polygon (shoelace); positive for counter-clockwise winding.
+	 * @param array<int,float[]> $pts
 	 *
-	 * @param  array<int,float[]> $pts
-	 * @return float
+	 * @return float The signed area of a polygon, positive when its vertices run counter-clockwise
 	 */
 	private function polygonArea(array $pts)
 	{
@@ -742,15 +628,15 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Ear test for the ear-clipping triangulator: true when triangle (a, b, c) is
-	 * convex (CCW) and no other remaining vertex lies inside it.
+	 * Whether triangle a, b, c is an ear: it turns counter-clockwise and holds no other vertex left
 	 *
-	 * @param  array<int,float[]> $pts
-	 * @param  int                $a
-	 * @param  int                $b
-	 * @param  int                $c
-	 * @param  int                $nv  number of live vertices in $V
-	 * @param  int[]              $V   live index ring
+	 * @param array<int,float[]> $pts
+	 * @param int                $a
+	 * @param int                $b
+	 * @param int                $c
+	 * @param int                $nv How many vertices of $V are left
+	 * @param int[]              $V  Indexes of the vertices left
+	 *
 	 * @return bool
 	 */
 	private function polygonSnip(array $pts, $a, $b, $c, $nv, array $V)
@@ -763,7 +649,7 @@ class ImageMapRegistry
 		$cx = $pts[$c][0];
 		$cy = $pts[$c][1];
 		if ($eps > (($bx - $ax) * ($cy - $ay) - ($by - $ay) * ($cx - $ax))) {
-			return false; // reflex (or collinear) vertex — not an ear
+			return false;
 		}
 		for ($p = 0; $p < $nv; $p++) {
 			$idx = $V[$p];
@@ -778,8 +664,7 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Barycentric-sign point-in-triangle test (inclusive of the edges), assuming a
-	 * counter-clockwise triangle (a, b, c).
+	 * Whether point p lies in counter-clockwise triangle a, b, c or on its edges
 	 *
 	 * @return bool
 	 */
@@ -804,20 +689,11 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Apply the branch's strict/auto policy to an image-map conformance
-	 * violation detected during drain/emission.
+	 * Throw for a map or area that cannot be written, or with PDFUAauto warn and let the caller skip it
 	 *
-	 * PDFUAauto=false (strict): throw MpdfException naming the offending
-	 * map/area so the document fails loudly rather than shipping partial or
-	 * mis-placed link output. PDFUAauto=true: record the diagnostic as a
-	 * warning and let the caller skip the offending item. Mirrors the
-	 * strict/auto branches the tag handlers use (Tag\Area::open,
-	 * Tag\A::open) — the registry runs after the tag handlers (at drain time)
-	 * but must honour the same contract.
+	 * @param string $msg
 	 *
-	 * @param  string $msg
-	 * @return void
-	 * @throws \Mpdf\MpdfException in strict mode
+	 * @throws \Mpdf\MpdfException Without PDFUAauto
 	 */
 	private function enforce($msg)
 	{
@@ -828,10 +704,7 @@ class ImageMapRegistry
 	}
 
 	/**
-	 * Emit a PDFUAauto warning via the injected UaState facade if wired.
-	 *
-	 * @param  string $msg
-	 * @return void
+	 * @param string $msg
 	 */
 	private function warn($msg)
 	{

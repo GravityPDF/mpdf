@@ -3,94 +3,55 @@
 namespace Mpdf\Ua;
 
 /**
- * Accumulator for the logical document structure during HTML parse.
- *
- * Maintains the currently-open element stack, allocates per-page MCID integers,
- * builds the ParentTree mapping from /StructParents keys to struct elements, and
- * tracks the artifact suppression depth so decorative content (running
- * headers/footers, OCG-layer wrappers, aria-hidden subtrees) bypasses struct-
- * element creation entirely.
- *
- * One instance per Mpdf lifecycle, constructed by ServiceFactory and reached
- * via $this->ua->getStructureTree().
- *
- * Spec references:
- *   - ISO 32000-1:2008 §14.7.2 — Structure Hierarchy
- *   - ISO 32000-1:2008 §14.7.4.4 — ParentTree; dense MCID arrays per /StructParents key
- *   - ISO 32000-1:2008 §14.8.2.2 — Real Content vs Artifacts
- *   - ISO 32000-1:2008 §14.7.3 — RoleMap (custom → standard type mapping)
- *
- * @see StructureElement  the node type managed by the stack / tree
- * @see StructureWriter   serialises this tree to PDF objects
+ * The logical structure of a PDF/UA document as it is read: the elements open at this point, the
+ * marked content IDs each page has handed out, and the ParentTree that leads from content back to
+ * its element. Content drawn as an artifact creates no element.
  */
 class StructureTree
 {
 
-	/** @var StructureElement  Permanent Document root; never popped from $stack. */
+	/** @var StructureElement The Document element, which is never closed */
 	protected $root;
 
-	/** @var StructureElement[]  Open element stack; index 0 is always $root. */
+	/** @var StructureElement[] The open elements, $root first */
 	protected $stack;
 
 	/**
-	 * @var array<int,int>
-	 *   Per-page MCID counters keyed by /StructParents integer. ISO 32000-1
-	 *   §14.7.4.4 — the ParentTree entry for each key must be a dense array
-	 *   starting at MCID 0. The counter resets automatically because a new
-	 *   /StructParents integer gets a new key.
+	 * @var array<int,int> The next MCID of each /StructParents key; each key counts from 0 with no gaps
+	 *   (ISO 32000-1 §14.7.4.4)
 	 */
 	protected $mcidByPage;
 
 	/**
-	 * @var array<int, array<int, StructureElement>>
-	 *   Outer key: /StructParents integer (from PageWriter). Inner key: MCID.
-	 *   Value: the struct element that owns that content item. Serialised by
-	 *   StructureWriter as the ParentTree NumTree.
+	 * @var array<int, array<int, StructureElement>> The element owning each MCID, by /StructParents key
 	 */
 	protected $parentTree;
 
 	/**
-	 * @var int  Artifact suppression depth; incremented by openArtifact() /
-	 *   decremented by closeArtifact(). When > 0, open()/addContent() become
-	 *   no-ops — content renders but produces no struct element and no MCID.
-	 *   ISO 32000-1 §14.8.2.2 — Artifacts are content outside the logical
-	 *   structure (pagination, decoration, layout helpers).
+	 * @var int How many artifacts are open; while any is, no elements are created and no MCIDs handed out
 	 */
 	protected $artifactDepth;
 
-	/** @var array<int, StructureElement>  Annotation /StructParent integer → owning struct element. */
+	/** @var array<int, StructureElement> The element owning each annotation, by its /StructParent */
 	protected $annotParentTree;
 
 	/**
-	 * @var \Mpdf\Ua\UaState|null  Facade injected after construction (ServiceFactory
-	 *   builds StructureTree before UaState — see ServiceFactory bootstrap order).
-	 *   Used to obtain the next /StructParent integer from the same pool that pages
-	 *   draw from, avoiding collisions where a page's /StructParents N and an
-	 *   annotation's /StructParent N both target the same ParentTree key
-	 *   (ISO 32000-1 §14.7.4.4 — page-level plural keys and annotation singular
-	 *   keys SHARE the ParentTree NumTree).
+	 * @var \Mpdf\Ua\UaState|null Set after construction, as it is built after this class. Pages and
+	 *   annotations are keyed in the same ParentTree, so they draw their keys from its one counter.
 	 */
 	protected $uaState;
 
 	/**
-	 * @var array<string,string>
-	 *   RoleMap entries collected from ARIA role="custom-name" usage.
-	 *   Key: custom role name. Value: standard PDF struct type it maps to.
-	 *   Emitted by StructureWriter on the StructTreeRoot dict.
-	 *   ISO 32000-1 §14.7.3 — RoleMap dict.
+	 * @var array<string,string> The standard type each custom role is mapped to, for the RoleMap
 	 */
 	protected $roleMappings;
 
 	/**
-	 * Initialise the tree with a Document root already on the stack and all
-	 * accumulators empty. Called once by ServiceFactory; UaState stores the
-	 * resulting instance.
+	 * Start with only the Document element open
 	 */
 	public function __construct()
 	{
-		// ISO 32000-1 §14.8 Table 333 — Document is the permanent root of every
-		// struct tree. It never has a parent and never carries MCIDs directly.
-		$this->root               = new StructureElement('Document');
+		$this->root              = new StructureElement('Document');
 		$this->stack              = [$this->root];
 		$this->mcidByPage         = [];
 		$this->parentTree         = [];
@@ -101,30 +62,25 @@ class StructureTree
 	}
 
 	/**
-	 * Inject the UaState facade so ParentTree-key allocation can share a single
-	 * counter with page /StructParents. Called once by ServiceFactory after the
-	 * UaState facade is built (the build order is StructureTree → UaState, so a
-	 * constructor-time injection is impossible).
+	 * Give the tree the counter it shares with pages for ParentTree keys, once UaState has been built
 	 *
-	 * @param  \Mpdf\Ua\UaState $uaState
-	 * @return void
+	 * @param \Mpdf\Ua\UaState $uaState
 	 */
 	public function setUaState(UaState $uaState)
 	{
 		$this->uaState = $uaState;
 	}
 
-	/** @return StructureElement permanent Document root. */
+	/**
+	 * @return StructureElement The Document element
+	 */
 	public function getRoot()
 	{
 		return $this->root;
 	}
 
 	/**
-	 * Return the top of the open-element stack; never null because the Document
-	 * root is always present.
-	 *
-	 * @return StructureElement
+	 * @return StructureElement The innermost open element
 	 */
 	public function getCurrent()
 	{
@@ -132,23 +88,11 @@ class StructureTree
 	}
 
 	/**
-	 * Return the innermost open struct element when it is an inline text
-	 * wrapper (Link, Span, Ruby, RB, RT, RP), or null when the stack top is a
-	 * block-level element.
+	 * The innermost open element when it is an inline one, such as a Link or Span, that owns the
+	 * text written inside it; null when that text belongs to the enclosing block.
 	 *
-	 * An MCID maps to exactly one struct element via the ParentTree, so text
-	 * flowing inside a Link / lang-Span / Abbr /E-Span / Ruby RB·RT must have
-	 * its content item attributed to that inline element rather than the
-	 * enclosing block — otherwise the inline element owns no content and its
-	 * /Lang, /Alt, /E or (for Link) the text run is lost, and veraPDF flags an
-	 * empty Link/Span (ISO 14289-1 §7.18.5 / §7.2, Matterhorn 02-003 / 11-001).
-	 * The stack top IS the direct owner of any text buffered at this instant,
-	 * so only the top is inspected; block-owned text returns null and stays on
-	 * the block's marked-content sequence.
-	 *
-	 * Captured per textbuffer entry during HTML parse (Mpdf::_saveTextBuffer)
-	 * and replayed at emit time (UA1 audit E6). Reused by the deferred
-	 * cell / image content paths (E9, E11).
+	 * A marked content ID has one owner, so text in a Link or a Span carrying /Lang or /E has to be
+	 * marked as the Link's or Span's; left on the block, the inline element would be empty.
 	 *
 	 * @return StructureElement|null
 	 */
@@ -162,18 +106,14 @@ class StructureTree
 	}
 
 	/**
-	 * Struct types that wrap flowing inline text and therefore own the MCID of
-	 * the text buffered while they are the stack top. ISO 32000-1 §14.8.5
-	 * inline-level structure types plus the Ruby group (§14.8.5.6 Table 337).
+	 * The inline types that own the text written while they are the innermost open element
 	 *
 	 * @var string[]
 	 */
 	private static $inlineContentTypes = ['Link', 'Span', 'Ruby', 'RB', 'RT', 'RP'];
 
 	/**
-	 * Return ParentTree contents keyed by /StructParents integer, then by MCID.
-	 *
-	 * @return array<int, array<int, StructureElement>>
+	 * @return array<int, array<int, StructureElement>> The element owning each MCID, by /StructParents key
 	 */
 	public function getParentTree()
 	{
@@ -181,9 +121,7 @@ class StructureTree
 	}
 
 	/**
-	 * Return annotation /StructParent index → owning struct element map.
-	 *
-	 * @return array<int, StructureElement>
+	 * @return array<int, StructureElement> The element owning each annotation, by its /StructParent
 	 */
 	public function getAnnotParentTree()
 	{
@@ -191,9 +129,7 @@ class StructureTree
 	}
 
 	/**
-	 * Return collected RoleMap entries.
-	 *
-	 * @return array<string,string>  customRole => standardType
+	 * @return array<string,string> The standard type each custom role is mapped to
 	 */
 	public function getRoleMappings()
 	{
@@ -201,14 +137,7 @@ class StructureTree
 	}
 
 	/**
-	 * Return whether the current render position is inside an Artifact scope.
-	 *
-	 * True while running header/footer rendering, aria-hidden subtrees, OCG
-	 * layer wrappers, decorative image paths, or any other
-	 * openArtifact()/closeArtifact() bracket. Tag handlers should treat this
-	 * as "do not emit struct elements".
-	 *
-	 * @return bool
+	 * @return bool Whether content drawn now is an artifact, such as a running header or an aria-hidden subtree
 	 */
 	public function isInArtifact()
 	{
@@ -216,17 +145,13 @@ class StructureTree
 	}
 
 	/**
-	 * Push a new struct element onto the stack as a child of the current top.
+	 * Open an element inside the current one. Inside an artifact nothing is opened, and the
+	 * matching close() closes nothing.
 	 *
-	 * Called from every tag handler's open() when PDFUA is active and the tag
-	 * maps to a standard struct type (see StructType::fromHtmlTag()). In
-	 * artifact scope this is a no-op — the paired close() is also a no-op
-	 * so the stack stays balanced.
+	 * @param string $type       A standard structure type
+	 * @param array  $attributes Such as Alt, Scope or ColSpan
 	 *
-	 * @param  string $type        PDF struct type (must be valid per StructType::isValid())
-	 * @param  array  $attributes  optional attribute map (Alt, Scope, ColSpan, …)
-	 * @return void
-	 * @throws \Mpdf\Exception\InvalidArgumentException  if $type is not a standard PDF struct type
+	 * @throws \Mpdf\Exception\InvalidArgumentException For a type that is not standard
 	 */
 	public function open($type, $attributes = [])
 	{
@@ -234,9 +159,6 @@ class StructureTree
 			throw new \Mpdf\Exception\InvalidArgumentException('Invalid struct type: "' . $type . '"');
 		}
 		if ($this->isInArtifact()) {
-			// ISO 32000-1 §14.8.2.2 — Artifact content must NOT appear in the
-			// structure tree. Suppress element creation; the paired close() is
-			// also a no-op below.
 			return;
 		}
 		$elem = new StructureElement($type, $attributes);
@@ -245,13 +167,7 @@ class StructureTree
 	}
 
 	/**
-	 * Pop the top of the open-element stack.
-	 *
-	 * Two guard cases, both no-ops:
-	 *   - stack size <= 1: never pop the Document root (would corrupt the tree).
-	 *   - artifact scope: the paired open() was a no-op, so close() must match.
-	 *
-	 * @return void
+	 * Close the innermost open element, never the Document, and nothing inside an artifact
 	 */
 	public function close()
 	{
@@ -265,21 +181,10 @@ class StructureTree
 	}
 
 	/**
-	 * Close the innermost open table row-group element (THead / TBody / TFoot)
-	 * when it is the stack top; otherwise a no-op.
+	 * Close the innermost open element if it is a THead, TBody or TFoot.
 	 *
-	 * Row groups reach Table::close() still open in two situations, both handled
-	 * here as a backstop so the Table pop that follows lands on the Table itself:
-	 *   - the HTML omitted the group's optional end tag (ISO 32000-1 §14.8
-	 *     Table 333 — </thead>/</tbody>/</tfoot> are optional), so the group's
-	 *     own close() never fired; or
-	 *   - Tr::open() synthesised a TBody for rows the HTML wrote directly under
-	 *     <table>, and that synthetic group stays open across the group-less rows.
-	 *
-	 * Also called from a group handler's open() to collapse a preceding
-	 * synthetic TBody before a real THead/TBody/TFoot begins.
-	 *
-	 * @return void
+	 * A row group can still be open when its table or the next group begins: its end tag is
+	 * optional in HTML, and the TBody that Tr opens for rows written straight under <table> has none.
 	 */
 	public function closeRowGroup()
 	{
@@ -293,21 +198,10 @@ class StructureTree
 	}
 
 	/**
-	 * Push an existing struct element onto the open-element stack without
-	 * creating a new one or appending it as a child of the current top.
+	 * Reopen an element already in the tree, so what is drawn later, such as the contents of a table
+	 * cell, opens its elements inside it. Close it again with close().
 	 *
-	 * Used when the deferred-render path needs to make a previously-pushed
-	 * element (e.g. a TD cell saved during HTML parse) the parent of new
-	 * children that are opened during render time. Without this, opens of
-	 * Figure / Span / etc. inside a cell would attach those children to the
-	 * wrong parent (the parse-time stack top — usually Document or Table).
-	 *
-	 * The caller MUST balance the push with a close() call (which simply pops
-	 * the element off the stack — the structure-tree linkage was established
-	 * when the element was originally pushed via open()).
-	 *
-	 * @param  StructureElement $elem
-	 * @return void
+	 * @param StructureElement $elem
 	 */
 	public function pushExisting(StructureElement $elem)
 	{
@@ -318,18 +212,8 @@ class StructureTree
 	}
 
 	/**
-	 * Pop the top struct element AND remove it from its parent's children.
-	 *
-	 * Use when a tag handler needs to discard a previously-opened element
-	 * (for example Th::open() inherits a TD push from Td::open() and must
-	 * replace it with TH). A plain close() leaves the discarded element in
-	 * the parent's /K array, which breaks ISO 14289-1 §7.2 test 43 by adding
-	 * phantom column counts.
-	 *
-	 * Idempotent: no-op when only the Document root is on the stack or when
-	 * we are inside an artifact scope.
-	 *
-	 * @return void
+	 * Close the innermost open element and take it out of the tree, as Th does to the TD that Td
+	 * opened for it. Left in the tree, the TD would count as an extra column.
 	 */
 	public function discardTop()
 	{
@@ -348,22 +232,13 @@ class StructureTree
 	}
 
 	/**
-	 * Allocate an MCID for a content item on the CURRENT struct element.
+	 * Hand out the marked content ID of content belonging to the innermost open element
 	 *
-	 * Called by tag handlers / rendering code immediately before emitting the
-	 * BDC operator: the returned integer is embedded in the property dict
-	 * (e.g. /P <</MCID 3>> BDC) and registered in the ParentTree.
+	 * @param int $structParentsIndex The /StructParents of the page or form XObject drawn on
 	 *
-	 * ISO 32000-1 §14.7.4.4 — the ParentTree entry for a given /StructParents
-	 * key must be dense starting at MCID 0; nextMcidForPage() enforces this.
+	 * @return int The MCID, or -1 inside an artifact, which MarkedContentHelper::begin() marks as /Artifact
 	 *
-	 * In artifact scope returns -1 (the Artifact sentinel); callers pass -1
-	 * through to MarkedContentHelper::begin() to emit /Artifact BMC instead
-	 * of a property-dict BDC.
-	 *
-	 * @param  int $structParentsIndex  /StructParents integer of the host page or Form XObject
-	 * @return int                      assigned MCID, or -1 when in artifact scope
-	 * @throws \Mpdf\Exception\InvalidArgumentException  if $structParentsIndex is not a non-negative integer
+	 * @throws \Mpdf\Exception\InvalidArgumentException For a /StructParents that has not been handed out
 	 */
 	public function addContent($structParentsIndex)
 	{
@@ -371,16 +246,13 @@ class StructureTree
 	}
 
 	/**
-	 * Allocate an MCID and attach it to an EXPLICIT struct element rather
-	 * than the stack top.
+	 * Hand out the marked content ID of content belonging to $elem, for content such as a table
+	 * cell's that is drawn after its element has closed
 	 *
-	 * Used by _tableWrite() and other deferred-rendering code paths where
-	 * the struct element was pushed at parse time but the BDC is emitted
-	 * later (when the render-time stack top is a different element).
+	 * @param StructureElement $elem
+	 * @param int              $structParentsIndex The /StructParents of the page or form XObject drawn on
 	 *
-	 * @param  StructureElement $elem                target element
-	 * @param  int              $structParentsIndex  /StructParents integer of the host page/XObject
-	 * @return int                                   assigned MCID, or -1 in artifact scope
+	 * @return int The MCID, or -1 inside an artifact
 	 */
 	public function addContentForElement(StructureElement $elem, $structParentsIndex)
 	{
@@ -389,7 +261,7 @@ class StructureTree
 				'structParentsIndex must be a non-negative integer'
 			);
 		}
-		// UA1 audit L-1 — see addContent() for rationale.
+		// A key that has not been handed out belongs to no page, and would leave its ParentTree entry unreachable
 		if ($this->uaState !== null) {
 			$ceiling = $this->uaState->peekStructParents();
 			if ($structParentsIndex >= $ceiling) {
@@ -409,13 +281,7 @@ class StructureTree
 	}
 
 	/**
-	 * Return the Artifact sentinel MCID (-1).
-	 *
-	 * Convenience wrapper so callers in non-artifact-scope code paths can also
-	 * route explicit Artifact content through a single entry point.
-	 * MarkedContentHelper::begin(..., -1) emits /Artifact BMC (no dict).
-	 *
-	 * @return int  -1 (Artifact sentinel)
+	 * @return int The -1 that MarkedContentHelper::begin() marks as /Artifact
 	 */
 	public function addArtifact()
 	{
@@ -423,12 +289,7 @@ class StructureTree
 	}
 
 	/**
-	 * Enter an Artifact suppression scope.
-	 *
-	 * Paired with closeArtifact(). Nesting is permitted; the depth counter
-	 * tracks balance so nested opens/closes behave correctly.
-	 *
-	 * @return void
+	 * Start drawing content as an artifact, until the matching closeArtifact(). Artifacts nest.
 	 */
 	public function openArtifact()
 	{
@@ -436,12 +297,7 @@ class StructureTree
 	}
 
 	/**
-	 * Leave one Artifact suppression scope.
-	 *
-	 * Clamped at 0 — extra closeArtifact() calls are no-ops. This tolerates
-	 * tag-handler bugs rather than throwing mid-render.
-	 *
-	 * @return void
+	 * Close one artifact; a close with none open is ignored rather than thrown mid-render
 	 */
 	public function closeArtifact()
 	{
@@ -451,17 +307,11 @@ class StructureTree
 	}
 
 	/**
-	 * Register a RoleMap entry for a custom ARIA / HTML role.
+	 * Map a custom role to a standard type in the RoleMap. A role keeps the first type it is mapped
+	 * to, as a RoleMap can give it only one.
 	 *
-	 * First registration wins — a second call with the same $role but a
-	 * different $standardType is silently ignored so conflicting RoleMap
-	 * entries can't reach veraPDF (which rejects them).
-	 *
-	 * ISO 32000-1 §14.7.3 — RoleMap dict on StructTreeRoot.
-	 *
-	 * @param  string $role          non-standard struct type seen in the HTML
-	 * @param  string $standardType  fallback standard struct type (e.g. 'Div')
-	 * @return void
+	 * @param string $role
+	 * @param string $standardType
 	 */
 	public function addRoleMapping($role, $standardType)
 	{
@@ -471,43 +321,25 @@ class StructureTree
 	}
 
 	/**
-	 * Allocate the next annotation /StructParent integer and associate it with
-	 * the given struct element.
+	 * Hand out the /StructParent of an annotation owned by $elem
 	 *
-	 * Annotation dicts carry /StructParent (singular) — a single integer that
-	 * indexes an entry in the ParentTree pointing back to one struct element.
-	 * This differs from page dicts, which use /StructParents (plural) and a
-	 * dense MCID array. StructureWriter emits the singular-key ParentTree
-	 * entries from $annotParentTree.
+	 * @param StructureElement $elem
 	 *
-	 * ISO 32000-1 §14.7.4.4 — /StructParent vs /StructParents distinction.
-	 *
-	 * @param  StructureElement $elem  the struct element owning the annotation
-	 * @return int                     the /StructParent integer to emit on the annotation dict
+	 * @return int
 	 */
 	public function nextAnnotStructParent(StructureElement $elem)
 	{
-		// Allocate from the SHARED ParentTree pool (UaState's counter, also
-		// used by page /StructParents). A separate counter would let an annot
-		// /StructParent collide with a page /StructParents N — both index the
-		// same NumTree, so the second writer would overwrite the first entry
-		// and either the page MCID array or the annotation map would vanish.
+		// Drawn from the counter pages use, as both are keys in the one ParentTree
 		$idx = $this->uaState->nextStructParents();
 		$this->annotParentTree[$idx] = $elem;
 		return $idx;
 	}
 
 	/**
-	 * Reserve the next /StructParent integer without registering a struct element.
+	 * Hand out an annotation's /StructParent before its element exists, as a form field's is written
+	 * ahead of its Form element; registerAnnotStructParent() names the owner later
 	 *
-	 * Used by MetadataWriter before widget annotation dicts are written, so that
-	 * form widget dicts can include /StructParent N before their corresponding
-	 * Form struct elements exist. StructureWriter::writeStructTree() completes
-	 * the registration by calling registerAnnotStructParent() for each widget.
-	 *
-	 * ISO 32000-1 §14.7.4.4 — /StructParent on annotation dicts (singular).
-	 *
-	 * @return int  the reserved /StructParent integer
+	 * @return int
 	 */
 	public function reserveAnnotStructParent()
 	{
@@ -515,15 +347,8 @@ class StructureTree
 	}
 
 	/**
-	 * Register a struct element for a previously reserved /StructParent integer.
-	 *
-	 * Called by StructureWriter::writeStructTree() after Form struct elements
-	 * are constructed, to complete the ParentTree registration that
-	 * reserveAnnotStructParent() deferred.
-	 *
-	 * @param  int              $idx   the /StructParent integer previously reserved
-	 * @param  StructureElement $elem  the struct element that owns this annotation
-	 * @return void
+	 * @param int              $idx  A /StructParent from reserveAnnotStructParent()
+	 * @param StructureElement $elem The element owning the annotation
 	 */
 	public function registerAnnotStructParent($idx, StructureElement $elem)
 	{
@@ -531,34 +356,11 @@ class StructureTree
 	}
 
 	/**
-	 * Remove Link struct elements that ended up with no kids, no MCRs, and no
-	 * OBJR references after annotation writing has completed.
+	 * Take out the Links left with no content and no annotation, such as <a href="x"></a> or a link
+	 * around a decorative image. A Link must hold one or the other, and one with neither has
+	 * nothing to click.
 	 *
-	 * Matterhorn 02-003 (ISO 14289-1 §7.18.5) — every Link struct element
-	 * MUST reference either marked content or an annotation via OBJR. A Link
-	 * with an empty /K array is structurally invalid; veraPDF either flags it
-	 * directly or treats the surrounding content as untagged.
-	 *
-	 * Two ways an empty Link reaches this point:
-	 *   1. <a href="x"></a> with no inner content — open() created the Link,
-	 *      no inner HTML produced an MCID, and Mpdf::Link() was never invoked
-	 *      because there is no glyph extent to draw a clickable rect over.
-	 *   2. <a href="x"><img alt=""></a> where the inner <img> is decorative —
-	 *      Img.php opens an Artifact scope, suppressing any descendant struct
-	 *      element creation, and Mpdf::Link() may still produce no annotation
-	 *      if the rendered rect is empty.
-	 *
-	 * Tag\A::close() may have set /Alt synthesised from the href in PDFUAauto
-	 * mode; that does NOT save the element from pruning here, because an
-	 * /Alt-only Link with no /K is still invalid — and there is no real
-	 * clickable annotation in the output PDF if no OBJR exists, so removing
-	 * the struct element loses no information.
-	 *
-	 * Must be called AFTER MetadataWriter::writeAnnotations() has run (so
-	 * OBJR refs are already attached) and BEFORE StructureWriter walks the
-	 * tree to allocate object numbers.
-	 *
-	 * @return void
+	 * Run once the annotations are written, so their references are in place, and before the tree is.
 	 */
 	public function pruneEmptyLinks()
 	{
@@ -566,22 +368,15 @@ class StructureTree
 	}
 
 	/**
-	 * Recursive worker for pruneEmptyLinks().
+	 * Prune the children of $elem after their own descendants, so a Link emptied below is caught
 	 *
-	 * Walks children depth-first, then re-examines this element's children
-	 * list for Links that meet the prune predicate. Pruning happens after the
-	 * recursion so a Link nested inside another Link (rare, malformed HTML)
-	 * is still examined in correct child-before-parent order.
-	 *
-	 * @param  StructureElement $elem
-	 * @return void
+	 * @param StructureElement $elem
 	 */
 	private function pruneEmptyLinksRecursive(StructureElement $elem)
 	{
 		foreach ($elem->getChildren() as $child) {
 			$this->pruneEmptyLinksRecursive($child);
 		}
-		// Re-fetch because recursion may have mutated grandchildren.
 		$toRemove = [];
 		foreach ($elem->getChildren() as $child) {
 			if ($child->getType() === 'Link'
@@ -598,24 +393,10 @@ class StructureTree
 	}
 
 	/**
-	 * Find the first Link struct element with an empty /K (no kids, no MCRs,
-	 * AND no OBJR refs) and return its source href hint, or null if every
-	 * Link in the tree carries at least one /K kid.
+	 * For a warning, where the first Link that pruneEmptyLinks() would take out pointed. A Link
+	 * holding only its annotation is not empty.
 	 *
-	 * "Empty" means the element would be serialised with no /K array — that
-	 * is the Matterhorn 02-003 violation. An OBJR-only Link (the typical
-	 * shape for `<a>text</a>` where the text MCID lives on the surrounding
-	 * P element and only the annotation OBJR is attached to Link) is
-	 * acceptable; the OBJR provides the structure-tree linkage to the link
-	 * annotation, and the annotation's own /Contents (or the producer's
-	 * synthesised /Alt) carries the accessible name.
-	 *
-	 * Caller MUST run this BEFORE pruneEmptyLinks() (which would silently
-	 * remove the offending elements).
-	 *
-	 * @return string|null  href hint from the first offending Link's '_href' attribute,
-	 *                      or '<unknown>' if the hint is missing, or null when no
-	 *                      offending Link exists in the tree.
+	 * @return string|null The Link's '_href', '<unknown>' without one, or null when no Link is empty
 	 */
 	public function findFirstEmptyLinkHref()
 	{
@@ -623,8 +404,9 @@ class StructureTree
 	}
 
 	/**
-	 * @param  StructureElement $elem
-	 * @return string|null
+	 * @param StructureElement $elem
+	 *
+	 * @return string|null Where the first empty Link in $elem pointed, as findFirstEmptyLinkHref()
 	 */
 	private function findFirstEmptyLinkHrefRecursive(StructureElement $elem)
 	{
@@ -646,24 +428,12 @@ class StructureTree
 	}
 
 	/**
-	 * Register a struct element for a specific MCR key that was cloned from an
-	 * imported tagged PDF (Tier 2 FPDI merge).
+	 * Record the owner of marked content in an imported page, keeping the MCID the page's content
+	 * stream already carries rather than handing out a new one
 	 *
-	 * Unlike addContent() / addContentForElement(), this method does NOT allocate
-	 * a new MCID — the MCID comes directly from the source PDF and must be
-	 * preserved so that the Form XObject's content stream MCIDs match the
-	 * ParentTree back-map. Callers are responsible for ensuring that the MCID
-	 * does not collide with other MCIDs registered under the same $structParents key.
-	 *
-	 * Called only by FpdiStructMerger::registerMcrInParentTree().
-	 *
-	 * ISO 32000-1:2008 §14.7.4.4 — ParentTree entry for a /StructParents key must
-	 * be a dense array indexed by MCID pointing to the owning struct element.
-	 *
-	 * @param  int              $structParents  /StructParents integer of the Form XObject
-	 * @param  int              $mcid           MCID from the source content stream
-	 * @param  StructureElement $elem           cloned host struct element owning this MCR
-	 * @return void
+	 * @param int              $structParents The /StructParents of the form XObject the page became
+	 * @param int              $mcid
+	 * @param StructureElement $elem          The element copied from the imported document
 	 */
 	public function registerImportedMcr($structParents, $mcid, StructureElement $elem)
 	{
@@ -671,14 +441,9 @@ class StructureTree
 	}
 
 	/**
-	 * Allocate the next MCID for a given /StructParents key.
+	 * @param int $page A /StructParents key, not a page number
 	 *
-	 * ISO 32000-1 §14.7.4.4 — MCIDs within one content stream (one page or
-	 * one Form XObject) must be dense and 0-based. Each /StructParents key
-	 * has its own independent counter; a new key starts at 0.
-	 *
-	 * @param  int $page  /StructParents integer (NOT a 1-based page number)
-	 * @return int        previous counter value
+	 * @return int The next MCID of that key, counting from 0
 	 */
 	private function nextMcidForPage($page)
 	{
