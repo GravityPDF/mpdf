@@ -212,7 +212,7 @@ trait FpdiTrait
 		$this->ua->addWarning(sprintf(
 			'Imported PDF source is encrypted (ISO 32000-1:2008 §7.6) and cannot be parsed by '
 			. 'vendor/setasign/fpdi. Auto-mode fallback: importPage() will return a synthetic '
-			. 'pageId and useImportedPage() will draw a Tier 0 /Artifact <</Type /Layout>> '
+			. 'pageId and useImportedPage() will draw an /Artifact <</Type /Layout>> '
 			. 'visible placeholder (border + caption) for each of the %d source page(s) in place '
 			. 'of the original content. Matterhorn 01-007.',
 			$pageCount
@@ -432,7 +432,7 @@ trait FpdiTrait
 
 			$pdfuaMerger->addUntaggedWarning(
 				'Imported PDF page is encrypted (ISO 32000-1:2008 §7.6) and cannot be parsed by '
-				. 'vendor/setasign/fpdi. Treated as Tier 0: a placeholder /Artifact <</Type /Layout>> '
+				. 'vendor/setasign/fpdi. A placeholder /Artifact <</Type /Layout>> '
 				. 'BDC … EMC pair is drawn in place of the original page content. Decrypt the source '
 				. 'upstream (e.g. `qpdf --decrypt`) for accessible imports. Matterhorn 01-007.'
 			);

@@ -35,12 +35,12 @@ class AriaDosTest extends PdfUaTestCase
 
 		$found = false;
 		foreach ($mpdf->getPdfUaWarnings() as $w) {
-			if (stripos($w, 'M-1') !== false) {
+			if (stripos($w, 'aria') !== false && (stripos($w, 'truncated') !== false || stripos($w, 'ignored') !== false)) {
 				$found = true;
 				break;
 			}
 		}
-		$this->assertTrue($found, 'Expected an M-1 truncation/rejection warning.');
+		$this->assertTrue($found, 'Expected a truncation/rejection warning.');
 	}
 
 	/**
@@ -79,11 +79,11 @@ class AriaDosTest extends PdfUaTestCase
 
 		$truncationWarning = false;
 		foreach ($mpdf->getPdfUaWarnings() as $w) {
-			if (stripos($w, 'M-1') !== false || stripos($w, 'truncated') !== false) {
+			if (stripos($w, 'truncated') !== false) {
 				$truncationWarning = true;
 				break;
 			}
 		}
-		$this->assertFalse($truncationWarning, 'Normal aria-labelledby must not trigger the M-1 cap.');
+		$this->assertFalse($truncationWarning, 'Normal aria-labelledby must not trigger the cap.');
 	}
 }

@@ -301,12 +301,12 @@ class HighBugRegressionsTest extends PdfUaTestCase
 	}
 
 	/**
-	 * PDFDocEncoding 0x86 decodes to U+2020, the dagger, where it parts from ISO-8859-1.
+	 * PDFDocEncoding 0x81 decodes to U+2020, the dagger, where it parts from ISO-8859-1.
 	 */
 	public function testFpdiMergerDecodesPdfDocEncodingSpecialBytes()
 	{
-		$decoded = $this->invokeDecode($this->makeRawHexString("\x86"));
-		$this->assertSame("\xE2\x80\xA0", $decoded, 'PDFDocEncoding 0x86 → U+2020 (dagger)');
+		$decoded = $this->invokeDecode($this->makeRawHexString("\x81"));
+		$this->assertSame("\xE2\x80\xA0", $decoded, 'PDFDocEncoding 0x81 → U+2020 (dagger)');
 	}
 
 	/**

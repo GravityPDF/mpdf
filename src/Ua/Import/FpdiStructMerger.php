@@ -506,7 +506,7 @@ class FpdiStructMerger
 			$this->addUntaggedWarning(
 				'Imported PDF struct sanity walk depth exceeded '
 				. self::MAX_RECURSION_DEPTH
-				. '; verify truncated (UA1 audit H-2).'
+				. '; verify truncated.'
 			);
 			return;
 		}
@@ -516,7 +516,7 @@ class FpdiStructMerger
 			$this->addUntaggedWarning(
 				'Imported PDF struct sanity walk exceeded '
 				. self::NODE_BUDGET
-				. ' nodes; verify truncated (UA1 audit M-4).'
+				. ' nodes; verify truncated.'
 			);
 			return;
 		}
@@ -718,8 +718,8 @@ class FpdiStructMerger
 		$message = 'Imported PDF struct subtree contains an /' . $attrKey . ' value '
 			. 'that failed the printable-codepoint sanity gauntlet (ISO 32000-1:2008 '
 			. '§7.6.5 / §7.9.2.2). The source may carry still-encrypted text-string '
-			. 'ciphertext that vendor/setasign/fpdi did not decrypt. Demoting page '
-			. 'to Tier 1 (/Artifact wrap). Matterhorn 01-007.';
+			. 'ciphertext that vendor/setasign/fpdi did not decrypt. The page is '
+			. 'wrapped as an /Artifact instead. Matterhorn 01-007.';
 
 		if (empty($this->mpdf->PDFUAauto)) {
 			throw new \Mpdf\MpdfException($message);
@@ -787,7 +787,7 @@ class FpdiStructMerger
 			$this->addUntaggedWarning(
 				'Imported PDF struct subtree depth exceeded '
 				. self::MAX_RECURSION_DEPTH
-				. '; merge truncated to prevent stack exhaustion (UA1 audit H-2).'
+				. '; merge truncated to prevent stack exhaustion.'
 			);
 			return null;
 		}
@@ -797,7 +797,7 @@ class FpdiStructMerger
 			$this->addUntaggedWarning(
 				'Imported PDF struct subtree exceeded '
 				. self::NODE_BUDGET
-				. ' nodes; merge truncated (UA1 audit M-4).'
+				. ' nodes; merge truncated.'
 			);
 			return null;
 		}
@@ -809,7 +809,7 @@ class FpdiStructMerger
 			if (isset($this->cloneVisited[$visitedKey])) {
 				$this->addUntaggedWarning(
 					'Cycle detected in imported PDF struct subtree at object '
-					. (int) $sourceElem->value . '; subtree truncated (UA1 audit H-2).'
+					. (int) $sourceElem->value . '; subtree truncated.'
 				);
 				return null;
 			}
@@ -833,7 +833,7 @@ class FpdiStructMerger
 				$inlineKey = 'obj:' . spl_object_hash($resolved);
 				if (isset($this->cloneVisited[$inlineKey])) {
 					$this->addUntaggedWarning(
-						'Cycle detected in imported PDF struct subtree; subtree truncated (UA1 audit H-2).'
+						'Cycle detected in imported PDF struct subtree; subtree truncated.'
 					);
 					return null;
 				}
@@ -1103,33 +1103,33 @@ class FpdiStructMerger
 			$t[0x83] = 0x2026; // HORIZONTAL ELLIPSIS
 			$t[0x84] = 0x2014; // EM DASH
 			$t[0x85] = 0x2013; // EN DASH
-			$t[0x86] = 0x2020; // DAGGER
-			$t[0x87] = 0x2021; // DOUBLE DAGGER
-			$t[0x88] = 0x02C6; // MODIFIER LETTER CIRCUMFLEX
-			$t[0x89] = 0x2030; // PER MILLE
-			$t[0x8A] = 0x201E; // DOUBLE LOW-9 QUOTE
-			$t[0x8B] = 0x201C; // LEFT DOUBLE QUOTE
-			$t[0x8C] = 0x201D; // RIGHT DOUBLE QUOTE
-			$t[0x8D] = 0x2018; // LEFT SINGLE QUOTE
-			$t[0x8E] = 0x2019; // RIGHT SINGLE QUOTE
-			$t[0x8F] = 0x201A; // SINGLE LOW-9 QUOTE
-			$t[0x90] = 0x2122; // TRADEMARK
-			$t[0x91] = 0xFB01; // LATIN SMALL LIGATURE FI
-			$t[0x92] = 0xFB02; // LATIN SMALL LIGATURE FL
-			$t[0x93] = 0x0141; // LATIN CAPITAL LETTER L WITH STROKE
-			$t[0x94] = 0x0152; // LATIN CAPITAL LIGATURE OE
-			$t[0x95] = 0x0160; // LATIN CAPITAL LETTER S WITH CARON
-			$t[0x96] = 0x0178; // LATIN CAPITAL LETTER Y WITH DIAERESIS
-			$t[0x97] = 0x017D; // LATIN CAPITAL LETTER Z WITH CARON
-			$t[0x98] = 0x0131; // LATIN SMALL LETTER DOTLESS I
-			$t[0x99] = 0x0142; // LATIN SMALL LETTER L WITH STROKE
-			$t[0x9A] = 0x0153; // LATIN SMALL LIGATURE OE
-			$t[0x9B] = 0x0161; // LATIN SMALL LETTER S WITH CARON
-			$t[0x9C] = 0x017E; // LATIN SMALL LETTER Z WITH CARON
-			$t[0x9E] = 0x20AC; // EURO SIGN
-			$t[0x9F] = 0x00A6; // BROKEN BAR
+			$t[0x86] = 0x0192; // FLORIN
+			$t[0x87] = 0x2044; // FRACTION SLASH
+			$t[0x88] = 0x2039; // SINGLE LEFT-POINTING ANGLE QUOTE
+			$t[0x89] = 0x203A; // SINGLE RIGHT-POINTING ANGLE QUOTE
+			$t[0x8A] = 0x2212; // MINUS SIGN
+			$t[0x8B] = 0x2030; // PER MILLE
+			$t[0x8C] = 0x201E; // DOUBLE LOW-9 QUOTE
+			$t[0x8D] = 0x201C; // LEFT DOUBLE QUOTE
+			$t[0x8E] = 0x201D; // RIGHT DOUBLE QUOTE
+			$t[0x8F] = 0x2018; // LEFT SINGLE QUOTE
+			$t[0x90] = 0x2019; // RIGHT SINGLE QUOTE
+			$t[0x91] = 0x201A; // SINGLE LOW-9 QUOTE
+			$t[0x92] = 0x2122; // TRADEMARK
+			$t[0x93] = 0xFB01; // LATIN SMALL LIGATURE FI
+			$t[0x94] = 0xFB02; // LATIN SMALL LIGATURE FL
+			$t[0x95] = 0x0141; // LATIN CAPITAL LETTER L WITH STROKE
+			$t[0x96] = 0x0152; // LATIN CAPITAL LIGATURE OE
+			$t[0x97] = 0x0160; // LATIN CAPITAL LETTER S WITH CARON
+			$t[0x98] = 0x0178; // LATIN CAPITAL LETTER Y WITH DIAERESIS
+			$t[0x99] = 0x017D; // LATIN CAPITAL LETTER Z WITH CARON
+			$t[0x9A] = 0x0131; // LATIN SMALL LETTER DOTLESS I
+			$t[0x9B] = 0x0142; // LATIN SMALL LETTER L WITH STROKE
+			$t[0x9C] = 0x0153; // LATIN SMALL LIGATURE OE
+			$t[0x9D] = 0x0161; // LATIN SMALL LETTER S WITH CARON
+			$t[0x9E] = 0x017E; // LATIN SMALL LETTER Z WITH CARON
+			$t[0xA0] = 0x20AC; // EURO SIGN
 
-			// 0xA0 was only given a character in ISO 32000-2
 			for ($i = 0xA1; $i <= 0xFF; $i++) {
 				$t[$i] = $i;
 			}

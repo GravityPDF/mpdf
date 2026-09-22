@@ -81,4 +81,20 @@ class EncryptedUaMetadataTest extends PdfUaTestCase
 		$this->assertStringNotContainsString($marker, $output, 'Body content must be encrypted, not plaintext');
 		$this->assertStringContainsString('<pdfuaid:part>1</pdfuaid:part>', $output);
 	}
+
+	/**
+	 * The /ID of a header cell is a string, so it is encrypted with the rest; only the /Headers names
+	 * that refer to it are left as they are.
+	 *
+	 * @return void
+	 */
+	public function testHeaderCellIdIsEncrypted()
+	{
+		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
+		$mpdf->SetProtection(['print']);
+		$output = $this->getOutput($mpdf, '<table><tr><th id="colhead">Head</th></tr><tr><td headers="colhead">Cell</td></tr></table>');
+
+		$this->assertStringContainsString('/Headers [/colhead]', $output);
+		$this->assertStringNotContainsString('/ID (colhead)', $output);
+	}
 }

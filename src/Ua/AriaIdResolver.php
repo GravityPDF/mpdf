@@ -170,7 +170,7 @@ class AriaIdResolver
 		if (strlen($targetIds) > self::MAX_ARIA_IDS_LENGTH) {
 			$this->unresolvedWarnings[] = $ariaAttrName
 				. ' attribute exceeded ' . self::MAX_ARIA_IDS_LENGTH
-				. ' bytes; ignored to prevent memory amplification (UA1 audit M-1).';
+				. ' bytes; ignored to prevent memory amplification.';
 			return;
 		}
 
@@ -186,7 +186,7 @@ class AriaIdResolver
 		if (count($tokens) > self::MAX_ARIA_IDS_TOKENS) {
 			$this->unresolvedWarnings[] = $ariaAttrName
 				. ' attribute had more than ' . self::MAX_ARIA_IDS_TOKENS
-				. ' IDs; truncated (UA1 audit M-1).';
+				. ' IDs; truncated.';
 			$tokens = array_slice($tokens, 0, self::MAX_ARIA_IDS_TOKENS);
 		}
 

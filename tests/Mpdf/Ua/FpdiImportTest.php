@@ -45,7 +45,7 @@ class FpdiImportTest extends PdfUaTestCase
 	private function makeUntaggedPdf()
 	{
 		$src = new \Mpdf\Mpdf(['mode' => 'utf-8', 'default_font' => 'DejaVuSansCondensed']);
-		$src->WriteHTML('<p>Untagged source page for FPDI Tier 1 import testing.</p>');
+		$src->WriteHTML('<p>Untagged source page for an untagged FPDI import.</p>');
 		$tmp = tempnam(sys_get_temp_dir(), 'mpdf_untagged_') . '.pdf';
 		$src->Output($tmp, 'F');
 		return $tmp;

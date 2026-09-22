@@ -166,7 +166,7 @@ class StructureWriter
 					&& preg_match('/\A[a-z0-9_.\-#]*\z/', $id) === 1,
 				'StructureWriter: stored /ID is outside sanitiseIdForPdf() codomain: ' . var_export($id, true)
 			);
-			$this->writer->write('/ID (' . $id . ')');
+			$this->writer->write('/ID ' . $this->writer->string($id));
 		}
 
 		// These belong on the element itself, not in its attribute objects

@@ -214,7 +214,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$this->assertStringContainsString(
 			'/Artifact <</Type /Layout>> BDC',
 			$output,
-			'Tier 0 placeholder must emit /Artifact <</Type /Layout>> BDC on the page'
+			'placeholder must emit /Artifact <</Type /Layout>> BDC on the page'
 		);
 		$this->assertStringContainsString('EMC', $output);
 
@@ -228,7 +228,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$this->assertGreaterThanOrEqual(
 			1,
 			$encMessages,
-			'getPdfUaWarnings() must contain at least one encrypted-source warning after Tier 0 fallback'
+			'getPdfUaWarnings() must contain at least one encrypted-source warning after fallback'
 		);
 	}
 
@@ -254,7 +254,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 			$pageId = $mpdf->importPage($i);
 			$this->assertTrue(
 				$mpdf->isEncryptedPlaceholder($pageId),
-				'every page of an encrypted source must yield a Tier 0 placeholder in auto mode'
+				'every page of an encrypted source must yield a placeholder in auto mode'
 			);
 			$mpdf->useImportedPage($pageId, 0, ($i - 1) * 60, 100, 50);
 		}
@@ -270,7 +270,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$this->assertMatchesRegularExpression(
 			'/re\s+S/',
 			$output,
-			'each Tier 0 placeholder must stroke a visible border rectangle (re … S)'
+			'each placeholder must stroke a visible border rectangle (re … S)'
 		);
 
 		$warnings = $mpdf->getPdfUaWarnings();
@@ -323,7 +323,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 
 		$this->assertFalse(
 			$mpdf->isEncryptedPlaceholder($pageId),
-			'a valid source imported after an encrypted one must not become a Tier 0 placeholder'
+			'a valid source imported after an encrypted one must not become a placeholder'
 		);
 		$this->assertStringNotContainsString(
 			\Mpdf\Ua\Import\FpdiStructMerger::ENCRYPTED_PAGE_PLACEHOLDER_ID_PREFIX,
@@ -412,7 +412,7 @@ class FpdiEncryptedSourceTest extends PdfUaTestCase
 		$this->assertStringContainsString(
 			'/Artifact <</Type /Layout>> BDC',
 			$output,
-			'Demoted Tier 2 → Tier 1 page must emit the Artifact wrap'
+			'Demoted tagged page must emit the Artifact wrap'
 		);
 
 		$warnings = $mpdf->getPdfUaWarnings();

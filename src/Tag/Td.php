@@ -499,7 +499,7 @@ class Td extends Tag
 				// Bounded as the aria-* attributes are
 				$this->ua->addWarning(
 					'Table cell headers="" exceeded ' . \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_LENGTH
-					. ' bytes; ignored to prevent memory amplification (UA1 audit M-1).'
+					. ' bytes; ignored to prevent memory amplification.'
 				);
 			} else {
 				$ids = preg_split(
@@ -512,7 +512,7 @@ class Td extends Tag
 					if (count($ids) > \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_TOKENS) {
 						$this->ua->addWarning(
 							'Table cell headers="" had more than ' . \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_TOKENS
-							. ' IDs; truncated (UA1 audit M-1).'
+							. ' IDs; truncated.'
 						);
 						$ids = array_slice($ids, 0, \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_TOKENS);
 					}

@@ -414,7 +414,7 @@ class FpdiStructMergerTest extends PdfUaTestCase
 		$this->assertMatchesRegularExpression(
 			'#/S /H2\s*/P \d+ 0 R\s*/K <</Type /MCR /Pg \d+ 0 R#',
 			$output,
-			'Bare-integer /K source element must merge with an MCR content reference (audit E1)'
+			'Bare-integer /K source element must merge with an MCR content reference'
 		);
 
 		$this->assertSame(
@@ -449,7 +449,7 @@ class FpdiStructMergerTest extends PdfUaTestCase
 		$this->assertMatchesRegularExpression(
 			'#<</Type /MCR /Pg \d+ 0 R /Stm \d+ 0 R /MCID \d+>>#',
 			$output,
-			'Merged Form-XObject MCRs must carry /Pg and /Stm (audit E5)'
+			'Merged Form-XObject MCRs must carry /Pg and /Stm'
 		);
 
 		// Searched forward from the XObject, so a neighbouring page's /StructParents is not read
@@ -472,5 +472,23 @@ class FpdiStructMergerTest extends PdfUaTestCase
 			$numsMatch[1],
 			'ParentTree /Nums must contain the Form XObject /StructParents key ' . $xobjKey
 		);
+	}
+
+	/**
+	 * A text string without a byte order mark is read as PDFDocEncoding, whose 0x80-0xA0 range differs
+	 * from Windows-1252 (ISO 32000-1 Annex D).
+	 *
+	 * @return void
+	 */
+	public function testPdfDocEncodingUpperRange()
+	{
+		$merger = $this->makeMpdf()->getPdfUaFpdiStructMerger();
+		$decode = new \ReflectionMethod($merger, 'pdfDocEncodingToUtf8');
+		if (PHP_VERSION_ID < 80100) {
+			$decode->setAccessible(true);
+		}
+
+		$expected = html_entity_decode('&#x2022;&#x2020;&#x0192;&#x2044;&#x2212;&#x201C;&#x2122;&#x0161;&#x017E;&#x20AC;', ENT_QUOTES, 'UTF-8');
+		$this->assertSame($expected, $decode->invoke($merger, "\x80\x81\x86\x87\x8A\x8D\x92\x9D\x9E\xA0"));
 	}
 }

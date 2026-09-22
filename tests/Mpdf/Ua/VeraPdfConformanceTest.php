@@ -400,7 +400,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 		$mpdf->SetPageTemplate($pageId);
 		$pdf = $this->getOutput($mpdf, '<h1>Imported Page</h1><p>Content over imported background.</p>');
 		@unlink($sourceFixture);
-		$this->assertVeraPdfCompliant($pdf, 'FPDI Tier 1 import');
+		$this->assertVeraPdfCompliant($pdf, 'untagged FPDI import');
 	}
 
 	/**
@@ -412,7 +412,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	private function makeUntaggedSourceFixture()
 	{
 		$source = new \Mpdf\Mpdf(['mode' => 'utf-8', 'default_font' => 'DejaVuSansCondensed']);
-		$source->WriteHTML('<p>Untagged source page generated for FPDI Tier 1 import testing.</p>');
+		$source->WriteHTML('<p>Untagged source page generated for an untagged FPDI import.</p>');
 		$path = tempnam(sys_get_temp_dir(), 'mpdf_ua_fpdi_source_') . '.pdf';
 		file_put_contents($path, $source->Output('', 'S'));
 		return $path;
@@ -439,7 +439,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 		]);
 		$pdf = $mpdf->Output(null, 'S');
 		@unlink($sourceFixture);
-		$this->assertVeraPdfCompliant($pdf, 'FPDI Tier 1 import with author-supplied /Alt');
+		$this->assertVeraPdfCompliant($pdf, 'untagged FPDI import with an /Alt');
 	}
 
 	/**
@@ -459,7 +459,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 		$mpdf->useImportedPage($pageId);
 		$pdf = $mpdf->Output(null, 'S');
 		@unlink($sourceFixture);
-		$this->assertVeraPdfCompliant($pdf, 'FPDI Tier 2 tagged import');
+		$this->assertVeraPdfCompliant($pdf, 'tagged FPDI import');
 	}
 
 	/**
@@ -472,7 +472,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 		$source = $this->makeMpdf();
 		$source->WriteHTML(
 			'<h1>Tagged source heading</h1>'
-			. '<p>Tagged source body paragraph generated for FPDI Tier 2 import testing.</p>'
+			. '<p>Tagged source body paragraph generated for a tagged FPDI import.</p>'
 		);
 		$path = tempnam(sys_get_temp_dir(), 'mpdf_ua_fpdi_tagged_') . '.pdf';
 		$source->Output($path, 'F');
