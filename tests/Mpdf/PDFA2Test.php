@@ -198,6 +198,7 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'files not allowed' => [[]],
 			'files allowed' => [['allowAnnotationFiles' => true]],
 			'PDF/A-2 appearances' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'allowAnnotationFiles' => true]],
+			'PDF/A-3 associated files' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B', 'allowAnnotationFiles' => true]],
 		];
 	}
 
@@ -268,6 +269,28 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(1, substr_count($pdf, '/Subtype /FileAttachment'));
 		$name = str_replace('-', '', basename($pdfa)); // mPDF keeps letters, digits, dots and underscores
 		$this->assertStringContainsString('/F (' . $name . ') /UF (' . $name . ')', $pdf);
+	}
+
+	/**
+	 * PDF/A-3 writes an annotation's file as an associated file: a file specification with an AFRelationship, named by
+	 * the annotation's /AF, and a stream with a MIME type
+	 */
+	public function testPdfa3AssociatesAnnotationFile()
+	{
+		$pdf = $this->render('<p><annotation content="File" file="' . __FILE__ . '" /></p>', ['allowAnnotationFiles' => true] + $this->pdfaConfig('3-B'));
+
+		$annotation = $this->annotations($pdf)[0];
+		$this->assertSame(1, preg_match('/\/FS (\d+) 0 R \/AF \[\1 0 R\]/', $annotation, $spec));
+		$this->assertSame(1, preg_match('/\/AP <<\/N (\d+) 0 R>>/', $annotation, $appearance));
+		$this->assertStringContainsString('/Subtype /Form', $this->object($pdf, $appearance[1]));
+
+		$filespec = $this->object($pdf, $spec[1]);
+		$this->assertStringContainsString('/Type /Filespec', $filespec);
+		$this->assertStringContainsString('/AFRelationship /Unspecified', $filespec);
+		$this->assertStringContainsString('/UF (PDFA2Test.php)', $filespec);
+
+		$this->assertSame(1, preg_match('/\/EF <<\s*\/F (\d+) 0 R/', $filespec, $stream));
+		$this->assertStringContainsString("/Type /EmbeddedFile\n/Subtype /application#2Foctet-stream", $this->object($pdf, $stream[1]));
 	}
 
 	/**

@@ -62,11 +62,12 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A document that attaches a PDF/A document and a plain PDF conforms, keeping only the PDF/A one
+	 * A document that attaches a PDF/A document, a plain PDF and a PHP file conforms: PDF/A-2 keeps only the PDF/A
+	 * one, PDF/A-3 all three
 	 *
-	 * @dataProvider pdfa2Versions
+	 * @dataProvider attachmentVersions
 	 */
-	public function testAttachmentsConform($version)
+	public function testAttachmentsConform($version, $embedded)
 	{
 		$attachment = $this->write($this->pdfa('2-B'));
 
@@ -74,10 +75,11 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->WriteHTML(
 			'<p>PDF/A <annotation content="PDF/A" file="' . $attachment . '" /></p>'
 			. '<p>Plain <annotation content="Plain" file="' . __DIR__ . '/../data/pdfs/2-Page-PDF_1_4.pdf" /></p>'
+			. '<p>PHP <annotation content="PHP" file="' . __FILE__ . '" /></p>'
 		);
 		$file = $this->write($mpdf);
 
-		$this->assertSame(1, substr_count(file_get_contents($file), '/Type /EmbeddedFile'));
+		$this->assertSame($embedded, substr_count(file_get_contents($file), '/Type /EmbeddedFile'));
 		$this->assertConforms($file, $this->flavour($mpdf));
 	}
 
@@ -118,13 +120,14 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The PDF/A-2 versions, whose attachments must themselves be PDF/A
+	 * The PDF/A versions that embed files, with how many of the three attachments each embeds: PDF/A-2 only the
+	 * PDF/A document
 	 *
-	 * @return string[][]
+	 * @return mixed[][]
 	 */
-	public function pdfa2Versions()
+	public function attachmentVersions()
 	{
-		return [['2-B'], ['2-U']];
+		return [['2-B', 1], ['2-U', 1], ['3-B', 3], ['3-U', 3]];
 	}
 
 	/**
