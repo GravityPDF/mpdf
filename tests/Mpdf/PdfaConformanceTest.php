@@ -82,6 +82,24 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A document with layers, one of them hidden, and a hidden block conforms
+	 *
+	 * @dataProvider layeredVersions
+	 */
+	public function testLayersConform($version)
+	{
+		$mpdf = $this->pdfa($version);
+		$mpdf->layerDetails[2] = ['state' => 'hidden', 'name' => 'Second'];
+		$mpdf->WriteHTML(
+			'<div style="z-index: 1">First layer</div><div style="z-index: 2">Second layer</div>'
+			. '<div style="visibility: hidden">Hidden</div>'
+		);
+
+		$this->assertSame([], $mpdf->PDFAXwarnings);
+		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
+	}
+
+	/**
 	 * The PDF/A versions that allow transparency, each with the default sRGB output intent and with a CMYK one
 	 *
 	 * @return mixed[][]
@@ -107,6 +125,16 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function pdfa2Versions()
 	{
 		return [['2-B'], ['2-U']];
+	}
+
+	/**
+	 * A PDF/A-2 and a PDF/A-3 version, which allow optional content
+	 *
+	 * @return string[][]
+	 */
+	public function layeredVersions()
+	{
+		return [['2-B'], ['3-B']];
 	}
 
 	/**
