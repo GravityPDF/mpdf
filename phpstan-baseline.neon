@@ -833,12 +833,6 @@ parameters:
 			path: src/Unicode/Bidi.php
 
 		-
-			message: '#^Variable \$ic might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Otl.php
-
-		-
 			message: '#^Variable \$next_level might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
