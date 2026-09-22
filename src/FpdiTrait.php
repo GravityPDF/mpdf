@@ -282,16 +282,17 @@ trait FpdiTrait
 			return;
 		}
 
+		// Encrypted into a new object: an imported link is written from the same parsed one each time its page is used
 		if ($value instanceof PdfString) {
 			$string = PdfString::unescape($value->value);
 			$string = $this->protection->rc4($this->protection->objectKey($this->currentObjectNumber), $string);
-			$value->value = $this->writer->escape($string);
+			$value = PdfString::create($this->writer->escape($string));
 
 		} elseif ($value instanceof PdfHexString) {
 			$filter = new AsciiHex();
 			$string = $filter->decode($value->value);
 			$string = $this->protection->rc4($this->protection->objectKey($this->currentObjectNumber), $string);
-			$value->value = $filter->encode($string, true);
+			$value = PdfHexString::create($filter->encode($string, true));
 
 		} elseif ($value instanceof PdfStream) {
 			$stream = $value->getStream();
