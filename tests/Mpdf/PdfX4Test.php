@@ -14,9 +14,48 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * The bundled sRGB profile, for an RGB output intent
+	 * The bundled sRGB profile, which a PDF/X-4 document embeds where it names none of its own
 	 */
 	const SRGB = __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc';
+
+	/**
+	 * @var string The path a CMYK profile is written to, for a CMYK output intent
+	 */
+	private $cmykProfile;
+
+	/**
+	 * Writes the CMYK profile the tests that ask for a CMYK output intent name.
+	 *
+	 * No CMYK profile is bundled - the smallest in the ICC registry is 2.7 MB - and mPDF reads only the
+	 * header of the profile it is given, to count its colour components, before embedding it whole. So
+	 * the tests write a profile that is a header alone: a CMYK printer profile carrying no tags.
+	 */
+	public function set_up()
+	{
+		$this->cmykProfile = sys_get_temp_dir() . '/mpdf-test-cmyk.icc';
+
+		$header = str_repeat("\0", 128);
+		$header = substr_replace($header, pack('N', 0x02100000), 8, 4); // ICC version 2.1
+		$header = substr_replace($header, 'prtr', 12, 4); // device class: printer
+		$header = substr_replace($header, 'CMYK', 16, 4); // data colour space
+		$header = substr_replace($header, 'Lab ', 20, 4); // profile connection space
+		$header = substr_replace($header, 'acsp', 36, 4); // the file signature every profile carries
+
+		$profile = $header . pack('N', 0); // a tag table of no tags
+		$profile = substr_replace($profile, pack('N', strlen($profile)), 0, 4);
+
+		file_put_contents($this->cmykProfile, $profile);
+	}
+
+	/**
+	 * Leaves no profile behind
+	 */
+	public function tear_down()
+	{
+		if (file_exists($this->cmykProfile)) {
+			unlink($this->cmykProfile);
+		}
+	}
 
 	/**
 	 * @param array $config Merged over automatic fixing and no compression
@@ -102,29 +141,70 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * PDF/X-4 embeds its output intent's profile, the bundled SWOP CMYK profile where it names none
+	 * PDF/X-4 permits an RGB output intent, so a document that names no profile prints to sRGB, and
+	 * embeds the bundled sRGB profile, which is 3 kB, as its output condition
 	 */
-	public function testPdfx4EmbedsTheSwopProfileByDefault()
+	public function testPdfx4EmbedsTheSrgbProfileByDefault()
 	{
 		$pdf = $this->pdf(['PDFX' => '4']);
 
 		$this->assertStringContainsString('/S /GTS_PDFX', $pdf);
-		$this->assertStringContainsString('/Info (SWOP2006 Coated3v2)', $pdf);
+		$this->assertStringContainsString('/Info (sRGB IEC61966-2.1)', $pdf);
+		$this->assertStringContainsString('/OutputConditionIdentifier (sRGB IEC61966-2.1)', $pdf);
 		$this->assertSame(1, preg_match('/\/DestOutputProfile (\d+) 0 R/', $pdf, $match));
-		$this->assertStringContainsString("\n" . $match[1] . " 0 obj\n<<\n/N 4\n/Length 2747952>>", $pdf);
-
-		$this->assertStringNotContainsString('/DestOutputProfile', $this->pdf(['PDFX' => true]), 'PDF/X-1a names a registered condition instead');
+		$this->assertStringContainsString("\n" . $match[1] . " 0 obj\n<<\n/N 3\n/Length 3052>>", $pdf);
 	}
 
 	/**
-	 * The bundled profile is a CMYK printer profile, as an output intent's must be
+	 * PDF/X-1a names a registered CMYK condition and embeds no profile, as it always has
 	 */
-	public function testTheBundledProfileIsACmykPrinterProfile()
+	public function testPdfx1aNamesTheRegisteredConditionWithNoProfile()
 	{
-		$header = file_get_contents(__DIR__ . '/../../data/iccprofiles/SWOP2006_Coated3v2.icc', false, null, 0, 20);
+		$pdf = $this->pdf(['PDFX' => true]);
 
-		$this->assertSame('prtr', substr($header, 12, 4));
-		$this->assertSame('CMYK', substr($header, 16, 4));
+		$this->assertStringContainsString('/Info (CGATS TR 001)', $pdf);
+		$this->assertStringContainsString('/OutputConditionIdentifier (CGATS TR 001)', $pdf);
+		$this->assertStringContainsString('/OutputCondition (CGATS TR 001 (SWOP))', $pdf);
+		$this->assertStringContainsString('/RegistryName (http://www.color.org)', $pdf);
+		$this->assertStringNotContainsString('/DestOutputProfile', $pdf);
+	}
+
+	/**
+	 * The default document prints to RGB throughout: nothing in it is written in DeviceCMYK
+	 */
+	public function testTheDefaultPdfx4DocumentIsRgbThroughout()
+	{
+		$pdf = $this->pdf(['PDFX' => '4'], '<p style="color: #ff0000">Text</p>');
+
+		$this->assertTrue($this->mpdf(['PDFX' => '4'])->pdfxRgbIntent());
+		$this->assertStringNotContainsString('DeviceCMYK', $pdf);
+		$this->assertSame(0, preg_match('/[\d.]+ [\d.]+ [\d.]+ [\d.]+ k\b/', $pdf));
+	}
+
+	/**
+	 * A CMYK output intent is had by naming a CMYK profile, which is embedded and counted
+	 */
+	public function testACmykOutputIntentIsHadByNamingAProfile()
+	{
+		$mpdf = $this->mpdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile]);
+		$this->assertSame(4, $mpdf->pdfxOutputChannels());
+		$this->assertFalse($mpdf->pdfxRgbIntent());
+
+		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile]);
+		$this->assertStringContainsString('/Info (mpdf-test-cmyk)', $pdf);
+		$this->assertStringContainsString('/OutputConditionIdentifier (Custom)', $pdf);
+		$this->assertSame(1, preg_match('/\/DestOutputProfile (\d+) 0 R/', $pdf, $match));
+		$this->assertStringStartsWith("<<\n/N 4\n", $this->object($pdf, $match[1]));
+	}
+
+	/**
+	 * PDF/X-1a prints to CMYK whatever profile the document names
+	 */
+	public function testPdfx1aPrintsToCmyk()
+	{
+		$this->assertSame(4, $this->mpdf(['PDFX' => true])->pdfxOutputChannels());
+		$this->assertSame(4, $this->mpdf(['PDFX' => true, 'ICCProfile' => self::SRGB])->pdfxOutputChannels());
+		$this->assertFalse($this->mpdf(['PDFX' => true])->pdfxRgbIntent());
 	}
 
 	/**
@@ -217,15 +297,19 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A colour with transparency is converted to CMYK and keeps its transparency, where PDF/X-1a loses it
+	 * A colour with transparency keeps it, where PDF/X-1a converts it to CMYK and loses it
 	 */
 	public function testAColourWithTransparencyKeepsItsTransparency()
 	{
 		$html = '<div style="background-color: rgba(255, 0, 0, 0.5)">Text</div>';
 
 		$pdf = $this->pdf(['PDFX' => '4'], $html);
-		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $pdf);
+		$this->assertStringContainsString('1.000 0.000 0.000 rg', $pdf);
 		$this->assertStringContainsString('/ca 0.5', $pdf);
+
+		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
+		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $cmyk);
+		$this->assertStringContainsString('/ca 0.5', $cmyk);
 
 		$this->assertStringNotContainsString('/ca 0.5', $this->pdf(['PDFX' => true], $html));
 	}
@@ -247,10 +331,11 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * PDF/X-4 keeps a PNG's transparency, and its RGB is written in sRGB, as the CMYK output intent
-	 * permits no DeviceRGB. PDF/X-1a converts it to CMYK without transparency.
+	 * PDF/X-4 keeps a PNG's transparency, its RGB written as it is for the RGB output intent, and in an
+	 * ICC-based sRGB space for a CMYK one, which permits no DeviceRGB. PDF/X-1a converts it to CMYK
+	 * without transparency.
 	 */
-	public function testPdfx4KeepsATranslucentPngInSrgb()
+	public function testPdfx4KeepsATranslucentPng()
 	{
 		$image = imagecreatetruecolor(16, 16);
 		imagesavealpha($image, true);
@@ -262,10 +347,14 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$pdf = $this->pdf(['PDFX' => '4'], $html);
 		$this->assertStringContainsString('/SMask', $pdf);
-		$this->assertStringNotContainsString('/DeviceRGB', $pdf);
-		$this->assertSame(1, preg_match('/\/ColorSpace (\d+) 0 R/', $pdf, $space));
-		$this->assertSame(1, preg_match('/^\[\/ICCBased (\d+) 0 R\]/', $this->object($pdf, $space[1]), $profile));
-		$this->assertStringStartsWith('<</N 3 /Length 3052>>', $this->object($pdf, $profile[1]));
+		$this->assertStringContainsString('/ColorSpace /DeviceRGB', $pdf);
+
+		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
+		$this->assertStringContainsString('/SMask', $cmyk);
+		$this->assertStringNotContainsString('/DeviceRGB', $cmyk);
+		$this->assertSame(1, preg_match('/\/ColorSpace (\d+) 0 R/', $cmyk, $space));
+		$this->assertSame(1, preg_match('/^\[\/ICCBased (\d+) 0 R\]/', $this->object($cmyk, $space[1]), $profile));
+		$this->assertStringStartsWith('<</N 3 /Length 3052>>', $this->object($cmyk, $profile[1]));
 
 		$pdfx1a = $this->pdf(['PDFX' => true], $html);
 		$this->assertStringNotContainsString('/SMask', $pdfx1a);
@@ -273,7 +362,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A palette image's palette is in sRGB
+	 * A palette image's palette is in sRGB, calibrated for a CMYK output intent
 	 */
 	public function testAPaletteImageIsInSrgb()
 	{
@@ -283,9 +372,11 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		imagepng($image);
 		$html = '<img src="data:image/png;base64,' . base64_encode(ob_get_clean()) . '" />';
 
-		$pdf = $this->pdf(['PDFX' => '4'], $html);
-		$this->assertSame(1, preg_match('/\/ColorSpace \[\/Indexed (\d+) 0 R 0 /', $pdf, $match));
-		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[1]));
+		$this->assertStringContainsString('/ColorSpace [/Indexed /DeviceRGB ', $this->pdf(['PDFX' => '4'], $html));
+
+		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
+		$this->assertSame(1, preg_match('/\/ColorSpace \[\/Indexed (\d+) 0 R 0 /', $cmyk, $match));
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($cmyk, $match[1]));
 	}
 
 	/**
@@ -317,39 +408,48 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testPagesAreBlendedInTheColourSpaceOfTheOutputIntent()
 	{
-		$this->assertStringContainsString('/Group << /Type /Group /S /Transparency /CS /DeviceCMYK >>', $this->pdf(['PDFX' => '4']));
+		$this->assertStringContainsString('/Group << /Type /Group /S /Transparency /CS /DeviceRGB >>', $this->pdf(['PDFX' => '4']));
 
-		$rgb = $this->pdf(['PDFX' => '4', 'ICCProfile' => self::SRGB]);
-		$this->assertStringContainsString('/Group << /Type /Group /S /Transparency /CS /DeviceRGB >>', $rgb);
+		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile]);
+		$this->assertStringContainsString('/Group << /Type /Group /S /Transparency /CS /DeviceCMYK >>', $cmyk);
 
 		$this->assertStringNotContainsString('/Group', $this->pdf(['PDFX' => true]));
 	}
 
 	/**
-	 * RGB is converted to CMYK for a CMYK output intent, and written as it is for an RGB one, with
-	 * the profile's three components
+	 * RGB is written as it is for the RGB output intent, and converted to CMYK for a CMYK one
 	 */
 	public function testRgbIsKeptOnlyForAnRgbOutputIntent()
 	{
 		$html = '<p style="color: #ff0000">Text</p>';
 
-		$cmyk = $this->pdf(['PDFX' => '4'], $html);
+		$rgb = $this->pdf(['PDFX' => '4'], $html);
+		$this->assertStringContainsString('1.000 0.000 0.000 rg', $rgb);
+
+		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
 		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $cmyk);
 		$this->assertStringNotContainsString('1.000 0.000 0.000 rg', $cmyk);
-
-		$rgb = $this->pdf(['PDFX' => '4', 'ICCProfile' => self::SRGB], $html);
-		$this->assertStringContainsString('1.000 0.000 0.000 rg', $rgb);
-		$this->assertSame(1, preg_match('/\/DestOutputProfile (\d+) 0 R/', $rgb, $match));
-		$this->assertStringStartsWith("<<\n/N 3\n", $this->object($rgb, $match[1]));
 	}
 
 	/**
-	 * A bitmap colour font is drawn in colour, its images in sRGB
+	 * CMYK is converted to RGB for the RGB output intent
 	 */
-	public function testABitmapColourFontIsDrawnInColourInSrgb()
+	public function testCmykIsConvertedForAnRgbOutputIntent()
 	{
-		$pdf = $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false]);
+		$html = '<p style="color: cmyk(0, 100, 100, 0)">Text</p>';
 
+		$this->assertStringContainsString('1.000 0.000 0.000 rg', $this->pdf(['PDFX' => '4'], $html));
+		$this->assertStringContainsString('0.000 1.000 1.000 0.000 k', $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html));
+	}
+
+	/**
+	 * A bitmap colour font is drawn in colour, its images in sRGB where the output intent is CMYK
+	 */
+	public function testABitmapColourFontIsDrawnInColour()
+	{
+		$this->assertStringContainsString('/ColorSpace /DeviceRGB', $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false]));
+
+		$pdf = $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false, 'ICCProfile' => $this->cmykProfile]);
 		$this->assertStringNotContainsString('/DeviceRGB', $pdf);
 		$this->assertStringContainsString('/SMask', $pdf);
 		$this->assertSame(1, preg_match('/\/ColorSpace (\d+) 0 R/', $pdf, $match));
@@ -357,27 +457,19 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A COLR font is drawn in colour, each fill in sRGB set by name
+	 * A COLR font is drawn in colour, each fill in sRGB set by name where the output intent is CMYK
 	 */
-	public function testAColrFontIsDrawnInColourInSrgb()
+	public function testAColrFontIsDrawnInColour()
 	{
-		$pdf = $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false, 'default_font' => 'colr']);
+		$rgb = $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false, 'default_font' => 'colr']);
+		$this->assertStringContainsString('1.000 0.800 0.200 rg', $rgb, 'the face, yellow');
+		$this->assertStringNotContainsString('CsRGB', $rgb);
 
+		$pdf = $this->colourFontPdf(['PDFX' => '4', 'PDFXauto' => false, 'default_font' => 'colr', 'ICCProfile' => $this->cmykProfile]);
 		$this->assertStringNotContainsString(' rg', $pdf);
 		$this->assertStringContainsString('/CsRGB cs 1.000 0.800 0.200 sc', $pdf, 'the face, yellow');
 		$this->assertSame(1, preg_match('/\/ColorSpace <<\/CsRGB (\d+) 0 R >>/', $pdf, $match));
 		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[1]));
-	}
-
-	/**
-	 * For an RGB output intent, a colour font's RGB is written as it is
-	 */
-	public function testAColourFontIsDrawnInDeviceRgbForAnRgbOutputIntent()
-	{
-		$pdf = $this->colourFontPdf(['PDFX' => '4', 'default_font' => 'colr', 'ICCProfile' => self::SRGB]);
-
-		$this->assertStringContainsString('1.000 0.800 0.200 rg', $pdf);
-		$this->assertStringNotContainsString('CsRGB', $pdf);
 	}
 
 	/**

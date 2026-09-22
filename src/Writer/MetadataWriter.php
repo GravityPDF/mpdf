@@ -212,12 +212,18 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				$this->writer->write('/OutputCondition ()');
 			}
 			$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
-		} elseif ($this->mpdf->PDFX) { // a CMYK profile, except where PDF/X-4 names another
+		} elseif ($this->mpdf->PDFX) { // a CMYK condition, except where PDF/X-4 embeds another profile
 			$this->writer->write('/S /GTS_PDFX');
-			if ($this->mpdf->ICCProfile || $this->mpdf->isPdfx4()) {
-				// PDF/X-4 embeds its profile, which is SWOP where the document names none
-				$this->writer->write('/Info (' . ($this->mpdf->ICCProfile ? $ICCProfile : 'SWOP2006 Coated3v2') . ')');
+			if ($this->mpdf->ICCProfile) {
+				$this->writer->write('/Info (' . $ICCProfile . ')');
 				$this->writer->write('/OutputConditionIdentifier (Custom)');
+				$this->writer->write('/OutputCondition ()');
+				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
+			} elseif ($this->mpdf->isPdfx4()) {
+				// PDF/X-4 permits an RGB output intent, and embeds the bundled sRGB profile where the
+				// document names none of its own. A CMYK intent is had by naming a CMYK ICCProfile.
+				$this->writer->write('/Info (sRGB IEC61966-2.1)');
+				$this->writer->write('/OutputConditionIdentifier (sRGB IEC61966-2.1)');
 				$this->writer->write('/OutputCondition ()');
 				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
 			} else {
@@ -241,8 +247,6 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				throw new \Mpdf\MpdfException(sprintf('Unable to find ICC profile "%s"', $this->mpdf->ICCProfile));
 			}
 			$s = file_get_contents($this->mpdf->ICCProfile);
-		} elseif ($this->mpdf->isPdfx4()) {
-			$s = file_get_contents(__DIR__ . '/../../data/iccprofiles/SWOP2006_Coated3v2.icc');
 		} else {
 			$s = file_get_contents(__DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc');
 		}

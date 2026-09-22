@@ -158,7 +158,7 @@ class ConfigVariables
 			// Colour profile OutputIntent
 			// sRGB_IEC61966-2-1 (=default if blank and PDFA), or other added .icc profile
 			// Must be CMYK for PDF/X-1a, or appropriate type for PDFA(RGB or CMYK) or PDF/X-4
-			// PDF/X-4 embeds SWOP2006_Coated3v2 where blank
+			// PDF/X-4 embeds sRGB_IEC61966-2-1 where blank; name a CMYK profile for a CMYK output intent
 			'ICCProfile' => '',
 
 			'spotColors' => [],

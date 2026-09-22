@@ -1655,15 +1655,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * The number of colour components of the PDF/X output intent: four for PDF/X-1a, and for PDF/X-4 as
-	 * many as its profile has, the bundled CMYK profile where it names none
+	 * The number of colour components of the PDF/X output intent: four for PDF/X-1a, which prints to a
+	 * CMYK condition, and for PDF/X-4 as many as its profile has, three for the bundled sRGB profile it
+	 * embeds where the document names none. A CMYK output intent is had by naming a CMYK ICCProfile.
 	 *
 	 * @return int 1 for grey, 3 for RGB or Lab, 4 for CMYK
 	 */
 	public function pdfxOutputChannels()
 	{
-		if (!$this->isPdfx4() || !$this->ICCProfile) {
+		if (!$this->isPdfx4()) {
 			return 4;
+		}
+
+		if (!$this->ICCProfile) {
+			return 3;
 		}
 
 		if (!isset($this->iccChannels[$this->ICCProfile])) {
