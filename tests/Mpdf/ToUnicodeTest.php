@@ -8,6 +8,8 @@ namespace Mpdf;
 class ToUnicodeTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
+	use PageStreams;
+
 	/**
 	 * A subset maps each run of 256 codes it draws from, as a range of its own
 	 */
@@ -39,11 +41,9 @@ class ToUnicodeTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function cmap($config)
 	{
-		$mpdf = new Mpdf($config + ['default_font' => 'dejavusans']);
-		$mpdf->compress = false;
-		$mpdf->WriteHTML('<p>Ελληνικά</p>');
+		$pdf = $this->render('<p>Ελληνικά</p>', $config + ['mode' => '', 'default_font' => 'dejavusans']);
 
-		$this->assertSame(1, preg_match('/\/CMapName \/Adobe-Identity-UCS def\n(.*?)endcmap/s', $mpdf->Output('', 'S'), $cmap));
+		$this->assertSame(1, preg_match('/\/CMapName \/Adobe-Identity-UCS def\n(.*?)endcmap/s', $pdf, $cmap));
 
 		return $cmap[1];
 	}

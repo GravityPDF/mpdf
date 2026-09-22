@@ -69,16 +69,6 @@ class PDFATest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('/Version /1.7', $output);
 	}
 
-	public function testPDFA_Version_Fail()
-	{
-		$this->mpdf->PDFAversion = '11';
-		try {
-			$this->mpdf->Output(null, 'S');
-		} catch (\Exception $e) {
-			$this->assertSame('PDFA version (11) is not valid. (Use: 1-B, 2-B, 2-U, 3-B or 3-U)', $e->getMessage());
-		}
-	}
-
 	/**
 	 * PDF/A-2 at levels B and U declares its part and level in the XMP metadata, without the PDF/A-1 amendment
 	 *
@@ -130,7 +120,7 @@ class PDFATest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function unsupportedVersions()
 	{
-		return [['1-A'], ['1-U'], ['2-A'], ['3-A'], ['4'], ['2B']];
+		return [['1-A'], ['1-U'], ['2-A'], ['3-A'], ['4'], ['11'], ['2B']];
 	}
 
 	public function testOriginalPDFA_3B()
