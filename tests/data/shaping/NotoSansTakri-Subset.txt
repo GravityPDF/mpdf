@@ -1,0 +1,132 @@
+=== latin ===
+0xFF              0041 0056 0041 0054 0061 0072  =>  0041 0056 0041 0054 0061 0072  group=CCCCCC
+0x80              0041 0056 0041 0054 0061 0072  =>  0041 0056 0041 0054 0061 0072  group=CCCCCC
+0xFF +kern -liga  0041 0056 0041 0054 0061 0072  =>  0041 0056 0041 0054 0061 0072  group=CCCCCC
+=== cyrillic ===
+0xFF              0416 0430 0439  =>  0416 0430 0439  group=CCC
+0x80              0416 0430 0439  =>  0416 0430 0439  group=CCC
+0xFF +kern -liga  0416 0430 0439  =>  0416 0430 0439  group=CCC
+=== greek ===
+0xFF              03B1 03B2 03C2  =>  03B1 03B2 03C2  group=CCC
+0x80              03B1 03B2 03C2  =>  03B1 03B2 03C2  group=CCC
+0xFF +kern -liga  03B1 03B2 03C2  =>  03B1 03B2 03C2  group=CCC
+=== hiragana ===
+0xFF              3042 3043 3044  =>  3042 3043 3044  group=CCC
+0x80              3042 3043 3044  =>  3042 3043 3044  group=CCC
+0xFF +kern -liga  3042 3043 3044  =>  3042 3043 3044  group=CCC
+=== arabic ===
+0xFF              0628 0640 0645 0644 0627  =>  0628 0640 0645 0644 0627  group=CCCCC  gpos={"1":{"kashida":8}}
+0x80              0628 0640 0645 0644 0627  =>  0628 0640 0645 0644 0627  group=CCCCC  gpos={"1":{"kashida":8}}
+0xFF +kern -liga  0628 0640 0645 0644 0627  =>  0628 0640 0645 0644 0627  group=CCCCC  gpos={"1":{"kashida":8}}
+=== syriac ===
+0xFF              0710 0712 0713 0715  =>  0710 0712 0713 0715  group=CCCC
+0x80              0710 0712 0713 0715  =>  0710 0712 0713 0715  group=CCCC
+0xFF +kern -liga  0710 0712 0713 0715  =>  0710 0712 0713 0715  group=CCCC
+=== nko ===
+0xFF              07CA 07CB 07CC  =>  07CA 07CB 07CC  group=CCC
+0x80              07CA 07CB 07CC  =>  07CA 07CB 07CC  group=CCC
+0xFF +kern -liga  07CA 07CB 07CC  =>  07CA 07CB 07CC  group=CCC
+=== devanagari ===
+0xFF              0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
+0x80              0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
+0xFF +kern -liga  0915 094D 0937 093F  =>  0915 094D 093F 0937  group=CCCC
+=== bengali ===
+0xFF              0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
+0x80              0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
+0xFF +kern -liga  0995 09CD 09B7 09BF  =>  0995 09CD 09B7 09BF  group=CCCC
+=== gurmukhi ===
+0xFF              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
+0x80              0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
+0xFF +kern -liga  0A15 0A4D 0A38 0A3F  =>  0A15 0A4D 0A38 0A3F  group=CCCC
+=== tamil ===
+0xFF              0B95 0BCD 0BB7 0BBF  =>  0B95 0BCD 0BB7 0BBF  group=CCCC
+0x80              0B95 0BCD 0BB7 0BBF  =>  0B95 0BCD 0BB7 0BBF  group=CCCC
+0xFF +kern -liga  0B95 0BCD 0BB7 0BBF  =>  0B95 0BCD 0BB7 0BBF  group=CCCC
+=== malayalam ===
+0xFF              0D15 0D4D 0D37 0D3F  =>  0D15 0D4D 0D37 0D3F  group=CCCC
+0x80              0D15 0D4D 0D37 0D3F  =>  0D15 0D4D 0D37 0D3F  group=CCCC
+0xFF +kern -liga  0D15 0D4D 0D37 0D3F  =>  0D15 0D4D 0D37 0D3F  group=CCCC
+=== sinhala ===
+0xFF              0D9A 0DCA 0DBB 0DBB  =>  0D9A 0DCA 0DBB 0DBB  group=CCCC
+0x80              0D9A 0DCA 0DBB 0DBB  =>  0D9A 0DCA 0DBB 0DBB  group=CCCC
+0xFF +kern -liga  0D9A 0DCA 0DBB 0DBB  =>  0D9A 0DCA 0DBB 0DBB  group=CCCC
+=== khmer ===
+0xFF              1780 17D2 1781 17C1  =>  17C1 1780 17D2 1781  group=CCCC
+0x80              1780 17D2 1781 17C1  =>  17C1 1780 17D2 1781  group=CCCC
+0xFF +kern -liga  1780 17D2 1781 17C1  =>  17C1 1780 17D2 1781  group=CCCC
+=== thai ===
+0xFF              0E01 0E34 0E48 0E23  =>  0E01 0E34 0E48 0E23  group=CCCC
+0x80              0E01 0E34 0E48 0E23  =>  0E01 0E34 0E48 0E23  group=CCCC
+0xFF +kern -liga  0E01 0E34 0E48 0E23  =>  0E01 0E34 0E48 0E23  group=CCCC
+=== lao ===
+0xFF              0E81 0EB4 0E8D  =>  0E81 0EB4 0E8D  group=CCC
+0x80              0E81 0EB4 0E8D  =>  0E81 0EB4 0E8D  group=CCC
+0xFF +kern -liga  0E81 0EB4 0E8D  =>  0E81 0EB4 0E8D  group=CCC
+=== myanmar ===
+0xFF              1000 103A 1039 1001  =>  1000 103A 1039 1001  group=CCCC
+0x80              1000 103A 1039 1001  =>  1000 103A 1039 1001  group=CCCC
+0xFF +kern -liga  1000 103A 1039 1001  =>  1000 103A 1039 1001  group=CCCC
+=== new tai lue ===
+0xFF              1980 19B0 1981  =>  1980 19B0 1981  group=CCC
+0x80              1980 19B0 1981  =>  1980 19B0 1981  group=CCC
+0xFF +kern -liga  1980 19B0 1981  =>  1980 19B0 1981  group=CCC
+=== cham ===
+0xFF              AA00 AA33 AA01  =>  AA00 AA33 AA01  group=CCC
+0x80              AA00 AA33 AA01  =>  AA00 AA33 AA01  group=CCC
+0xFF +kern -liga  AA00 AA33 AA01  =>  AA00 AA33 AA01  group=CCC
+=== tai tham ===
+0xFF              1A20 1A60 1A21  =>  1A20 1A60 1A21  group=CCC
+0x80              1A20 1A60 1A21  =>  1A20 1A60 1A21  group=CCC
+0xFF +kern -liga  1A20 1A60 1A21  =>  1A20 1A60 1A21  group=CCC
+=== mixed scripts ===
+0xFF              0041 0628 0915 0042  =>  0041 0628 0915 0042  group=CCCC
+0x80              0041 0628 0915 0042  =>  0041 0628 0915 0042  group=CCCC
+0xFF +kern -liga  0041 0628 0915 0042  =>  0041 0628 0915 0042  group=CCCC
+=== spaced ===
+0xFF              0041 0020 0628 0020 0042  =>  0041 0020 0628 0020 0042  group=CSCSC
+0x80              0041 0020 0628 0020 0042  =>  0041 0020 0628 0020 0042  group=CSCSC
+0xFF +kern -liga  0041 0020 0628 0020 0042  =>  0041 0020 0628 0020 0042  group=CSCSC
+=== font characters 0 ===
+0xFF              0020 00A0 0964 0965 200C 200D 25CC E000  =>  0020 00A0 0964 0965 200C 200D 25CC E000  group=SCCCCCCC
+0x80              0020 00A0 0964 0965 200C 200D 25CC E000  =>  0020 00A0 0964 0965 200C 200D 25CC E000  group=SCCCCCCC
+0xFF +kern -liga  0020 00A0 0964 0965 200C 200D 25CC E000  =>  0020 00A0 0964 0965 200C 200D 25CC E000  group=SCCCCCCC
+=== font characters 1 ===
+0xFF              E001 E002 E003 E004 E005 E006 E007 E008  =>  E001 E002 E003 E004 E005 E006 E007 E008  group=MMMCCCCC  gpos={"1":{"BaseWidth":0,"XPlacement":-35,"YPlacement":-320}}
+0x80              E001 E002 E003 E004 E005 E006 E007 E008  =>  E001 E002 E003 E004 E005 E006 E007 E008  group=MMMCCCCC  gpos={"1":{"BaseWidth":0,"XPlacement":-35,"YPlacement":-320}}
+0xFF +kern -liga  E001 E002 E003 E004 E005 E006 E007 E008  =>  E001 E002 E003 E004 E005 E006 E007 E008  group=MMMCCCCC  gpos={"1":{"BaseWidth":0,"XPlacement":-35,"YPlacement":-320}}
+=== font characters 2 ===
+0xFF              11680 11681 11682 11683 11684 11685 11686 11687  =>  11680 11681 11682 11683 11684 11685 11686 11687  group=CCCCCCCC
+0x80              11680 11681 11682 11683 11684 11685 11686 11687  =>  11680 11681 11682 11683 11684 11685 11686 11687  group=CCCCCCCC
+0xFF +kern -liga  11680 11681 11682 11683 11684 11685 11686 11687  =>  11680 11681 11682 11683 11684 11685 11686 11687  group=CCCCCCCC
+=== font characters 3 ===
+0xFF              11688 11689 1168A 1168B 1168C 1168D 1168E 1168F  =>  11688 11689 1168A 1168B 1168C 1168D 1168E 1168F  group=CCCCCCCC
+0x80              11688 11689 1168A 1168B 1168C 1168D 1168E 1168F  =>  11688 11689 1168A 1168B 1168C 1168D 1168E 1168F  group=CCCCCCCC
+0xFF +kern -liga  11688 11689 1168A 1168B 1168C 1168D 1168E 1168F  =>  11688 11689 1168A 1168B 1168C 1168D 1168E 1168F  group=CCCCCCCC
+=== font characters 4 ===
+0xFF              11690 11691 11692 11693 11694 11695 11696 11697  =>  11690 11691 11692 11693 11694 11695 11696 11697  group=CCCCCCCC
+0x80              11690 11691 11692 11693 11694 11695 11696 11697  =>  11690 11691 11692 11693 11694 11695 11696 11697  group=CCCCCCCC
+0xFF +kern -liga  11690 11691 11692 11693 11694 11695 11696 11697  =>  11690 11691 11692 11693 11694 11695 11696 11697  group=CCCCCCCC
+=== font characters 5 ===
+0xFF              11698 11699 1169A 1169B 1169C 1169D 1169E 1169F  =>  11698 11699 1169A 1169B 1169C 1169D 1169E 1169F  group=CCCCCCCC
+0x80              11698 11699 1169A 1169B 1169C 1169D 1169E 1169F  =>  11698 11699 1169A 1169B 1169C 1169D 1169E 1169F  group=CCCCCCCC
+0xFF +kern -liga  11698 11699 1169A 1169B 1169C 1169D 1169E 1169F  =>  11698 11699 1169A 1169B 1169C 1169D 1169E 1169F  group=CCCCCCCC
+=== font characters 6 ===
+0xFF              116A0 116A1 116A2 116A3 116A4 116A5 116A6 116A7  =>  116A0 116A1 116A2 116A3 116A4 116A5 116A6 116A7  group=CCCCCCCC
+0x80              116A0 116A1 116A2 116A3 116A4 116A5 116A6 116A7  =>  116A0 116A1 116A2 116A3 116A4 116A5 116A6 116A7  group=CCCCCCCC
+0xFF +kern -liga  116A0 116A1 116A2 116A3 116A4 116A5 116A6 116A7  =>  116A0 116A1 116A2 116A3 116A4 116A5 116A6 116A7  group=CCCCCCCC
+=== font characters 7 ===
+0xFF              116A8 116A9 116AA 116AB 116AC 116AD 116AE 116AF  =>  116A8 116A9 116AA 116AB 116AC 116AD 116AE 116AF  group=CCCMCMCC  gpos={"3":{"BaseWidth":510,"XPlacement":250,"YPlacement":30}}
+0x80              116A8 116A9 116AA 116AB 116AC 116AD 116AE 116AF  =>  116A8 116A9 116AA 116AB 116AC 116AD 116AE 116AF  group=CCCMCMCC  gpos={"3":{"BaseWidth":510,"XPlacement":250,"YPlacement":30}}
+0xFF +kern -liga  116A8 116A9 116AA 116AB 116AC 116AD 116AE 116AF  =>  116A8 116A9 116AA 116AB 116AC 116AD 116AE 116AF  group=CCCMCMCC  gpos={"3":{"BaseWidth":510,"XPlacement":250,"YPlacement":30}}
+=== font characters 8 ===
+0xFF              116B0 116B1 116B2 116B3 116B4 116B5 116B6 116B7  =>  116B0 116B1 116B2 116B3 116B4 116B5 116B6 116B7  group=MMMMMMMM  gpos={"1":{"BaseWidth":0,"XPlacement":-1,"YPlacement":-230},"3":{"BaseWidth":0,"XPlacement":0,"YPlacement":130},"4":{"BaseWidth":0,"XPlacement":0,"YPlacement":360},"5":{"BaseWidth":0,"XPlacement":0,"YPlacement":510},"7":{"BaseWidth":0,"XPlacement":0,"YPlacement":-570}}
+0x80              116B0 116B1 116B2 116B3 116B4 116B5 116B6 116B7  =>  116B0 116B1 116B2 116B3 116B4 116B5 116B6 116B7  group=MMMMMMMM  gpos={"1":{"BaseWidth":0,"XPlacement":-1,"YPlacement":-230},"3":{"BaseWidth":0,"XPlacement":0,"YPlacement":130},"4":{"BaseWidth":0,"XPlacement":0,"YPlacement":360},"5":{"BaseWidth":0,"XPlacement":0,"YPlacement":510},"7":{"BaseWidth":0,"XPlacement":0,"YPlacement":-570}}
+0xFF +kern -liga  116B0 116B1 116B2 116B3 116B4 116B5 116B6 116B7  =>  116B0 116B1 116B2 116B3 116B4 116B5 116B6 116B7  group=MMMMMMMM  gpos={"1":{"BaseWidth":0,"XPlacement":-1,"YPlacement":-230},"3":{"BaseWidth":0,"XPlacement":0,"YPlacement":130},"4":{"BaseWidth":0,"XPlacement":0,"YPlacement":360},"5":{"BaseWidth":0,"XPlacement":0,"YPlacement":510},"7":{"BaseWidth":0,"XPlacement":0,"YPlacement":-570}}
+=== font characters 9 ===
+0xFF              116B8 116B9 116C0 116C1 116C2 116C3 116C4 116C5  =>  116B8 116B9 116C0 116C1 116C2 116C3 116C4 116C5  group=CCCCCCCC
+0x80              116B8 116B9 116C0 116C1 116C2 116C3 116C4 116C5  =>  116B8 116B9 116C0 116C1 116C2 116C3 116C4 116C5  group=CCCCCCCC
+0xFF +kern -liga  116B8 116B9 116C0 116C1 116C2 116C3 116C4 116C5  =>  116B8 116B9 116C0 116C1 116C2 116C3 116C4 116C5  group=CCCCCCCC
+=== font characters 10 ===
+0xFF              116C6 116C7 116C8 116C9  =>  116C6 116C7 116C8 116C9  group=CCCC
+0x80              116C6 116C7 116C8 116C9  =>  116C6 116C7 116C8 116C9  group=CCCC
+0xFF +kern -liga  116C6 116C7 116C8 116C9  =>  116C6 116C7 116C8 116C9  group=CCCC
