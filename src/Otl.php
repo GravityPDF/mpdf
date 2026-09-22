@@ -3392,6 +3392,22 @@ class Otl
 
 			$this->recordLigatureText($substitute, $GlyphPos);
 
+			// The characters the ligature stands for, taken before the splice drops its components, for
+			// its /ActualText. They ride in GPOSinfo to outlast sliceOTLdata(); only under PDF/UA, as
+			// any GPOSinfo sends a run off the plain Tj path.
+			if ($this->mpdf->PDFUA) {
+				$ligSrc = [$this->OTLdata[$pos]['uni']];
+				for ($ligi = 1; $ligi < count($GlyphPos); $ligi++) {
+					if (isset($this->OTLdata[$GlyphPos[$ligi]]['uni'])) {
+						$ligSrc[] = $this->OTLdata[$GlyphPos[$ligi]]['uni'];
+					}
+				}
+				if (!isset($newOTLdata[0]['GPOSinfo'])) {
+					$newOTLdata[0]['GPOSinfo'] = [];
+				}
+				$newOTLdata[0]['GPOSinfo']['ligature_source'] = $ligSrc;
+			}
+
 			// The components need not be contiguous, so the ligature and whatever stands between its
 			// components (the marks it skipped) replace the whole span in one splice
 			$span = [$newOTLdata[0]];

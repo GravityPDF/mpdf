@@ -154,6 +154,15 @@ class ConfigVariables
 			'PDFAauto' => false,
 			'PDFAversion' => '1-B',
 
+			// PDF/UA-1 accessible files (ISO 14289-1)
+			// true=Forces compliance with PDF/UA-1; needs embedded TrueType/OpenType fonts, not core fonts
+			'PDFUA' => false,
+			// Overrides warnings making changes when possible to force PDF/UA-1 compliance
+			'PDFUAauto' => false,
+
+			// Document title, as SetTitle() sets it; PDF/UA-1 requires one
+			'title' => '',
+
 			// Colour profile OutputIntent
 			// sRGB_IEC61966-2-1 (=default if blank and PDFA), or other added .icc profile
 			// Must be CMYK for PDFX, or appropriate type for PDFA(RGB or CMYK)

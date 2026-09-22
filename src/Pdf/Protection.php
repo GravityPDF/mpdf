@@ -23,6 +23,22 @@ class Protection
 	private $useRC128Encryption;
 
 	/**
+	 * Whether a /V 4 crypt-filter dictionary is written in place of the /V 1 or 2 RC4 handler.
+	 * Only /V 4 has the Identity crypt filter that leaves the metadata stream unencrypted.
+	 *
+	 * @var bool
+	 */
+	private $useV4Encryption;
+
+	/**
+	 * The /EncryptMetadata entry: whether the document XMP metadata stream is encrypted.
+	 * It can only be false under /V 4.
+	 *
+	 * @var bool
+	 */
+	private $encryptMetadata;
+
+	/**
 	 * @var string
 	 */
 	private $encryptionKey;
@@ -79,6 +95,8 @@ class Protection
 			"\x2E\x2E\x00\xB6\xD0\x68\x3E\x80\x2F\x0C\xA9\xFE\x64\x53\x69\x7A";
 
 		$this->useRC128Encryption = false;
+		$this->useV4Encryption = false;
+		$this->encryptMetadata = true;
 
 		$this->options = [
 			'print' => 4, // bit 3
@@ -123,6 +141,36 @@ class Protection
 		$this->generateEncryptionKey($user_pass, $owner_pass, $protection);
 
 		return true;
+	}
+
+	/**
+	 * Encrypt with a /V 4 crypt filter and leave the XMP metadata stream in plaintext, so a
+	 * reader without the password can still find pdfuaid:part.
+	 *
+	 * Call it before setProtection(): leaving the metadata out changes the file key. /V 4
+	 * needs the 128-bit key.
+	 */
+	public function useV4WithUnencryptedMetadata()
+	{
+		$this->useV4Encryption = true;
+		$this->useRC128Encryption = true;
+		$this->encryptMetadata = false;
+	}
+
+	/**
+	 * @return bool Whether a /V 4 crypt-filter dictionary is written
+	 */
+	public function getUseV4Encryption()
+	{
+		return $this->useV4Encryption;
+	}
+
+	/**
+	 * @return bool Whether the XMP metadata stream is encrypted
+	 */
+	public function getEncryptMetadata()
+	{
+		return $this->encryptMetadata;
 	}
 
 	/**
@@ -324,7 +372,15 @@ class Protection
 		$perms .= chr(bindec(substr($prot, 8, 8)));
 		$perms .= chr(bindec(substr($prot, 0, 8)));
 
-		$tmp = $this->md5toBinary($user_pass . $this->oValue . $perms . $this->hexToString($this->uniqid));
+		$md5input = $user_pass . $this->oValue . $perms . $this->hexToString($this->uniqid);
+
+		// A handler that leaves the metadata unencrypted adds 0xFFFFFFFF to the key
+		// (ISO 32000-1 §7.6.3.3, Algorithm 2 step g)
+		if ($this->useV4Encryption && !$this->encryptMetadata) {
+			$md5input .= "\xff\xff\xff\xff";
+		}
+
+		$tmp = $this->md5toBinary($md5input);
 
 		if ($this->useRC128Encryption) {
 			for ($i = 0; $i < 50; ++$i) {

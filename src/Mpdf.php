@@ -92,6 +92,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $PDFAauto;
 	var $ICCProfile;
 
+	var $PDFUA;     // Write a PDF/UA-1 document (ISO 14289-1)
+	var $PDFUAauto; // Warn about what PDF/UA-1 does not allow instead of throwing
+
+	/**
+	 * The PDF/UA-1 state of the document; collaborators are handed it by ServiceFactory
+	 *
+	 * @var \Mpdf\Ua\UaState
+	 */
+	private $ua;
+
 	var $printers_info;
 	var $iterationCounter;
 	var $smCapsScale;
@@ -420,6 +430,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $saveTableCounter;
 	var $cellBorderBuffer;
 
+	/**
+	 * What each block tag opened inside a table cell did to the structure tree, so the cell's
+	 * text is marked against the element inside the cell rather than the whole TD.
+	 *
+	 * 'closes' is how many StructureTree::close() calls undo the frame: an LI in a cell opens
+	 * LI and LBody, so it takes two.
+	 *
+	 * @var array<int, array{kind: string|null, tag: string, closes: int}>
+	 */
+	var $cellBlockStructStack = [];
+
+	/**
+	 * The length $cellBlockStructStack had when each open cell began. HTML leaves many end tags
+	 * out and mPDF does not replay them inside tables, so a cell unwinds back to this length.
+	 *
+	 * @var int[]
+	 */
+	var $cellFrameBaseStack = [];
+
 	var $saveHTMLFooter_height;
 	var $saveHTMLFooterE_height;
 
@@ -540,6 +569,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $ws; // Word spacing
 
 	var $HREF;
+
 	var $pgwidth;
 	var $fontlist;
 	var $oldx;
@@ -1093,6 +1123,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$originalConfig = $config;
 		$config = $this->initConfig($originalConfig);
 
+		// PDF/UA-1 is defined on PDF 1.7, whatever pdf_version asks for
+		if ($this->PDFUA) {
+			$this->pdf_version = '1.7';
+		}
+
 		$serviceFactory = new ServiceFactory($container);
 		$services = $serviceFactory->getServices(
 			$this,
@@ -1109,7 +1144,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->container = $container;
 		$this->services = [];
 
+		// Private, so it only reaches collaborators through their constructors
+		$this->ua = $services['uaState'];
+
 		foreach ($services as $key => $service) {
+			if ($key === 'uaState') {
+				continue;
+			}
 			$this->{$key} = $service;
 			$this->services[] = $key;
 		}
@@ -1921,6 +1962,67 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->title = $title;
 	}
 
+	/**
+	 * What PDFUAauto recorded instead of throwing, read once the document is output.
+	 *
+	 * @return string[]
+	 */
+	public function getPdfUaWarnings()
+	{
+		return $this->ua->getWarnings();
+	}
+
+	/**
+	 * For tests; tag handlers reach the helper through UaState.
+	 *
+	 * @return \Mpdf\Ua\MarkedContentHelper
+	 */
+	public function getPdfUaMarkedContentHelper()
+	{
+		return $this->ua->getMarkedContentHelper();
+	}
+
+	/**
+	 * For collaborators such as Form that are not handed UaState.
+	 *
+	 * @return \Mpdf\Ua\StructureTree
+	 */
+	public function getPdfUaStructureTree()
+	{
+		return $this->ua->getStructureTree();
+	}
+
+	/**
+	 * For tests; FpdiTrait reaches the merger through UaState.
+	 *
+	 * @return \Mpdf\Ua\Import\FpdiStructMerger
+	 */
+	public function getPdfUaFpdiStructMerger()
+	{
+		return $this->ua->getFpdiStructMerger();
+	}
+
+	/**
+	 * For tests; the <map> and <area> tags reach the registry through UaState.
+	 *
+	 * @return \Mpdf\Ua\ImageMap\ImageMapRegistry
+	 */
+	public function getPdfUaImageMapRegistry()
+	{
+		return $this->ua->getImageMapRegistry();
+	}
+
+	/**
+	 * Allocate the next /StructParents key, for an imported page's form XObject. The keys are
+	 * dense from 0 and /ParentTreeNextKey follows the count, so every key comes from UaState.
+	 *
+	 * @return int
+	 */
+	public function getPdfUaNextStructParents()
+	{
+		return $this->ua->nextStructParents();
+	}
+
 	function SetSubject($subject)
 	{
 		// Subject of document
@@ -1947,6 +2049,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function AddCustomProperty($key, $value)
 	{
+		// The key becomes a name in /Info, which PDF 1.7 limits to 127 bytes. Checked only for
+		// PDF/UA-1, where any other document keeps taking whatever key it is given.
+		$key = (string) $key;
+		if ($this->PDFUA) {
+			if ($key === '') {
+				throw new \Mpdf\MpdfException('AddCustomProperty: key must not be empty.');
+			}
+			if (strlen($key) > 127) {
+				throw new \Mpdf\MpdfException(
+					'AddCustomProperty: key length exceeds the PDF 1.7 Name production limit (127 bytes).'
+				);
+			}
+		}
 		$this->customProperties[$key] = $value;
 	}
 
@@ -2064,7 +2179,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->PDFAXwarnings[] = "Cannot set visibility to anything other than full when using PDFA or PDFX";
 			return '';
 		} elseif (!$this->PDFA && !$this->PDFX) {
-			$this->pdf_version = '1.5';
+			$this->setMinPdfVersion('1.5');
 		}
 		if ($this->visibility != 'visible') {
 			$this->writer->write('EMC');
@@ -2414,6 +2529,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 		/* -- END BACKGROUNDS -- */
+
+		// Body backgrounds are decoration, as PrintPageBackgrounds() treats page backgrounds
+		if ($this->PDFUA && $s !== '') {
+			$s = "/Artifact BMC\n" . $s . "EMC\n";
+		}
+
 		return $s;
 	}
 
@@ -2434,6 +2555,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$s = '';
 
 		ksort($this->pageBackgrounds);
+
+		// Block backgrounds are decoration, marked as one artifact. In a header or footer this
+		// nests inside the header's own artifact, which is allowed.
+		$pdfuaArtifactOpened = false;
+		if ($this->PDFUA && !empty($this->pageBackgrounds)) {
+			$s .= "/Artifact BMC\n";
+			$pdfuaArtifactOpened = true;
+		}
 
 		foreach ($this->pageBackgrounds as $bl => $pbs) {
 
@@ -2693,6 +2822,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			/* -- END BACKGROUNDS -- */
 		}
 
+		if ($pdfuaArtifactOpened) {
+			$s .= "EMC\n";
+		}
+
 		return $s;
 	}
 
@@ -2701,6 +2834,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$s = '';
 		/* -- BACKGROUNDS -- */
 		ksort($this->tableBackgrounds);
+
+		// Table backgrounds are decoration, marked as one artifact
+		$pdfuaArtifactOpened = false;
+		if ($this->PDFUA && !empty($this->tableBackgrounds)) {
+			$s .= "/Artifact BMC\n";
+			$pdfuaArtifactOpened = true;
+		}
 		foreach ($this->tableBackgrounds as $bl => $pbs) {
 			foreach ($pbs as $pb) {
 				if ((!isset($pb['gradient']) || !$pb['gradient']) && (!isset($pb['image_id']) || !$pb['image_id'])) {
@@ -2872,6 +3012,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 		/* -- END BACKGROUNDS -- */
+
+		if ($pdfuaArtifactOpened) {
+			$s .= "EMC\n";
+		}
+
 		return $s;
 	}
 
@@ -2889,7 +3034,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->PDFAXwarnings[] = "Cannot use layers when using PDFA or PDFX";
 				return '';
 			} elseif (!$this->PDFA && !$this->PDFX) {
-				$this->pdf_version = '1.5';
+				$this->setMinPdfVersion('1.5');
 			}
 		}
 		$this->current_layer = $id;
@@ -4437,7 +4582,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->FontSize = $size / Mpdf::SCALE;
 			$this->CurrentFont = &$this->fonts[$fontkey];
 			if ($write) {
-				$fontout = (sprintf('BT /F%d %.3F Tf ET', $this->CurrentFont['i'], $this->FontSizePt));
+				$fontout = $this->fontOperator();
 				if ($this->page > 0 && ((isset($this->pageoutput[$this->page]['Font']) && $this->pageoutput[$this->page]['Font'] != $fontout) || !isset($this->pageoutput[$this->page]['Font']))) {
 					$this->writer->write($fontout);
 				}
@@ -4505,7 +4650,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->FontSize = $size / Mpdf::SCALE;
 			$this->CurrentFont = &$this->fonts[$fontkey];
 			if ($write) {
-				$fontout = (sprintf('BT /F%d %.3F Tf ET', $this->CurrentFont['i'], $this->FontSizePt));
+				$fontout = $this->fontOperator();
 				if ($this->page > 0 && ((isset($this->pageoutput[$this->page]['Font']) && $this->pageoutput[$this->page]['Font'] != $fontout) || !isset($this->pageoutput[$this->page]['Font']))) {
 					$this->writer->write($fontout);
 				}
@@ -4530,13 +4675,36 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->FontSize = $size / Mpdf::SCALE;
 		$this->currentfontsize = $size;
 		if ($write) {
-			$fontout = (sprintf('BT /F%d %.3F Tf ET', $this->CurrentFont['i'], $this->FontSizePt));
+			$fontout = $this->fontOperator();
 			// Edited mPDF 3.0
 			if ($this->page > 0 && ((isset($this->pageoutput[$this->page]['Font']) && $this->pageoutput[$this->page]['Font'] != $fontout) || !isset($this->pageoutput[$this->page]['Font']))) {
 				$this->writer->write($fontout);
 			}
 			$this->pageoutput[$this->page]['Font'] = $fontout;
 		}
+	}
+
+	/**
+	 * @return int The /StructParents key of the current page, allocated when the page began
+	 */
+	private function pdfuaStructParents()
+	{
+		return $this->pageDim[$this->page]['structParents'];
+	}
+
+	/**
+	 * The operator that selects the current font and size.
+	 *
+	 * Tf is allowed outside a text object. PDF/UA-1 drops the empty BT/ET around it, which veraPDF
+	 * otherwise counts as untagged content when it falls inside marked content (ISO 14289-1 §7.1).
+	 *
+	 * @return string
+	 */
+	private function fontOperator()
+	{
+		$format = $this->PDFUA ? '/F%d %.3F Tf' : 'BT /F%d %.3F Tf ET';
+
+		return sprintf($format, $this->CurrentFont['i'], $this->FontSizePt);
 	}
 
 	/**
@@ -4587,9 +4755,44 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->links[$link] = [$page, $y];
 	}
 
-	function Link($x, $y, $w, $h, $link)
+	/**
+	 * Add a link annotation over an area of the current page.
+	 *
+	 * @param float        $x
+	 * @param float        $y
+	 * @param float        $w
+	 * @param float        $h
+	 * @param mixed        $link       A URL, or an internal link
+	 * @param float[]|null $quadPoints The /QuadPoints of a hotspot that is not axis-aligned, in PDF units;
+	 *                                 the rectangle given is then its bounding box
+	 */
+	function Link($x, $y, $w, $h, $link, $quadPoints = null)
 	{
+		// Every link annotation in PDF/UA-1 belongs to a Link structure element, which artifact
+		// content (a running header or footer, an aria-hidden subtree) cannot have. The link is
+		// dropped and its text stays as artifact content.
+		if ($this->PDFUA && $this->ua->getStructureTree()->isInArtifact()) {
+			$this->ua->addWarning(
+				'PDF/UA-1: <a href="' . (is_string($link) ? $link : '') . '"> in a running '
+				. 'header/footer or aria-hidden subtree dropped (no Link annotation emitted) — '
+				. 'artifact content cannot host a tagged link (ISO 14289-1 §7.18.5). '
+				. 'The visible text is retained as an artifact.'
+			);
+			return;
+		}
+
 		$l = [$x * Mpdf::SCALE, $this->hPt - $y * Mpdf::SCALE, $w * Mpdf::SCALE, $h * Mpdf::SCALE, $link];
+		// The Link element travels with the annotation through every buffer a link can wait in,
+		// so the annotation is written as its OBJR
+		if ($this->PDFUA) {
+			$linkStructElem = $this->ua->getAnchorState()->getLinkStructElem();
+			if ($linkStructElem !== null) {
+				$l['structElem'] = $linkStructElem;
+			}
+		}
+		if ($quadPoints !== null) {
+			$l['quadPoints'] = $quadPoints;
+		}
 		if ($this->table_rotate) { // *TABLES*
 			$this->tbrot_Links[$this->page][] = $l; // *TABLES*
 			return; // *TABLES*
@@ -5046,6 +5249,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$ws = $this->ws; // Word Spacing
 			$charspacing = $this->charspacing; // Character Spacing
 			$this->ResetSpacing();
+
+			// A marked-content sequence ends on the page it began
+			$this->closeBlockBdcIfOpen();
 
 			$this->AddPage($this->CurOrientation);
 
@@ -5716,6 +5922,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$charspacing = $this->FontSizePt ? ($this->charspacing * 1000 / $this->FontSizePt) : 0;
 		$wordspacing = $this->FontSizePt ? ($this->ws * 1000 / $this->FontSizePt) : 0;
 
+		// A ligature the font's ToUnicode cannot map back is given its characters as /ActualText
+		$ligActualTextWriter = $this->PDFUA
+			? $this->ua->getLigatureActualTextWriter()
+			: null;
+
 		$XshiftBefore = 0;
 		$XshiftAfter = 0;
 		$lastYPlacement = 0;
@@ -5732,6 +5943,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$YPlacement = 0;
 			$groupBreak = false;
 			$kashida = 0;
+
+			$isLigHere = false;
+			$ligActualTextHex = '';
+			if ($ligActualTextWriter !== null
+				&& isset($GPOSinfo[$i]['ligature_source'])
+				&& count($GPOSinfo[$i]['ligature_source']) > 1
+			) {
+				$srcCp = $GPOSinfo[$i]['ligature_source'];
+				if (!$ligActualTextWriter->toUnicodeCovers($c, $srcCp, $this->CurrentFont)) {
+					$isLigHere = true;
+					$ligActualTextHex = $ligActualTextWriter->getActualTextEncoding($srcCp);
+					// End the TJ here: the BDC has to come before the ligature's glyph
+					$groupBreak = true;
+				}
+			}
+
 			if (!empty($OTLdata)) {
 				// YPlacement from GPOS
 				if (isset($GPOSinfo[$i]['YPlacement']) && $GPOSinfo[$i]['YPlacement']) {
@@ -5869,6 +6096,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$tj .= sprintf('%.3F Ts ', $YPlacement);
 				}
 
+				// Marked content may begin between two TJs inside BT/ET
+				if ($isLigHere) {
+					$tj .= $ligActualTextWriter->buildBdcBytes($ligActualTextHex) . ' ';
+				}
+
 				$tj .= $sipset
 					? '[<'
 					: '[(';
@@ -5876,6 +6108,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// Output the code for the txt character
 			$tj .= $tx;
+
+			// End the ligature's TJ and its marked content, and start a TJ for what follows
+			if ($isLigHere) {
+				$tj .= $sipset
+					? '>] TJ '
+					: ')] TJ ';
+				$tj .= $ligActualTextWriter->buildEmcBytes() . ' ';
+				$tj .= $sipset
+					? '[<'
+					: '[(';
+			}
 			$lastSmallCapsON = $SmallCapsON;
 			$last_fontid = $fontid;
 			$last_fontsize = $fontsize;
@@ -6602,6 +6845,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$saved['bord'] = $this->spanborder;
 		$saved['border'] = $this->spanborddet;
 		$saved['HREF'] = $this->HREF;
+		// The chunk is drawn after the elements around it have closed, so it keeps the Link its
+		// annotation belongs to and the innermost inline element its text is marked against
+		// (a Span inside a link, say)
+		if ($this->PDFUA) {
+			$saved['pdfuaLinkStructElem'] = $this->ua->getAnchorState()->getLinkStructElem();
+			$saved['pdfuaInlineContentElem'] = $this->ua->getAnchorState()->getInlineContentElem();
+		}
 		$saved['textvar'] = $this->textvar; // mPDF 5.7.1
 		$saved['textshadow'] = $this->textshadow;
 		$saved['linewidth'] = $this->LineWidth;
@@ -6632,6 +6882,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->spanborddet = $saved['border'];
 		$this->ColorFlag = ($this->FillColor != $this->TextColor); // Restore ColorFlag as well
 		$this->HREF = $saved['HREF'];
+		if (array_key_exists('pdfuaLinkStructElem', $saved)) {
+			$this->ua->getAnchorState()->setLinkStructElem($saved['pdfuaLinkStructElem']);
+		}
+		if (array_key_exists('pdfuaInlineContentElem', $saved)) {
+			$this->ua->getAnchorState()->setInlineContentElem($saved['pdfuaInlineContentElem']);
+		}
 		$this->fixedlSpacing = $saved['fixedlSpacing'];
 		$this->minwSpacing = $saved['minwSpacing'];
 		$this->textvar = $saved['textvar'];  // mPDF 5.7.1
@@ -6641,7 +6897,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->textparam = $saved['textparam'];
 		if ($write) {
 			$this->SetFont($saved['family'], $saved['style'], $saved['sizePt'], true, true); // force output
-			$fontout = (sprintf('BT /F%d %.3F Tf ET', $this->CurrentFont['i'], $this->FontSizePt));
+			$fontout = $this->fontOperator();
 			if ($this->page > 0 && ((isset($this->pageoutput[$this->page]['Font']) && $this->pageoutput[$this->page]['Font'] != $fontout) || !isset($this->pageoutput[$this->page]['Font']))) {
 				$this->writer->write($fontout);
 			}
@@ -6679,6 +6935,272 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->flowingBlockAttr['blockdir'] = $blockdir;
 		$this->flowingBlockAttr['cOTLdata'] = []; // mPDF 5.7.1
 		$this->flowingBlockAttr['lastBidiText'] = ''; // mPDF 5.7.1
+		// The block's marked content is opened as its text is drawn, not when its tag opens, as a
+		// block across pages needs an MCID on each. A <br> starts a new flowing block inside the
+		// same one, so whatever the last line opened is closed first.
+		if ($this->PDFUA) {
+			$this->closeBlockBdcIfOpen();
+			$this->flowingBlockAttr['pdfua_struct_open'] = false;
+			$this->flowingBlockAttr['pdfua_type'] = 'P';
+			$this->flowingBlockAttr['pdfua_artifact_open'] = false;
+			// Whether a BDC is open on this page that owes an EMC before the page or block ends
+			$this->flowingBlockAttr['pdfua_bdc_active']  = false;
+			// The block's own element, which the top of the structure stack may not be when an
+			// inline element is open inside it
+			$this->flowingBlockAttr['pdfua_struct_elem'] = null;
+			// The inline element the open BDC belongs to, or null when it is the block's
+			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+		}
+	}
+
+	/**
+	 * Open the block's marked content on this page, if it is not open already.
+	 *
+	 * The MCID is given to the block's own element rather than the top of the structure stack,
+	 * which may be an inline element inside the block.
+	 *
+	 * @return void
+	 */
+	private function ensureBlockBdcOpen()
+	{
+		if (!$this->PDFUA) {
+			return;
+		}
+		// Text after an inline element goes back into the block's own marked content
+		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])
+			&& !empty($this->flowingBlockAttr['pdfua_bdc_elem'])) {
+			$this->closeBlockBdcIfOpen();
+		}
+		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
+			return;
+		}
+		if (!empty($this->flowingBlockAttr['pdfua_artifact_open'])) {
+			$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
+			$this->flowingBlockAttr['pdfua_bdc_active'] = true;
+			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+			return;
+		}
+		if (empty($this->flowingBlockAttr['pdfua_struct_open'])) {
+			return;
+		}
+		$elem = isset($this->flowingBlockAttr['pdfua_struct_elem'])
+			? $this->flowingBlockAttr['pdfua_struct_elem']
+			: null;
+		if ($elem === null) {
+			return;
+		}
+		$structParents = $this->pdfuaStructParents();
+		$mcid = $this->ua->getStructureTree()->addContentForElement($elem, $structParents);
+		$this->ua->getMarkedContentHelper()->begin($this->flowingBlockAttr['pdfua_type'], $mcid);
+		$this->flowingBlockAttr['pdfua_bdc_active'] = true;
+		$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+	}
+
+	/**
+	 * Open marked content for text inside an inline element (a Link, a Span with its own
+	 * language, an Abbr, ruby), closing whatever the block had open.
+	 *
+	 * An MCID belongs to one element, so the text needs its own for the Link to have content and
+	 * for the Span's /Lang or the Abbr's /E to apply to anything.
+	 *
+	 * @param \Mpdf\Ua\StructureElement $elem The inline element the chunk is in
+	 * @return void
+	 */
+	private function ensureInlineBdcOpen($elem)
+	{
+		if (!$this->PDFUA || $elem === null) {
+			return;
+		}
+		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])
+			&& isset($this->flowingBlockAttr['pdfua_bdc_elem'])
+			&& $this->flowingBlockAttr['pdfua_bdc_elem'] === $elem) {
+			return;
+		}
+		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
+			$this->closeBlockBdcIfOpen();
+		}
+		// Inside an artifact block no inline element was made, so the text is artifact too
+		if (!empty($this->flowingBlockAttr['pdfua_artifact_open'])) {
+			$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
+			$this->flowingBlockAttr['pdfua_bdc_active'] = true;
+			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+			return;
+		}
+		$structParents = $this->pdfuaStructParents();
+		$mcid = $this->ua->getStructureTree()->addContentForElement($elem, $structParents);
+		$this->ua->getMarkedContentHelper()->begin($elem->getType(), $mcid);
+		$this->flowingBlockAttr['pdfua_bdc_active'] = true;
+		$this->flowingBlockAttr['pdfua_bdc_elem'] = $elem;
+	}
+
+	/**
+	 * Keep the text of a line on the block's element, which AriaIdResolver reads as the name an
+	 * aria-labelledby or aria-describedby pointing at the block resolves to.
+	 *
+	 * Images and list markers are left out.
+	 *
+	 * @param array $content The line's chunks, from $flowingBlockAttr['content']
+	 * @return void
+	 */
+	private function captureBlockStructText($content)
+	{
+		if (!$this->PDFUA) {
+			return;
+		}
+		if (empty($this->flowingBlockAttr['pdfua_struct_open'])) {
+			return;
+		}
+		if (!empty($this->flowingBlockAttr['pdfua_artifact_open'])) {
+			return;
+		}
+		$elem = isset($this->flowingBlockAttr['pdfua_struct_elem'])
+			? $this->flowingBlockAttr['pdfua_struct_elem']
+			: null;
+		if ($elem === null) {
+			return;
+		}
+		$text = '';
+		foreach ($content as $k => $chunk) {
+			if (isset($this->objectbuffer[$k]) && $this->objectbuffer[$k]) {
+				continue;
+			}
+			$text .= $chunk;
+		}
+		$elem->appendText($text);
+	}
+
+	/**
+	 * End the marked content the flowing block has open, if any.
+	 *
+	 * @return void
+	 */
+	private function closeBlockBdcIfOpen()
+	{
+		if (!$this->PDFUA) {
+			return;
+		}
+		if (empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
+			return;
+		}
+		$this->ua->getMarkedContentHelper()->end();
+		$this->flowingBlockAttr['pdfua_bdc_active'] = false;
+		$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+	}
+
+	/**
+	 * Mark where a table cell's block frames begin, once the TD or TH element is open.
+	 *
+	 * @return void
+	 */
+	public function pdfuaEnterCellFrameScope()
+	{
+		if ($this->PDFUA) {
+			$this->cellFrameBaseStack[] = count($this->cellBlockStructStack);
+		}
+	}
+
+	/**
+	 * Close whatever blocks are still open in a table cell, as in `<td><p>x</td>`.
+	 *
+	 * Runs before the TD or TH element is closed, or a block left open would be closed in its
+	 * place.
+	 *
+	 * @return void
+	 */
+	public function pdfuaLeaveCellFrameScope()
+	{
+		if (!$this->PDFUA) {
+			return;
+		}
+		$base = array_pop($this->cellFrameBaseStack);
+		if ($base === null) {
+			$base = 0;
+		}
+		while (count($this->cellBlockStructStack) > $base) {
+			$this->pdfuaPopCellBlockStructFrame();
+		}
+	}
+
+	/**
+	 * Close what the last block opened in a table cell: an element, an artifact, or nothing.
+	 *
+	 * @return void
+	 */
+	public function pdfuaPopCellBlockStructFrame()
+	{
+		$frame = array_pop($this->cellBlockStructStack);
+		if ($frame === null) {
+			return;
+		}
+		if ($frame['kind'] === '__artifact__') {
+			$this->ua->getStructureTree()->closeArtifact();
+		} elseif ($frame['kind'] === '__struct__') {
+			$closes = isset($frame['closes']) ? $frame['closes'] : 1;
+			for ($i = 0; $i < $closes; $i++) {
+				$this->ua->getStructureTree()->close();
+			}
+		}
+	}
+
+	/**
+	 * @return int The index in $cellBlockStructStack where the current cell's frames begin, 0 outside a cell
+	 */
+	public function pdfuaCurrentCellFrameBase()
+	{
+		return empty($this->cellFrameBaseStack) ? 0 : end($this->cellFrameBaseStack);
+	}
+
+	/**
+	 * Give a flowing block started inside an open block tag (after a `<br>`, say) the tagging of
+	 * that block, which newFlowingBlock() clears. Without it the lines that follow are untagged.
+	 *
+	 * Table cells are tagged apart from this.
+	 *
+	 * @param bool $is_table
+	 * @return void
+	 */
+	public function restoreFlowingBlockPdfuaState($is_table = false)
+	{
+		if (!$this->PDFUA || $is_table) {
+			return;
+		}
+		if (!isset($this->blk[$this->blklvl])) {
+			return;
+		}
+		$blk = $this->blk[$this->blklvl];
+		if (!empty($blk['pdfua_artifact'])) {
+			$this->flowingBlockAttr['pdfua_artifact_open'] = true;
+			return;
+		}
+		if (!empty($blk['pdfua_type'])) {
+			$this->flowingBlockAttr['pdfua_struct_open'] = true;
+			$this->flowingBlockAttr['pdfua_type']        = $blk['pdfua_type'];
+			$this->flowingBlockAttr['pdfua_struct_elem'] = isset($blk['pdfua_struct_elem'])
+				? $blk['pdfua_struct_elem']
+				: null;
+		}
+	}
+
+	/**
+	 * The /Alt an SVG gives itself with its <title> and <desc>, joined by a blank line.
+	 *
+	 * @param array $info The image's info, with accessible_title and accessible_desc
+	 * @return string|null Null when the SVG has neither
+	 */
+	private function svgAccessibleAlt(array $info)
+	{
+		$svgTitle = isset($info['accessible_title']) ? $info['accessible_title'] : null;
+		$svgDesc  = isset($info['accessible_desc'])  ? $info['accessible_desc']  : null;
+		if ($svgTitle !== null && $svgDesc !== null) {
+			return $svgTitle . "\n\n" . $svgDesc;
+		}
+		if ($svgTitle !== null) {
+			return $svgTitle;
+		}
+		if ($svgDesc !== null) {
+			return $svgDesc;
+		}
+		return null;
 	}
 
 	function finishFlowingBlock($endofblock = false, $next = '')
@@ -6832,6 +7354,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+
 		if (isset($font[count($font) - 1])) {
 			$lastfontreqstyle = (isset($font[count($font) - 1]['ReqFontStyle']) ? $font[count($font) - 1]['ReqFontStyle'] : '');
 			$lastfontstyle = (isset($font[count($font) - 1]['style']) ? $font[count($font) - 1]['style'] : '');
@@ -6888,6 +7411,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$ws = $this->ws; // Word Spacing
 			$charspacing = $this->charspacing; // Character Spacing
 			$this->ResetSpacing();
+
+			// A marked-content sequence ends on the page it began; the next page opens its own
+			$this->closeBlockBdcIfOpen();
 
 			$this->AddPage($this->CurOrientation);
 
@@ -6983,6 +7509,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		/* -- END CSS-IMAGE-FLOAT -- */
 
+
+		if ($content) {
+			$this->captureBlockStructText($content);
+		}
 
 		if ($content) {
 			// In FinishFlowing Block no lines are justified as it is always last line
@@ -7170,6 +7700,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				$this->restoreFont($font[$k]);  // mPDF 5.7
 
+
+				// Mark the chunk against the element restoreFont() says it is in. Table cell text
+				// always has one (the cell, or an element inside it); a cell chunk without one is
+				// an image or widget, which printobjectbuffer() marks itself.
+				if ($this->PDFUA) {
+					$pdfuaInlineElem = (!isset($this->objectbuffer[$k]) || !$this->objectbuffer[$k])
+						? $this->ua->getAnchorState()->getInlineContentElem()
+						: null;
+					if ($pdfuaInlineElem !== null) {
+						$this->ensureInlineBdcOpen($pdfuaInlineElem);
+					} elseif (!$is_table) {
+						$this->ensureBlockBdcOpen();
+					}
+				}
+
 				if ($is_table && substr($align, 0, 1) == 'D' && $aord == 0) {
 					$dp = $this->decimal_align[substr($align, 0, 2)];
 					$s = preg_split('/' . preg_quote($dp, '/') . '/', $content[0], 2);  // ? needs to be /u if not core
@@ -7272,6 +7817,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->objectbuffer = [];
 			$this->ResetSpacing();
 		} // END IF CONTENT
+
+		if ($endofblock) {
+			$this->closeBlockBdcIfOpen();
+		}
 
 		/* -- CSS-IMAGE-FLOAT -- */
 		// Update values if set to skipline
@@ -7423,6 +7972,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// HR
 			if ($objattr['type'] == 'hr') {
+				// The rule is decoration. An artifact may not sit inside tagged content, so inside
+				// marked content it is left as it is.
+				$pdfuaHrArtifactOpen = false;
+				if ($this->PDFUA
+					&& $this->ua->getMarkedContentHelper()->getDepth() === 0) {
+					$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
+					$pdfuaHrArtifactOpen = true;
+				}
 				$this->SetDColor($objattr['color']);
 				switch ($objattr['align']) {
 					case 'C':
@@ -7441,6 +7998,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->Line($x, $this->y, $x + $objattr['INNER-WIDTH'], $this->y);
 				$this->SetLineWidth($oldlinewidth);
 				$this->SetDColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+				if ($pdfuaHrArtifactOpen) {
+					$this->ua->getMarkedContentHelper()->end();
+				}
 			}
 			// IMAGE
 			if ($objattr['type'] == 'image') {
@@ -7623,11 +8183,126 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$outstring = sprintf("q " . $pre . "%.3F 0 0 %.3F %.3F %.3F cm " . $gradmask . "/I%d Do Q", $obiw * Mpdf::SCALE, $obih * Mpdf::SCALE, $objattr['INNER-X'] * Mpdf::SCALE, ($this->h - ($objattr['INNER-Y'] + $obih )) * Mpdf::SCALE, $objattr['ID']); // mPDF 5.7.3 TRANSFORMS
 					}
 				}
+				// An image with alt="" is an artifact, and one with alt text a Figure. One with no
+				// alt at all is named by its SVG title, aria-label, title or aria-labelledby, in
+				// that order; with none of those it throws, or under PDFUAauto is an artifact.
+				$pdfuaImageMcid = null;
+				$pdfuaImageClosedBlockBdc = false;
+				if ($this->PDFUA) {
+					$pdfuaImageAlt = isset($objattr['pdfua_alt']) ? $objattr['pdfua_alt'] : null;
+
+					if ($pdfuaImageAlt === null
+						&& isset($objattr['itype']) && $objattr['itype'] === 'svg'
+						&& isset($objattr['file'])
+						&& isset($this->formobjects[$objattr['file']])) {
+						$pdfuaImageAlt = $this->svgAccessibleAlt($this->formobjects[$objattr['file']]);
+					}
+
+					// The element aria-labelledby names is only known once the document ends, when
+					// AriaIdResolver gives the Figure its /Alt. aria-describedby is a description,
+					// not a name, so on its own it does not name the image.
+					$pdfuaImageDeferredName = false;
+					if ($pdfuaImageAlt === null) {
+						if (!empty($objattr['pdfua_aria_label'])) {
+							$pdfuaImageAlt = $objattr['pdfua_aria_label'];
+						} elseif (!empty($objattr['pdfua_title'])) {
+							$pdfuaImageAlt = $objattr['pdfua_title'];
+						} elseif (!empty($objattr['pdfua_aria_labelledby'])) {
+							$pdfuaImageDeferredName = true;
+						}
+					}
+
+					if (($pdfuaImageAlt === '' || $pdfuaImageAlt === null) && !$pdfuaImageDeferredName) {
+						// An artifact may not sit inside the block's tagged content, so the block's
+						// marked content is ended here and begun again after the image
+						if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
+							$this->closeBlockBdcIfOpen();
+							$pdfuaImageClosedBlockBdc = true;
+						}
+					}
+					if ($pdfuaImageAlt === '') {
+						$pdfuaImageMcid = $this->ua->getStructureTree()->addArtifact();
+					} elseif ($pdfuaImageAlt === null && !$pdfuaImageDeferredName) {
+						// Whether the image is content or decoration cannot be guessed (Matterhorn 13-004)
+						if (empty($this->PDFUAauto)) {
+							throw new \Mpdf\MpdfException(
+								'PDF/UA-1: <img> is missing the alt attribute. Provide alt="" '
+								. 'for a purely decorative image, alt="description" for content, '
+								. 'or (for SVG) include <title>/<desc> inside the SVG. '
+								. 'Enable PDFUAauto to auto-correct (treats missing alt as decorative).'
+							);
+						}
+						$this->ua->addWarning('Image is missing alt attribute; treating as decorative Artifact. Provide alt="" for decorative images or alt="description" for content images.');
+						$pdfuaImageMcid = $this->ua->getStructureTree()->addArtifact();
+					} else {
+						// A Figure carries its /BBox in user space (Matterhorn 13-008)
+						$pdfuaFigBbox = [
+							round($objattr['INNER-X'] * Mpdf::SCALE, 3),
+							round(($this->h - ($objattr['INNER-Y'] + $obih)) * Mpdf::SCALE, 3),
+							round(($objattr['INNER-X'] + $obiw) * Mpdf::SCALE, 3),
+							round(($this->h - $objattr['INNER-Y']) * Mpdf::SCALE, 3),
+						];
+						$pdfuaFigAttrs = ['BBox' => $pdfuaFigBbox];
+						if ($pdfuaImageAlt !== null) {
+							$pdfuaFigAttrs['Alt'] = $pdfuaImageAlt;
+						}
+						$this->ua->getStructureTree()->open('Figure', $pdfuaFigAttrs);
+						$figureElem = $this->ua->getStructureTree()->getCurrent();
+						$this->ua->getAriaIdResolver()->queueAriaRefs($figureElem, $objattr, true);
+						$structParents = $this->pdfuaStructParents();
+						$pdfuaImageMcid = $this->ua->getStructureTree()->addContent($structParents);
+					}
+					$this->ua->getMarkedContentHelper()->begin('Figure', $pdfuaImageMcid);
+				}
+
 				$this->writer->write($outstring);
+
+				if ($this->PDFUA && $pdfuaImageMcid !== null) {
+					$this->ua->getMarkedContentHelper()->end();
+					// An artifact (-1) opened no element
+					if ($pdfuaImageMcid !== -1) {
+						$this->ua->getStructureTree()->close();
+					}
+				}
+				if ($pdfuaImageClosedBlockBdc) {
+					$this->ensureBlockBdcOpen();
+				}
+
 				// LINK
 				if (isset($objattr['link'])) {
 					$this->Link($objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT'], $objattr['link']);
 				}
+
+				// The <map> of an image map may come after the <img>, so where the image was drawn
+				// is kept and its links made once the HTML is written. The rotation and transform
+				// it was drawn with go too, for hotspots that are no longer axis-aligned.
+				if ($this->PDFUA
+					&& !empty($objattr['pdfua_image_map_name'])
+					&& $objattr['type'] == 'image'
+				) {
+					if ($pdfuaImageMcid === -1 || $pdfuaImageMcid === null) {
+						$this->ua->addWarning(
+							'PDF/UA-1: image map ignored on decorative image (alt="") — '
+							. 'an image map implies meaningful content; provide alt text.'
+						);
+					} else {
+						// $figureElem is always set by here, which PHPStan cannot follow
+						$this->ua->getImageMapRegistry()->queueDeferred([
+							'mapName'     => $objattr['pdfua_image_map_name'],
+							'page'        => $this->page,
+							'pageHpt'     => $this->hPt,
+							'imgX'        => $objattr['INNER-X'],
+							'imgY'        => $objattr['INNER-Y'],
+							'imgW'        => $obiw,
+							'imgH'        => $obih,
+							'origW'       => $objattr['orig_w'],
+							'origH'       => $objattr['orig_h'],
+							'transformCm' => trim($tr . $tr2),
+							'figure'      => isset($figureElem) ? $figureElem : null,
+						]);
+					}
+				}
+
 				if (isset($objattr['opacity'])) {
 					$this->SetAlpha(1);
 				}
@@ -7657,6 +8332,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($objattr['type'] === 'barcode') {
+
+				// A barcode is content, so a Figure whose /Alt is its code unless aria-label names it
+				$pdfuaBarcodeTagOpened = false;
+				if ($this->PDFUA) {
+					$inArtifactScope = $this->ua->getStructureTree()->isInArtifact();
+					if (!$inArtifactScope) {
+						$altText = isset($objattr['aria-label']) && $objattr['aria-label'] !== ''
+							? $objattr['aria-label']
+							: 'Barcode: ' . $objattr['code'];
+						$this->ua->getStructureTree()->open('Figure', ['Alt' => $altText]);
+						$barcodeElem = $this->ua->getStructureTree()->getCurrent();
+						$this->ua->getAriaIdResolver()->queueAriaRefs($barcodeElem, $objattr, true);
+						$structParents = $this->pdfuaStructParents();
+						$mcid = $this->ua->getStructureTree()->addContent($structParents);
+						$this->ua->getMarkedContentHelper()->begin('Figure', $mcid);
+						$pdfuaBarcodeTagOpened = true;
+					}
+				}
 
 				$bgcol = $this->colorConverter->convert(255, $this->PDFAXwarnings);
 
@@ -7763,6 +8456,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$objattr['quiet_zone_right']
 					);
 				}
+
+				if ($pdfuaBarcodeTagOpened) {
+					$this->ua->getMarkedContentHelper()->end();
+					$this->ua->getStructureTree()->close();
+				}
 			}
 
 			// TEXT CIRCLE
@@ -7787,11 +8485,36 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (empty($this->directWrite)) {
 					$this->directWrite = new DirectWrite($this, $this->otl, $this->sizeConverter, $this->colorConverter);
 				}
+
+				// Circular text is drawn a glyph at a time, so the Span carries it whole as /ActualText
+				$pdfuaTextCircleTagOpened = false;
+				if ($this->PDFUA) {
+					$inArtifactScope = $this->ua->getStructureTree()->isInArtifact();
+					if (!$inArtifactScope) {
+						$topText = isset($objattr['top-text']) ? $objattr['top-text'] : '';
+						$bottomText = isset($objattr['bottom-text']) ? $objattr['bottom-text'] : '';
+						$divider = isset($objattr['divider']) ? $objattr['divider'] : '';
+						$actualText = $topText . $divider . $bottomText;
+						$this->ua->getStructureTree()->open('Span', ['ActualText' => $actualText]);
+						$textCircleElem = $this->ua->getStructureTree()->getCurrent();
+						$this->ua->getAriaIdResolver()->queueAriaRefs($textCircleElem, $objattr, true);
+						$structParents = $this->pdfuaStructParents();
+						$mcid = $this->ua->getStructureTree()->addContent($structParents);
+						$this->ua->getMarkedContentHelper()->begin('Span', $mcid);
+						$pdfuaTextCircleTagOpened = true;
+					}
+				}
+
 				if (isset($objattr['top-text'])) {
 					$this->directWrite->CircularText($objattr['INNER-X'] + $objattr['INNER-WIDTH'] / 2, $objattr['INNER-Y'] + $objattr['INNER-HEIGHT'] / 2, $objattr['r'] / $k, $objattr['top-text'], 'top', $objattr['fontfamily'], $objattr['fontsize'] / $k, $objattr['fontstyle'], $objattr['space-width'], $objattr['char-width'], (isset($objattr['divider']) ? $objattr['divider'] : ''));
 				}
 				if (isset($objattr['bottom-text'])) {
 					$this->directWrite->CircularText($objattr['INNER-X'] + $objattr['INNER-WIDTH'] / 2, $objattr['INNER-Y'] + $objattr['INNER-HEIGHT'] / 2, $objattr['r'] / $k, $objattr['bottom-text'], 'bottom', $objattr['fontfamily'], $objattr['fontsize'] / $k, $objattr['fontstyle'], $objattr['space-width'], $objattr['char-width'], (isset($objattr['divider']) ? $objattr['divider'] : ''));
+				}
+
+				if ($pdfuaTextCircleTagOpened) {
+					$this->ua->getMarkedContentHelper()->end();
+					$this->ua->getStructureTree()->close();
 				}
 			}
 
@@ -7805,6 +8528,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$col = $this->colorConverter->convert(0, $this->PDFAXwarnings);
 				if (isset($objattr['colorarray']) && ($objattr['colorarray'])) {
 					$col = $objattr['colorarray'];
+				}
+
+				// The marker is the content of the Lbl element Li::open() made, which is no longer
+				// on the structure stack
+				$pdfuaLblMcid = null;
+				if ($this->PDFUA
+					&& !$this->ColActive
+					&& !$this->ua->getStructureTree()->isInArtifact()
+					&& isset($this->blk[$this->blklvl]['pdfua_li_lbl_elem'])
+				) {
+					$structParents = $this->pdfuaStructParents();
+					$pdfuaLblMcid = $this->ua->getStructureTree()->addContentForElement(
+						$this->blk[$this->blklvl]['pdfua_li_lbl_elem'],
+						$structParents
+					);
+					$this->ua->getMarkedContentHelper()->begin('Lbl', $pdfuaLblMcid);
 				}
 
 				if (isset($objattr['bullet']) && $objattr['bullet']) { // Used for position "outside" only
@@ -7853,6 +8592,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					$this->Cell($w, $this->FontSize, $texto, 0, 0, $align, 0, '', 0, 0, 0, 'T', 0, false, false, 0, $objattr['lineBox']);
 					$this->SetTColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+				}
+
+				if ($pdfuaLblMcid !== null) {
+					$this->ua->getMarkedContentHelper()->end();
 				}
 			}
 
@@ -8614,6 +9357,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
+
 				$lastfontreqstyle = (isset($font[count($font) - 1]['ReqFontStyle']) ? $font[count($font) - 1]['ReqFontStyle'] : '');
 				$lastfontstyle = (isset($font[count($font) - 1]['style']) ? $font[count($font) - 1]['style'] : '');
 				if ($blockdir == 'ltr' && strpos($lastfontreqstyle, "I") !== false && strpos($lastfontstyle, "I") === false) { // Artificial italic
@@ -8727,6 +9471,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$charspacing = $this->charspacing; // Character Spacing
 						$this->ResetSpacing();
 
+						// A marked-content sequence ends on the page it began; the next page opens its own
+						$this->closeBlockBdcIfOpen();
+
 						$this->AddPage($this->CurOrientation);
 
 						$this->x = $bak_x;
@@ -8807,6 +9554,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->x += $ti;
 					}
 
+					$this->captureBlockStructText($content);
+
 					// BIDI magic_reverse moved upwards from here
 					foreach ($chunkorder as $aord => $k) { // mPDF 5.7
 
@@ -8834,6 +9583,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 
 						$this->restoreFont($font[$k]);  // mPDF 5.7
+
+
+						// As in finishFlowingBlock()
+						if ($this->PDFUA) {
+							$pdfuaInlineElem = (!isset($this->objectbuffer[$k]) || !$this->objectbuffer[$k])
+								? $this->ua->getAnchorState()->getInlineContentElem()
+								: null;
+							if ($pdfuaInlineElem !== null) {
+								$this->ensureInlineBdcOpen($pdfuaInlineElem);
+							} elseif (!$is_table) {
+								$this->ensureBlockBdcOpen();
+							}
+						}
 
 						$this->SetSpacing(($this->fixedlSpacing * Mpdf::SCALE) + $jcharspacing, ($this->fixedlSpacing + $this->minwSpacing) * Mpdf::SCALE + $jws);
 						// Now unset these values so they don't influence GetStringwidth below or in fn. Cell
@@ -8904,6 +9666,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						} else {
 							$this->Cell($stringWidth, $stackHeight, $chunk, '', 0, '', $fill, $this->HREF, 0, 0, 0, 'M', $fill, true, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, (isset($lineBox[$k]) ? $lineBox[$k] : false)); // first or middle part
 						}
+
 
 						if (!empty($this->spanborddet)) {
 							if (strpos($contentB[$k], 'R') !== false && $aord != $arraysize - 1) {
@@ -9154,7 +9917,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
-	function Image($file, $x, $y, $w = 0, $h = 0, $type = '', $link = '', $paint = true, $constrain = true, $watermark = false, $shownoimg = true, $allowvector = true)
+	/**
+	 * Place an image on the page.
+	 *
+	 * @param string      $file
+	 * @param float       $x
+	 * @param float       $y
+	 * @param float       $w
+	 * @param float       $h
+	 * @param string      $type
+	 * @param mixed       $link
+	 * @param bool        $paint
+	 * @param bool        $constrain
+	 * @param bool        $watermark
+	 * @param bool        $shownoimg
+	 * @param bool        $allowvector
+	 * @param string|null $alt         Under PDF/UA-1, the image's /Alt, or '' for an image that is decoration.
+	 *                                 An SVG without one is named by its <title> and <desc>.
+	 */
+	function Image($file, $x, $y, $w = 0, $h = 0, $type = '', $link = '', $paint = true, $constrain = true, $watermark = false, $shownoimg = true, $allowvector = true, $alt = null)
 	{
 		$orig_srcpath = $file;
 		$this->GetFullPath($file);
@@ -9285,7 +10066,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($this->watermarkImgBehind) {
-				$outstring = $this->watermarkImgAlpha . "\n" . $outstring . "\n" . $this->SetAlpha(1, 'Normal', true) . "\n";
+				$pdfuaPrefix = $this->PDFUA ? '/Artifact <</Type /Background>> BDC' . "\n" : '';
+				$pdfuaSuffix = $this->PDFUA ? "\nEMC" : '';
+				$outstring = $this->watermarkImgAlpha . "\n" . $pdfuaPrefix . $outstring . $pdfuaSuffix . "\n" . $this->SetAlpha(1, 'Normal', true) . "\n";
 				$this->pages[$this->page] = preg_replace('/(___BACKGROUND___PATTERNS' . $this->uniqstr . ')/', "\n" . $outstring . "\n" . '\\1', $this->pages[$this->page]);
 			} else {
 				$this->writer->write($outstring);
@@ -9359,9 +10142,56 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if ($paint) {
+			// A watermark is marked by watermarkImg()
+			$pdfuaTagOpened = false;
+			if ($this->PDFUA && !$watermark) {
+				$inArtifactScope = $this->ua->getStructureTree()->isInArtifact();
+				if (!$inArtifactScope) {
+					if ($alt === null && isset($info['type']) && $info['type'] === 'svg') {
+						$alt = $this->svgAccessibleAlt($info);
+					}
+
+					if ($alt === '') {
+						$this->writer->write('/Artifact BMC');
+						$pdfuaTagOpened = 'artifact';
+					} elseif ($alt !== null) {
+						$structParents = $this->pdfuaStructParents();
+						$directImageBbox = [
+							round($x * Mpdf::SCALE, 3),
+							round(($this->h - ($y + $h)) * Mpdf::SCALE, 3),
+							round(($x + $w) * Mpdf::SCALE, 3),
+							round(($this->h - $y) * Mpdf::SCALE, 3),
+						];
+						$this->ua->getStructureTree()->open('Figure', ['Alt' => $alt, 'BBox' => $directImageBbox]);
+						$mcid = $this->ua->getStructureTree()->addContent($structParents);
+						$this->ua->getMarkedContentHelper()->begin('Figure', $mcid);
+						$pdfuaTagOpened = 'figure';
+					} else {
+						if (empty($this->PDFUAauto)) {
+							throw new \Mpdf\MpdfException(
+								'PDF/UA-1: Image() called without $alt parameter for "' . $file . '". '
+								. 'Pass $alt="" for a decorative image, $alt="description" for content, '
+								. 'or (for SVG) include <title>/<desc> inside the SVG. '
+								. 'Enable PDFUAauto to auto-correct (treats missing alt as decorative).'
+							);
+						}
+						$this->ua->addWarning('Image() called without $alt in PDFUA mode — treating as decorative: ' . $file);
+						$this->writer->write('/Artifact BMC');
+						$pdfuaTagOpened = 'artifact';
+					}
+				}
+			}
+
 			$this->writer->write($outstring);
 			if ($link) {
 				$this->Link($x, $y, $w, $h, $link);
+			}
+
+			if ($pdfuaTagOpened === 'artifact') {
+				$this->writer->write('EMC');
+			} elseif ($pdfuaTagOpened === 'figure') {
+				$this->ua->getMarkedContentHelper()->end();
+				$this->ua->getStructureTree()->close();
 			}
 
 			// Avoid writing text on top of the image. // THIS WAS OUTSIDE THE if ($paint) bit!!!!!!!!!!!!!!!!
@@ -10058,14 +10888,30 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->HTMLheaderPageForms = [];
 				$this->pageBackgrounds = [];
 
+				// A running header is an artifact, and so is everything inside it
+				if ($this->PDFUA) {
+					$this->ua->getStructureTree()->openArtifact();
+				}
 				$this->writingHTMLheader = true;
 				$this->WriteHTML($html, HTMLParserMode::HTML_HEADER_BUFFER);
 				$this->writingHTMLheader = false;
+				if ($this->PDFUA) {
+					$this->ua->getStructureTree()->closeArtifact();
+				}
 				$this->Reset();
 				$this->pageoutput[$n] = [];
 
 				$s = $this->PrintPageBackgrounds();
 				$this->headerbuffer = $s . $this->headerbuffer;
+
+				// Wrapped once the header and its backgrounds are both in the buffer. Out here the
+				// writer would write to the page, not to headerbuffer.
+				if ($this->PDFUA) {
+					$this->headerbuffer = '/Artifact <</Type /Pagination /Subtype /Header>> BDC' . "\n"
+						. $this->headerbuffer
+						. "\nEMC\n";
+				}
+
 				$os = '';
 				if ($rotate) {
 					$os .= sprintf('q 0 -1 1 0 0 %.3F cm ', ($this->w * Mpdf::SCALE));
@@ -10144,10 +10990,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->HTMLheaderPageForms = [];
 				$this->pageBackgrounds = [];
 
+				// A running footer is an artifact, and so is everything inside it
+				if ($this->PDFUA) {
+					$this->ua->getStructureTree()->openArtifact();
+				}
 				$this->writingHTMLfooter = true;
 				$this->InFooter = true;
 				$this->WriteHTML($html, HTMLParserMode::HTML_HEADER_BUFFER);
 				$this->InFooter = false;
+				if ($this->PDFUA) {
+					$this->ua->getStructureTree()->closeArtifact();
+				}
 				$this->Reset();
 				$this->pageoutput[$n] = [];
 
@@ -10157,6 +11010,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$s = $this->PrintPageBackgrounds(-$adj);
 				$this->headerbuffer = $s . $this->headerbuffer;
 				$this->writingHTMLfooter = false; // mPDF 5.7.3  (moved after PrintPageBackgrounds so can adjust position of images in footer)
+
+				// Wrapped in the buffer, as the header is
+				if ($this->PDFUA) {
+					$this->headerbuffer = '/Artifact <</Type /Pagination /Subtype /Footer>> BDC' . "\n"
+						. $this->headerbuffer
+						. "\nEMC\n";
+				}
 
 				$os = '';
 				$os .= $this->StartTransform(true) . "\n";
@@ -10349,6 +11209,42 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->pageWriter->writePages();
 
+		// An aria-labelledby and the like may point forward, so they are resolved once every
+		// element exists and before the structure tree is written
+		if ($this->PDFUA) {
+			$resolver = $this->ua->getAriaIdResolver();
+			$resolver->resolveAll();
+			foreach ($resolver->getUnresolvedWarnings() as $w) {
+				$this->ua->addWarning($w);
+			}
+			// aria-flowto and aria-activedescendant have nothing to become in PDF/UA-1. Losing
+			// them breaks no rule, so they are only a warning, even when strict.
+			foreach ($resolver->getRelationshipWarnings() as $w) {
+				$this->ua->addWarning($w);
+			}
+			// A name pointing at a missing or empty element was not written, as an empty /Alt
+			// would hide the element's content
+			$nameErrors = $resolver->getNameResolutionErrors();
+			if (!empty($nameErrors)) {
+				if ($this->PDFUAauto) {
+					foreach ($nameErrors as $w) {
+						$this->ua->addWarning($w);
+					}
+				} else {
+					throw new \Mpdf\MpdfException('PDF/UA-1: ' . $nameErrors[0]);
+				}
+			}
+		}
+
+		// Marked content left open by a tag would make the document invalid
+		if ($this->PDFUA && $this->ua->getMarkedContentHelper()->getDepth() !== 0) {
+			if ($this->PDFUAauto) {
+				$this->ua->addWarning('Unbalanced BDC/EMC depth at end of document: ' . $this->ua->getMarkedContentHelper()->getDepth());
+			} else {
+				throw new \Mpdf\MpdfException('PDF/UA-1: Unbalanced marked content operators (depth=' . $this->ua->getMarkedContentHelper()->getDepth() . ')');
+			}
+		}
+
 		// @log Writing document resources
 
 		$this->resourceWriter->writeResources();
@@ -10365,7 +11261,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('endobj');
 
 		// METADATA
-		if ($this->PDFA || $this->PDFX) {
+		// PDF/UA-1 declares itself in XMP metadata (pdfuaid:part)
+		if ($this->PDFA || $this->PDFX || $this->PDFUA) {
 			$this->metadataWriter->writeMetadata();
 		}
 
@@ -10598,6 +11495,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->pageDim[$this->page]['w'] = $this->w;
 		$this->pageDim[$this->page]['h'] = $this->h;
+
+		// The page's /StructParents key is needed as soon as content is marked on it, long before
+		// PageWriter writes the page
+		if ($this->PDFUA && !isset($this->pageDim[$this->page]['structParents'])) {
+			$this->pageDim[$this->page]['structParents'] = $this->ua->nextStructParents();
+		}
 
 		$this->pageDim[$this->page]['outer_width_LR'] = $this->page_box['outer_width_LR'] ?: 0;
 		$this->pageDim[$this->page]['outer_width_TB'] = $this->page_box['outer_width_TB'] ?: 0;
@@ -10902,9 +11805,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$wx = ($this->w / 2) - $adj + $offset / 3;
 		$wy = ($this->h / 2) + $opp;
 
+		if ($this->PDFUA) {
+			$this->pages[$this->page] .= '/Artifact <</Type /Background>> BDC' . "\n";
+		}
 		$this->Rotate($angle, $wx, $wy);
 		$this->Text($wx, $wy, $texte, $OTLdata, $textvar);
 		$this->Rotate(0);
+		if ($this->PDFUA) {
+			$this->pages[$this->page] .= 'EMC' . "\n";
+		}
 
 		$this->SetTColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
 
@@ -10923,7 +11832,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->SetAlpha($alpha, $this->watermarkImgAlphaBlend);
 		}
 
+		// A watermark behind the page is spliced in by Image(), which marks it there
+		if ($this->PDFUA && !$this->watermarkImgBehind) {
+			$this->pages[$this->page] .= '/Artifact <</Type /Background>> BDC' . "\n";
+		}
 		$this->Image($src, 0, 0, 0, 0, '', '', true, true, true);
+		if ($this->PDFUA && !$this->watermarkImgBehind) {
+			$this->pages[$this->page] .= 'EMC' . "\n";
+		}
 
 		if (!$this->watermarkImgBehind) {
 			$this->SetAlpha(1);
@@ -14184,6 +15100,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->textbuffer = [];
 			}
 
+			// Every <map> has been read by now, including those after their <img>
+			if ($this->PDFUA && !$parseonly && $this->ua->getImageMapRegistry()->hasDeferred()) {
+				$this->ua->getImageMapRegistry()->drain();
+			}
+
 			/* -- CSS-FLOAT -- */
 			// If ended with a float, need to move to end page
 			$currpos = $this->page * 1000 + $this->y;
@@ -16192,6 +17113,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		else {
 			$arr[18] = null;
 		}
+		// The text is drawn after its tags have closed, so it keeps the Link its annotation belongs
+		// to (19) and the innermost inline element its text is marked against (20), which for a
+		// Span inside a link is the Span
+		if ($this->PDFUA) {
+			$linkElem = $this->ua->getAnchorState()->getLinkStructElem();
+			if ($linkElem !== null) {
+				$arr[19] = $linkElem;
+			}
+			$inlineElem = $this->ua->getStructureTree()->getCurrentInline();
+			if ($inlineElem !== null) {
+				$arr[20] = $inlineElem;
+			}
+		}
 		// mPDF 6  Lists
 		if ($return) {
 			return ($arr);
@@ -16254,6 +17188,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // mPDF 5.7.1
 		else {
 			$arr[18] = null;
+		}
+		// As in _saveTextBuffer(), except that the element the text is marked against is whatever is
+		// open in the cell, block or inline: the TD itself, or an H2, LI or Span inside it
+		if ($this->PDFUA) {
+			$linkElem = $this->ua->getAnchorState()->getLinkStructElem();
+			if ($linkElem !== null) {
+				$arr[19] = $linkElem;
+			}
+			$ownerElem = $this->ua->getStructureTree()->getCurrent();
+			if ($ownerElem !== null && $ownerElem !== $this->ua->getStructureTree()->getRoot()) {
+				$arr[20] = $ownerElem;
+			}
 		}
 		$this->cell[$this->row][$this->col]['textbuffer'][] = $arr;
 	}
@@ -16324,6 +17270,43 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$this->newFlowingBlock($this->divwidth, $this->divheight, $align, $is_table, $blockstate, true, $blockdir, $table_draft);
+
+		$this->restoreFlowingBlockPdfuaState($is_table);
+
+		// Text outside any block tag, as in "Some text<h3>Title</h3>", is put in a P of its own.
+		// Images, widgets and the like mark themselves, and an artifact image inside a P would be
+		// artifact inside tagged content, so a run of only those is left alone. Whitespace between
+		// images still draws text, so it counts.
+		$pdfuaAutoP = false;
+		if ($this->PDFUA && !$is_table && !$table_draft
+			&& !empty($arrayaux)
+			&& empty($this->flowingBlockAttr['pdfua_struct_open'])
+			&& empty($this->flowingBlockAttr['pdfua_artifact_open'])
+			&& !$this->ua->getStructureTree()->isInArtifact()) {
+			$hasNonObject = false;
+			foreach ($arrayaux as $entry) {
+				if (!isset($entry[0])) {
+					continue;
+				}
+				$t = $entry[0];
+				if (substr($t, 0, 3) === Mpdf::OBJECT_IDENTIFIER) {
+					continue;
+				}
+				$hasNonObject = true;
+				break;
+			}
+			if ($hasNonObject) {
+				$this->ua->getStructureTree()->open('P', []);
+				$elem = $this->ua->getStructureTree()->getCurrent();
+				$this->flowingBlockAttr['pdfua_struct_open'] = true;
+				$this->flowingBlockAttr['pdfua_type']        = 'P';
+				$this->flowingBlockAttr['pdfua_struct_elem'] = $elem;
+				// For restoreFlowingBlockPdfuaState() after a <br>
+				$this->blk[$this->blklvl]['pdfua_type']        = 'P';
+				$this->blk[$this->blklvl]['pdfua_struct_elem'] = $elem;
+				$pdfuaAutoP = true;
+			}
+		}
 
 		$array_size = count($arrayaux);
 
@@ -16507,6 +17490,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (isset($vetor[12]) and $vetor[12] != '') { // Requested Bold,Italic
 				$this->ReqFontStyle = $vetor[12];
 			}
+			// Set for every entry, so text outside an inline element does not keep the last one's
+			if ($this->PDFUA) {
+				$this->ua->getAnchorState()->setInlineContentElem(
+					isset($vetor[20]) ? $vetor[20] : null
+				);
+			}
 			if (isset($vetor[1]) and $vetor[1] != '') { // LINK
 				if ($this->isNamedAnchorReference($vetor[1])) {
 					// Repeated reference to same anchor?
@@ -16517,6 +17506,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$vetor[1] = $this->internallink[$vetor[1]];
 				}
 				$this->HREF = $vetor[1];     // HREF link style set here ******
+				if ($this->PDFUA && isset($vetor[19])) {
+					$this->ua->getAnchorState()->setLinkStructElem($vetor[19]);
+				} elseif ($this->PDFUA) {
+					$this->ua->getAnchorState()->clearLinkStructElem();
+				}
 			}
 
 			// SPECIAL CONTENT - IMAGES & FORM OBJECTS
@@ -16576,6 +17570,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 
 						$this->newFlowingBlock($this->divwidth, $this->divheight, $align, $is_table, $blockstate, false, $blockdir, $table_draft);
+						$this->restoreFlowingBlockPdfuaState($is_table);
 					}
 				} else {
 					/* -- END TABLES -- */
@@ -16606,6 +17601,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if (($skipln == 1 || $skipln == -2) && !isset($objattr['float'])) {
 						$this->finishFlowingBlock(false, $objattr['type']);
 						$this->newFlowingBlock($this->divwidth, $this->divheight, $align, $is_table, $blockstate, false, $blockdir, $table_draft);
+						$this->restoreFlowingBlockPdfuaState($is_table);
 					}
 
 					if (!$table_draft) {
@@ -16843,6 +17839,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					/* -- END COLUMNS -- */
 					$this->newFlowingBlock($this->divwidth, $this->divheight, $align, $is_table, $blockstate, false, $blockdir, $table_draft);
+					$this->restoreFlowingBlockPdfuaState($is_table);
 				} else {
 					$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
 					// Added to correct for OddEven Margins
@@ -16920,6 +17917,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->spanborder = false;
 			$this->spanborddet = [];
 			$this->HREF = '';
+			$this->ua->getAnchorState()->clearLinkStructElem();
 			$this->textparam = [];
 			$this->SetTextOutline();
 
@@ -16971,6 +17969,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->x = $bak_x;
 			return $ch;
 		}
+
+		// The next run of loose text in this block gets a P of its own
+		if (!empty($pdfuaAutoP)) {
+			$this->ua->getStructureTree()->close();
+			$this->blk[$this->blklvl]['pdfua_type']        = null;
+			$this->blk[$this->blklvl]['pdfua_struct_elem'] = null;
+		}
 	}
 
 	function _setDashBorder($style, $div, $cp, $side)
@@ -17014,6 +18019,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($this->blk[$blvl]['bb_painted'][$this->page]) && $this->blk[$blvl]['bb_painted'][$this->page]) {
 			return;
 		} // *CSS-FLOAT*
+
+		// Block backgrounds and borders are decoration, painted between blocks rather than inside
+		// their marked content. In a header or footer this nests inside the header's own
+		// artifact, which is allowed; a fixed-position block is written as though it were one.
+		$pdfuaArtifactOpened = false;
+		if ($this->PDFUA) {
+			$this->writer->write('/Artifact BMC');
+			$pdfuaArtifactOpened = true;
+		}
 
 		if (isset($this->blk[$blvl]['x0'])) {
 			$x0 = $this->blk[$blvl]['x0'];
@@ -18052,6 +19066,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Float DIV
 		$this->blk[$blvl]['bb_painted'][$this->page] = true;
+
+		if ($pdfuaArtifactOpened) {
+			$this->writer->write('EMC');
+		}
 	}
 	function PaintDivLnBorder($state = 0, $blvl = 0, $h = 0)
 	{
@@ -18223,6 +19241,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->ResetStyles();
 
 		$this->HREF = '';
+		$this->ua->getAnchorState()->clearLinkStructElem();
 		$this->textparam = [];
 		$this->SetTextOutline();
 
@@ -19248,7 +20267,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		if ($str == '') { // enable all tags
 			// Insert new supported tags in the long string below.
-			$this->enabledtags = "<a><acronym><address><article><aside><b><bdi><bdo><big><blockquote><br><caption><center><cite><code><del><details><dd><div><dl><dt><em><fieldset><figcaption><figure><font><form><h1><h2><h3><h4><h5><h6><hgroup><hr><i><img><input><ins><kbd><legend><li><main><mark><meter><nav><ol><option><p><pre><progress><q><s><samp><section><select><small><span><strike><strong><sub><summary><sup><table><tbody><td><template><textarea><tfoot><th><thead><time><tr><tt><u><ul><var><footer><header><annotation><bookmark><textcircle><barcode><dottab><indexentry><indexinsert><watermarktext><watermarkimage><tts><ttz><tta><column_break><columnbreak><newcolumn><newpage><page_break><pagebreak><formfeed><columns><toc><tocentry><tocpagebreak><pageheader><pagefooter><setpageheader><setpagefooter><sethtmlpageheader><sethtmlpagefooter>";
+			$this->enabledtags = "<a><abbr><acronym><address><area><article><aside><b><bdi><bdo><big><blockquote><br><caption><center><cite><code><del><details><dd><div><dl><dt><em><fieldset><figcaption><figure><font><form><h1><h2><h3><h4><h5><h6><hgroup><hr><i><img><input><ins><kbd><legend><li><main><map><mark><meter><nav><ol><option><p><pre><progress><q><rb><rp><rt><rtc><ruby><s><samp><section><select><small><span><strike><strong><sub><summary><sup><table><tbody><td><template><textarea><tfoot><th><thead><time><tr><tt><u><ul><var><footer><header><annotation><bookmark><textcircle><barcode><dottab><indexentry><indexinsert><watermarktext><watermarkimage><tts><ttz><tta><column_break><columnbreak><newcolumn><newpage><page_break><pagebreak><formfeed><columns><toc><tocentry><tocpagebreak><pageheader><pagefooter><setpageheader><setpagefooter><sethtmlpageheader><sethtmlpagefooter>";
 		} else {
 			$str = explode(",", $str);
 			foreach ($str as $v) {
@@ -20952,6 +21971,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$cellBorderOverlay = [];
 
+		// Borders are decoration. Those only buffered into cellBorderBuffer write nothing here, and
+		// an artifact may not sit inside tagged content, such as the outer cell of a nested table.
+		$pdfuaArtifactOpened = false;
+		if ($this->PDFUA
+			&& !($buffer && !$bSeparate)
+			&& $this->ua->getMarkedContentHelper()->getDepth() === 0
+		) {
+			$this->writer->write('/Artifact BMC');
+			$pdfuaArtifactOpened = true;
+		}
+
 		if ($bord == -1) {
 			$this->Rect($x, $y, $w, $h);
 		} elseif ($this->simpleTables && ($cort == 'cell')) {
@@ -21018,6 +22048,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->cellBorderBuffer[] = pack("A16nCnda6A10d14", str_pad(sprintf("%08.7f", ($dom + 4)), 16, "0", STR_PAD_LEFT), $cbord, ord($side), $details[$side]['s'], $details[$side]['w'], $details[$side]['c'], $details[$side]['style'], $x, $y, $w, $h, $details['mbw']['BL'], $details['mbw']['BR'], $details['mbw']['RT'], $details['mbw']['RB'], $details['mbw']['TL'], $details['mbw']['TR'], $details['mbw']['LT'], $details['mbw']['LB'], $details['cellposdom'], 1);
 						}
 					}
+				}
+				if ($pdfuaArtifactOpened) {
+					$this->writer->write('EMC');
 				}
 				return;
 			}
@@ -21473,6 +22506,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// $this->SetLineWidth($oldlinewidth);
 			// $this->SetDColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+		}
+
+		if ($pdfuaArtifactOpened) {
+			$this->writer->write('EMC');
 		}
 	}
 
@@ -23055,6 +24092,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// TEXT (and nested tables)
 
 					$this->divwidth = $w;
+					// The cell's element was closed when </td> was read. It goes back on the stack
+					// while the cell is drawn, so a Figure made for an image in it is the cell's child
+					// and not the table's. The text marks itself chunk by chunk, except in a rotated
+					// cell, which is drawn as one string and marked as a whole.
+					$pdfuaCellElem = (isset($cell['pdfua_struct_elem']) && $this->PDFUA)
+						? $cell['pdfua_struct_elem']
+						: null;
+					$pdfuaCellRotated = ($pdfuaCellElem !== null && !empty($cell['textbuffer']) && !empty($cell['R']));
+					if ($pdfuaCellElem !== null && !empty($cell['textbuffer'])) {
+						$this->ua->getStructureTree()->pushExisting($pdfuaCellElem);
+					}
+					if ($pdfuaCellRotated) {
+						$pdfuaCellStructParents = $this->pdfuaStructParents();
+						$pdfuaCellMcid = $this->ua->getStructureTree()->addContentForElement(
+							$pdfuaCellElem,
+							$pdfuaCellStructParents
+						);
+						$this->ua->getMarkedContentHelper()->begin($pdfuaCellElem->getType(), $pdfuaCellMcid);
+					}
 					if (!empty($cell['textbuffer'])) {
 						$this->cellTextAlign = $align;
 						$this->cellLineHeight = $cell['cellLineHeight'];
@@ -23215,6 +24271,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->printbuffer($cell['textbuffer'], '', true, false, $cell['direction']);
 						}
 						$this->y = $opy;
+					}
+					if ($pdfuaCellRotated) {
+						$this->ua->getMarkedContentHelper()->end();
+					}
+					if ($pdfuaCellElem !== null && !empty($cell['textbuffer'])) {
+						$this->ua->getStructureTree()->close();
 					}
 
 					/* -- BACKGROUNDS -- */
@@ -23540,6 +24602,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetProtection($permissions = [], $user_pass = '', $owner_pass = null, $length = 40)
 	{
+		// Assistive technology must be allowed to read the content (Matterhorn 07-001)
+		if ($this->PDFUA && !in_array('extract', $permissions)) {
+			if ($this->PDFUAauto) {
+				$this->ua->addWarning(
+					'SetProtection() called without the \'extract\' permission. ' .
+					'PDF/UA-1 (Matterhorn 07-001) requires the content-copying-for-accessibility ' .
+					'permission bit to be set. The \'extract\' permission has been force-added.'
+				);
+				$permissions[] = 'extract';
+			} else {
+				throw new \Mpdf\MpdfException(
+					'SetProtection() without \'extract\' permission is not permitted in PDF/UA-1 mode ' .
+					'(Matterhorn 07-001). Assistive technology must be able to read document content. ' .
+					'Add \'extract\' to the permissions array, or enable PDFUAauto to auto-correct.'
+				);
+			}
+		}
+		// The XMP metadata has to be readable without the key, which takes the /V 4 handler with
+		// /EncryptMetadata false. It is chosen before the key is made, as the key depends on it.
+		if ($this->PDFUA) {
+			$this->protection->useV4WithUnencryptedMetadata();
+		}
+
 		$this->encrypted = $this->protection->setProtection($permissions, $user_pass, $owner_pass, $length);
 	}
 
@@ -25633,7 +26718,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$this->SetFont($font, $style, $szfont, true, true);
+
+		$pdfuaTagOpened = false;
+		if ($this->PDFUA) {
+			$inArtifactScope = $this->ua->getStructureTree()->isInArtifact();
+			if (!$inArtifactScope) {
+				$structParents = $this->pdfuaStructParents();
+				$this->ua->getStructureTree()->open('Span');
+				$mcid = $this->ua->getStructureTree()->addContent($structParents);
+				$this->ua->getMarkedContentHelper()->begin('Span', $mcid);
+				$pdfuaTagOpened = true;
+			}
+		}
+
 		$this->Cell($w, 0, $text, 0, 0, "C", 0, '', 0, 0, 0, 'M', 0, false, $OTLdata, $textvar);
+
+		if ($pdfuaTagOpened) {
+			$this->ua->getMarkedContentHelper()->end();
+			$this->ua->getStructureTree()->close();
+		}
 	}
 	/* -- END DIRECTW -- */
 
@@ -27328,7 +28431,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Make self closing tabs valid XHTML
 		// Tags which are self-closing: 1) Replaceable and 2) Non-replaced items
-		$selftabs = 'input|hr|img|br|barcode|dottab';
+		$selftabs = 'input|hr|img|br|barcode|dottab|area';
 		$selftabs2 = 'indexentry|indexinsert|bookmark|watermarktext|watermarkimage|column_break|columnbreak|newcolumn|newpage|page_break|pagebreak|formfeed|columns|toc|tocpagebreak|setpageheader|setpagefooter|sethtmlpageheader|sethtmlpagefooter|annotation';
 
 		// Fix self-closing tags which don't close themselves
@@ -27445,6 +28548,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	function OverWrite($file_in, $search, $replacement, $dest = Destination::DOWNLOAD, $file_out = "mpdf")
 	{
+		// Replacing bytes leaves the structure tree describing the old text
+		if ($this->PDFUA) {
+			if ($this->PDFUAauto) {
+				$this->ua->addWarning(
+					'OverWrite() called in PDF/UA-1 mode. Binary string replacement cannot ' .
+					'maintain the logical structure tree required for accessibility, so the ' .
+					'PDF/UA-1 guarantee cannot be preserved for this call. Regenerate the PDF ' .
+					'using WriteHTML() with the updated content to keep it conformant.'
+				);
+			} else {
+				throw new \Mpdf\MpdfException(
+					'OverWrite() is not compatible with PDF/UA-1 mode. Binary string replacement ' .
+					'cannot maintain the logical structure tree required for accessibility. ' .
+					'Regenerate the PDF using WriteHTML() with the updated content instead, ' .
+					'or enable PDFUAauto to proceed with a warning.'
+				);
+			}
+		}
 		$pdf = file_get_contents($file_in);
 
 		if (!is_array($search)) {
@@ -27696,6 +28817,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetJS($script)
 	{
+		// PDF/UA-1 does not allow document JavaScript (Matterhorn 17-001)
+		if ($this->PDFUA) {
+			if (empty($this->PDFUAauto)) {
+				throw new \Mpdf\MpdfException(
+					'PDF/UA-1: SetJS() / <script> embedding is not permitted (Matterhorn 17-001). '
+					. 'Document-level JavaScript may interfere with assistive technology. '
+					. 'Remove the script, or enable PDFUAauto to auto-correct (the script will '
+					. 'be omitted with a warning recorded).'
+				);
+			}
+			$this->ua->addWarning(
+				'PDF/UA-1: SetJS() ignored — document-level JavaScript is not permitted (Matterhorn 17-001).'
+			);
+			return;
+		}
 		$this->js = $script;
 	}
 
@@ -27782,7 +28918,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * uses this functionality to determine the correct page numbers.
 	 *
 	 * Only scalar and array values are captured in the snapshot, plus the state of the Form and
-	 * TableOfContents objects, where a document registers its fields and contents entries.
+	 * TableOfContents objects, where a document registers its fields and contents entries, and under
+	 * PDF/UA the structure tree the document is tagged into.
 	 *
 	 * @return array<string, mixed>
 	 *
@@ -27798,6 +28935,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
+		$snapshot['ua'] = $this->PDFUA ? $this->ua->getStateSnapshot() : [];
 
 		return $snapshot;
 	}
@@ -27815,7 +28953,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->form->restoreStateSnapshot($snapshot['form']);
 		$this->tableOfContents->restoreStateSnapshot($snapshot['tableOfContents']);
-		unset($snapshot['form'], $snapshot['tableOfContents']);
+		$this->ua->restoreStateSnapshot($snapshot['ua']);
+		unset($snapshot['form'], $snapshot['tableOfContents'], $snapshot['ua']);
 
 		$this->restoreOwnState($snapshot);
 

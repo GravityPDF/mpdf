@@ -7,6 +7,8 @@ use Mpdf\Form;
 use Mpdf\Mpdf;
 use Mpdf\Pdf\Protection;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
+use Mpdf\Ua\UaPolicy;
+use Mpdf\Ua\UaState;
 use Mpdf\Utils\PdfDate;
 
 use Psr\Log\LoggerInterface;
@@ -37,12 +39,26 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $protection;
 
-	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, LoggerInterface $logger)
+	/**
+	 * @var \Mpdf\Ua\UaState
+	 */
+	private $ua;
+
+	/**
+	 * @param Mpdf            $mpdf
+	 * @param BaseWriter      $writer
+	 * @param Form            $form
+	 * @param Protection      $protection
+	 * @param UaState         $ua
+	 * @param LoggerInterface $logger
+	 */
+	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, UaState $ua, LoggerInterface $logger)
 	{
 		$this->mpdf = $mpdf;
 		$this->writer = $writer;
 		$this->form = $form;
 		$this->protection = $protection;
+		$this->ua = $ua;
 		$this->logger = $logger;
 	}
 
@@ -81,33 +97,17 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		// DC elements
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:dc="http://purl.org/dc/elements/1.1/">' . "\n";
 		$m .= '    <dc:format>application/pdf</dc:format>' . "\n";
-		if (!empty($this->mpdf->title)) {
-			$m .= '    <dc:title>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->title, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:title>' . "\n";
+		if ($this->mpdf->title !== '' && $this->mpdf->title !== null) {
+			$m .= $this->dublinCoreProperty('title', 'Alt', $this->mpdf->title, true);
 		}
 		if (!empty($this->mpdf->keywords)) {
-			$m .= '    <dc:subject>
-	 <rdf:Bag>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Bag>
-	</dc:subject>' . "\n";
+			$m .= $this->dublinCoreProperty('subject', 'Bag', $this->mpdf->keywords, false);
 		}
 		if (!empty($this->mpdf->subject)) {
-			$m .= '    <dc:description>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->subject, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:description>' . "\n";
+			$m .= $this->dublinCoreProperty('description', 'Alt', $this->mpdf->subject, true);
 		}
 		if (!empty($this->mpdf->author)) {
-			$m .= '    <dc:creator>
-	 <rdf:Seq>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->author, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Seq>
-	</dc:creator>' . "\n";
+			$m .= $this->dublinCoreProperty('creator', 'Seq', $this->mpdf->author, false);
 		}
 		$m .= '   </rdf:Description>' . "\n";
 
@@ -135,6 +135,21 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$m .= '   </rdf:Description>' . "\n";
 		}
 
+		// Not an elseif: a document can be PDF/A and PDF/UA at once
+		if ($this->mpdf->PDFUA) {
+			if ($this->mpdf->title === '' || $this->mpdf->title === null) {
+				if ($this->mpdf->PDFUAauto) {
+					$this->ua->addWarning('PDF/UA-1 requires a document title. Set the \'title\' config option.');
+				} else {
+					throw new \Mpdf\MpdfException('PDF/UA-1 requires a document title. Set the \'title\' config option.');
+				}
+			}
+			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid
+				. '" xmlns:pdfuaid="http://www.aiim.org/pdfua/ns/id/">' . "\n";
+			$m .= '    <pdfuaid:part>1</pdfuaid:part>' . "\n";
+			$m .= '   </rdf:Description>' . "\n";
+		}
+
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/">' . "\n";
 		$m .= '    <xmpMM:DocumentID>uuid:' . $uuid . '</xmpMM:DocumentID>' . "\n";
 		$m .= '   </rdf:Description>' . "\n";
@@ -142,16 +157,51 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$m .= ' </x:xmpmeta>' . "\n";
 		$m .= str_repeat(str_repeat(' ', 100) . "\n", 20); // 2-4kB whitespace padding required
 		$m .= '<?xpacket end="w"?>'; // "r" read only
-		$this->writer->write('<</Type/Metadata/Subtype/XML/Length ' . strlen($m) . '>>');
-		$this->writer->stream($m);
+		// Left unencrypted so pdfuaid:part can be read without the key. The Identity crypt filter
+		// says so, and only means it under the /V 4 handler writeEncryption() then uses.
+		if ($this->mpdf->PDFUA && $this->mpdf->encrypted) {
+			$this->writer->write('<</Type/Metadata/Subtype/XML'
+				. '/Filter[/Crypt]'
+				. '/DecodeParms<</Type/CryptFilterDecodeParms/Name/Identity>>'
+				. '/Length ' . strlen($m) . '>>');
+			$this->writer->stream($m, false);
+		} else {
+			$this->writer->write('<</Type/Metadata/Subtype/XML/Length ' . strlen($m) . '>>');
+			$this->writer->stream($m);
+		}
 		$this->writer->write('endobj');
+	}
+
+	/**
+	 * A Dublin Core property whose value sits in an RDF container.
+	 *
+	 * Every line ending is written out as "\n" rather than taken from a string literal that
+	 * spans several lines of this file, so a checkout with CRLF endings — which is what git
+	 * gives a Windows user by default — does not put a carriage return into the XMP packet.
+	 *
+	 * @param string $element   The dc element name, such as 'title'
+	 * @param string $container The RDF container element name: 'Alt', 'Bag' or 'Seq'
+	 * @param string $value     The value, escaped here
+	 * @param bool   $default   Whether to mark the value as the default language
+	 *
+	 * @return string
+	 */
+	private function dublinCoreProperty($element, $container, $value, $default)
+	{
+		$lang = $default ? ' xml:lang="x-default"' : '';
+
+		return '    <dc:' . $element . '>' . "\n"
+			. "\t" . ' <rdf:' . $container . '>' . "\n"
+			. "\t" . '  <rdf:li' . $lang . '>' . htmlspecialchars($value, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n"
+			. "\t" . ' </rdf:' . $container . '>' . "\n"
+			. "\t" . '</dc:' . $element . '>' . "\n";
 	}
 
 	public function writeInfo() // _putinfo
 	{
 		$this->writer->write('/Producer ' . $this->writer->utf16BigEndianTextString($this->getProducerString()));
 
-		if (!empty($this->mpdf->title)) {
+		if ($this->mpdf->title !== '' && $this->mpdf->title !== null) {
 			$this->writer->write('/Title ' . $this->writer->utf16BigEndianTextString($this->mpdf->title));
 		}
 
@@ -172,7 +222,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		foreach ($this->mpdf->customProperties as $key => $value) {
-			$this->writer->write('/' . $key . ' ' . $this->writer->utf16BigEndianTextString($value));
+			// Escaped, or a key such as "good\n/Producer (pwned)" would add entries of its own
+			$this->writer->write('/' . $this->writer->escapeName($key) . ' ' . $this->writer->utf16BigEndianTextString($value));
 		}
 
 		$this->writer->write('/CreationDate ' . $this->writer->dateString());
@@ -341,10 +392,23 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write('/Pages 1 0 R');
 
-		if (is_string($this->mpdf->currentLang)) {
-			$this->writer->write(sprintf('/Lang (%s)', $this->mpdf->currentLang));
-		} elseif (is_string($this->mpdf->default_lang)) {
-			$this->writer->write(sprintf('/Lang (%s)', $this->mpdf->default_lang));
+		// PDF/UA requires a /Lang. It is a string, so in an encrypted document it is encrypted
+		// too; left plain, a reader decrypts it into nonsense.
+		$langTag = null;
+		if (is_string($this->mpdf->currentLang) && $this->mpdf->currentLang !== '') {
+			$langTag = $this->mpdf->currentLang;
+		} elseif (is_string($this->mpdf->default_lang) && $this->mpdf->default_lang !== '') {
+			$langTag = $this->mpdf->default_lang;
+		} elseif ($this->mpdf->PDFUA) {
+			if ($this->mpdf->PDFUAauto) {
+				$this->ua->addWarning('PDF/UA-1 requires a /Lang entry in the document catalog. Defaulting to en-US.');
+				$langTag = 'en-US';
+			} else {
+				throw new \Mpdf\MpdfException('PDF/UA-1 requires a /Lang entry in the document catalog. Pass a language mode such as \'en-GB\' to the Mpdf constructor.');
+			}
+		}
+		if ($langTag !== null) {
+			$this->writer->write('/Lang ' . $this->writer->string($langTag));
 		}
 
 		if ($this->mpdf->ZoomMode === 'fullpage') {
@@ -388,8 +452,15 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		// Metadata
-		if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
+		if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->PDFUA) {
 			$this->writer->write('/Metadata ' . $this->mpdf->MetadataRoot . ' 0 R');
+		}
+
+		if ($this->mpdf->PDFUA) {
+			$this->writer->write('/MarkInfo <</Marked true /Suspects false>>');
+			if ($this->ua->getStructTreeRootObjNum()) {
+				$this->writer->write('/StructTreeRoot ' . $this->ua->getStructTreeRootObjNum() . ' 0 R');
+			}
 		}
 
 		// OutputIntents
@@ -417,7 +488,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$this->writer->write('/Names << /JavaScript ' . $this->mpdf->n_js . ' 0 R >> ');
 		}
 
-		if ($this->mpdf->DisplayPreferences || $this->mpdf->directionality === 'rtl' || $this->mpdf->mirrorMargins) {
+		// PDF/UA has viewers show the title rather than the file name, so needs /DisplayDocTitle
+		if ($this->mpdf->DisplayPreferences || $this->mpdf->directionality === 'rtl' || $this->mpdf->mirrorMargins || $this->mpdf->PDFUA) {
 
 			$this->writer->write('/ViewerPreferences<<');
 
@@ -433,7 +505,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				$this->writer->write('/HideWindowUI true');
 			}
 
-			if (is_int(strpos($this->mpdf->DisplayPreferences, 'DisplayDocTitle'))) {
+			if ($this->mpdf->PDFUA || is_int(strpos($this->mpdf->DisplayPreferences, 'DisplayDocTitle'))) {
 				$this->writer->write('/DisplayDocTitle true');
 			}
 
@@ -554,11 +626,16 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 					foreach ($this->mpdf->PageLinks[$n] as $key => $pl) {
 
 						$this->writer->object();
+						$linkAnnotObjNum = $this->mpdf->n;
 						$rect = sprintf('%.3F %.3F %.3F %.3F', $pl[0], $pl[1], $pl[0] + $pl[2], $pl[1] - $pl[3]);
 						$this->writer->write('<</Type /Annot /Subtype /Link /Rect [' . $rect . ']', false);
 
 						// Removed as causing undesired effects in Chrome PDF viewer https://github.com/mpdf/mpdf/issues/283
-						// $this->writer->write(' /Contents ' . $this->writer->utf16BigEndianTextString($pl[4]);
+						// PDF/UA-1 needs it all the same: a link annotation must carry an alternate description (§7.18.5)
+						if ($this->mpdf->PDFUA) {
+							$contents = is_string($pl[4]) && strpos($pl[4], '@') !== 0 ? $pl[4] : 'Internal link';
+							$this->writer->write(' /Contents ' . $this->writer->utf16BigEndianTextString($contents), false);
+						}
 						$this->writer->write(' /NM ' . $this->writer->string(sprintf('%04u-%04u', $n, $key)), false);
 						$this->writer->write(' /M ' . $this->writer->dateString(), false);
 
@@ -569,13 +646,36 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						// $this->writer->write(' >>');
 						// $this->writer->write(' /C [1 0 0]');	// Color RGB
 
-						if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
+						if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->PDFUA) {
 							$this->writer->write(' /F 28', false);
 						}
 
 						// An imported link carries its source annotation's own entries, which may include a border
 						if (!isset($pl['importedLink'])) {
 							$this->writer->write(' /Border [0 0 0]', false);
+						}
+
+						// Every link annotation is tagged; one made outside an <a> (Link(), a TOC entry, an
+						// imported page's link) gets a Link element of its own
+						if ($this->mpdf->PDFUA) {
+							$tree = $this->ua->getStructureTree();
+							$linkStructElem = isset($pl['structElem']) ? $pl['structElem'] : null;
+							if ($linkStructElem === null) {
+								$tree->open('Link', []);
+								$linkStructElem = $tree->getCurrent();
+								$tree->close();
+							}
+							$linkStructParent = $tree->nextAnnotStructParent($linkStructElem);
+							$linkStructElem->addObjref($linkStructParent, $linkAnnotObjNum);
+							$this->writer->write(' /StructParent ' . $linkStructParent, false);
+						}
+
+						if (isset($pl['quadPoints'])) {
+							$s = ' /QuadPoints [';
+							foreach ($pl['quadPoints'] as $value) {
+								$s .= sprintf('%.3F ', $value);
+							}
+							$this->writer->write(rtrim($s) . ']', false);
 						}
 
 						if (strpos($pl[4], '@') === 0) {
@@ -586,30 +686,24 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$this->writer->write(sprintf(' /Dest [%d 0 R /XYZ 0 %.3F null]>>', 1 + 2 * $p, $htarg));
 
 						} elseif (is_string($pl[4])) {
+							// A link put straight into PageLinks, or imported, can still carry a script URI
+							// that Tag\A would have refused
+							if ($this->mpdf->PDFUA && UaPolicy::isPolicyBlockedHref($pl[4])) {
+								$this->ua->addWarning('PDF/UA-1: stripped /URI action with policy-blocked scheme: ' . UaPolicy::formatHrefForMessage($pl[4]));
+							} else {
+								$this->writer->write(' /A <</S /URI /URI ' . $this->writer->string($pl[4]) . '>>');
+							}
+
 							/**
 							 * This block is from the FPDI library
 							 * @copyright Copyright (c) 2024 Setasign GmbH & Co. KG (https://www.setasign.com)
 							 * @license http://opensource.org/licenses/mit-license The MIT License
 							 */
 							if (isset($pl['importedLink'])) {
-								$this->writer->write('/A <</S /URI /URI ' . $this->writer->string($pl[4]) . '>>');
-								$values = $pl['importedLink']['pdfObject']->value;
-
-								foreach ($values as $name => $entry) {
+								foreach ($pl['importedLink']['pdfObject']->value as $name => $entry) {
 									$this->writer->write('/' . $name . ' ', false);
 									$this->mpdf->writePdfType($entry);
 								}
-
-								if (isset($pl['quadPoints'])) {
-									$s = '/QuadPoints[';
-									foreach ($pl['quadPoints'] as $value) {
-										$s .= sprintf('%.3F ', $value);
-									}
-									$s .= ']';
-									$this->writer->write($s);
-								}
-							} else {
-								$this->writer->write(' /A <</S /URI /URI ' . $this->writer->string($pl[4]) . '>>');
 							}
 							$this->writer->write('>>');
 						} else {
@@ -643,6 +737,19 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						}
 
 						$this->writer->object();
+						$annotObjNum = $this->mpdf->n;
+
+						// A text or file attachment annotation is tagged Annot. Note is for footnotes,
+						// and needs an /ID.
+						$noteStructElem = null;
+						$noteStructParent = null;
+						if ($this->mpdf->PDFUA) {
+							$this->ua->getStructureTree()->open('Annot', []);
+							$noteStructElem = $this->ua->getStructureTree()->getCurrent();
+							$this->ua->getStructureTree()->close();
+							$noteStructParent = $this->ua->getStructureTree()->nextAnnotStructParent($noteStructElem);
+							$noteStructElem->addObjref($noteStructParent, $annotObjNum);
+						}
 
 						$annot = '';
 						$pl['opt'] = array_change_key_case($pl['opt'], CASE_LOWER);
@@ -701,7 +808,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						$annot .= ' /CreationDate ' . $this->writer->dateString();
 						$annot .= ' /Border [0 0 0]';
 
-						if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
+						if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->PDFUA) {
 							$annot .= ' /F 28';
 							$annot .= ' /CA 1';
 						} elseif ($pl['opt']['ca'] > 0) {
@@ -760,6 +867,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						}
 
 						$annot .= ' /P ' . $pl['pageobj'] . ' 0 R';
+
+						if ($noteStructParent !== null) {
+							$annot .= ' /StructParent ' . $noteStructParent;
+						}
+
 						$annot .= '>>';
 						$this->writer->write($annot);
 						$this->writer->write('endobj');
@@ -819,7 +931,35 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 				// Active Forms
 				if (count($this->form->forms) > 0) {
+					// Each widget's /StructParent is taken before _putFormItems() writes it
+					if ($this->mpdf->PDFUA) {
+						foreach ($this->form->forms as $ref => $frm) {
+							if (isset($frm['page']) && $frm['page'] == $n) {
+								$this->form->forms[$ref]['structParent']
+									= $this->ua->getStructureTree()->reserveAnnotStructParent();
+							}
+						}
+					}
+
 					$this->form->_putFormItems($n, $hPt);
+
+					// and its Form element made once the widget has an object number
+					if ($this->mpdf->PDFUA) {
+						foreach ($this->form->forms as $ref => $frm) {
+							if (isset($frm['page'], $frm['structParent'], $frm['obj'])
+								&& $frm['page'] == $n
+							) {
+								$this->ua->getStructureTree()->open('Form', []);
+								$formElem = $this->ua->getStructureTree()->getCurrent();
+								$this->ua->getStructureTree()->close();
+								$formElem->addObjref($frm['structParent'], $frm['obj']);
+								$this->ua->getStructureTree()->registerAnnotStructParent(
+									$frm['structParent'],
+									$formElem
+								);
+							}
+						}
+					}
 				}
 			}
 		}
@@ -834,7 +974,17 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	public function writeEncryption() // _putencryption
 	{
 		$this->writer->write('/Filter /Standard');
-		if ($this->protection->getUseRC128Encryption()) {
+		if ($this->protection->getUseV4Encryption()) {
+			// RC4 still, but through crypt filters, the only handler under which the Identity filter on
+			// the XMP metadata really leaves it unencrypted
+			$this->writer->write('/V 4');
+			$this->writer->write('/R 4');
+			$this->writer->write('/Length 128');
+			$this->writer->write('/CF <</StdCF <</Type /CryptFilter /CFM /V2 /AuthEvent /DocOpen /Length 16>>>>');
+			$this->writer->write('/StmF /StdCF');
+			$this->writer->write('/StrF /StdCF');
+			$this->writer->write('/EncryptMetadata false');
+		} elseif ($this->protection->getUseRC128Encryption()) {
 			$this->writer->write('/V 2');
 			$this->writer->write('/R 3');
 			$this->writer->write('/Length 128');

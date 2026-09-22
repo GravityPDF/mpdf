@@ -8,6 +8,11 @@ use Mpdf\Mpdf;
 class Table extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$this->mpdf->tdbegin = false;
@@ -519,8 +524,20 @@ class Table extends Tag
 		//++++++++++++++++++++++++++++
 		$this->mpdf->plainCell_properties = [];
 		unset($table);
+
+		// Opened only now so that a nested table lands inside the cell that holds it
+		if ($this->mpdf->PDFUA) {
+			$this->ua->getStructureTree()->open('Table');
+
+			$tableElem = $this->ua->getStructureTree()->getCurrent();
+			$this->ua->getAriaIdResolver()->queueAriaRefs($tableElem, $attr);
+		}
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
 
@@ -732,6 +749,11 @@ class Table extends Tag
 			$this->mpdf->tdbegin = true;
 			$this->mpdf->nestedtablejustfinished = true;
 			$this->mpdf->ignorefollowingspaces = true;
+			// A row group can still be open, made for bare rows or left by an omitted end tag
+			if ($this->mpdf->PDFUA) {
+				$this->ua->getStructureTree()->closeRowGroup();
+				$this->ua->getStructureTree()->close();
+			}
 			return;
 		}
 		$this->mpdf->cMarginL = 0;
@@ -1243,6 +1265,12 @@ class Table extends Tag
 			$this->mpdf->InlineBDF = $save_bflp;
 			$this->mpdf->InlineBDFctr = $save_bflpc; // mPDF 6
 			$this->mpdf->restoreInlineProperties($save_silp);
+		}
+
+		// Closed only once the cells are drawn; a row group can still be open, as for a nested table
+		if ($this->mpdf->PDFUA) {
+			$this->ua->getStructureTree()->closeRowGroup();
+			$this->ua->getStructureTree()->close();
 		}
 	}
 

@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Ua\AriaIdResolver;
+
 use Mpdf\Mpdf;
 
 class BarCode extends Tag
@@ -242,6 +244,11 @@ class BarCode extends Tag
 			$objattr['width'] = $w + $extrawidth;
 			$objattr['barcode_height'] = $h;
 			$objattr['barcode_width'] = $w;
+
+			// The Figure around the barcode is made when it is drawn, so its id and aria-* travel with it
+			if ($this->mpdf->PDFUA) {
+				$objattr += AriaIdResolver::toObjattr($attr);
+			}
 
 			/* -- CSS-IMAGE-FLOAT -- */
 			if (!$this->mpdf->ColActive && !$this->mpdf->tableLevel && !$this->mpdf->listlvl && !$this->mpdf->kwt) {

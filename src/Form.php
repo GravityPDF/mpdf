@@ -7,6 +7,10 @@ use Mpdf\Color\ColorConverter;
 use Mpdf\Writer\BaseWriter;
 use Mpdf\Writer\FormWriter;
 
+/**
+ * Draws HTML form fields, as AcroForm widgets when active forms are on and as plain drawing when
+ * they are off.
+ */
 class Form
 {
 
@@ -117,7 +121,8 @@ class Form
 		$this->formSelectDefaultOption = true; // for Select drop down box; if no option is explicitly maked as selected,
 		// this determines whether to select 1st option (as per browser)
 		// - affects whether "required" attribute is relevant
-		$this->formUseZapD = true;  // Determine whether to use ZapfDingbat icons for radio/checkboxes
+		// Determine whether to use ZapfDingbat icons for radio/checkboxes. Not under PDF/UA, which embeds every font
+		$this->formUseZapD = !$mpdf->PDFUA;
 		// FORM STYLES
 		// These can alternatively use a 4 number string to represent CMYK colours
 		$this->form_border_color = '0.6 0.6 0.72';   // RGB
@@ -224,6 +229,8 @@ class Form
 
 		} else {
 
+			$wrapArtifact = $this->beginChromeArtifact();
+
 			$w -= $this->form_element_spacing['input']['outer']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['input']['outer']['v'] * 2 / $k;
 			$this->mpdf->x += $this->form_element_spacing['input']['outer']['h'] / $k;
@@ -263,6 +270,8 @@ class Form
 			$this->mpdf->Cell($w, $h, $texto, 1, 0, $rtlalign, 1, '', 0, $this->form_element_spacing['input']['inner']['h'] / $k, $this->form_element_spacing['input']['inner']['h'] / $k, 'M', 0, false, $OTLdata);
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -335,6 +344,8 @@ class Form
 
 		} else {
 
+			$wrapArtifact = $this->beginChromeArtifact();
+
 			$w -= $this->form_element_spacing['textarea']['outer']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['textarea']['outer']['v'] * 2 / $k;
 
@@ -369,6 +380,8 @@ class Form
 			$this->writer->write('Q');
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -436,6 +449,8 @@ class Form
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
+			$wrapArtifact = $this->beginChromeArtifact();
+
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			if (!empty($objattr['disabled'])) {
 				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
@@ -460,7 +475,8 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
 			$save_font = $this->mpdf->FontFamily;
 			$save_currentfont = $this->mpdf->currentfontfamily;
-			if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
+			if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->PDFUA) {
+				// ZapfDingbats is a core font and cannot be embedded, so the arrow comes from the current font
 				if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 					$this->mpdf->PDFAXwarnings[] = 'Core Adobe font Zapfdingbats cannot be embedded in mPDF - used in Form element: Select - which is required for PDFA1-b or PDFX/1-a. (Different character/font will be substituted.)';
 				}
@@ -479,6 +495,8 @@ class Form
 			$this->mpdf->currentfontfamily = $save_currentfont;
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -498,11 +516,15 @@ class Form
 			}
 			$this->SetJSButton($w, $h, $objattr['fieldname'], (isset($objattr['value']) ? $objattr['value'] : ''), $js, $objattr['ID'], $objattr['title'], $flags, (isset($objattr['Indexed']) ? $objattr['Indexed'] : false));
 		} else {
+			$wrapArtifact = $this->beginChromeArtifact();
+
 			$this->mpdf->y = $objattr['INNER-Y'];
 			$this->writer->write(sprintf('q %.3F 0 0 %.3F %.3F %.3F cm /I%d Do Q', $objattr['INNER-WIDTH'] * Mpdf::SCALE, $objattr['INNER-HEIGHT'] * Mpdf::SCALE, $objattr['INNER-X'] * Mpdf::SCALE, ($this->mpdf->h - ($objattr['INNER-Y'] + $objattr['INNER-HEIGHT'] )) * Mpdf::SCALE, $objattr['ID']));
 			if (!empty($objattr['BORDER-WIDTH'])) {
 				$this->mpdf->PaintImgBorder($objattr, $is_table);
 			}
+
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -545,6 +567,8 @@ class Form
 
 		} else {
 
+			$wrapArtifact = $this->beginChromeArtifact();
+
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
 
@@ -576,6 +600,8 @@ class Form
 
 			$this->mpdf->Cell($w, $h, $texto, '', 0, 'C', 0, '', 0, 0, 0, 'M', 0, false, $OTLdata);
 			$this->mpdf->SetFColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -603,6 +629,8 @@ class Form
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
 		} else {
+			$wrapArtifact = $this->beginChromeArtifact();
+
 			$iw = $w * 0.7;
 			$ih = $h * 0.7;
 			$lx = $x + (($w - $iw) / 2);
@@ -628,6 +656,8 @@ class Form
 			}
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -655,6 +685,8 @@ class Form
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
 		} else {
+			$wrapArtifact = $this->beginChromeArtifact();
+
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			$radius = $this->mpdf->FontSize * 0.35;
 			$cx = $x + ($w / 2);
@@ -676,6 +708,8 @@ class Form
 			}
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+
+			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -804,6 +838,14 @@ class Form
 			$this->writer->write('/V /' . $state . ' ');
 			$this->writer->write('/DV /' . $state . ' ');
 			$this->writer->write('/T ' . $this->writer->string($name) . ' ');
+			// Every field needs a /TU (ISO 14289-1 §7.18.1), and a radio group takes none from its buttons
+			if ($this->mpdf->PDFUA) {
+				$tu = isset($frg['TU']) ? $frg['TU'] : '';
+				if (strlen($tu) === 0 || $tu === "\xFE\xFF") {
+					$tu = $this->writer->utf8ToUtf16BigEndian($name);
+				}
+				$this->writer->write('/TU ' . $this->writer->string($tu));
+			}
 			$this->writer->write('>>');
 			$this->writer->write('endobj');
 		}
@@ -1434,7 +1476,18 @@ class Form
 			$this->writer->write('/T ' . $this->writer->string($form['T']));
 		}
 
-		$this->writer->write('/TU ' . $this->writer->string($form['TU']));
+		// A /TU that is only a byte order mark is empty
+		$tu = isset($form['TU']) ? $form['TU'] : '';
+		if ($this->mpdf->PDFUA && (strlen($tu) === 0 || $tu === "\xFE\xFF")) {
+			$fallback = isset($form['T']) && $form['T'] !== '' ? $form['T']
+				: ($form['subtype'] === 'radio' ? 'Radio button' : 'Button');
+			$tu = $this->writer->utf8ToUtf16BigEndian($fallback);
+		}
+		$this->writer->write('/TU ' . $this->writer->string($tu));
+
+		if ($this->mpdf->PDFUA && isset($form['structParent'])) {
+			$this->writer->write('/StructParent ' . $form['structParent']);
+		}
 
 		if (isset($this->form_button_icon[$form['T']])) {
 			$form['BS_W'] = 0;
@@ -1630,9 +1683,7 @@ class Form
 				$matrix = sprintf('%.3F 0 0 %.3F 0 %.3F', $form['style']['fontsize'] * 1.33 / 10, $form['style']['fontsize'] * 1.25 / 10, $form['style']['fontsize']);
 				$fill = $radio_background_color . ' rg 3.778 -7.410 m 2.800 -7.410 1.947 -7.047 1.225 -6.322 c 0.500 -5.600 0.138 -4.747 0.138 -3.769 c 0.138 -2.788 0.500 -1.938 1.225 -1.213 c 1.947 -0.491 2.800 -0.128 3.778 -0.128 c 4.757 -0.128 5.610 -0.491 6.334 -1.213 c 7.056 -1.938 7.419 -2.788 7.419 -3.769 c 7.419 -4.747 7.056 -5.600 6.334 -6.322 c 5.610 -7.047 4.757 -7.410 3.778 -7.410 c h f ';
 				$circle = '3.778 -6.963 m 4.631 -6.963 5.375 -6.641 6.013 -6.004 c 6.653 -5.366 6.972 -4.619 6.972 -3.769 c 6.972 -2.916 6.653 -2.172 6.013 -1.532 c 5.375 -0.894 4.631 -0.576 3.778 -0.576 c 2.928 -0.576 2.182 -0.894 1.544 -1.532 c 0.904 -2.172 0.585 -2.916 0.585 -3.769 c 0.585 -4.619 0.904 -5.366 1.544 -6.004 c 2.182 -6.641 2.928 -6.963 3.778 -6.963 c h 3.778 -7.410 m 2.800 -7.410 1.947 -7.047 1.225 -6.322 c 0.500 -5.600 0.138 -4.747 0.138 -3.769 c 0.138 -2.788 0.500 -1.938 1.225 -1.213 c 1.947 -0.491 2.800 -0.128 3.778 -0.128 c 4.757 -0.128 5.610 -0.491 6.334 -1.213 c 7.056 -1.938 7.419 -2.788 7.419 -3.769 c 7.419 -4.747 7.056 -5.600 6.334 -6.322 c 5.610 -7.047 4.757 -7.410 3.778 -7.410 c h f ';
-				$r_on = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $circle . '  ' . $radio_color . ' rg
-5.184 -5.110 m 4.800 -5.494 4.354 -5.685 3.841 -5.685 c 3.331 -5.685 2.885 -5.494 2.501 -5.110 c 2.119 -4.725 1.925 -4.279 1.925 -3.769 c 1.925 -3.257 2.119 -2.810 2.501 -2.429 c 2.885 -2.044 3.331 -1.853 3.841 -1.853 c 4.354 -1.853 4.800 -2.044 5.184 -2.429 c 5.566 -2.810 5.760 -3.257 5.760 -3.769 c 5.760 -4.279 5.566 -4.725 5.184 -5.110 c h
-f Q ';
+				$r_on = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $circle . '  ' . $radio_color . ' rg' . "\n" . '5.184 -5.110 m 4.800 -5.494 4.354 -5.685 3.841 -5.685 c 3.331 -5.685 2.885 -5.494 2.501 -5.110 c 2.119 -4.725 1.925 -4.279 1.925 -3.769 c 1.925 -3.257 2.119 -2.810 2.501 -2.429 c 2.885 -2.044 3.331 -1.853 3.841 -1.853 c 4.354 -1.853 4.800 -2.044 5.184 -2.429 c 5.566 -2.810 5.760 -3.257 5.760 -3.769 c 5.760 -4.279 5.566 -4.725 5.184 -5.110 c h' . "\n" . 'f Q ';
 				$r_off = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $circle . '  Q ';
 			}
 
@@ -1660,8 +1711,7 @@ f Q ';
 				$matrix = sprintf('%.3F 0 0 %.3F 0 %.3F', $form['style']['fontsize'] * 1.33 / 10, $form['style']['fontsize'] * 1.25 / 10, $form['style']['fontsize']);
 				$fill = $radio_background_color . ' rg 7.395 -0.070 m 7.395 -7.344 l 0.121 -7.344 l 0.121 -0.070 l 7.395 -0.070 l h  f ';
 				$square = '0.508 -6.880 m 6.969 -6.880 l 6.969 -0.534 l 0.508 -0.534 l 0.508 -6.880 l h 7.395 -0.070 m 7.395 -7.344 l 0.121 -7.344 l 0.121 -0.070 l 7.395 -0.070 l h ';
-				$cb_on = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $square . ' f ' . $radio_color . ' rg
-6.321 -1.352 m 5.669 -2.075 5.070 -2.801 4.525 -3.532 c 3.979 -4.262 3.508 -4.967 3.112 -5.649 c 3.080 -5.706 3.039 -5.779 2.993 -5.868 c 2.858 -6.118 2.638 -6.243 2.334 -6.243 c 2.194 -6.243 2.100 -6.231 2.052 -6.205 c 2.003 -6.180 1.954 -6.118 1.904 -6.020 c 1.787 -5.788 1.688 -5.523 1.604 -5.226 c 1.521 -4.930 1.480 -4.721 1.480 -4.600 c 1.480 -4.535 1.491 -4.484 1.512 -4.447 c 1.535 -4.410 1.579 -4.367 1.647 -4.319 c 1.733 -4.259 1.828 -4.210 1.935 -4.172 c 2.040 -4.134 2.131 -4.115 2.205 -4.115 c 2.267 -4.115 2.341 -4.232 2.429 -4.469 c 2.437 -4.494 2.444 -4.511 2.448 -4.522 c 2.451 -4.531 2.456 -4.546 2.465 -4.568 c 2.546 -4.795 2.614 -4.910 2.668 -4.910 c 2.714 -4.910 2.898 -4.652 3.219 -4.136 c 3.539 -3.620 3.866 -3.136 4.197 -2.683 c 4.426 -2.367 4.633 -2.103 4.816 -1.889 c 4.998 -1.676 5.131 -1.544 5.211 -1.493 c 5.329 -1.426 5.483 -1.368 5.670 -1.319 c 5.856 -1.271 6.066 -1.238 6.296 -1.217 c 6.321 -1.352 l h  f  Q ';
+				$cb_on = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $square . ' f ' . $radio_color . ' rg' . "\n" . '6.321 -1.352 m 5.669 -2.075 5.070 -2.801 4.525 -3.532 c 3.979 -4.262 3.508 -4.967 3.112 -5.649 c 3.080 -5.706 3.039 -5.779 2.993 -5.868 c 2.858 -6.118 2.638 -6.243 2.334 -6.243 c 2.194 -6.243 2.100 -6.231 2.052 -6.205 c 2.003 -6.180 1.954 -6.118 1.904 -6.020 c 1.787 -5.788 1.688 -5.523 1.604 -5.226 c 1.521 -4.930 1.480 -4.721 1.480 -4.600 c 1.480 -4.535 1.491 -4.484 1.512 -4.447 c 1.535 -4.410 1.579 -4.367 1.647 -4.319 c 1.733 -4.259 1.828 -4.210 1.935 -4.172 c 2.040 -4.134 2.131 -4.115 2.205 -4.115 c 2.267 -4.115 2.341 -4.232 2.429 -4.469 c 2.437 -4.494 2.444 -4.511 2.448 -4.522 c 2.451 -4.531 2.456 -4.546 2.465 -4.568 c 2.546 -4.795 2.614 -4.910 2.668 -4.910 c 2.714 -4.910 2.898 -4.652 3.219 -4.136 c 3.539 -3.620 3.866 -3.136 4.197 -2.683 c 4.426 -2.367 4.633 -2.103 4.816 -1.889 c 4.998 -1.676 5.131 -1.544 5.211 -1.493 c 5.329 -1.426 5.483 -1.368 5.670 -1.319 c 5.856 -1.271 6.066 -1.238 6.296 -1.217 c 6.321 -1.352 l h  f  Q ';
 				$cb_off = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $square . ' f Q ';
 			}
 			$this->writer->object();
@@ -1713,6 +1763,15 @@ f Q ';
 		$this->writer->write('/M ' . $this->writer->dateString());
 
 		$this->writer->write('/T ' . $this->writer->string($form['T']));
+		// A /TU that is only a byte order mark is empty
+		if ($this->mpdf->PDFUA) {
+			$tu = isset($form['TU']) ? $form['TU'] : '';
+			if (strlen($tu) === 0 || $tu === "\xFE\xFF") {
+				$fallback = isset($form['T']) && $form['T'] !== '' ? $form['T'] : 'Choice field';
+				$tu = $this->writer->utf8ToUtf16BigEndian($fallback);
+			}
+			$this->writer->write('/TU ' . $this->writer->string($tu));
+		}
 		$this->writer->write('/DA (/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor'] . ')');
 
 		$opt = '';
@@ -1749,6 +1808,10 @@ f Q ';
 		if (isset($this->array_form_choice_js[$form['T']])) {
 			$this->writer->write('/AA << /V ' . ($this->mpdf->n + 1) . ' 0 R >>');
 			$put_js = 1;
+		}
+
+		if ($this->mpdf->PDFUA && isset($form['structParent'])) {
+			$this->writer->write('/StructParent ' . $form['structParent']);
 		}
 
 		$this->writer->write('>>');
@@ -1801,7 +1864,19 @@ f Q ';
 		$this->writer->write('/MK <<' . $temp . ' >>');
 
 		$this->writer->write('/T ' . $this->writer->string($form['T']));
-		$this->writer->write('/TU ' . $this->writer->string($form['TU']));
+		// Every field needs a /TU to be announced by (ISO 14289-1 §7.18.1). It is stored as UTF-16BE
+		// with a byte order mark, so one that is only the mark is empty.
+		$tu = isset($form['TU']) ? $form['TU'] : '';
+		if ($this->mpdf->PDFUA && (strlen($tu) === 0 || $tu === "\xFE\xFF")) {
+			$fallback = isset($form['T']) && $form['T'] !== '' ? $form['T'] : 'Form field';
+			$tu = $this->writer->utf8ToUtf16BigEndian($fallback);
+		}
+		$this->writer->write('/TU ' . $this->writer->string($tu));
+
+		if ($this->mpdf->PDFUA && isset($form['structParent'])) {
+			$this->writer->write('/StructParent ' . $form['structParent']);
+		}
+
 		if ($form['V'] || $form['V'] === '0') {
 			$this->writer->write('/V ' . $this->writer->string($form['V']));
 		}
@@ -1862,5 +1937,34 @@ f Q ';
 			}
 		}
 		return $n;
+	}
+
+	/**
+	 * Under PDF/UA, marks the drawing of an inactive form field as an artifact: it is decoration, not
+	 * content. Not inside marked content already open, where an artifact may not nest.
+	 *
+	 * @return bool Whether the artifact was opened
+	 */
+	private function beginChromeArtifact()
+	{
+		if (!$this->mpdf->PDFUA || $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() !== 0) {
+			return false;
+		}
+
+		$this->mpdf->getPdfUaStructureTree()->openArtifact();
+		$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
+
+		return true;
+	}
+
+	/**
+	 * @param bool $opened What beginChromeArtifact() returned
+	 */
+	private function endChromeArtifact($opened)
+	{
+		if ($opened) {
+			$this->mpdf->getPdfUaMarkedContentHelper()->end();
+			$this->mpdf->getPdfUaStructureTree()->closeArtifact();
+		}
 	}
 }

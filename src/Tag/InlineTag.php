@@ -8,6 +8,17 @@ use Mpdf\Utils\UtfString;
 abstract class InlineTag extends Tag
 {
 
+	/**
+	 * @var string|null The structure type that tags the element under PDF/UA whatever its attributes
+	 */
+	protected $pdfuaStructType;
+
+
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -174,8 +185,60 @@ abstract class InlineTag extends Tag
 			}
 			$this->mpdf->biDirectional = true;
 		}
+
+		// Each tag records how many elements it opened, so close() ends as many
+		if ($this->mpdf->PDFUA) {
+			$depth = $this->openInlineUaStruct($attr) ? 1 : 0;
+			if ($this->pdfuaStructType !== null) {
+				$this->ua->getStructureTree()->open($this->pdfuaStructType);
+				$depth++;
+			}
+			$this->ua->getInlineStructStack()->pushFrame($tag, $depth);
+		}
 	}
 
+	/**
+	 * Opens a Span carrying the language (Matterhorn 11-001) and the aria-label of an element
+	 * that has either.
+	 *
+	 * @param array $attr
+	 * @return bool Whether a Span was opened
+	 */
+	protected function openInlineUaStruct($attr)
+	{
+		if (!$this->mpdf->PDFUA) {
+			return false;
+		}
+		$structAttrs = [];
+		if (isset($attr['LANG']) && $attr['LANG'] !== '') {
+			$structAttrs['Lang'] = $attr['LANG'];
+		}
+		if (isset($attr['ARIA-LABEL']) && $attr['ARIA-LABEL'] !== '') {
+			$structAttrs['Alt'] = $attr['ARIA-LABEL'];
+		}
+		if (empty($structAttrs)) {
+			return false;
+		}
+		$this->ua->getStructureTree()->open('Span', $structAttrs);
+		$elem = $this->ua->getStructureTree()->getCurrent();
+		$this->ua->getAriaIdResolver()->queueAriaRefs($elem, $attr);
+		return true;
+	}
+
+	/**
+	 * Counts elements a subclass opened after parent::open() among those close() ends.
+	 *
+	 * @param int $count
+	 */
+	protected function pushInlineUaStructDepth($count)
+	{
+		$this->ua->getInlineStructStack()->addToTopFrame($this->getTagName(), $count);
+	}
+
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -227,6 +290,14 @@ abstract class InlineTag extends Tag
 				$this->mpdf->_saveCellTextBuffer($popf);
 			} else {
 				$this->mpdf->_saveTextBuffer($popf);
+			}
+		}
+
+		// Counted per tag, as a tag can nest inside one of the same name
+		if ($this->mpdf->PDFUA) {
+			$depth = $this->ua->getInlineStructStack()->popFrame($tag);
+			for ($i = 0; $i < $depth; $i++) {
+				$this->ua->getStructureTree()->close();
 			}
 		}
 	}

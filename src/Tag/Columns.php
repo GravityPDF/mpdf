@@ -22,7 +22,8 @@ class Columns extends Tag
 				$this->sizeConverter,
 				$this->colorConverter,
 				$this->imageProcessor,
-				$this->languageToFont
+				$this->languageToFont,
+				$this->ua
 			);
 		}
 

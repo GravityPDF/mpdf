@@ -65,9 +65,14 @@ final class BaseWriter
 		}
 	}
 
-	public function stream($s)
+	/**
+	 * @param string $s
+	 * @param bool   $encrypt False for a stream left readable in an encrypted document, such as the
+	 *                        XMP metadata that must declare PDF/UA conformance to any reader
+	 */
+	public function stream($s, $encrypt = true)
 	{
-		if ($this->mpdf->encrypted) {
+		if ($this->mpdf->encrypted && $encrypt) {
 			$s = $this->protection->rc4($this->protection->objectKey($this->mpdf->currentObjectNumber), $s);
 		}
 
@@ -117,6 +122,42 @@ final class BaseWriter
 	public function escapeSlashes($s) // _escapeName
 	{
 		return strtr($s, ['/' => '#2F']);
+	}
+
+	/**
+	 * Any bytes as a valid PDF name: whatever is not printable ASCII, or is a delimiter or '#',
+	 * is written as #XX (ISO 32000-1 §7.3.5). A structure element id goes through
+	 * StructureElement::sanitiseIdForPdf() instead, which also caps the length.
+	 *
+	 * @param string $name
+	 *
+	 * @return string
+	 */
+	public function escapeName($name)
+	{
+		$out = '';
+		$len = strlen((string) $name);
+		for ($i = 0; $i < $len; $i++) {
+			$ord = ord($name[$i]);
+			if ($ord < 0x21 || $ord > 0x7E
+				|| $ord === 0x23 // #
+				|| $ord === 0x25 // %
+				|| $ord === 0x28 // (
+				|| $ord === 0x29 // )
+				|| $ord === 0x2F // /
+				|| $ord === 0x3C // <
+				|| $ord === 0x3E // >
+				|| $ord === 0x5B // [
+				|| $ord === 0x5D // ]
+				|| $ord === 0x7B // {
+				|| $ord === 0x7D // }
+			) {
+				$out .= sprintf('#%02X', $ord);
+			} else {
+				$out .= $name[$i];
+			}
+		}
+		return $out;
 	}
 
 	/**

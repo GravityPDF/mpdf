@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Ua\AriaIdResolver;
+
 use Mpdf\Mpdf;
 use Mpdf\Utils\UtfString;
 
@@ -225,6 +227,11 @@ class TextCircle extends Tag
 		$objattr['height'] = $h + $extraheight;
 		$objattr['width'] = $w + $extrawidth;
 		$objattr['type'] = 'textcircle';
+
+		// The Span around the text circle is made when it is drawn, so its id and aria-* travel with it
+		if ($this->mpdf->PDFUA) {
+			$objattr += AriaIdResolver::toObjattr($attr);
+		}
 
 		$e = Mpdf::OBJECT_IDENTIFIER . "type=image,objattr=" . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
 

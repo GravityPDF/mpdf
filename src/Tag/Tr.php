@@ -7,6 +7,11 @@ use Mpdf\Css\Border;
 class Tr extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 
@@ -79,10 +84,31 @@ class Tr extends Tag
 		if ($this->mpdf->tabletfoot) {
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['is_tfoot'][$this->mpdf->row] = true;
 		}
+
+		// A TR belongs to a row group. Rows written straight under <table> share a TBody made for
+		// them, closed by the table or by the next explicit row group.
+		if ($this->mpdf->PDFUA) {
+			$tree = $this->ua->getStructureTree();
+			if (!$tree->isInArtifact() && $tree->getCurrent()->getType() === 'Table') {
+				$tree->open('TBody');
+			}
+			$tree->open('TR');
+
+			$trElem = $this->ua->getStructureTree()->getCurrent();
+			$this->ua->getAriaIdResolver()->queueAriaRefs($trElem, $attr);
+		}
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
+		if ($this->mpdf->PDFUA) {
+			$this->ua->getStructureTree()->close();
+		}
+
 		if ($this->mpdf->tableLevel) {
 			// If Border set on TR - Update right border
 			if (isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trborder-right'][$this->mpdf->row])) {

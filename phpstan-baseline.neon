@@ -471,7 +471,13 @@ parameters:
 		-
 			message: '#^Variable \$chars might not be defined\.$#'
 			identifier: variable.undefined
-			count: 2
+			count: 5
+			path: src/Mpdf.php
+
+		-
+			message: '#^Variable \$codePoints might not be defined\.$#'
+			identifier: variable.undefined
+			count: 5
 			path: src/Mpdf.php
 
 		-

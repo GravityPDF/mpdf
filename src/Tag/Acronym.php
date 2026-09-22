@@ -2,8 +2,10 @@
 
 namespace Mpdf\Tag;
 
-class Acronym extends InlineTag
+/**
+ * The obsolete <acronym>, handled as <abbr>.
+ */
+class Acronym extends Abbr
 {
-
 
 }

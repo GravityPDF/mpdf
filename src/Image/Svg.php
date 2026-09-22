@@ -3002,8 +3002,21 @@ class Svg
 	 */
 	function mergeStyles($data)
 	{
+		// No external entities: no network, and before PHP 8 no entity loader either
+		$prevEntityLoader = null;
+		if (\PHP_VERSION_ID < 80000 && function_exists('libxml_disable_entity_loader')) {
+			$prevEntityLoader = libxml_disable_entity_loader(true);
+		}
 		$xml = new \DOMDocument();
-		if (!$xml->loadXML($data, LIBXML_NOERROR)) {
+		try {
+			$loaded = $xml->loadXML($data, LIBXML_NOERROR | LIBXML_NONET);
+		} catch (\Exception $e) {
+			$loaded = false;
+		}
+		if ($prevEntityLoader !== null) {
+			libxml_disable_entity_loader($prevEntityLoader);
+		}
+		if (!$loaded) {
 			return $data;
 		}
 
@@ -3092,6 +3105,15 @@ class Svg
 		}
 
 		$this->svg_info = [];
+
+		// The <title> and <desc> of the drawing give its Figure an /Alt when the <img> has none
+		$accessibleMetadata = ['title' => null, 'desc' => null];
+		if (!empty($this->mpdf->PDFUA)) {
+			$accessibleMetadata = $this->extractAccessibleMetadata($data);
+		}
+		$this->svg_info['accessible_title'] = $accessibleMetadata['title'];
+		$this->svg_info['accessible_desc']  = $accessibleMetadata['desc'];
+
 		$last_gradid = ''; // mPDF 6
 		$last_svg_fontid = ''; // mPDF 6
 		$last_svg_fontdefw = ''; // mPDF 6
@@ -3310,8 +3332,85 @@ class Svg
 				'w' => $this->svg_info['w'] * $this->kp,
 				'h' => -$this->svg_info['h'] * $this->kp,
 				'data' => $this->svg_string,
+				'accessible_title' => isset($this->svg_info['accessible_title'])
+					? $this->svg_info['accessible_title'] : null,
+				'accessible_desc' => isset($this->svg_info['accessible_desc'])
+					? $this->svg_info['accessible_desc'] : null,
 			];
 		}
+	}
+
+	/**
+	 * The <title> and <desc> of the drawing as a whole, for the Figure's /Alt when the <img> has
+	 * none. Only the first of each directly under the root <svg> counts: one inside a <g> or a
+	 * shape describes that element (SVG 1.1 §5.4).
+	 *
+	 * @param string $data SVG markup as ImageSVG() has cleaned it
+	 *
+	 * @return array{title: ?string, desc: ?string} Null for one that is missing or empty
+	 */
+	public function extractAccessibleMetadata($data)
+	{
+		$result = ['title' => null, 'desc' => null];
+
+		if ($data === null || $data === '' || stripos($data, '<svg') === false) {
+			return $result;
+		}
+
+		// Much SVG is malformed, and a drawing that will not parse simply has no title
+		$useInternalErrors = libxml_use_internal_errors(true);
+		// No LIBXML_NOENT, which would read an external entity such as <title>&xxe;</title> into
+		// the text. ImageSVG() strips the DOCTYPE, but this method is public.
+		$prevEntityLoader = null;
+		if (\PHP_VERSION_ID < 80000 && function_exists('libxml_disable_entity_loader')) {
+			$prevEntityLoader = libxml_disable_entity_loader(true);
+		}
+		try {
+			$xml = simplexml_load_string($data, 'SimpleXMLElement', LIBXML_NONET | LIBXML_NOCDATA);
+		} catch (\Exception $e) {
+			$xml = false;
+		}
+		libxml_clear_errors();
+		libxml_use_internal_errors($useInternalErrors);
+		if ($prevEntityLoader !== null) {
+			libxml_disable_entity_loader($prevEntityLoader);
+		}
+
+		if ($xml === false) {
+			return $result;
+		}
+
+		$titleText = null;
+		$descText  = null;
+		foreach ($xml->children() as $child) {
+			$name = $child->getName();
+			if ($titleText === null && $name === 'title') {
+				$titleText = (string) $child;
+			} elseif ($descText === null && $name === 'desc') {
+				$descText = (string) $child;
+			}
+			if ($titleText !== null && $descText !== null) {
+				break;
+			}
+		}
+
+		if ($titleText !== null) {
+			$titleText = trim(preg_replace('/\s+/u', ' ', $titleText));
+			$result['title'] = ($titleText === '') ? null : $titleText;
+		}
+		if ($descText !== null) {
+			// A description keeps its line breaks, but not the indentation of the markup
+			$descText = str_replace(["\r\n", "\r"], "\n", $descText);
+			$descText = preg_replace('/[ \t]+/u', ' ', $descText);
+			$descLines = explode("\n", $descText);
+			foreach ($descLines as $i => $line) {
+				$descLines[$i] = trim($line);
+			}
+			$descText = trim(implode("\n", $descLines));
+			$result['desc'] = ($descText === '') ? null : $descText;
+		}
+
+		return $result;
 	}
 
 	// AUTOFONT =========================

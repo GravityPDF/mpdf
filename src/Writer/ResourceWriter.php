@@ -5,6 +5,7 @@ namespace Mpdf\Writer;
 use Mpdf\Strict;
 use Mpdf\Mpdf;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
+use Mpdf\Ua\UaState;
 use Psr\Log\LoggerInterface;
 
 final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
@@ -68,6 +69,11 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $javaScriptWriter;
 
+	/**
+	 * @var \Mpdf\Ua\UaState
+	 */
+	private $ua;
+
 	public function __construct(
 		Mpdf $mpdf,
 		BaseWriter $writer,
@@ -80,7 +86,8 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 		BookmarkWriter $bookmarkWriter,
 		MetadataWriter $metadataWriter,
 		JavaScriptWriter $javaScriptWriter,
-		LoggerInterface $logger
+		LoggerInterface $logger,
+		UaState $ua
 	) {
 		$this->mpdf = $mpdf;
 		$this->writer = $writer;
@@ -94,6 +101,7 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 		$this->metadataWriter = $metadataWriter;
 		$this->javaScriptWriter = $javaScriptWriter;
 		$this->logger = $logger;
+		$this->ua = $ua;
 	}
 
 	public function writeResources() // _putresources
@@ -227,6 +235,15 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write('>>');
 		$this->writer->write('endobj'); // end resource dictionary
+
+		// Before the catalog, which refers to the tree's root
+		if ($this->mpdf->PDFUA) {
+			$this->ua->setStructTreeRootObjNum(
+				$this->ua->getStructureWriter()->writeStructTree(
+					$this->ua->getStructParentsCounter()
+				)
+			);
+		}
 
 		$this->bookmarkWriter->writeBookmarks();
 

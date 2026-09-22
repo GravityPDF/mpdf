@@ -7,6 +7,11 @@ namespace Mpdf\Tag;
 class TFoot extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$this->mpdf->lastoptionaltag = 'TFOOT'; // Save current HTML specified optional endtag
@@ -40,10 +45,25 @@ class TFoot extends Tag
 		if (isset($properties['TEXT-ALIGN'])) {
 			$this->mpdf->tfoot_textalign_default = $properties['TEXT-ALIGN'];
 		}
+
+		// Ends the TBody made for any rows written before it outside a group
+		if ($this->mpdf->PDFUA) {
+			$tree = $this->ua->getStructureTree();
+			$tree->closeRowGroup();
+			$tree->open('TFoot');
+		}
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
+		if ($this->mpdf->PDFUA) {
+			$this->ua->getStructureTree()->closeRowGroup();
+		}
+
 		$this->mpdf->lastoptionaltag = '';
 		unset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl]);
 		$this->cssManager->tbCSSlvl--;

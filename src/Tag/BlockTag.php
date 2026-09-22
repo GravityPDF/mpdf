@@ -16,6 +16,268 @@ use Mpdf\Utils\UtfString;
 abstract class BlockTag extends Tag
 {
 
+	/**
+	 * The structure type of a block, from its class, tag, role and aria-hidden. A heading is held
+	 * to the one sequence of the document, in a table cell or not: the first is an H1, and none
+	 * skips a level on the way down (ISO 14289-1 §7.4.2).
+	 *
+	 * @param string $tag
+	 * @param array  $attr
+	 * @return string|null A structure type, '__artifact__', or null for none
+	 */
+	private function resolveBlockStructType($tag, $attr)
+	{
+		$structType = null;
+		// The classes of a table of contents come first
+		if (!empty($attr['CLASS'])) {
+			foreach (explode(' ', strtolower($attr['CLASS'])) as $cls) {
+				$tocType = \Mpdf\Ua\StructType::fromCssClass($cls);
+				if ($tocType !== null) {
+					$structType = $tocType;
+					break;
+				}
+			}
+		}
+		if ($structType === null) {
+			$structType = \Mpdf\Ua\StructType::fromHtmlTag($tag, $attr);
+		}
+
+		if (!empty($attr['ROLE'])) {
+			$role = strtolower($attr['ROLE']);
+			if ($role === 'none' || $role === 'presentation' || $role === 'separator') {
+				$structType = '__artifact__';
+			} elseif ($role === 'heading') {
+				$level = isset($attr['ARIA-LEVEL']) ? (int) $attr['ARIA-LEVEL'] : 2;
+				$structType = 'H' . max(1, min(6, $level));
+			} else {
+				$ariaRoleMap = [
+					'list'           => 'L',
+					'listitem'       => 'LI',
+					'table'          => 'Table',
+					'grid'           => 'Table',
+					'row'            => 'TR',
+					'columnheader'   => 'TH',
+					'rowheader'      => 'TH',
+					'cell'           => 'TD',
+					'gridcell'       => 'TD',
+					'figure'         => 'Figure',
+					'img'            => 'Figure',
+					'note'           => 'Note',
+					'doc-footnote'   => 'Note',
+					'link'           => 'Link',
+					'article'        => 'Art',
+					'doc-chapter'    => 'Sect',
+					'region'         => 'Sect',
+					'navigation'     => 'Sect',
+					'main'           => 'Div',
+					'banner'         => 'Sect',
+					'complementary'  => 'Sect',
+					'contentinfo'    => 'Sect',
+					'group'          => 'Div',
+					'paragraph'      => 'P',
+					'term'           => 'Span',
+					'definition'     => 'Span',
+					// PDF has no Title type
+					'doc-title'      => 'H1',
+				];
+				if (isset($ariaRoleMap[$role])) {
+					$structType = $ariaRoleMap[$role];
+				}
+			}
+		}
+
+		if (isset($attr['ARIA-HIDDEN']) && strtolower($attr['ARIA-HIDDEN']) === 'true') {
+			$structType = '__artifact__';
+		}
+
+		if ($structType !== null && $structType !== '__artifact__'
+			&& preg_match('/^H([1-6])$/', $structType, $hm)
+		) {
+			$requestedLevel = (int) $hm[1];
+			$lastLevel      = $this->ua->getLastHeadingLevel();
+
+			if ($lastLevel === 0 && $requestedLevel > 1) {
+				if ($this->mpdf->PDFUAauto) {
+					$this->ua->addWarning(
+						'PDF/UA-1 §7.4.2: first heading must be H1; '
+						. $structType . ' auto-promoted to H1.'
+					);
+					$structType = 'H1';
+				} else {
+					throw new \Mpdf\MpdfException(
+						'PDF/UA-1 §7.4.2: first heading in the document must be H1; '
+						. $structType . ' found. Enable PDFUAauto to auto-correct.'
+					);
+				}
+			} elseif ($lastLevel > 0 && $requestedLevel > $lastLevel + 1) {
+				$clampedLevel = $lastLevel + 1;
+				if ($this->mpdf->PDFUAauto) {
+					$this->ua->addWarning(
+						'PDF/UA-1 §7.4.2: heading sequence skips from H' . $lastLevel
+						. ' to ' . $structType . '; auto-clamped to H' . $clampedLevel . '.'
+					);
+					$structType = 'H' . $clampedLevel;
+				} else {
+					throw new \Mpdf\MpdfException(
+						'PDF/UA-1 §7.4.2: heading sequence skips from H' . $lastLevel
+						. ' to ' . $structType . ' (skips H' . $clampedLevel . '). '
+						. 'Enable PDFUAauto to auto-correct.'
+					);
+				}
+			}
+
+			if (preg_match('/^H([1-6])$/', $structType, $fm)) {
+				$this->ua->setLastHeadingLevel((int) $fm[1]);
+			}
+		}
+
+		return $structType;
+	}
+
+	/**
+	 * The /ListNumbering of a list-style-type. PDF names only a few (ISO 32000-1 Table 347), and a
+	 * list marked any other way has none.
+	 *
+	 * @param string|null $listStyleType
+	 * @return string|null
+	 */
+	private static function listNumberingFromCssType($listStyleType)
+	{
+		switch (strtolower((string) $listStyleType)) {
+			case 'decimal':
+				return 'Decimal';
+			case 'upper-roman':
+				return 'UpperRoman';
+			case 'lower-roman':
+				return 'LowerRoman';
+			case 'upper-alpha':
+			case 'upper-latin':
+				return 'UpperAlpha';
+			case 'lower-alpha':
+			case 'lower-latin':
+				return 'LowerAlpha';
+			case 'disc':
+				return 'Disc';
+			case 'circle':
+				return 'Circle';
+			case 'square':
+				return 'Square';
+			default:
+				return null;
+		}
+	}
+
+	/**
+	 * The tags that end an open <p>, as in Tag::OpenTag(), which does not do it in a table cell
+	 *
+	 * @var string[]
+	 */
+	private static $pClosingTags = [
+		'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'TABLE', 'PRE',
+		'FORM', 'ADDRESS', 'BLOCKQUOTE', 'CENTER', 'DL', 'HR', 'ARTICLE', 'ASIDE',
+		'FIELDSET', 'HGROUP', 'MAIN', 'NAV', 'SECTION',
+	];
+
+	/**
+	 * Records what a block in a table cell opened, so its end tag, or an end tag left out, can
+	 * close it. Every block in a cell records something, even one that opened nothing.
+	 *
+	 * @param string|null $kind   '__struct__', '__artifact__' or null
+	 * @param string      $tag
+	 * @param int         $closes How many elements it opened
+	 */
+	private function pushCellBlockStructFrame($kind, $tag, $closes = 1)
+	{
+		if ($this->mpdf->PDFUA && $this->mpdf->tableLevel) {
+			$this->mpdf->cellBlockStructStack[] = ['kind' => $kind, 'tag' => $tag, 'closes' => $closes];
+		}
+	}
+
+	/**
+	 * In a table cell, closes the block a new one ends by the rules for omitted end tags, as
+	 * Tag::OpenTag() does outside tables, so that <li>a<li>b are siblings.
+	 *
+	 * @param string $tag The tag about to open
+	 */
+	private function autoCloseCellSiblingFor($tag)
+	{
+		if (!$this->mpdf->PDFUA || !$this->mpdf->tableLevel) {
+			return;
+		}
+		if (count($this->mpdf->cellBlockStructStack) <= $this->mpdf->pdfuaCurrentCellFrameBase()) {
+			return;
+		}
+		$top = end($this->mpdf->cellBlockStructStack);
+		$topTag = $top['tag'];
+		$close = ($topTag === 'LI' && $tag === 'LI')
+			|| ($topTag === 'DT' && ($tag === 'DT' || $tag === 'DD'))
+			|| ($topTag === 'DD' && ($tag === 'DT' || $tag === 'DD'))
+			|| ($topTag === 'P' && in_array($tag, self::$pClosingTags, true));
+		if ($close) {
+			$this->mpdf->pdfuaPopCellBlockStructFrame();
+		}
+	}
+
+	/**
+	 * Gives a term or definition in a table cell the LI it needs, as Dt and Dd do outside tables.
+	 * A term begins a new LI and a definition shares its term's; the LI closes with the list or
+	 * the cell.
+	 *
+	 * @param string $tag 'DT' or 'DD'
+	 */
+	private function openImplicitCellListItem($tag)
+	{
+		$tree = $this->ua->getStructureTree();
+		// A term or definition whose end tag was left out ends here
+		if (count($this->mpdf->cellBlockStructStack) > $this->mpdf->pdfuaCurrentCellFrameBase()) {
+			$topTag = end($this->mpdf->cellBlockStructStack)['tag'];
+			if ($topTag === 'DT' || $topTag === 'DD') {
+				$this->mpdf->pdfuaPopCellBlockStructFrame();
+			}
+		}
+		$cur = $tree->getCurrent()->getType();
+		if ($tag === 'DT' && $cur === 'LI') {
+			$this->closeCellBlockStructFrame('__implicitLI__');
+			$cur = $tree->getCurrent()->getType();
+		}
+		if ($cur === 'L') {
+			$tree->open('LI');
+			$this->pushCellBlockStructFrame('__struct__', '__implicitLI__');
+		}
+	}
+
+	/**
+	 * In a table cell, closes what the block with this end tag opened, and anything inside it
+	 * whose end tag was left out. An end tag with nothing open to match is ignored.
+	 *
+	 * @param string $tag
+	 */
+	private function closeCellBlockStructFrame($tag)
+	{
+		if (!$this->mpdf->PDFUA || !$this->mpdf->tableLevel) {
+			return;
+		}
+		$base = $this->mpdf->pdfuaCurrentCellFrameBase();
+		$matchIdx = -1;
+		for ($i = count($this->mpdf->cellBlockStructStack) - 1; $i >= $base; $i--) {
+			if ($this->mpdf->cellBlockStructStack[$i]['tag'] === $tag) {
+				$matchIdx = $i;
+				break;
+			}
+		}
+		if ($matchIdx < 0) {
+			return;
+		}
+		while (count($this->mpdf->cellBlockStructStack) > $matchIdx) {
+			$this->mpdf->pdfuaPopCellBlockStructFrame();
+		}
+	}
+
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -41,6 +303,8 @@ abstract class BlockTag extends Tag
 
 		$p = $this->cssManager->PreviewBlockCSS($tag, $attr);
 		if (isset($p['DISPLAY']) && strtolower($p['DISPLAY']) === 'none') {
+			// Recorded all the same, for close() to find
+			$this->pushCellBlockStructFrame(null, $tag);
 			$this->mpdf->blklvl++;
 			$this->mpdf->blk[$this->mpdf->blklvl]['hide'] = true;
 			$this->mpdf->blk[$this->mpdf->blklvl]['tag'] = $tag;  // mPDF 6
@@ -63,6 +327,7 @@ abstract class BlockTag extends Tag
 				unset($attr['ALIGN']);
 			}
 			if ($cappos != $divpos) {
+				$this->pushCellBlockStructFrame(null, $tag);
 				$this->mpdf->blklvl++;
 				$this->mpdf->blk[$this->mpdf->blklvl]['hide'] = true;
 				$this->mpdf->blk[$this->mpdf->blklvl]['tag'] = $tag;  // mPDF 6
@@ -140,6 +405,41 @@ abstract class BlockTag extends Tag
 				$this->mpdf->setCSS($properties, 'INLINE');
 			}
 
+			// A block in a table cell is tagged as it is read, as the table is drawn later. Opened
+			// before the list marker is buffered, so the marker belongs to it too.
+			if ($this->mpdf->PDFUA) {
+				if ($tag === 'DT' || $tag === 'DD') {
+					$this->openImplicitCellListItem($tag);
+				} else {
+					$this->autoCloseCellSiblingFor($tag);
+				}
+				$structType = $this->resolveBlockStructType($tag, $attr);
+				if ($structType === '__artifact__') {
+					$this->ua->getStructureTree()->openArtifact();
+					$this->pushCellBlockStructFrame('__artifact__', $tag);
+				} elseif ($structType !== null) {
+					$structAttrs = [];
+					if (isset($attr['LANG'])) {
+						$structAttrs['Lang'] = $attr['LANG'];
+					}
+					if (isset($attr['ARIA-LABEL']) && $attr['ARIA-LABEL'] !== '') {
+						$structAttrs['Alt'] = $attr['ARIA-LABEL'];
+					}
+					$this->ua->getStructureTree()->open($structType, $structAttrs);
+					$elem = $this->ua->getStructureTree()->getCurrent();
+					$closes = 1;
+					if ($structType === 'LI') {
+						// The content of an LI, a nested list included, belongs in an LBody
+						$this->ua->getStructureTree()->open('LBody');
+						$closes = 2;
+					}
+					$this->pushCellBlockStructFrame('__struct__', $tag, $closes);
+					$this->ua->getAriaIdResolver()->queueAriaRefs($elem, $attr);
+				} else {
+					$this->pushCellBlockStructFrame(null, $tag);
+				}
+			}
+
 			// mPDF 6  Lists
 			if ($tag === 'UL' || $tag === 'OL') {
 				$this->mpdf->listlvl++;
@@ -187,6 +487,13 @@ abstract class BlockTag extends Tag
 				// Override with CSS list-style-type if specified (highest specificity)
 				if (!empty($properties['LIST-STYLE-TYPE'])) {
 					$this->mpdf->listtype[$this->mpdf->listlvl] = strtolower($properties['LIST-STYLE-TYPE']);
+				}
+
+				if ($this->mpdf->PDFUA && isset($elem, $structType) && $structType === 'L') {
+					$numbering = self::listNumberingFromCssType($this->mpdf->listtype[$this->mpdf->listlvl]);
+					if ($numbering !== null) {
+						$elem->setAttribute('ListNumbering', $numbering);
+					}
 				}
 			}
 
@@ -905,6 +1212,36 @@ abstract class BlockTag extends Tag
 
 		$this->mpdf->x = $this->mpdf->lMargin + $currblk['outer_left_margin'];
 
+		// A float is tagged in reading order like any other block
+		if ($this->mpdf->PDFUA && !$this->mpdf->tableLevel) {
+			$structType = $this->resolveBlockStructType($tag, $attr);
+
+			if ($structType === '__artifact__') {
+				$this->ua->getStructureTree()->openArtifact();
+				$currblk['pdfua_artifact'] = true;
+				$currblk['pdfua_type']     = null;
+			} elseif ($structType !== null) {
+				$structAttrs = [];
+				if (isset($attr['LANG'])) {
+					$structAttrs['Lang'] = $attr['LANG'];
+				}
+				if (isset($attr['ARIA-LABEL']) && $attr['ARIA-LABEL'] !== '') {
+					$structAttrs['Alt'] = $attr['ARIA-LABEL'];
+				}
+				$this->ua->getStructureTree()->open($structType, $structAttrs);
+				$currblk['pdfua_type'] = $structType;
+				$currblk['pdfua_artifact'] = false;
+
+				$elem = $this->ua->getStructureTree()->getCurrent();
+				// Content of the block on each later page is marked against it
+				$currblk['pdfua_struct_elem'] = $elem;
+				$this->ua->getAriaIdResolver()->queueAriaRefs($elem, $attr);
+			} else {
+				$currblk['pdfua_type']     = null;
+				$currblk['pdfua_artifact'] = false;
+			}
+		}
+
 		/* -- BACKGROUNDS -- */
 		if (!empty($properties['BACKGROUND-IMAGE']) && !$this->mpdf->kwt && !$this->mpdf->ColActive) {
 			$ret = $this->mpdf->SetBackground($properties, $currblk['inner_width']);
@@ -964,6 +1301,14 @@ abstract class BlockTag extends Tag
 					} else {
 						$currblk['list_style_type'] = 'square';
 					}
+				}
+			}
+
+			// After the default marker, so an unstyled list is numbered too
+			if ($this->mpdf->PDFUA && !empty($currblk['pdfua_struct_elem'])) {
+				$numbering = self::listNumberingFromCssType($currblk['list_style_type']);
+				if ($numbering !== null) {
+					$currblk['pdfua_struct_elem']->setAttribute('ListNumbering', $numbering);
 				}
 			}
 
@@ -1098,9 +1443,16 @@ abstract class BlockTag extends Tag
 		}
 	}
 
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
+
+		// First, as the table path below returns early
+		$this->closeCellBlockStructFrame($tag);
 
 		// mPDF 6 bidi
 		// Block
@@ -1270,6 +1622,9 @@ abstract class BlockTag extends Tag
 				(isset($this->mpdf->blk[$this->mpdf->blklvl]['direction']) ? $this->mpdf->blk[$this->mpdf->blklvl]['direction'] : 'ltr')
 			);
 
+			// newFlowingBlock() cleared what the block had opened
+			$this->mpdf->restoreFlowingBlockPdfuaState();
+
 			$this->mpdf->finishFlowingBlock(true); // true = END of flowing block
 			$this->mpdf->PaintDivBB('', $blockstate);
 		} else {
@@ -1373,6 +1728,16 @@ abstract class BlockTag extends Tag
 		}
 		if ($blk['keep_block_together']) {
 			$this->mpdf->keep_block_together = false;
+		}
+
+		// Once the content is written, while the block is still there to read
+		if ($this->mpdf->PDFUA && !$this->mpdf->tableLevel) {
+			$blk = isset($this->mpdf->blk[$this->mpdf->blklvl]) ? $this->mpdf->blk[$this->mpdf->blklvl] : [];
+			if (!empty($blk['pdfua_artifact'])) {
+				$this->ua->getStructureTree()->closeArtifact();
+			} elseif (!empty($blk['pdfua_type'])) {
+				$this->ua->getStructureTree()->close();
+			}
 		}
 
 		if ($this->mpdf->blklvl > 0) { // ==0 SHOULDN'T HAPPEN - NOT XHTML

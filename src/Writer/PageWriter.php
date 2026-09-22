@@ -5,6 +5,7 @@ namespace Mpdf\Writer;
 use Mpdf\Strict;
 use Mpdf\Mpdf;
 use Mpdf\Form;
+use Mpdf\Ua\UaState;
 
 final class PageWriter
 {
@@ -31,12 +32,25 @@ final class PageWriter
 	 */
 	private $metadataWriter;
 
-	public function __construct(Mpdf $mpdf, Form $form, BaseWriter $writer, MetadataWriter $metadataWriter)
+	/**
+	 * @var \Mpdf\Ua\UaState
+	 */
+	private $ua;
+
+	/**
+	 * @param Mpdf           $mpdf
+	 * @param Form           $form
+	 * @param BaseWriter     $writer
+	 * @param MetadataWriter $metadataWriter
+	 * @param UaState        $ua
+	 */
+	public function __construct(Mpdf $mpdf, Form $form, BaseWriter $writer, MetadataWriter $metadataWriter, UaState $ua)
 	{
 		$this->mpdf = $mpdf;
 		$this->form = $form;
 		$this->writer = $writer;
 		$this->metadataWriter = $metadataWriter;
+		$this->ua = $ua;
 	}
 
 	public function writePages() // _putpages
@@ -142,6 +156,8 @@ final class PageWriter
 
 			// Page
 			$this->writer->object();
+			// For the /Pg of the structure elements drawn on the page
+			$this->mpdf->pageDim[$n]['n'] = $this->mpdf->n;
 			$this->writer->write('<</Type /Page');
 			$this->writer->write('/Parent 1 0 R');
 
@@ -249,6 +265,19 @@ final class PageWriter
 
 				$s .= '] ';
 				$this->writer->write($s);
+			}
+
+			// Every page gets /StructParents and /Tabs /S, not only those with annotations. The key
+			// was allocated when the page began; a page made without _beginpage() takes one here.
+			if ($this->mpdf->PDFUA) {
+				if (isset($this->mpdf->pageDim[$n]['structParents'])) {
+					$structParents = $this->mpdf->pageDim[$n]['structParents'];
+				} else {
+					$structParents = $this->ua->nextStructParents();
+					$this->mpdf->pageDim[$n]['structParents'] = $structParents;
+				}
+				$this->writer->write('/StructParents ' . $structParents);
+				$this->writer->write('/Tabs /S');
 			}
 
 			$this->writer->write('/Contents ' . ($this->mpdf->n + 1) . ' 0 R>>');

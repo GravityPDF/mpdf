@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Ua\AriaIdResolver;
+
 use Mpdf\Mpdf;
 
 class Img extends Tag
@@ -10,6 +12,10 @@ class Img extends Tag
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$this->mpdf->ignorefollowingspaces = false;
+
+		// null when there is no alt at all, which is not the same as alt="" marking the image decorative
+		$alt = isset($attr['ALT']) ? $attr['ALT'] : null;
+
 		$objattr = [];
 		$objattr['margin_top'] = 0;
 		$objattr['margin_bottom'] = 0;
@@ -427,6 +433,20 @@ class Img extends Tag
 			if (isset($properties['TRANSFORM']) && !$this->mpdf->ColActive && !$this->mpdf->kwt) {
 				$objattr['transform'] = $properties['TRANSFORM'];
 			}
+
+			$objattr['pdfua_alt'] = $alt;
+
+			// The areas of the map are linked when the image is drawn
+			if (isset($attr['USEMAP']) && $attr['USEMAP'] !== '') {
+				$um = ltrim($attr['USEMAP'], '#');
+				$objattr['pdfua_image_map_name'] = strtolower($um);
+			}
+
+			// The Figure is made when the image is drawn, so what names it travels with it: an image
+			// without alt but with an aria-label or title is named by that
+			$objattr += AriaIdResolver::toObjattr($attr);
+			$objattr['pdfua_aria_label'] = isset($attr['ARIA-LABEL']) ? $attr['ARIA-LABEL'] : null;
+			$objattr['pdfua_title'] = isset($attr['TITLE']) ? $attr['TITLE'] : null;
 
 			$e = Mpdf::OBJECT_IDENTIFIER . "type=image,objattr=" . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
 

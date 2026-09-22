@@ -10,6 +10,11 @@ use Mpdf\Utils\UtfString;
 class Td extends Tag
 {
 
+	/**
+	 * @param array $attr
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -410,6 +415,10 @@ class Td extends Tag
 		unset($c);
 		$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['s'] = 0;
 
+		if ($this->mpdf->PDFUA) {
+			$this->pdfuaOpenCellStruct($attr);
+		}
+
 		$cs = $rs = 1;
 		if (isset($attr['COLSPAN']) && preg_match('/^\d+$/', $attr['COLSPAN']) && $attr['COLSPAN'] > 1) {
 			$cs = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['colspan'] = $attr['COLSPAN'];
@@ -439,8 +448,117 @@ class Td extends Tag
 		unset($table);
 	}
 
+	/**
+	 * Opens the structure element of the cell and keeps it on the cell, since the table is drawn
+	 * only after the whole of it has been read.
+	 *
+	 * @param array $attr
+	 */
+	protected function pdfuaOpenCellStruct($attr)
+	{
+		$tree = $this->ua->getStructureTree();
+		$tree->open($this->pdfuaCellStructType(), $this->pdfuaCellStructAttrs($attr));
+
+		// In a running header or footer nothing was opened, and the current element is an ancestor
+		if (!$tree->isInArtifact()) {
+			$cellElem = $tree->getCurrent();
+			$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['pdfua_struct_elem'] = $cellElem;
+
+			$this->pdfuaRegisterCellId($attr, $cellElem);
+
+			// The id is registered above, where a TH without one is given one
+			$this->ua->getAriaIdResolver()->queueAriaRefs($cellElem, array_diff_key($attr, ['ID' => true]));
+		}
+
+		// Blocks left open by omitted end tags inside the cell are closed with it. Entered even in
+		// a header or footer, to pair with close()
+		$this->mpdf->pdfuaEnterCellFrameScope();
+	}
+
+	/**
+	 * @return string The structure type of the cell
+	 */
+	protected function pdfuaCellStructType()
+	{
+		return 'TD';
+	}
+
+	/**
+	 * The attributes of the cell's structure element: its headers, and its spans.
+	 *
+	 * @param array $attr
+	 * @return array
+	 */
+	protected function pdfuaCellStructAttrs($attr)
+	{
+		$cellAttrs = [];
+		if (!empty($attr['HEADERS'])) {
+			// Cleaned the way a TH cleans its /ID, so the two still match
+			$rawHeaders = (string) $attr['HEADERS'];
+			if (strlen($rawHeaders) > \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_LENGTH) {
+				// Bounded as the aria-* attributes are
+				$this->ua->addWarning(
+					'Table cell headers="" exceeded ' . \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_LENGTH
+					. ' bytes; ignored to prevent memory amplification.'
+				);
+			} else {
+				$ids = preg_split(
+					'/\s+/',
+					trim($rawHeaders),
+					\Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_TOKENS + 1,
+					PREG_SPLIT_NO_EMPTY
+				);
+				if (is_array($ids) && !empty($ids)) {
+					if (count($ids) > \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_TOKENS) {
+						$this->ua->addWarning(
+							'Table cell headers="" had more than ' . \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_TOKENS
+							. ' IDs; truncated.'
+						);
+						$ids = array_slice($ids, 0, \Mpdf\Ua\AriaIdResolver::MAX_ARIA_IDS_TOKENS);
+					}
+					$sanitised = [];
+					foreach ($ids as $rawId) {
+						$sanitised[] = \Mpdf\Ua\StructureElement::sanitiseIdForPdf($rawId);
+					}
+					$cellAttrs['Headers'] = $sanitised;
+				}
+			}
+		}
+		// Every row must span the same number of columns (Matterhorn 09-008), and without these a
+		// spanning cell counts as one
+		if (isset($attr['COLSPAN']) && preg_match('/^\d+$/', $attr['COLSPAN']) && $attr['COLSPAN'] > 1) {
+			$cellAttrs['ColSpan'] = (int) $attr['COLSPAN'];
+		}
+		if (isset($attr['ROWSPAN']) && preg_match('/^\d+$/', $attr['ROWSPAN']) && $attr['ROWSPAN'] > 1) {
+			$cellAttrs['RowSpan'] = (int) $attr['ROWSPAN'];
+		}
+		return $cellAttrs;
+	}
+
+	/**
+	 * Makes the cell's id something aria-* attributes can refer to.
+	 *
+	 * @param array                     $attr
+	 * @param \Mpdf\Ua\StructureElement $cellElem
+	 */
+	protected function pdfuaRegisterCellId($attr, $cellElem)
+	{
+		if (!empty($attr['ID'])) {
+			$this->ua->getAriaIdResolver()->registerId($attr['ID'], $cellElem);
+		}
+	}
+
+	/**
+	 * @param array $ahtml
+	 * @param int   $ihtml
+	 */
 	public function close(&$ahtml, &$ihtml)
 	{
+		if ($this->mpdf->PDFUA) {
+			$this->mpdf->pdfuaLeaveCellFrameScope();
+			$this->ua->getStructureTree()->close();
+		}
+
 		if ($this->mpdf->tableLevel) {
 			$this->mpdf->lastoptionaltag = 'TR';
 			unset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl]);
