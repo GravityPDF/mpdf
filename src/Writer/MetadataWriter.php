@@ -535,11 +535,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * The number of objects writeAnnotations() writes an annotation as, which PageWriter reserves that many
-	 * object numbers for before any of them exists.
+	 * The number of objects writeAnnotations() writes an annotation as. PageWriter reserves that many numbers
+	 * for it before any of the objects exists.
 	 *
-	 * The annotation itself is one, and either the stream of its embedded file or its popup is a second. The
-	 * two cannot both be written, so an annotation asking for both still takes two objects.
+	 * The annotation is one; the stream of its embedded file or its popup is a second. Never both, so an
+	 * annotation asking for both still takes two.
 	 *
 	 * @param array $annotation An entry of Mpdf::$PageAnnots
 	 *
@@ -555,9 +555,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Whether the file an annotation attaches is embedded in the document, which the `allowAnnotationFiles`
-	 * configuration gates. Where it is not, the annotation is written as a plain text annotation and the
-	 * stream of the file is left out
+	 * Whether the file an annotation attaches is embedded, which `allowAnnotationFiles` gates. Where it is
+	 * not, the annotation is written with subtype /Text and no stream for the file
 	 *
 	 * @param array $annotation An entry of Mpdf::$PageAnnots
 	 *
@@ -569,8 +568,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Whether a popup is written for an annotation. Only an annotation with no embedded file carries one,
-	 * the file taking the object the popup would have been written as
+	 * Whether a popup is written for an annotation. Only one with no embedded file carries a popup: the file
+	 * takes the object the popup would have been
 	 *
 	 * @param array $annotation An entry of Mpdf::$PageAnnots
 	 *
