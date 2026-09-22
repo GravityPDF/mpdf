@@ -2644,8 +2644,8 @@ class Otl
 	}
 
 	/**
-	 * The rules of a Format 1 plain context subtable that start with one glyph, decoded, for the life
-	 * of the document.
+	 * The rules of a Format 1 plain context subtable, GSUB Type 5 or GPOS Type 7, that start with one
+	 * glyph, decoded, for the life of the document.
 	 *
 	 * @param int $offset        Where the subtable starts; the reader is just past its format
 	 * @param int $coverageIndex The first glyph's index in the subtable's Coverage table
@@ -2681,7 +2681,8 @@ class Otl
 	}
 
 	/**
-	 * A Format 2 plain context subtable's classes and rule sets, decoded, for the life of the document.
+	 * The classes and rule sets of a Format 2 plain context subtable, GSUB Type 5 or GPOS Type 7,
+	 * decoded, for the life of the document.
 	 *
 	 * @param int $offset Where the subtable starts; the reader is just past its format
 	 *
@@ -2741,8 +2742,9 @@ class Otl
 	}
 
 	/**
-	 * A Format 3 plain context subtable, decoded, for the life of the document. Unlike Format 3 of a
-	 * chained context, the count of lookup records precedes the Coverage table offsets.
+	 * A Format 3 plain context subtable, GSUB Type 5 or GPOS Type 7, decoded, for the life of the
+	 * document. Unlike Format 3 of a chained context, the count of lookup records precedes the
+	 * Coverage table offsets.
 	 *
 	 * @param int $offset Where the subtable starts; the reader is just past its format
 	 *
@@ -4299,36 +4301,16 @@ class Otl
 	 */
 	private function _applyGPOScontextPosFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
-		$CoverageTableOffset = $subtable_offset + $this->reader->readUInt16();
-		$PosRuleSetCount = $this->reader->readUInt16();
-
-		// PosRuleSet tables: All contexts beginning with the same glyph
-		// Select the PosRuleSet required using the position of the glyph in the coverage table
-		$GlyphPos = $LuCoverage[$currGID];
-		$this->reader->skip($GlyphPos * 2);
-		$offset = $this->reader->readUInt16();
-		if ($offset == 0x0000) {
-			return null; // No context begins with this glyph
-		}
-
-		$PosRuleSet = $subtable_offset + $offset;
-		$this->reader->seek($PosRuleSet);
-		$PosRuleCnt = $this->reader->readUInt16();
-		$PosRule = [];
-		for ($b = 0; $b < $PosRuleCnt; $b++) {
-			$PosRule[$b] = $PosRuleSet + $this->reader->readUInt16();
-		}
-
-		for ($b = 0; $b < $PosRuleCnt; $b++) {  // EACH RULE
-			$this->reader->seek($PosRule[$b]);
-			list($inputGlyphIDs, $PosCount) = SequenceRule::plain($this->reader);
+		foreach ($this->plainRuleSet($subtable_offset, $LuCoverage[$currGID]) as $rule) {
+			list($inputChars, $PosCount, $records) = $rule;
 
 			// Position 0 is the glyph the Coverage table selected this rule set by
-			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $this->charsOf($inputGlyphIDs));
+			$Input = array_merge([$this->OTLdata[$ptr]['uni']], $inputChars);
 
 			// Type 7 is a plain context: it has no backtrack or lookahead sequence
 			$matched = $this->checkContextMatch($Input, [], [], $ignore, $ptr);
 			if ($matched) {
+				$this->reader->seek($records);
 				$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 				if ($this->debugOTL) {
 					echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
@@ -4352,51 +4334,26 @@ class Otl
 	 */
 	private function _applyGPOScontextPosFormat2($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
-		$CoverageTableOffset = $subtable_offset + $this->reader->readUInt16();
-		$InputClassDefOffset = $subtable_offset + $this->reader->readUInt16();
-		$PosClassSetCnt = $this->reader->readUInt16();
-		$PosClassSetOffset = [];
-		for ($b = 0; $b < $PosClassSetCnt; $b++) {
-			$offset = $this->reader->readUInt16();
-			if ($offset == 0x0000) {
-				$PosClassSetOffset[] = $offset;
-			} else {
-				$PosClassSetOffset[] = $subtable_offset + $offset;
+		list($InputClasses, $ruleSets, $class0excl) = $this->plainClassContext($subtable_offset);
+
+		foreach ($ruleSets as $s => $ruleSet) { // ordered by input class
+			// Select the rule set if currGlyph is in First Input Class
+			if (!isset($InputClasses[$s][$currGID])) {
+				continue;
 			}
-		}
 
-		$InputClasses = $this->_getClasses($InputClassDefOffset);
+			foreach ($this->plainClassRules($ruleSet, $s, $InputClasses) as $rule) {
+				list($inputGlyphs, $PosCount, $records) = $rule;
 
-		for ($s = 0; $s < $PosClassSetCnt; $s++) { // $ChainPosClassSet is ordered by input class-may be NULL
-			// Select $PosClassSet if currGlyph is in First Input Class
-			if ($PosClassSetOffset[$s] > 0 && isset($InputClasses[$s][$currGID])) {
-				$this->reader->seek($PosClassSetOffset[$s]);
-				$PosClassRuleCnt = $this->reader->readUInt16();
-				$PosClassRule = [];
-				for ($b = 0; $b < $PosClassRuleCnt; $b++) {
-					$PosClassRule[$b] = $PosClassSetOffset[$s] + $this->reader->readUInt16();
-				}
-
-				for ($b = 0; $b < $PosClassRuleCnt; $b++) {  // EACH RULE
-					$this->reader->seek($PosClassRule[$b]);
-					list($inputClassIndices, $PosCount) = SequenceRule::plain($this->reader);
-
-					// The rule set array is indexed by the class of the first input glyph, so the loop
-					// index over it is that class, and that class is position 0
-					$inputGlyphs = array_merge([$InputClasses[$s]], $this->classSets($InputClasses, $inputClassIndices));
-
-					// Class 0 contains all the glyphs NOT in the other classes
-					$class0excl = $this->getClassZeroExclusions($InputClassDefOffset);
-
-					$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
-					if ($matched) {
-						$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
-						if ($this->debugOTL) {
-							echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
-						}
-
-						return $shift;
+				$matched = $this->checkContextMatchMultiple($inputGlyphs, [], [], $ignore, $ptr, $class0excl);
+				if ($matched) {
+					$this->reader->seek($records);
+					$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
+					if ($this->debugOTL) {
+						echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
 					}
+
+					return $shift;
 				}
 			}
 		}
@@ -4415,18 +4372,12 @@ class Otl
 	 */
 	private function _applyGPOScontextPosFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
-		// NB Unlike Lookup Type 8 Format 3, the count of positionings precedes the Coverage table offsets
-		$InputGlyphCount = $this->reader->readUInt16();
-		$PosCount = $this->reader->readUInt16();
-		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $InputGlyphCount);
-		$save_pos = $this->reader->tell(); // Save the point just after the Coverage table offsets
-
-		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
+		list($CoverageInputGlyphs, $PosCount, $records) = $this->plainCoverageContext($subtable_offset);
 
 		// Type 7 is a plain context: it has no backtrack or lookahead sequence
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, [], [], $ignore, $ptr);
 		if ($matched) {
-			$this->reader->seek($save_pos); // Return to just after the Coverage table offsets
+			$this->reader->seek($records);
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
 				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
