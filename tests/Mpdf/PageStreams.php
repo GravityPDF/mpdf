@@ -115,18 +115,36 @@ trait PageStreams
 	}
 
 	/**
+	 * The object numbers each page lists in its /Annots array, as one array of numbers per page
+	 *
+	 * @param string $pdf
+	 *
+	 * @return string[][]
+	 */
+	private function annotationRefs($pdf)
+	{
+		$refs = [];
+		foreach ($this->pageObjects($pdf) as $i => $number) {
+			$refs[$i] = [];
+			if (preg_match('/\/Annots \[([^\]]*)\]/', $this->object($pdf, $number), $list)) {
+				preg_match_all('/(\d+) 0 R/', $list[1], $listed);
+				$refs[$i] = $listed[1];
+			}
+		}
+
+		return $refs;
+	}
+
+	/**
 	 * The annotation objects listed by each page, as one string per page
 	 */
 	private function annotations($pdf)
 	{
 		$annotations = [];
-		foreach ($this->pageObjects($pdf) as $i => $number) {
+		foreach ($this->annotationRefs($pdf) as $i => $refs) {
 			$annotations[$i] = '';
-			if (preg_match('/\/Annots \[([^\]]*)\]/', $this->object($pdf, $number), $list)) {
-				preg_match_all('/(\d+) 0 R/', $list[1], $refs);
-				foreach ($refs[1] as $ref) {
-					$annotations[$i] .= $this->object($pdf, $ref);
-				}
+			foreach ($refs as $ref) {
+				$annotations[$i] .= $this->object($pdf, $ref);
 			}
 		}
 
