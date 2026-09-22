@@ -98,32 +98,16 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:dc="http://purl.org/dc/elements/1.1/">' . "\n";
 		$m .= '    <dc:format>application/pdf</dc:format>' . "\n";
 		if ($this->mpdf->title !== '' && $this->mpdf->title !== null) {
-			$m .= '    <dc:title>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->title, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:title>' . "\n";
+			$m .= $this->dublinCoreProperty('title', 'Alt', $this->mpdf->title, true);
 		}
 		if (!empty($this->mpdf->keywords)) {
-			$m .= '    <dc:subject>
-	 <rdf:Bag>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Bag>
-	</dc:subject>' . "\n";
+			$m .= $this->dublinCoreProperty('subject', 'Bag', $this->mpdf->keywords, false);
 		}
 		if (!empty($this->mpdf->subject)) {
-			$m .= '    <dc:description>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->subject, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:description>' . "\n";
+			$m .= $this->dublinCoreProperty('description', 'Alt', $this->mpdf->subject, true);
 		}
 		if (!empty($this->mpdf->author)) {
-			$m .= '    <dc:creator>
-	 <rdf:Seq>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->author, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Seq>
-	</dc:creator>' . "\n";
+			$m .= $this->dublinCoreProperty('creator', 'Seq', $this->mpdf->author, false);
 		}
 		$m .= '   </rdf:Description>' . "\n";
 
@@ -186,6 +170,31 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$this->writer->stream($m);
 		}
 		$this->writer->write('endobj');
+	}
+
+	/**
+	 * A Dublin Core property whose value sits in an RDF container.
+	 *
+	 * Every line ending is written out as "\n" rather than taken from a string literal that
+	 * spans several lines of this file, so a checkout with CRLF endings — which is what git
+	 * gives a Windows user by default — does not put a carriage return into the XMP packet.
+	 *
+	 * @param string $element   The dc element name, such as 'title'
+	 * @param string $container The RDF container element name: 'Alt', 'Bag' or 'Seq'
+	 * @param string $value     The value, escaped here
+	 * @param bool   $default   Whether to mark the value as the default language
+	 *
+	 * @return string
+	 */
+	private function dublinCoreProperty($element, $container, $value, $default)
+	{
+		$lang = $default ? ' xml:lang="x-default"' : '';
+
+		return '    <dc:' . $element . '>' . "\n"
+			. "\t" . ' <rdf:' . $container . '>' . "\n"
+			. "\t" . '  <rdf:li' . $lang . '>' . htmlspecialchars($value, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n"
+			. "\t" . ' </rdf:' . $container . '>' . "\n"
+			. "\t" . '</dc:' . $element . '>' . "\n";
 	}
 
 	public function writeInfo() // _putinfo
