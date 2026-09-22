@@ -6,8 +6,7 @@ use Mpdf\Fonts\FontRegistry;
 use Mpdf\Utils\UtfString;
 
 /**
- * PDF/X-4, which unlike PDF/X-1a keeps transparency, layers and colour fonts, beside PDF/X-1a, which is
- * left as it was
+ * PDF/X-4, which keeps the transparency, layers and colour fonts PDF/X-1a strips, beside PDF/X-1a
  */
 class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -112,7 +111,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('/S /GTS_PDFX', $pdf);
 		$this->assertStringContainsString('/Info (SWOP2006 Coated3v2)', $pdf);
 		$this->assertSame(1, preg_match('/\/DestOutputProfile (\d+) 0 R/', $pdf, $match));
-		$this->assertStringContainsString("\n" . $match[1] . " 0 obj\n<<\n/N 4\n/Length 2747952>>", $pdf, 'too long for PageStreams::object() to match');
+		$this->assertStringContainsString("\n" . $match[1] . " 0 obj\n<<\n/N 4\n/Length 2747952>>", $pdf);
 
 		$this->assertStringNotContainsString('/DestOutputProfile', $this->pdf(['PDFX' => true]), 'PDF/X-1a names a registered condition instead');
 	}

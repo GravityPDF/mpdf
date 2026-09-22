@@ -353,7 +353,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		// PDF/X-4 is based on PDF 1.6, which a header written before PDFX was set is older than
+		// PDF/X-4 is based on PDF 1.6, which the header may predate where PDFX was set after it was written
 		if ($this->mpdf->isPdfx4() && version_compare($this->mpdf->pdf_version, '1.6', '<')) {
 			$this->writer->write('/Version /1.6');
 		}
