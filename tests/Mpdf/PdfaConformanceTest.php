@@ -52,7 +52,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<p style="color: cmyka(0, 100, 100, 0, 0.5)">Translucent CMYK</p>'
 			. '<div style="background: linear-gradient(rgba(255, 0, 0, 1), rgba(0, 0, 255, 0.2)); height: 10mm"></div>'
 			. '<div style="border: 1mm solid rgba(0, 128, 0, 0.4); box-shadow: 1mm 1mm 1mm rgba(0, 0, 0, 0.5)">Borders</div>'
-			. '<p>Notes <annotation content="Note" /> <annotation content="Popup" popup="true" /></p>'
+			. '<p>Notes <annotation content="Note" subject="Subject" /> <annotation content="Popup" popup="true" /></p>'
 			. '<img src="' . $img . 'pngpixels/rgba8-None.png" /> <img src="' . $img . 'pngpixels/la8-PNG.png" />'
 			. '<img src="' . $img . 'truecolour-trns.png" /> <img style="opacity: 0.5" src="' . $img . 'tiger.jpg" width="20" />'
 			. '<img src="' . $img . 'demo.svg" width="40" />'
