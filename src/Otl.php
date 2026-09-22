@@ -2385,36 +2385,15 @@ class Otl
 		if ($this->lookupFlag->skips($Flag, $currGlyph, $MarkFilteringSet)) {
 			return null;
 		}
-		$Coverage = $subtable_offset + $this->reader->readUInt16();
-		$FirstGlyphPos = $LuCoverage[$currGID];
 
-		$LigSetCount = $this->reader->readUInt16();
-
-		$this->reader->skip($FirstGlyphPos * 2);
-		$LigSet = $subtable_offset + $this->reader->readUInt16();
-
-		$this->reader->seek($LigSet);
-		$LigCount = $this->reader->readUInt16();
-		// LigatureSet i.e. all starting with the same first Glyph $currGlyph
-		$LigatureOffset = [];
-		for ($g = 0; $g < $LigCount; $g++) {
-			$LigatureOffset[$g] = $LigSet + $this->reader->readUInt16();
-		}
-		for ($g = 0; $g < $LigCount; $g++) {
-			// Ligature tables
-			$this->reader->seek($LigatureOffset[$g]);
-			$LigGlyph = $this->reader->readUInt16(); // Output Ligature GlyphID
-			$substitute = $this->glyphToChar($LigGlyph);
-			$CompCount = $this->reader->readUInt16();
+		foreach ($this->ligatureSet($subtable_offset, $LuCoverage[$currGID]) as $ligature) {
+			list($substitute, $components) = $ligature;
 
 			$spos = $ptr;
 			$match = true;
 			$GlyphPos = [];
 			$GlyphPos[] = $spos;
-			for ($l = 1; $l < $CompCount; $l++) {
-				$gid = $this->reader->readUInt16();
-				$checkGlyph = $this->glyphToChar($gid); // Other component/input Glyphs starting at position 2 (arrayindex 1)
-
+			foreach ($components as $checkGlyph) {
 				$spos++;
 				//while $this->OTLdata[$spos]['uni'] is an "ignore" =>  spos++
 				while (isset($this->OTLdata[$spos]) && isset($ignore[$this->OTLdata[$spos]['uni']])) {
@@ -2435,12 +2414,45 @@ class Otl
 					echo OtlDump::shapingStep($this->OTLdata, 'GSUB', $lookupID, $subtable, $Type, $SubstFormat, $ptr, $currGlyph, $level);
 				}
 				if ($shift) {
-					return ($spos - $ptr + 1 - ($CompCount - 1));
+					return ($spos - $ptr + 1 - count($components));
 				}
 			}
 		}
 
 		return null;
+	}
+
+	/**
+	 * The ligatures of a Ligature Substitution subtable that start with one glyph, decoded, for the
+	 * life of the document.
+	 *
+	 * Every glyph the subtable covers is offered to it, and each offer read the whole set from the
+	 * font again and translated each component to its character.
+	 *
+	 * @param int $offset        Where the subtable starts; the reader is just past its format
+	 * @param int $coverageIndex The first glyph's index in the subtable's Coverage table
+	 *
+	 * @return array Each ligature in the order the font lists them, as [$ligature, $components]: the
+	 *               character it substitutes, and the character each component after the first must be
+	 */
+	private function ligatureSet($offset, $coverageIndex)
+	{
+		if (!isset($this->LuDataCache[$this->otlCacheKey]['ligatureSet'][$offset][$coverageIndex])) {
+			$this->reader->skip(4 + $coverageIndex * 2); // coverageOffset and ligatureSetCount
+			$ligatureSet = $offset + $this->reader->readUInt16();
+
+			$ligatures = [];
+			foreach (SequenceRule::ruleOffsets($this->reader, $ligatureSet) as $ligature) {
+				$this->reader->seek($ligature);
+				$substitute = $this->glyphToChar($this->reader->readUInt16());
+				$components = $this->charsOf(SequenceRule::values($this->reader, $this->reader->readUInt16() - 1));
+				$ligatures[] = [$substitute, $components];
+			}
+
+			$this->LuDataCache[$this->otlCacheKey]['ligatureSet'][$offset][$coverageIndex] = $ligatures;
+		}
+
+		return $this->LuDataCache[$this->otlCacheKey]['ligatureSet'][$offset][$coverageIndex];
 	}
 
 	/**

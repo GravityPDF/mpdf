@@ -45,6 +45,7 @@ class DecodedSubtableTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'GSUB 6 format 3, Padauk Book' => ['padaukbook', 'မြန်မာဘာသာစကားသည် ကျွန်ုပ် မင်္ဂလာပါ', 'GSUB', 'chainedCoverage'],
+			'GSUB 4, FreeSerif' => ['freeserif', 'क्षत्रिय श्रृंखला द्विज र्क्ष्म्य हिन्दी', 'GSUB', 'ligatureSet'],
 		];
 	}
 
