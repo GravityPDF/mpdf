@@ -3,20 +3,19 @@
 namespace Mpdf\Invoice\EN16931\Writer;
 
 use Mpdf\Invoice\EN16931\Invoice;
+use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Party;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
 use Mpdf\Strict;
-use Mpdf\Utils\NumericString;
 
 /**
  * Writes an invoice as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how to pay
  *
- * Pass labels to translate it and the separators its numbers are written with, e.g. for French
- * new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date'], ',', "\xc2\xa0"). Extend it to format dates or
- * amounts further.
+ * Pass labels to translate it, and a Formatter for how its numbers, amounts and dates are written, e.g.
+ * new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date'], Formatter::eur()).
  *
  *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter()]);
  */
@@ -64,25 +63,18 @@ class HtmlInvoiceWriter implements WriterInterface
 	private $labels;
 
 	/**
-	 * @var string
+	 * @var \Mpdf\Invoice\Formatter
 	 */
-	private $decimalPoint;
-
-	/**
-	 * @var string
-	 */
-	private $thousandsSeparator;
+	private $formatter;
 
 	/**
 	 * @param string[] $labels Replacements for any of the default labels, keyed as they are
-	 * @param string $decimalPoint
-	 * @param string $thousandsSeparator
+	 * @param \Mpdf\Invoice\Formatter|null $formatter 1,021.11 EUR and 2026-09-23 when null
 	 */
-	public function __construct(array $labels = [], $decimalPoint = '.', $thousandsSeparator = ',')
+	public function __construct(array $labels = [], $formatter = null)
 	{
 		$this->labels = $labels + self::$defaultLabels;
-		$this->decimalPoint = $decimalPoint;
-		$this->thousandsSeparator = $thousandsSeparator;
+		$this->formatter = $formatter ?: new Formatter();
 	}
 
 	/**
@@ -146,9 +138,9 @@ class HtmlInvoiceWriter implements WriterInterface
 	private function details(Invoice $invoice)
 	{
 		$details = [
-			'issueDate' => $this->date($invoice->getIssueDate()),
-			'deliveryDate' => $this->date($invoice->getDeliveryDate()),
-			'dueDate' => $this->date($invoice->getDueDate()),
+			'issueDate' => $this->formatter->date($invoice->getIssueDate()),
+			'deliveryDate' => $this->formatter->date($invoice->getDeliveryDate()),
+			'dueDate' => $this->formatter->date($invoice->getDueDate()),
 			'buyerReference' => $invoice->getBuyerReference(),
 			'orderReference' => $invoice->getOrderReference(),
 		];
@@ -207,10 +199,10 @@ class HtmlInvoiceWriter implements WriterInterface
 			}
 
 			$html .= $this->row('td', $item, [
-				$this->number($line->getQuantity()),
-				$this->money($line->getUnitPrice(), $currency),
+				$this->formatter->number($line->getQuantity()),
+				$this->formatter->money($line->getUnitPrice(), $currency),
 				$this->rate($line->getVatCategory(), $line->getVatRate()),
-				$this->money($line->getNetAmount(), $currency),
+				$this->formatter->money($line->getNetAmount(), $currency),
 			]);
 		}
 
@@ -249,7 +241,7 @@ class HtmlInvoiceWriter implements WriterInterface
 
 		$totals = [[$this->labels['lineTotal'], $invoice->getLineTotal()]];
 		foreach ($invoice->getVatBreakdown() as $group) {
-			$label = sprintf($this->labels['vatGroup'], $this->rate($group['category'], $group['rate']), $this->money($group['basis'], $currency));
+			$label = sprintf($this->labels['vatGroup'], $this->rate($group['category'], $group['rate']), $this->formatter->money($group['basis'], $currency));
 			$reason = $invoice->getExemptionReason($group['category']);
 			if ($reason !== null) {
 				$label .= ' (' . $reason . ')';
@@ -266,9 +258,9 @@ class HtmlInvoiceWriter implements WriterInterface
 
 		$html = '<tfoot>';
 		foreach ($totals as $total) {
-			$html .= $this->total($total[0], $this->escape($this->money($total[1], $currency)));
+			$html .= $this->total($total[0], $this->escape($this->formatter->money($total[1], $currency)));
 		}
-		$html .= $this->total($last[0], '<strong>' . $this->escape($this->money($last[1], $currency)) . '</strong>');
+		$html .= $this->total($last[0], '<strong>' . $this->escape($this->formatter->money($last[1], $currency)) . '</strong>');
 
 		return $html . '</tfoot>';
 	}
@@ -323,47 +315,7 @@ class HtmlInvoiceWriter implements WriterInterface
 	 */
 	private function rate($category, $rate)
 	{
-		return $category === LineItem::NOT_SUBJECT_TO_VAT ? $category : $this->number($rate) . '%';
-	}
-
-	/**
-	 * A quantity or VAT rate, to at most four decimals and without trailing zeros
-	 *
-	 * @param float $number
-	 *
-	 * @return string
-	 */
-	protected function number($number)
-	{
-		$decimal = NumericString::decimal($number, 4);
-		$point = strpos($decimal, '.');
-
-		return number_format((float) $decimal, $point === false ? 0 : strlen($decimal) - $point - 1, $this->decimalPoint, $this->thousandsSeparator);
-	}
-
-	/**
-	 * An amount, to the cent, with its currency
-	 *
-	 * @param float $amount
-	 * @param string $currency
-	 *
-	 * @return string
-	 */
-	protected function money($amount, $currency)
-	{
-		return number_format($amount, 2, $this->decimalPoint, $this->thousandsSeparator) . ' ' . $currency;
-	}
-
-	/**
-	 * A date, or null when there is none
-	 *
-	 * @param \DateTimeInterface|null $date
-	 *
-	 * @return string|null
-	 */
-	protected function date($date)
-	{
-		return $date !== null ? $date->format('Y-m-d') : null;
+		return $category === LineItem::NOT_SUBJECT_TO_VAT ? $category : $this->formatter->number($rate) . '%';
 	}
 
 	/**

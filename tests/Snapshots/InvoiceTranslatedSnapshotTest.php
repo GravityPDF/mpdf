@@ -4,10 +4,12 @@ namespace Snapshots;
 
 use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
+use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
+use Mpdf\Invoice\Formatter;
 
 /**
- * A credit note in French: every label replaced, a decimal comma and no-break space between thousands, and dates
- * written by a subclass the French way
+ * A credit note in French: every label replaced, a decimal comma, no-break spaces between thousands, the euro sign
+ * after the amount and dates written day first
  *
  * @group snapshot
  */
@@ -37,7 +39,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 	 */
 	protected function getWriter()
 	{
-		return new FrenchHtmlInvoiceWriter([
+		return new HtmlInvoiceWriter([
 			Invoice::TYPE_CREDIT_NOTE => 'Avoir',
 			'issueDate' => 'Date d’émission',
 			'deliveryDate' => 'Date de livraison',
@@ -61,7 +63,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 			'iban' => 'IBAN',
 			'bic' => 'BIC',
 			'accountName' => 'Titulaire du compte',
-		], ',', "\xc2\xa0");
+		], new Formatter(',', "\xc2\xa0", 'd/m/Y', ['EUR' => "%s\xc2\xa0€"]));
 	}
 
 }
