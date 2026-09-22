@@ -3,9 +3,12 @@
 namespace Snapshots;
 
 use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
+use Mpdf\Invoice\Formatter;
+use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 
 /**
- * An invoice printed by HtmlInvoiceWriter through WriteInvoice()
+ * An invoice printed by HtmlInvoiceWriter through WriteInvoice(), in the British convention unless a snapshot says
+ * otherwise
  *
  * @group snapshot
  */
@@ -26,7 +29,7 @@ abstract class InvoiceSnapshot extends Snapshot
 	 */
 	protected function getWriter()
 	{
-		return new HtmlInvoiceWriter();
+		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()));
 	}
 
 	/**

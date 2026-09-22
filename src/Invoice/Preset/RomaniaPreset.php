@@ -3,9 +3,9 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How France writes numbers, amounts, rates and dates: 1 021,11 €, 5,5 % and 23/09/2026, with no-break spaces
+ * How Romania writes numbers, amounts, rates and dates: 1.021,11 lei, 5,5 % and 23.09.2026
  */
-class FrancePreset extends AbstractPreset
+class RomaniaPreset extends AbstractPreset
 {
 
 	/**
@@ -21,7 +21,7 @@ class FrancePreset extends AbstractPreset
 	 */
 	public function getThousandsSeparator()
 	{
-		return "\xc2\xa0";
+		return '.';
 	}
 
 	/**
@@ -29,7 +29,7 @@ class FrancePreset extends AbstractPreset
 	 */
 	public function getDateFormat()
 	{
-		return 'd/m/Y';
+		return 'd.m.Y';
 	}
 
 	/**
@@ -37,7 +37,7 @@ class FrancePreset extends AbstractPreset
 	 */
 	public function getCurrencyFormats()
 	{
-		return ['EUR' => "%s\xc2\xa0€"];
+		return ['RON' => "%s\xc2\xa0lei"];
 	}
 
 	/**

@@ -3,9 +3,10 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How France writes numbers, amounts, rates and dates: 1 021,11 €, 5,5 % and 23/09/2026, with no-break spaces
+ * How Portugal writes numbers, amounts, rates and dates: 1021,11 € but 10 211,11 €, 5,5% and 23/09/2026, a four-digit
+ * number being written whole
  */
-class FrancePreset extends AbstractPreset
+class PortugalPreset extends AbstractPreset
 {
 
 	/**
@@ -25,6 +26,14 @@ class FrancePreset extends AbstractPreset
 	}
 
 	/**
+	 * @return int
+	 */
+	public function getMinimumGroupingDigits()
+	{
+		return 2;
+	}
+
+	/**
 	 * @return string
 	 */
 	public function getDateFormat()
@@ -38,14 +47,6 @@ class FrancePreset extends AbstractPreset
 	public function getCurrencyFormats()
 	{
 		return ['EUR' => "%s\xc2\xa0€"];
-	}
-
-	/**
-	 * @return string
-	 */
-	public function getPercentFormat()
-	{
-		return "%s\xc2\xa0%%";
 	}
 
 }

@@ -3,9 +3,10 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How France writes numbers, amounts, rates and dates: 1 021,11 €, 5,5 % and 23/09/2026, with no-break spaces
+ * How Spain writes numbers, amounts, rates and dates: 1021,11 € but 10.211,11 €, 5,5 % and 23/09/2026, a four-digit
+ * number being written whole
  */
-class FrancePreset extends AbstractPreset
+class SpainPreset extends AbstractPreset
 {
 
 	/**
@@ -21,7 +22,15 @@ class FrancePreset extends AbstractPreset
 	 */
 	public function getThousandsSeparator()
 	{
-		return "\xc2\xa0";
+		return '.';
+	}
+
+	/**
+	 * @return int
+	 */
+	public function getMinimumGroupingDigits()
+	{
+		return 2;
 	}
 
 	/**

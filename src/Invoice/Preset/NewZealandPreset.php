@@ -3,9 +3,9 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How the United States writes numbers, amounts, rates and dates: $1,021.11, 5.5% and 09/23/2026
+ * How New Zealand writes numbers, amounts, rates and dates: $1,021.11, 5.5% and 23/09/2026
  */
-class UnitedStatesPreset extends AbstractPreset
+class NewZealandPreset extends AbstractPreset
 {
 
 	/**
@@ -13,7 +13,7 @@ class UnitedStatesPreset extends AbstractPreset
 	 */
 	public function getDateFormat()
 	{
-		return 'm/d/Y';
+		return 'd/m/Y';
 	}
 
 	/**
@@ -21,7 +21,7 @@ class UnitedStatesPreset extends AbstractPreset
 	 */
 	public function getCurrencyFormats()
 	{
-		return ['USD' => '$%s'];
+		return ['NZD' => '$%s'];
 	}
 
 }

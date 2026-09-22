@@ -2,29 +2,16 @@
 
 namespace Mpdf\Invoice\Preset;
 
-use Mpdf\Strict;
-
 /**
- * The convention a Formatter uses unless given a country's: 1,021.11 EUR, 20% and 2026-09-23. A country's preset
- * extends it with only what the country writes another way.
+ * How Czechia writes numbers, amounts, rates and dates: 1 021,11 Kč, 5,5 % and 23.09.2026, with no-break spaces
  */
-class DefaultPreset implements PresetInterface
+class CzechiaPreset extends AbstractPreset
 {
-
-	use Strict;
 
 	/**
 	 * @return string
 	 */
 	public function getDecimalPoint()
-	{
-		return '.';
-	}
-
-	/**
-	 * @return string
-	 */
-	public function getThousandsSeparator()
 	{
 		return ',';
 	}
@@ -32,9 +19,17 @@ class DefaultPreset implements PresetInterface
 	/**
 	 * @return string
 	 */
+	public function getThousandsSeparator()
+	{
+		return "\xc2\xa0";
+	}
+
+	/**
+	 * @return string
+	 */
 	public function getDateFormat()
 	{
-		return 'Y-m-d';
+		return 'd.m.Y';
 	}
 
 	/**
@@ -42,7 +37,7 @@ class DefaultPreset implements PresetInterface
 	 */
 	public function getCurrencyFormats()
 	{
-		return [];
+		return ['CZK' => "%s\xc2\xa0Kč"];
 	}
 
 	/**
@@ -50,7 +45,7 @@ class DefaultPreset implements PresetInterface
 	 */
 	public function getPercentFormat()
 	{
-		return '%s%%';
+		return "%s\xc2\xa0%%";
 	}
 
 }

@@ -3,9 +3,10 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How France writes numbers, amounts, rates and dates: 1 021,11 €, 5,5 % and 23/09/2026, with no-break spaces
+ * How Dutch-speaking Belgium, the larger of its language communities writes numbers, amounts, rates and dates: €
+ * 1.021,11, 5,5% and 23/09/2026
  */
-class FrancePreset extends AbstractPreset
+class BelgiumPreset extends AbstractPreset
 {
 
 	/**
@@ -21,7 +22,7 @@ class FrancePreset extends AbstractPreset
 	 */
 	public function getThousandsSeparator()
 	{
-		return "\xc2\xa0";
+		return '.';
 	}
 
 	/**
@@ -37,15 +38,7 @@ class FrancePreset extends AbstractPreset
 	 */
 	public function getCurrencyFormats()
 	{
-		return ['EUR' => "%s\xc2\xa0€"];
-	}
-
-	/**
-	 * @return string
-	 */
-	public function getPercentFormat()
-	{
-		return "%s\xc2\xa0%%";
+		return ['EUR' => "€\xc2\xa0%s"];
 	}
 
 }

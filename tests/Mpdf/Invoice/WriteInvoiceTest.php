@@ -6,6 +6,7 @@ use Mpdf\Invoice\EN16931\InvoiceFixtures;
 use Mpdf\Invoice\EN16931\Writer\CiiInvoiceWriter;
 use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
 use Mpdf\Invoice\PdfA3\FacturX;
+use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\MpdfException;
 use Mpdf\PageStreams;
 
@@ -16,12 +17,22 @@ class WriteInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
+	 * The HTML writer, in the British convention
+	 *
+	 * @return \Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter
+	 */
+	private function htmlWriter()
+	{
+		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()));
+	}
+
+	/**
 	 * The HTML writer prints the invoice and the XML writer embeds it, in one call
 	 */
 	public function testPrintsAndEmbedsTheInvoice()
 	{
 		$mpdf = $this->pdfA3();
-		$mpdf->WriteInvoice($this->invoice(), [new HtmlInvoiceWriter(), new CiiInvoiceWriter(FacturX::EN16931)]);
+		$mpdf->WriteInvoice($this->invoice(), [$this->htmlWriter(), new CiiInvoiceWriter(FacturX::EN16931)]);
 		$output = $this->output($mpdf);
 
 		$this->assertStringContainsString('<fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>', $output);
@@ -34,7 +45,7 @@ class WriteInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testPrintsTheInvoiceAlone()
 	{
 		$mpdf = $this->mpdf();
-		$mpdf->WriteInvoice($this->invoice(), [new HtmlInvoiceWriter()]);
+		$mpdf->WriteInvoice($this->invoice(), [$this->htmlWriter()]);
 		$output = $this->output($mpdf);
 
 		$this->assertNull($mpdf->facturX);
@@ -81,7 +92,7 @@ class WriteInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf = $this->pdfA3();
 
 		try {
-			$mpdf->WriteInvoice($this->invoice(), [new HtmlInvoiceWriter(), new CiiInvoiceWriter(FacturX::MINIMUM)]);
+			$mpdf->WriteInvoice($this->invoice(), [$this->htmlWriter(), new CiiInvoiceWriter(FacturX::MINIMUM)]);
 			$this->fail('MINIMUM cannot carry the prepayment, so the XML writer should have refused the invoice');
 		} catch (MpdfException $e) {
 			$this->assertStringContainsString('MINIMUM cannot carry a prepaid amount', $e->getMessage());

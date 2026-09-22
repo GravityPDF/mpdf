@@ -59,7 +59,7 @@ class InvoiceUsdSnapshotTest extends InvoiceSnapshot
 	 */
 	protected function getWriter()
 	{
-		return new HtmlInvoiceWriter([], new Formatter(new UnitedStatesPreset()));
+		return new HtmlInvoiceWriter(new Formatter(new UnitedStatesPreset()));
 	}
 
 }

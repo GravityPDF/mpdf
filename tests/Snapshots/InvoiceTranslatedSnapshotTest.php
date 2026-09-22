@@ -40,7 +40,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 	 */
 	protected function getWriter()
 	{
-		return new HtmlInvoiceWriter([
+		return new HtmlInvoiceWriter(new Formatter(new FrancePreset()), [
 			Invoice::TYPE_CREDIT_NOTE => 'Avoir',
 			'issueDate' => 'Date d’émission',
 			'deliveryDate' => 'Date de livraison',
@@ -64,7 +64,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 			'iban' => 'IBAN',
 			'bic' => 'BIC',
 			'accountName' => 'Titulaire du compte',
-		], new Formatter(new FrancePreset()));
+		]);
 	}
 
 }

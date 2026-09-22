@@ -2,21 +2,20 @@
 
 namespace Mpdf\Invoice;
 
-use Mpdf\Invoice\Preset\DefaultPreset;
 use Mpdf\Invoice\Preset\PresetInterface;
-use Mpdf\MpdfException;
 use Mpdf\Strict;
 use Mpdf\Utils\NumericString;
 
 /**
  * How a printed trade document writes its numbers, amounts, rates, dates and addresses
  *
- * It follows a country's preset, such as UnitedStatesPreset, GermanyPreset or FrancePreset, or DefaultPreset
- * (1,021.11 EUR, 20% and 2026-09-23) when given none. The with methods adjust it further:
+ * It follows the preset of a country, one of those in Mpdf\Invoice\Preset or a PresetInterface of your own, and the
+ * with methods adjust it further:
  *
  *     (new Formatter(new GermanyPreset()))->withCurrencyFormat('GBP', '£%s')
  *
- * Addresses follow their party's country whichever preset is used: 75002 Paris, but New York, NY 10118.
+ * Amounts are to the cent but in a currency without one, such as the yen, and addresses follow their party's country
+ * whichever preset is used: 75002 Paris, but New York, NY 10118.
  */
 class Formatter
 {
@@ -36,6 +35,13 @@ class Formatter
 	];
 
 	/**
+	 * The ISO 4217 currencies with no minor unit, whose amounts are written whole
+	 *
+	 * @var string[]
+	 */
+	private static $wholeCurrencies = ['BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF'];
+
+	/**
 	 * @var string
 	 */
 	private $decimalPoint;
@@ -44,6 +50,16 @@ class Formatter
 	 * @var string
 	 */
 	private $thousandsSeparator;
+
+	/**
+	 * @var int[]
+	 */
+	private $groupingSizes;
+
+	/**
+	 * @var int
+	 */
+	private $minimumGroupingDigits;
 
 	/**
 	 * @var string
@@ -66,22 +82,14 @@ class Formatter
 	private $localityFormats;
 
 	/**
-	 * @param \Mpdf\Invoice\Preset\PresetInterface|null $preset DefaultPreset when null
-	 *
-	 * @throws \Mpdf\MpdfException When the preset is not a PresetInterface
+	 * @param \Mpdf\Invoice\Preset\PresetInterface $preset
 	 */
-	public function __construct($preset = null)
+	public function __construct(PresetInterface $preset)
 	{
-		if ($preset === null) {
-			$preset = new DefaultPreset();
-		}
-
-		if (!$preset instanceof PresetInterface) {
-			throw new MpdfException('A Formatter\'s preset must implement ' . PresetInterface::class);
-		}
-
 		$this->decimalPoint = $preset->getDecimalPoint();
 		$this->thousandsSeparator = $preset->getThousandsSeparator();
+		$this->groupingSizes = $preset->getGroupingSizes();
+		$this->minimumGroupingDigits = $preset->getMinimumGroupingDigits();
 		$this->dateFormat = $preset->getDateFormat();
 		$this->currencyFormats = $preset->getCurrencyFormats();
 		$this->percentFormat = $preset->getPercentFormat();
@@ -148,7 +156,7 @@ class Formatter
 		$decimal = NumericString::decimal($number, 4);
 		$point = strpos($decimal, '.');
 
-		return number_format((float) $decimal, $point === false ? 0 : strlen($decimal) - $point - 1, $this->decimalPoint, $this->thousandsSeparator);
+		return $this->separate((float) $decimal, $point === false ? 0 : strlen($decimal) - $point - 1);
 	}
 
 	/**
@@ -164,7 +172,7 @@ class Formatter
 	}
 
 	/**
-	 * An amount to the cent in its currency, the sign ahead of any symbol: -$100.00
+	 * An amount to the cent, or whole in a currency without cents, the sign ahead of any symbol: -$100.00
 	 *
 	 * @param float $amount
 	 * @param string $currency ISO 4217 code
@@ -173,9 +181,10 @@ class Formatter
 	 */
 	public function money($amount, $currency)
 	{
-		$amount = round($amount, 2);
+		$decimals = in_array($currency, self::$wholeCurrencies, true) ? 0 : 2;
+		$amount = round($amount, $decimals);
 		$format = isset($this->currencyFormats[$currency]) ? $this->currencyFormats[$currency] : '%s ' . $currency;
-		$money = sprintf($format, number_format(abs($amount), 2, $this->decimalPoint, $this->thousandsSeparator));
+		$money = sprintf($format, $this->separate(abs($amount), $decimals));
 
 		return $amount < 0 ? '-' . $money : $money;
 	}
@@ -201,6 +210,35 @@ class Formatter
 
 		// Close the gaps the missing parts leave, then any comma left at either end
 		return trim(preg_replace(['/\s+/', '/ ?(, ?)+/'], [' ', ', '], $line), ' ,');
+	}
+
+	/**
+	 * A number to so many decimals, its digits grouped and its decimal point as the preset writes them
+	 *
+	 * @param float $number
+	 * @param int $decimals
+	 *
+	 * @return string
+	 */
+	private function separate($number, $decimals)
+	{
+		$parts = explode('.', number_format(abs($number), $decimals, '.', ''));
+		$integer = $parts[0];
+
+		$size = $this->groupingSizes[0];
+		if (strlen($integer) >= $size + $this->minimumGroupingDigits) {
+			$groups = [substr($integer, -$size)];
+			$integer = substr($integer, 0, -$size);
+			$size = $this->groupingSizes[count($this->groupingSizes) - 1];
+			while (strlen($integer) > $size) {
+				array_unshift($groups, substr($integer, -$size));
+				$integer = substr($integer, 0, -$size);
+			}
+			array_unshift($groups, $integer);
+			$integer = implode($this->thousandsSeparator, $groups);
+		}
+
+		return ($number < 0 ? '-' : '') . $integer . (isset($parts[1]) ? $this->decimalPoint . $parts[1] : '');
 	}
 
 	/**

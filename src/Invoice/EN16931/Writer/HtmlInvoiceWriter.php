@@ -14,10 +14,9 @@ use Mpdf\Strict;
 /**
  * Writes an invoice as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how to pay
  *
- * Pass labels to translate it, and a Formatter for how its numbers, amounts and dates are written, e.g.
- * new HtmlInvoiceWriter(['380' => 'Facture', 'issueDate' => 'Date'], new Formatter(new FrancePreset())).
+ * A Formatter sets how its numbers, amounts and dates are written, and labels translate it:
  *
- *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter()]);
+ *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter(new Formatter(new FrancePreset()), ['380' => 'Facture'])]);
  */
 class HtmlInvoiceWriter implements WriterInterface
 {
@@ -68,13 +67,13 @@ class HtmlInvoiceWriter implements WriterInterface
 	private $formatter;
 
 	/**
+	 * @param \Mpdf\Invoice\Formatter $formatter
 	 * @param string[] $labels Replacements for any of the default labels, keyed as they are
-	 * @param \Mpdf\Invoice\Formatter|null $formatter 1,021.11 EUR and 2026-09-23 when null
 	 */
-	public function __construct(array $labels = [], $formatter = null)
+	public function __construct(Formatter $formatter, array $labels = [])
 	{
+		$this->formatter = $formatter;
 		$this->labels = $labels + self::$defaultLabels;
-		$this->formatter = $formatter ?: new Formatter();
 	}
 
 	/**

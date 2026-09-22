@@ -2,46 +2,78 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\Invoice\Preset\AustraliaPreset;
+use Mpdf\Invoice\Preset\BelgiumPreset;
+use Mpdf\Invoice\Preset\CanadaPreset;
+use Mpdf\Invoice\Preset\ChinaPreset;
+use Mpdf\Invoice\Preset\CzechiaPreset;
 use Mpdf\Invoice\Preset\FrancePreset;
 use Mpdf\Invoice\Preset\GermanyPreset;
+use Mpdf\Invoice\Preset\IndiaPreset;
+use Mpdf\Invoice\Preset\ItalyPreset;
+use Mpdf\Invoice\Preset\JapanPreset;
+use Mpdf\Invoice\Preset\NetherlandsPreset;
+use Mpdf\Invoice\Preset\NewZealandPreset;
+use Mpdf\Invoice\Preset\PolandPreset;
+use Mpdf\Invoice\Preset\PortugalPreset;
+use Mpdf\Invoice\Preset\RomaniaPreset;
+use Mpdf\Invoice\Preset\SpainPreset;
+use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\Invoice\Preset\UnitedStatesPreset;
-use Mpdf\MpdfException;
 
 class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
-	 * Each preset with its currency, and what a formatter following it makes of a quantity, an amount, a refund, a rate
-	 * and a date
+	 * Each country's preset with its currency, and what a formatter following it makes of a large number, an amount of
+	 * four digits, a refund, a rate and a date
 	 *
 	 * @return mixed[]
 	 */
-	public function formatterProvider()
+	public function presetProvider()
 	{
+		$nbsp = "\xc2\xa0";
+
 		return [
-			'default' => [new Formatter(), 'EUR', '1,500.25', '1,021.11 EUR', '-100.00 EUR', '5.5%', '2026-09-23'],
-			'United States' => [new Formatter(new UnitedStatesPreset()), 'USD', '1,500.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
-			'Germany' => [new Formatter(new GermanyPreset()), 'EUR', '1.500,25', "1.021,11\xc2\xa0€", "-100,00\xc2\xa0€", '5,5%', '23.09.2026'],
-			'France' => [new Formatter(new FrancePreset()), 'EUR', "1\xc2\xa0500,25", "1\xc2\xa0021,11\xc2\xa0€", "-100,00\xc2\xa0€", "5,5\xc2\xa0%", '23/09/2026'],
+			'United States' => [new UnitedStatesPreset(), 'USD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '09/23/2026'],
+			'Canada' => [new CanadaPreset(), 'CAD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '2026-09-23'],
+			'Australia' => [new AustraliaPreset(), 'AUD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '23/09/2026'],
+			'New Zealand' => [new NewZealandPreset(), 'NZD', '1,234,567.25', '$1,021.11', '-$100.00', '5.5%', '23/09/2026'],
+			'United Kingdom' => [new UnitedKingdomPreset(), 'GBP', '1,234,567.25', '£1,021.11', '-£100.00', '5.5%', '23/09/2026'],
+			'China' => [new ChinaPreset(), 'CNY', '1,234,567.25', '¥1,021.11', '-¥100.00', '5.5%', '2026-09-23'],
+			'Japan' => [new JapanPreset(), 'JPY', '1,234,567.25', '¥1,021', '-¥100', '5.5%', '2026/09/23'],
+			'India' => [new IndiaPreset(), 'INR', '12,34,567.25', '₹1,021.11', '-₹100.00', '5.5%', '23/09/2026'],
+			'Germany' => [new GermanyPreset(), 'EUR', '1.234.567,25', "1.021,11{$nbsp}€", "-100,00{$nbsp}€", "5,5{$nbsp}%", '23.09.2026'],
+			'France' => [new FrancePreset(), 'EUR', "1{$nbsp}234{$nbsp}567,25", "1{$nbsp}021,11{$nbsp}€", "-100,00{$nbsp}€", "5,5{$nbsp}%", '23/09/2026'],
+			'Italy' => [new ItalyPreset(), 'EUR', '1.234.567,25', "1.021,11{$nbsp}€", "-100,00{$nbsp}€", '5,5%', '23/09/2026'],
+			'Spain' => [new SpainPreset(), 'EUR', '1.234.567,25', "1021,11{$nbsp}€", "-100,00{$nbsp}€", "5,5{$nbsp}%", '23/09/2026'],
+			'Poland' => [new PolandPreset(), 'PLN', "1{$nbsp}234{$nbsp}567,25", "1021,11{$nbsp}zł", "-100,00{$nbsp}zł", '5,5%', '23.09.2026'],
+			'Romania' => [new RomaniaPreset(), 'RON', '1.234.567,25', "1.021,11{$nbsp}lei", "-100,00{$nbsp}lei", "5,5{$nbsp}%", '23.09.2026'],
+			'Netherlands' => [new NetherlandsPreset(), 'EUR', '1.234.567,25', "€{$nbsp}1.021,11", "-€{$nbsp}100,00", '5,5%', '23-09-2026'],
+			'Belgium' => [new BelgiumPreset(), 'EUR', '1.234.567,25', "€{$nbsp}1.021,11", "-€{$nbsp}100,00", '5,5%', '23/09/2026'],
+			'Czechia' => [new CzechiaPreset(), 'CZK', "1{$nbsp}234{$nbsp}567,25", "1{$nbsp}021,11{$nbsp}Kč", "-100,00{$nbsp}Kč", "5,5{$nbsp}%", '23.09.2026'],
+			'Portugal' => [new PortugalPreset(), 'EUR', "1{$nbsp}234{$nbsp}567,25", "1021,11{$nbsp}€", "-100,00{$nbsp}€", '5,5%', '23/09/2026'],
 		];
 	}
 
 	/**
-	 * A formatter writes quantities, amounts, rates and dates by its conventions, the sign of a refund ahead of any symbol
+	 * A formatter writes numbers, amounts, rates and dates as its country does, the sign of a refund ahead of any symbol
 	 *
-	 * @dataProvider formatterProvider
+	 * @dataProvider presetProvider
 	 *
-	 * @param \Mpdf\Invoice\Formatter $formatter
-	 * @param string $currency
+	 * @param \Mpdf\Invoice\Preset\PresetInterface $preset
+	 * @param string $currency The country's currency
 	 * @param string $number
 	 * @param string $money
 	 * @param string $refund
 	 * @param string $percent
 	 * @param string $date
 	 */
-	public function testFormats(Formatter $formatter, $currency, $number, $money, $refund, $percent, $date)
+	public function testFormatsAsTheCountryDoes($preset, $currency, $number, $money, $refund, $percent, $date)
 	{
-		$this->assertSame($number, $formatter->number(1500.25));
+		$formatter = new Formatter($preset);
+
+		$this->assertSame($number, $formatter->number(1234567.25));
 		$this->assertSame($money, $formatter->money(1021.11, $currency));
 		$this->assertSame($refund, $formatter->money(-100, $currency));
 		$this->assertSame($percent, $formatter->percent(5.5));
@@ -49,12 +81,24 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A currency without a format of its own is written with its code after the amount
+	 * A country that writes a four-digit number whole still groups one of five, and India groups a crore in pairs
+	 */
+	public function testGroupsDigitsAsTheCountryDoes()
+	{
+		$this->assertSame("10.211,11\xc2\xa0€", (new Formatter(new SpainPreset()))->money(10211.11, 'EUR'));
+		$this->assertSame('₹1,23,45,678.00', (new Formatter(new IndiaPreset()))->money(12345678, 'INR'));
+		$this->assertSame('₹999.00', (new Formatter(new IndiaPreset()))->money(999, 'INR'));
+	}
+
+	/**
+	 * A currency the preset has no format for is written with its code after the amount, and one without a minor unit
+	 * is written whole whatever the preset
 	 */
 	public function testWritesAnotherCurrencyByItsCode()
 	{
 		$this->assertSame('1,021.11 EUR', (new Formatter(new UnitedStatesPreset()))->money(1021.11, 'EUR'));
 		$this->assertSame('1.021,11 USD', (new Formatter(new GermanyPreset()))->money(1021.11, 'USD'));
+		$this->assertSame('1.022 JPY', (new Formatter(new GermanyPreset()))->money(1021.5, 'JPY'));
 	}
 
 	/**
@@ -108,8 +152,8 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$party->setCountrySubdivision($subdivision);
 		}
 
-		$this->assertSame($expected, (new Formatter())->locality($party));
 		$this->assertSame($expected, (new Formatter(new UnitedStatesPreset()))->locality($party));
+		$this->assertSame($expected, (new Formatter(new GermanyPreset()))->locality($party));
 	}
 
 	/**
@@ -117,7 +161,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTakesLocalityFormats()
 	{
-		$formatter = (new Formatter())
+		$formatter = (new Formatter(new UnitedStatesPreset()))
 			->withLocalityFormat('US', '{postcode} {city}')
 			->withLocalityFormat('BR', '{city}, {subdivision}, {postcode}');
 
@@ -131,24 +175,14 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testRoundsAndLeavesOutWhatIsNotThere()
 	{
-		$formatter = new Formatter();
+		$formatter = new Formatter(new UnitedKingdomPreset());
 
 		$this->assertSame('7.5', $formatter->number(7.5));
 		$this->assertSame('0.3333', $formatter->number(1 / 3));
 		$this->assertSame('3', $formatter->number(3.0));
+		$this->assertSame('-1,500.25', $formatter->number(-1500.25));
 		$this->assertSame('0.00 EUR', $formatter->money(-0.001, 'EUR'));
 		$this->assertNull($formatter->date(null));
-	}
-
-	/**
-	 * A preset that does not implement PresetInterface is refused
-	 */
-	public function testRefusesWhatIsNotAPreset()
-	{
-		$this->expectException(MpdfException::class);
-		$this->expectExceptionMessage("A Formatter's preset must implement Mpdf\\Invoice\\Preset\\PresetInterface");
-
-		new Formatter('EUR');
 	}
 
 	/**

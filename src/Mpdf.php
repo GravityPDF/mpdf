@@ -2012,7 +2012,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 *
 	 * Every writer runs before the document is touched, so one that cannot express the invoice leaves it as it was.
 	 *
-	 *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter(), new CiiInvoiceWriter(FacturX::EN16931)]);
+	 *     $mpdf->WriteInvoice($invoice, [
+	 *         new HtmlInvoiceWriter(new Formatter(new FrancePreset())),
+	 *         new CiiInvoiceWriter(FacturX::EN16931),
+	 *     ]);
 	 *
 	 * @param \Mpdf\Invoice\TradeDocument $document
 	 * @param \Mpdf\Invoice\WriterInterface[] $writers

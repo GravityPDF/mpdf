@@ -3,9 +3,9 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How Germany writes numbers and dates, and its euros: 1.021,11 € and 23.09.2026
+ * How Germany writes numbers, amounts, rates and dates: 1.021,11 €, 5,5 % and 23.09.2026
  */
-class GermanyPreset extends DefaultPreset
+class GermanyPreset extends AbstractPreset
 {
 
 	/**
@@ -38,6 +38,14 @@ class GermanyPreset extends DefaultPreset
 	public function getCurrencyFormats()
 	{
 		return ['EUR' => "%s\xc2\xa0€"];
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getPercentFormat()
+	{
+		return "%s\xc2\xa0%%";
 	}
 
 }
