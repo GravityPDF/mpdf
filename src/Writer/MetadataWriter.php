@@ -901,18 +901,39 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('/Perms (' . $this->writer->escape($this->protection->getPermsValue()) . ')');
 	}
 
-	public function writeTrailer() // _puttrailer
+	/**
+	 * The trailer's entries but the file ID, which a cross-reference stream carries in its own dictionary instead
+	 *
+	 * @param int $root The object number of the catalog
+	 *
+	 * @return string[]
+	 */
+	public function trailer($root) // _puttrailer
 	{
-		$this->writer->write('/Size ' . ($this->mpdf->n + 1));
-		$this->writer->write('/Root ' . $this->mpdf->n . ' 0 R');
-		$this->writer->write('/Info ' . $this->mpdf->InfoRoot . ' 0 R');
+		$entries = [
+			'/Size ' . ($this->mpdf->n + 1),
+			'/Root ' . $root . ' 0 R',
+			'/Info ' . $this->mpdf->InfoRoot . ' 0 R',
+		];
 
 		if ($this->mpdf->encrypted) {
-			$this->writer->write('/Encrypt ' . $this->mpdf->enc_obj_id . ' 0 R');
+			$entries[] = '/Encrypt ' . $this->mpdf->enc_obj_id . ' 0 R';
 		}
 
+		return $entries;
+	}
+
+	/**
+	 * The trailer's file ID, made of the document as written up to the moment it is asked for: a classic trailer
+	 * asks after writing its other entries, so the ID stays what it has always been
+	 *
+	 * @return string
+	 */
+	public function fileId()
+	{
 		$uniqid = $this->hash();
-		$this->writer->write('/ID [<' . $uniqid . '> <' . $uniqid . '>]');
+
+		return '/ID [<' . $uniqid . '> <' . $uniqid . '>]';
 	}
 
 	/**

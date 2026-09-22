@@ -44,6 +44,20 @@ class Buffer
 		return $this->length;
 	}
 
+	/**
+	 * Empty the buffer and return what it held, one entry per append, so it can be written again in a new order
+	 *
+	 * @return array<int, string>
+	 */
+	public function detach()
+	{
+		$contents = $this->contents;
+		$this->contents = [];
+		$this->length = 0;
+
+		return $contents;
+	}
+
 	public function writeToFile($handle)
 	{
 		foreach ($this->contents as $content) {

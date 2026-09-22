@@ -757,6 +757,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $pages; // array containing pages
 	var $state; // current document state
 	var $compress; // compression flag
+	var $useObjectStreams;
 
 	var $DefOrientation; // default orientation
 	var $CurOrientation; // current orientation
@@ -1053,6 +1054,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * @var \Mpdf\Writer\ResourceWriter
 	 */
 	private $resourceWriter;
+
+	/**
+	 * @var \Mpdf\Writer\CrossReferenceWriter
+	 */
+	private $crossReferenceWriter;
 
 	/**
 	 * @var string[]
@@ -10498,27 +10504,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
-		// Cross-ref
-		$o = $this->buffer->getLength();
-		$this->writer->write('xref');
-		$this->writer->write('0 ' . ($this->n + 1));
-		$this->writer->write('0000000000 65535 f ');
+		$this->crossReferenceWriter->writeCrossReference();
 
-		for ($i = 1; $i <= $this->n; $i++) {
-			$this->writer->write(sprintf('%010d 00000 n ', $this->offsets[$i]));
-		}
-
-		// Trailer
-		$this->writer->write('trailer');
-		$this->writer->write('<<');
-
-		$this->metadataWriter->writeTrailer();
-
-		$this->writer->write('>>');
-		$this->writer->write('startxref');
-		$this->writer->write($o);
-
-		$this->buffer->append('%%EOF');
 		$this->state = 3;
 	}
 
@@ -27658,8 +27645,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * Replace text inside the page content streams of a PDF that mPDF wrote
 	 *
 	 * Only documents mPDF itself produced are supported: page content must be uncompressed or FlateDecode,
-	 * exactly as PageWriter writes it, with a classic cross-reference table and "\n" line endings. Anything
-	 * else, including other stream filters, object streams or PDFs from other producers, throws. Whether each
+	 * exactly as PageWriter writes it, with the classic cross-reference table or the cross-reference stream
+	 * CrossReferenceWriter writes, and "\n" line endings. Anything else, including other stream filters or PDFs
+	 * from other producers, throws. Whether each
 	 * stream is compressed is read from the document, but the search strings are still encoded the way this
 	 * instance would write them, so overwrite with the same fonts and mode as the instance that wrote the file.
 	 *
@@ -27702,10 +27690,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Get xref into array
 		$xref = [];
-		if (!preg_match("/xref\n0 (\d+)\n(.*?)\ntrailer/s", $pdf, $m)) {
+		$xrefStream = null;
+		if (preg_match("/xref\n0 (\d+)\n(.*?)\ntrailer/s", $pdf, $m)) {
+			$xref_objid = $m[1];
+			preg_match_all('/(\d{10}) (\d{5}) (f|n)/', $m[2], $x);
+			for ($i = 0; $i < count($x[0]); $i++) {
+				$xref[] = [(int) $x[1][$i], $x[2][$i], $x[3][$i]];
+			}
+		} elseif ($xrefStream = $this->crossReferenceWriter->readStream($pdf, $file_in)) {
+			foreach ($xrefStream['rows'] as $i => $row) {
+				if ($row[0] === 1) {
+					$xref[$i] = [$row[1]];
+				}
+			}
+		} else {
 			throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no cross-reference table of the kind mPDF writes was found in it', $file_in));
 		}
-		$xref_objid = $m[1];
 
 		// Only the key this instance made opens the pages, so the document has to be one it encrypted
 		$fileEncrypted = preg_match("/\n\/U \(((?:\\\\.|[^\\\\)])*)\)/s", $pdf, $u) === 1;
@@ -27713,17 +27713,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": it was not encrypted by this instance', $file_in));
 		}
 
-		preg_match_all('/(\d{10}) (\d{5}) (f|n)/', $m[2], $x);
-		for ($i = 0; $i < count($x[0]); $i++) {
-			$xref[] = [(int) $x[1][$i], $x[2][$i], $x[3][$i]];
-		}
-
 		$changes = [];
-		if (!preg_match("/<<\s*\/Type\s*\/Pages\s*\/Kids\s*\[(.*?)\]\s*\/Count/s", $pdf, $m)) {
-			throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no page tree was found in it', $file_in));
+		if ($xrefStream) {
+			if ($xrefStream['pages'] === null) {
+				throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no page tree was found in it', $file_in));
+			}
+			$objlist = $xrefStream['pages'];
+		} else {
+			if (!preg_match("/<<\s*\/Type\s*\/Pages\s*\/Kids\s*\[(.*?)\]\s*\/Count/s", $pdf, $m)) {
+				throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no page tree was found in it', $file_in));
+			}
+			preg_match_all("/(\d+) 0 R /s", $m[1], $o);
+			$objlist = $o[1];
 		}
-		preg_match_all("/(\d+) 0 R /s", $m[1], $o);
-		$objlist = $o[1];
 
 		$found = 0;
 
@@ -27783,27 +27785,42 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no page content of the kind mPDF writes was found in it', $file_in));
 		}
 
-		// Update xref in PDF
-		krsort($changes);
-		$newxref = "xref\n0 " . $xref_objid . "\n";
-		foreach ($xref as $v) {
-			foreach ($changes as $ck => $cv) {
-				if ($v[0] > $ck) {
-					$v[0] += $cv;
-				}
-			}
-			$newxref .= sprintf('%010d', $v[0]) . ' ' . $v[1] . ' ' . $v[2] . " \n";
-		}
-		$newxref .= "trailer";
-		$pdf = preg_replace("/xref\n0 \d+\n.*?\ntrailer/s", $newxref, $pdf);
+		// The second part of the file ID names this version of the document, so it changes with it (ISO 32000-1,
+		// 14.4). The trailer holding it comes after every object, so no offset moves.
+		$newId = md5($pdf);
+		$renameId = function ($trailer) use ($newId) {
+			return preg_replace('/(\/ID\s*\[\s*<[0-9A-Fa-f]*>\s*<)[0-9A-Fa-f]*>/', '${1}' . $newId . '>', $trailer, 1);
+		};
 
-		// Update startxref in PDF
-		if (!preg_match("/startxref\n(\d+)\n%%EOF/s", $pdf, $m)) {
-			throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no startxref was found in it', $file_in));
+		if ($xrefStream) {
+			$xrefStream['trailer'] = $renameId($xrefStream['trailer']);
+			$pdf = $this->crossReferenceWriter->shiftStream($pdf, $xrefStream, $changes);
+		} else {
+			// Update xref in PDF
+			krsort($changes);
+			$newxref = "xref\n0 " . $xref_objid . "\n";
+			foreach ($xref as $v) {
+				foreach ($changes as $ck => $cv) {
+					if ($v[0] > $ck) {
+						$v[0] += $cv;
+					}
+				}
+				$newxref .= sprintf('%010d', $v[0]) . ' ' . $v[1] . ' ' . $v[2] . " \n";
+			}
+			$newxref .= "trailer";
+			$pdf = preg_replace("/xref\n0 \d+\n.*?\ntrailer/s", $newxref, $pdf);
+
+			// Update startxref in PDF
+			if (!preg_match("/startxref\n(\d+)\n%%EOF/s", $pdf, $m)) {
+				throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no startxref was found in it', $file_in));
+			}
+			$startxref = $m[1];
+			$startxref += array_sum($changes);
+			$pdf = preg_replace("/startxref\n(\d+)\n%%EOF/s", "startxref\n" . $startxref . "\n%%EOF", $pdf);
+
+			$trailerAt = strrpos($pdf, "\ntrailer");
+			$pdf = substr($pdf, 0, $trailerAt) . $renameId(substr($pdf, $trailerAt));
 		}
-		$startxref = $m[1];
-		$startxref += array_sum($changes);
-		$pdf = preg_replace("/startxref\n(\d+)\n%%EOF/s", "startxref\n" . $startxref . "\n%%EOF", $pdf);
 
 		// OUTPUT
 		switch ($dest) {

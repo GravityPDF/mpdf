@@ -2,10 +2,14 @@
 
 namespace Mpdf;
 
+use Mpdf\Import\ObjectStreamCrossReference;
+use Mpdf\Import\PdfParser;
 use setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException;
 use setasign\Fpdi\PdfParser\Filter\AsciiHex;
+use setasign\Fpdi\PdfParser\StreamReader;
 use setasign\Fpdi\PdfParser\Type\PdfHexString;
 use setasign\Fpdi\PdfParser\Type\PdfIndirectObject;
+use setasign\Fpdi\PdfParser\Type\PdfIndirectObjectReference;
 use setasign\Fpdi\PdfParser\Type\PdfNull;
 use setasign\Fpdi\PdfParser\Type\PdfNumeric;
 use setasign\Fpdi\PdfParser\Type\PdfStream;
@@ -23,6 +27,7 @@ trait FpdiTrait
 		writePdfType as fpdiWritePdfType;
 		useImportedPage as fpdiUseImportedPage;
 		importPage as fpdiImportPage;
+		getPdfParserInstance as fpdiGetPdfParserInstance;
 	}
 
 	protected $k = Mpdf::SCALE;
@@ -33,6 +38,42 @@ trait FpdiTrait
 	 * @var int
 	 */
 	protected $templateId = 0;
+
+	/**
+	 * Whether a reference in an imported document names a generation of its object other than the one the document's
+	 * cross-reference now lists, which makes it a reference to the null object (ISO 32000-1, 7.3.10 and 7.5.4)
+	 *
+	 * @param \setasign\Fpdi\PdfParser\Type\PdfIndirectObjectReference $reference
+	 *
+	 * @return bool
+	 */
+	private function isStale(PdfIndirectObjectReference $reference)
+	{
+		$crossReference = $this->getPdfReader($this->currentReaderId)->getParser()->getCrossReference();
+		if (!$crossReference instanceof ObjectStreamCrossReference) {
+			return false;
+		}
+
+		$generation = $crossReference->getGenerationFor($reference->value);
+
+		return $generation !== null && $generation !== (int) $reference->generationNumber;
+	}
+
+	/**
+	 * The parser FPDI chooses, except that its own base parser is replaced by mPDF's, which also reads
+	 * cross-reference and object streams (PDF 1.5)
+	 *
+	 * @param \setasign\Fpdi\PdfParser\StreamReader $streamReader
+	 * @param array                                 $parserParams Passed on to FPDI's choice
+	 *
+	 * @return \setasign\Fpdi\PdfParser\PdfParser
+	 */
+	protected function getPdfParserInstance(StreamReader $streamReader, array $parserParams = [])
+	{
+		$parser = $this->fpdiGetPdfParserInstance($streamReader, $parserParams);
+
+		return get_class($parser) === 'setasign\Fpdi\PdfParser\PdfParser' ? new PdfParser($streamReader) : $parser;
+	}
 
 	protected function setPageFormat($format, $orientation)
 	{
@@ -259,6 +300,11 @@ trait FpdiTrait
 	 */
 	public function writePdfType(PdfType $value)
 	{
+		// A reference whose generation is not the object's current one is to an object that no longer exists
+		if ($value instanceof PdfIndirectObjectReference && $this->isStale($value)) {
+			$value = new PdfNull();
+		}
+
 		if (!$this->encrypted) {
 			if ($value instanceof PdfIndirectObject) {
 				/**
