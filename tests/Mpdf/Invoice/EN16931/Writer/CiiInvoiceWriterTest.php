@@ -48,7 +48,22 @@ class CiiInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Documents and profiles the generator refuses, and the reason it gives
+	 * A state follows the country from BASIC WL up, and MINIMUM, which carries only the seller's country, leaves it out
+	 */
+	public function testWritesTheCountrySubdivision()
+	{
+		$invoice = $this->minimumInvoice();
+		$invoice->getSeller()->setCountrySubdivision('Île-de-France');
+
+		$this->assertStringContainsString(
+			"<ram:CountryID>FR</ram:CountryID>\n          <ram:CountrySubDivisionName>Île-de-France</ram:CountrySubDivisionName>\n        </ram:PostalTradeAddress>",
+			(new CiiInvoiceWriter(FacturX::BASIC_WL))->write($invoice)
+		);
+		$this->assertStringNotContainsString('CountrySubDivisionName', (new CiiInvoiceWriter(FacturX::MINIMUM))->write($invoice));
+	}
+
+	/**
+	 * Documents and profiles the writer refuses, and the reason it gives
 	 *
 	 * @return mixed[]
 	 */

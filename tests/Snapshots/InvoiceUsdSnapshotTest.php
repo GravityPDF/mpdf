@@ -10,7 +10,8 @@ use Mpdf\Invoice\Party;
 
 /**
  * An export to the United States invoiced in dollars: the amounts after a dollar sign with commas between thousands,
- * the prepayment as -$, dates month first, and no VAT on the export with the reason beside it
+ * the prepayment as -$, dates month first, the buyer's state before its ZIP code, and no VAT on the export with the
+ * reason beside it
  *
  * @group snapshot
  */
@@ -35,7 +36,8 @@ class InvoiceUsdSnapshotTest extends InvoiceSnapshot
 			->setVatId('FR32123456789')
 			->setEmail('billing@seller.example');
 		$buyer = (new Party('Buyer Inc.', 'US'))
-			->setAddress('350 Fifth Avenue', '10118', 'New York, NY', 'Suite 4200')
+			->setAddress('350 Fifth Avenue', '10118', 'New York', 'Suite 4200')
+			->setCountrySubdivision('NY')
 			->setEmail('ap@buyer.example');
 
 		$invoice = new Invoice('INV-2026-0002', new \DateTime('2026-09-23'), 'USD', $seller, $buyer);

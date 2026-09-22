@@ -167,7 +167,7 @@ class HtmlInvoiceWriter implements WriterInterface
 			$party->getName(),
 			$party->getStreet(),
 			$party->getAdditionalStreet(),
-			trim($party->getPostcode() . ' ' . $party->getCity()),
+			$this->formatter->locality($party),
 			$party->getCountryCode(),
 			$party->getVatId() !== null ? $this->labels['vatId'] . ' ' . $party->getVatId() : null,
 			$party->getEmail(),

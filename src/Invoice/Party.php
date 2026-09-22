@@ -45,6 +45,11 @@ class Party
 	/**
 	 * @var string|null
 	 */
+	private $countrySubdivision;
+
+	/**
+	 * @var string|null
+	 */
 	private $vatId;
 
 	/**
@@ -86,6 +91,18 @@ class Party
 		$this->postcode = $postcode;
 		$this->city = $city;
 		$this->additionalStreet = $additionalStreet;
+
+		return $this;
+	}
+
+	/**
+	 * @param string $subdivision The state, province or region, e.g. NY
+	 *
+	 * @return $this
+	 */
+	public function setCountrySubdivision($subdivision)
+	{
+		$this->countrySubdivision = $subdivision;
 
 		return $this;
 	}
@@ -174,6 +191,14 @@ class Party
 	public function getCity()
 	{
 		return $this->city;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getCountrySubdivision()
+	{
+		return $this->countrySubdivision;
 	}
 
 	/**

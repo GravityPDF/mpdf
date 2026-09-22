@@ -168,6 +168,9 @@ class CiiInvoiceWriter extends CiiWriter
 			$this->appendIfSet($address, 'ram:CityName', $party->getCity());
 		}
 		$this->append($address, 'ram:CountryID', $party->getCountryCode());
+		if ($detailed) {
+			$this->appendIfSet($address, 'ram:CountrySubDivisionName', $party->getCountrySubdivision());
+		}
 
 		if ($detailed && $party->getEmail() !== null) {
 			$communication = $this->append($element, 'ram:URIUniversalCommunication');
