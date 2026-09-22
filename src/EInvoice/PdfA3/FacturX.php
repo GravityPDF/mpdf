@@ -1,6 +1,6 @@
 <?php
 
-namespace Mpdf\Pdf;
+namespace Mpdf\EInvoice\PdfA3;
 
 use Mpdf\MpdfException;
 use Mpdf\Strict;
@@ -13,6 +13,18 @@ class FacturX
 
 	use Strict;
 
+	const MINIMUM = 'MINIMUM';
+
+	const BASIC_WL = 'BASIC WL';
+
+	const BASIC = 'BASIC';
+
+	const EN16931 = 'EN 16931';
+
+	const EXTENDED = 'EXTENDED';
+
+	const XRECHNUNG = 'XRECHNUNG';
+
 	/**
 	 * @var string
 	 */
@@ -24,11 +36,11 @@ class FacturX
 	 * @var string[]
 	 */
 	private static $guidelines = [
-		'urn:factur-x.eu:1p0:minimum' => 'MINIMUM',
-		'urn:factur-x.eu:1p0:basicwl' => 'BASIC WL',
-		'urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic' => 'BASIC',
-		'urn:cen.eu:en16931:2017' => 'EN 16931',
-		'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended' => 'EXTENDED',
+		'urn:factur-x.eu:1p0:minimum' => self::MINIMUM,
+		'urn:factur-x.eu:1p0:basicwl' => self::BASIC_WL,
+		'urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic' => self::BASIC,
+		'urn:cen.eu:en16931:2017' => self::EN16931,
+		'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended' => self::EXTENDED,
 	];
 
 	/**
@@ -57,14 +69,42 @@ class FacturX
 			$conformanceLevel = $this->readConformanceLevel($xml);
 		}
 
+		$this->xml = $xml;
+		$this->conformanceLevel = self::checkLevel($conformanceLevel, array_merge(array_values(self::$guidelines), [self::XRECHNUNG]));
+	}
+
+	/**
+	 * The guideline ID an invoice of a conformance level names in ExchangedDocumentContext
+	 *
+	 * @param string $conformanceLevel Any level but XRECHNUNG, whose guideline ID names the XRechnung version
+	 *
+	 * @return string
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	public static function getGuideline($conformanceLevel)
+	{
+		return array_search(self::checkLevel($conformanceLevel, self::$guidelines), self::$guidelines, true);
+	}
+
+	/**
+	 * A conformance level in the case Factur-X writes it, provided it is one of those given
+	 *
+	 * @param string $conformanceLevel
+	 * @param string[] $levels
+	 *
+	 * @return string
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	private static function checkLevel($conformanceLevel, array $levels)
+	{
 		$conformanceLevel = strtoupper($conformanceLevel);
-		$levels = array_merge(array_values(self::$guidelines), ['XRECHNUNG']);
 		if (!in_array($conformanceLevel, $levels, true)) {
 			throw new MpdfException(sprintf('Factur-X conformance level "%s" is not one of %s', $conformanceLevel, implode(', ', $levels)));
 		}
 
-		$this->xml = $xml;
-		$this->conformanceLevel = $conformanceLevel;
+		return $conformanceLevel;
 	}
 
 	/**
@@ -74,7 +114,7 @@ class FacturX
 	 */
 	private function getFilename()
 	{
-		return $this->conformanceLevel === 'XRECHNUNG' ? 'xrechnung.xml' : 'factur-x.xml';
+		return $this->conformanceLevel === self::XRECHNUNG ? 'xrechnung.xml' : 'factur-x.xml';
 	}
 
 	/**
@@ -91,7 +131,7 @@ class FacturX
 			'content' => $this->xml,
 			'mime' => 'text/xml',
 			'description' => 'Factur-X invoice',
-			'AFRelationship' => in_array($this->conformanceLevel, ['MINIMUM', 'BASIC WL'], true) ? 'Data' : 'Alternative',
+			'AFRelationship' => in_array($this->conformanceLevel, [self::MINIMUM, self::BASIC_WL], true) ? 'Data' : 'Alternative',
 		];
 	}
 
@@ -166,7 +206,7 @@ class FacturX
 		}
 
 		if (strpos($guideline, 'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung') === 0) {
-			return 'XRECHNUNG';
+			return self::XRECHNUNG;
 		}
 
 		throw new MpdfException(sprintf('Guideline "%s" is not a Factur-X profile; pass the Factur-X conformance level', $guideline));

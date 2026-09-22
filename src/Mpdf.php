@@ -12,7 +12,7 @@ use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Output\Destination;
-use Mpdf\Pdf\FacturX;
+use Mpdf\EInvoice\PdfA3\FacturX;
 use Mpdf\PsrLogAwareTrait\MpdfPsrLogAwareTrait;
 use Mpdf\QrCode;
 use Mpdf\Shaper\OtlData;
@@ -830,7 +830,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $additionalXmpRdf; // additional rdf added in xmp
 
 	/**
-	 * @var \Mpdf\Pdf\FacturX|null
+	 * @var \Mpdf\EInvoice\PdfA3\FacturX|null
 	 */
 	var $facturX; // see SetFacturX below
 

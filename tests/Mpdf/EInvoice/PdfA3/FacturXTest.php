@@ -1,8 +1,9 @@
 <?php
 
-namespace Mpdf;
+namespace Mpdf\EInvoice\PdfA3;
 
-use Mpdf\Pdf\FacturX;
+use Mpdf\MpdfException;
+use Mpdf\PageStreams;
 
 class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -22,7 +23,7 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function invoice()
 	{
 		if (self::$invoice === null) {
-			self::$invoice = file_get_contents(__DIR__ . '/../data/xml/factur-x-en16931.xml');
+			self::$invoice = file_get_contents(__DIR__ . '/../../../data/xml/factur-x-en16931.xml');
 		}
 
 		return self::$invoice;
