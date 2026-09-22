@@ -85,10 +85,10 @@ class Gradient
 						$trans = true;
 					}
 				} elseif ($colspace === 'CMYK') {
-					$this->mpdf->gradients[$n]['stream'] .= chr(ord($patch_array[$i]['colors'][$j][1]) * 2.55);
-					$this->mpdf->gradients[$n]['stream'] .= chr(ord($patch_array[$i]['colors'][$j][2]) * 2.55);
-					$this->mpdf->gradients[$n]['stream'] .= chr(ord($patch_array[$i]['colors'][$j][3]) * 2.55);
-					$this->mpdf->gradients[$n]['stream'] .= chr(ord($patch_array[$i]['colors'][$j][4]) * 2.55);
+					// Percentages to bytes, rounded: 100 * 2.55 is 254.99999999999997
+					for ($k = 1; $k <= 4; $k++) {
+						$this->mpdf->gradients[$n]['stream'] .= chr((int) round(ord($patch_array[$i]['colors'][$j][$k]) * 2.55));
+					}
 					if (isset($patch_array[$i]['colors'][$j][5]) && ord($patch_array[$i]['colors'][$j][5]) < 100) {
 						$trans = true;
 					}
