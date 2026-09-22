@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # veraPDF validates against PDF/A, PDF/UA and WTPDF; tests in the conformance group choose the flavour
+      # The veraPDF release to install; the cache is keyed on it
       VERAPDF_VERSION: "1.30.2"
 
     steps:
@@ -50,9 +50,7 @@ jobs:
           rm -r verapdf-installer.zip verapdf.properties "verapdf-greenfield-${VERAPDF_VERSION}"
 
       - name: "Put veraPDF on the PATH"
-        run: |
-          echo "$HOME/verapdf" >> "$GITHUB_PATH"
-          "$HOME/verapdf/verapdf" --version
+        run: echo "$HOME/verapdf" >> "$GITHUB_PATH"
 
       - name: "Install PHP"
         uses: "shivammathur/setup-php@v2"

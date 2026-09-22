@@ -85,9 +85,8 @@ class Gradient
 						$trans = true;
 					}
 				} elseif ($colspace === 'CMYK') {
-					// Percentages to bytes, rounded: 100 * 2.55 is 254.99999999999997
 					for ($k = 1; $k <= 4; $k++) {
-						$this->mpdf->gradients[$n]['stream'] .= chr((int) round(ord($patch_array[$i]['colors'][$j][$k]) * 2.55));
+						$this->mpdf->gradients[$n]['stream'] .= $this->percentToByte($patch_array[$i]['colors'][$j][$k]);
 					}
 					if (isset($patch_array[$i]['colors'][$j][5]) && ord($patch_array[$i]['colors'][$j][5]) < 100) {
 						$trans = true;
@@ -118,11 +117,11 @@ class Gradient
 				for ($j = 0; $j < count($patch_array[$i]['colors']); $j++) {
 					// each color component as 8 bit // OPACITY
 					if ($colspace === 'RGB') {
-						$this->mpdf->gradients[$n]['stream_trans'] .= chr((int) (ord($patch_array[$i]['colors'][$j][4]) * 2.55));
+						$this->mpdf->gradients[$n]['stream_trans'] .= $this->percentToByte($patch_array[$i]['colors'][$j][4]);
 					} elseif ($colspace === 'CMYK') {
-						$this->mpdf->gradients[$n]['stream_trans'] .= chr((int) (ord($patch_array[$i]['colors'][$j][5]) * 2.55));
+						$this->mpdf->gradients[$n]['stream_trans'] .= $this->percentToByte($patch_array[$i]['colors'][$j][5]);
 					} elseif ($colspace === 'Gray') {
-						$this->mpdf->gradients[$n]['stream_trans'] .= chr((int) (ord($patch_array[$i]['colors'][$j][3]) * 2.55));
+						$this->mpdf->gradients[$n]['stream_trans'] .= $this->percentToByte($patch_array[$i]['colors'][$j][3]);
 					}
 				}
 			}
@@ -142,6 +141,20 @@ class Gradient
 		}
 
 		$this->writer->write($s);
+	}
+
+	/**
+	 * A colour component mPDF holds as a percentage, packed in a byte, as the 8-bit sample a patch mesh draws with
+	 *
+	 * Rounded, as 100 * 2.55 is 254.99999999999997.
+	 *
+	 * @param string $percent
+	 *
+	 * @return string
+	 */
+	private function percentToByte($percent)
+	{
+		return chr((int) round(ord($percent) * 2.55));
 	}
 
 	// type = linear:2; radial: 3;

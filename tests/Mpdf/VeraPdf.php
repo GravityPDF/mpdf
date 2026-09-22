@@ -12,6 +12,26 @@ trait VeraPdf
 {
 
 	/**
+	 * @var bool|null whether veraPDF runs, asked once as each start is a JVM's
+	 */
+	private static $veraPdfRuns;
+
+	/**
+	 * Skips the test unless veraPDF can be run, to call before the test spends time building a document
+	 */
+	private function skipWithoutVeraPdf()
+	{
+		if (self::$veraPdfRuns === null) {
+			exec('verapdf --version 2>&1', $version, $status);
+			self::$veraPdfRuns = $status === 0;
+		}
+
+		if (!self::$veraPdfRuns) {
+			$this->markTestSkipped('veraPDF is not on the PATH');
+		}
+	}
+
+	/**
 	 * Asserts veraPDF finds the document conforms to a flavour, as its --flavour option names it: '2b' for
 	 * PDF/A-2b, 'ua1' for PDF/UA-1 and so on
 	 *
@@ -20,10 +40,7 @@ trait VeraPdf
 	 */
 	private function assertConforms($file, $flavour)
 	{
-		exec('verapdf --version 2>&1', $version, $status);
-		if ($status !== 0) {
-			$this->markTestSkipped('veraPDF is not on the PATH');
-		}
+		$this->skipWithoutVeraPdf();
 
 		exec('verapdf --flavour ' . escapeshellarg($flavour) . ' --format xml ' . escapeshellarg($file) . ' 2>&1', $report);
 		$report = implode("\n", $report);
