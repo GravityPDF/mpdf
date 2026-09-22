@@ -18,8 +18,9 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	use PageStreams;
 
 	/**
-	 * Whether the file attachment is allowed, and whether the page also carries a form field. Only a page that
-	 * has something to reference after the annotation can show the miscount, but all four are pinned
+	 * Whether the file attachment is allowed, and whether the page also carries a form field. Only a page with
+	 * something to reference after the annotation can show the miscount; the other three are here so they
+	 * stay working
 	 *
 	 * @return array[]
 	 */
@@ -34,7 +35,7 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	}
 
 	/**
-	 * Whether the file attachment is allowed, for what the form field makes no difference to
+	 * Whether the file attachment is allowed, for the tests a form field makes no difference to
 	 *
 	 * @return array[]
 	 */
@@ -79,8 +80,8 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	}
 
 	/**
-	 * What the gate itself decides: the attachment is embedded, and the annotation announces it, only where
-	 * the configuration allows it
+	 * What the gate decides is not what the fix changes: a rejection still writes the annotation as a note
+	 * with the file left out, and only the number of objects that takes was ever wrong
 	 *
 	 * @dataProvider permissions
 	 *
@@ -95,10 +96,9 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	}
 
 	/**
-	 * A popup is written for every annotation that asks for one and has no embedded file, and is left out for
-	 * every annotation that has one - the pair of cases the count agreed with all along, whether the
-	 * attachment was allowed or rejected. The popup is an annotation in its own right, so the page lists it
-	 * wherever it is written
+	 * A popup takes the object an embedded file would have, so an annotation asking for both is two objects
+	 * either way and the count was never wrong here - the one thing #343 did not break. A popup is an
+	 * annotation in its own right, so the page lists it wherever it is written
 	 *
 	 * @dataProvider permissions
 	 *
