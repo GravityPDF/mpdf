@@ -63,6 +63,7 @@ class DecodedSubtableTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'GSUB 6 format 3, Padauk Book' => ['padaukbook', null, 'မြန်မာဘာသာစကားသည် ကျွန်ုပ် မင်္ဂလာပါ', 'GSUB', 'chainedCoverage'],
 			'GPOS 2 format 1, Pothana' => ['pothana2000', null, 'తెలుగు భారతదేశంలో ఆంధ్రప్రదేశ్ స్త్రీ క్ష్మ ర్క్క', 'GPOS', 'pairSet'],
 			'GPOS 2 format 2, FreeSerif' => ['freeserif', null, 'क्षत्रिय श्रृंखला द्विज र्क्ष्म्य हिन्दी', 'GPOS', 'classDef'],
+			'GPOS 8 format 3, Taamey David' => ['taameydavidclm', null, 'בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ', 'GPOS', 'chainedCoverage'],
 		];
 	}
 

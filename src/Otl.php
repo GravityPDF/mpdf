@@ -2890,7 +2890,8 @@ class Otl
 	}
 
 	/**
-	 * A chained context Format 3 subtable, decoded, for the life of the document.
+	 * A chained context Format 3 subtable, GSUB Type 6 or GPOS Type 8, decoded, for the life of the
+	 * document.
 	 *
 	 * The subtable is offered every glyph its input Coverage table matches, which in a font such as
 	 * Padauk is over a million times for a few pages of text, and it holds one rule. Following its
@@ -4529,22 +4530,11 @@ class Otl
 	 */
 	private function _applyGPOSchainContextPosFormat3($lookupID, $subtable, $ptr, $currGlyph, $subtable_offset, $Type, $tag, $level, $is_old_spec, $ignore, $PosFormat)
 	{
-		// Each of the three sequences is a count and then one Coverage table offset per position.
-		// NB Unlike Lookup Type 7 Format 3, the count of positionings follows them rather than
-		// preceding them.
-		$CoverageBacktrackOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
-		$CoverageInputOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
-		$CoverageLookaheadOffset = SequenceRule::coverageOffsets($this->reader, $subtable_offset, $this->reader->readUInt16());
-		$PosCount = $this->reader->readUInt16();
-		$save_pos = $this->reader->tell(); // Save the point just after PosCount
-
-		$CoverageBacktrackGlyphs = $this->coverageSets($CoverageBacktrackOffset);
-		$CoverageInputGlyphs = $this->coverageSets($CoverageInputOffset);
-		$CoverageLookaheadGlyphs = $this->coverageSets($CoverageLookaheadOffset);
+		list($CoverageBacktrackGlyphs, $CoverageInputGlyphs, $CoverageLookaheadGlyphs, $PosCount, $records) = $this->chainedCoverageContext($subtable_offset);
 
 		$matched = $this->checkContextMatchMultiple($CoverageInputGlyphs, $CoverageBacktrackGlyphs, $CoverageLookaheadGlyphs, $ignore, $ptr);
 		if ($matched) {
-			$this->reader->seek($save_pos); // Return to just after PosCount
+			$this->reader->seek($records);
 			$shift = $this->_applyGPOSlookupRecords($PosCount, $matched, $tag, $is_old_spec);
 			if ($this->debugOTL) {
 				echo OtlDump::shapingStep($this->OTLdata, 'GPOS', $lookupID, $subtable, $Type, $PosFormat, $ptr, $currGlyph, $level);
