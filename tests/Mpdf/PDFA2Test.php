@@ -247,7 +247,8 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$mpdf->Output('', 'S');
 			$this->fail('The file PDF/A-2 cannot embed went unreported');
 		} catch (MpdfException $e) {
-			$this->assertSame([sprintf('PDFA version 2-B cannot embed the file "%s" (Annotation written without the file)', $plain)], $mpdf->PDFAXwarnings);
+			// Resolving the path turns a Windows backslash into a forward slash
+			$this->assertSame([sprintf('PDFA version 2-B cannot embed the file "%s" (Annotation written without the file)', str_replace('\\', '/', $plain))], $mpdf->PDFAXwarnings);
 		} finally {
 			unlink($pdfa);
 		}
