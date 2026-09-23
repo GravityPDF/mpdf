@@ -10,7 +10,7 @@ class UnnamedButtonTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * Each kind of button, without a name, and the name it is given
+	 * Each kind of button without a name, and the word its generated name starts with
 	 *
 	 * @return string[][]
 	 */

@@ -1135,8 +1135,8 @@ class Form
 	}
 
 	/**
-	 * A name for a button that has none, numbered after the field it becomes. Buttons sharing a name are one
-	 * field to a viewer, and share the entry that holds a button's action and icon.
+	 * A name for a button that has none. Buttons sharing a name are one field to a viewer and share the entry
+	 * that holds an action or icon, so it carries the number SetFormButton() is about to give the field.
 	 *
 	 * @param string $kind
 	 *
