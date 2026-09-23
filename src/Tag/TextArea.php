@@ -82,13 +82,8 @@ class TextArea extends Tag
 			if (isset($properties['OVERFLOW']) && strtolower($properties['OVERFLOW']) === 'hidden') {
 				$objattr['donotscroll'] = true;
 			}
-			if (isset($properties['BORDER-TOP-COLOR'])) {
-				$objattr['border-col'] = $this->colorConverter->convert($properties['BORDER-TOP-COLOR'], $this->mpdf->PDFAXwarnings);
-			}
-			if (isset($properties['BACKGROUND-COLOR'])) {
-				$objattr['background-col'] = $this->colorConverter->convert($properties['BACKGROUND-COLOR'], $this->mpdf->PDFAXwarnings);
-			}
 		}
+		$objattr = array_merge($objattr, $this->formFieldStyle($properties));
 		$this->mpdf->SetLineHeight('', $this->form->textarea_lineheight);
 
 		$w = 0;
