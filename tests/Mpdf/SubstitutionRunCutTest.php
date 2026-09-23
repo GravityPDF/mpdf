@@ -53,8 +53,8 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * DejaVu Sans Mono has the heart but no text selector. The heart and its selector are one emoji
-	 * the font draws, so the scan passes over them and stops at the selector after the b, and it is
-	 * that one that is cut out: not the copy inside the heart, which comes first in the token.
+	 * the font draws, so the run the scan finds is the selector after the b, and that is the one cut
+	 * out rather than the one after the heart.
 	 */
 	public function testTheRunIsCutWhereTheScanFoundItRatherThanAtAnEarlierCopy()
 	{
