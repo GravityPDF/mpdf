@@ -1178,6 +1178,26 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A figure holding an image and its caption passes, as does one given a name with aria-label.
+	 *
+	 * @return void
+	 */
+	public function testFigureWithCaptionPassesUa1()
+	{
+		$png = 'data:image/png;base64,'
+			. 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8'
+			. 'z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
+
+		$html = '<h1>Figures</h1>'
+			. '<figure><img src="' . $png . '" width="20" height="20" alt="A red pixel">'
+			. '<figcaption>Figure 1. One pixel</figcaption></figure>'
+			. '<figure aria-label="Sales by quarter"><p>Q1 10, Q2 20</p></figure>';
+
+		$pdf = $this->getOutput($this->makeMpdf(), $html);
+		$this->assertVeraPdfCompliant($pdf, 'figures with captions');
+	}
+
+	/**
 	 * Reads an HTML fixture from tests/data/html/pdfua-examples/, skipping the test when it is missing.
 	 *
 	 * @param string $name The file name without .html
