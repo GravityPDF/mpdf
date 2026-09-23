@@ -1698,7 +1698,7 @@ class Form
 		$ascent = (isset($desc['Ascent']) ? $desc['Ascent'] : 800) / 1000;
 		$descent = (isset($desc['Descent']) ? $desc['Descent'] : -200) / 1000;
 
-		// The text is measured and shaped at the size it is drawn at. The field keeps its own, which is 0 for auto.
+		// GetStringWidth() and Text() read the size from the font state, but the field keeps its own: 0 for auto
 		$this->emWidths = [];
 		$fieldSize = $this->mpdf->FontSizePt;
 		$size = $fieldSize;
@@ -1830,7 +1830,7 @@ class Form
 
 	/**
 	 * The width of some text in ems of the current font, shaped as it is drawn, adding its characters to the font's
-	 * subset
+	 * subset. Kept for the rest of the field, as wrapping measures the same words at each size it tries.
 	 *
 	 * @param string $text in the document's encoding: Windows-1252 bytes in a core font, UTF-8 otherwise
 	 *

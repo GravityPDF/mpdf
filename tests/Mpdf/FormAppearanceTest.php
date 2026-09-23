@@ -98,14 +98,14 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Poppler draws a form with checkboxes and radio buttons without warning of an unknown font tag, whatever script
-	 * its text field is in
+	 * Poppler reads a form with checkboxes and radio buttons without warning of an unknown font tag (#59), whatever
+	 * script its text field is in
 	 *
 	 * @dataProvider values
 	 *
 	 * @param string $value the text field's value
 	 */
-	public function testPopplerFindsTheFontItRedrawsWith($value)
+	public function testPopplerReadsTheFormWithoutWarnings($value)
 	{
 		exec('pdftotext -v 2>&1', $version, $status);
 		if ($status !== 0) {
