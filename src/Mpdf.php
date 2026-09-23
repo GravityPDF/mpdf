@@ -23649,9 +23649,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
-	function SetProtection($permissions = [], $user_pass = '', $owner_pass = null, $length = 40)
-	{
-		$this->encrypted = $this->protection->setProtection($permissions, $user_pass, $owner_pass, $length);
+	/**
+	 * Encrypts the document with AES-256
+	 *
+	 * @param string[]|string|null $permissions What a user who opens the document with the user password may do;
+	 *                                          empty or null permits nothing
+	 * @param string $user_pass UTF-8; empty lets anyone open the document
+	 * @param string|null $owner_pass UTF-8; null makes a random one
+	 * @param int|null $length Deprecated and ignored: the key is always 256 bits. Kept so calls that pass 40 or 128
+	 *                         still work.
+	 *
+	 * @throws \Mpdf\MpdfException When a permission or password cannot be used; the protection set before stays
+	 */
+	function SetProtection(
+		$permissions = [],
+		#[\SensitiveParameter]
+		$user_pass = '',
+		#[\SensitiveParameter]
+		$owner_pass = null,
+		$length = null
+	) {
+		$this->encrypted = $this->protection->setProtection($permissions, $user_pass, $owner_pass);
 	}
 
 	// =========================================
@@ -27688,6 +27706,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": no cross-reference table of the kind mPDF writes was found in it', $file_in));
 		}
 		$xref_objid = $m[1];
+
+		// Only the key this instance made opens the pages, so the document has to be one it encrypted
+		$fileEncrypted = preg_match("/\n\/U \(((?:\\\\.|[^\\\\)])*)\)/s", $pdf, $u) === 1;
+		if ($fileEncrypted !== (bool) $this->encrypted || ($fileEncrypted && !$this->protection->isUValue($this->writer->unescape($u[1])))) {
+			throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": it was not encrypted by this instance', $file_in));
+		}
+
 		preg_match_all('/(\d{10}) (\d{5}) (f|n)/', $m[2], $x);
 		for ($i = 0; $i < count($x[0]); $i++) {
 			$xref[] = [(int) $x[1][$i], $x[2][$i], $x[3][$i]];
@@ -27723,11 +27748,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$oldlen = $m[2];
 
 			if ($this->encrypted) {
-				$s = $this->protection->rc4($this->protection->objectKey($obj + 1), $s);
+				$s = $this->protection->decrypt($s);
 			}
 
 			if ($compressed) {
-				$s = gzuncompress($s);
+				$s = @gzuncompress($s);
+				if ($s === false) {
+					throw new \Mpdf\MpdfException(sprintf('Cannot overwrite "%s": object %d does not inflate', $file_in, $obj + 1));
+				}
 			}
 
 			foreach ($search as $k => $val) {
@@ -27739,7 +27767,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($this->encrypted) {
-				$s = $this->protection->rc4($this->protection->objectKey($obj + 1), $s);
+				$s = $this->protection->encrypt($s);
 			}
 
 			$newlen = strlen($s);

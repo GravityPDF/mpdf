@@ -309,7 +309,7 @@ parameters:
 		-
 			message: '#^PHPDoc tag @var has invalid value \(\$value PdfIndirectObject\)\: Unexpected token "\$value", expected type at offset 15 on line 2$#'
 			identifier: phpDoc.parseError
-			count: 2
+			count: 1
 			path: src/Mpdf.php
 
 		-

@@ -4,7 +4,6 @@ namespace Mpdf;
 
 use Mockery;
 use Mpdf\Pdf\Protection;
-use Mpdf\Pdf\Protection\UniqidGenerator;
 use Mpdf\Writer\BaseWriter;
 
 class TocNumbering extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
@@ -273,7 +272,7 @@ class TocNumbering extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$pageNumber,
 		$pattern = 'q 0.000 0.000 0.000 rg  0 Tr BT 546.468 784.480 Td  (%s) Tj ET Q'
 	) {
-		$writer = new BaseWriter($this->mpdf, new Protection(new UniqidGenerator()));
+		$writer = new BaseWriter($this->mpdf, new Protection());
 
 		$pageNumber = $writer->escape(
 			$writer->utf8ToUtf16BigEndian($pageNumber, false)

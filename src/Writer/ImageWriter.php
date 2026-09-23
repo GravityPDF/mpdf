@@ -93,7 +93,7 @@ final class ImageWriter
 				$this->writer->write('/Mask [' . $trns . ']');
 			}
 
-			$this->writer->write('/Length ' . strlen($info['data']) . '>>');
+			$this->writer->write('/Length ' . $this->writer->streamLength($info['data']) . '>>');
 			$this->writer->stream($info['data']);
 
 			unset($this->mpdf->images[$file]['data']);
@@ -103,13 +103,13 @@ final class ImageWriter
 			if ($icc) { // ICC colour profile
 				$this->writer->object();
 				$icc = $this->mpdf->compress ? gzcompress($info['icc']) : $info['icc'];
-				$this->writer->write('<</N ' . $info['ch'] . ' ' . $filter . '/Length ' . strlen($icc) . '>>');
+				$this->writer->write('<</N ' . $info['ch'] . ' ' . $filter . '/Length ' . $this->writer->streamLength($icc) . '>>');
 				$this->writer->stream($icc);
 				$this->writer->write('endobj');
 			} elseif ($info['cs'] === 'Indexed') { // Palette
 				$this->writer->object();
 				$pal = $this->mpdf->compress ? gzcompress($info['pal']) : $info['pal'];
-				$this->writer->write('<<' . $filter . '/Length ' . strlen($pal) . '>>');
+				$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($pal) . '>>');
 				$this->writer->stream($pal);
 				$this->writer->write('endobj');
 			}

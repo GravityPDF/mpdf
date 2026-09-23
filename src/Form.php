@@ -812,7 +812,7 @@ class Form
 	function _putFormsCatalog()
 	{
 		if (isset($this->pdf_acro_array)) {
-			$this->writer->write('/AcroForm << /DA (/F1 0 Tf 0 g )');
+			$this->writer->write('/AcroForm << /DA ' . $this->writer->string('/F1 0 Tf 0 g '));
 			$this->writer->write('/Q 0');
 			$this->writer->write('/Fields [' . $this->pdf_acro_array . ']');
 			$f = '';
@@ -1366,7 +1366,7 @@ class Form
 		$this->writer->write('/Type /XObject');
 		$this->writer->write('/Subtype /Image');
 		$this->writer->write('/BBox [0 0 1 1]');
-		$this->writer->write('/Length ' . strlen($info['data']));
+		$this->writer->write('/Length ' . $this->writer->streamLength($info['data']));
 		$this->writer->write('/BitsPerComponent ' . $info['bpc']);
 
 		if ($info['cs'] === 'Indexed') {
@@ -1399,7 +1399,7 @@ class Form
 			$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
 			$this->writer->object();
 			$pal = $this->mpdf->compress ? gzcompress($info['pal']) : $info['pal'];
-			$this->writer->write('<<' . $filter . '/Length ' . strlen($pal) . '>>');
+			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($pal) . '>>');
 			$this->writer->stream($pal);
 			$this->writer->write('endobj');
 		}
@@ -1477,10 +1477,10 @@ class Form
 			}
 
 			if ($this->formUseZapD) {
-				$this->writer->write('/DA (/F' . $this->mpdf->fonts['czapfdingbats']['i'] . ' 0 Tf ' . $radio_color . ' rg)');
+				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts['czapfdingbats']['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 				$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off /Off >> >>');
 			} else {
-				$this->writer->write('/DA (/F' . $this->mpdf->fonts[$this->mpdf->CurrentFont['fontkey']]['i'] . ' 0 Tf ' . $radio_color . ' rg)');
+				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$this->mpdf->CurrentFont['fontkey']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 				$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
 			}
 
@@ -1511,9 +1511,9 @@ class Form
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 
 			if ($this->formUseZapD) {
-				$this->writer->write('/DA (/F' . $this->mpdf->fonts['czapfdingbats']['i'] . ' 0 Tf ' . $radio_color . ' rg)');
+				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts['czapfdingbats']['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 			} else {
-				$this->writer->write('/DA (/F' . $this->mpdf->fonts[$this->mpdf->CurrentFont['fontkey']]['i'] . ' 0 Tf ' . $radio_color . ' rg)');
+				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$this->mpdf->CurrentFont['fontkey']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 			}
 
 			$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
@@ -1535,7 +1535,7 @@ class Form
 			$temp .= $form['AC'] ? '/AC ' . $this->writer->string($form['AC']) . ' ' : '/AC ' . $this->writer->string($form['T']) . ' ';
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write('/MK << ' . $temp . ' >>');
-			$this->writer->write('/DA (/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor'] . ')');
+			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
 			$this->writer->write('/AA << /D << /S /ResetForm /Flags 1 >> >>');
 			$form['FF'][] = 17;
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
@@ -1548,7 +1548,7 @@ class Form
 			$temp .= $form['AC'] ? '/AC ' . $this->writer->string($form['AC']) . ' ' : '/AC ' . $this->writer->string($form['T']) . ' ';
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write("/MK << $temp >>");
-			$this->writer->write('/DA (/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor'] . ')');
+			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
 
 			// Bit 4 (8) = useGETmethod else use POST
 			// Bit 3 (4) = HTML export format (charset chosen by Adobe)--- OR ---
@@ -1566,7 +1566,7 @@ class Form
 			}
 			// To submit a value, needs to be in /AP dictionary, AND this object must contain a /Fields entry
 			// listing all fields to output
-			$this->writer->write('/AA << /D << /S /SubmitForm /F (' . $form['URL'] . ') /Flags ' . $flag . ' >> >>');
+			$this->writer->write('/AA << /D << /S /SubmitForm /F ' . $this->writer->string($form['URL']) . ' /Flags ' . $flag . ' >> >>');
 			$form['FF'][] = 17;
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 		}
@@ -1590,7 +1590,7 @@ class Form
 			$temp .= $form['AC'] ? '/AC ' . $this->writer->string($form['AC']) . ' ' : '/AC ' . $this->writer->string($form['T']) . ' ';
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write("/MK << $temp >>");
-			$this->writer->write('/DA (/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor'] . ')');
+			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
 			$form['FF'][] = 17;
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 			// Javascript
@@ -1638,13 +1638,13 @@ f Q ';
 
 			$this->writer->object();
 			$p = $this->mpdf->compress ? gzcompress($r_on) : $r_on;
-			$this->writer->write('<<' . $filter . '/Length ' . strlen($p) . ' /Resources 2 0 R>>');
+			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
 			$this->writer->stream($p);
 			$this->writer->write('endobj');
 
 			$this->writer->object();
 			$p = $this->mpdf->compress ? gzcompress($r_off) : $r_off;
-			$this->writer->write('<<' . $filter . '/Length ' . strlen($p) . ' /Resources 2 0 R>>');
+			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
 			$this->writer->stream($p);
 			$this->writer->write('endobj');
 		}
@@ -1666,7 +1666,7 @@ f Q ';
 			}
 			$this->writer->object();
 			$p = $this->mpdf->compress ? gzcompress($cb_on) : $cb_on;
-			$this->writer->write('<<' . $filter . '/Length ' . strlen($p) . ' /Resources 2 0 R>>');
+			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
 			$this->writer->stream($p);
 			$this->writer->write('endobj');
 
@@ -1674,7 +1674,7 @@ f Q ';
 			if (!$this->formUseZapD) {
 				$this->writer->object();
 				$p = $this->mpdf->compress ? gzcompress($cb_off) : $cb_off;
-				$this->writer->write('<<' . $filter . '/Length ' . strlen($p) . ' /Resources 2 0 R>>');
+				$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
 				$this->writer->stream($p);
 				$this->writer->write('endobj');
 			}
@@ -1713,7 +1713,7 @@ f Q ';
 		$this->writer->write('/M ' . $this->writer->dateString());
 
 		$this->writer->write('/T ' . $this->writer->string($form['T']));
-		$this->writer->write('/DA (/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor'] . ')');
+		$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
 
 		$opt = '';
 		$count = count($form['OPT']['VAL']);
@@ -1806,7 +1806,7 @@ f Q ';
 			$this->writer->write('/V ' . $this->writer->string($form['V']));
 		}
 		$this->writer->write('/DV ' . $this->writer->string($form['DV']));
-		$this->writer->write('/DA (/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor'] . ')');
+		$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
 		if ($form['Q']) {
 			$this->writer->write('/Q ' . $form['Q'] . '');
 		}

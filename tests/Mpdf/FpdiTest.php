@@ -4,7 +4,6 @@ namespace Mpdf;
 
 use fpdi_pdf_parser;
 use Mpdf\Pdf\Protection;
-use Mpdf\Pdf\Protection\UniqidGenerator;
 use Mpdf\Writer\BaseWriter;
 use pdf_parser;
 use setasign\Fpdi\PdfParser\PdfParser;
@@ -137,9 +136,9 @@ class FpdiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testEncryptionOfStringWithOctalValue()
 	{
 		$pdf = new mPDF();
-		$writer = new BaseWriter($pdf, new Protection(new UniqidGenerator()));
+		$writer = new BaseWriter($pdf, new Protection());
 
-		$pdf->SetProtection(['copy', 'print'], '', 'password', 128);
+		$pdf->SetProtection(['copy', 'print'], '', 'password');
 
 		$string = new PdfString();
 		$string->value = '\040\t\n\f\040';
@@ -148,8 +147,13 @@ class FpdiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		// (xxxxx)
 		$string = substr($pdf->buffer->writeToString(), 1, -1);
-		// we need to unescape the string, to get a comparable value
-		$this->assertEquals(5, strlen($writer->unescape($string)));
+
+		$protection = new \ReflectionProperty('Mpdf\Mpdf', 'protection');
+		if (PHP_VERSION_ID < 80100) {
+			$protection->setAccessible(true);
+		}
+
+		$this->assertSame(" \t\n\f ", $protection->getValue($pdf)->decrypt($writer->unescape($string)));
 	}
 
 	/**
@@ -177,17 +181,15 @@ class FpdiTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 		$protection = $property->getValue($mpdf);
 
-		preg_match_all('/\n(\d+) 0 obj\n(<<\/Type \/Annot \/Subtype \/Link(?:(?!endobj).)*)endobj/s', $pdf, $links, PREG_SET_ORDER);
-		$this->assertCount(3, $links);
+		preg_match_all('/\n\d+ 0 obj\n<<\/Type \/Annot \/Subtype \/Link(?:(?!endobj).)*endobj/s', $pdf, $links);
+		$this->assertCount(3, $links[0]);
 
-		foreach ($links as $link) {
-			$key = $protection->objectKey((int) $link[1]);
+		foreach ($links[0] as $link) {
+			$this->assertSame(1, preg_match('/\/Contents \(((?:\\\\.|[^\\\\)])*)\)/s', $link, $contents));
+			$this->assertSame('A link to example.com', $protection->decrypt(PdfString::unescape($contents[1])));
 
-			$this->assertSame(1, preg_match('/\/Contents \(((?:\\\\.|[^\\\\)])*)\)/s', $link[2], $contents));
-			$this->assertSame('A link to example.com', $protection->rc4($key, PdfString::unescape($contents[1])));
-
-			$this->assertSame(1, preg_match('/\/T <([0-9A-Fa-f]*)>/', $link[2], $title));
-			$this->assertSame("\xFE\xFF\x00A\x00u\x00t\x00h\x00o\x00r", $protection->rc4($key, hex2bin($title[1])));
+			$this->assertSame(1, preg_match('/\/T <([0-9A-Fa-f]*)>/', $link, $title));
+			$this->assertSame("\xFE\xFF\x00A\x00u\x00t\x00h\x00o\x00r", $protection->decrypt(hex2bin($title[1])));
 		}
 	}
 

@@ -224,7 +224,7 @@ final class BackgroundWriter
 				$this->writer->write('/Filter /FlateDecode');
 				$s = gzcompress($s);
 			}
-			$this->writer->write('/Length ' . strlen($s) . '>>');
+			$this->writer->write('/Length ' . $this->writer->streamLength($s) . '>>');
 			$this->writer->stream($s);
 			$this->writer->write('endobj');
 		}
@@ -358,7 +358,7 @@ final class BackgroundWriter
 						$this->writer->write('/Decode[0 1 0 1 0 1 0 1 0 1]');
 					}
 					$this->writer->write('/BitsPerFlag 8');
-					$this->writer->write('/Length ' . strlen($grad['stream']));
+					$this->writer->write('/Length ' . $this->writer->streamLength($grad['stream']));
 					$this->writer->write('>>');
 					$this->writer->stream($grad['stream']);
 				}
@@ -410,7 +410,7 @@ final class BackgroundWriter
 					$this->writer->write('/BitsPerComponent 8');
 					$this->writer->write('/Decode[0 1 0 1 0 1]');
 					$this->writer->write('/BitsPerFlag 8');
-					$this->writer->write('/Length ' . strlen($grad['stream_trans']));
+					$this->writer->write('/Length ' . $this->writer->streamLength($grad['stream_trans']));
 					$this->writer->write('>>');
 					$this->writer->stream($grad['stream_trans']);
 				}
@@ -433,7 +433,7 @@ final class BackgroundWriter
 				$p = ($this->mpdf->compress) ? gzcompress($str) : $str;
 
 				$this->writer->write('<< /Type /XObject /Subtype /Form /FormType 1 ' . $filter);
-				$this->writer->write('/Length ' . strlen($p));
+				$this->writer->write('/Length ' . $this->writer->streamLength($p));
 				$this->writer->write('/BBox [-' . ($this->mpdf->wPt / 2) . ' -' . ($this->mpdf->hPt / 2) . ' ' . (2 * $this->mpdf->wPt) . ' ' . (2 * $this->mpdf->hPt) . ']');
 				$this->writer->write('/Group << /Type /Group /S /Transparency /CS /DeviceGray >>');
 				$this->writer->write('/Resources <<');

@@ -3,7 +3,6 @@
 namespace Mpdf;
 
 use Mpdf\Pdf\Protection;
-use Mpdf\Pdf\Protection\UniqidGenerator;
 use Mpdf\Writer\BaseWriter;
 
 class SubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase

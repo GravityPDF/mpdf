@@ -8,7 +8,6 @@ use Mpdf\Image\PngPixels;
 use Mpdf\Mpdf;
 use Mpdf\MpdfException;
 use Mpdf\Pdf\Protection;
-use Mpdf\Pdf\Protection\UniqidGenerator;
 use Mpdf\TestLogger;
 
 /**
@@ -272,7 +271,7 @@ class Type3FontWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$fontCache = new FontCache(new Cache($this->cacheDir . '/mpdf/ttfontdata', 0));
 
-		return new Type3FontWriter($this->mpdf, new BaseWriter($this->mpdf, new Protection(new UniqidGenerator())), $fontCache, 'win', $this->logger);
+		return new Type3FontWriter($this->mpdf, new BaseWriter($this->mpdf, new Protection()), $fontCache, 'win', $this->logger);
 	}
 
 	/**

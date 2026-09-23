@@ -28,13 +28,6 @@ trait FpdiTrait
 	protected $k = Mpdf::SCALE;
 
 	/**
-	 * The currently used object number.
-	 *
-	 * @var int
-	 */
-	public $currentObjectNumber;
-
-	/**
 	 * A counter for template ids.
 	 *
 	 * @var int
@@ -285,27 +278,23 @@ trait FpdiTrait
 		// Encrypted into a new object: an imported link is written from the same parsed one each time its page is used
 		if ($value instanceof PdfString) {
 			$string = PdfString::unescape($value->value);
-			$string = $this->protection->rc4($this->protection->objectKey($this->currentObjectNumber), $string);
+			$string = $this->protection->encrypt($string);
 			$value = PdfString::create($this->writer->escape($string));
 
 		} elseif ($value instanceof PdfHexString) {
 			$filter = new AsciiHex();
 			$string = $filter->decode($value->value);
-			$string = $this->protection->rc4($this->protection->objectKey($this->currentObjectNumber), $string);
+			$string = $this->protection->encrypt($string);
 			$value = PdfHexString::create($filter->encode($string, true));
 
 		} elseif ($value instanceof PdfStream) {
 			$stream = $value->getStream();
-			$stream = $this->protection->rc4($this->protection->objectKey($this->currentObjectNumber), $stream);
+			$stream = $this->protection->encrypt($stream);
 			$dictionary = $value->value;
 			$dictionary->value['Length'] = PdfNumeric::create(\strlen($stream));
 			$value = PdfStream::create($dictionary, $stream);
 
 		} elseif ($value instanceof PdfIndirectObject) {
-			/**
-			 * @var $value PdfIndirectObject
-			 */
-			$this->currentObjectNumber = $this->objectMap[$this->currentReaderId][$value->objectNumber];
 			/**
 			 * @var $value PdfIndirectObject
 			 */

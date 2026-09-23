@@ -142,7 +142,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$m .= ' </x:xmpmeta>' . "\n";
 		$m .= str_repeat(str_repeat(' ', 100) . "\n", 20); // 2-4kB whitespace padding required
 		$m .= '<?xpacket end="w"?>'; // "r" read only
-		$this->writer->write('<</Type/Metadata/Subtype/XML/Length ' . strlen($m) . '>>');
+		$this->writer->write('<</Type/Metadata/Subtype/XML/Length ' . $this->writer->streamLength($m) . '>>');
 		$this->writer->stream($m);
 		$this->writer->write('endobj');
 	}
@@ -251,7 +251,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$this->writer->write('/Filter /FlateDecode ');
 		}
 
-		$this->writer->write('/Length ' . strlen($s) . '>>');
+		$this->writer->write('/Length ' . $this->writer->streamLength($s) . '>>');
 		$this->writer->stream($s);
 		$this->writer->write('endobj');
 	}
@@ -300,7 +300,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			if (!empty($file['mime'])) {
 				$this->writer->write('/Subtype /' . $this->writer->escapeSlashes($file['mime']));
 			}
-			$this->writer->write('/Length ' . strlen($filestream));
+			$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
 			$this->writer->write('/Filter /FlateDecode');
 			if (isset($file['path'])) {
 				// The file's own date, not the document's
@@ -339,12 +339,20 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+		// AES-256 encryption is PDF 2.0, or PDF 1.7 with Adobe's extension level 8
+		if ($this->mpdf->encrypted) {
+			if (version_compare($this->mpdf->pdf_version, '1.7', '<')) {
+				$this->writer->write('/Version /1.7');
+			}
+			$this->writer->write('/Extensions <</ADBE <</BaseVersion /1.7 /ExtensionLevel 8>>>>');
+		}
+
 		$this->writer->write('/Pages 1 0 R');
 
 		if (is_string($this->mpdf->currentLang)) {
-			$this->writer->write(sprintf('/Lang (%s)', $this->mpdf->currentLang));
+			$this->writer->write('/Lang ' . $this->writer->string($this->mpdf->currentLang));
 		} elseif (is_string($this->mpdf->default_lang)) {
-			$this->writer->write(sprintf('/Lang (%s)', $this->mpdf->default_lang));
+			$this->writer->write('/Lang ' . $this->writer->string($this->mpdf->default_lang));
 		}
 
 		if ($this->mpdf->ZoomMode === 'fullpage') {
@@ -725,7 +733,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$f = preg_replace('/^.*\//', '', $f);
 							$f = preg_replace('/[^a-zA-Z0-9._]/', '', $f);
 
-							$annot .= '/FS <</Type /Filespec /F (' . $f . ')';
+							$annot .= '/FS <</Type /Filespec /F ' . $this->writer->string($f);
 							$annot .= '/EF <</F ' . ($this->mpdf->n + 1) . ' 0 R>>';
 							$annot .= '>>';
 
@@ -819,7 +827,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$filestream = gzcompress($file);
 							$this->writer->object();
 							$this->writer->write('<</Type /EmbeddedFile');
-							$this->writer->write('/Length ' . strlen($filestream));
+							$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
 							$this->writer->write('/Filter /FlateDecode');
 							$this->writer->write('>>');
 							$this->writer->stream($filestream);
@@ -879,17 +887,18 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	public function writeEncryption() // _putencryption
 	{
 		$this->writer->write('/Filter /Standard');
-		if ($this->protection->getUseRC128Encryption()) {
-			$this->writer->write('/V 2');
-			$this->writer->write('/R 3');
-			$this->writer->write('/Length 128');
-		} else {
-			$this->writer->write('/V 1');
-			$this->writer->write('/R 2');
-		}
+		$this->writer->write('/V 5');
+		$this->writer->write('/R 6');
+		$this->writer->write('/Length 256');
+		$this->writer->write('/CF <</StdCF <</AuthEvent /DocOpen /CFM /AESV3 /Length 32>>>>');
+		$this->writer->write('/StmF /StdCF');
+		$this->writer->write('/StrF /StdCF');
 		$this->writer->write('/O (' . $this->writer->escape($this->protection->getOValue()) . ')');
 		$this->writer->write('/U (' . $this->writer->escape($this->protection->getUValue()) . ')');
+		$this->writer->write('/OE (' . $this->writer->escape($this->protection->getOEValue()) . ')');
+		$this->writer->write('/UE (' . $this->writer->escape($this->protection->getUEValue()) . ')');
 		$this->writer->write('/P ' . $this->protection->getPValue());
+		$this->writer->write('/Perms (' . $this->writer->escape($this->protection->getPermsValue()) . ')');
 	}
 
 	public function writeTrailer() // _puttrailer
@@ -900,11 +909,10 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->mpdf->encrypted) {
 			$this->writer->write('/Encrypt ' . $this->mpdf->enc_obj_id . ' 0 R');
-			$this->writer->write('/ID [<' . $this->protection->getUniqid() . '> <' . $this->protection->getUniqid() . '>]');
-		} else {
-			$uniqid = $this->hash();
-			$this->writer->write('/ID [<' . $uniqid . '> <' . $uniqid . '>]');
 		}
+
+		$uniqid = $this->hash();
+		$this->writer->write('/ID [<' . $uniqid . '> <' . $uniqid . '>]');
 	}
 
 	/**

@@ -36,7 +36,8 @@
 		"paragonie/random_compat": "^1.4|^2.0|^9.99.99",
 		"psr/http-message": "^1.0 || ^2.0",
 		"psr/log": "^1.0 || ^2.0 || ^3.0",
-		"setasign/fpdi": "^2.1"
+		"setasign/fpdi": "^2.1",
+		"symfony/polyfill-intl-normalizer": "^1.10"
 	},
 	"require-dev": {
 		"mockery/mockery": "^1.3.0",
@@ -50,6 +51,7 @@
 		"ext-bcmath": "Needed for generation of some types of barcodes",
 		"ext-zlib": "Needed for compression of embedded resources, such as fonts",
 		"ext-xml": "Needed mainly for SVG manipulation",
+		"ext-openssl": "Needed to encrypt documents with SetProtection()",
 		"ext-imagick": "Needed if developing the Mpdf library",
 		"mpdf/font-bundle-all": "All official mPDF fonts that offers coverage for common and uncommon scripts worldwide. Uses 110MB of disk space.",
 		"mpdf/font-bundle-lite": "A subset of official mPDF fonts that offers coverage for most common scripts. Uses 30MB of disk space.",

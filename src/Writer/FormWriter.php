@@ -44,7 +44,7 @@ final class FormWriter
 			}
 
 			$data = $this->mpdf->compress ? gzcompress($info['data']) : $info['data'];
-			$this->writer->write('/Length ' . strlen($data) . '>>');
+			$this->writer->write('/Length ' . $this->writer->streamLength($data) . '>>');
 			$this->writer->stream($data);
 
 			unset($this->mpdf->formobjects[$file]['data']);
