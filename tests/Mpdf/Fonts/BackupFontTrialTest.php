@@ -8,14 +8,19 @@ use Mpdf\Mpdf;
  * A backup font the substitution scan tries and passes over leaves nothing in the document, whether its
  * metrics were cached or not.
  *
- * The document font is DejaVu Sans. Noto Emoji, the first backup font, lacks the Chinese, which Sun-ExtA
- * has; the man is in neither DejaVu nor Sun-ExtA.
+ * The document font is DejaVu Sans. Noto Emoji lacks the Chinese, which Sun-ExtA has; the man is in
+ * neither DejaVu nor Sun-ExtA.
  */
 class BackupFontTrialTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/** 2000-01-01 */
 	const CREATION_DATE = 946684800;
+
+	const CHINESE_AND_MAN = '<p>Hello 你好 &#x1F468;</p>';
+
+	/** The man, asking to be drawn as text */
+	const TEXT_MAN = '<p>Hello &#x1F468;&#xFE0E;</p>';
 
 	/**
 	 * @var string
@@ -59,8 +64,8 @@ class BackupFontTrialTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAColdCacheGivesTheSameDocumentAsAWarmOne()
 	{
-		list($coldFonts, $coldPdf) = $this->render();
-		list($warmFonts, $warmPdf) = $this->render();
+		list($coldFonts, $coldPdf) = $this->render(['notoemoji', 'sunexta'], self::CHINESE_AND_MAN);
+		list($warmFonts, $warmPdf) = $this->render(['notoemoji', 'sunexta'], self::CHINESE_AND_MAN);
 
 		$this->assertSame(['dejavusans', 'sunexta', 'notoemoji'], array_keys($warmFonts));
 		$this->assertSame(array_keys($warmFonts), array_keys($coldFonts));
@@ -68,9 +73,27 @@ class BackupFontTrialTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A run starting with an emoji that asks for a presentation has the scan ask each backup font
+	 * whether it draws in colour. Sun-ExtA is asked and passed over, and the document is the one that
+	 * never had it as a backup font.
+	 */
+	public function testABackupFontAskedWhetherItDrawsInColourIsNotAdded()
+	{
+		list($askedFonts, $askedPdf) = $this->render(['sunexta', 'notoemoji'], self::TEXT_MAN);
+		list($fonts, $pdf) = $this->render(['notoemoji'], self::TEXT_MAN);
+
+		$this->assertSame(['dejavusans', 'notoemoji'], array_keys($askedFonts));
+		$this->assertSame(array_keys($fonts), array_keys($askedFonts));
+		$this->assertSame($pdf, $askedPdf);
+	}
+
+	/**
+	 * @param string[] $backupSubsFont
+	 * @param string   $html
+	 *
 	 * @return array [Mpdf::$fonts, the PDF]
 	 */
-	private function render()
+	private function render(array $backupSubsFont, $html)
 	{
 		$mpdf = new Mpdf([
 			'mode' => 'utf-8',
@@ -87,14 +110,14 @@ class BackupFontTrialTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				'sunexta' => ['R' => 'Sun-ExtA.ttf'],
 			],
 			'default_font' => 'dejavusans',
-			'backupSubsFont' => ['notoemoji', 'sunexta'],
+			'backupSubsFont' => $backupSubsFont,
 			'useSubstitutions' => true,
 			'exposeVersion' => false,
 			'creationDate' => self::CREATION_DATE,
 		]);
 		$mpdf->SetCompression(false);
 
-		$mpdf->WriteHTML('<p>Hello 你好 &#x1F468;</p>');
+		$mpdf->WriteHTML($html);
 
 		return [$mpdf->fonts, $mpdf->OutputBinaryData()];
 	}

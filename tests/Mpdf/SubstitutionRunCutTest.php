@@ -76,8 +76,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * The text either side of a run is kept whole where it holds a newline. Neither font has a glyph
-	 * for the first newline, so it is a run of its own that stays where it is; the second comes
-	 * after the Thai and is kept with the text it is in.
+	 * for a newline, so each one is a run of its own that stays where it is.
 	 */
 	public function testANewlineKeepsTheTextEitherSideOfARun()
 	{
@@ -94,7 +93,9 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'span style="font-family: garuda"',
 			$this->text([0x0E01]),
 			'/span',
-			"three\nfour",
+			"three\n",
+			'',
+			'four',
 		], $tokens);
 	}
 

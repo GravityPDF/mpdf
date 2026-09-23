@@ -4106,9 +4106,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		/* -- CJK-FONTS -- */
 		if (in_array($family, $this->available_CJK_fonts)) {
-			if (empty($this->Big5_widths)) {
-				require __DIR__ . '/../data/CJKdata.php';
-			}
 			$this->AddCJKFont($family); // don't need to add style
 			return;
 		}
@@ -4456,9 +4453,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				/* -- CJK-FONTS -- */
 				if (in_array($fontkey, $this->available_CJK_fonts)) {
 					if (!isset($this->fonts[$fontkey])) { // already added
-						if (empty($this->Big5_widths)) {
-							require __DIR__ . '/../data/CJKdata.php';
-						}
 						$this->AddCJKFont($family); // don't need to add style
 					}
 				} else { // Test to see if requested font/style is available - or substitute /* -- END CJK-FONTS -- */
@@ -11340,6 +11334,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->fonts[$fontkey] = ['i' => $i, 'type' => 'Type0', 'name' => $name, 'up' => $up, 'ut' => 40, 'cw' => $cw, 'CMap' => $CMap, 'registry' => $registry, 'MissingWidth' => 1000, 'desc' => $desc];
 	}
 
+	/**
+	 * The character widths AddCJKFont() gives an Adobe CJK font. The font is not added to the document.
+	 *
+	 * @param string $family 'big5', 'gb', 'sjis' or 'uhc'
+	 *
+	 * @return array|null Null for any other family
+	 */
+	public function cjkWidths($family)
+	{
+		if (empty($this->Big5_widths)) {
+			require __DIR__ . '/../data/CJKdata.php';
+		}
+
+		$widths = [
+			'big5' => $this->Big5_widths,
+			'gb' => $this->GB_widths,
+			'sjis' => $this->SJIS_widths,
+			'uhc' => $this->UHC_widths,
+		];
+
+		return isset($widths[$family]) ? $widths[$family] : null;
+	}
+
 	function AddCJKFont($family)
 	{
 
@@ -11362,7 +11379,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add Big5 font with proportional Latin
 		$family = 'big5';
 		$name = 'MSungStd-Light-Acro';
-		$cw = $this->Big5_widths;
+		$cw = $this->cjkWidths('big5');
 		$CMap = 'UniCNS-UTF16-H';
 		$registry = ['ordering' => 'CNS1', 'supplement' => 4];
 		$desc = [
@@ -11385,7 +11402,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add GB font with proportional Latin
 		$family = 'gb';
 		$name = 'STSongStd-Light-Acro';
-		$cw = $this->GB_widths;
+		$cw = $this->cjkWidths('gb');
 		$CMap = 'UniGB-UTF16-H';
 		$registry = ['ordering' => 'GB1', 'supplement' => 4];
 		$desc = [
@@ -11409,7 +11426,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add SJIS font with proportional Latin
 		$family = 'sjis';
 		$name = 'KozMinPro-Regular-Acro';
-		$cw = $this->SJIS_widths;
+		$cw = $this->cjkWidths('sjis');
 		$CMap = 'UniJIS-UTF16-H';
 		$registry = ['ordering' => 'Japan1', 'supplement' => 5];
 		$desc = [
@@ -11433,7 +11450,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add UHC font with proportional Latin
 		$family = 'uhc';
 		$name = 'HYSMyeongJoStd-Medium-Acro';
-		$cw = $this->UHC_widths;
+		$cw = $this->cjkWidths('uhc');
 		$CMap = 'UniKS-UTF16-H';
 		$registry = ['ordering' => 'Korea1', 'supplement' => 2];
 		$desc = [
@@ -26184,7 +26201,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$unicode = $this->UTF8StringToArray($text, false);
 		// Every emoji is outside ASCII, a keycap's U+20E3 included
 		$clusters = preg_match('/[^\x00-\x7F]/', $text) === 1 ? Emoji::clusters($unicode) : [];
-		$fontCount = count($this->fonts);
 		$from = 0;
 		$pieces = [];
 
@@ -26199,21 +26215,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$pieces = array_merge($pieces, $run['insert']);
 			$text = $run['rest'];
 			$from = $run['from'];
-
-			// Looking for the next run can add a font to the document, and so can the span just written,
-			// once the main loop reaches it. Taking both in one pass would swap them, and with them the
-			// order the document holds its fonts in, so the scan stops wherever either could happen.
-			if (!$run['batch'] || count($this->fonts) !== $fontCount) {
-				break;
-			}
 		}
 
 		if (!$pieces) {
 			return 0;
 		}
 
-		// Whatever is left after the last run becomes a token of its own, which the main loop offers to
-		// the scan again: another pass can reach what this one stopped at
+		// Whatever is left after the last run becomes a token of its own
 		$pieces[] = $text;
 		$writehtml_a[$writehtml_i] = $writehtml_e = array_shift($pieces);
 		array_splice($writehtml_a, $writehtml_i + 1, 0, $pieces);
@@ -26443,7 +26451,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							'insert' => [''],
 							'rest' => mb_substr($text, $kept),
 							'from' => $from + $kept,
-							'batch' => true,
 						];
 					}
 					break;
@@ -26472,9 +26479,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * @param string $replacement What a core font draws in place of the run, which is not the text it
 	 *                            replaces
 	 *
-	 * @return array ['before', 'insert', 'rest', 'from' => where 'rest' starts in the token,
-	 *               'batch' => whether the scan may take another run in the same pass, which needs the
-	 *               tokens to leave the document's fonts alone]
+	 * @return array ['before', 'insert', 'rest', 'from' => where 'rest' starts in the token]
 	 */
 	private function substitutionStep($text, $from, $start, $l, $font, $replacement = null)
 	{
@@ -26487,29 +26492,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				: [$font, $replacement, '/' . $font],
 			'rest' => mb_substr($text, $offset + $l, null, 'UTF-8'),
 			'from' => $start + $l,
-			// What a core font tag adds to the document is left for the next pass to find out
-			'batch' => $replacement === null && $this->spanAddsNoFont($font),
 		];
-	}
-
-	/**
-	 * Whether the span that moves a run into a font would leave the document's fonts as they are, which
-	 * it does where SetFont() has already added the one it asks for.
-	 *
-	 * @param string $font The font the run moves into
-	 *
-	 * @return bool
-	 */
-	private function spanAddsNoFont($font)
-	{
-		if (!isset($this->fonts[$font])) {
-			return false;
-		}
-
-		// A style the family has no font file for is dropped, and the one already added is used
-		$styled = $font . $this->FontStyle;
-
-		return isset($this->fonts[$styled]) || !in_array($styled, $this->available_unifonts, true);
 	}
 
 	/**
