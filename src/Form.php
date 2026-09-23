@@ -1306,9 +1306,10 @@ class Form
 		if (!$name) {
 			$name = $this->unnamedButtonName('Button');
 		}
-		// pos => 1 = no caption, icon only; 0 = caption only
+		// pos => 1 = no caption, icon only; 0 = caption only. It is kept under the number SetFormButton() is about to
+		// give the field, which then knows the button shows an icon.
 		if ($image_id) {
-			$this->form_button_icon[$this->formCount] = [
+			$this->form_button_icon[$this->formCount + 1] = [
 				'pos' => 1,
 				'image_id' => $image_id,
 				'Indexed' => $indexed,
@@ -1393,7 +1394,7 @@ class Form
 		$appearance = null;
 		if ($type !== 'radio' && $type !== 'checkbox') {
 			// A button showing an icon draws no caption to fit
-			$appearance = $this->appearanceText($bb, $hh, $border['W'], [$value === '' ? $name : $value], '1', 'line', [], !isset($this->form_button_icon[$name]));
+			$appearance = $this->appearanceText($bb, $hh, $border['W'], [$value === '' ? $name : $value], '1', 'line', [], !isset($this->form_button_icon[$this->formCount]));
 		}
 		if (!$this->mpdf->onlyCoreFonts) {
 			if (isset($this->mpdf->CurrentFont['subset'])) {
