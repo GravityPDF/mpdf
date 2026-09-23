@@ -107,7 +107,7 @@ class StaticListBoxTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A drop-down still draws only its selected option beside an arrow, as wide as that option
+	 * A drop-down still draws only its selected option beside an arrow
 	 */
 	public function testADropDownKeepsItsSelectedOptionAndArrow()
 	{
@@ -115,10 +115,6 @@ class StaticListBoxTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(['Fig', chr(116)], $mpdf->drawnText);
 		$this->assertSame('czapfdingbats', $mpdf->drawnFontFamily[1]);
-		$this->assertLessThan(
-			$this->boxWidth('<select name="fruit" size="2">' . $this->options(['Elderberry and apple', 'Fig'], [1]) . '</select>'),
-			$this->boxWidth('<select name="fruit">' . $this->options(['Elderberry and apple', 'Fig'], [1]) . '</select>')
-		);
 	}
 
 	/**

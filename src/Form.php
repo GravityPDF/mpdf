@@ -512,7 +512,7 @@ class Form
 		$y = $this->mpdf->y;
 		$padding = $this->form_element_spacing['select']['inner']['h'] / $k;
 		$rowHeight = $this->mpdf->FontSize;
-		$rows = max(1, (int) floor(($h - 2 * $this->form_element_spacing['select']['inner']['v'] / $k) / $rowHeight + 0.001));
+		$rows = $objattr['rows'];
 
 		$items = isset($objattr['items']) ? $objattr['items'] : [];
 		$top = 0;

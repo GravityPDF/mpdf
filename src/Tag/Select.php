@@ -75,16 +75,9 @@ class Select extends Tag
 			$OTLdata = $this->mpdf->selectoption['SELECTED-OTLDATA'];
 		}
 
-		if ($this->mpdf->useActiveForms) {
-			$w = $this->mpdf->selectoption['MAXWIDTH'];
-		} elseif (isset($this->mpdf->selectoption['MULTIPLE']) || isset($this->mpdf->selectoption['SIZE'])) {
-			// A static list box draws every option, so it is as wide as the widest
-			$w = 0;
-			if (isset($this->mpdf->selectoption['ITEMS'])) {
-				foreach ($this->mpdf->selectoption['ITEMS'] as $item) {
-					$w = max($w, $this->mpdf->GetStringWidth($item['content'], true, $item['OTLdata']));
-				}
-			}
+		// A list box shows every option, so it is as wide as the widest, as an active one is
+		if ($this->mpdf->useActiveForms || isset($this->mpdf->selectoption['MULTIPLE']) || isset($this->mpdf->selectoption['SIZE'])) {
+			$w = isset($this->mpdf->selectoption['MAXWIDTH']) ? $this->mpdf->selectoption['MAXWIDTH'] : 0;
 		} else {
 			$w = $this->mpdf->GetStringWidth($texto, true, $OTLdata);
 		}
@@ -134,6 +127,7 @@ class Select extends Tag
 		if (isset($objattr['size']) && $objattr['size'] > 1) {
 			$rows = $objattr['size'];
 		}
+		$objattr['rows'] = $rows;
 
 		$objattr['fontfamily'] = $this->mpdf->FontFamily;
 		$objattr['fontsize'] = $this->mpdf->FontSizePt;
