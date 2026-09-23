@@ -3,9 +3,8 @@
 namespace Mpdf;
 
 /**
- * Every active form widget carries its own appearance. A PDF/A document relies on them alone (#348). Other documents
- * ask the viewer to redraw the widgets only for text the appearances cannot shape (#408), and then name the ZapfDingbats
- * font it redraws checkboxes with (#59).
+ * Every active form widget carries its own appearance (#348), with its text shaped and ordered as page text is (#408),
+ * so no document asks the viewer to redraw them or names the ZapfDingbats font it would redraw checkboxes with (#59).
  */
 class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -13,44 +12,94 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * A form asks the viewer to redraw its widgets only when a field shows text the appearances cannot shape or
-	 * reorder, and then names ZaDb for a checkbox or radio button to be redrawn in
+	 * A form never asks the viewer to redraw its widgets, whatever script its text is in, so it names no ZaDb font
 	 *
-	 * @dataProvider redraws
+	 * @dataProvider scripts
 	 *
 	 * @param string $html
-	 * @param bool $redraw whether /NeedAppearances is expected
-	 * @param bool $named whether ZaDb is expected
 	 */
-	public function testViewerRedrawsOnlyTextTheAppearancesCannotShape($html, $redraw, $named)
+	public function testViewerIsNotAskedToRedraw($html)
 	{
 		$form = $this->acroForm($this->render('<form>' . $html . '</form>', ['mode' => 'utf-8', 'useActiveForms' => true]));
 
-		$this->assertSame($redraw, strpos($form, '/NeedAppearances true') !== false);
-		$this->assertSame($named, strpos($form, '/ZaDb << /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>') !== false);
+		$this->assertStringNotContainsString('/NeedAppearances', $form);
+		$this->assertStringNotContainsString('/ZaDb', $form);
 	}
 
 	/**
-	 * Latin, Arabic, Hebrew and Thai field text, with and without a checkbox or radio button
+	 * Latin, Arabic, Hebrew and Thai field text, with a checkbox or radio button
 	 *
-	 * @return mixed[][]
+	 * @return string[][]
 	 */
-	public function redraws()
+	public function scripts()
 	{
 		$checkbox = ' <input type="checkbox" name="c" value="y" checked="checked" />';
 		$radio = ' <input type="radio" name="r" value="a" checked="checked" />';
 
 		return [
-			'Latin, checkbox' => ['<input type="text" name="t" value="Hello" />' . $checkbox, false, false],
-			'Arabic value, checkbox' => ['<input type="text" name="t" value="مرحبا" style="font-family: dejavusans" />' . $checkbox, true, true],
-			'Hebrew option, radio button' => ['<select name="s" style="font-family: dejavusans"><option value="1">שלום</option></select>' . $radio, true, true],
-			'Thai caption' => ['<input type="submit" name="go" value="สวัสดี" style="font-family: garuda" />', true, false],
+			'Latin value' => ['<input type="text" name="t" value="Hello" />' . $checkbox],
+			'Arabic value' => ['<input type="text" name="t" value="مرحبا" style="font-family: dejavusans" />' . $checkbox],
+			'Hebrew option' => ['<select name="s" style="font-family: dejavusans"><option value="1">שלום</option></select>' . $radio],
+			'Thai caption' => ['<input type="submit" name="go" value="สวัสดี" style="font-family: garuda" />' . $radio],
 		];
 	}
 
 	/**
-	 * Poppler draws a form with checkboxes and radio buttons without warning of an unknown font tag, whether it is
-	 * asked to redraw them or not
+	 * A text field's appearance draws its value with the glyphs, order and positioning the page draws it with when
+	 * forms are not active
+	 *
+	 * @dataProvider shapedValues
+	 *
+	 * @param string $value
+	 * @param string $font
+	 */
+	public function testAppearanceDrawsTheValueAsThePageDoes($value, $font)
+	{
+		$html = '<form><input type="text" name="t" value="' . $value . '" style="font-family: ' . $font . '; width: 80mm" /></form>';
+
+		$page = $this->textShown($this->render($html, ['mode' => 'utf-8']));
+		$appearance = $this->textShown($this->render($html, ['mode' => 'utf-8', 'useActiveForms' => true]));
+
+		$this->assertCount(1, $page);
+		$this->assertSame($page, $appearance);
+	}
+
+	/**
+	 * Arabic, which joins and runs right to left, Hebrew, which only runs right to left, and Thai, whose marks are
+	 * placed and whose words are marked for breaking
+	 *
+	 * @return string[][]
+	 */
+	public function shapedValues()
+	{
+		return [
+			'Arabic' => ['مرحبا بالعالم', 'dejavusans'],
+			'Hebrew' => ['שלום עולם', 'dejavusans'],
+			'Thai' => ['สวัสดีครับ', 'garuda'],
+		];
+	}
+
+	/**
+	 * A text area with an auto font size is drawn at 12pt when its text fits, and smaller when it would otherwise run
+	 * past the bottom, as a viewer sizes it
+	 */
+	public function testAutoSizedTextAreaFitsItsHeight()
+	{
+		$short = $this->render('<form><textarea name="a" rows="3" cols="30" style="font-size: auto">Short</textarea></form>', ['useActiveForms' => true]);
+		$this->assertStringContainsString(' 12.000 Tf ', $short);
+
+		$long = $this->render('<form><textarea name="a" rows="3" cols="30" style="font-size: auto">' . str_repeat('A few more words ', 20) . '</textarea></form>', ['useActiveForms' => true]);
+		$this->assertSame(1, preg_match('/BT \/F\d+ ([\d.]+) Tf ET/', $long, $size));
+		$this->assertLessThan(12, (float) $size[1]);
+
+		preg_match_all('/1 0 0 1 [\d.]+ (-?[\d.]+) Tm/', $long, $baselines);
+		$this->assertGreaterThan(1, count($baselines[1]));
+		$this->assertGreaterThanOrEqual(3, min(array_map('floatval', $baselines[1])));
+	}
+
+	/**
+	 * Poppler draws a form with checkboxes and radio buttons without warning of an unknown font tag, whatever script
+	 * its text field is in
 	 *
 	 * @dataProvider values
 	 *
@@ -79,7 +128,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A Latin value, which leaves the widgets as drawn, and an Arabic one, which has the viewer redraw them
+	 * A Latin value, and an Arabic one, which once had the viewer redraw every widget
 	 *
 	 * @return string[][]
 	 */
@@ -89,8 +138,8 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Every widget of an ordinary document carries its appearance, which in Latin text the viewer is not asked to
-	 * redraw, and keeps the actions and flags PDF/A drops
+	 * Every widget of an ordinary document carries its appearance, which the viewer is not asked to redraw, and keeps
+	 * the actions and flags PDF/A drops
 	 *
 	 * @dataProvider modes
 	 *
@@ -353,6 +402,23 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function pdfa($auto)
 	{
 		return ['mode' => 'utf-8', 'PDFA' => true, 'PDFAauto' => $auto, 'PDFAversion' => '2-B', 'useActiveForms' => true];
+	}
+
+	/**
+	 * The operands of each text-showing operator in a document, whether a string shown whole or an array of glyphs
+	 * and adjustments
+	 *
+	 * @param string $pdf
+	 *
+	 * @return string[]
+	 */
+	private function textShown($pdf)
+	{
+		preg_match_all('/T[dm]\s+(?:0 Tc 0 Tw (\[.*?\]) TJ|(\(.*?\)) Tj)/s', $pdf, $matches, PREG_SET_ORDER);
+
+		return array_map(function ($match) {
+			return isset($match[2]) ? $match[2] : $match[1];
+		}, $matches);
 	}
 
 	/**

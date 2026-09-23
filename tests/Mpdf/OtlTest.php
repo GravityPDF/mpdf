@@ -106,34 +106,4 @@ class OtlTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame($expected, $actual);
 	}
 
-	/**
-	 * Text in a script with a shaper of its own is complex; Latin, Greek and Cyrillic are not
-	 *
-	 * @dataProvider scripts
-	 *
-	 * @param string $text
-	 * @param bool $complex
-	 */
-	public function testHasComplexScript($text, $complex)
-	{
-		$this->assertSame($complex, $this->otl->hasComplexScript($text));
-	}
-
-	/**
-	 * Text in simple and complex scripts
-	 *
-	 * @return mixed[][]
-	 */
-	public function scripts()
-	{
-		return [
-			'Latin' => ['Hello, world 123', false],
-			'Greek and Cyrillic' => ['Ελληνικά Русский', false],
-			'Devanagari' => ['नमस्ते', true],
-			'Arabic' => ['مرحبا', true],
-			'Thai' => ['สวัสดี', true],
-			'Latin with a Devanagari word' => ['Hello नमस्ते', true],
-		];
-	}
-
 }
