@@ -29,6 +29,7 @@ final class ImageWriter
 	public function writeImages()
 	{
 		$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
+		list($gray, $masks) = $this->calibratedGray();
 
 		// Each image's object number by its 'i'. A soft mask is added before the image it masks, which
 		// names it by this rather than as the object before its own, since the ICC-based sRGB colour
@@ -71,7 +72,13 @@ final class ImageWriter
 				}
 				$this->writer->write('/ColorSpace [/Indexed ' . $rgb . ' ' . (strlen($info['pal']) / 3 - 1) . ' ' . ($this->mpdf->n + 1) . ' 0 R]');
 			} else {
-				$this->writer->write('/ColorSpace ' . ($info['cs'] === 'DeviceRGB' ? $rgb : '/' . $info['cs']));
+				if ($info['cs'] === 'DeviceRGB') {
+					$this->writer->write('/ColorSpace ' . $rgb);
+				} elseif ($gray && $info['cs'] === 'DeviceGray' && empty($info['icc']) && !isset($masks[$info['i']])) {
+					$this->writer->write('/ColorSpace ' . $gray);
+				} else {
+					$this->writer->write('/ColorSpace /' . $info['cs']);
+				}
 				if ($info['cs'] === 'DeviceCMYK') {
 					if ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace !== 3) {
 						throw new \Mpdf\MpdfException('PDFA1-b does not permit Images using mixed colour space (' . $file . ').');
@@ -124,6 +131,38 @@ final class ImageWriter
 				$this->writer->write('endobj');
 			}
 		}
+	}
+
+	/**
+	 * Grey images are written in the ICC-based grey colour space where DeviceGray is not permitted, all
+	 * but soft masks, which ISO 32000 has be DeviceGray.
+	 *
+	 * The colour space is written here, before any image, because written between a soft mask and the
+	 * image it masks, which names it as the object before its own, it would take the mask's place.
+	 *
+	 * @return array [the grey colour space, or null where grey stays DeviceGray, each soft mask's 'i'
+	 *               => true]
+	 */
+	private function calibratedGray()
+	{
+		if (!$this->mpdf->writesCalibratedGray()) {
+			return [null, []];
+		}
+
+		$masks = [];
+		foreach ($this->mpdf->images as $info) {
+			if (isset($info['masked'])) {
+				$masks[$info['masked']] = true;
+			}
+		}
+
+		foreach ($this->mpdf->images as $info) {
+			if ($info['cs'] === 'DeviceGray' && empty($info['icc']) && !isset($masks[$info['i']])) {
+				return [$this->writer->grayColorSpace(), $masks];
+			}
+		}
+
+		return [null, []];
 	}
 
 }

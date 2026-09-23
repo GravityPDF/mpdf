@@ -103,6 +103,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $usesCalibratedRgb = false;
 
+	/**
+	 * @var bool Whether the content sets colour in the ICC-based grey colour space, which the page's
+	 *           resource dictionary then names - see SetColor()
+	 */
+	private $usesCalibratedGray = false;
+
 	var $PDFA;
 	var $PDFAversion;
 	var $PDFAauto;
@@ -1741,6 +1747,45 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	public function usesCalibratedRgb()
 	{
 		return $this->usesCalibratedRgb;
+	}
+
+	/**
+	 * PDF/X-4 permits DeviceGray only where its output intent is grey or CMYK. Printing to an RGB output
+	 * intent, grey is written in an ICC-based colour space whose profile has sRGB's tone curve, so that
+	 * each grey draws as it does in DeviceGray - data/iccprofiles/Gray_sRGB_TRC.icc.
+	 *
+	 * @return bool Whether grey is written in that colour space rather than in DeviceGray
+	 */
+	public function writesCalibratedGray()
+	{
+		return $this->isPdfx4() && $this->pdfxRgbIntent();
+	}
+
+	/**
+	 * @return bool Whether the content has set a colour in the ICC-based grey colour space, so that the
+	 *              page's resource dictionary must name it
+	 */
+	public function usesCalibratedGray()
+	{
+		return $this->usesCalibratedGray;
+	}
+
+	/**
+	 * A content stream starts in black in DeviceGray. Where DeviceGray is not permitted, each page and
+	 * each form drawn from SVG or WMF starts by setting black in the ICC-based grey colour space, so that
+	 * nothing drawn before a colour is set falls back to DeviceGray.
+	 *
+	 * @return string Content setting the fill and stroke colours, or nothing where grey is DeviceGray
+	 */
+	public function initialColor()
+	{
+		if (!$this->writesCalibratedGray()) {
+			return '';
+		}
+
+		$black = $this->colorConverter->convert(0, $this->PDFAXwarnings);
+
+		return $this->SetColor($black, 'Fill') . ' ' . $this->SetColor($black, 'Draw') . "\n";
 	}
 
 	/**
@@ -3640,21 +3685,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return '';
 		} // mPDF 6
 
-		// Where DeviceRGB is not permitted, RGB is set in the ICC-based sRGB colour space the page's
-		// resources name. An annotation's colour array is a device colour and stays one; PDF/X writes
-		// no annotations anyway.
-		if (($col[0] == 3 || $col[0] == 5) && $type !== 'CodeOnly' && $this->writesCalibratedRgb()) {
-			$this->usesCalibratedRgb = true;
+		// Where DeviceRGB or DeviceGray is not permitted, RGB or grey is set in the ICC-based sRGB or grey
+		// colour space the page's resources name. An annotation's colour array is a device colour and
+		// stays one; PDF/X writes no annotations anyway.
+		$calibrated = null;
+		if ($type !== 'CodeOnly') {
+			if (($col[0] == 3 || $col[0] == 5) && $this->writesCalibratedRgb()) {
+				$this->usesCalibratedRgb = true;
+				$calibrated = [Writer\BaseWriter::CALIBRATED_RGB, sprintf('%.3F %.3F %.3F', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255)];
+			} elseif ($col[0] == 1 && $this->writesCalibratedGray()) {
+				$this->usesCalibratedGray = true;
+				$calibrated = [Writer\BaseWriter::CALIBRATED_GRAY, sprintf('%.3F', ord($col[1]) / 255)];
+			}
+		}
 
-			return sprintf(
-				'/%s %s %.3F %.3F %.3F %s',
-				Writer\BaseWriter::CALIBRATED_RGB,
-				$type === 'Draw' ? 'CS' : 'cs',
-				ord($col[1]) / 255,
-				ord($col[2]) / 255,
-				ord($col[3]) / 255,
-				$type === 'Draw' ? 'SC' : 'sc'
-			);
+		if ($calibrated) {
+			return $type === 'Draw'
+				? sprintf('/%s CS %s SC', $calibrated[0], $calibrated[1])
+				: sprintf('/%s cs %s sc', $calibrated[0], $calibrated[1]);
 		}
 
 		if ($col[0] == 3 || $col[0] == 5) { // RGB / RGBa

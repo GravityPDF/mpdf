@@ -5,6 +5,7 @@ namespace Mpdf\Writer;
 use Mpdf\Fonts\Color\ColorFontFile;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\Color\ColorGlyphSource;
+use Mpdf\Fonts\Color\Geometry;
 use Mpdf\Fonts\Color\GlyphResources;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Image\ImageTypeGuesser;
@@ -243,9 +244,40 @@ class Type3FontWriter implements GlyphResources
 			return vsprintf('%.3F %.3F %.3F ', $rgb) . ($stroking ? 'RG' : 'rg');
 		}
 
-		$this->drawn['colorSpaces'][BaseWriter::CALIBRATED_RGB] = $calibrated;
+		return $this->setByName(BaseWriter::CALIBRATED_RGB, $calibrated, vsprintf('%.3F %.3F %.3F', $rgb), $stroking);
+	}
 
-		return '/' . BaseWriter::CALIBRATED_RGB . ' ' . ($stroking ? 'CS ' : 'cs ') . vsprintf('%.3F %.3F %.3F ', $rgb) . ($stroking ? 'SC' : 'sc');
+	/**
+	 * Grey is DeviceGray, or where the document may not use DeviceGray, the ICC-based grey colour space
+	 * BaseWriter::calibratedGray() writes, set by name
+	 *
+	 * @inheritdoc
+	 */
+	public function gray($level)
+	{
+		$calibrated = $this->writer->calibratedGray();
+		if ($calibrated === null) {
+			return Geometry::number($level) . ' g';
+		}
+
+		return $this->setByName(BaseWriter::CALIBRATED_GRAY, $calibrated, Geometry::number($level), false);
+	}
+
+	/**
+	 * Registers an ICC-based colour space on the subset being written, for its resources to name
+	 *
+	 * @param string $name       What the content sets it by, e.g. 'CSRGB'
+	 * @param int    $object     Its object number
+	 * @param string $components The colour in it, e.g. '1.000 0.800 0.200'
+	 * @param bool   $stroking   Whether it is the colour strokes are painted in, rather than fills
+	 *
+	 * @return string Content setting that colour in that colour space
+	 */
+	private function setByName($name, $object, $components, $stroking)
+	{
+		$this->drawn['colorSpaces'][$name] = $object;
+
+		return '/' . $name . ($stroking ? ' CS ' : ' cs ') . $components . ($stroking ? ' SC' : ' sc');
 	}
 
 	/**
@@ -314,7 +346,7 @@ class Type3FontWriter implements GlyphResources
 	public function softMask($content, array $box, $luminosity = false, $inverted = false)
 	{
 		// A mask of brightness is drawn in grey
-		$form = $this->form($content, $box, $luminosity ? ' /CS /DeviceGray' : '');
+		$form = $this->form($content, $box, $luminosity ? ' /CS ' . $this->writer->grayColorSpace() : '');
 		$key = $form . ($luminosity ? '-luminosity' : '-alpha') . ($inverted ? '-inverted' : '');
 		if (!isset($this->drawn['masks'][$key])) {
 			$this->drawn['masks'][$key] = ['name' => 'SM' . ++$this->named, 'form' => $form, 'luminosity' => $luminosity, 'inverted' => $inverted];
@@ -517,12 +549,12 @@ class Type3FontWriter implements GlyphResources
 	/**
 	 * @param array[] $stops As GlyphResources::shading() takes them
 	 *
-	 * @return string /DeviceGray or RGB, as the stops' colours are - see rgb()
+	 * @return string Grey or RGB, as the stops' colours are - see gray() and rgb()
 	 */
 	private function colourSpace(array $stops)
 	{
 		if (count($stops[0][1]) === 1) {
-			return '/DeviceGray';
+			return $this->writer->grayColorSpace();
 		}
 
 		$calibrated = $this->writer->calibratedRgb();
