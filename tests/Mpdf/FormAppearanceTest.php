@@ -318,6 +318,14 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * With ZapfDingbats gone nothing asks whether a form has checkboxes, so Form keeps no record of it (#462)
+	 */
+	public function testFormKeepsNoRecordOfCheckboxes()
+	{
+		$this->assertFalse(property_exists('Mpdf\Form', 'form_checkboxes'));
+	}
+
+	/**
 	 * A list box draws as many options as its size asks for, each whole and inside its own row, and nothing after
 	 * them
 	 *
