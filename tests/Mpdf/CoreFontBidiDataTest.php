@@ -22,11 +22,11 @@ class CoreFontBidiDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->WriteHTML('<table><tr><td><ul><li>One<ul><li>Caf&eacute; &Acirc;</li></ul></li></ul></td></tr></table>');
 
 		$this->assertContains(
-			[[0xA0, 0xA0, 0xA0, 0xA0, 0x2D, 0x20], [Ucdn::BIDI_CLASS_CS, Ucdn::BIDI_CLASS_CS, Ucdn::BIDI_CLASS_CS, Ucdn::BIDI_CLASS_CS, Ucdn::BIDI_CLASS_ES, Ucdn::BIDI_CLASS_WS]],
+			[[0xA0, 0xA0, 0xA0, 0xA0, 0x2D, 0x20], array_merge(array_fill(0, 4, Ucdn::BIDI_CLASS_CS), [Ucdn::BIDI_CLASS_ES, Ucdn::BIDI_CLASS_WS])],
 			$mpdf->bidiData
 		);
 		$this->assertContains(
-			[[0x43, 0x61, 0x66, 0xE9, 0x20, 0xC2], [Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_WS, Ucdn::BIDI_CLASS_L]],
+			[[0x43, 0x61, 0x66, 0xE9, 0x20, 0xC2], array_merge(array_fill(0, 4, Ucdn::BIDI_CLASS_L), [Ucdn::BIDI_CLASS_WS, Ucdn::BIDI_CLASS_L])],
 			$mpdf->bidiData
 		);
 	}
@@ -41,7 +41,7 @@ class CoreFontBidiDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->WriteHTML('<p>Caf&eacute; <span style="font-family:dejavusans">Caf&eacute;</span></p>');
 
 		$this->assertSame(
-			[[[0x43, 0x61, 0x66, 0xE9, 0x20], [Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_WS]]],
+			[[[0x43, 0x61, 0x66, 0xE9, 0x20], array_merge(array_fill(0, 4, Ucdn::BIDI_CLASS_L), [Ucdn::BIDI_CLASS_WS])]],
 			$mpdf->bidiData
 		);
 	}
@@ -57,8 +57,8 @@ class CoreFontBidiDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(
 			[
-				[[0x43, 0x61, 0x66, 0xE9, 0x20], [Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_WS]],
-				[[0x43, 0x61, 0x66, 0xE9], [Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L]],
+				[[0x43, 0x61, 0x66, 0xE9, 0x20], array_merge(array_fill(0, 4, Ucdn::BIDI_CLASS_L), [Ucdn::BIDI_CLASS_WS])],
+				[[0x43, 0x61, 0x66, 0xE9], array_fill(0, 4, Ucdn::BIDI_CLASS_L)],
 			],
 			$mpdf->bidiData
 		);
@@ -74,7 +74,7 @@ class CoreFontBidiDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->biDirectional = true;
 		$mpdf->MultiCell(0, 5, 'Caf' . UtfString::code2utf(0xE9));
 
-		$this->assertSame([[[0x43, 0x61, 0x66, 0xE9], [Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L, Ucdn::BIDI_CLASS_L]]], $mpdf->bidiData);
+		$this->assertSame([[[0x43, 0x61, 0x66, 0xE9], array_fill(0, 4, Ucdn::BIDI_CLASS_L)]], $mpdf->bidiData);
 	}
 
 	/**
