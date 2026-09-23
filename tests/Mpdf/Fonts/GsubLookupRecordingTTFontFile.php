@@ -12,12 +12,12 @@ class GsubLookupRecordingTTFontFile extends TTFontFile
 {
 
 	/**
-	 * @var array The font's GSUB lookups, rules read, or an empty array if it has no GSUB
+	 * @var array The font's GSUB lookups, empty if it has no GSUB
 	 */
 	public $gsubLookups = [];
 
 	/**
-	 * Records the lookups, then does what the parser does with them.
+	 * Records the lookups, then builds the shaper's tables from them as the parser does.
 	 *
 	 * @return string See TTFontFile::useGSUBlookups()
 	 */
