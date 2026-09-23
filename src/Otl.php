@@ -1446,6 +1446,25 @@ class Otl
 	}
 
 	/**
+	 * Whether some text is in a script with a shaper of its own, which reorders, joins or checks its characters
+	 * before the font's tables are applied
+	 *
+	 * @param string $str UTF-8
+	 *
+	 * @return bool
+	 */
+	public function hasComplexScript($str)
+	{
+		foreach (ScriptRuns::split($this->mpdf->UTF8StringToArray($str, false)) as $run) {
+			if ($this->selectShaper($run['script']) !== '') {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Which shaper a run gets once the font's GSUB script for it is known.
 	 *
 	 * As HarfBuzz's hb_ot_shaper_categorize(): a font designed for DFLT, or one where the choice fell

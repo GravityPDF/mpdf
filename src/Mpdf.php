@@ -2077,7 +2077,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 *
 	 * @param string $message
 	 */
-	private function pdfaxWarning($message)
+	public function pdfaxWarning($message)
 	{
 		if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
 			$this->PDFAXwarnings[] = $message;
