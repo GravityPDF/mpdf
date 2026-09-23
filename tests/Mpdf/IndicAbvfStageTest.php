@@ -7,9 +7,9 @@ namespace Mpdf;
  *
  * shapeIndic() names the stages of HarfBuzz's plan a feature at a time, and the Indic list was
  * `indic_features` in HarfBuzz's order with abvf missing from between blwf and half. The
- * presentation pass did not stand in for it - abvf is in the $omittags a document cannot get past -
- * so under the Indic and Sinhala shapers the feature was never applied at all, although the
- * reordering marks characters for it there exactly as it does for Khmer.
+ * presentation pass did not stand in for it - abvf is in Otl::PRESENTATION_OMIT_TAGS - so under the
+ * Indic and Sinhala shapers the feature was never applied at all, although the reordering marks
+ * characters for it there exactly as it does for Khmer.
  *
  * Nothing in the corpus states abvf under an Indic tag, so NotoSansBengali-AbvfStage-Synthetic is an
  * eight-glyph subset of Noto Sans Bengali 3.011 (SIL OFL 1.1 with no Reserved Font Name, fsType 0)
@@ -65,20 +65,14 @@ class IndicAbvfStageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Why abvf stays in the $omittags of the presentation pass. That pass carries no masks, so a tag
-	 * a document could add to it would have its Lookups taken a second time over every glyph of the
-	 * run, the base consonant included - the defect #263 removed, reached from a stylesheet instead.
-	 *
-	 * Neither direction of the request is honoured, since $omittags holds every tag of the basic
-	 * forms alike. HarfBuzz does honour it, by giving the feature another value at its own stage
-	 * rather than by a second pass, and draws both consonants as KHA for `--features=abvf`. That
-	 * divergence belongs to the whole list and is older than this; what is asserted here is only that
-	 * the Lookups are not taken twice.
+	 * A document turning abvf on has it at its own stage, over every glyph rather than only those the
+	 * reordering marked, which is what `hb-shape --features=abvf` draws. It is still not handed to
+	 * the presentation pass: Otl::PRESENTATION_OMIT_TAGS keeps it out of there.
 	 */
-	public function testADocumentNamingAbvfDoesNotTakeItsLookupsASecondTime()
+	public function testADocumentTurningAbvfOnHasItAtItsOwnStage()
 	{
 		$this->assertSame(
-			[self::GA, self::VIRAMA, self::KHA],
+			[self::KHA, self::VIRAMA, self::KHA],
 			$this->drawn([self::GA, self::VIRAMA, self::GA], "font-feature-settings:'abvf'")
 		);
 	}

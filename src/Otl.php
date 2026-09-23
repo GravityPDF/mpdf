@@ -38,18 +38,19 @@ class Otl
 
 	/**
 	 * The features the presentation pass must not take, whatever a document's font-feature-settings
-	 * asks for (GravityPDF/mpdf#280).
+	 * asks for.
 	 *
 	 * The syllable shapers apply their own basic forms before it, from their stage lists, against the
-	 * mask the reordering left on each glyph. The presentation pass carries no masks, so a Lookup
-	 * reached a second time from there would run over every glyph of the run rather than the ones
-	 * marked for it.
+	 * mask the reordering left on each glyph, and take a document's value for one of them there - see
+	 * shaperStage(). The presentation pass carries no masks, so a Lookup reached a second time from
+	 * there would run over every glyph of the run rather than the ones marked for it.
 	 *
-	 * So every tag a shaper applies for itself belongs here. The Arabic joining forms are here for the
-	 * same reason, applied from the joining tables rather than from a stage list. The Hangul jamo
-	 * forms are the exception that is not a shaper's: no stage list names them, and blocking them
-	 * costs nothing because none of these paths shapes Hangul. A script with no shaper passes an empty
-	 * list instead, and a document may ask for them there.
+	 * So every tag a shaper applies for itself belongs here, and the converse must hold too: a tag
+	 * here must be named by some shaper's stage list, or it is silently never applied under that
+	 * shaper, whatever the font offers or the document asks. The Arabic joining forms are named by
+	 * shapeArabic() and applied from the joining tables. The Hangul jamo forms are the one exception:
+	 * no stage list names them, which costs nothing because none of these shapers lays out Hangul. A
+	 * script with no shaper passes an empty list instead, and a document may ask for them there.
 	 */
 	const PRESENTATION_OMIT_TAGS = 'locl ccmp nukt akhn rphf rkrf pref blwf abvf half pstf cfar vatu cjct init medi fina isol med2 fin2 fin3 ljmo vjmo tjmo';
 
@@ -686,23 +687,12 @@ class Otl
 		Arabic::resolveJoining($this->OTLdata, $this->GlyphClassMarks, $GSUBscriptTag);
 
 		// a. Apply initial GSUB Lookups (in order specified in lookup list but only selecting from certain tags)
-		$tags = 'locl ccmp';
-		$omittags = '';
-		$usetags = $tags;
-		if (!empty($this->mpdf->OTLtags)) {
-			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
-		}
-		$this->_applyGSUBrules($usetags, $GSUBscriptTag, $GSUBlangsys);
+		$this->_applyGSUBrules($this->shaperStage('locl ccmp', $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys);
 
 		// b. Apply context-specific forms GSUB Lookups (initial, isolated, medial, final)
 		// Arab and Syriac are the only scripts requiring the special joining - which takes the place of
 		// isol fina medi init rules in GSUB (+ fin2 fin3 med2 in Syriac syrc)
-		$tags = 'isol fina fin2 fin3 medi med2 init';
-		$omittags = '';
-		$usetags = $tags;
-		if (!empty($this->mpdf->OTLtags)) {
-			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
-		}
+		$usetags = $this->shaperStage('isol fina fin2 fin3 medi med2 init', $GSUBFeatures);
 
 		$multiple = Arabic::shape($this->OTLdata, $this->GSUBdata[$this->GSUBfont]['rtlSUB'], $usetags);
 
@@ -906,7 +896,8 @@ class Otl
 				$dottedcircle[0]['hex'] = '025CC';  // TEMPORARY
 			}
 		}
-		Indic::initial_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $broken_syllables, $indic_config, $scriptblock, $is_old_spec, $dottedcircle);
+		$GSUBdata = $this->shaperGsubData($GSUBFeatures);
+		Indic::initial_reordering($this->OTLdata, $GSUBdata, $broken_syllables, $indic_config, $scriptblock, $is_old_spec, $dottedcircle);
 
 		// d. Apply initial and basic shaping forms GSUB Lookups (one at a time)
 		// Khmer writes its dependent forms round the base rather than reordering them, so it asks for
@@ -917,7 +908,7 @@ class Otl
 			? ['locl ccmp pref blwf abvf pstf cfar']
 			: ['locl ccmp', 'nukt', 'akhn', 'rphf', 'rkrf', 'pref', 'blwf', 'abvf', 'half', 'pstf', 'vatu', 'cjct'];
 		foreach ($stages as $tags) {
-			$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+			$this->_applyGSUBrulesIndic($this->shaperStage($tags, $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
 		}
 
 		// e. Final Re-ordering (Indic / Khmer / Sinhala)
@@ -925,12 +916,11 @@ class Otl
 		// Reorder reph
 		// Reorder pre-base reordering consonants:
 
-		Indic::final_reordering($this->OTLdata, $this->GSUBdata[$this->GSUBfont], $indic_config, $scriptblock, $is_old_spec);
+		Indic::final_reordering($this->OTLdata, $GSUBdata, $indic_config, $scriptblock, $is_old_spec);
 
 		// f. Apply 'init' feature to first syllable in word (indicated by ['mask']) Indic::FLAG(Indic::INIT);
 		if ($this->shaper == 'I' || $this->shaper == 'S') {
-			$tags = 'init';
-			$this->_applyGSUBrulesIndic($tags, $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+			$this->_applyGSUBrulesIndic($this->shaperStage('init', $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
 		}
 
 		// g. Apply Presentation Forms GSUB Lookups (+ any discretionary)
@@ -990,7 +980,7 @@ class Otl
 		// One call per stage of HarfBuzz's Myanmar plan
 		$stages = ['locl ccmp', 'rphf', 'pref', 'blwf', 'pstf'];
 		foreach ($stages as $tags) {
-			$this->_applyGSUBrulesMyanmar($tags, $GSUBscriptTag, $GSUBlangsys);
+			$this->_applyGSUBrulesMyanmar($this->shaperStage($tags, $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys);
 		}
 
 		// d. Apply Presentation Forms GSUB Lookups (+ any discretionary)
@@ -1034,8 +1024,7 @@ class Otl
 		$sea_category_string = '';
 
 		// b. Apply locl and ccmp shaping forms - before initial re-ordering; GSUB Lookups (one at a time)
-		$tags = 'locl ccmp';
-		$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
+		$this->_applyGSUBrulesSingly($this->shaperStage('locl ccmp', $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys);
 
 		// c. Initial Re-ordering
 		// Find base consonant
@@ -1063,7 +1052,7 @@ class Otl
 		// One call per stage of the plan HarfBuzz builds for these scripts
 		$stages = ['pref', 'abvf blwf pstf'];
 		foreach ($stages as $tags) {
-			$this->_applyGSUBrulesSingly($tags, $GSUBscriptTag, $GSUBlangsys);
+			$this->_applyGSUBrulesSingly($this->shaperStage($tags, $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys);
 		}
 
 		// e. Final Re-ordering
@@ -1587,6 +1576,52 @@ class Otl
 	}
 
 	/**
+	 * One stage of the features a shaper applies for itself, less those the document turned off.
+	 *
+	 * HarfBuzz takes a document's value for one of these features at the stage its shaper applies
+	 * it, and a feature valued 0 there is left out of the plan. The document may not add to the
+	 * stage, and what it names is never handed on to the presentation pass: that pass carries no
+	 * masks, and would take the feature's Lookups a second time over every glyph of the run.
+	 *
+	 * @param string $tags     The stage's features, space separated
+	 * @param array  $Features The features this font offers for the script and language in hand
+	 *
+	 * @return string The stage's features, space separated
+	 */
+	private function shaperStage($tags, $Features)
+	{
+		if (empty($this->mpdf->OTLtags)) {
+			return $tags;
+		}
+
+		return $this->_applyTagSettings($tags, $Features, '', true);
+	}
+
+	/**
+	 * The derived tables the Indic reordering reads, with those of a feature the document turned off
+	 * emptied.
+	 *
+	 * The reordering reads them to find the base consonant, the reph and the pre-base form, where
+	 * HarfBuzz asks its plan whether the feature would substitute - and a feature switched off is not
+	 * in the plan, so it would not.
+	 *
+	 * @param array $Features The features this font offers for the script and language in hand
+	 *
+	 * @return array The derived tables, keyed as GSUBdata
+	 */
+	private function shaperGsubData($Features)
+	{
+		$GSUBdata = $this->GSUBdata[$this->GSUBfont];
+		foreach (['rphf', 'pref', 'blwf', 'pstf'] as $tag) {
+			if (trim($this->shaperStage($tag, $Features)) === '') {
+				$GSUBdata[$tag] = [];
+			}
+		}
+
+		return $GSUBdata;
+	}
+
+	/**
 	 * Add the features the document asked for to a default set, and take out the ones it turned off.
 	 *
 	 * font-variant and font-feature-settings both reach here; the first four-letter tag in either is
@@ -1595,8 +1630,8 @@ class Otl
 	 *
 	 * @param string $tags     The features that would be used by default, space separated
 	 * @param array  $Features The features this font offers for the script and language in hand
-	 * @param string $omittags Features that may not be turned on here whatever the document says,
-	 *                         because the shaper applies them itself
+	 * @param string $omittags Features the document may neither add nor remove here, because the
+	 *                         shaper applies them itself at a stage of its own
 	 * @param bool   $onlytags Whether the document may only turn off features already in $tags,
 	 *                         rather than add any
 	 *
@@ -2058,11 +2093,16 @@ class Otl
 	 * The bit each Indic feature sets on the glyphs it may be applied to. The tags left out apply to
 	 * every glyph in the syllable and have no bit of their own.
 	 *
+	 * A feature the document's font-feature-settings turned on is left out too. HarfBuzz makes a
+	 * feature a document names for the whole run global, which sets its bit on every glyph, so it is
+	 * still applied once, at its own stage, but no longer only where the reordering marked a
+	 * character for it.
+	 *
 	 * @return array The mask, by feature tag
 	 */
 	private function indicFeatureMasks()
 	{
-		return [
+		$masks = [
 			'rphf' => Indic::FLAG(Indic::RPHF),
 			'pref' => Indic::FLAG(Indic::PREF),
 			'blwf' => Indic::FLAG(Indic::BLWF),
@@ -2072,6 +2112,13 @@ class Otl
 			'cfar' => Indic::FLAG(Indic::CFAR),
 			'init' => Indic::FLAG(Indic::INIT),
 		];
+
+		if (!empty($this->mpdf->OTLtags['FFPlus'])) {
+			preg_match_all('/([a-zA-Z0-9]{4})[\d]*/', $this->mpdf->OTLtags['FFPlus'], $m);
+			$masks = array_diff_key($masks, array_flip($m[1]));
+		}
+
+		return $masks;
 	}
 
 	/**
