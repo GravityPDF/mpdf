@@ -29,7 +29,7 @@
 
 			<assert test="count(outputIntents/outputIntent[subtype = 'GTS_PDFX']/destOutputIntent) = 1">[dest-output-profile] The output intent of a PDF/X-4 document names an embedded ICC profile in /DestOutputProfile, and this one names none.</assert>
 
-			<assert test="count(iccProfiles/iccProfile[@id = current()/outputIntents/outputIntent/destOutputIntent/@id][normalize-space(dataColorSpace) = 'GRAY' or normalize-space(dataColorSpace) = 'RGB' or normalize-space(dataColorSpace) = 'Lab' or normalize-space(dataColorSpace) = 'CMYK']) = 1">[intent-colour-space] The profile the output intent names is embedded and prints to grey, RGB, Lab or CMYK.</assert>
+			<assert test="count(iccProfiles/iccProfile[@id = current()/outputIntents/outputIntent/destOutputIntent/@id][normalize-space(dataColorSpace) = 'GRAY' or normalize-space(dataColorSpace) = 'RGB' or normalize-space(dataColorSpace) = 'CMYK']) = 1">[intent-colour-space] The profile the output intent names is embedded and prints to grey, RGB or CMYK.</assert>
 
 		</rule>
 	</pattern>
