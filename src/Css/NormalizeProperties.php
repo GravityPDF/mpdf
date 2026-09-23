@@ -278,6 +278,7 @@ class NormalizeProperties
 					in_array($candidate, $this->mpdf->sans_fonts, true) ||
 					in_array($candidate, $this->mpdf->serif_fonts, true) ||
 					in_array($candidate, $this->mpdf->mono_fonts, true) ||
+					in_array($candidate, ['ccourier', 'ctimes', 'chelvetica'], true) ||
 					($this->mpdf->onlyCoreFonts && in_array($candidate, ['courier', 'times', 'helvetica', 'arial'], true)) ||
 					in_array($candidate, ['sjis', 'uhc', 'big5', 'gb'], true)
 				) {
