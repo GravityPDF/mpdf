@@ -21,7 +21,6 @@ use Mpdf\Http\CurlHttpClient;
 use Mpdf\Http\SocketHttpClient;
 use Mpdf\Image\ImageProcessor;
 use Mpdf\Pdf\Protection;
-use Mpdf\Pdf\Protection\UniqidGenerator;
 use Mpdf\Writer\BaseWriter;
 use Mpdf\Writer\BackgroundWriter;
 use Mpdf\Writer\ColorWriter;
@@ -120,7 +119,7 @@ class ServiceFactory
 
 		$otl = new Otl($mpdf, $fontCache);
 
-		$protection = new Protection(new UniqidGenerator());
+		$protection = new Protection();
 
 		$writer = new BaseWriter($mpdf, $protection);
 

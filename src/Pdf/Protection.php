@@ -2,40 +2,46 @@
 
 namespace Mpdf\Pdf;
 
-use Mpdf\Pdf\Protection\UniqidGenerator;
+use Mpdf\MpdfException;
+use Mpdf\Pdf\Protection\PasswordHash;
 
+/**
+ * The standard security handler at AES-256 (ISO 32000-2, revision 6; PDF 1.7 Adobe extension level 8)
+ *
+ * The file key is 32 random bytes, stored wrapped under each password in /UE and /OE. Every string and stream is
+ * encrypted with that key alone, each with its own random IV.
+ */
 class Protection
 {
 
 	/**
-	 * @var string
+	 * Bits 7, 8 and 13 to 32 of /P are reserved and set, as a signed 32-bit integer
 	 */
-	private $lastRc4Key;
+	const RESERVED_PERMISSION_BITS = -3904;
+
+	/**
+	 * @var int[] Array of permission => bit
+	 */
+	private $options = [
+		'print' => 4, // bit 3
+		'modify' => 8, // bit 4
+		'copy' => 16, // bit 5
+		'annot-forms' => 32, // bit 6
+		'fill-forms' => 256, // bit 9
+		'extract' => 512, // bit 10
+		'assemble' => 1024, // bit 11
+		'print-highres' => 2048 // bit 12
+	];
+
+	/**
+	 * @var \Mpdf\Pdf\Protection\PasswordHash
+	 */
+	private $passwordHash;
 
 	/**
 	 * @var string
 	 */
-	private $lastRc4KeyC;
-
-	/**
-	 * @var bool
-	 */
-	private $useRC128Encryption;
-
-	/**
-	 * @var string
-	 */
-	private $encryptionKey;
-
-	/**
-	 * @var string
-	 */
-	private $padding;
-
-	/**
-	 * @var string
-	 */
-	private $uniqid;
+	private $fileKey;
 
 	/**
 	 * @var string
@@ -50,160 +56,154 @@ class Protection
 	/**
 	 * @var string
 	 */
+	private $oeValue;
+
+	/**
+	 * @var string
+	 */
+	private $ueValue;
+
+	/**
+	 * @var int
+	 */
 	private $pValue;
 
 	/**
-	 * @var int[] Array of permission => byte representation
+	 * @var string
 	 */
-	private $options;
+	private $permsValue;
 
 	/**
-	 * @var \Mpdf\Pdf\Protection\UniqidGenerator
+	 * Nothing is encrypted until setProtection() makes the key
 	 */
-	private $uniqidGenerator;
-
-	public function __construct(UniqidGenerator $uniqidGenerator)
+	public function __construct()
 	{
-		if (!function_exists('random_int') || !function_exists('random_bytes')) {
-			throw new \Mpdf\MpdfException(
-				'Unable to set PDF file protection, CSPRNG Functions are not available. '
-				. 'Use paragonie/random_compat polyfill or upgrade to PHP 7.'
-			);
-		}
-
-		$this->uniqidGenerator = $uniqidGenerator;
-
-		$this->lastRc4Key = '';
-
-		$this->padding = "\x28\xBF\x4E\x5E\x4E\x75\x8A\x41\x64\x00\x4E\x56\xFF\xFA\x01\x08" .
-			"\x2E\x2E\x00\xB6\xD0\x68\x3E\x80\x2F\x0C\xA9\xFE\x64\x53\x69\x7A";
-
-		$this->useRC128Encryption = false;
-
-		$this->options = [
-			'print' => 4, // bit 3
-			'modify' => 8, // bit 4
-			'copy' => 16, // bit 5
-			'annot-forms' => 32, // bit 6
-			'fill-forms' => 256, // bit 9
-			'extract' => 512, // bit 10
-			'assemble' => 1024, // bit 11
-			'print-highres' => 2048 // bit 12
-		];
+		$this->passwordHash = new PasswordHash();
 	}
 
 	/**
-	 * @param array $permissions
-	 * @param string $user_pass
-	 * @param string $owner_pass
-	 * @param int $length
+	 * Makes a new file key and the entries that open it. Nothing changes unless all of them are made.
 	 *
-	 * @return bool
+	 * @param string[]|string|null $permissions What a user who opens the document with the user password may do;
+	 *                                          empty or null permits nothing
+	 * @param string $user_pass UTF-8; empty lets anyone open the document
+	 * @param string|null $owner_pass UTF-8; null makes a random one
+	 *
+	 * @return bool Always true: the document is to be encrypted
+	 *
+	 * @throws \Mpdf\MpdfException
 	 */
-	public function setProtection($permissions = [], $user_pass = '', $owner_pass = null, $length = 40)
-	{
-		if (is_string($permissions) && strlen($permissions) > 0) {
+	public function setProtection(
+		$permissions = [],
+		#[\SensitiveParameter]
+		$user_pass = '',
+		#[\SensitiveParameter]
+		$owner_pass = null
+	) {
+		if ($permissions === null || $permissions === '') {
+			$permissions = [];
+		} elseif (is_string($permissions)) {
 			$permissions = [$permissions];
 		} elseif (!is_array($permissions)) {
-			return false;
+			throw new MpdfException('PDF permissions must be an array of permission names');
 		}
 
-		$protection = $this->getProtectionBitsFromOptions($permissions);
-
-		if ($length === 128) {
-			$this->useRC128Encryption = true;
-		} elseif ($length !== 40) {
-			throw new \Mpdf\MpdfException('PDF protection only allows lenghts of 40 or 128');
+		if (!function_exists('openssl_encrypt')) {
+			throw new MpdfException('Unable to set PDF file protection, the OpenSSL extension is not available.');
 		}
+
+		$pValue = $this->getProtectionBitsFromOptions($permissions);
 
 		if ($owner_pass === null) {
 			$owner_pass = bin2hex(random_bytes(23));
 		}
 
-		$this->generateEncryptionKey($user_pass, $owner_pass, $protection);
+		$user_pass = $this->passwordHash->prepare($user_pass);
+		$owner_pass = $this->passwordHash->prepare($owner_pass);
+
+		$fileKey = random_bytes(32);
+
+		list($uValue, $ueValue) = $this->passwordEntries($fileKey, $user_pass, '');
+		list($oValue, $oeValue) = $this->passwordEntries($fileKey, $owner_pass, $uValue);
+
+		// Algorithm 10: /P, a flag saying metadata is encrypted, and "adb", encrypted with the file key
+		$perms = pack('V', $pValue) . "\xFF\xFF\xFF\xFF" . 'Tadb' . random_bytes(4);
+
+		$this->permsValue = $this->aes($perms, 'aes-256-ecb', $fileKey, OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING, '');
+		$this->fileKey = $fileKey;
+		$this->pValue = $pValue;
+		$this->uValue = $uValue;
+		$this->ueValue = $ueValue;
+		$this->oValue = $oValue;
+		$this->oeValue = $oeValue;
 
 		return true;
 	}
 
 	/**
-	 * Compute key depending on object number where the encrypted data is stored
+	 * Encrypts a string or stream: a random IV followed by the data in AES-256-CBC with PKCS#7 padding
 	 *
-	 * @param int $n
-	 *
-	 * @return string
-	 */
-	public function objectKey($n)
-	{
-		if ($this->useRC128Encryption) {
-			$len = 16;
-		} else {
-			$len = 10;
-		}
-
-		return substr($this->md5toBinary($this->encryptionKey . pack('VXxx', $n)), 0, $len);
-	}
-
-	/**
-	 * RC4 is the standard encryption algorithm used in PDF format
-	 *
-	 * @param string $key
-	 * @param string $text
+	 * @param string $data
 	 *
 	 * @return string
+	 *
+	 * @throws \Mpdf\MpdfException When there is no key to encrypt with
 	 */
-	public function rc4($key, $text)
+	public function encrypt($data)
 	{
-		if ($this->lastRc4Key != $key) {
-			$k = str_repeat($key, round(256 / strlen($key)) + 1);
-			$rc4 = range(0, 255);
-			$j = 0;
-			for ($i = 0; $i < 256; $i++) {
-				$t = $rc4[$i];
-				$j = ($j + $t + ord($k[$i])) % 256;
-				$rc4[$i] = $rc4[$j];
-				$rc4[$j] = $t;
-			}
-			$this->lastRc4Key = $key;
-			$this->lastRc4KeyC = $rc4;
-		} else {
-			$rc4 = $this->lastRc4KeyC;
+		if ($this->fileKey === null) {
+			throw new MpdfException('Unable to encrypt without a key: call SetProtection() first');
 		}
 
-		$len = strlen($text);
-		$a = 0;
-		$b = 0;
-		$out = '';
-		for ($i = 0; $i < $len; $i++) {
-			$a = ($a + 1) % 256;
-			$t = $rc4[$a];
-			$b = ($b + $t) % 256;
-			$rc4[$a] = $rc4[$b];
-			$rc4[$b] = $t;
-			$k = $rc4[($rc4[$a] + $rc4[$b]) % 256];
-			$out .= chr(ord($text[$i]) ^ $k);
+		$iv = random_bytes(16);
+
+		return $iv . $this->aes($data, 'aes-256-cbc', $this->fileKey, OPENSSL_RAW_DATA, $iv);
+	}
+
+	/**
+	 * Whether this is the /U entry of the key encrypt() uses
+	 *
+	 * @param string $uValue
+	 *
+	 * @return bool
+	 */
+	public function isUValue($uValue)
+	{
+		return $this->uValue !== null && hash_equals($this->uValue, $uValue);
+	}
+
+	/**
+	 * @param string $data What encrypt() made
+	 *
+	 * @return string
+	 *
+	 * @throws \Mpdf\MpdfException When the data was not encrypted with this document's key
+	 */
+	public function decrypt($data)
+	{
+		$plain = openssl_decrypt(substr($data, 16), 'aes-256-cbc', $this->fileKey, OPENSSL_RAW_DATA, substr($data, 0, 16));
+
+		if ($plain === false) {
+			throw new MpdfException('Unable to decrypt data that was not encrypted with the key of this document');
 		}
 
-		return $out;
+		return $plain;
 	}
 
 	/**
-	 * @return mixed
+	 * How long encrypt() makes data of this length: the IV and the data padded to a whole block
+	 *
+	 * @param int $length
+	 *
+	 * @return int
 	 */
-	public function getUseRC128Encryption()
+	public function encryptedLength($length)
 	{
-		return $this->useRC128Encryption;
+		return 32 + $length - $length % 16;
 	}
 
 	/**
-	 * @return mixed
-	 */
-	public function getUniqid()
-	{
-		return $this->uniqid;
-	}
-
-	/**
-	 * @return mixed
+	 * @return string
 	 */
 	public function getOValue()
 	{
@@ -211,7 +211,7 @@ class Protection
 	}
 
 	/**
-	 * @return mixed
+	 * @return string
 	 */
 	public function getUValue()
 	{
@@ -219,142 +219,101 @@ class Protection
 	}
 
 	/**
-	 * @return mixed
+	 * @return string
+	 */
+	public function getOEValue()
+	{
+		return $this->oeValue;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getUEValue()
+	{
+		return $this->ueValue;
+	}
+
+	/**
+	 * @return int
 	 */
 	public function getPValue()
 	{
 		return $this->pValue;
 	}
 
+	/**
+	 * @return string
+	 */
+	public function getPermsValue()
+	{
+		return $this->permsValue;
+	}
+
+	/**
+	 * @param string[] $permissions
+	 *
+	 * @return int /P as a signed 32-bit integer
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
 	private function getProtectionBitsFromOptions($permissions)
 	{
-		// bit 31 = 1073741824
-		// bit 32 = 2147483648
-		// bits 13-31 = 2147479552
-		// bits 13-32 = 4294963200 + 192 = 4294963392
-
-		$protection = 4294963392; // bits 7, 8, 13-32
+		$protection = self::RESERVED_PERMISSION_BITS;
 
 		foreach ($permissions as $permission) {
 			if (!isset($this->options[$permission])) {
-				throw new \Mpdf\MpdfException(sprintf('Invalid permission type "%s"', $permission));
+				throw new MpdfException(sprintf('Invalid permission type "%s"', $permission));
 			}
-			if ($this->options[$permission] > 32) {
-				$this->useRC128Encryption = true;
-			}
-			if (isset($this->options[$permission])) {
-				$protection += $this->options[$permission];
-			}
+
+			$protection |= $this->options[$permission];
 		}
 
 		return $protection;
 	}
 
-	private function oValue($user_pass, $owner_pass)
+	/**
+	 * Algorithms 8 and 9: the /U or /O entry that checks a password, and the /UE or /OE entry that holds the file key
+	 * under it, AES-256-CBC with a zero IV and no padding
+	 *
+	 * @param string $fileKey
+	 * @param string $password A prepared password
+	 * @param string $userKey Empty for the user password, /U for the owner password
+	 *
+	 * @return string[]
+	 */
+	private function passwordEntries($fileKey, $password, $userKey)
 	{
-		$tmp = $this->md5toBinary($owner_pass);
-		if ($this->useRC128Encryption) {
-			for ($i = 0; $i < 50; ++$i) {
-				$tmp = $this->md5toBinary($tmp);
-			}
-		}
-		if ($this->useRC128Encryption) {
-			$keybytelen = (128 / 8);
-		} else {
-			$keybytelen = (40 / 8);
-		}
-		$owner_rc4_key = substr($tmp, 0, $keybytelen);
-		$enc = $this->rc4($owner_rc4_key, $user_pass);
-		if ($this->useRC128Encryption) {
-			$len = strlen($owner_rc4_key);
-			for ($i = 1; $i <= 19; ++$i) {
-				$key = '';
-				for ($j = 0; $j < $len; ++$j) {
-					$key .= chr(ord($owner_rc4_key[$j]) ^ $i);
-				}
-				$enc = $this->rc4($key, $enc);
-			}
-		}
+		$validationSalt = random_bytes(8);
+		$keySalt = random_bytes(8);
 
-		return $enc;
+		$check = $this->passwordHash->hash($password, $validationSalt, $userKey) . $validationSalt . $keySalt;
+		$key = $this->passwordHash->hash($password, $keySalt, $userKey);
+
+		return [$check, $this->aes($fileKey, 'aes-256-cbc', $key, OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING, str_repeat("\0", 16))];
 	}
 
-	private function uValue()
+	/**
+	 * openssl_encrypt(), throwing where it fails rather than handing back false
+	 *
+	 * @param string $data
+	 * @param string $cipher
+	 * @param string $key
+	 * @param int $options
+	 * @param string $iv
+	 *
+	 * @return string
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	private function aes($data, $cipher, $key, $options, $iv)
 	{
-		if ($this->useRC128Encryption) {
-			$tmp = $this->md5toBinary($this->padding . $this->hexToString($this->uniqid));
-			$enc = $this->rc4($this->encryptionKey, $tmp);
-			$len = strlen($tmp);
-			for ($i = 1; $i <= 19; ++$i) {
-				$key = '';
-				for ($j = 0; $j < $len; ++$j) {
-					$key .= chr(ord($this->encryptionKey[$j]) ^ $i);
-				}
-				$enc = $this->rc4($key, $enc);
-			}
-			$enc .= str_repeat("\x00", 16);
+		$encrypted = openssl_encrypt($data, $cipher, $key, $options, $iv);
 
-			return substr($enc, 0, 32);
-		} else {
-			return $this->rc4($this->encryptionKey, $this->padding);
-		}
-	}
-
-	private function generateEncryptionKey($user_pass, $owner_pass, $protection)
-	{
-		// Pad passwords
-		$user_pass = substr($user_pass . $this->padding, 0, 32);
-		$owner_pass = substr($owner_pass . $this->padding, 0, 32);
-
-		$this->oValue = $this->oValue($user_pass, $owner_pass);
-
-		$this->uniqid = $this->uniqidGenerator->generate();
-
-		// Compute encyption key
-		if ($this->useRC128Encryption) {
-			$keybytelen = (128 / 8);
-		} else {
-			$keybytelen = (40 / 8);
+		if ($encrypted === false) {
+			throw new MpdfException(sprintf('Unable to encrypt with %s: %s', $cipher, openssl_error_string()));
 		}
 
-		$prot = sprintf('%032b', $protection);
-
-		$perms = chr(bindec(substr($prot, 24, 8)));
-		$perms .= chr(bindec(substr($prot, 16, 8)));
-		$perms .= chr(bindec(substr($prot, 8, 8)));
-		$perms .= chr(bindec(substr($prot, 0, 8)));
-
-		$tmp = $this->md5toBinary($user_pass . $this->oValue . $perms . $this->hexToString($this->uniqid));
-
-		if ($this->useRC128Encryption) {
-			for ($i = 0; $i < 50; ++$i) {
-				$tmp = $this->md5toBinary(substr($tmp, 0, $keybytelen));
-			}
-		}
-
-		$this->encryptionKey = substr($tmp, 0, $keybytelen);
-
-		$this->uValue = $this->uValue();
-		$this->pValue = $protection;
-	}
-
-	private function md5toBinary($string)
-	{
-		return pack('H*', md5($string));
-	}
-
-	private function hexToString($hs)
-	{
-		$s = '';
-		$len = strlen($hs);
-		if (($len % 2) != 0) {
-			$hs .= '0';
-			++$len;
-		}
-		for ($i = 0; $i < $len; $i += 2) {
-			$s .= chr(hexdec($hs[$i] . $hs[($i + 1)]));
-		}
-
-		return $s;
+		return $encrypted;
 	}
 }

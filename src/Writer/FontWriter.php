@@ -122,7 +122,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 						}
 					}
 
-					$this->writer->write('<</Length ' . strlen($font));
+					$this->writer->write('<</Length ' . $this->writer->streamLength($font));
 					$this->writer->write('/Filter /FlateDecode');
 					$this->writer->write('/Length1 ' . $originalsize);
 					$this->writer->write('>>');
@@ -290,13 +290,13 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$toUni .= "CMapName currentdict /CMap defineresource pop\n";
 					$toUni .= "end\n";
 					$toUni .= "end\n";
-					$this->writer->write('<</Length ' . strlen($toUni) . '>>');
+					$this->writer->write('<</Length ' . $this->writer->streamLength($toUni) . '>>');
 					$this->writer->stream($toUni);
 					$this->writer->write('endobj');
 
 					// Font file
 					$this->writer->object();
-					$this->writer->write('<</Length ' . strlen($fontstream));
+					$this->writer->write('<</Length ' . $this->writer->streamLength($fontstream));
 					$this->writer->write('/Filter /FlateDecode');
 					$this->writer->write('/Length1 ' . $ttfontsize);
 					$this->writer->write('>>');
@@ -389,14 +389,14 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				$toUni .= "end\n";
 				$toUni .= "end\n";
 
-				$this->writer->write('<</Length ' . strlen($toUni) . '>>');
+				$this->writer->write('<</Length ' . $this->writer->streamLength($toUni) . '>>');
 				$this->writer->stream($toUni);
 				$this->writer->write('endobj');
 
 				// CIDSystemInfo dictionary
 				$this->writer->object();
-				$this->writer->write('<</Registry (Adobe)');
-				$this->writer->write('/Ordering (UCS)');
+				$this->writer->write('<</Registry ' . $this->writer->string('Adobe'));
+				$this->writer->write('/Ordering ' . $this->writer->string('UCS'));
 				$this->writer->write('/Supplement 0');
 				$this->writer->write('>>');
 				$this->writer->write('endobj');
@@ -415,7 +415,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				}
 
 				if ($font['panose']) {
-					$this->writer->write(' /Style << /Panose <' . $font['panose'] . '> >>');
+					$this->writer->write(' /Style << /Panose ' . $this->writer->hexString($font['panose']) . ' >>');
 				}
 
 				if ($asSubset) {
@@ -455,7 +455,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 				$this->writer->object();
-				$this->writer->write('<</Length ' . strlen($cidtogidmap) . '');
+				$this->writer->write('<</Length ' . $this->writer->streamLength($cidtogidmap) . '');
 				$this->writer->write('/Filter /FlateDecode');
 				$this->writer->write('>>');
 				$this->writer->stream($cidtogidmap);
@@ -464,7 +464,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				// Font file
 				if ($asSubset) {
 					$this->writer->object();
-					$this->writer->write('<</Length ' . strlen($fontstream));
+					$this->writer->write('<</Length ' . $this->writer->streamLength($fontstream));
 					$this->writer->write('/Filter /FlateDecode');
 					$this->writer->write('/Length1 ' . $ttfontsize);
 					$this->writer->write('>>');

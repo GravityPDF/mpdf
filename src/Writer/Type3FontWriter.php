@@ -725,7 +725,7 @@ class Type3FontWriter implements GlyphResources
 			$content = gzcompress($content);
 			$dictionary .= ' /Filter /FlateDecode';
 		}
-		$this->writer->write('<<' . ltrim($dictionary . ' /Length ' . strlen($content)) . '>>');
+		$this->writer->write('<<' . ltrim($dictionary . ' /Length ' . $this->writer->streamLength($content)) . '>>');
 		$this->writer->stream($content);
 		$this->writer->write('endobj');
 	}
@@ -779,7 +779,7 @@ class Type3FontWriter implements GlyphResources
 		$cmap .= "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n";
 
 		$this->writer->object();
-		$this->writer->write('<</Length ' . strlen($cmap) . '>>');
+		$this->writer->write('<</Length ' . $this->writer->streamLength($cmap) . '>>');
 		$this->writer->stream($cmap);
 		$this->writer->write('endobj');
 	}

@@ -249,7 +249,7 @@ final class PageWriter
 			// Page content
 			$this->writer->object();
 			$p = $this->mpdf->compress ? gzcompress($thispage) : $thispage;
-			$this->writer->write('<<' . $filter . '/Length ' . strlen($p) . '>>');
+			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . '>>');
 			$this->writer->stream($p);
 			$this->writer->write('endobj');
 		}

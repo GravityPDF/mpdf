@@ -31,7 +31,7 @@ final class JavaScriptWriter
 		$this->writer->object();
 		$this->mpdf->n_js = $this->mpdf->n;
 		$this->writer->write('<<');
-		$this->writer->write('/Names [(EmbeddedJS) ' . (1 + $this->mpdf->n) . ' 0 R ]');
+		$this->writer->write('/Names [' . $this->writer->string('EmbeddedJS') . ' ' . (1 + $this->mpdf->n) . ' 0 R ]');
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 

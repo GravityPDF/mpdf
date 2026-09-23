@@ -528,7 +528,7 @@ class ConfigVariables
 
 			// Dates the document at this Unix timestamp, or DateTimeInterface, instead of now. The Info and XMP dates,
 			// each annotation's, {DATE} in a header, and the file ID that is made from them follow it, so the same content
-			// gives the same bytes. An encrypted document keeps the random ID its key is made from.
+			// gives the same bytes. An encrypted document still differs, as its key and IVs are random.
 			'creationDate' => null,
 		];
 	}

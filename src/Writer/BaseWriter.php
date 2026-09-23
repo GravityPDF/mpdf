@@ -42,10 +42,31 @@ final class BaseWriter
 		}
 	}
 
+	/**
+	 * A hexadecimal string, encrypted when the document is
+	 *
+	 * @param string $hex Hexadecimal digits, which may be separated by white space as in the PDF syntax
+	 *
+	 * @return string
+	 */
+	public function hexString($hex)
+	{
+		if (!$this->mpdf->encrypted) {
+			return '<' . $hex . '>';
+		}
+
+		$hex = preg_replace('/\s+/', '', $hex);
+		if (strlen($hex) % 2) {
+			$hex .= '0';
+		}
+
+		return '<' . bin2hex($this->protection->encrypt(hex2bin($hex))) . '>';
+	}
+
 	public function string($s)
 	{
 		if ($this->mpdf->encrypted) {
-			$s = $this->protection->rc4($this->protection->objectKey($this->mpdf->currentObjectNumber), $s);
+			$s = $this->protection->encrypt($s);
 		}
 
 		return '(' . $this->escape($s) . ')';
@@ -61,14 +82,29 @@ final class BaseWriter
 		if (!$onlynewobj) {
 			$this->mpdf->offsets[$obj_id] = $this->mpdf->buffer->getLength();
 			$this->write($obj_id . ' 0 obj');
-			$this->mpdf->currentObjectNumber = $obj_id; // for later use with encryption
 		}
+	}
+
+	/**
+	 * The /Length of a stream that stream() writes with this data, which encryption lengthens
+	 *
+	 * @param string $s
+	 *
+	 * @return int
+	 */
+	public function streamLength($s)
+	{
+		if ($this->mpdf->encrypted) {
+			return $this->protection->encryptedLength(strlen($s));
+		}
+
+		return strlen($s);
 	}
 
 	public function stream($s)
 	{
 		if ($this->mpdf->encrypted) {
-			$s = $this->protection->rc4($this->protection->objectKey($this->mpdf->currentObjectNumber), $s);
+			$s = $this->protection->encrypt($s);
 		}
 
 		$this->write('stream');
@@ -80,7 +116,7 @@ final class BaseWriter
 	{
 		$s = $this->utf8ToUtf16BigEndian($s, true);
 		if ($this->mpdf->encrypted) {
-			$s = $this->protection->rc4($this->protection->objectKey($this->mpdf->currentObjectNumber), $s);
+			$s = $this->protection->encrypt($s);
 		}
 
 		return '(' . $this->escape($s) . ')';
