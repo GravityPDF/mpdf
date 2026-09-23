@@ -12,6 +12,9 @@ use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Output\Destination;
+use Mpdf\Pdf\DocumentProfile;
+use Mpdf\Invoice\EmbeddedInvoiceInterface;
+use Mpdf\Xmp\XmpExtensionInterface;
 use Mpdf\PsrLogAwareTrait\MpdfPsrLogAwareTrait;
 use Mpdf\QrCode;
 use Mpdf\Shaper\OtlData;
@@ -839,6 +842,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $associatedFiles; // associated files (see SetAssociatedFiles below)
 	var $additionalXmpRdf; // additional rdf added in xmp
 
+
 	var $aliasNbPg; // alias for total number of pages
 	var $aliasNbPgGp; // alias for total number of pages in page group
 
@@ -1019,6 +1023,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * @var \Mpdf\Writer\MetadataWriter
 	 */
 	private $metadataWriter;
+
+	/**
+	 * The XMP extensions the document carries: the embedded invoice's, and those registered with AddXmpExtension()
+	 *
+	 * @var \Mpdf\Xmp\XmpExtensions
+	 */
+	private $xmpExtensions;
 
 	/**
 	 * @var \Mpdf\Writer\ImageWriter
@@ -1997,6 +2008,49 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function SetAdditionalXmpRdf($s)
 	{
 		$this->additionalXmpRdf = $s;
+	}
+
+	/**
+	 * Embed invoice XML with the XMP that declares it, making the document an e-invoice, in place of any invoice embedded before
+	 *
+	 * The invoice decides the documents it may be embedded in, the name and relationship of its file, and its XMP. It is
+	 * embedded ahead of any files set by SetAssociatedFiles(), and its XMP is written like an extension registered with
+	 * AddXmpExtension(). For a Factur-X / ZUGFeRD invoice, in a PDF/A-3 document:
+	 *
+	 *     $mpdf->SetEmbeddedInvoice(new FacturX($xml));
+	 *
+	 * Extend FacturX for a later version of Factur-X, or implement EmbeddedInvoiceInterface for a specification that differs further.
+	 *
+	 * @see https://fnfe-mpe.org/factur-x/factur-x_en/ Factur-X, the specification shared with ZUGFeRD
+	 *
+	 * @param \Mpdf\Invoice\EmbeddedInvoiceInterface $invoice
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	function SetEmbeddedInvoice(EmbeddedInvoiceInterface $invoice)
+	{
+		$invoice->checkDocument(DocumentProfile::fromMpdf($this));
+		$this->xmpExtensions->set('SetEmbeddedInvoice()', $invoice);
+	}
+
+	/**
+	 * Add properties in a namespace of their own to the document's XMP metadata
+	 *
+	 * The document must be PDF/A or PDF/X, as mPDF writes XMP metadata for no other. Under PDF/A the extension schema that
+	 * declares the properties is written too. Extension schemas and their properties belong here rather than in
+	 * SetAdditionalXmpRdf(): an XMP packet holds only one list of extension schemas, and mPDF writes it.
+	 *
+	 * @param \Mpdf\Xmp\XmpExtensionInterface $extension
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	function AddXmpExtension(XmpExtensionInterface $extension)
+	{
+		if (!$this->metadataWriter->writesMetadata()) {
+			throw new \Mpdf\MpdfException('AddXmpExtension() needs a PDF/A or PDF/X document, as mPDF writes XMP metadata for no other. Set PDFA or PDFX to true in the constructor configuration.');
+		}
+
+		$this->xmpExtensions->add('AddXmpExtension()', $extension);
 	}
 
 	function SetAnchor2Bookmark($x)
@@ -10656,8 +10710,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
+		$invoice = $this->xmpExtensions->get('SetEmbeddedInvoice()');
+		if ($invoice instanceof EmbeddedInvoiceInterface) {
+			// PDFA, PDFAversion and PDFX are public, so check again the document the invoice ends up in
+			$invoice->checkDocument(DocumentProfile::fromMpdf($this));
+			$this->associatedFiles = array_merge([$invoice->getAssociatedFile()], (array) $this->associatedFiles);
+		}
+
 		// METADATA
-		if ($this->PDFA || $this->PDFX) {
+		if ($this->metadataWriter->writesMetadata()) {
 			$this->metadataWriter->writeMetadata();
 		}
 
