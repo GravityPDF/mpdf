@@ -11,6 +11,22 @@ use Mpdf\Unicode\Ucdn;
 class ConfigVariables
 {
 
+	/**
+	 * The default annotationFileAllowList: file types commonly embedded in PDFs that can't carry active content,
+	 * each mapped to the MIME types ext-fileinfo reports for them across libmagic versions
+	 */
+	const ANNOTATION_FILE_TYPES = [
+		'txt' => 'text/plain',
+		'xml' => ['application/xml', 'text/xml'],
+		'pdf' => 'application/pdf',
+		'csv' => ['text/csv', 'text/plain', 'application/csv'],
+		'json' => ['application/json', 'text/plain'],
+		'png' => 'image/png',
+		'jpg' => 'image/jpeg',
+		'jpeg' => 'image/jpeg',
+		'gif' => 'image/gif',
+	];
+
 	private $defaults;
 
 	public function __construct()
@@ -466,7 +482,26 @@ class ConfigVariables
 
 			'cacheCleanupInterval' => 3600,
 
+			// Embed the files annotations attach. When off, each such annotation is written as a text note
 			'allowAnnotationFiles' => false,
+
+			// Let <annotation file=""> in HTML attach a file; allowAnnotationFiles must be on too. When off, the
+			// attribute is ignored with a warning. Mpdf::Annotation() doesn't need it
+			'allowHtmlAnnotationFiles' => false,
+
+			// The file extensions annotations may embed, each mapped to the MIME type(s) ext-fileinfo may detect in
+			// the file, e.g. ['xml' => ['application/xml', 'text/xml'], 'pdf' => 'application/pdf']. A file whose
+			// extension or detected type is not listed is not embedded (see showAnnotationErrors).
+			// Setting it replaces the defaults; extend them with ConfigVariables::ANNOTATION_FILE_TYPES + [...]
+			'annotationFileAllowList' => self::ANNOTATION_FILE_TYPES,
+
+			// The largest file, in bytes, an annotation may attach; a larger one is not embedded (see
+			// showAnnotationErrors). The file is held in memory and compressed whole. 0 means no limit
+			'annotationFileMaxSize' => 10 * 1024 * 1024,
+
+			// Throw an MpdfAnnotationException where an annotation's file cannot be embedded. Otherwise (the default,
+			// unless debug is on) a warning is logged and the annotation is written as a text note without the file
+			'showAnnotationErrors' => false,
 
 			'hyphenationDictionaryFile' => __DIR__ . '/../../data/patterns/dictionary.txt',
 

@@ -8,6 +8,7 @@ use Mpdf\Http\ClientInterface;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\PsrHttpMessageShim\Request;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
+use Mpdf\Utils\Path;
 use Psr\Log\LoggerInterface;
 
 class AssetFetcher implements \Psr\Log\LoggerAwareInterface, \Mpdf\AssetFetcherInterface
@@ -114,7 +115,7 @@ class AssetFetcher implements \Psr\Log\LoggerAwareInterface, \Mpdf\AssetFetcherI
 
 	public function isPathLocal($path)
 	{
-		return str_starts_with($path, 'file://') || strpos($path, '://') === false; // @todo More robust implementation
+		return Path::isLocal($path);
 	}
 
 }

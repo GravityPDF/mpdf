@@ -9,9 +9,17 @@ namespace Mpdf;
 trait PageStreams
 {
 
-	private function mpdf($config = [])
+	/**
+	 * An uncompressed document
+	 *
+	 * @param array $config
+	 * @param \Mpdf\Container\ContainerInterface|null $container Services to use in place of mPDF's own
+	 *
+	 * @return \Mpdf\Mpdf
+	 */
+	private function mpdf($config = [], $container = null)
 	{
-		$mpdf = new Mpdf($config + ['mode' => 'c']);
+		$mpdf = new Mpdf($config + ['mode' => 'c'], $container);
 		$mpdf->compress = false;
 
 		return $mpdf;

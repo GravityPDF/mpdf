@@ -46,7 +46,7 @@ jobs:
         with:
           coverage: "none"
           php-version: "${{ matrix.php-version }}"
-          extensions: "mbstring, gd, bcmath, bz2"
+          extensions: "mbstring, gd, bcmath, bz2, fileinfo"
           tools: composer:v2
           ini-values: error_reporting=-1
 

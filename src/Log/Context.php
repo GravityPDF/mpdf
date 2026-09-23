@@ -15,6 +15,8 @@ class Context
 
 	const IMAGES = 'images';
 
+	const ANNOTATIONS = 'annotations';
+
 	const CSS_SIZE_CONVERSION = 'css_size_conversion';
 
 	const HTML_MARKUP = 'html_markup';
