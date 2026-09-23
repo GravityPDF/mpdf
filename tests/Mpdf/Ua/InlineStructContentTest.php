@@ -41,6 +41,26 @@ class InlineStructContentTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A link in the middle of a paragraph is read between the text before and after it.
+	 *
+	 * @return void
+	 */
+	public function testLinkIsReadBetweenTheTextAroundIt()
+	{
+		$output = $this->getOutput(
+			$this->makeMpdf(),
+			'<p>Claim<sup><a href="#fn1">1</a></sup>.</p><p id="fn1">1. Source.</p>'
+		);
+
+		$paragraph = $this->firstStructBodyContaining($output, 'P');
+		$this->assertNotNull($paragraph, 'a /S /P struct element must exist');
+		$this->assertMatchesRegularExpression(
+			'@/K \[<</Type /MCR /Pg \d+ 0 R /MCID 0>> \d+ 0 R <</Type /MCR /Pg \d+ 0 R /MCID 2>>\]@',
+			$paragraph
+		);
+	}
+
+	/**
 	 * The text of an abbr is held by the Span that carries its /E expansion.
 	 *
 	 * @return void

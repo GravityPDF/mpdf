@@ -36,6 +36,13 @@ class StructureWriter
 	private $pageRefMap = null;
 
 	/**
+	 * What firstContentKey() found for each element, by spl_object_hash(), while the tree is written
+	 *
+	 * @var array<string, int[]|null>
+	 */
+	private $firstContentKeys = [];
+
+	/**
 	 * @param Mpdf          $mpdf
 	 * @param BaseWriter    $writer
 	 * @param StructureTree $tree
@@ -83,7 +90,9 @@ class StructureWriter
 
 		$this->pageRefMap = $this->buildPageRefMap();
 
+		$this->firstContentKeys = [];
 		$this->writeElement($this->tree->getRoot());
+		$this->firstContentKeys = [];
 
 		$parentTreeObjNum = $this->writeParentTree();
 
@@ -239,10 +248,6 @@ class StructureWriter
 
 		$kParts = [];
 
-		foreach ($elem->getChildren() as $child) {
-			$kParts[] = $child->getObjNum() . ' 0 R';
-		}
-
 		$pageRefs = $this->pageRefMap;
 		$singleSimpleMcid = (
 			count($mcids) === 1
@@ -262,7 +267,12 @@ class StructureWriter
 			}
 			$kParts[] = (string) $mcids[0]['mcid'];
 		} else {
-			foreach ($mcids as $mcr) {
+			foreach ($this->kidsInReadingOrder($elem) as $kid) {
+				if ($kid instanceof StructureElement) {
+					$kParts[] = $kid->getObjNum() . ' 0 R';
+					continue;
+				}
+				$mcr = $kid;
 				$pageObjNum = (isset($mcr['pageRef']) && $mcr['pageRef'] > 0)
 					? $mcr['pageRef']
 					: (isset($pageRefs[$mcr['page']]) ? $pageRefs[$mcr['page']] : 0);
@@ -294,6 +304,77 @@ class StructureWriter
 
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
+	}
+
+	/**
+	 * The children of an element and its own marked content, in the order they are read.
+	 *
+	 * An inline element such as a Link is opened when its tag is read, before the text of the block
+	 * around it is drawn, so the order elements were added in does not tell where the block's own
+	 * text falls between them. Content drawn on a page is numbered as it is drawn, so a child is put
+	 * after the block's content drawn before its own; a child without any, such as a Form, after
+	 * the content the block had when the child was added. Children keep their order, and content
+	 * of an imported page keeps the order its source gave it.
+	 *
+	 * @param StructureElement $elem
+	 *
+	 * @return array<int, StructureElement|array{page:int, mcid:int, pageRef:int, stm:int}>
+	 */
+	private function kidsInReadingOrder(StructureElement $elem)
+	{
+		$mcids = $elem->getMcids();
+		$count = count($mcids);
+		$kids = [];
+		$next = 0;
+		foreach ($elem->getChildren() as $child) {
+			$key = $this->firstContentKey($child);
+			while ($next < $count) {
+				$mcr = $mcids[$next];
+				$before = ($key === null || !empty($mcr['stm']))
+					? $next < $child->getParentContentBefore()
+					: [$mcr['page'], $mcr['mcid']] < $key;
+				if (!$before) {
+					break;
+				}
+				$kids[] = $mcr;
+				$next++;
+			}
+			$kids[] = $child;
+		}
+
+		return array_merge($kids, array_slice($mcids, $next));
+	}
+
+	/**
+	 * Where the first content an element or its descendants drew on a page is: its /StructParents
+	 * key and MCID. Content inside a form XObject is left out, as its MCIDs are numbered apart.
+	 *
+	 * @param StructureElement $elem
+	 *
+	 * @return int[]|null Null when there is none
+	 */
+	private function firstContentKey(StructureElement $elem)
+	{
+		$hash = spl_object_hash($elem);
+		if (array_key_exists($hash, $this->firstContentKeys)) {
+			return $this->firstContentKeys[$hash];
+		}
+
+		$first = null;
+		foreach ($elem->getMcids() as $mcr) {
+			$key = [$mcr['page'], $mcr['mcid']];
+			if (empty($mcr['stm']) && ($first === null || $key < $first)) {
+				$first = $key;
+			}
+		}
+		foreach ($elem->getChildren() as $child) {
+			$key = $this->firstContentKey($child);
+			if ($key !== null && ($first === null || $key < $first)) {
+				$first = $key;
+			}
+		}
+
+		return $this->firstContentKeys[$hash] = $first;
 	}
 
 	/**

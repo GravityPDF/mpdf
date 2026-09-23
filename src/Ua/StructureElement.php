@@ -72,6 +72,14 @@ class StructureElement
 	protected $objNum;
 
 	/**
+	 * How much marked content the parent owned when this element was added, which places an element
+	 * with no content of its own, such as a Form, among the parent's content
+	 *
+	 * @var int
+	 */
+	protected $parentContentBefore;
+
+	/**
 	 * @param string $type       A standard PDF structure type
 	 * @param array  $attributes PDF attribute names, not HTML ones: ['Scope' => 'Row'], not ['scope' => 'row']
 	 *
@@ -95,6 +103,7 @@ class StructureElement
 		$this->textRuns   = [];
 		$this->id         = null;
 		$this->objNum     = 0;
+		$this->parentContentBefore = 0;
 	}
 
 	/** @return string */
@@ -149,6 +158,12 @@ class StructureElement
 	public function getObjNum()
 	{
 		return $this->objNum;
+	}
+
+	/** @return int How much marked content the parent owned when this element was added */
+	public function getParentContentBefore()
+	{
+		return $this->parentContentBefore;
 	}
 
 	// The mutators below are for StructureTree and StructureWriter; tag classes go through
@@ -334,6 +349,7 @@ class StructureElement
 	public function addChild(StructureElement $child)
 	{
 		$child->parent    = $this;
+		$child->parentContentBefore = count($this->mcids);
 		$this->children[] = $child;
 	}
 

@@ -153,4 +153,47 @@ class StructureWriterTest extends PdfUaTestCase
 		$this->assertStringNotContainsString(',', $m[1], '/BBox must use "." decimal separator');
 		$this->assertSame('10.5 20.25 100.125 200', trim($m[1]));
 	}
+
+	/**
+	 * A Link opened before the paragraph around it was drawn is written between the paragraph's
+	 * text before it and after it.
+	 */
+	public function testInlineChildIsWrittenBetweenTheContentAroundIt()
+	{
+		$tree = new StructureTree();
+		$tree->open('P');
+		$p = $tree->getCurrent();
+		$tree->open('Link');
+		$link = $tree->getCurrent();
+		$tree->close();
+		$tree->close();
+
+		$tree->addContentForElement($p, 0);
+		$tree->addContentForElement($link, 0);
+		$tree->addContentForElement($p, 0);
+
+		$pdf = preg_replace('/\s+/', ' ', $this->serialise($tree));
+
+		$this->assertStringContainsString('/S /P /P ' . $tree->getRoot()->getObjNum() . ' 0 R /K [0 ' . $link->getObjNum() . ' 0 R 2]', $pdf);
+	}
+
+	/**
+	 * A child with no content of its own, such as a Form, is written after the content its parent
+	 * had when it was added.
+	 */
+	public function testChildWithoutContentKeepsItsPlaceAmongTheContent()
+	{
+		$tree = new StructureTree();
+		$tree->open('Div');
+		$tree->addContent(0);
+		$tree->open('Form');
+		$form = $tree->getCurrent();
+		$tree->close();
+		$tree->addContent(0);
+		$tree->close();
+
+		$pdf = preg_replace('/\s+/', ' ', $this->serialise($tree));
+
+		$this->assertStringContainsString('/S /Div /P ' . $tree->getRoot()->getObjNum() . ' 0 R /K [0 ' . $form->getObjNum() . ' 0 R 1]', $pdf);
+	}
 }
