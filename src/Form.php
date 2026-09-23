@@ -98,7 +98,6 @@ class Form
 	 */
 	private $buttonGroups = [];
 
-	var $form_checkboxes;
 	var $pdf_acro_array;
 	var $pdf_array_co;
 	var $array_form_button_js;
@@ -167,7 +166,6 @@ class Form
 		$this->formAction = '';
 		$this->form_fonts = [];
 		$this->form_radio_groups = [];
-		$this->form_checkboxes = false;
 		$this->forms = [];
 		$this->pdf_array_co = '';
 	}
@@ -1423,9 +1421,6 @@ class Form
 			if ($disabled) {
 				$this->form_radio_groups[$name]['disabled'] = true;
 			}
-		}
-		if ($type === 'checkbox') {
-			$this->form_checkboxes = true;
 		}
 		if ($checked) {
 			$activ = 1;
