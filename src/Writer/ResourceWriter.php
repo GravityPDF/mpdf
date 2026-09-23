@@ -125,6 +125,7 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 
 		// Written before the dictionary that names it, since it is an object of its own
 		$calibratedRgb = $this->mpdf->usesCalibratedRgb() ? $this->writer->calibratedRgb() : null;
+		$calibratedGray = $this->mpdf->usesCalibratedGray() ? $this->writer->calibratedGray() : null;
 
 		// Resource dictionary
 		$this->mpdf->offsets[2] = $this->mpdf->buffer->getLength();
@@ -146,10 +147,13 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 		}
 		$this->writer->write('>>');
 
-		if (count($this->mpdf->spotColors) || $calibratedRgb) {
+		if (count($this->mpdf->spotColors) || $calibratedRgb || $calibratedGray) {
 			$this->writer->write('/ColorSpace <<');
 			if ($calibratedRgb) {
 				$this->writer->write('/' . BaseWriter::CALIBRATED_RGB . ' ' . $calibratedRgb . ' 0 R');
+			}
+			if ($calibratedGray) {
+				$this->writer->write('/' . BaseWriter::CALIBRATED_GRAY . ' ' . $calibratedGray . ' 0 R');
 			}
 			foreach ($this->mpdf->spotColors as $color) {
 				$this->writer->write('/CS' . $color['i'] . ' ' . $color['n'] . ' 0 R');

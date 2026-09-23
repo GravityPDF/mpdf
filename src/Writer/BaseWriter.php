@@ -38,6 +38,16 @@ final class BaseWriter
 	 */
 	private $calibratedRgb;
 
+	/**
+	 * The name the ICC-based grey colour space is set by, upper case for the same reason
+	 */
+	const CALIBRATED_GRAY = 'CSGRAY';
+
+	/**
+	 * @var int|null The object number of the ICC-based grey colour space, once written
+	 */
+	private $calibratedGray;
+
 	public function __construct(Mpdf $mpdf, Protection $protection)
 	{
 		$this->mpdf = $mpdf;
@@ -289,26 +299,68 @@ final class BaseWriter
 		}
 
 		if ($this->calibratedRgb === null) {
-			$profile = file_get_contents(__DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc');
-			$filter = '';
-			if ($this->mpdf->compress) {
-				$profile = gzcompress($profile);
-				$filter = '/Filter /FlateDecode ';
-			}
-
-			$this->object();
-			$this->write('<</N 3 ' . $filter . '/Length ' . strlen($profile) . '>>');
-			$this->stream($profile);
-			$this->write('endobj');
-
-			$this->object();
-			$this->write('[/ICCBased ' . ($this->mpdf->n - 1) . ' 0 R]');
-			$this->write('endobj');
-
-			$this->calibratedRgb = $this->mpdf->n;
+			$this->calibratedRgb = $this->iccBased(file_get_contents(__DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc'), 3);
 		}
 
 		return $this->calibratedRgb;
+	}
+
+	/**
+	 * The colour space grey is written in where it may not be DeviceGray: PDF/X-4 permits DeviceGray only
+	 * where its output intent is grey or CMYK, so under an RGB one grey is written in an ICC-based space
+	 * whose profile is data/iccprofiles/Gray_sRGB_TRC.icc. Written the first time it is asked for, so asked
+	 * for between objects.
+	 *
+	 * @return int|null The object number of the ICC-based colour space, or null where grey is DeviceGray
+	 */
+	public function calibratedGray()
+	{
+		if (!$this->mpdf->writesCalibratedGray()) {
+			return null;
+		}
+
+		if ($this->calibratedGray === null) {
+			$this->calibratedGray = $this->iccBased(file_get_contents(__DIR__ . '/../../data/iccprofiles/Gray_sRGB_TRC.icc'), 1);
+		}
+
+		return $this->calibratedGray;
+	}
+
+	/**
+	 * @return string The colour space grey is written in, for a dictionary to name: /DeviceGray, or a
+	 *                reference to the ICC-based grey colour space - see calibratedGray()
+	 */
+	public function grayColorSpace()
+	{
+		$calibrated = $this->calibratedGray();
+
+		return $calibrated === null ? '/DeviceGray' : $calibrated . ' 0 R';
+	}
+
+	/**
+	 * @param string $profile  An ICC profile
+	 * @param int    $channels The number of colour components it has
+	 *
+	 * @return int The object number of an ICC-based colour space on that profile, written with it
+	 */
+	private function iccBased($profile, $channels)
+	{
+		$filter = '';
+		if ($this->mpdf->compress) {
+			$profile = gzcompress($profile);
+			$filter = '/Filter /FlateDecode ';
+		}
+
+		$this->object();
+		$this->write('<</N ' . $channels . ' ' . $filter . '/Length ' . strlen($profile) . '>>');
+		$this->stream($profile);
+		$this->write('endobj');
+
+		$this->object();
+		$this->write('[/ICCBased ' . ($this->mpdf->n - 1) . ' 0 R]');
+		$this->write('endobj');
+
+		return $this->mpdf->n;
 	}
 
 	/**

@@ -636,7 +636,7 @@ class SvgRenderer
 			return null;
 		}
 
-		$mask = "0 g\n";
+		$mask = $this->resources->gray(0) . "\n";
 		foreach ($pieces as $piece) {
 			$mask .= $piece[0] . ($piece[1] ? 'f*' : 'f') . "\n";
 		}

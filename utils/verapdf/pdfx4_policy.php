@@ -37,7 +37,7 @@ $directory = __DIR__ . '/../../tmp/verapdf';
 
 // The features the policy reads. Anything not asked for is missing from the report, and an assertion
 // over what is missing passes in silence.
-$features = 'actions,annotations,colorSpace,iccProfile,imageXobject,informationDict,lowLevelInfo,metadata,outputIntent,page,shading';
+$features = 'actions,annotations,colorSpace,formXobject,iccProfile,imageXobject,informationDict,lowLevelInfo,metadata,outputIntent,page,shading';
 
 if (!is_dir($directory) && !mkdir($directory, 0777, true)) {
 	fwrite(STDERR, sprintf("Cannot write to %s\n", $directory));
@@ -81,6 +81,38 @@ function content()
 		. '<p style="color: #cc2222">Body text, and <span style="color: cmyk(10, 20, 30, 40)">a colour given as CMYK</span>.</p>'
 		. '<div style="background: linear-gradient(#ff0000, #0000ff); height: 15mm">A gradient</div>'
 		. '<img src="data:image/png;base64,' . $rgb . '" /> <img src="data:image/png;base64,' . $indexed . '" />';
+}
+
+/**
+ * @return string The HTML of what a document printing to sRGB draws in grey: a greyscale image, one with
+ *                alpha, whose soft mask is the one DeviceGray permitted, a gradient of grey stops, and
+ *                the luminosity soft masks behind an rgba gradient and a shadow
+ */
+function greyContent()
+{
+	$chunk = function ($type, $data) {
+		return pack('N', strlen($data)) . $type . $data . pack('N', crc32($type . $data));
+	};
+
+	$grey = '';
+	$greyAlpha = '';
+	for ($y = 0; $y < 8; $y++) {
+		$grey .= "\0";
+		$greyAlpha .= "\0";
+		for ($x = 0; $x < 8; $x++) {
+			$grey .= chr($x * 32);
+			$greyAlpha .= chr($x * 32) . chr($y * 32);
+		}
+	}
+
+	$png = function ($colourType, $rows) use ($chunk) {
+		return base64_encode("\x89PNG\r\n\x1a\n" . $chunk('IHDR', pack('NNCCCCC', 8, 8, 8, $colourType, 0, 0, 0)) . $chunk('IDAT', gzcompress($rows)) . $chunk('IEND', ''));
+	};
+
+	return '<img src="data:image/png;base64,' . $png(0, $grey) . '" /> <img src="data:image/png;base64,' . $png(4, $greyAlpha) . '" />'
+		. '<div style="background: linear-gradient(0, 255); height: 10mm">A grey gradient</div>'
+		. '<div style="background: linear-gradient(rgba(255, 0, 0, 0.5), #0000ff); height: 10mm">A translucent gradient</div>'
+		. '<div style="box-shadow: 2mm 2mm 2mm rgba(0, 0, 0, 0.5); width: 40mm">A shadow</div>';
 }
 
 /**
@@ -183,9 +215,14 @@ $cases = [];
 
 $srgb = $directory . '/srgb.pdf';
 $mpdf = document();
-$mpdf->WriteHTML(content());
+$mpdf->WriteHTML(content() . greyContent());
 $mpdf->OutputFile($srgb);
 $cases['srgb'] = ['file' => $srgb, 'breaks' => [], 'what' => 'the default document, printing to sRGB'];
+
+// The ICC-based grey colour space, made DeviceGray
+$greyInSrgb = $directory . '/device-gray-in-srgb.pdf';
+mutateMatch($srgb, $greyInSrgb, '/\[\/ICCBased \d+ 0 R\]/', '/DeviceGray');
+$cases['device-gray-in-srgb'] = ['file' => $greyInSrgb, 'breaks' => ['no-device-gray'], 'what' => 'DeviceGray in a document printing to sRGB'];
 
 // The output intent's profile, made to print to a colour space nothing knows
 $unknown = $directory . '/unknown-intent-space.pdf';

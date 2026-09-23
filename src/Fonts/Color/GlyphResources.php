@@ -30,6 +30,13 @@ interface GlyphResources
 	public function rgb(array $rgb, $stroking = false);
 
 	/**
+	 * @param float $level From 0, black, to 1
+	 *
+	 * @return string Content setting that grey as the fill colour, e.g. '0 g'
+	 */
+	public function gray($level);
+
+	/**
 	 * @param float $opacity From 0, transparent, to 1
 	 *
 	 * @return string Content setting fills and strokes to that opacity, e.g. '/GS2 gs'

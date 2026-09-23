@@ -58,6 +58,14 @@ class RecordingResources implements GlyphResources
 	/**
 	 * @inheritdoc
 	 */
+	public function gray($level)
+	{
+		return Geometry::number($level) . ' g';
+	}
+
+	/**
+	 * @inheritdoc
+	 */
 	public function alpha($opacity)
 	{
 		return sprintf('/GS%.2F gs', $opacity);

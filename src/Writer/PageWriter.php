@@ -57,6 +57,7 @@ final class PageWriter
 		}
 
 		$annotid = (3 + 2 * $nb);
+		$initialColor = $this->mpdf->initialColor();
 
 		// Active Forms
 		$totaladdnum = 0;
@@ -143,6 +144,8 @@ final class PageWriter
 			while (preg_match('/(\% BTR(.*?)\% ETR)/is', $thispage, $m)) {
 				$thispage = preg_replace('/(\% BTR.*?\% ETR)/is', '', $thispage, 1) . "\n" . $m[2];
 			}
+
+			$thispage = $initialColor . $thispage;
 
 			// Page
 			$this->writer->object();
