@@ -57,13 +57,13 @@ parameters:
 		-
 			message: '#^Variable \$radio_background_color might not be defined\.$#'
 			identifier: variable.undefined
-			count: 2
+			count: 1
 			path: src/Form.php
 
 		-
 			message: '#^Variable \$radio_color might not be defined\.$#'
 			identifier: variable.undefined
-			count: 10
+			count: 1
 			path: src/Form.php
 
 		-
