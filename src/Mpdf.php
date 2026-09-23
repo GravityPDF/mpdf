@@ -2210,7 +2210,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function visibilityBegins($v)
 	{
-		if (!isset(self::VISIBILITY_GROUPS[$v])) {
+		if (!array_key_exists($v, self::VISIBILITY_GROUPS)) {
 			throw new \Mpdf\MpdfException('Incorrect visibility: ' . $v);
 		}
 
