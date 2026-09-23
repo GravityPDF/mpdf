@@ -1580,9 +1580,9 @@ class Otl
 	 * One stage of the features a shaper applies for itself, less those the document turned off.
 	 *
 	 * HarfBuzz takes a document's value for one of these features at the stage its shaper applies
-	 * it, and a feature valued 0 there is left out of the plan. The document may not add to the
-	 * stage, and what it names is never handed on to the presentation pass: that pass carries no
-	 * masks, and would take the feature's Lookups a second time over every glyph of the run.
+	 * it, and leaves a feature valued 0 out of its plan. The document cannot add a feature to a stage,
+	 * and none of these features reaches the presentation pass, which carries no masks and would
+	 * take their Lookups a second time over every glyph of the run.
 	 *
 	 * @param string $tags     The stage's features, space separated
 	 * @param array  $Features The features this font offers for the script and language in hand
@@ -1598,9 +1598,9 @@ class Otl
 	 * The derived tables the Indic reordering reads, with those of a feature the document turned off
 	 * emptied.
 	 *
-	 * The reordering reads them to find the base consonant, the reph and the pre-base form, where
-	 * HarfBuzz asks its plan whether the feature would substitute - and a feature switched off is not
-	 * in the plan, so it would not.
+	 * The reordering reads them to find the base consonant, the reph and the pre-base form. HarfBuzz
+	 * asks its plan whether the feature would substitute there, and a feature switched off is not in
+	 * the plan.
 	 *
 	 * @param array $Features The features this font offers for the script and language in hand
 	 *
@@ -2092,10 +2092,9 @@ class Otl
 	 * The bit each Indic feature sets on the glyphs it may be applied to. The tags left out apply to
 	 * every glyph in the syllable and have no bit of their own.
 	 *
-	 * A feature the document's font-feature-settings turned on is left out too. HarfBuzz makes a
-	 * feature a document names for the whole run global, which sets its bit on every glyph, so it is
-	 * still applied once, at its own stage, but no longer only where the reordering marked a
-	 * character for it.
+	 * A feature the document turned on is left out too. HarfBuzz makes a feature the document turns
+	 * on for the whole run global, which sets its bit on every glyph: it is applied once, at its own
+	 * stage, to every glyph rather than only to those the reordering marked.
 	 *
 	 * @param array $Features The features this font offers for the script and language in hand
 	 *

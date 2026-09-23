@@ -58,7 +58,7 @@ class ShaperOwnedFeatureSettingsTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 			'Khmer, blwf off' => [
 				'khmeros', [0x1780, 0x17D2, 0x1781], "'blwf' 0", [0x1780, 0x17D2, 0x1781],
 			],
-			'Khmer, blwf on, which it already was where it applies' => [
+			'Khmer, blwf on, which draws what it draws by default' => [
 				'khmeros', [0x1780, 0x17D2, 0x1781], "'blwf' 1", [0x1780, 0xE001],
 			],
 			'Khmer, pref off: the Coeng Ro still moves in front of the base, unsubstituted' => [
