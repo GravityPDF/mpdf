@@ -5218,10 +5218,8 @@ class Otl
 	 * offers hundreds of rules at a glyph and its classes name thousands of glyphs between them, so
 	 * that was most of the cost of shaping one.
 	 *
-	 * The loop stops at the number of classes rather than at the highest class number, which is how it
-	 * has always read: _getClasses() drops a class whose glyphs no character reaches, so the two are
-	 * not always the same, and a table with a gap in its class numbers leaves the classes above the
-	 * gap out of the set.
+	 * Class numbers can have gaps, so every class _getClasses() returns goes in. It has already
+	 * dropped class 0.
 	 *
 	 * @param int $offset Where the ClassDef starts, as ClassDef::offset() gives it. A subtable that
 	 *                    states no ClassDef excludes nothing, so class 0 matches every glyph
@@ -5231,13 +5229,9 @@ class Otl
 	private function getClassZeroExclusions($offset)
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset])) {
-			$classes = $this->_getClasses($offset);
 			$excluded = [];
-
-			for ($class = 1; $class <= count($classes); $class++) {
-				if (isset($classes[$class]) && is_array($classes[$class])) {
-					$excluded = $excluded + $classes[$class];
-				}
+			foreach ($this->_getClasses($offset) as $glyphs) {
+				$excluded += $glyphs;
 			}
 
 			$this->LuDataCache[$this->otlCacheKey]['class0excl'][$offset] = $excluded;
