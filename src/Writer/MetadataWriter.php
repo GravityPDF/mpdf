@@ -943,15 +943,20 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 					$this->form->_putFormItems($n, $hPt);
 
-					// and its Form element made once the widget has an object number
+					// and joins its Form element once it has an object number. A widget drawn where no
+					// element could be made, as in a running header, is given one at the end of the document.
 					if ($this->mpdf->PDFUA) {
 						foreach ($this->form->forms as $ref => $frm) {
 							if (isset($frm['page'], $frm['structParent'], $frm['obj'])
 								&& $frm['page'] == $n
 							) {
-								$this->ua->getStructureTree()->open('Form', []);
-								$formElem = $this->ua->getStructureTree()->getCurrent();
-								$this->ua->getStructureTree()->close();
+								if (isset($frm['pdfua_elem'])) {
+									$formElem = $frm['pdfua_elem'];
+								} else {
+									$this->ua->getStructureTree()->open('Form', []);
+									$formElem = $this->ua->getStructureTree()->getCurrent();
+									$this->ua->getStructureTree()->close();
+								}
 								$formElem->addObjref($frm['structParent'], $frm['obj']);
 								$this->ua->getStructureTree()->registerAnnotStructParent(
 									$frm['structParent'],

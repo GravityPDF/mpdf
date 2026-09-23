@@ -255,6 +255,31 @@ class AnnotationsAndMiscTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A field's Form element sits in the paragraph it is drawn in, after the label before it, rather
+	 * than at the end of the document.
+	 */
+	public function testFormElementIsReadInsideItsParagraph()
+	{
+		$mpdf = $this->makeMpdf(['useActiveForms' => true]);
+		$output = $this->getOutput(
+			$mpdf,
+			'<p>Name <input type="text" name="fname" title="First Name"/></p><p>After the field</p>'
+		);
+
+		$blocks = $mpdf->getPdfUaStructureTree()->getRoot()->getChildren();
+		$this->assertCount(2, $blocks);
+		$fields = $blocks[0]->getChildren();
+		$this->assertCount(1, $fields);
+		$this->assertSame('Form', $fields[0]->getType());
+		$this->assertCount(1, $fields[0]->getObjrefs());
+
+		$this->assertMatchesRegularExpression(
+			'@/S /P\s+/P \d+ 0 R\s+/K \[<</Type /MCR /Pg \d+ 0 R /MCID 0>> \d+ 0 R\]@',
+			$output
+		);
+	}
+
+	/**
 	 * Each radio button in a group has a Form struct element of its own.
 	 *
 	 * Their appearances are drawn with paths, since ZapfDingbats is a core font and cannot be embedded.
