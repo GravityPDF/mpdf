@@ -100,8 +100,8 @@ class ToUnicodeCMapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * What the CMap maps each code to, as Unicode values by code.
 	 *
-	 * The last byte of the destination is what a range increments, which is the same as counting up
-	 * from it while the range stays inside one high byte - which is what the first test asserts.
+	 * A range increments the last byte of its destination, which is the same as counting up from it
+	 * as long as the range stays inside one high byte, as the first test asserts every range does.
 	 *
 	 * @param string $cmap
 	 *
@@ -186,7 +186,7 @@ class ToUnicodeCMapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		$this->assertContains([0x00F0, 0x00FF, 0x00F0], $ranges, 'The run should break where the high byte turns over');
-		$this->assertContains([0x0100, 0x0110, 0x0100], $ranges, 'and carry on in a range of its own');
+		$this->assertContains([0x0100, 0x0110, 0x0100], $ranges, 'The rest of the run should carry on in a range of its own');
 	}
 
 	/**

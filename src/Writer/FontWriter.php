@@ -509,7 +509,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 	 *
 	 * @param array $font The font as the document holds it, whose subset is the codes drawn
 	 *
-	 * @return string The bfrange blocks, of the hundred entries a block may hold
+	 * @return string The bfrange blocks, of at most the hundred entries a block may hold
 	 */
 	private function identityRanges(array $font)
 	{
