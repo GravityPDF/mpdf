@@ -227,6 +227,106 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A list box draws as many options as its size asks for, each whole and inside its own row, and nothing after
+	 * them
+	 *
+	 * @dataProvider listBoxes
+	 *
+	 * @param string $mode
+	 * @param int $rows the list box's size
+	 * @param string $style
+	 */
+	public function testListBoxShowsItsRowsWhole($mode, $rows, $style)
+	{
+		$options = '';
+		foreach (['Apple', 'Banana', 'Cherry', 'Damson', 'Elderberry', 'Fig'] as $i => $option) {
+			$options .= '<option value="' . $i . '">' . $option . ' gjpqy</option>';
+		}
+
+		$mpdf = $this->mpdf(['mode' => $mode, 'useActiveForms' => true]);
+		$mpdf->WriteHTML('<form><select name="s" size="' . $rows . '" multiple="multiple" style="' . $style . '">' . $options . '</select></form>');
+		$desc = $mpdf->CurrentFont['desc'];
+		$appearance = $this->choiceAppearance($this->output($mpdf));
+
+		$this->assertSame(1, preg_match('/([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re W n BT \/F\d+ ([\d.]+) Tf/', $appearance, $clip));
+		list(, , $bottom, , $height, $size) = $clip;
+		$row = $height / $rows;
+
+		preg_match_all('/ 1 0 0 1 -?[\d.]+ (-?[\d.]+) Tm \(/', $appearance, $baselines);
+		$this->assertCount($rows, $baselines[1]);
+		foreach ($baselines[1] as $i => $baseline) {
+			$rowBottom = $bottom + ($rows - 1 - $i) * $row;
+			$this->assertGreaterThanOrEqual($rowBottom - 0.002, $baseline + $desc['Descent'] / 1000 * $size, 'Row ' . $i . ' reaches below its row');
+			$this->assertLessThanOrEqual($rowBottom + $row + 0.002, $baseline + $desc['Ascent'] / 1000 * $size, 'Row ' . $i . ' reaches above its row');
+		}
+	}
+
+	/**
+	 * One, three and six rows, in a core and an embedded font, and in a size larger than the default
+	 *
+	 * @return mixed[][]
+	 */
+	public function listBoxes()
+	{
+		return [
+			'one row' => ['utf-8', 1, ''],
+			'three rows' => ['utf-8', 3, ''],
+			'six rows, larger text' => ['utf-8', 6, 'font-size: 16pt'],
+			'three rows, core font' => ['c', 3, ''],
+		];
+	}
+
+	/**
+	 * No choice field's appearance draws a drop-down arrow, and its text is clipped at the full width inside the
+	 * border. Interactive viewers draw a combo box's button themselves, so an arrow in the appearance shows twice
+	 *
+	 * @dataProvider choiceFields
+	 *
+	 * @param string $select
+	 */
+	public function testAChoiceFieldAppearanceHasNoDropDownArrow($select)
+	{
+		$appearance = $this->choiceAppearance($this->render('<form>' . $select . '</form>', $this->pdfa(true)));
+
+		$this->assertSame(1, preg_match('/ 0 0 ([\d.]+) [\d.]+ re f .*? ([\d.]+) [\d.]+ ([\d.]+) [\d.]+ re W n/', $appearance, $box));
+		list(, $width, $border, $clipWidth) = $box;
+
+		$this->assertDoesNotMatchRegularExpression('/ [\d.]+ [\d.]+ m [\d.]+ [\d.]+ l [\d.]+ [\d.]+ l f /', $appearance);
+		$this->assertEqualsWithDelta($width - 2 * $border, (float) $clipWidth, 0.002);
+	}
+
+	/**
+	 * A combo box, and list boxes of one and several rows
+	 *
+	 * @return string[][]
+	 */
+	public function choiceFields()
+	{
+		$options = '<option value="1">One</option><option value="2">Two</option>';
+
+		return [
+			'combo box' => ['<select name="s">' . $options . '</select>'],
+			'one-row list box' => ['<select name="s" size="1" multiple="multiple">' . $options . '</select>'],
+			'list box' => ['<select name="s" size="2">' . $options . '</select>'],
+		];
+	}
+
+	/**
+	 * The content of the appearance of a document's first choice field
+	 *
+	 * @param string $pdf
+	 *
+	 * @return string
+	 */
+	private function choiceAppearance($pdf)
+	{
+		$this->assertSame(1, preg_match('/\/FT \/Ch.*?\/AP << \/N (\d+) 0 R/s', $pdf, $ref));
+		$this->assertSame(1, preg_match('/stream\n(.*)\nendstream/s', $this->object($pdf, $ref[1]), $stream));
+
+		return $stream[1];
+	}
+
+	/**
 	 * Every kind of widget, with a script, a submit and a reset button, a button hidden from print and a hidden input
 	 *
 	 * @return string

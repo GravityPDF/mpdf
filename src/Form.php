@@ -416,7 +416,7 @@ class Form
 				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 			}
 
-			$this->SetFormChoice($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $flags, $data, $rtlalign, $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), $this->activeBorder($objattr));
+			$this->SetFormChoice($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $flags, $data, $rtlalign, $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), $this->activeBorder($objattr), (isset($objattr['rows']) ? $objattr['rows'] : 1));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
@@ -1199,7 +1199,7 @@ class Form
 		}
 	}
 
-	function SetFormChoice($w, $h, $name, $flags, $array, $align = 'L', $js = '', $background_col = false, $border_col = false, $border = [])
+	function SetFormChoice($w, $h, $name, $flags, $array, $align = 'L', $js = '', $background_col = false, $border_col = false, $border = [], $rows = 1)
 	{
 		$this->formCount++;
 		if ($this->mpdf->blk[$this->mpdf->blklvl]['direction'] === 'rtl') {
@@ -1214,7 +1214,7 @@ class Form
 		if (in_array(self::FLAG_COMBOBOX, $flags, true)) {
 			$appearance = $this->appearanceText($w, $h, $border['W'], [$array['SEL'] ? $array['OPT'][$array['SEL'][0]] : ''], $align, 'line');
 		} else {
-			$appearance = $this->appearanceText($w, $h, $border['W'], $array['OPT'], $align, 'list', $array['SEL']);
+			$appearance = $this->appearanceText($w, $h, $border['W'], $array['OPT'], $align, 'list', $array['SEL'], true, $rows);
 		}
 		if ($this->mpdf->onlyCoreFonts) {
 			for ($i = 0; $i < count($array['VAL']); $i++) {
@@ -1689,16 +1689,17 @@ class Form
 	 * @param float $border its border width, in points
 	 * @param string[] $lines the text, a line each, in the document's encoding
 	 * @param string $align '0', '1' or '2', left, centred or right as /Q has it
-	 * @param string $flow 'line' centres the first line on the height, 'wrap' runs the lines down from the top
-	 *  wrapped to the width, and 'list' runs them down unwrapped, as a list box shows its options
+	 * @param string $flow 'line' centres the first line on the height, 'wrap' runs the lines down from the top wrapped
+	 *  to the width, and 'list' shows them unwrapped a row each, as a list box shows its options
 	 * @param int[] $selected the lines a list box highlights
 	 * @param bool $fit whether a 'line' is fitted to the widget as fitLine() does. Not for a hidden field, which has no
 	 *  room, or a button that shows an icon instead
+	 * @param int $rows the rows a list box shows
 	 *
 	 * @return mixed[] the font size, each line with where it starts and as the font encodes it, and the highlights, in
 	 *  points from the bottom left
 	 */
-	private function appearanceText($w, $h, $border, array $lines, $align, $flow, array $selected = [], $fit = true)
+	private function appearanceText($w, $h, $border, array $lines, $align, $flow, array $selected = [], $fit = true, $rows = 1)
 	{
 		if (!$this->mpdf->usingCoreFont && !$this->complexText) {
 			foreach ($lines as $line) {
@@ -1730,23 +1731,40 @@ class Form
 			});
 			$lines = [mb_substr($line, 0, $length, $this->mpdf->mb_enc)];
 		}
+
+		// A list box's rows share the height inside the border. Tag\Select allowed one font size a row, less than the
+		// font's line height, so the font shrinks to keep each row whole
+		$rowHeight = ($height - 2 * $border) / $rows;
+		if ($flow === 'list') {
+			$size = min($size, $rowHeight / ($ascent - $descent));
+		}
 		$leading = ($ascent - $descent) * $size;
 
 		$top = 0;
 		if ($flow === 'wrap') {
 			$lines = $this->wrap($lines, $room / $size);
-		} elseif ($flow === 'line') {
+		} elseif ($flow !== 'list') {
 			$lines = array_slice($lines, 0, 1);
-		} elseif ($selected && min($selected) >= floor(($height - 2 * $padding) / $leading)) {
+		} elseif ($selected && min($selected) >= $rows) {
 			// A list box too short to show its first selected option starts at it
 			$top = min($selected);
 		}
 
 		$layout = ['size' => $size, 'lines' => [], 'highlights' => []];
-		foreach (array_slice($lines, $top, null, true) as $i => $line) {
-			$y = $flow === 'line' ? ($height - $leading) / 2 - $descent * $size : $height - $padding - $ascent * $size - ($i - $top) * $leading;
-			if ($y + $ascent * $size < 0) {
-				break;
+		foreach (array_slice($lines, $top, $flow === 'list' ? $rows : null, true) as $i => $line) {
+			if ($flow === 'list') {
+				$rowBottom = $height - $border - ($i - $top + 1) * $rowHeight;
+				$y = $rowBottom + ($rowHeight - $leading) / 2 - $descent * $size;
+				if (in_array($i, $selected, true)) {
+					$layout['highlights'][] = [$border, $rowBottom, $width - 2 * $border, $rowHeight];
+				}
+			} elseif ($flow === 'wrap') {
+				$y = $height - $padding - $ascent * $size - $i * $leading;
+				if ($y + $ascent * $size < 0) {
+					break;
+				}
+			} else {
+				$y = ($height - $leading) / 2 - $descent * $size;
 			}
 
 			$lineWidth = $this->emWidth($line) * $size;
@@ -1759,9 +1777,6 @@ class Form
 			}
 
 			$layout['lines'][] = [$x, $y, $this->mpdf->usingCoreFont ? $line : $this->writer->utf8ToUtf16BigEndian($line, false)];
-			if (in_array($i, $selected, true)) {
-				$layout['highlights'][] = [$border, $y + $descent * $size, $width - 2 * $border, $leading];
-			}
 		}
 
 		return $layout;
