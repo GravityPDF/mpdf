@@ -1017,6 +1017,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$this->form->_putRadioItems($n);
 		}
 
+		$this->form->putButtonGroups();
+
 		$this->annotationFiles = [];
 	}
 
@@ -1025,7 +1027,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 *
 	 * Each page gets its links, then its annotations, then its form widgets. An annotation's ids name the annotation
 	 * itself, its embedded file (under PDF/A-3 its file specification, then the file) or else its popup, and its
-	 * appearance under PDF/A. The radio groups come last.
+	 * appearance under PDF/A. The radio groups come last, then the groups of push buttons that share a name.
 	 *
 	 * @param int $id the object number after the last page's
 	 *
@@ -1075,6 +1077,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		foreach ($this->form->form_radio_groups as $name => $frg) {
 			$this->form->form_radio_groups[$name]['obj_id'] = $id++;
 		}
+
+		$this->form->addButtonGroupIds($id);
 
 		return $annots;
 	}
