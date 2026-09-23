@@ -1033,15 +1033,13 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testADocumentWithIccBasedGreyIsImportedByMpdf()
 	{
-		$file = tempnam(sys_get_temp_dir(), 'mpdf');
-		file_put_contents($file, $this->pdf(['PDFX' => '4'], '<p>Text</p><div style="background: linear-gradient(0, 255); height: 10mm">Gradient</div>'));
+		$source = $this->pdf(['PDFX' => '4'], '<p>Text</p><div style="background: linear-gradient(0, 255); height: 10mm">Gradient</div>');
 
 		$mpdf = $this->mpdf();
-		$pages = $mpdf->setSourceFile($file);
+		$pages = $mpdf->setSourceFile(StreamReader::createByString($source));
 		$mpdf->AddPage();
 		$mpdf->useTemplate($mpdf->importPage(1));
 		$pdf = $mpdf->OutputBinaryData();
-		unlink($file);
 
 		$this->assertSame(1, $pages);
 		$this->assertStringContainsString('/CSGRAY cs 0.000 sc', $pdf);
