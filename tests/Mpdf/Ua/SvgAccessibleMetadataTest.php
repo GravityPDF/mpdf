@@ -114,7 +114,7 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * An inline <svg> takes its /Alt from its own <title>, the only name it can have.
+	 * An inline <svg> takes its /Alt from its own <title>.
 	 */
 	public function testInlineSvgUsesItsOwnTitle()
 	{
@@ -204,6 +204,32 @@ class SvgAccessibleMetadataTest extends PdfUaTestCase
 		$this->expectException(\Mpdf\MpdfException::class);
 		$this->expectExceptionMessageMatches('/missing the alt attribute/');
 		$this->getOutput($mpdf, '<p>' . $svg . '</p>');
+	}
+
+	/**
+	 * An inline <svg> without a <title> is named by its aria-label, and strict mode does not throw.
+	 */
+	public function testInlineSvgIsNamedByItsAriaLabel()
+	{
+		$mpdf = $this->makeMpdf();
+		$svg  = str_replace('<svg ', '<svg aria-label="Blue dot" ', $this->buildInlineSvg(null, null));
+		$pdf  = $this->getOutput($mpdf, '<p>' . $svg . '</p>');
+
+		$this->assertStringContainsString('/S /Figure', $pdf);
+		$this->assertContainsUtf16BeAlt($pdf, 'Blue dot');
+	}
+
+	/**
+	 * An inline <svg> with aria-hidden="true" is an artifact, and strict mode does not throw.
+	 */
+	public function testInlineSvgHiddenWithAriaIsAnArtifact()
+	{
+		$mpdf = $this->makeMpdf();
+		$svg  = str_replace('<svg ', '<svg aria-hidden="true" ', $this->buildInlineSvg(null, null));
+		$pdf  = $this->getOutput($mpdf, '<p>Text</p>' . $svg);
+
+		$this->assertStringNotContainsString('/S /Figure', $pdf);
+		$this->assertStringContainsString('/Artifact BMC', $pdf);
 	}
 
 	/**

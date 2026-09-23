@@ -171,6 +171,40 @@ class DirectPhpAndAriaTest extends PdfUaTestCase
 	}
 
 	/**
+	 * An image with no alt that role="presentation", role="none" or aria-hidden="true" marks as
+	 * decorative is an artifact, and strict mode does not throw for it.
+	 *
+	 * @dataProvider decorativeImageAttributeProvider
+	 *
+	 * @param string $attribute
+	 */
+	public function testImageMarkedDecorativeWithoutAltIsArtifact($attribute)
+	{
+		$output = $this->getOutput(
+			$this->makeMpdf(),
+			'<p>Text</p><img src="' . __DIR__ . '/../../data/img/issue1609.png" ' . $attribute . '>'
+		);
+
+		$this->assertStringNotContainsString('/S /Figure', $output);
+		$this->assertStringContainsString('/Artifact BMC', $output);
+		$this->assertBdcEmcBalanced($output);
+	}
+
+	/**
+	 * The attributes that mark an image decorative.
+	 *
+	 * @return array<string, string[]>
+	 */
+	public function decorativeImageAttributeProvider()
+	{
+		return [
+			'presentation' => ['role="presentation"'],
+			'none'         => ['role="none"'],
+			'aria-hidden'  => ['aria-hidden="true"'],
+		];
+	}
+
+	/**
 	 * A lang attribute on a block sets /Lang on its struct element.
 	 */
 	public function testLangAttributePropagatesToStructElement()

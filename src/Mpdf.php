@@ -28352,8 +28352,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (count($svgi[0])) {
 			for ($i = 0; $i < count($svgi[0]); $i++) {
 				$file = $this->cache->write('/_tempSVG' . uniqid(random_int(1, 100000), true) . '_' . $i . '.svg', $svgi[0][$i]);
-				$class = $this->svgClassAttribute($svgi[0][$i]);
-				$html = str_replace($svgi[0][$i], '<img src="' . $file . '"' . ($class !== '' ? ' class="' . $class . '"' : '') . ' />', $html);
+				// The class the SVG was styled by, and what names it or hides it from assistive technology
+				$attributes = '';
+				foreach (['class', 'role', 'aria-label', 'aria-labelledby', 'aria-describedby', 'aria-hidden'] as $name) {
+					$value = $this->svgAttribute($svgi[0][$i], $name);
+					if ($value !== '') {
+						$attributes .= ' ' . $name . '="' . $value . '"';
+					}
+				}
+				$html = str_replace($svgi[0][$i], '<img src="' . $file . '"' . $attributes . ' />', $html);
 			}
 		}
 
@@ -28502,25 +28509,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * The class an embedded SVG was given, so the img element it becomes can still be reached by the
-	 * selectors written for it. The value may be double quoted, single quoted or unquoted, as any
-	 * attribute value may be; a double quote is dropped because no class name can hold one.
+	 * An attribute of an embedded SVG, to be given to the img element it becomes. The value may be
+	 * double quoted, single quoted or unquoted, as any attribute value may be; a double quote is
+	 * dropped so the value can be written back between double quotes.
 	 *
 	 * @param string $svg
+	 * @param string $name
 	 *
 	 * @return string
 	 */
-	private function svgClassAttribute($svg)
+	private function svgAttribute($svg, $name)
 	{
 		$matches = [];
-		if (!preg_match('/^<svg\b[^>]*?\sclass\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>"\']+))/si', $svg, $matches)) {
+		$pattern = '/^<svg\b[^>]*?\s' . preg_quote($name, '/') . '\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>"\']+))/si';
+		if (!preg_match($pattern, $svg, $matches)) {
 			return '';
 		}
 
 		// PCRE drops the groups after the one that took part
-		$class = array_pop($matches);
+		$value = array_pop($matches);
 
-		return str_replace('"', '', $class);
+		return str_replace('"', '', $value);
 	}
 
 	// mPDF 5.7+
