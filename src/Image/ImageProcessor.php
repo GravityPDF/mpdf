@@ -1049,7 +1049,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 
 		$channels = (int) $a[4];
 
-		if ($a[2] === 'DeviceCMYK' && ($this->mpdf->restrictColorSpace === 2 || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace !== 3) || $this->mpdf->pdfxRgbIntent())) {
+		if ($a[2] === 'DeviceCMYK' && ($this->mpdf->restrictColorSpace === 2 || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace !== 3) || $this->mpdf->pdfxConvertsCmyk())) {
 
 			// convert to RGB image
 			if (!function_exists('gd_info')) {

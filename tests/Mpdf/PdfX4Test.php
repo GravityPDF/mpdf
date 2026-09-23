@@ -548,6 +548,22 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A grey output intent permits no DeviceCMYK either, so CMYK colours and gradients are converted
+	 * to RGB, which is then written in the ICC-based sRGB colour space
+	 */
+	public function testCmykIsConvertedForAGreyOutputIntent()
+	{
+		$html = '<p style="color: cmyk(0, 100, 100, 0)">Text</p>'
+			. '<div style="background: linear-gradient(cmyk(0, 100, 0, 0), cmyk(100, 0, 0, 0)); height: 10mm">Gradient</div>';
+
+		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->writeProfile('grey', 'GRAY')], $html);
+
+		$this->assertStringNotContainsString('DeviceCMYK', $pdf);
+		$this->assertSame(0, preg_match('/[\d.]+ [\d.]+ [\d.]+ [\d.]+ k\b/', $pdf));
+		$this->assertStringContainsString('/CSRGB cs 1.000 0.000 0.000 sc', $pdf);
+	}
+
+	/**
 	 * A bitmap colour font is drawn in colour, its images in sRGB where the output intent is CMYK
 	 */
 	public function testABitmapColourFontIsDrawnInColour()

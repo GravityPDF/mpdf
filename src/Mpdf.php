@@ -1705,11 +1705,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/**
 	 * @return bool Whether the document is PDF/X-4 printed to an RGB output intent, where RGB colour is
-	 *              written as it is and CMYK is converted to it
+	 *              written as it is
 	 */
 	public function pdfxRgbIntent()
 	{
 		return $this->pdfxOutputChannels() === 3;
+	}
+
+	/**
+	 * @return bool Whether the document is PDF/X-4 printed to a grey or RGB output intent, which may not
+	 *              use DeviceCMYK, so that CMYK is converted to RGB
+	 */
+	public function pdfxConvertsCmyk()
+	{
+		return $this->isPdfx4() && $this->pdfxOutputChannels() !== 4;
 	}
 
 	/**

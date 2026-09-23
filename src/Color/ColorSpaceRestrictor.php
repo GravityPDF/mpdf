@@ -149,7 +149,7 @@ class ColorSpaceRestrictor
 	 */
 	private function restrictCmykColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
-		if (($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) || ($this->mpdf->PDFX && $this->mpdf->pdfxRgbIntent())) {
+		if (($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) || $this->mpdf->pdfxConvertsCmyk()) {
 			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$PDFAXwarnings[] = "CMYK color specified '" . $color . "' (converted to RGB)";
 			}
