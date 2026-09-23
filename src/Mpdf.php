@@ -2185,9 +2185,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Whether content with this visibility is left out of the document: under PDFAauto and PDFXauto, screen-only
-	 * content, and hidden content where optional content is not allowed. The archive or print file stands for the
-	 * printed document.
+	 * Whether content with this visibility is left out: under PDFAauto and PDFXauto, what would not print is dropped,
+	 * which is screen-only content, and hidden content where optional content is not allowed
 	 *
 	 * @param string $v
 	 *
@@ -2219,8 +2218,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Write the font, colours, line width and spacing the renderer believes are set, since any that were set in content
-	 * left out were left out with it
+	 * Write the font, colours, line width and spacing in force again, since any set inside left-out content went
+	 * with it
 	 */
 	private function resumeAfterDroppedContent()
 	{

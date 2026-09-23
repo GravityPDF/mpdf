@@ -17,7 +17,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	const PDFA1_AUTO = ['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'];
 
 	/**
-	 * A block and a span with each visibility are in the page content or not, and the text around them is
+	 * A block and a span of each visibility are drawn or left out, and the text around them is always drawn
 	 *
 	 * @dataProvider autoVisibilities
 	 */
@@ -128,7 +128,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A block and a span, drawn and left out, with how many of each thing they register
+	 * A block and a span, drawn and left out, with how many of each entry they register
 	 *
 	 * @return mixed[][]
 	 */
@@ -168,7 +168,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A line drawn after content left out has the colour and width set for it, although the content left out set
+	 * A line drawn after left-out content gets the colour and width set for it, even though the left-out content set
 	 * the same ones last
 	 */
 	public function testDrawingResumesWithTheStateSet()

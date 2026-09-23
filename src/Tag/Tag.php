@@ -121,8 +121,8 @@ abstract class Tag
 	}
 
 	/**
-	 * An object's attributes with the visibility of the span it is in. Printing reads a span's visibility from the
-	 * inline properties a text buffer entry carries, which an object put straight into the buffer has none of.
+	 * An object's attributes with the visibility of the span it is in. Printing reads a span's visibility from its
+	 * text buffer entry, and an object put straight into the buffer has none.
 	 *
 	 * @param mixed[] $objattr
 	 *
