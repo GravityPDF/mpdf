@@ -2,12 +2,17 @@
 
 namespace Mpdf\Writer;
 
+use Mpdf\AssetFetcherInterface;
+use Mpdf\File\FileTypeAllowList;
 use Mpdf\Strict;
 use Mpdf\Form;
+use Mpdf\Log\Context as LogContext;
 use Mpdf\Mpdf;
+use Mpdf\MpdfAnnotationException;
 use Mpdf\Pdf\Protection;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
 use Mpdf\Utils\PdfDate;
+use Mpdf\Utils\Path;
 
 use Psr\Log\LoggerInterface;
 
@@ -37,12 +42,26 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $protection;
 
-	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, LoggerInterface $logger)
+	/**
+	 * The file of each annotation path loadAnnotationFiles() has seen, until the annotations are written: its
+	 * compressed contents and MIME type, or false where it failed
+	 *
+	 * @var array
+	 */
+	private $annotationFiles = [];
+
+	/**
+	 * @var \Mpdf\AssetFetcherInterface
+	 */
+	private $assetFetcher;
+
+	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, AssetFetcherInterface $assetFetcher, LoggerInterface $logger)
 	{
 		$this->mpdf = $mpdf;
 		$this->writer = $writer;
 		$this->form = $form;
 		$this->protection = $protection;
+		$this->assetFetcher = $assetFetcher;
 		$this->logger = $logger;
 	}
 
@@ -576,6 +595,116 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * Load the file of every annotation that embeds one, before PageWriter numbers the objects they take. A file
+	 * that fails is cleared from its annotation, which is then written as a text note; each path is loaded once
+	 * for the document
+	 *
+	 * @throws \Mpdf\MpdfAnnotationException Where a file fails with `showAnnotationErrors` or `debug` on
+	 */
+	public function loadAnnotationFiles()
+	{
+		foreach ($this->mpdf->PageAnnots as $n => $annotations) {
+			foreach ($annotations as $k => $annotation) {
+				if (!$this->embedsFileAttachment($annotation)) {
+					continue;
+				}
+
+				$path = $annotation['opt']['file'];
+				if (!array_key_exists($path, $this->annotationFiles)) {
+					$this->annotationFiles[$path] = $this->loadAnnotationFileOrWarn($path);
+				}
+
+				if ($this->annotationFiles[$path] === false) {
+					$this->mpdf->PageAnnots[$n][$k]['opt']['file'] = '';
+				}
+			}
+		}
+	}
+
+	/**
+	 * An annotation's file as loadAnnotationFile() gives it, or false with a warning where it fails and
+	 * `showAnnotationErrors` and `debug` are off
+	 *
+	 * @param string $path
+	 *
+	 * @return string[]|false
+	 *
+	 * @throws \Mpdf\MpdfAnnotationException
+	 */
+	private function loadAnnotationFileOrWarn($path)
+	{
+		try {
+			return $this->loadAnnotationFile($path);
+		} catch (MpdfAnnotationException $e) {
+			if ($this->mpdf->showAnnotationErrors || $this->mpdf->debug) {
+				throw $e;
+			}
+
+			$this->logger->warning($e->getMessage(), ['context' => LogContext::ANNOTATIONS]);
+
+			return false;
+		}
+	}
+
+	/**
+	 * Read an annotation's file through the asset fetcher and detect its MIME type. `annotationFileAllowList`
+	 * must list its extension, and the detected type for it; the file must be no larger than
+	 * `annotationFileMaxSize`, and a local file's size is checked before it is read
+	 *
+	 * @param string $path A full path, as Mpdf::Annotation() leaves it
+	 *
+	 * @return string[] The compressed contents and the MIME type
+	 *
+	 * @throws \Mpdf\MpdfAnnotationException Where any of that fails
+	 */
+	private function loadAnnotationFile($path)
+	{
+		$allowList = new FileTypeAllowList((array) $this->mpdf->annotationFileAllowList);
+		if ($allowList->isEmpty()) {
+			throw new MpdfAnnotationException(sprintf('File attachment %s is not embedded: "annotationFileAllowList" is empty, so no extension is allowed', $path));
+		}
+
+		$extension = Path::extension($path);
+		if (!$allowList->allowsExtension($extension)) {
+			throw new MpdfAnnotationException(sprintf('File attachment %s is not embedded: "annotationFileAllowList" does not list its extension "%s"', $path, $extension));
+		}
+
+		if (!class_exists('finfo')) {
+			throw new MpdfAnnotationException(sprintf('File attachment %s is not embedded: ext-fileinfo is required to detect its type', $path));
+		}
+
+		$limit = (int) $this->mpdf->annotationFileMaxSize;
+		$tooLarge = sprintf('File attachment %s is not embedded: it is larger than the %d bytes "annotationFileMaxSize" allows', $path, $limit);
+
+		// Avoids reading a local file that is already too large; the length check below enforces the limit
+		if ($limit > 0 && Path::isLocal($path) && @filesize($path) > $limit) {
+			throw new MpdfAnnotationException($tooLarge);
+		}
+
+		try {
+			$content = $this->assetFetcher->fetchDataFromPath($path);
+		} catch (\Mpdf\MpdfException $e) {
+			throw new MpdfAnnotationException(sprintf('File attachment %s is not embedded: it cannot be read (%s)', $path, $e->getMessage()), 0, E_ERROR, null, null, $e);
+		}
+
+		if (!$content) {
+			throw new MpdfAnnotationException(sprintf('File attachment %s is not embedded: it cannot be read or is empty', $path));
+		}
+
+		if ($limit > 0 && strlen($content) > $limit) {
+			throw new MpdfAnnotationException($tooLarge);
+		}
+
+		$finfo = new \finfo(FILEINFO_MIME_TYPE);
+		$type = $finfo->buffer($content);
+		if (!$allowList->allowsType($extension, $type)) {
+			throw new MpdfAnnotationException(sprintf('File attachment %s is not embedded: it holds %s, which "annotationFileAllowList" does not list for the extension "%s"', $path, $type, $extension));
+		}
+
+		return [gzcompress($content), $type];
+	}
+
+	/**
 	 * Whether a popup is written for an annotation. Only one with no embedded file carries a popup: the file
 	 * takes the object the popup would have been
 	 *
@@ -819,14 +948,10 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 						if ($fileAttachment) {
 
-							$file = @file_get_contents($pl['opt']['file']);
-							if (!$file) {
-								throw new \Mpdf\MpdfException('mPDF Error: Cannot access file attachment - ' . $pl['opt']['file']);
-							}
-
-							$filestream = gzcompress($file);
+							list($filestream, $type) = $this->annotationFiles[$pl['opt']['file']];
 							$this->writer->object();
 							$this->writer->write('<</Type /EmbeddedFile');
+							$this->writer->write('/Subtype /' . $this->writer->escapeSlashes($type));
 							$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
 							$this->writer->write('/Filter /FlateDecode');
 							$this->writer->write('>>');
@@ -882,6 +1007,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		if (count($this->form->form_radio_groups)) {
 			$this->form->_putRadioItems($n);
 		}
+
+		$this->annotationFiles = [];
 	}
 
 	public function writeEncryption() // _putencryption

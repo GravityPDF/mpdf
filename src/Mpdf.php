@@ -304,6 +304,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $cacheCleanupInterval;
 
 	var $allowAnnotationFiles;
+	var $allowHtmlAnnotationFiles;
+	var $annotationFileAllowList;
+	var $annotationFileMaxSize;
+	var $showAnnotationErrors;
 
 	var $fontdata;
 
@@ -7515,7 +7519,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->y = $y - 1;
 				$this->x = $x - 1;
 				$this->Line($x - 1, $y - 1, $x - 1, $y - 1);
-				$this->Annotation($objattr['CONTENT'], $x, $y, $objattr['ICON'], $objattr['AUTHOR'], $objattr['SUBJECT'], $objattr['OPACITY'], $objattr['COLOR'], (isset($objattr['POPUP']) ? $objattr['POPUP'] : ''), (isset($objattr['FILE']) ? $objattr['FILE'] : ''));
+				$this->Annotation($objattr['CONTENT'], $x, $y, $objattr['ICON'], $objattr['AUTHOR'], $objattr['SUBJECT'], $objattr['OPACITY'], $objattr['COLOR'], (isset($objattr['POPUP']) ? $objattr['POPUP'] : ''), (isset($objattr['FILE']) ? $this->htmlAnnotationFile($objattr['FILE']) : ''));
 			} /* -- END ANNOTATIONS -- */ else {
 				$y = $objattr['OUTER-Y'];
 				$x = $objattr['OUTER-X'];
@@ -10377,6 +10381,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$opacity = $this->annotOpacity;
 		}
 
+		// Resolved against the basepath now, which may change before the file is read at output
+		if (!empty($file)) {
+			$this->GetFullPath($file);
+		}
+
 		$an = ['txt' => $text, 'x' => $x, 'y' => $y, 'opt' => ['Icon' => $icon, 'T' => $author, 'Subj' => $subject, 'C' => $colarray, 'CA' => $opacity, 'popup' => $popup, 'file' => $file]];
 
 		if ($this->table_rotate) {
@@ -12004,6 +12013,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$tr = parse_url($this->basepath);
 
 		$this->basepathIsLocal = (isset($tr['host']) && ($tr['host'] == $host));
+	}
+
+	/**
+	 * The file an <annotation file=""> attribute passes to Annotation(): none, with a warning, when
+	 * `allowHtmlAnnotationFiles` is off
+	 *
+	 * @param string $file The attribute's value
+	 *
+	 * @return string
+	 */
+	private function htmlAnnotationFile($file)
+	{
+		if ($file !== '' && !$this->allowHtmlAnnotationFiles) {
+			$this->logger->warning('Files attached by the file attribute of an annotation tag have to be allowed explicitly with "allowHtmlAnnotationFiles" config key');
+
+			return '';
+		}
+
+		return $file;
 	}
 
 	public function GetFullPath(&$path, $basepath = '')

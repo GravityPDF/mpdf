@@ -52,6 +52,7 @@
 		"ext-zlib": "Needed for compression of embedded resources, such as fonts",
 		"ext-xml": "Needed mainly for SVG manipulation",
 		"ext-openssl": "Needed to encrypt documents with SetProtection()",
+		"ext-fileinfo": "Needed to check the type of the files annotations embed",
 		"ext-imagick": "Needed if developing the Mpdf library",
 		"mpdf/font-bundle-all": "All official mPDF fonts that offers coverage for common and uncommon scripts worldwide. Uses 110MB of disk space.",
 		"mpdf/font-bundle-lite": "A subset of official mPDF fonts that offers coverage for most common scripts. Uses 30MB of disk space.",

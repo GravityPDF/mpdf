@@ -124,6 +124,10 @@ class AnnotationFileAttachmentTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	 */
 	private function document($allow, $field, $popup = false)
 	{
+		if ($allow && !class_exists('finfo')) {
+			$this->markTestSkipped('ext-fileinfo is needed to embed the file of an annotation');
+		}
+
 		$mpdf = $this->mpdf(['allowAnnotationFiles' => $allow, 'useActiveForms' => $field]);
 		$mpdf->WriteHTML($field ? '<p><input type="text" name="field" value="Hello" /></p>' : '<p>Text</p>');
 		$mpdf->Annotation('Attached', 0, 0, 'Paperclip', '', '', 0, false, $popup, __DIR__ . '/../data/xml/test.xml');
