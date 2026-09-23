@@ -14258,9 +14258,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$this->selectoption['SELECTED-OTLDATA'] = $this->OTLdata;
 							} // *OTL*
 						}
-						// Active Forms
+						// Active Forms, and a static list box, which draws every option
 						if (isset($this->selectoption['ACTIVE']) && $this->selectoption['ACTIVE']) {
-							$this->selectoption['ITEMS'][] = ['exportValue' => $this->selectoption['currentVAL'], 'content' => $e, 'selected' => $this->selectoption['currentSEL']];
+							$this->selectoption['ITEMS'][] = ['exportValue' => $this->selectoption['currentVAL'], 'content' => $e, 'selected' => $this->selectoption['currentSEL'], 'OTLdata' => empty($this->OTLdata) ? false : $this->OTLdata];
 						}
 						$this->OTLdata = [];
 					} // TEXTAREA

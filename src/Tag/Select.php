@@ -77,6 +77,14 @@ class Select extends Tag
 
 		if ($this->mpdf->useActiveForms) {
 			$w = $this->mpdf->selectoption['MAXWIDTH'];
+		} elseif (isset($this->mpdf->selectoption['MULTIPLE']) || isset($this->mpdf->selectoption['SIZE'])) {
+			// A static list box draws every option, so it is as wide as the widest
+			$w = 0;
+			if (isset($this->mpdf->selectoption['ITEMS'])) {
+				foreach ($this->mpdf->selectoption['ITEMS'] as $item) {
+					$w = max($w, $this->mpdf->GetStringWidth($item['content'], true, $item['OTLdata']));
+				}
+			}
 		} else {
 			$w = $this->mpdf->GetStringWidth($texto, true, $OTLdata);
 		}
