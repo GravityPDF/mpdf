@@ -4,6 +4,7 @@ namespace Mpdf;
 
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Utils\UtfString;
+use setasign\Fpdi\PdfParser\StreamReader;
 
 /**
  * PDF/X-4, which keeps the transparency, layers and colour fonts PDF/X-1a strips, beside PDF/X-1a
@@ -24,27 +25,47 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private $cmykProfile;
 
 	/**
-	 * Writes the CMYK profile the tests that ask for a CMYK output intent name.
+	 * @var string The path a grey profile is written to, for a grey output intent
+	 */
+	private $grayProfile;
+
+	/**
+	 * Writes the CMYK and grey profiles the tests that ask for those output intents name.
 	 *
 	 * No CMYK profile is bundled - the smallest in the ICC registry is 2.7 MB - and mPDF reads only the
 	 * header of the profile it is given, to count its colour components, before embedding it whole. So
-	 * the tests write a profile that is a header alone: a CMYK printer profile carrying no tags.
+	 * the tests write profiles that are a header alone: a CMYK printer profile and a grey display
+	 * profile, carrying no tags.
 	 */
 	public function set_up()
 	{
-		$this->cmykProfile = sys_get_temp_dir() . '/mpdf-test-cmyk.icc';
+		$this->cmykProfile = $this->headerOnlyProfile('cmyk', 'prtr', 'CMYK');
+		$this->grayProfile = $this->headerOnlyProfile('gray', 'mntr', 'GRAY');
+	}
 
+	/**
+	 * @param string $name  Distinguishes the file
+	 * @param string $class The device class, e.g. 'prtr'
+	 * @param string $space The data colour space, e.g. 'CMYK'
+	 *
+	 * @return string The path of an ICC version 2.1 profile of that class and space with no tags
+	 */
+	private function headerOnlyProfile($name, $class, $space)
+	{
 		$header = str_repeat("\0", 128);
 		$header = substr_replace($header, pack('N', 0x02100000), 8, 4); // ICC version 2.1
-		$header = substr_replace($header, 'prtr', 12, 4); // device class: printer
-		$header = substr_replace($header, 'CMYK', 16, 4); // data colour space
+		$header = substr_replace($header, $class, 12, 4);
+		$header = substr_replace($header, $space, 16, 4);
 		$header = substr_replace($header, 'Lab ', 20, 4); // profile connection space
 		$header = substr_replace($header, 'acsp', 36, 4); // the file signature every profile carries
 
 		$profile = $header . pack('N', 0); // a tag table of no tags
 		$profile = substr_replace($profile, pack('N', strlen($profile)), 0, 4);
 
-		file_put_contents($this->cmykProfile, $profile);
+		$file = sys_get_temp_dir() . '/mpdf-test-' . $name . '.icc';
+		file_put_contents($file, $profile);
+
+		return $file;
 	}
 
 	/**
@@ -52,8 +73,10 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function tear_down()
 	{
-		if (file_exists($this->cmykProfile)) {
-			unlink($this->cmykProfile);
+		foreach ([$this->cmykProfile, $this->grayProfile] as $file) {
+			if (file_exists($file)) {
+				unlink($file);
+			}
 		}
 	}
 
@@ -338,13 +361,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testPdfx4KeepsATranslucentPng()
 	{
-		$image = imagecreatetruecolor(16, 16);
-		imagesavealpha($image, true);
-		imagealphablending($image, false);
-		imagefilledrectangle($image, 0, 0, 15, 15, imagecolorallocatealpha($image, 220, 40, 40, 63));
-		ob_start();
-		imagepng($image);
-		$html = '<img src="data:image/png;base64,' . base64_encode(ob_get_clean()) . '" />';
+		$html = $this->translucentPng();
 
 		$pdf = $this->pdf(['PDFX' => '4'], $html);
 		$this->assertStringContainsString('/SMask', $pdf);
@@ -378,6 +395,110 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$cmyk = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html);
 		$this->assertSame(1, preg_match('/\/ColorSpace \[\/Indexed (\d+) 0 R 0 /', $cmyk, $match));
 		$this->assertStringStartsWith('[/ICCBased ', $this->object($cmyk, $match[1]));
+	}
+
+	/**
+	 * An image names its soft mask by the mask's own object number, even where the ICC-based sRGB
+	 * colour space, written the first time something asks for it, falls between the two
+	 *
+	 * @param string $intent The property holding the output intent's profile
+	 *
+	 * @dataProvider nonRgbIntents
+	 */
+	public function testAnImageNamesItsSoftMask($intent)
+	{
+		$pdf = $this->maskedPdf($intent);
+
+		$this->assertSame(1, preg_match('/\/SMask (\d+) 0 R\n\/ColorSpace (\d+) 0 R/', $pdf, $match));
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[2]), 'the image is in sRGB');
+		$this->assertLessThan((int) $match[2], (int) $match[1], 'the mask is written before the colour space');
+
+		$mask = $this->object($pdf, $match[1]);
+		$this->assertStringStartsWith('<</Type /XObject', $mask);
+		$this->assertStringContainsString('/Subtype /Image', $mask);
+		$this->assertStringContainsString('/ColorSpace /DeviceGray', $mask);
+	}
+
+	/**
+	 * mPDF reads back the masked image: a page imported into another document keeps its soft mask
+	 *
+	 * @param string $intent The property holding the output intent's profile
+	 *
+	 * @dataProvider nonRgbIntents
+	 */
+	public function testAMaskedImageIsImportedByMpdf($intent)
+	{
+		$mpdf = $this->mpdf();
+		$mpdf->setSourceFile(StreamReader::createByString($this->maskedPdf($intent)));
+		$mpdf->AddPage();
+		$mpdf->useTemplate($mpdf->importPage(1));
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertSame(1, preg_match('/\/SMask (\d+) 0 R/', $pdf, $match));
+		$this->assertStringContainsString('/Subtype /Image', $this->object($pdf, $match[1]));
+	}
+
+	/**
+	 * The masked image draws translucent: rasterised, its middle is lighter than the same image drawn
+	 * opaque, since the page shows through, and is not the white page alone
+	 *
+	 * @param string $intent The property holding the output intent's profile
+	 *
+	 * @dataProvider nonRgbIntents
+	 */
+	public function testAMaskedImageDrawsTranslucent($intent)
+	{
+		if (!class_exists('Imagick')) {
+			$this->markTestSkipped('Imagick is not installed');
+		}
+
+		$translucent = $this->middleOfTheImage($this->maskedPdf($intent));
+		$opaque = $this->middleOfTheImage($this->maskedPdf($intent, 0));
+
+		$this->assertGreaterThan($opaque['g'] + 40, $translucent['g']);
+		$this->assertLessThan(250, $translucent['g']);
+	}
+
+	/**
+	 * @param string $pdf A document drawing translucentPng() at the top left of its first page
+	 *
+	 * @return int[] The red, green and blue of the middle of the image, rasterised at 30 DPI over a white page
+	 */
+	private function middleOfTheImage($pdf)
+	{
+		$image = new \Imagick();
+		$image->setResolution(30, 30);
+		try {
+			$image->readImageBlob($pdf);
+		} catch (\ImagickException $e) {
+			$this->markTestSkipped('Imagick cannot read a PDF here (' . trim($e->getMessage()) . ')');
+		}
+		$image->setImageBackgroundColor('white');
+		$image->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+		$image->transformImageColorspace(\Imagick::COLORSPACE_SRGB);
+
+		// The image is 40mm square at the page's 15mm left and 16mm top margins
+		return $image->getImagePixelColor(round(35 / 25.4 * 30), round(36 / 25.4 * 30))->getColor();
+	}
+
+	/**
+	 * @param string $intent The property holding the output intent's profile
+	 * @param int    $alpha  As translucentPng() takes it
+	 *
+	 * @return string A PDF/X-4 document for that output intent drawing translucentPng()
+	 */
+	private function maskedPdf($intent, $alpha = 63)
+	{
+		return $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->$intent], $this->translucentPng($alpha));
+	}
+
+	/**
+	 * @return array[] The properties holding a CMYK and a grey output intent's profile, for which RGB
+	 *                 is written in the ICC-based sRGB colour space
+	 */
+	public function nonRgbIntents()
+	{
+		return ['CMYK' => ['cmykProfile'], 'grey' => ['grayProfile']];
 	}
 
 	/**
@@ -665,6 +786,23 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertStringNotContainsString('/Title', $pdf);
 		$this->assertStringNotContainsString('<dc:title>', $pdf);
+	}
+
+	/**
+	 * @param int $alpha GD's alpha, from 0 for opaque to 127 for transparent
+	 *
+	 * @return string An image tag drawing a PNG of red, half transparent by default, 40mm square
+	 */
+	private function translucentPng($alpha = 63)
+	{
+		$image = imagecreatetruecolor(16, 16);
+		imagesavealpha($image, true);
+		imagealphablending($image, false);
+		imagefilledrectangle($image, 0, 0, 15, 15, imagecolorallocatealpha($image, 220, 40, 40, $alpha));
+		ob_start();
+		imagepng($image);
+
+		return '<img src="data:image/png;base64,' . base64_encode(ob_get_clean()) . '" style="width: 40mm; height: 40mm" />';
 	}
 
 	/**
