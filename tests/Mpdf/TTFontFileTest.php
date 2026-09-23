@@ -206,14 +206,42 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAClassDefinitionTableAtOffsetZeroHasNoClasses()
 	{
 		$this->ttf->glyphToChar = [40 => [0x41]];
-
-		$reader = new \ReflectionProperty($this->ttf, 'reader');
-		if (PHP_VERSION_ID < 80100) {
-			$reader->setAccessible(true);
-		}
-		$reader->setValue($this->ttf, new Fonts\BlobReader(pack('n*', 1, 40, 1, 1)));
+		$this->readFrom(pack('n*', 1, 40, 1, 1));
 
 		$this->assertSame([], $this->ttf->_getClassDefinitionTable(0));
+	}
+
+	/**
+	 * A Class Definition can list glyphs as class 0: Format 1 gives a class to every glyph in its
+	 * range, and Format 2 can state a range of class 0. The parser leaves those glyphs out, as Otl
+	 * does, so a rule naming class 0 gets no glyph list and class 0 excludes only the other classes.
+	 *
+	 * Glyphs 40, 41 and 42 are A, B and C, in classes 1, 0 and 2. The table starts two bytes in,
+	 * because offset 0 means there is no table.
+	 *
+	 * @dataProvider dataClassDefinitionsListingClassZero
+	 *
+	 * @param string $table The Class Definition table
+	 */
+	public function testGlyphsAClassDefinitionListsAsClassZeroAreLeftOut($table)
+	{
+		$this->ttf->glyphToChar = [40 => [0x41], 41 => [0x42], 42 => [0x43]];
+		$this->readFrom(pack('n', 0) . $table);
+
+		$this->assertSame([1 => '00041', 2 => '00043'], $this->ttf->_getClasses(2));
+	}
+
+	/**
+	 * The same three classes as Format 1 and as Format 2.
+	 *
+	 * @return array
+	 */
+	public function dataClassDefinitionsListingClassZero()
+	{
+		return [
+			'Format 1' => [pack('n*', 1, 40, 3, 1, 0, 2)],
+			'Format 2' => [pack('n*', 2, 3, 40, 40, 1, 41, 41, 0, 42, 42, 2)],
+		];
 	}
 
 	/**
@@ -320,6 +348,20 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			['NotoSans-Regular.ttf', 'NotoSans-Regular'],
 			['Manjari-Regular.ttf', 'Manjari-Regular'],
 		];
+	}
+
+	/**
+	 * Point the parser's reader at a table held in memory.
+	 *
+	 * @param string $bytes
+	 */
+	private function readFrom($bytes)
+	{
+		$reader = new \ReflectionProperty($this->ttf, 'reader');
+		if (PHP_VERSION_ID < 80100) {
+			$reader->setAccessible(true);
+		}
+		$reader->setValue($this->ttf, new Fonts\BlobReader($bytes));
 	}
 
 	/**
