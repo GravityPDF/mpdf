@@ -1675,6 +1675,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * PDF/X permits no interactive form field, so under PDFXauto fields are drawn on the page as with
+	 * useActiveForms off, and keep the values they show. Without PDFXauto they stay active and the
+	 * document is refused when written.
+	 *
+	 * @return bool Whether form fields are written as interactive fields rather than drawn
+	 */
+	public function activeForms()
+	{
+		return $this->useActiveForms && !($this->PDFX && $this->PDFXauto);
+	}
+
+	/**
 	 * The number of colour components of the PDF/X output intent: four for PDF/X-1a, which prints to a
 	 * CMYK condition, and for PDF/X-4 as many as its profile has, three for the bundled sRGB profile it
 	 * embeds where the document names none. A CMYK output intent is had by naming a CMYK ICCProfile.
@@ -14037,11 +14049,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$e = mb_convert_case($e, MB_CASE_TITLE, "UTF-8");
 					} // mPDF 5.7.1
 				} else {
-					if ($this->checkSIP && (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) && $this->subPos < $i && (!$this->specialcontent || !$this->useActiveForms)) {
+					if ($this->checkSIP && (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) && $this->subPos < $i && (!$this->specialcontent || !$this->activeForms())) {
 						$cnt += $this->SubstituteCharsSIP($a, $i, $e);
 					}
 
-					if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->CurrentFont['type'] != 'Type0' && $this->subPos < $i && (!$this->specialcontent || !$this->useActiveForms)) {
+					if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->CurrentFont['type'] != 'Type0' && $this->subPos < $i && (!$this->specialcontent || !$this->activeForms())) {
 						$cnt += $this->SubstituteCharsMB($a, $i, $e);
 					}
 
@@ -14055,7 +14067,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					/* -- OTL -- */
 					// Use OTL OpenType Table Layout - GSUB & GPOS
-					if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL'] && (!$this->specialcontent || !$this->useActiveForms)) {
+					if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL'] && (!$this->specialcontent || !$this->activeForms())) {
 						if (!$this->otl) {
 							$this->otl = new Otl($this, $this->fontCache);
 						}

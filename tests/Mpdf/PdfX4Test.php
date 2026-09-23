@@ -348,34 +348,78 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * PDF/X permits no interactive form field, so an active form's fields are removed
+	 * @return string A form with a field of every kind, each carrying a value or a script
 	 */
-	public function testActiveFormFieldsAreRemoved()
+	private function form()
 	{
-		$html = '<form><input type="text" name="field" value="Value" /></form>';
-
-		$this->assertStringContainsString('/AcroForm', $this->pdf(['useActiveForms' => true], $html));
-
-		$pdf = $this->pdf(['PDFX' => '4', 'useActiveForms' => true], $html);
-		$this->assertStringNotContainsString('/AcroForm', $pdf);
-		$this->assertStringNotContainsString('/Subtype /Widget', $pdf);
+		return '<form action="submit.php">'
+			. '<input type="text" name="text" value="Typed value" onchange="app.alert(1)" />'
+			. '<input type="password" name="password" value="secret" />'
+			. '<textarea name="textarea" rows="2" cols="20">Written</textarea>'
+			. '<select name="combo"><option value="1">First</option><option value="2" selected>Chosen option</option></select>'
+			. '<select name="list" size="3" multiple><option selected>Alpha</option><option>Beta</option></select>'
+			. '<input type="checkbox" name="checked" value="1" checked="checked" /><input type="checkbox" name="unchecked" value="1" />'
+			. '<input type="radio" name="radio" value="a" checked="checked" /><input type="radio" name="radio" value="b" />'
+			. '<input type="submit" name="submit" value="Send" /><input type="reset" name="reset" value="Clear" />'
+			. '<input type="button" name="button" value="Run" onclick="app.alert(2)" />'
+			. '<input type="image" name="image" src="' . __DIR__ . '/../data/img/bayeux2.jpg" width="20" onclick="app.alert(3)" />'
+			. '<input type="hidden" name="hidden" value="Hidden value" />'
+			. '</form>';
 	}
 
 	/**
-	 * An active check box or radio button is removed like any other field, rather than refused for
-	 * the ZapfDingbats it would be drawn with
+	 * PDF/X permits no interactive form field, so under PDFXauto an active form is drawn on the page
+	 * exactly as it is with useActiveForms off, keeping the values it shows and nothing interactive
 	 *
 	 * @dataProvider pdfxVersions
 	 *
 	 * @param string $version
 	 */
-	public function testActiveCheckBoxesAndRadioButtonsAreRemoved($version)
+	public function testActiveFormFieldsAreDrawnOnThePage($version)
 	{
-		$html = '<form><input type="checkbox" name="box" value="1" checked="checked" /><input type="radio" name="radio" value="1" /></form>';
+		$mpdf = $this->mpdf(['PDFX' => $version, 'useActiveForms' => true], TextRecordingMpdf::class);
+		$mpdf->WriteHTML($this->form());
+		$pdf = $mpdf->OutputBinaryData();
 
-		$pdf = $this->pdf(['PDFX' => $version, 'useActiveForms' => true], $html);
-		$this->assertStringNotContainsString('/Subtype /Widget', $pdf);
-		$this->assertStringNotContainsString('ZapfDingbats', $pdf);
+		$this->assertTrue($mpdf->useActiveForms, 'the setting is left as it was given');
+		foreach (['/AcroForm', '/Widget', '/Annots', '/JavaScript', '/SubmitForm', '/ResetForm', 'ZapfDingbats'] as $interactive) {
+			$this->assertStringNotContainsString($interactive, $pdf);
+		}
+
+		$drawn = array_map('trim', $mpdf->drawnText);
+		foreach (['Typed value', '******', 'Written', 'Chosen option', 'Alpha', 'Send', 'Clear', 'Run'] as $value) {
+			$this->assertContains($value, $drawn);
+		}
+		$this->assertNotContains('Hidden value', $drawn);
+
+		$static = $this->pdf(['PDFX' => $version, 'useActiveForms' => false], $this->form());
+		$this->assertSame($this->pages($static), $this->pages($pdf));
+	}
+
+	/**
+	 * Without PDFXauto an active form is refused rather than drawn. The check box is refused as a
+	 * field, not with an exception over the ZapfDingbats it would be set in.
+	 *
+	 * @dataProvider pdfxVersions
+	 *
+	 * @param string $version
+	 */
+	public function testActiveFormFieldsAreRefusedWithoutPdfxAuto($version)
+	{
+		$mpdf = $this->mpdf(['PDFX' => $version, 'PDFXauto' => false, 'useActiveForms' => true]);
+		$mpdf->WriteHTML('<form><input type="text" name="text" value="Typed value" /><input type="checkbox" name="box" value="1" /></form>');
+
+		try {
+			$mpdf->OutputBinaryData();
+			$this->fail('the active form was written');
+		} catch (MpdfException $e) {
+			$this->assertStringContainsString('PDFA/PDFX warnings generated', $e->getMessage());
+		}
+
+		$this->assertContains(
+			sprintf('Form fields, file attachments and annotations within the TrimBox or BleedBox are not permitted in %s files. (Removed)', $mpdf->pdfxVersionLabel()),
+			$mpdf->PDFAXwarnings
+		);
 	}
 
 	/**

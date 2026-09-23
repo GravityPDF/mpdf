@@ -51,7 +51,7 @@ class Input extends Tag
 		if ($this->mpdf->onlyCoreFonts) {
 			$objattr['title'] = mb_convert_encoding($objattr['title'], $this->mpdf->mb_enc, 'UTF-8');
 		}
-		if ($this->mpdf->useActiveForms && isset($attr['NAME'])) {
+		if ($this->mpdf->activeForms() && isset($attr['NAME'])) {
 			$objattr['fieldname'] = $attr['NAME'];
 		}
 		if (isset($attr['VALUE'])) {
@@ -79,7 +79,7 @@ class Input extends Tag
 		}
 		$objattr['fontfamily'] = $this->mpdf->FontFamily;
 		$objattr['fontsize'] = $this->mpdf->FontSizePt;
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			if (isset($attr['ALIGN'])) {
 				$objattr['text_align'] = $this->getAlign($attr['ALIGN']);
 			} elseif (isset($properties['TEXT-ALIGN'])) {
@@ -111,7 +111,7 @@ class Input extends Tag
 		switch (strtoupper($attr['TYPE'])) {
 			case 'HIDDEN':
 				$this->mpdf->ignorefollowingspaces = true; //Eliminate exceeding left-side spaces
-				if ($this->mpdf->useActiveForms) {
+				if ($this->mpdf->activeForms()) {
 					$this->form->SetFormText(0, 0, $objattr['fieldname'], $objattr['value'], $objattr['value'], '', 0, '', true);
 				}
 				if ($this->mpdf->InlineProperties[$tag]) {
@@ -309,7 +309,7 @@ class Input extends Tag
 					$objattr['image_width'] = $w;
 					$objattr['ID'] = $info['i'];
 					$texto = 'X';
-					if ($this->mpdf->useActiveForms) {
+					if ($this->mpdf->activeForms()) {
 						if (isset($attr['ONCLICK'])) {
 							$objattr['onClick'] = $attr['ONCLICK'];
 						}
@@ -342,7 +342,7 @@ class Input extends Tag
 				$height = $this->mpdf->FontSize + ($this->form->form_element_spacing['button']['outer']['v'] * 2)
 					+ ($this->form->form_element_spacing['button']['inner']['v'] * 2);
 
-				if ($this->mpdf->useActiveForms && isset($attr['ONCLICK'])) {
+				if ($this->mpdf->activeForms() && isset($attr['ONCLICK'])) {
 					$objattr['onClick'] = $attr['ONCLICK'];
 				}
 				break;
@@ -357,7 +357,7 @@ class Input extends Tag
 					$type = 'PASSWORD';
 				}
 
-				if ($properties['FONT-SIZE'] === 'auto' && $this->mpdf->useActiveForms) {
+				if ($properties['FONT-SIZE'] === 'auto' && $this->mpdf->activeForms()) {
 					$objattr['use_auto_fontsize'] = true;
 				}
 
@@ -383,7 +383,7 @@ class Input extends Tag
 				if (isset($attr['MAXLENGTH']) && ctype_digit($attr['MAXLENGTH'])) {
 					$objattr['maxlength'] = $attr['MAXLENGTH'];
 				}
-				if ($this->mpdf->useActiveForms) {
+				if ($this->mpdf->activeForms()) {
 					if (isset($attr['ONCALCULATE'])) {
 						$objattr['onCalculate'] = $attr['ONCALCULATE'];
 					} elseif (isset($attr['ONCHANGE'])) {
