@@ -497,8 +497,8 @@ class Form
 	}
 
 	/**
-	 * Draws a static list box as HTML does: a row for each option that fits, from the first, or from the first selected
-	 * option when it would fall below the last row, with every selected option highlighted
+	 * Draws a static list box as a browser does: one option a row, every selected one highlighted, scrolled to the first
+	 * selected option if it would fall below the last row
 	 *
 	 * @param mixed[] $objattr
 	 * @param float $w the box's width, in mm
@@ -531,8 +531,8 @@ class Form
 		$items = array_slice($items, $top, $rows);
 		$rowsTop = $y + ($h - $rows * $rowHeight) / 2;
 
-		// Highlights go down before any text, so that one cannot cover the descenders of the option above it. The
-		// highlight is mPDF's own colour, so the document is not warned that it was converted.
+		// Highlights go down before the text so none covers the descenders of the option above. The colour is mPDF's
+		// own, so converting it for the colour space raises no warning.
 		$this->mpdf->SetFColor($this->colorConverter->convert('rgb(153, 191, 217)'));
 		foreach ($items as $row => $item) {
 			if (!empty($item['selected'])) {
@@ -540,7 +540,7 @@ class Form
 			}
 		}
 
-		// Cell() breaks the page when the line's height would run past the bottom, which the box already fits in
+		// Cell() would break the page on the line's height; the box is already known to fit
 		$divheight = $this->mpdf->divheight;
 		$this->mpdf->divheight = 0;
 		foreach ($items as $row => $item) {

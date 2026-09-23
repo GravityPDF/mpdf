@@ -30,6 +30,8 @@ class StaticListBoxTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A list box draws as many options as it has rows, from the first, and no arrow
+	 *
 	 * @dataProvider listBoxes
 	 *
 	 * @param string $attributes
