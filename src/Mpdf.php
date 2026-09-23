@@ -1675,9 +1675,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * PDF/X permits no interactive form field, so under PDFXauto the fields are drawn on the page as
-	 * they are with useActiveForms off, keeping what they show. Without PDFXauto they stay active, and
-	 * are refused when the document is written.
+	 * PDF/X permits no interactive form field, so under PDFXauto fields are drawn on the page as with
+	 * useActiveForms off, and keep the values they show. Without PDFXauto they stay active and the
+	 * document is refused when written.
 	 *
 	 * @return bool Whether form fields are written as interactive fields rather than drawn
 	 */

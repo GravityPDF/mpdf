@@ -389,8 +389,8 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Where mPDF is not to fix the document, an active form is refused rather than drawn, and a check
-	 * box for being a field rather than for its ZapfDingbats
+	 * Without PDFXauto an active form is refused rather than drawn. The check box is refused as a
+	 * field, not with an exception over the ZapfDingbats it would be set in.
 	 *
 	 * @dataProvider pdfxVersions
 	 *
