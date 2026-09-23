@@ -251,6 +251,20 @@ $cmykSpot = $directory . '/cmyk-spot-in-srgb.pdf';
 mutate($spot, $cmykSpot, "/DeviceRGB <<\n/Range", "/DeviceCMYK<<\n/Range");
 $cases['cmyk-spot-in-srgb'] = ['file' => $cmykSpot, 'breaks' => ['no-device-cmyk'], 'what' => 'a spot colour falling back to DeviceCMYK in a document printing to sRGB'];
 
+// An active form, which PDFXauto draws on the page rather than writing its fields and their scripts
+$forms = $directory . '/forms-srgb.pdf';
+$mpdf = document(['useActiveForms' => true]);
+$mpdf->WriteHTML('<form action="submit.php">'
+	. '<p><input type="text" name="text" value="Typed value" onchange="app.alert(1)" /> <input type="password" name="password" value="secret" /></p>'
+	. '<p><textarea name="textarea" rows="2" cols="20">Written</textarea></p>'
+	. '<p><select name="combo"><option selected>Chosen</option></select> <select name="list" size="3" multiple><option selected>Alpha</option><option>Beta</option></select></p>'
+	. '<p><input type="checkbox" name="box" value="1" checked="checked" /> <input type="radio" name="radio" value="a" checked="checked" /></p>'
+	. '<p><input type="submit" name="submit" value="Send" /> <input type="reset" name="reset" value="Clear" /> <input type="button" name="button" value="Run" onclick="app.alert(2)" /></p>'
+	. '<input type="hidden" name="hidden" value="Hidden" />'
+	. '</form>');
+$mpdf->OutputFile($forms);
+$cases['forms-srgb'] = ['file' => $forms, 'breaks' => [], 'what' => 'an active form drawn on the page of a document printing to sRGB'];
+
 // Everything PDF/X refuses, in a document that is not PDF/X at all
 $nonconformant = $directory . '/nonconformant.pdf';
 $configVariables = new ConfigVariables();

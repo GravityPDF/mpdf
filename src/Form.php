@@ -165,7 +165,7 @@ class Form
 	function print_ob_text($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// TEXT/PASSWORD INPUT
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 
 			$flags = [];
 
@@ -269,7 +269,7 @@ class Form
 	function print_ob_textarea($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// TEXTAREA
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 
 			$flags = [self::FLAG_TEXTAREA];
 
@@ -375,7 +375,7 @@ class Form
 	function print_ob_select($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// SELECT
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -485,7 +485,7 @@ class Form
 	function print_ob_imageinput($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $is_table)
 	{
 		// INPUT/BUTTON as IMAGE
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -509,7 +509,7 @@ class Form
 	function print_ob_button($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// BUTTON
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -582,7 +582,7 @@ class Form
 	function print_ob_checkbox($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $x, $y)
 	{
 		// CHECKBOX
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -635,7 +635,7 @@ class Form
 	function print_ob_radio($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $x, $y)
 	{
 		// RADIO
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
