@@ -907,8 +907,9 @@ class Otl
 		$stages = $this->shaper == 'K'
 			? ['locl ccmp pref blwf abvf pstf cfar']
 			: ['locl ccmp', 'nukt', 'akhn', 'rphf', 'rkrf', 'pref', 'blwf', 'abvf', 'half', 'pstf', 'vatu', 'cjct'];
+		$masks = $this->indicFeatureMasks($GSUBFeatures);
 		foreach ($stages as $tags) {
-			$this->_applyGSUBrulesIndic($this->shaperStage($tags, $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+			$this->_applyGSUBrulesIndic($this->shaperStage($tags, $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys, $is_old_spec, $masks);
 		}
 
 		// e. Final Re-ordering (Indic / Khmer / Sinhala)
@@ -920,7 +921,7 @@ class Otl
 
 		// f. Apply 'init' feature to first syllable in word (indicated by ['mask']) Indic::FLAG(Indic::INIT);
 		if ($this->shaper == 'I' || $this->shaper == 'S') {
-			$this->_applyGSUBrulesIndic($this->shaperStage('init', $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys, $is_old_spec);
+			$this->_applyGSUBrulesIndic($this->shaperStage('init', $GSUBFeatures), $GSUBscriptTag, $GSUBlangsys, $is_old_spec, $masks);
 		}
 
 		// g. Apply Presentation Forms GSUB Lookups (+ any discretionary)
@@ -1590,10 +1591,6 @@ class Otl
 	 */
 	private function shaperStage($tags, $Features)
 	{
-		if (empty($this->mpdf->OTLtags)) {
-			return $tags;
-		}
-
 		return $this->_applyTagSettings($tags, $Features, '', true);
 	}
 
@@ -1612,8 +1609,9 @@ class Otl
 	private function shaperGsubData($Features)
 	{
 		$GSUBdata = $this->GSUBdata[$this->GSUBfont];
+		$kept = $this->shaperStage('rphf pref blwf pstf', $Features);
 		foreach (['rphf', 'pref', 'blwf', 'pstf'] as $tag) {
-			if (trim($this->shaperStage($tag, $Features)) === '') {
+			if (strpos($kept, $tag) === false) {
 				$GSUBdata[$tag] = [];
 			}
 		}
@@ -1789,10 +1787,11 @@ class Otl
 	 * @param string $langsys   The OpenType language system under it
 	 * @param bool   $is_old_spec Whether the font uses the original Indic script tags rather than the
 	 *                            v2 ones, which changes where the features are expected to apply
+	 * @param array  $featureMasks The bit a feature's glyphs must carry, by tag - indicFeatureMasks()
 	 */
-	function _applyGSUBrulesIndic($usetags, $scriptTag, $langsys, $is_old_spec)
+	function _applyGSUBrulesIndic($usetags, $scriptTag, $langsys, $is_old_spec, array $featureMasks)
 	{
-		$this->applyGSUBfeaturesInTurn($usetags, $scriptTag, $langsys, $is_old_spec, $this->indicFeatureMasks());
+		$this->applyGSUBfeaturesInTurn($usetags, $scriptTag, $langsys, $is_old_spec, $featureMasks);
 	}
 
 	/**
@@ -2098,9 +2097,11 @@ class Otl
 	 * still applied once, at its own stage, but no longer only where the reordering marked a
 	 * character for it.
 	 *
+	 * @param array $Features The features this font offers for the script and language in hand
+	 *
 	 * @return array The mask, by feature tag
 	 */
-	private function indicFeatureMasks()
+	private function indicFeatureMasks($Features)
 	{
 		$masks = [
 			'rphf' => Indic::FLAG(Indic::RPHF),
@@ -2113,12 +2114,7 @@ class Otl
 			'init' => Indic::FLAG(Indic::INIT),
 		];
 
-		if (!empty($this->mpdf->OTLtags['FFPlus'])) {
-			preg_match_all('/([a-zA-Z0-9]{4})[\d]*/', $this->mpdf->OTLtags['FFPlus'], $m);
-			$masks = array_diff_key($masks, array_flip($m[1]));
-		}
-
-		return $masks;
+		return array_diff_key($masks, array_flip($this->featuresToApply($this->_applyTagSettings('', $Features))));
 	}
 
 	/**
