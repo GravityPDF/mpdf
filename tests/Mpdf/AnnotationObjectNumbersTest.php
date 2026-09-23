@@ -11,8 +11,8 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 	use PageStreams;
 
 	/**
-	 * Every /Annots entry is an annotation of its page, and every /Popup, /Parent, /EF, /AP and radio /Parent
-	 * reference names an object of the kind it should
+	 * Every /Annots entry is an annotation of its page, and every /Popup, /Parent, /EF, /AP and radio or button /Parent
+	 * reference names an object of the kind it should. A field that gathers widgets is listed by /Fields, not /Annots.
 	 *
 	 * @dataProvider documents
 	 *
@@ -30,11 +30,14 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		$this->assertEveryObjectWritten($pdf);
 
 		$subtypes = [];
+		$listed = [];
+		$parents = [];
 		foreach ($this->pageObjects($pdf) as $i => $page) {
 			$refs = $this->annotsOf($pdf, $page);
 			$subtypes[$i] = [];
 
 			foreach ($refs as $ref) {
+				$listed[] = $ref;
 				$annot = $this->object($pdf, $ref);
 				$this->assertStringContainsString('/Type /Annot', $annot);
 				preg_match('/\/Subtype \/(\w+)/', $annot, $subtype);
@@ -72,11 +75,23 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 
 				if ($subtype[1] === 'Widget' && preg_match('/\/Parent (\d+) 0 R/', $annot, $group)) {
 					$this->assertMatchesRegularExpression('/\/Kids \[[^\]]*\b' . $ref . ' 0 R/', $this->object($pdf, $group[1]));
+					$this->assertStringNotContainsString('/T (', $annot, 'A kid takes its name from its field');
+					$parents[] = $group[1];
 				}
 			}
 		}
 
 		$this->assertSame($expected, $subtypes);
+
+		if ($forms) {
+			preg_match('/\/Fields \[([^\]]*)\]/', $pdf, $fields);
+			preg_match_all('/(\d+) 0 R/', $fields[1], $fields);
+			$this->assertCount(4, array_unique($parents), 'Two radio groups and two groups of buttons');
+			foreach (array_unique($parents) as $parent) {
+				$this->assertNotContains($parent, $listed, 'A field is not an annotation');
+				$this->assertContains($parent, $fields[1]);
+			}
+		}
 	}
 
 	/**
@@ -87,24 +102,25 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 	public function documents()
 	{
 		$notes = ['Link', 'Text', 'Popup', 'Text', 'Text', 'Text', 'Popup'];
-		$widgets = ['Widget', 'Widget', 'Widget', 'Widget', 'Widget'];
+		$widgets = ['Widget', 'Widget', 'Widget', 'Widget', 'Widget', 'Widget', 'Widget', 'Widget', 'Widget'];
 		$second = ['Link', 'Text', 'Popup'];
 
 		$withFile = ['Link', 'Text', 'Popup', 'FileAttachment', 'Text', 'Text', 'Popup'];
 
 		return [
-			'file not allowed, forms' => [['mode' => 'c', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
-			'embedded fonts, forms' => [['useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
-			'file allowed, forms' => [['mode' => 'c', 'useActiveForms' => true, 'allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], true, [array_merge($withFile, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
+			'file not allowed, forms' => [['mode' => 'c', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget', 'Widget', 'Widget'])]],
+			'embedded fonts, forms' => [['useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget', 'Widget', 'Widget'])]],
+			'file allowed, forms' => [['mode' => 'c', 'useActiveForms' => true, 'allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], true, [array_merge($withFile, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget', 'Widget', 'Widget'])]],
 			'PDF/A-2 appearances, file not a PDF/A' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], false, [$notes, $second]],
-			'PDF/A-2 appearances, forms' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
+			'PDF/A-2 appearances, forms' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget', 'Widget', 'Widget'])]],
 			'PDF/A-3 appearances and file' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B', 'allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], false, [$withFile, $second]],
 		];
 	}
 
 	/**
 	 * Two pages of links, notes with and without popups, a note with a file and, when asked, form widgets with a
-	 * radio group on each page
+	 * radio group on each page, two buttons named go on the first and one on the second, and buttons named b and
+	 * lone
 	 *
 	 * @param bool $forms
 	 *
@@ -118,13 +134,16 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		if ($forms) {
 			$html .= '<form><input type="text" name="t1" value="x" onchange="alert(1)" /> <input type="checkbox" name="c1" value="1" checked="checked" />'
 				. ' <input type="radio" name="r1" value="a" checked="checked" /> <input type="radio" name="r1" value="b" />'
-				. ' <select name="s1" onchange="x()"><option value="1">1</option></select></form>';
+				. ' <select name="s1" onchange="x()"><option value="1">1</option></select>'
+				. ' <input type="button" name="go" value="A" onclick="a()" /> <input type="submit" name="go" value="B" />'
+				. ' <input type="image" name="b" src="' . __DIR__ . '/../data/img/ratio-16x9.png" onclick="b()" /> <input type="reset" name="lone" /></form>';
 		}
 
 		$html .= '<pagebreak /><p id="b"><a href="https://example.com">ext</a> <annotation content="Second" popup="true" /></p>';
 
 		if ($forms) {
-			$html .= '<form><input type="radio" name="r2" value="c" /> <input type="radio" name="r2" value="d" checked="checked" /> <input type="text" name="t2" /></form>';
+			$html .= '<form><input type="radio" name="r2" value="c" /> <input type="radio" name="r2" value="d" checked="checked" /> <input type="text" name="t2" />'
+				. ' <input type="button" name="go" value="C" onclick="c()" /> <input type="image" name="b" src="' . __DIR__ . '/../data/img/ratio-9x16.png" /></form>';
 		}
 
 		return $html;
