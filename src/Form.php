@@ -64,6 +64,11 @@ class Form
 	 */
 	private $formCount;
 
+	/**
+	 * @var float[] the width of each word appearanceText() has measured in the current field's font, in ems
+	 */
+	private $emWidths = [];
+
 	// Active Forms
 	var $formSubmitNoValueFields;
 	var $formExportType;
@@ -1598,7 +1603,7 @@ class Form
 
 	/**
 	 * Runs text through OTL, unless it has been already, and puts it in visual order, in the current font, as page text
-	 * is drawn
+	 * is drawn. Core fonts are neither shaped nor reordered.
 	 *
 	 * @param string $text
 	 * @param mixed[]|false|null $OTLdata its OTL data if it has been shaped already
@@ -1664,8 +1669,7 @@ class Form
 
 	/**
 	 * Lays out the text a widget's appearance shows, in the current font, which can only be measured while the widget
-	 * is being placed. Each line is shaped and put in visual order as page text is, and written with the operators
-	 * Cell() writes for it.
+	 * is being placed. Each line is shaped and put in visual order as page text is, and written by Mpdf::Text().
 	 *
 	 * @param float $w the widget's width
 	 * @param float $h its height
@@ -1695,14 +1699,16 @@ class Form
 		$descent = (isset($desc['Descent']) ? $desc['Descent'] : -200) / 1000;
 
 		// The text is measured and shaped at the size it is drawn at. The field keeps its own, which is 0 for auto.
-		$fieldSize = [$this->mpdf->FontSizePt, $this->mpdf->FontSize, $this->mpdf->currentfontsize];
-		$size = $this->mpdf->FontSizePt;
+		$this->emWidths = [];
+		$fieldSize = $this->mpdf->FontSizePt;
+		$size = $fieldSize;
 		$this->mpdf->SetFontSize($size ?: 12, false);
 		if (!$size) {
+			$rows = $roomHeight / ($ascent - $descent);
 			if ($flow === 'line') {
-				$size = max(1, $roomHeight / ($ascent - $descent));
+				$size = max(1, $rows);
 			} elseif ($flow === 'wrap') {
-				$size = $this->wrappedFontSize($lines, $room, $roomHeight / ($ascent - $descent));
+				$size = $this->wrappedFontSize($lines, $room, $rows);
 			} else {
 				$size = 12;
 			}
@@ -1750,7 +1756,7 @@ class Form
 				$y = ($height - $leading) / 2 - $descent * $size;
 			}
 
-			list($text, $OTLdata) = $this->mpdf->usingCoreFont ? [$line, null] : $this->shapeText($line);
+			list($text, $OTLdata) = $this->shapeText($line);
 			$lineWidth = $this->mpdf->GetStringWidth($text, true, $OTLdata) * Mpdf::SCALE;
 			if ($align === '1') {
 				$x = ($width - $lineWidth) / 2;
@@ -1760,16 +1766,10 @@ class Form
 				$x = $padding;
 			}
 
-			// As Cell() writes text: positioned glyph by glyph only where OTL moved any
-			if (!empty($OTLdata['GPOSinfo'])) {
-				$layout['lines'][] = trim($this->mpdf->applyGPOSpdf($text, '1 0 0 1 %.3F %.3F Tm', $x, $y, $OTLdata));
-			} else {
-				$encoded = $this->mpdf->usingCoreFont ? $text : $this->writer->utf8ToUtf16BigEndian($text, false);
-				$layout['lines'][] = sprintf('BT 1 0 0 1 %.3F %.3F Tm (%s) Tj ET', $x, $y, $this->writer->escape($encoded));
-			}
+			$layout['lines'][] = trim($this->mpdf->Text($x, $y, $text, $OTLdata, 0, '', 'SVG', true));
 		}
 
-		list($this->mpdf->FontSizePt, $this->mpdf->FontSize, $this->mpdf->currentfontsize) = $fieldSize;
+		$this->mpdf->SetFontSize($fieldSize, false);
 
 		return $layout;
 	}
@@ -1838,19 +1838,12 @@ class Form
 	 */
 	private function emWidth($text)
 	{
-		if ($this->mpdf->usingCoreFont) {
-			$cw = $this->mpdf->CurrentFont['cw'];
-			$width = 0;
-			for ($i = 0; $i < strlen($text); $i++) {
-				$width += isset($cw[$text[$i]]) ? $cw[$text[$i]] : 0;
-			}
-
-			return $width / 1000;
+		if (!isset($this->emWidths[$text])) {
+			list($shaped, $OTLdata) = $this->shapeText($text);
+			$this->emWidths[$text] = $this->mpdf->GetStringWidth($shaped, true, $OTLdata) / $this->mpdf->FontSize;
 		}
 
-		list($shaped, $OTLdata) = $this->shapeText($text);
-
-		return $this->mpdf->GetStringWidth($shaped, true, $OTLdata) / $this->mpdf->FontSize;
+		return $this->emWidths[$text];
 	}
 
 	/**

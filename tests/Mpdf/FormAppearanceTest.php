@@ -92,7 +92,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(1, preg_match('/BT \/F\d+ ([\d.]+) Tf ET/', $long, $size));
 		$this->assertLessThan(12, (float) $size[1]);
 
-		preg_match_all('/1 0 0 1 [\d.]+ (-?[\d.]+) Tm/', $long, $baselines);
+		preg_match_all('/BT [\d.]+ (-?[\d.]+) Td/', $long, $baselines);
 		$this->assertGreaterThan(1, count($baselines[1]));
 		$this->assertGreaterThanOrEqual(3, min(array_map('floatval', $baselines[1])));
 	}
@@ -128,7 +128,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A Latin value, and an Arabic one, which once had the viewer redraw every widget
+	 * A Latin value, and an Arabic one, which is shaped and right to left
 	 *
 	 * @return string[][]
 	 */

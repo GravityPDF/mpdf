@@ -349,7 +349,7 @@ class FormFieldShrinkTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function assertAppearance($widget, $pdf, $da, $size, $drawn)
 	{
 		$this->assertMatchesRegularExpression('/\/DA \(\/F\d+ ' . preg_quote($da, '/') . ' Tf /', $widget);
-		$this->assertMatchesRegularExpression('/\/F\d+ ' . preg_quote($size, '/') . ' Tf ET [\d.]+ g BT 1 0 0 1 [\d.]+ [\d.]+ Tm \(' . $drawn . '\) Tj/', $pdf);
+		$this->assertMatchesRegularExpression('/\/F\d+ ' . preg_quote($size, '/') . ' Tf ET [^B]* BT [\d.]+ [\d.]+ Td \(' . $drawn . '\) Tj/', $pdf);
 	}
 
 }
