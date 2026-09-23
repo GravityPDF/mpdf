@@ -6,6 +6,7 @@ use Mpdf\Strict;
 
 use Mpdf\Cache;
 use Mpdf\Color\ColorConverter;
+use Mpdf\Css\BorderMerger;
 use Mpdf\CssManager;
 use Mpdf\Form;
 use Mpdf\Image\ImageProcessor;
@@ -156,30 +157,24 @@ abstract class Tag
 			return $style;
 		}
 
-		// The cascade folds border-top-width, -style and -color into BORDER-TOP. Given without the shorthand, one of
-		// them comes with these defaults for the other two, which the field should not take.
-		$defaults = ['WIDTH' => '0px', 'STYLE' => 'none', 'COLOR' => '#000000'];
-		$border = array_combine(array_keys($defaults), array_pad(preg_split('/\s+/', trim($properties['BORDER-TOP']), 3), 3, ''));
+		// The cascade folds border-top-width, -style and -color into BORDER-TOP, and keeps them. A part given only as a
+		// longhand brings BorderMerger's defaults for the others, which the field should not take.
+		$border = array_combine(array_keys(BorderMerger::DEFAULTS), array_pad(preg_split('/\s+/', trim($properties['BORDER-TOP']), 3), 3, ''));
 		$longhand = isset($properties['BORDER-TOP-WIDTH']) || isset($properties['BORDER-TOP-STYLE']) || isset($properties['BORDER-TOP-COLOR']);
-		foreach ($defaults as $part => $default) {
-			if ($longhand && !isset($properties['BORDER-TOP-' . $part]) && $border[$part] === $default) {
-				$border[$part] = '';
+		foreach ($border as $part => $value) {
+			if ($value === '' || ($longhand && !isset($properties['BORDER-TOP-' . $part]) && $value === BorderMerger::DEFAULTS[$part])) {
+				continue;
+			}
+			if ($part === 'WIDTH') {
+				$style['border-width'] = $this->sizeConverter->convert($value, $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
+			} elseif ($part === 'STYLE') {
+				$style['border-style'] = strtolower($value);
+			} elseif ($color = $this->colorConverter->convert($value, $this->mpdf->PDFAXwarnings)) {
+				$style['border-col'] = $color;
 			}
 		}
 
-		if ($border['WIDTH'] !== '') {
-			$style['border-width'] = $this->sizeConverter->convert($border['WIDTH'], $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
-		}
-		if ($border['STYLE'] !== '') {
-			$style['border-style'] = strtolower($border['STYLE']);
-		}
-		if ($border['COLOR'] !== '') {
-			$style['border-col'] = $this->colorConverter->convert($border['COLOR'], $this->mpdf->PDFAXwarnings);
-		}
-
-		return array_filter($style, function ($value) {
-			return $value !== false;
-		});
+		return $style;
 	}
 
 	abstract public function open($attr, &$ahtml, &$ihtml);

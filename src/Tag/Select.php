@@ -119,9 +119,7 @@ class Select extends Tag
 		if (isset($this->mpdf->selectoption['SIZE'])) {
 			$objattr['size'] = $this->mpdf->selectoption['SIZE'];
 		}
-		if (isset($this->mpdf->selectoption['STYLE'])) {
-			$objattr = array_merge($objattr, $this->mpdf->selectoption['STYLE']);
-		}
+		$objattr = array_merge($objattr, $this->mpdf->selectoption['STYLE']);
 		$rows = 1;
 		if (isset($objattr['size']) && $objattr['size'] > 1) {
 			$rows = $objattr['size'];

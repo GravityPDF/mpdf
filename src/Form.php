@@ -240,16 +240,7 @@ class Form
 
 			$border = $this->setStaticBorder($objattr, $k);
 
-			if (!empty($objattr['disabled'])) {
-				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
-			} elseif (!empty($objattr['readonly'])) {
-				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
-			} else {
-				$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 250));
-				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
-			}
+			$this->setStaticColors($objattr, !empty($objattr['disabled']) || !empty($objattr['readonly']));
 
 			$this->fittedCell($w, $h, $texto, $border ? 1 : 0, $rtlalign, 1, $this->form_element_spacing['input']['inner']['h'] / $k);
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
@@ -335,16 +326,7 @@ class Form
 
 			$border = $this->setStaticBorder($objattr, $k);
 
-			if (!empty($objattr['disabled'])) {
-				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
-			} elseif (!empty($objattr['readonly'])) {
-				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
-			} else {
-				$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 250));
-				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
-			}
+			$this->setStaticColors($objattr, !empty($objattr['disabled']) || !empty($objattr['readonly']));
 
 			$this->mpdf->Rect($this->mpdf->x, $this->mpdf->y, $w, $h, $border ? 'DF' : 'F');
 			$ClipPath = sprintf('q %.3F %.3F %.3F %.3F re W n ', $this->mpdf->x * Mpdf::SCALE, ($this->mpdf->h - $this->mpdf->y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE);
@@ -433,13 +415,7 @@ class Form
 
 		} else {
 			$border = $this->setStaticBorder($objattr, $k) ? 1 : 0;
-			if (!empty($objattr['disabled'])) {
-				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
-			} else {
-				$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 250));
-				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
-			}
+			$this->setStaticColors($objattr, !empty($objattr['disabled']));
 			$w -= $this->form_element_spacing['select']['outer']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['select']['outer']['v'] * 2 / $k;
 			$this->mpdf->x += $this->form_element_spacing['select']['outer']['h'] / $k;
@@ -672,6 +648,19 @@ class Form
 	private function fieldColor(array $objattr, $key, $grey)
 	{
 		return isset($objattr[$key]) ? $objattr[$key] : $this->colorConverter->convert($grey, $this->mpdf->PDFAXwarnings);
+	}
+
+	/**
+	 * Sets the fill and text colours of a text field, text area or select drawn into the page: its CSS colours, or
+	 * else black on near-white, with a grey fill when it cannot be edited and grey text too when it is disabled
+	 *
+	 * @param mixed[] $objattr
+	 * @param bool $greyed whether it cannot be edited
+	 */
+	private function setStaticColors(array $objattr, $greyed)
+	{
+		$this->mpdf->SetFColor($greyed ? $this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings) : $this->fieldColor($objattr, 'background-col', 250));
+		$this->mpdf->SetTColor(!empty($objattr['disabled']) ? $this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings) : $this->fieldColor($objattr, 'color', 0));
 	}
 
 	/**
