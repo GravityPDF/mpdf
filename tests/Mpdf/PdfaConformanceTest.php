@@ -130,7 +130,8 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * An active form conforms: checkboxes and radio buttons are drawn without ZapfDingbats, every widget carries its
-	 * appearance, and the JavaScript, submit and reset actions PDF/A forbids are left out (#348)
+	 * appearance, and the JavaScript, submit and reset actions PDF/A forbids are left out (#348). Two of the buttons
+	 * share a name and are written as kids of one field (#443).
 	 *
 	 * @dataProvider documents
 	 */
@@ -147,7 +148,8 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<p><select name="s" onchange="app.alert(2)"><option value="1">One</option><option value="2" selected="selected">Two</option></select>'
 			. ' <select name="m" size="3" multiple="multiple"><option value="1">One</option><option value="2" selected="selected">Two</option></select></p>'
 			. '<p><input type="submit" name="go" value="Send" /> <input type="reset" name="rs" value="Reset" />'
-			. ' <input type="button" name="b" value="Push" onclick="app.alert(3)" noprint="noprint" /></p>'
+			. ' <input type="button" name="b" value="Push" onclick="app.alert(3)" noprint="noprint" />'
+			. ' <input type="button" name="b" value="Again" onclick="app.alert(4)" /></p>'
 			. '</form>'
 		);
 

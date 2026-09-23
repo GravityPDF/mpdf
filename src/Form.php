@@ -92,6 +92,12 @@ class Form
 	var $formAction;
 	var $form_fonts;
 	var $form_radio_groups;
+
+	/**
+	 * @var array[] by name, the push buttons that share it, which are written as one field with the widgets as kids
+	 */
+	private $buttonGroups = [];
+
 	var $form_checkboxes;
 	var $pdf_acro_array;
 	var $pdf_array_co;
@@ -833,12 +839,12 @@ class Form
 		}
 
 		if ($form['typ'] === 'Bt') {
-			if (isset($this->array_form_button_js[$form['T']])) {
+			if (isset($this->array_form_button_js[$form['n']])) {
 				$total++;
 			}
-			if (isset($this->form_button_icon[$form['T']])) {
+			if (isset($this->form_button_icon[$form['n']])) {
 				$total++;
-				if ($this->form_button_icon[$form['T']]['Indexed']) {
+				if ($this->form_button_icon[$form['n']]['Indexed']) {
 					$total++;
 				}
 			}
@@ -871,6 +877,61 @@ class Form
 				$annots[] = $id;
 				$id += $this->getCountItems($form);
 			}
+		}
+	}
+
+	/**
+	 * Gathers the push buttons that share a name and numbers the field each group is written as, from $id. A button
+	 * with a name of its own stays a single field and widget.
+	 *
+	 * @param int $id the first group's object number, left at the next free one
+	 */
+	function addButtonGroupIds(&$id)
+	{
+		$names = [];
+		foreach ($this->forms as $form) {
+			if ($this->isPushButton($form)) {
+				$names[$form['T']][] = $form['n'];
+			}
+		}
+
+		$this->buttonGroups = [];
+		foreach ($names as $name => $kids) {
+			if (count($kids) > 1) {
+				$this->buttonGroups[$name] = ['obj_id' => $id++, 'kids' => $kids];
+			}
+		}
+	}
+
+	/**
+	 * Whether a field is a submit, reset, script or image button, which is pressed rather than switched on and off
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return bool
+	 */
+	private function isPushButton($form)
+	{
+		return $form['typ'] === 'Bt' && $form['subtype'] !== 'radio' && $form['subtype'] !== 'checkbox';
+	}
+
+	/**
+	 * Writes each group of same-named push buttons as a field holding the name and the push-button flag, with the
+	 * widgets as its kids. It is not an annotation, so no page lists it.
+	 */
+	function putButtonGroups()
+	{
+		foreach ($this->buttonGroups as $name => $group) {
+			$this->writer->object();
+			$this->pdf_acro_array .= $this->mpdf->n . ' 0 R ';
+
+			$kids = '';
+			foreach ($group['kids'] as $kid) {
+				$kids .= $this->forms[$kid]['obj'] . ' 0 R ';
+			}
+
+			$this->writer->write('<< /FT /Btn /Ff ' . $this->_setflag([17]) . ' /T ' . $this->writer->string($name) . ' /Kids [ ' . $kids . '] >>');
+			$this->writer->write('endobj');
 		}
 	}
 
@@ -986,17 +1047,20 @@ class Form
 		return false;
 	}
 
-	function SetFormButtonJS($name, $js)
+	/**
+	 * Gives a button its script, by the button's number rather than its name, which other buttons may share
+	 *
+	 * @param int $n the button's number, its key in $forms
+	 * @param string $js
+	 */
+	function SetFormButtonJS($n, $js)
 	{
 		if (!$this->actionAllowed()) {
 			return;
 		}
-		$js = str_replace("\t", ' ', trim($js));
-		if (isset($name) && isset($js)) {
-			$this->array_form_button_js[$this->writer->escape($name)] = [
-				'js' => $js
-			];
-		}
+		$this->array_form_button_js[$n] = [
+			'js' => str_replace("\t", ' ', trim($js))
+		];
 	}
 
 	function SetFormChoiceJS($name, $js)
@@ -1244,7 +1308,7 @@ class Form
 		}
 		// pos => 1 = no caption, icon only; 0 = caption only
 		if ($image_id) {
-			$this->form_button_icon[$this->writer->escape($name)] = [
+			$this->form_button_icon[$this->formCount] = [
 				'pos' => 1,
 				'image_id' => $image_id,
 				'Indexed' => $indexed,
@@ -1252,7 +1316,7 @@ class Form
 		}
 		$this->SetFormButton($w, $h, $name, $value, 'js_button', $title, $flags, false, false, $background_col, $border_col, $noprint, $border);
 		if ($js) {
-			$this->SetFormButtonJS($name, $js);
+			$this->SetFormButtonJS($this->formCount, $js);
 		}
 		$this->mpdf->x += $w;
 	}
@@ -1809,8 +1873,8 @@ class Form
 			}
 		}
 
-		if (isset($this->form_button_icon[$form['T']])) {
-			$s .= sprintf(' q %.3F 0 0 %.3F 0 0 cm /I%d Do Q', $width, $height, $this->form_button_icon[$form['T']]['image_id']);
+		if (isset($this->form_button_icon[$form['n']])) {
+			$s .= sprintf(' q %.3F 0 0 %.3F 0 0 cm /I%d Do Q', $width, $height, $this->form_button_icon[$form['n']]['image_id']);
 		} elseif ($form['AP']['lines']) {
 			$s .= sprintf(' /Tx BMC q %.3F %.3F %.3F %.3F re W n BT', $border, $border, $width - 2 * $border, $height - 2 * $border);
 			$s .= sprintf(' /F%d %.3F Tf %s', $this->mpdf->fonts[$form['style']['font']]['i'], $form['AP']['size'], $form['style']['fontcolor']);
@@ -1979,7 +2043,9 @@ class Form
 		$this->writer->object();
 		$n = $this->mpdf->n;
 
-		if ($form['subtype'] !== 'radio') {
+		// A radio button or a button that shares its name is listed through the field it is a kid of
+		$group = $this->isPushButton($form) && isset($this->buttonGroups[$form['T']]);
+		if ($form['subtype'] !== 'radio' && !$group) {
 			$this->pdf_acro_array .= $n . ' 0 R '; // Add to /Field element
 		}
 
@@ -1999,13 +2065,15 @@ class Form
 		$this->writer->write('/FT /Btn ');
 		$this->writer->write('/H /P ');
 
-		if ($form['subtype'] !== 'radio') {  // mPDF 5.3.23
+		if ($group) {
+			$this->writer->write('/Parent ' . $this->buttonGroups[$form['T']]['obj_id'] . ' 0 R ');
+		} elseif ($form['subtype'] !== 'radio') {  // mPDF 5.3.23
 			$this->writer->write('/T ' . $this->writer->string($form['T']));
 		}
 
 		$this->writer->write('/TU ' . $this->writer->string($form['TU']));
 
-		if (isset($this->form_button_icon[$form['T']])) {
+		if (isset($this->form_button_icon[$form['n']])) {
 			$form['BS_W'] = 0;
 		}
 
@@ -2137,14 +2205,14 @@ class Form
 
 		if ($form['subtype'] === 'js_button') {
 			// Icon / image
-			if (isset($this->form_button_icon[$form['T']])) {
+			if (isset($this->form_button_icon[$form['n']])) {
 				$cc++;
-				$temp .= '/TP ' . $this->form_button_icon[$form['T']]['pos'] . ' ';
+				$temp .= '/TP ' . $this->form_button_icon[$form['n']]['pos'] . ' ';
 				$temp .= '/I ' . ($cc + $this->mpdf->n) . ' 0 R ';  // Normal icon
 				$temp .= '/RI ' . ($cc + $this->mpdf->n) . ' 0 R ';  // onMouseOver
 				$temp .= '/IX ' . ($cc + $this->mpdf->n) . ' 0 R ';  // onClick / onMouseDown
 				$temp .= '/IF << /SW /A /S /A /A [0.0 0.0] >> '; // Icon fit dictionary
-				if ($this->form_button_icon[$form['T']]['Indexed']) {
+				if ($this->form_button_icon[$form['n']]['Indexed']) {
 					$cc++;
 				}
 				$put_icon = 1;
@@ -2158,7 +2226,7 @@ class Form
 			$form['FF'][] = 17;
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 			// Javascript
-			if (isset($this->array_form_button_js[$form['T']])) {
+			if (isset($this->array_form_button_js[$form['n']])) {
 				$cc++;
 				$this->writer->write('/AA << /D ' . ($cc + $this->mpdf->n) . ' 0 R >>');
 				$put_js = 1;
@@ -2172,13 +2240,12 @@ class Form
 		// additional objects
 		// obj icon
 		if ($put_icon === 1) {
-			$this->_put_button_icon($this->form_button_icon[$form['T']], $form['w'], $form['h']);
+			$this->_put_button_icon($this->form_button_icon[$form['n']], $form['w'], $form['h']);
 			$put_icon = null;
 		}
 		// obj + 1
 		if ($put_js === 1) {
-			$this->mpdf->_set_object_javascript($this->array_form_button_js[$form['T']]['js']);
-			unset($this->array_form_button_js[$form['T']]);
+			$this->mpdf->_set_object_javascript($this->array_form_button_js[$form['n']]['js']);
 			$put_js = null;
 		}
 
