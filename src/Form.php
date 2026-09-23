@@ -385,10 +385,13 @@ class Form
 			if (!empty($objattr['required'])) {
 				$flags[] = self::FLAG_REQUIRED;
 			}
-			if (!empty($objattr['multiple']) && isset($objattr['size']) && $objattr['size'] > 1) {
+			// As in HTML, a select is a drop-down unless it is multiple or given a size of two or more rows
+			$multiple = !empty($objattr['multiple']);
+			$combo = !$multiple && (!isset($objattr['size']) || $objattr['size'] < 2);
+			if ($multiple) {
 				$flags[] = self::FLAG_MULTISELECT;
 			}
-			if (isset($objattr['size']) && $objattr['size'] < 2) {
+			if ($combo) {
 				$flags[] = self::FLAG_COMBOBOX;
 				if (!empty($objattr['editable'])) {
 					$flags[] = self::FLAG_EDITABLE;
@@ -396,7 +399,7 @@ class Form
 			}
 
 			// only allow spellcheck if combo and editable
-			if ((!isset($objattr['spellcheck']) || !$objattr['spellcheck']) || (isset($objattr['size']) && $objattr['size'] > 1) || (!isset($objattr['editable']) || !$objattr['editable'])) {
+			if (!$combo || empty($objattr['spellcheck']) || empty($objattr['editable'])) {
 				$flags[] = self::FLAG_NO_SPELLCHECK;
 			}
 

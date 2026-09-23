@@ -104,7 +104,7 @@ class Select extends Tag
 			$objattr['items'] = $this->mpdf->selectoption['ITEMS'];
 		}
 		if (isset($this->mpdf->selectoption['MULTIPLE'])) {
-			$objattr['multiple'] = $this->mpdf->selectoption['MULTIPLE'];
+			$objattr['multiple'] = true;
 		}
 		if (isset($this->mpdf->selectoption['DISABLED'])) {
 			$objattr['disabled'] = $this->mpdf->selectoption['DISABLED'];
