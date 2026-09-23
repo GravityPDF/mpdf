@@ -1908,7 +1908,10 @@ class Otl
 	{
 		$tags = [];
 		foreach (explode(' ', $usetags) as $usetag) {
-			$tags[] = substr($usetag, 0, 4);
+			// An empty list gives one empty entry, and substr() makes that false on PHP 5.6
+			if ($usetag !== '') {
+				$tags[] = substr($usetag, 0, 4);
+			}
 		}
 
 		return array_unique($tags);
