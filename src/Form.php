@@ -22,7 +22,6 @@ class Form
 	const FLAG_PASSWORD = 14;
 	const FLAG_RADIO = 15;
 	const FLAG_NOTOGGLEOFF = 16;
-	const FLAG_PUSHBUTTON = 17;
 	const FLAG_COMBOBOX = 18;
 	const FLAG_EDITABLE = 19;
 	const FLAG_MULTISELECT = 22;
@@ -784,7 +783,7 @@ class Form
 				$kids .= $this->forms[$kid]['obj'] . ' 0 R ';
 			}
 
-			$this->writer->write('<< /FT /Btn /Ff ' . $this->_setflag([self::FLAG_PUSHBUTTON]) . ' /T ' . $this->writer->string($name) . ' /Kids [ ' . $kids . '] >>');
+			$this->writer->write('<< /FT /Btn /Ff ' . $this->_setflag([17]) . ' /T ' . $this->writer->string($name) . ' /Kids [ ' . $kids . '] >>');
 			$this->writer->write('endobj');
 		}
 	}

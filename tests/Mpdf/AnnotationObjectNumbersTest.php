@@ -84,10 +84,11 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		$this->assertSame($expected, $subtypes);
 
 		if ($forms) {
-			preg_match('/\/Fields \[([^\]]*)\]/', $pdf, $fields);
-			preg_match_all('/(\d+) 0 R/', $fields[1], $fields);
-			$this->assertCount(4, array_unique($parents), 'Two radio groups and two groups of buttons');
-			foreach (array_unique($parents) as $parent) {
+			preg_match('/\/Fields \[([^\]]*)\]/', $pdf, $list);
+			preg_match_all('/(\d+) 0 R/', $list[1], $fields);
+			$parents = array_unique($parents);
+			$this->assertCount(4, $parents, 'Two radio groups and two groups of buttons');
+			foreach ($parents as $parent) {
 				$this->assertNotContains($parent, $listed, 'A field is not an annotation');
 				$this->assertContains($parent, $fields[1]);
 			}

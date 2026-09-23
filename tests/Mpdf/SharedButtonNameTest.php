@@ -24,14 +24,14 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<input type="button" name="go" value="Second" onclick="app.alert(\'second\')" />'
 			. '</form>', ['mode' => 'c', 'useActiveForms' => true]);
 
-		$fields = $this->fields($pdf);
+		$fields = $this->refs('Fields', $pdf);
 		$this->assertCount(1, $fields);
 
 		$field = $this->object($pdf, $fields[0]);
 		$this->assertStringContainsString('/FT /Btn /Ff 65536 /T (go)', $field);
 		$this->assertStringNotContainsString('/Type /Annot', $field);
 
-		$kids = $this->kids($field);
+		$kids = $this->refs('Kids', $field);
 		$this->assertSame($this->annotationRefs($pdf)[0], $kids);
 
 		foreach (['First' => 'first', 'Second' => 'second'] as $caption => $script) {
@@ -57,7 +57,7 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. ' <input type="submit" name="lone" value="Alone" /> <input type="radio" name="r" value="a" />'
 			. '</form>', ['mode' => 'c', 'useActiveForms' => true]);
 
-		$fields = $this->fields($pdf);
+		$fields = $this->refs('Fields', $pdf);
 		$this->assertCount(3, $fields);
 
 		$lone = $this->object($pdf, $fields[0]);
@@ -69,7 +69,7 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$field = $this->object($pdf, $fields[2]);
 		$this->assertStringContainsString('/T (act)', $field);
-		$this->assertCount(4, $this->kids($field));
+		$this->assertCount(4, $this->refs('Kids', $field));
 		$this->assertCount(6, $this->annotationRefs($pdf)[0]);
 	}
 
@@ -83,7 +83,7 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '</form>', ['mode' => 'c', 'useActiveForms' => true]);
 
 		$sizes = [];
-		foreach ($this->kids($this->object($pdf, $this->fields($pdf)[0])) as $kid) {
+		foreach ($this->refs('Kids', $this->object($pdf, $this->refs('Fields', $pdf)[0])) as $kid) {
 			$this->assertSame(1, preg_match('/\/I (\d+) 0 R/', $this->object($pdf, $kid), $icon));
 			preg_match('/\/Width (\d+).*?\/Height (\d+)/s', $this->object($pdf, $icon[1]), $size);
 			$sizes[] = $size[2] > $size[1] ? 'tall' : 'wide';
@@ -102,10 +102,10 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<input type="button" name="go" value="First" onclick="app.alert(1)" /> <input type="submit" name="go" value="Second" />'
 			. '</form>', ['mode' => 'utf-8', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'useActiveForms' => true]);
 
-		$fields = $this->fields($pdf);
+		$fields = $this->refs('Fields', $pdf);
 		$this->assertCount(1, $fields);
 
-		foreach ($this->kids($this->object($pdf, $fields[0])) as $kid) {
+		foreach ($this->refs('Kids', $this->object($pdf, $fields[0])) as $kid) {
 			$widget = $this->object($pdf, $kid);
 			$this->assertStringContainsString('/AP << /N << /Push ', $widget);
 			$this->assertStringNotContainsString('/AA', $widget);
@@ -122,10 +122,10 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$pdf = $this->render($this->filler(22) . '<form>' . $this->keptBlock(12, '<input type="button" name="go" value="First" onclick="app.alert(1)" />'
 			. ' <input type="button" name="go" value="Second" onclick="app.alert(2)" />') . '</form>', ['mode' => 'c', 'useActiveForms' => true]);
 
-		$fields = $this->fields($pdf);
+		$fields = $this->refs('Fields', $pdf);
 		$this->assertCount(1, $fields);
 
-		$kids = $this->kids($this->object($pdf, $fields[0]));
+		$kids = $this->refs('Kids', $this->object($pdf, $fields[0]));
 		$this->assertCount(2, $kids);
 		$this->assertSame($kids, array_merge([], ...$this->annotationRefs($pdf)));
 		$this->assertSame([], $this->annotationRefs($pdf)[0], 'The block moved to the second page');
@@ -142,13 +142,13 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->WriteHTML('<p>One</p><pagebreak /><p>Two</p>');
 		$pdf = $this->output($mpdf);
 
-		$fields = $this->fields($pdf);
+		$fields = $this->refs('Fields', $pdf);
 		$this->assertCount(1, $fields);
 
 		$refs = $this->annotationRefs($pdf);
 		$this->assertCount(1, $refs[0]);
 		$this->assertCount(1, $refs[1]);
-		$this->assertSame(array_merge($refs[0], $refs[1]), $this->kids($this->object($pdf, $fields[0])));
+		$this->assertSame(array_merge($refs[0], $refs[1]), $this->refs('Kids', $this->object($pdf, $fields[0])));
 	}
 
 	/**
@@ -167,30 +167,16 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The objects the document's /AcroForm lists in /Fields
+	 * The objects an array of references lists, the first in $pdf under the key given
 	 *
-	 * @param string $pdf
-	 *
-	 * @return string[]
-	 */
-	private function fields($pdf)
-	{
-		$this->assertSame(1, preg_match('/\/Fields \[([^\]]*)\]/', $pdf, $list));
-		preg_match_all('/(\d+) 0 R/', $list[1], $refs);
-
-		return $refs[1];
-	}
-
-	/**
-	 * The objects a field lists in /Kids
-	 *
-	 * @param string $field
+	 * @param string $key 'Fields' or 'Kids'
+	 * @param string $pdf a document or one of its objects
 	 *
 	 * @return string[]
 	 */
-	private function kids($field)
+	private function refs($key, $pdf)
 	{
-		$this->assertSame(1, preg_match('/\/Kids \[([^\]]*)\]/', $field, $list));
+		$this->assertSame(1, preg_match('/\/' . $key . ' \[([^\]]*)\]/', $pdf, $list));
 		preg_match_all('/(\d+) 0 R/', $list[1], $refs);
 
 		return $refs[1];
