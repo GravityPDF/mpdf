@@ -26,15 +26,23 @@ final class ImageWriter
 		$this->writer = $writer;
 	}
 
+	/**
+	 * Writes each image the document holds, with the palette or colour profile it names, and names the
+	 * soft mask of one that has one at the object that mask was written at
+	 */
 	public function writeImages()
 	{
 		$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
+
+		// The object each image was written at, by its number, which is what a soft mask is named by
+		$written = [];
 
 		foreach ($this->mpdf->images as $file => $info) {
 
 			$this->writer->object();
 
 			$this->mpdf->images[$file]['n'] = $this->mpdf->n;
+			$written[$info['i']] = $this->mpdf->n;
 
 			$this->writer->write('<</Type /XObject');
 			$this->writer->write('/Subtype /Image');
@@ -46,7 +54,7 @@ final class ImageWriter
 			}
 
 			if (isset($info['masked'])) {
-				$this->writer->write('/SMask ' . ($this->mpdf->n - 1) . ' 0 R');
+				$this->writer->write('/SMask ' . $this->maskObject($file, $info['masked'], $written) . ' 0 R');
 			}
 
 			// set color space
@@ -114,6 +122,31 @@ final class ImageWriter
 				$this->writer->write('endobj');
 			}
 		}
+	}
+
+	/**
+	 * The object an image's soft mask was written at
+	 *
+	 * ImageProcessor::register() puts a mask in ahead of the image it masks, so it has been written by
+	 * the time the image names it. Taking the object from the mask itself, rather than counting back
+	 * from the image's, is what keeps a palette or a colour profile written in between from being
+	 * named as the mask - which renders wrong and says nothing.
+	 *
+	 * @throws \Mpdf\MpdfException Where the mask is not among the images written before this one
+	 *
+	 * @param string $file    The image's key in Mpdf::$images, for the message where its mask is missing
+	 * @param int    $mask    The mask's number, as the image's 'masked' holds it
+	 * @param int[]  $written The object each image written so far was written at, by its number
+	 *
+	 * @return int
+	 */
+	private function maskObject($file, $mask, array $written)
+	{
+		if (!isset($written[$mask])) {
+			throw new \Mpdf\MpdfException(sprintf('The soft mask of image "%s" was not written before it', $file));
+		}
+
+		return $written[$mask];
 	}
 
 }
