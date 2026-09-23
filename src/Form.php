@@ -378,6 +378,9 @@ class Form
 	function print_ob_select($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// SELECT
+		// As in HTML, a select is a drop-down unless it is multiple or given a size of two or more rows
+		$multiple = !empty($objattr['multiple']);
+		$combo = !$multiple && (!isset($objattr['size']) || $objattr['size'] < 2);
 		if ($this->mpdf->useActiveForms) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
@@ -388,9 +391,6 @@ class Form
 			if (!empty($objattr['required'])) {
 				$flags[] = self::FLAG_REQUIRED;
 			}
-			// As in HTML, a select is a drop-down unless it is multiple or given a size of two or more rows
-			$multiple = !empty($objattr['multiple']);
-			$combo = !$multiple && (!isset($objattr['size']) || $objattr['size'] < 2);
 			if ($multiple) {
 				$flags[] = self::FLAG_MULTISELECT;
 			}
@@ -455,6 +455,14 @@ class Form
 			$this->mpdf->x += $this->form_element_spacing['select']['outer']['h'] / $k;
 			$this->mpdf->y += $this->form_element_spacing['select']['outer']['v'] / $k;
 
+			if (!$combo) {
+				$this->printListBox($objattr, $w, $h, $rtlalign, $k);
+				$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
+				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+
+				return;
+			}
+
 			// DIRECTIONALITY
 			if (preg_match('/([' . $this->mpdf->pregRTLchars . '])/u', $texto)) {
 				$this->mpdf->biDirectional = true;
@@ -486,6 +494,73 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 		}
+	}
+
+	/**
+	 * Draws a static list box as a browser does: one option a row, every selected one highlighted, scrolled to the first
+	 * selected option if it would fall below the last row
+	 *
+	 * @param mixed[] $objattr
+	 * @param float $w the box's width, in mm
+	 * @param float $h its height, in mm
+	 * @param string $rtlalign
+	 * @param float $k how much a table has shrunk the box
+	 */
+	private function printListBox($objattr, $w, $h, $rtlalign, $k)
+	{
+		$x = $this->mpdf->x;
+		$y = $this->mpdf->y;
+		$padding = $this->form_element_spacing['select']['inner']['h'] / $k;
+		$rowHeight = $this->mpdf->FontSize;
+		$rows = $objattr['rows'];
+
+		$items = isset($objattr['items']) ? $objattr['items'] : [];
+		$top = 0;
+		foreach ($items as $i => $item) {
+			if (!empty($item['selected'])) {
+				if ($i >= $rows) {
+					$top = $i;
+				}
+				break;
+			}
+		}
+
+		$this->mpdf->Rect($x, $y, $w, $h, 'F');
+		$this->writer->write(sprintf('q %.3F %.3F %.3F %.3F re W n', $x * Mpdf::SCALE, ($this->mpdf->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE));
+
+		$items = array_slice($items, $top, $rows);
+		$rowsTop = $y + ($h - $rows * $rowHeight) / 2;
+
+		// Highlights go down before the text so none covers the descenders of the option above. The colour is mPDF's
+		// own, so converting it for the colour space raises no warning.
+		$this->mpdf->SetFColor($this->colorConverter->convert('rgb(153, 191, 217)'));
+		foreach ($items as $row => $item) {
+			if (!empty($item['selected'])) {
+				$this->mpdf->Rect($x, $rowsTop + $row * $rowHeight, $w, $rowHeight, 'F');
+			}
+		}
+
+		// Cell() would break the page on the line's height; the box is already known to fit
+		$divheight = $this->mpdf->divheight;
+		$this->mpdf->divheight = 0;
+		foreach ($items as $row => $item) {
+			$text = $item['content'];
+			$OTLdata = $item['OTLdata'];
+			if (preg_match('/([' . $this->mpdf->pregRTLchars . '])/u', $text)) {
+				$this->mpdf->biDirectional = true;
+			} // *RTL*
+			$this->mpdf->magic_reverse_dir($text, $this->mpdf->directionality, $OTLdata);
+
+			$this->mpdf->x = $x;
+			$this->mpdf->y = $rowsTop + $row * $rowHeight;
+			$this->mpdf->Cell($w, $rowHeight, $text, 0, 0, $rtlalign, 0, '', 0, $padding, $padding, 'M', 0, false, $OTLdata);
+		}
+
+		$this->mpdf->divheight = $divheight;
+		$this->writer->write('Q');
+		$this->mpdf->Rect($x, $y, $w, $h, 'D');
+		$this->mpdf->x = $x + $w;
+		$this->mpdf->y = $y;
 	}
 
 	function print_ob_imageinput($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $is_table)
