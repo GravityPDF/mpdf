@@ -214,9 +214,7 @@ final class ResourceWriter implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->mpdf->hasOC || count($this->mpdf->layers)) {
 			$this->writer->write('/Properties <<');
-			if ($this->mpdf->hasOC) {
-				$this->writer->write('/OC1 ' . $this->mpdf->n_ocg_print . ' 0 R /OC2 ' . $this->mpdf->n_ocg_view . ' 0 R /OC3 ' . $this->mpdf->n_ocg_hidden . ' 0 R ');
-			}
+			$this->writer->write($this->optionalContentWriter->visibilityProperties());
 			if (count($this->mpdf->layers)) {
 				foreach ($this->mpdf->layers as $id => $layer) {
 					$this->writer->write('/ZI' . $id . ' ' . $layer['n'] . ' 0 R');

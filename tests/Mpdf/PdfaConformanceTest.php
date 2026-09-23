@@ -59,6 +59,10 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<img src="' . $img . 'demo.svg" width="40" />'
 			. '<svg width="100" height="50"><rect width="80" height="40" fill="red" fill-opacity="0.3" stroke="blue"'
 			. ' stroke-opacity="0.4" opacity="0.5" /><text x="5" y="30" fill-opacity="0.5">SVG</text></svg>'
+			. '<svg width="100" height="50"><linearGradient id="l"><stop offset="0" stop-color="red" stop-opacity="0.2" />'
+			. '<stop offset="1" stop-color="blue" /></linearGradient><radialGradient id="r"><stop offset="0" stop-color="red"'
+			. ' stop-opacity="0.2" /><stop offset="1" stop-color="blue" /></radialGradient><rect width="40" height="40"'
+			. ' fill="url(#l)" /><rect x="50" width="40" height="40" fill="url(#r)" /></svg>'
 		);
 
 		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));

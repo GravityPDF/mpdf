@@ -39,6 +39,69 @@ class PDFA1Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * An SVG gradient stop at part opacity fades through a soft mask where transparency is allowed, and is painted
+	 * opaque under PDF/A-1 and PDF/X-1a
+	 *
+	 * @dataProvider gradientDocuments
+	 */
+	public function testSvgGradientStopOpacity($config, $gradient, $translucent)
+	{
+		$pdf = $this->render($this->translucentGradient($gradient), $config + ['mode' => '']);
+
+		$this->assertSame($translucent, strpos($pdf, '/SMask') !== false);
+	}
+
+	/**
+	 * A PDF/A-1 document that is not to fix itself reports the gradient stop opacity it could not keep
+	 *
+	 * @dataProvider gradients
+	 */
+	public function testSvgGradientStopOpacityIsReported($gradient)
+	{
+		$mpdf = $this->pdfa('1-B', ['PDFAauto' => false]);
+		$mpdf->WriteHTML($this->translucentGradient($gradient));
+
+		$this->assertContains('Image opacity must be 100% (Opacity changed to 100%)', $mpdf->PDFAXwarnings);
+	}
+
+	/**
+	 * Each SVG gradient under PDF/A-1b, PDF/A-2b and PDF/X-1a, with whether its stop keeps its opacity
+	 *
+	 * @return mixed[][]
+	 */
+	public function gradientDocuments()
+	{
+		$documents = [
+			'PDF/A-1b' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'], false],
+			'PDF/A-2b' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B'], true],
+			'PDF/X-1a' => [['PDFX' => true, 'PDFXauto' => true], false],
+		];
+
+		$cases = [];
+		foreach ($documents as $document => $case) {
+			list($config, $translucent) = $case;
+			foreach ($this->gradients() as $gradient => $args) {
+				$cases[$document . ', ' . $gradient] = [$config, $args[0], $translucent];
+			}
+		}
+
+		return $cases;
+	}
+
+	/**
+	 * The SVG gradient elements
+	 *
+	 * @return string[][]
+	 */
+	public function gradients()
+	{
+		return [
+			'linear' => ['linearGradient'],
+			'radial' => ['radialGradient'],
+		];
+	}
+
+	/**
 	 * A blurred box-shadow fades out through a soft mask under PDF/A-2, and under PDF/A-1 keeps a hard edge instead
 	 *
 	 * @dataProvider versions
@@ -163,6 +226,19 @@ class PDFA1Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return '<svg width="100" height="50"><rect width="80" height="40" fill="red" fill-opacity="0.3" stroke="blue"'
 			. ' stroke-opacity="0.4" opacity="0.5" /></svg>';
+	}
+
+	/**
+	 * An SVG shape filled with a gradient whose first stop is at part opacity
+	 *
+	 * @param string $gradient linearGradient or radialGradient
+	 *
+	 * @return string
+	 */
+	private function translucentGradient($gradient)
+	{
+		return '<svg width="100" height="50"><' . $gradient . ' id="g"><stop offset="0" stop-color="red" stop-opacity="0.2" />'
+			. '<stop offset="1" stop-color="blue" /></' . $gradient . '><rect width="80" height="40" fill="url(#g)" /></svg>';
 	}
 
 	/**

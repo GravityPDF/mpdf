@@ -11,6 +11,16 @@ final class OptionalContentWriter
 	use Strict;
 
 	/**
+	 * The groups the visibility property draws in, by resource name: the bit of Mpdf::$hasOC that marks each one used,
+	 * the property holding its object number, its name, and its print and view states
+	 */
+	const VISIBILITY_GROUPS = [
+		'OC1' => [1, 'n_ocg_print', 'Print only', 'ON', 'OFF'],
+		'OC2' => [2, 'n_ocg_view', 'Screen only', 'OFF', 'ON'],
+		'OC3' => [4, 'n_ocg_hidden', 'Hidden', 'OFF', 'OFF'],
+	];
+
+	/**
 	 * @var \Mpdf\Mpdf
 	 */
 	private $mpdf;
@@ -28,24 +38,19 @@ final class OptionalContentWriter
 
 	public function writeOptionalContentGroups() // _putocg Optional Content Groups
 	{
-		if ($this->mpdf->hasOC) {
+		foreach (self::VISIBILITY_GROUPS as $group) {
+			list($bit, $property, $name, $print, $view) = $group;
+
+			// Only the groups the document uses are written, as the catalog lists only those
+			$this->mpdf->$property = null;
+			if (!($this->mpdf->hasOC & $bit)) {
+				continue;
+			}
 
 			$this->writer->object();
-			$this->mpdf->n_ocg_print = $this->mpdf->n;
-			$this->writer->write('<</Type /OCG /Name ' . $this->writer->string('Print only'));
-			$this->writer->write('/Usage <</Print <</PrintState /ON>> /View <</ViewState /OFF>>>>>>');
-			$this->writer->write('endobj');
-
-			$this->writer->object();
-			$this->mpdf->n_ocg_view = $this->mpdf->n;
-			$this->writer->write('<</Type /OCG /Name ' . $this->writer->string('Screen only'));
-			$this->writer->write('/Usage <</Print <</PrintState /OFF>> /View <</ViewState /ON>>>>>>');
-			$this->writer->write('endobj');
-
-			$this->writer->object();
-			$this->mpdf->n_ocg_hidden = $this->mpdf->n;
-			$this->writer->write('<</Type /OCG /Name ' . $this->writer->string('Hidden'));
-			$this->writer->write('/Usage <</Print <</PrintState /OFF>> /View <</ViewState /OFF>>>>>>');
+			$this->mpdf->$property = $this->mpdf->n;
+			$this->writer->write('<</Type /OCG /Name ' . $this->writer->string($name));
+			$this->writer->write('/Usage <</Print <</PrintState /' . $print . '>> /View <</ViewState /' . $view . '>>>>>>');
 			$this->writer->write('endobj');
 		}
 
@@ -66,6 +71,23 @@ final class OptionalContentWriter
 				$this->writer->write('endobj');
 			}
 		}
+	}
+
+	/**
+	 * The page resource entries naming each visibility group written
+	 *
+	 * @return string
+	 */
+	public function visibilityProperties()
+	{
+		$properties = '';
+		foreach (self::VISIBILITY_GROUPS as $resource => $group) {
+			if ($this->mpdf->{$group[1]}) {
+				$properties .= '/' . $resource . ' ' . $this->mpdf->{$group[1]} . ' 0 R ';
+			}
+		}
+
+		return $properties;
 	}
 
 }
