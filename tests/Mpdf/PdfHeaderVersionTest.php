@@ -82,11 +82,11 @@ class PdfHeaderVersionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'a version longer than the one first written' => [[], function (Mpdf $mpdf) {
 				$mpdf->pdf_version = '1.10';
 			}, '1.10'],
-			'PDF/A-1b refuses layers' => [['mode' => '', 'PDFA' => true, 'PDFAauto' => true], function (Mpdf $mpdf) {
+			'PDF/A-1b refuses layers' => [['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'], function (Mpdf $mpdf) {
 				$mpdf->BeginLayer(1);
 				$mpdf->EndLayer();
 			}, '1.4'],
-			'PDF/A-1b keeps 1.4 over an imported PDF 1.6 page' => [['mode' => '', 'PDFA' => true, 'PDFAauto' => true], self::import('1.6'), '1.4'],
+			'PDF/A-1b keeps 1.4 over an imported PDF 1.6 page' => [['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'], self::import('1.6'), '1.4'],
 			'PDF/X-1a keeps 1.4 over an imported PDF 1.6 page' => [['mode' => '', 'PDFX' => true, 'PDFXauto' => true], self::import('1.6'), '1.4'],
 		];
 	}

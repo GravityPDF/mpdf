@@ -277,7 +277,7 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testPdfa3AssociatesAnnotationFile()
 	{
-		$pdf = $this->render('<p><annotation content="File" file="' . __FILE__ . '" /></p>', ['allowAnnotationFiles' => true] + $this->pdfaConfig('3-B'));
+		$pdf = $this->render('<p><annotation content="File" file="' . __DIR__ . '/../data/annotation-files/sample.txt' . '" /></p>', ['allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true] + $this->pdfaConfig('3-B'));
 
 		$annotation = $this->annotations($pdf)[0];
 		$this->assertSame(1, preg_match('/\/FS (\d+) 0 R \/AF \[\1 0 R\]/', $annotation, $spec));
@@ -287,10 +287,10 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$filespec = $this->object($pdf, $spec[1]);
 		$this->assertStringContainsString('/Type /Filespec', $filespec);
 		$this->assertStringContainsString('/AFRelationship /Unspecified', $filespec);
-		$this->assertStringContainsString('/UF (PDFA2Test.php)', $filespec);
+		$this->assertStringContainsString('/UF (sample.txt)', $filespec);
 
 		$this->assertSame(1, preg_match('/\/EF <<\s*\/F (\d+) 0 R/', $filespec, $stream));
-		$this->assertStringContainsString("/Type /EmbeddedFile\n/Subtype /application#2Foctet-stream", $this->object($pdf, $stream[1]));
+		$this->assertStringContainsString("/Type /EmbeddedFile\n/Subtype /text#2Fplain", $this->object($pdf, $stream[1]));
 	}
 
 	/**

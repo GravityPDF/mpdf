@@ -69,7 +69,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A document that attaches a PDF/A document, a plain PDF and a PHP file conforms: PDF/A-2 keeps only the PDF/A
+	 * A document that attaches a PDF/A document, a plain PDF and a text file conforms: PDF/A-2 keeps only the PDF/A
 	 * one, PDF/A-3 all three
 	 *
 	 * @dataProvider attachmentVersions
@@ -78,11 +78,11 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$attachment = $this->write($this->pdfa('2-B'));
 
-		$mpdf = $this->pdfa($version, ['allowAnnotationFiles' => true]);
+		$mpdf = $this->pdfa($version, ['allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true]);
 		$mpdf->WriteHTML(
 			'<p>PDF/A <annotation content="PDF/A" file="' . $attachment . '" /></p>'
 			. '<p>Plain <annotation content="Plain" file="' . __DIR__ . '/../data/pdfs/2-Page-PDF_1_4.pdf" /></p>'
-			. '<p>PHP <annotation content="PHP" file="' . __FILE__ . '" /></p>'
+			. '<p>Text <annotation content="Text" file="' . __DIR__ . '/../data/annotation-files/sample.txt' . '" /></p>'
 		);
 		$file = $this->write($mpdf);
 

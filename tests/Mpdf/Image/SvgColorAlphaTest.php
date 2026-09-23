@@ -100,7 +100,7 @@ class SvgColorAlphaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function noTransparencyProvider()
 	{
 		return [
-			'PDF/A-1b' => [['mode' => 'utf-8', 'PDFA' => true, 'PDFAauto' => true]],
+			'PDF/A-1b' => [['mode' => 'utf-8', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B']],
 			'PDF/X-1a' => [['mode' => 'utf-8', 'PDFX' => true, 'PDFXauto' => true]],
 		];
 	}
