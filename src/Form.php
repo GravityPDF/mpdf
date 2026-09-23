@@ -60,14 +60,14 @@ class Form
 	public $forms;
 
 	/**
-	 * @var bool whether a field shows text that needs shaping or reordering, which its appearance cannot give it
-	 */
-	private $complexText = false;
-
-	/**
 	 * @var int
 	 */
 	private $formCount;
+
+	/**
+	 * @var mixed[][] the text appearanceText() has shaped for the current field, as shapedText() returns it
+	 */
+	private $shaped = [];
 
 	// Active Forms
 	var $formSubmitNoValueFields;
@@ -238,11 +238,6 @@ class Form
 			$h -= $this->form_element_spacing['input']['outer']['v'] * 2 / $k;
 			$this->mpdf->x += $this->form_element_spacing['input']['outer']['h'] / $k;
 			$this->mpdf->y += $this->form_element_spacing['input']['outer']['v'] / $k;
-
-			// DIRECTIONALITY
-			if (preg_match('/([' . $this->mpdf->pregRTLchars . '])/u', $texto)) {
-				$this->mpdf->biDirectional = true;
-			}
 
 			$border = $this->setStaticBorder($objattr, $k);
 
@@ -1010,21 +1005,10 @@ class Form
 				}
 				$f .= '/F' . $this->mpdf->fonts[$fn]['i'] . ' ' . $this->mpdf->fonts[$fn]['n'] . ' 0 R ';
 			}
-			// The appearances are neither shaped nor reordered, so text that needs either has the viewer redraw every
-			// widget. Drop this once they are (#408). PDF/A forbids asking.
-			$redraw = $this->complexText && !$this->mpdf->PDFA;
-			// A viewer redraws checkboxes and radio buttons in a ZapfDingbats font named ZaDb, which has to be here.
-			// PDF/X cannot name a font it does not embed.
-			if ($redraw && !$this->mpdf->PDFX && ($this->form_checkboxes || $this->form_radio_groups)) {
-				$f .= '/ZaDb << /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >> ';
-			}
 			$this->writer->write('/DR << /Font << ' . $f . ' >> >>');
 			// CO Calculation Order
 			if ($this->pdf_array_co) {
 				$this->writer->write('/CO [' . $this->pdf_array_co . ']');
-			}
-			if ($redraw) {
-				$this->writer->write('/NeedAppearances true');
 			}
 			$this->writer->write('>>');
 		}
@@ -1619,7 +1603,7 @@ class Form
 
 	/**
 	 * Runs text through OTL, unless it has been already, and puts it in visual order, in the current font, as page text
-	 * is drawn
+	 * is drawn. Core fonts are neither shaped nor reordered.
 	 *
 	 * @param string $text
 	 * @param mixed[]|false|null $OTLdata its OTL data if it has been shaped already
@@ -1628,6 +1612,10 @@ class Form
 	 */
 	private function shapeText($text, $OTLdata = null)
 	{
+		if (preg_match('/[' . $this->mpdf->pregRTLchars . ']/u', $text)) {
+			$this->mpdf->biDirectional = true;
+		}
+
 		if ($OTLdata === null && !empty($this->mpdf->CurrentFont['useOTL'])) {
 			$text = $this->otl->applyOTL($text, $this->mpdf->CurrentFont['useOTL']);
 			$OTLdata = $this->otl->OTLdata;
@@ -1681,8 +1669,7 @@ class Form
 
 	/**
 	 * Lays out the text a widget's appearance shows, in the current font, which can only be measured while the widget
-	 * is being placed. Notes text in a right-to-left script or one with a shaper of its own, which the layout does not
-	 * reorder or shape.
+	 * is being placed. Each line is shaped and put in visual order as page text is, and written by Mpdf::Text().
 	 *
 	 * @param float $w the widget's width
 	 * @param float $h its height
@@ -1696,34 +1683,35 @@ class Form
 	 *  room, or a button that shows an icon instead
 	 * @param int $rows the rows a list box shows
 	 *
-	 * @return mixed[] the font size, each line with where it starts and as the font encodes it, and the highlights, in
-	 *  points from the bottom left
+	 * @return mixed[] the font size, the operators that draw each line, and the highlights, in points from the bottom
+	 *  left
 	 */
 	private function appearanceText($w, $h, $border, array $lines, $align, $flow, array $selected = [], $fit = true, $rows = 1)
 	{
-		if (!$this->mpdf->usingCoreFont && !$this->complexText) {
-			foreach ($lines as $line) {
-				// ASCII is neither right-to-left nor shaped
-				if (preg_match('/[^\x00-\x7F]/', $line) && (preg_match('/[' . $this->mpdf->pregRTLchars . ']/u', $line) || $this->otl->hasComplexScript($line))) {
-					$this->complexText = true;
-					break;
-				}
-			}
-		}
-
 		$width = $w * Mpdf::SCALE;
 		$height = $h * Mpdf::SCALE;
 		$padding = $border + 2;
+		$room = $width - 2 * $padding;
+		$roomHeight = $height - 2 * $padding;
 
 		$desc = $this->mpdf->CurrentFont['desc'];
 		$ascent = (isset($desc['Ascent']) ? $desc['Ascent'] : 800) / 1000;
 		$descent = (isset($desc['Descent']) ? $desc['Descent'] : -200) / 1000;
 
-		$room = $width - 2 * $padding;
-
-		$size = $this->mpdf->FontSizePt;
+		// GetStringWidth() and Text() read the size from the font state, but the field keeps its own: 0 for auto
+		$this->shaped = [];
+		$fieldSize = $this->mpdf->FontSizePt;
+		$size = $fieldSize;
+		$this->mpdf->SetFontSize($size ?: 12, false);
 		if (!$size) {
-			$size = $flow === 'line' ? max(1, ($height - 2 * $padding) / ($ascent - $descent)) : 12;
+			$rows = $roomHeight / ($ascent - $descent);
+			if ($flow === 'line') {
+				$size = max(1, $rows);
+			} elseif ($flow === 'wrap') {
+				$size = $this->wrappedFontSize($lines, $room, $rows);
+			} else {
+				$size = 12;
+			}
 		} elseif ($fit && $flow === 'line') {
 			$line = $lines[0];
 			list($size, $length) = $this->fitLine($size, $room, mb_strlen($line, $this->mpdf->mb_enc), function ($length) use ($line, $size) {
@@ -1738,6 +1726,7 @@ class Form
 		if ($flow === 'list') {
 			$size = min($size, $rowHeight / ($ascent - $descent));
 		}
+		$this->mpdf->SetFontSize($size, false);
 		$leading = ($ascent - $descent) * $size;
 
 		$top = 0;
@@ -1767,7 +1756,8 @@ class Form
 				$y = ($height - $leading) / 2 - $descent * $size;
 			}
 
-			$lineWidth = $this->emWidth($line) * $size;
+			list($text, $OTLdata, $em) = $this->shapedText($line);
+			$lineWidth = $em * $size;
 			if ($align === '1') {
 				$x = ($width - $lineWidth) / 2;
 			} elseif ($align === '2') {
@@ -1776,10 +1766,33 @@ class Form
 				$x = $padding;
 			}
 
-			$layout['lines'][] = [$x, $y, $this->mpdf->usingCoreFont ? $line : $this->writer->utf8ToUtf16BigEndian($line, false)];
+			$layout['lines'][] = trim($this->mpdf->Text($x, $y, $text, $OTLdata, 0, '', 'SVG', true));
 		}
 
+		$this->mpdf->SetFontSize($fieldSize, false);
+
 		return $layout;
+	}
+
+	/**
+	 * The font size a multi-line field with an auto size is drawn at, as a viewer sizes one: the largest, from 12pt
+	 * down in half points to 4pt, at which the wrapped text fits the height
+	 *
+	 * @param string[] $lines
+	 * @param float $room the width the text has, in points
+	 * @param float $rows how many lines of 1pt text fit the height
+	 *
+	 * @return float
+	 */
+	private function wrappedFontSize(array $lines, $room, $rows)
+	{
+		for ($size = 12; $size > 4; $size -= 0.5) {
+			if (count($this->wrap($lines, $room / $size)) <= $rows / $size) {
+				break;
+			}
+		}
+
+		return $size;
 	}
 
 	/**
@@ -1816,7 +1829,8 @@ class Form
 	}
 
 	/**
-	 * The width of some text in ems of the current font, adding its characters to the font's subset
+	 * The width of some text in ems of the current font, shaped as it is drawn, adding its characters to the font's
+	 * subset
 	 *
 	 * @param string $text in the document's encoding: Windows-1252 bytes in a core font, UTF-8 otherwise
 	 *
@@ -1824,19 +1838,27 @@ class Form
 	 */
 	private function emWidth($text)
 	{
-		$cw = $this->mpdf->CurrentFont['cw'];
-		$width = 0;
-		if ($this->mpdf->usingCoreFont) {
-			for ($i = 0; $i < strlen($text); $i++) {
-				$width += isset($cw[$text[$i]]) ? $cw[$text[$i]] : 0;
-			}
-		} else {
-			foreach ($this->mpdf->UTF8StringToArray($text) as $char) {
-				$width += $this->mpdf->_getCharWidth($cw, $char, false);
-			}
+		$shaped = $this->shapedText($text);
+
+		return $shaped[2];
+	}
+
+	/**
+	 * Some text shaped by shapeText() and measured, kept for the rest of the field, as wrapping measures the same words
+	 * at each size it tries and fitting measures the line it then draws
+	 *
+	 * @param string $text in the document's encoding
+	 *
+	 * @return mixed[] the text as drawn, its OTL data, and its width in ems of the current font
+	 */
+	private function shapedText($text)
+	{
+		if (!isset($this->shaped[$text])) {
+			list($shaped, $OTLdata) = $this->shapeText($text);
+			$this->shaped[$text] = [$shaped, $OTLdata, $this->mpdf->GetStringWidth($shaped, true, $OTLdata) / $this->mpdf->FontSize];
 		}
 
-		return $width / 1000;
+		return $this->shaped[$text];
 	}
 
 	/**
@@ -1892,12 +1914,10 @@ class Form
 		if (isset($this->form_button_icon[$form['n']])) {
 			$s .= sprintf(' q %.3F 0 0 %.3F 0 0 cm /I%d Do Q', $width, $height, $this->form_button_icon[$form['n']]['image_id']);
 		} elseif ($form['AP']['lines']) {
-			$s .= sprintf(' /Tx BMC q %.3F %.3F %.3F %.3F re W n BT', $border, $border, $width - 2 * $border, $height - 2 * $border);
-			$s .= sprintf(' /F%d %.3F Tf %s', $this->mpdf->fonts[$form['style']['font']]['i'], $form['AP']['size'], $form['style']['fontcolor']);
-			foreach ($form['AP']['lines'] as $line) {
-				$s .= sprintf(' 1 0 0 1 %.3F %.3F Tm (%s) Tj', $line[0], $line[1], $this->writer->escape($line[2]));
-			}
-			$s .= ' ET Q EMC';
+			$s .= sprintf(' /Tx BMC q %.3F %.3F %.3F %.3F re W n', $border, $border, $width - 2 * $border, $height - 2 * $border);
+			// Text() writes no Tf, so the font is set once in the text state its lines inherit
+			$s .= sprintf(' BT /F%d %.3F Tf ET %s', $this->mpdf->fonts[$form['style']['font']]['i'], $form['AP']['size'], $form['style']['fontcolor']);
+			$s .= ' ' . implode(' ', $form['AP']['lines']) . ' Q EMC';
 		}
 
 		$this->writeAppearanceStream($s, [$width, $height]);
