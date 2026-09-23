@@ -564,6 +564,29 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A spot colour falls back to RGB where the output intent is not CMYK: DeviceRGB for an RGB intent,
+	 * the ICC-based sRGB colour space for a grey one
+	 */
+	public function testASpotColourFallsBackToTheColourSpaceOfTheOutputIntent()
+	{
+		$html = '<p style="color: spot(PANTONE 300 C, 80%)">Text</p>';
+		$spot = function (Mpdf $mpdf) {
+			$mpdf->AddSpotColor('PANTONE 300 C', 100, 44, 0, 0);
+		};
+
+		$pdf = $this->pdf(['PDFX' => '4'], $html, $spot);
+		$this->assertStringContainsString("/Separation /PANTONE#20300#20C\n/DeviceRGB <<\n/Range [0 1 0 1 0 1] /C0 [1 1 1] \n/C1 [0.000 0.557 1.000]", $pdf);
+		$this->assertStringNotContainsString('DeviceCMYK', $pdf);
+
+		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->writeProfile('grey', 'GRAY')], $html, $spot);
+		$this->assertSame(1, preg_match('/\/Separation \/PANTONE#20300#20C\n(\d+) 0 R <</', $pdf, $match));
+		$this->assertSame('[/ICCBased', substr($this->object($pdf, $match[1]), 0, 10));
+
+		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->cmykProfile], $html, $spot);
+		$this->assertStringContainsString("/Separation /PANTONE#20300#20C\n/DeviceCMYK <<", $pdf, 'a CMYK intent keeps the CMYK');
+	}
+
+	/**
 	 * A bitmap colour font is drawn in colour, its images in sRGB where the output intent is CMYK
 	 */
 	public function testABitmapColourFontIsDrawnInColour()
