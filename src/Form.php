@@ -223,7 +223,7 @@ class Form
 				$this->mpdf->FontSizePt = 0.0;
 			}
 
-			$this->SetFormText($w, $h, $objattr['fieldname'], $val, $val, $objattr['title'], $flags, $fieldalign, false, (isset($objattr['maxlength']) ? $objattr['maxlength'] : false), $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false));
+			$this->SetFormText($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $val, $val, $objattr['title'], $flags, $fieldalign, false, (isset($objattr['maxlength']) ? $objattr['maxlength'] : false), $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false));
 
 		} else {
 
@@ -333,7 +333,7 @@ class Form
 				$this->mpdf->FontSizePt = 0.0;
 			}
 
-			$this->SetFormText($w, $h, $objattr['fieldname'], $texto, $texto, (isset($objattr['title']) ? $objattr['title'] : ''), $flags, $fieldalign, false, -1, $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false));
+			$this->SetFormText($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $texto, $texto, (isset($objattr['title']) ? $objattr['title'] : ''), $flags, $fieldalign, false, -1, $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
@@ -438,7 +438,7 @@ class Form
 				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 			}
 
-			$this->SetFormChoice($w, $h, $objattr['fieldname'], $flags, $data, $rtlalign, $js);
+			$this->SetFormChoice($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $flags, $data, $rtlalign, $js);
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
@@ -502,7 +502,7 @@ class Form
 			} else {
 				$js = '';
 			}
-			$this->SetJSButton($w, $h, $objattr['fieldname'], (isset($objattr['value']) ? $objattr['value'] : ''), $js, $objattr['ID'], $objattr['title'], $flags, (isset($objattr['Indexed']) ? $objattr['Indexed'] : false));
+			$this->SetJSButton($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), (isset($objattr['value']) ? $objattr['value'] : ''), $js, $objattr['ID'], $objattr['title'], $flags, (isset($objattr['Indexed']) ? $objattr['Indexed'] : false));
 		} else {
 			$this->mpdf->y = $objattr['INNER-Y'];
 			$this->writer->write(sprintf('q %.3F 0 0 %.3F %.3F %.3F cm /I%d Do Q', $objattr['INNER-WIDTH'] * Mpdf::SCALE, $objattr['INNER-HEIGHT'] * Mpdf::SCALE, $objattr['INNER-X'] * Mpdf::SCALE, ($this->mpdf->h - ($objattr['INNER-Y'] + $objattr['INNER-HEIGHT'] )) * Mpdf::SCALE, $objattr['ID']));
@@ -529,13 +529,13 @@ class Form
 
 				if ($objattr['subtype'] === 'RESET') {
 					$this->SetFormButtonText($objattr['value']);
-					$this->SetFormReset($w, $h, $objattr['fieldname'], $objattr['value'], $objattr['title'], $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
+					$this->SetFormReset($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $objattr['value'], $objattr['title'], $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
 				} elseif ($objattr['subtype'] === 'SUBMIT') {
 					$url = $this->formAction;
 					$type = $this->formExportType;
 					$method = $this->formMethod;
 					$this->SetFormButtonText($objattr['value']);
-					$this->SetFormSubmit($w, $h, $objattr['fieldname'], $objattr['value'], $url, $objattr['title'], $type, $method, $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
+					$this->SetFormSubmit($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $objattr['value'], $url, $objattr['title'], $type, $method, $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
 				} elseif ($objattr['subtype'] === 'BUTTON') {
 					$this->SetFormButtonText($objattr['value']);
 					if (isset($objattr['onClick']) && $objattr['onClick']) {
@@ -543,7 +543,7 @@ class Form
 					} else {
 						$js = '';
 					}
-					$this->SetJSButton($w, $h, $objattr['fieldname'], $objattr['value'], $js, 0, $objattr['title'], $flags, false, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
+					$this->SetJSButton($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $objattr['value'], $js, 0, $objattr['title'], $flags, false, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
 				}
 			}
 
@@ -598,7 +598,7 @@ class Form
 			if (!empty($objattr['checked'])) {
 				$checked = true;
 			}
-			$this->SetCheckBox($w, $h, $objattr['fieldname'], $objattr['value'], $objattr['title'], $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
+			$this->SetCheckBox($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $objattr['value'], $objattr['title'], $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
 		} else {
 			$iw = $w * 0.7;
 			$ih = $h * 0.7;
@@ -641,7 +641,7 @@ class Form
 			if (!empty($objattr['checked'])) {
 				$checked = true;
 			}
-			$this->SetRadio($w, $h, $objattr['fieldname'], $objattr['value'], (isset($objattr['title']) ? $objattr['title'] : ''), $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
+			$this->SetRadio($w, $h, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $objattr['value'], (isset($objattr['title']) ? $objattr['title'] : ''), $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
 		} else {
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			$radius = $this->mpdf->FontSize * 0.35;
@@ -1092,7 +1092,7 @@ class Form
 	function SetFormReset($w, $h, $name, $value = 'Reset', $title = '', $flags = [], $background_col = false, $border_col = false, $noprint = false)
 	{
 		if (!$name) {
-			$name = 'Reset';
+			$name = $this->unnamedButtonName('Reset');
 		}
 		$this->SetFormButton($w, $h, $name, $value, 'reset', $title, $flags, false, false, $background_col, $border_col, $noprint);
 		$this->mpdf->x += $w;
@@ -1100,6 +1100,9 @@ class Form
 
 	function SetJSButton($w, $h, $name, $value, $js, $image_id = 0, $title = '', $flags = [], $indexed = false, $background_col = false, $border_col = false, $noprint = false)
 	{
+		if (!$name) {
+			$name = $this->unnamedButtonName('Button');
+		}
 		$this->SetFormButton($w, $h, $name, $value, 'js_button', $title, $flags, false, false, $background_col, $border_col, $noprint);
 		// pos => 1 = no caption, icon only; 0 = caption only
 		if ($image_id) {
@@ -1118,7 +1121,7 @@ class Form
 	function SetFormSubmit($w, $h, $name, $value = 'Submit', $url = '', $title = '', $typ = 'html', $method = 'POST', $flags = [], $background_col = false, $border_col = false, $noprint = false)
 	{
 		if (!$name) {
-			$name = 'Submit';
+			$name = $this->unnamedButtonName('Submit');
 		}
 
 		$this->SetFormButton($w, $h, $name, $value, 'submit', $title, $flags, false, false, $background_col, $border_col, $noprint);
@@ -1129,6 +1132,19 @@ class Form
 			$this->forms[$this->formCount]['exporttype'] = $typ;
 		}
 		$this->mpdf->x += $w;
+	}
+
+	/**
+	 * A name for a button that has none. Buttons sharing a name are one field to a viewer and share the entry
+	 * that holds an action or icon, so it carries the number SetFormButton() is about to give the field.
+	 *
+	 * @param string $kind
+	 *
+	 * @return string
+	 */
+	private function unnamedButtonName($kind)
+	{
+		return $kind . '_' . ($this->formCount + 1);
 	}
 
 	function SetFormButtonText($ca, $rc = '', $ac = '')
