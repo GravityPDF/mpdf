@@ -14,6 +14,16 @@ class JapanPreset extends AbstractPreset
 	protected $dateFormat = 'Y/m/d';
 
 	/**
+	 * @var string
+	 */
+	protected $longDateFormat = 'Y年{month}j日';
+
+	/**
+	 * @var string[]
+	 */
+	protected $monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+
+	/**
 	 * @var string[]
 	 */
 	protected $currencyFormats = ['JPY' => '¥%s'];

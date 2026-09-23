@@ -6,8 +6,8 @@ use Mpdf\Strict;
 
 /**
  * A preset whose settings are properties: a country's preset sets its date and currency formats, and whatever else it
- * writes differently from the English-speaking defaults of a decimal point, commas between groups of three digits and
- * 5.5%
+ * writes differently from the English-speaking defaults of a decimal point, commas between groups of three digits,
+ * 5.5%, English month names and 1 January 2020 written out
  */
 abstract class AbstractPreset implements PresetInterface
 {
@@ -43,6 +43,16 @@ abstract class AbstractPreset implements PresetInterface
 	 * @var string
 	 */
 	protected $dateFormat;
+
+	/**
+	 * @var string
+	 */
+	protected $longDateFormat = 'j {month} Y';
+
+	/**
+	 * @var string[]
+	 */
+	protected $monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 	/**
 	 * @var string[]
@@ -92,6 +102,22 @@ abstract class AbstractPreset implements PresetInterface
 	public function getDateFormat()
 	{
 		return $this->dateFormat;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getLongDateFormat()
+	{
+		return $this->longDateFormat;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public function getMonthNames()
+	{
+		return $this->monthNames;
 	}
 
 	/**

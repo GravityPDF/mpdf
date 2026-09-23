@@ -35,9 +35,23 @@ interface PresetInterface
 	public function getMinimumGroupingDigits();
 
 	/**
-	 * @return string As DateTimeInterface::format() takes it
+	 * @return string As DateTimeInterface::format() takes it, with {month} for the month's name, e.g. 'd/m/Y'
 	 */
 	public function getDateFormat();
+
+	/**
+	 * The date written out, as in a letter
+	 *
+	 * @return string As getDateFormat(), e.g. 'j {month} Y'
+	 */
+	public function getLongDateFormat();
+
+	/**
+	 * The months from January, each as the language writes it in a date: the genitive where it has one
+	 *
+	 * @return string[]
+	 */
+	public function getMonthNames();
 
 	/**
 	 * A sprintf() format for amounts in each currency that has its own; the rest are written with their code after them

@@ -26,6 +26,11 @@ class SwedenPreset extends AbstractPreset
 	/**
 	 * @var string[]
 	 */
+	protected $monthNames = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+
+	/**
+	 * @var string[]
+	 */
 	protected $currencyFormats = ['SEK' => '%s' . self::NBSP . 'kr'];
 
 	/**

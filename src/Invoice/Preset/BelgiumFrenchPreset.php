@@ -26,6 +26,11 @@ class BelgiumFrenchPreset extends AbstractPreset
 	/**
 	 * @var string[]
 	 */
+	protected $monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+	/**
+	 * @var string[]
+	 */
 	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];
 
 	/**

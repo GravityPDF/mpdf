@@ -26,6 +26,11 @@ class ItalyPreset extends AbstractPreset
 	/**
 	 * @var string[]
 	 */
+	protected $monthNames = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+
+	/**
+	 * @var string[]
+	 */
 	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];
 
 }

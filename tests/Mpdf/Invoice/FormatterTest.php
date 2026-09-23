@@ -118,6 +118,63 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Each country's preset and a date written out as it does, in its language and with the month as a date takes it
+	 *
+	 * @return mixed[]
+	 */
+	public function longDateProvider()
+	{
+		return [
+			'United States' => [new UnitedStatesPreset(), 'September 23, 2026'],
+			'Canada, English' => [new CanadaEnglishPreset(), 'September 23, 2026'],
+			'Canada, Quebec' => [new CanadaQuebecPreset(), '23 septembre 2026'],
+			'Australia' => [new AustraliaPreset(), '23 September 2026'],
+			'New Zealand' => [new NewZealandPreset(), '23 September 2026'],
+			'United Kingdom' => [new UnitedKingdomPreset(), '23 September 2026'],
+			'China' => [new ChinaPreset(), '2026年9月23日'],
+			'Japan' => [new JapanPreset(), '2026年9月23日'],
+			'India' => [new IndiaPreset(), '23 September 2026'],
+			'Germany' => [new GermanyPreset(), '23. September 2026'],
+			'France' => [new FrancePreset(), '23 septembre 2026'],
+			'Italy' => [new ItalyPreset(), '23 settembre 2026'],
+			'Spain' => [new SpainPreset(), '23 de septiembre de 2026'],
+			'Poland' => [new PolandPreset(), '23 września 2026'],
+			'Romania' => [new RomaniaPreset(), '23 septembrie 2026'],
+			'Netherlands' => [new NetherlandsPreset(), '23 september 2026'],
+			'Belgium, Dutch' => [new BelgiumDutchPreset(), '23 september 2026'],
+			'Belgium, French' => [new BelgiumFrenchPreset(), '23 septembre 2026'],
+			'Czechia' => [new CzechiaPreset(), '23. září 2026'],
+			'Portugal' => [new PortugalPreset(), '23 de setembro de 2026'],
+			'Sweden' => [new SwedenPreset(), '23 september 2026'],
+		];
+	}
+
+	/**
+	 * A formatter asked for long dates writes them as its country does
+	 *
+	 * @dataProvider longDateProvider
+	 *
+	 * @param \Mpdf\Invoice\Preset\PresetInterface $preset
+	 * @param string $expected
+	 */
+	public function testWritesLongDatesAsTheCountryDoes($preset, $expected)
+	{
+		$this->assertSame($expected, (new Formatter($preset))->withLongDates()->date(new \DateTime('2026-09-23')));
+	}
+
+	/**
+	 * {month} gives the month's name in the preset's language in any date format, its letters left alone
+	 */
+	public function testNamesTheMonthInAnyDateFormat()
+	{
+		$date = new \DateTime('2020-01-01');
+
+		$this->assertSame('1st January 2020', (new Formatter(new UnitedKingdomPreset()))->withDateFormat('jS {month} Y')->date($date));
+		$this->assertSame('am 1. Januar 2020', (new Formatter(new GermanyPreset()))->withDateFormat('\a\m j. {month} Y')->date($date));
+		$this->assertSame('1 stycznia 2020', (new Formatter(new PolandPreset()))->withDateFormat('j {month} Y')->date($date));
+	}
+
+	/**
 	 * A with method returns an adjusted copy, leaving the formatter it was called on as it was
 	 */
 	public function testAdjustsACopy()

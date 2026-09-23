@@ -29,6 +29,16 @@ class PortugalPreset extends AbstractPreset
 	protected $dateFormat = 'd/m/Y';
 
 	/**
+	 * @var string
+	 */
+	protected $longDateFormat = 'j \\d\\e {month} \\d\\e Y';
+
+	/**
+	 * @var string[]
+	 */
+	protected $monthNames = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+	/**
 	 * @var string[]
 	 */
 	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];

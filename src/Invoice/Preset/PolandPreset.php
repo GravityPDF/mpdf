@@ -31,6 +31,11 @@ class PolandPreset extends AbstractPreset
 	/**
 	 * @var string[]
 	 */
+	protected $monthNames = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+
+	/**
+	 * @var string[]
+	 */
 	protected $currencyFormats = ['PLN' => '%s' . self::NBSP . 'zł'];
 
 }

@@ -14,6 +14,11 @@ class UnitedStatesPreset extends AbstractPreset
 	protected $dateFormat = 'm/d/Y';
 
 	/**
+	 * @var string
+	 */
+	protected $longDateFormat = '{month} j, Y';
+
+	/**
 	 * @var string[]
 	 */
 	protected $currencyFormats = ['USD' => '$%s'];

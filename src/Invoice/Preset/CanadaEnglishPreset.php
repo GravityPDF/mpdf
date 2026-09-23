@@ -14,6 +14,11 @@ class CanadaEnglishPreset extends AbstractPreset
 	protected $dateFormat = 'Y-m-d';
 
 	/**
+	 * @var string
+	 */
+	protected $longDateFormat = '{month} j, Y';
+
+	/**
 	 * @var string[]
 	 */
 	protected $currencyFormats = ['CAD' => '$%s'];

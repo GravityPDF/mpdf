@@ -26,6 +26,11 @@ class RomaniaPreset extends AbstractPreset
 	/**
 	 * @var string[]
 	 */
+	protected $monthNames = ['ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie', 'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'];
+
+	/**
+	 * @var string[]
+	 */
 	protected $currencyFormats = ['RON' => '%s' . self::NBSP . 'lei'];
 
 	/**

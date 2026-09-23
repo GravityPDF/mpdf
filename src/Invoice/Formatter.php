@@ -9,8 +9,8 @@ use Mpdf\Utils\NumericString;
 /**
  * How a printed trade document writes its numbers, amounts, rates, dates and addresses
  *
- * It follows the preset of a country, one of those in Mpdf\Invoice\Preset or a PresetInterface of your own.
- * withDateFormat() and the other with methods return a copy adjusted further:
+ * It follows the preset of a country, one of those in Mpdf\Invoice\Preset or a PresetInterface of your own, including
+ * its month names. withDateFormat() and the other with methods return a copy adjusted further:
  *
  *     (new Formatter(new GermanyPreset()))->withCurrencyFormat('GBP', '£%s')
  *
@@ -82,6 +82,16 @@ class Formatter
 	private $dateFormat;
 
 	/**
+	 * @var string
+	 */
+	private $longDateFormat;
+
+	/**
+	 * @var string[]
+	 */
+	private $monthNames;
+
+	/**
 	 * @var string[]
 	 */
 	private $currencyFormats;
@@ -101,6 +111,8 @@ class Formatter
 		$this->groupingSizes = $preset->getGroupingSizes();
 		$this->minimumGroupingDigits = $preset->getMinimumGroupingDigits();
 		$this->dateFormat = $preset->getDateFormat();
+		$this->longDateFormat = $preset->getLongDateFormat();
+		$this->monthNames = $preset->getMonthNames();
 		$this->currencyFormats = $preset->getCurrencyFormats();
 		$this->percentFormat = $preset->getPercentFormat();
 	}
@@ -108,7 +120,8 @@ class Formatter
 	/**
 	 * A copy writing dates by another format
 	 *
-	 * @param string $format As DateTimeInterface::format() takes it, e.g. 'Y-m-d'
+	 * @param string $format As DateTimeInterface::format() takes it, with {month} for the month's name in the preset's
+	 *                       language, e.g. 'Y-m-d' or 'jS {month} Y'
 	 *
 	 * @return self
 	 */
@@ -118,6 +131,16 @@ class Formatter
 		$formatter->dateFormat = $format;
 
 		return $formatter;
+	}
+
+	/**
+	 * A copy writing dates out as the preset does in a letter: 23. September 2026, or September 23, 2026
+	 *
+	 * @return self
+	 */
+	public function withLongDates()
+	{
+		return $this->withDateFormat($this->longDateFormat);
 	}
 
 	/**
@@ -217,7 +240,14 @@ class Formatter
 	 */
 	public function date($date)
 	{
-		return $date !== null ? $date->format($this->dateFormat) : null;
+		if ($date === null) {
+			return null;
+		}
+
+		// The name goes in after formatting, so its letters are not read as format characters
+		$formatted = $date->format(str_replace('{month}', "\x01", $this->dateFormat));
+
+		return str_replace("\x01", $this->monthNames[$date->format('n') - 1], $formatted);
 	}
 
 	/**

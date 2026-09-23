@@ -24,6 +24,16 @@ class CzechiaPreset extends AbstractPreset
 	protected $dateFormat = 'd.m.Y';
 
 	/**
+	 * @var string
+	 */
+	protected $longDateFormat = 'j. {month} Y';
+
+	/**
+	 * @var string[]
+	 */
+	protected $monthNames = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
+
+	/**
 	 * @var string[]
 	 */
 	protected $currencyFormats = ['CZK' => '%s' . self::NBSP . 'Kč'];

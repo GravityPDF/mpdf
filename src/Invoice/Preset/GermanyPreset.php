@@ -24,6 +24,16 @@ class GermanyPreset extends AbstractPreset
 	protected $dateFormat = 'd.m.Y';
 
 	/**
+	 * @var string
+	 */
+	protected $longDateFormat = 'j. {month} Y';
+
+	/**
+	 * @var string[]
+	 */
+	protected $monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+	/**
 	 * @var string[]
 	 */
 	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];
