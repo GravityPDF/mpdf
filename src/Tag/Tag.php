@@ -120,6 +120,23 @@ abstract class Tag
 		return array_key_exists($property, self::ALIGN) ? self::ALIGN[$property] : '';
 	}
 
+	/**
+	 * An object's attributes with the visibility of the span it is in. Printing reads a span's visibility from its
+	 * text buffer entry, and an object put straight into the buffer has none.
+	 *
+	 * @param mixed[] $objattr
+	 *
+	 * @return mixed[]
+	 */
+	protected function withSpanVisibility(array $objattr)
+	{
+		if (!empty($this->mpdf->textparam['visibility'])) {
+			$objattr['visibility'] = $this->mpdf->textparam['visibility'];
+		}
+
+		return $objattr;
+	}
+
 	abstract public function open($attr, &$ahtml, &$ihtml);
 
 	abstract public function close(&$ahtml, &$ihtml);

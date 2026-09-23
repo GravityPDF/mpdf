@@ -19,6 +19,7 @@ use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 use Mpdf\Utils\Path;
+use Mpdf\Writer\OptionalContentWriter;
 use Psr\Log\NullLogger;
 use Mpdf\Unicode\Ucdn;
 use Mpdf\Unicode\Bidi;
@@ -49,6 +50,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const SCALE = 72 / 25.4;
 
 	const OBJECT_IDENTIFIER = "\xbb\xa4\xac";
+
+	/**
+	 * The optional content group each visibility draws in, by its resource name in OptionalContentWriter
+	 */
+	const VISIBILITY_GROUPS = ['printonly' => 'OC1', 'screenonly' => 'OC2', 'hidden' => 'OC3'];
 
 	var $useFixedNormalLineHeight; // mPDF 6
 	var $useFixedTextBaseline; // mPDF 6
@@ -2150,30 +2156,89 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetVisibility($v)
 	{
+		$dropped = $this->visibilityDropped($v);
 		// PDF/A-2 forbids the /AS that switches print-only and screen-only content, but hidden content needs none
 		if ($v !== 'visible' && (!$this->optionalContentAllowed() || ($this->PDFA && $v !== 'hidden'))) {
 			$this->PDFAXwarnings[] = "Cannot set visibility to " . $v . " when using PDFA or PDFX";
-			return '';
+			if (!$dropped) {
+				return '';
+			}
 		} elseif (!$this->PDFA && !$this->PDFX) {
 			$this->setMinPdfVersion('1.5');
 		}
 		if ($this->visibility != 'visible') {
-			$this->writer->write('EMC');
+			if ($this->visibilityDropped($this->visibility)) {
+				$this->writer->write('___DROPPED___END' . $this->uniqstr);
+				$this->resumeAfterDroppedContent();
+			} else {
+				$this->writer->write('EMC');
+			}
 			$this->hasOC = intval($this->hasOC);
 		}
-		if ($v == 'printonly') {
-			$this->writer->write('/OC /OC1 BDC');
-			$this->hasOC = ($this->hasOC | 1);
-		} elseif ($v == 'screenonly') {
-			$this->writer->write('/OC /OC2 BDC');
-			$this->hasOC = ($this->hasOC | 2);
-		} elseif ($v == 'hidden') {
-			$this->writer->write('/OC /OC3 BDC');
-			$this->hasOC = ($this->hasOC | 4);
+		if ($dropped) {
+			$this->writer->write('___DROPPED___START' . $this->uniqstr);
 		} elseif ($v != 'visible') {
-			throw new \Mpdf\MpdfException('Incorrect visibility: ' . $v);
+			$this->writer->write($this->visibilityBegins($v));
+			$this->hasOC = ($this->hasOC | OptionalContentWriter::VISIBILITY_GROUPS[self::VISIBILITY_GROUPS[$v]][0]);
 		}
 		$this->visibility = $v;
+	}
+
+	/**
+	 * Whether content with this visibility is left out: under PDFAauto and PDFXauto, what would not print is dropped,
+	 * which is screen-only content, and hidden content where optional content is not allowed
+	 *
+	 * @param string $v
+	 *
+	 * @return bool
+	 */
+	private function visibilityDropped($v)
+	{
+		if ($v !== 'screenonly' && ($v !== 'hidden' || $this->optionalContentAllowed())) {
+			return false;
+		}
+
+		return ($this->PDFA && $this->PDFAauto) || ($this->PDFX && $this->PDFXauto);
+	}
+
+	/**
+	 * The operator that begins content drawn in the optional content group of a visibility other than visible
+	 *
+	 * @param string $v
+	 *
+	 * @return string
+	 */
+	private function visibilityBegins($v)
+	{
+		if (!array_key_exists($v, self::VISIBILITY_GROUPS)) {
+			throw new \Mpdf\MpdfException('Incorrect visibility: ' . $v);
+		}
+
+		return '/OC /' . self::VISIBILITY_GROUPS[$v] . ' BDC';
+	}
+
+	/**
+	 * Write the font, colours, line width and spacing in force again, since any set inside left-out content went
+	 * with it
+	 */
+	private function resumeAfterDroppedContent()
+	{
+		$this->pageoutput[$this->page] = [];
+
+		if ($this->FontFamily) {
+			$this->SetFont($this->FontFamily, $this->FontStyle, $this->FontSizePt, true, true);
+		}
+
+		$this->SetLineWidth($this->LineWidth);
+
+		foreach (['DrawColor', 'FillColor'] as $color) {
+			if ($this->$color) {
+				$this->writer->write($this->$color);
+				$this->pageoutput[$this->page][$color] = $this->$color;
+			}
+		}
+
+		$this->writer->write(sprintf('BT %.3F Tc %.3F Tw ET', $this->charspacing, $this->ws));
 	}
 
 	function Open()
@@ -2528,6 +2593,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		foreach ($this->pageBackgrounds as $bl => $pbs) {
 
+			// A background left out is not drawn, so it registers no shading, pattern or image either
+			foreach ($pbs as $i => $pb) {
+				if ($this->visibilityDropped($pb['visibility'])) {
+					unset($pbs[$i]);
+				}
+			}
+
 			foreach ($pbs as $pb) {
 
 				if ((!isset($pb['image_id']) && !isset($pb['gradient'])) || isset($pb['shadowonly'])) { // Background colour or boxshadow
@@ -2538,13 +2610,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if ($pb['visibility'] != 'visible') {
-						if ($pb['visibility'] == 'printonly') {
-							$s .= '/OC /OC1 BDC' . "\n";
-						} elseif ($pb['visibility'] == 'screenonly') {
-							$s .= '/OC /OC2 BDC' . "\n";
-						} elseif ($pb['visibility'] == 'hidden') {
-							$s .= '/OC /OC3 BDC' . "\n";
-						}
+						$s .= $this->visibilityBegins($pb['visibility']) . "\n";
 					}
 
 					// Box shadow
@@ -2592,13 +2658,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if ($pb['visibility'] != 'visible') {
-						if ($pb['visibility'] == 'printonly') {
-							$s .= '/OC /OC1 BDC' . "\n";
-						} elseif ($pb['visibility'] == 'screenonly') {
-							$s .= '/OC /OC2 BDC' . "\n";
-						} elseif ($pb['visibility'] == 'hidden') {
-							$s .= '/OC /OC3 BDC' . "\n";
-						}
+						$s .= $this->visibilityBegins($pb['visibility']) . "\n";
 					}
 
 				}
@@ -4777,6 +4837,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function Link($x, $y, $w, $h, $link)
 	{
+		if ($this->visibilityDropped($this->visibility)) {
+			return;
+		}
+
 		$l = [$x * Mpdf::SCALE, $this->hPt - $y * Mpdf::SCALE, $w * Mpdf::SCALE, $h * Mpdf::SCALE, $link];
 		if ($this->table_rotate) { // *TABLES*
 			$this->tbrot_Links[$this->page][] = $l; // *TABLES*
@@ -7375,6 +7439,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (isset($this->textparam['visibility']) && $this->textparam['visibility'] && $this->textparam['visibility'] != $this->visibility) {
 					$this->SetVisibility($this->textparam['visibility']);
 				}
+				$this->spanVisibilityToObject($k);
 
 				// *********** SPAN BACKGROUND COLOR ***************** //
 				if (isset($this->spanbgcolor) && $this->spanbgcolor) {
@@ -7560,7 +7625,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$rtlalign = 'L';
 		}
 
+		// An object left out is not drawn, and registers no link, field, bookmark or entry
+		$blockDropped = $this->visibilityDropped($this->visibility);
+
 		foreach ($this->objectbuffer as $ib => $objattr) {
+
+			if ($blockDropped || (isset($objattr['visibility']) && $this->visibilityDropped($objattr['visibility']))) {
+				continue;
+			}
 
 			if ($objattr['type'] == 'bookmark' || $objattr['type'] == 'indexentry' || $objattr['type'] == 'toc') {
 				$x = $objattr['OUTER-X'];
@@ -7641,6 +7713,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (isset($objattr['z-index']) && $objattr['z-index'] > 0 && $this->current_layer == 0) {
 					$this->BeginLayer($objattr['z-index']);
 				}
+				$save_vis = $this->visibility;
 				if (isset($objattr['visibility']) && $objattr['visibility'] != 'visible' && $objattr['visibility']) {
 					$this->SetVisibility($objattr['visibility']);
 				}
@@ -7834,8 +7907,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->restoreGraphicsState();
 				}
 
-				if (isset($objattr['visibility']) && $objattr['visibility'] != 'visible' && $objattr['visibility']) {
-					$this->SetVisibility('visible');
+				if ($this->visibility != $save_vis) {
+					$this->SetVisibility($save_vis);
 				}
 				if (isset($objattr['z-index']) && $objattr['z-index'] > 0 && $this->current_layer == 0) {
 					$this->EndLayer();
@@ -8121,6 +8194,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->x = $save_x;
 
 		unset($content);
+	}
+
+	/**
+	 * Give an object in a span the span's visibility, as printobjectbuffer() draws it after the span's text
+	 *
+	 * @param int $k The object's index in the object buffer
+	 */
+	private function spanVisibilityToObject($k)
+	{
+		if (!isset($this->objectbuffer[$k]) || empty($this->textparam['visibility']) || $this->textparam['visibility'] === 'visible') {
+			return;
+		}
+
+		if (empty($this->objectbuffer[$k]['visibility']) || $this->objectbuffer[$k]['visibility'] === 'visible') {
+			$this->objectbuffer[$k]['visibility'] = $this->textparam['visibility'];
+		}
 	}
 
 	function _printListBullet($x, $y, $size, $type, $color)
@@ -9038,6 +9127,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if (isset($this->textparam['visibility']) && $this->textparam['visibility'] && $this->textparam['visibility'] != $this->visibility) {
 							$this->SetVisibility($this->textparam['visibility']);
 						}
+						$this->spanVisibilityToObject($k);
 						// *********** SPAN BACKGROUND COLOR ***************** //
 						if ($this->spanbgcolor) {
 							$cor = $this->spanbgcolorarray;

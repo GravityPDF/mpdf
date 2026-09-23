@@ -109,6 +109,26 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A document with print-only, screen-only and hidden blocks and spans conforms, with what cannot be optional
+	 * content drawn or left out
+	 *
+	 * @dataProvider visibilityVersions
+	 */
+	public function testVisibilityConforms($version)
+	{
+		$mpdf = $this->pdfa($version);
+		$html = '';
+		foreach (['printonly', 'screenonly', 'hidden'] as $visibility) {
+			$html .= '<div style="visibility: ' . $visibility . '; border: 1mm solid #000; background: #ccc">Block'
+				. ' <a href="https://example.com">link</a> <annotation content="Note" /></div>'
+				. '<p>Text <span style="visibility: ' . $visibility . '">span</span> text</p>';
+		}
+		$mpdf->WriteHTML($html);
+
+		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
+	}
+
+	/**
 	 * An active form conforms: checkboxes and radio buttons are drawn without ZapfDingbats, every widget carries its
 	 * appearance, and the JavaScript, submit and reset actions PDF/A forbids are left out (#348)
 	 *
@@ -132,6 +152,16 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		);
 
 		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
+	}
+
+	/**
+	 * PDF/A-1b, which allows no optional content, and PDF/A-2b and PDF/A-2u, which allow it for hidden content only
+	 *
+	 * @return string[][]
+	 */
+	public function visibilityVersions()
+	{
+		return [['1-B'], ['2-B'], ['2-U']];
 	}
 
 	/**

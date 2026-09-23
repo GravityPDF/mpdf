@@ -86,7 +86,7 @@ class Annotation extends Tag
 				$objattr['POPUP'] = true;
 			}
 		}
-		$e = Mpdf::OBJECT_IDENTIFIER . "type=annot,objattr=" . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
+		$e = Mpdf::OBJECT_IDENTIFIER . "type=annot,objattr=" . serialize($this->withSpanVisibility($objattr)) . Mpdf::OBJECT_IDENTIFIER;
 		if ($this->mpdf->tableLevel) {
 			$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['textbuffer'][] = [$e];
 		} // *TABLES*
