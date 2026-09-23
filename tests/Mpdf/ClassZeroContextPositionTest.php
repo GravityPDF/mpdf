@@ -27,6 +27,8 @@ class ClassZeroContextPositionTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	const B_SMALL_CAP = 0xE002;
 
 	/**
+	 * B is substituted only where the glyphs either side of it are in class 0 for one subtable.
+	 *
 	 * @dataProvider dataRuns
 	 *
 	 * @param string $text       What the document is written from

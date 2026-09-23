@@ -4845,7 +4845,7 @@ class Otl
 			if ($this->restrictToSyllable && isset($this->OTLdata[$checkpos]['syllable']) && $this->OTLdata[$checkpos]['syllable'] != $current_syllable) {
 				return false;
 			} // If Input Class 0 specified, matches anything NOT in $class0excl. Falsy rather than null, so
-			// a class the ClassDef does not define still reads as class 0 here, as it always has
+			// a class the ClassDef does not define still reads as class 0 here
 			elseif (!$Input[$i] && isset($this->OTLdata[$checkpos]) && !isset($class0excl[$this->OTLdata[$checkpos]['uni']])) {
 				$matched[] = $checkpos;
 			} elseif (isset($this->OTLdata[$checkpos]) && isset($Input[$i][$this->OTLdata[$checkpos]['uni']])) {
