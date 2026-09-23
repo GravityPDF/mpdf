@@ -94,6 +94,7 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 
 		return [
 			'file not allowed, forms' => [['mode' => 'c', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
+			'embedded fonts, forms' => [['useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
 			'file allowed, forms' => [['mode' => 'c', 'useActiveForms' => true, 'allowAnnotationFiles' => true], true, [array_merge($withFile, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
 			'PDF/A-2 appearances, file not a PDF/A' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'allowAnnotationFiles' => true], false, [$notes, $second]],
 			'PDF/A-2 appearances, forms' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],

@@ -936,12 +936,9 @@ class Form
 		if (!preg_match('/^[a-zA-Z0-9_:\-]+$/', $name)) {
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
 		}
-		$appearance = null;
-		if ($this->mpdf->PDFA) {
-			// A hidden input passes its flags as 0
-			$text = in_array(self::FLAG_PASSWORD, (array) $flags, true) ? str_repeat('*', mb_strlen($value, 'UTF-8')) : $value;
-			$appearance = $this->appearanceText($w, $h, $this->form_border_width, preg_split('/\r\n|\r|\n/', $text), $align, in_array(self::FLAG_TEXTAREA, (array) $flags, true) ? 'wrap' : 'line');
-		}
+		// A hidden input passes its flags as 0
+		$text = in_array(self::FLAG_PASSWORD, (array) $flags, true) ? str_repeat('*', mb_strlen($value, $this->mpdf->mb_enc)) : $value;
+		$appearance = $this->appearanceText($w, $h, $this->form_border_width, preg_split('/\r\n|\r|\n/', $text), $align, in_array(self::FLAG_TEXTAREA, (array) $flags, true) ? 'wrap' : 'line');
 		if ($this->mpdf->onlyCoreFonts) {
 			$value = $this->Win1252ToPDFDocEncoding($value);
 			$default = $this->Win1252ToPDFDocEncoding($default);
@@ -1037,10 +1034,9 @@ class Form
 		if (!preg_match('/^[a-zA-Z0-9_:\-]+$/', $name)) {
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
 		}
-		$appearance = null;
-		if ($this->mpdf->PDFA && in_array(self::FLAG_COMBOBOX, $flags, true)) {
+		if (in_array(self::FLAG_COMBOBOX, $flags, true)) {
 			$appearance = $this->appearanceText($w, $h, $this->form_border_width, [$array['SEL'] ? $array['OPT'][$array['SEL'][0]] : ''], $align, 'line');
-		} elseif ($this->mpdf->PDFA) {
+		} else {
 			$appearance = $this->appearanceText($w, $h, $this->form_border_width, $array['OPT'], $align, 'list', $array['SEL']);
 		}
 		if ($this->mpdf->onlyCoreFonts) {
@@ -1200,7 +1196,7 @@ class Form
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
 		}
 		$appearance = null;
-		if ($this->mpdf->PDFA && $type !== 'radio' && $type !== 'checkbox') {
+		if ($type !== 'radio' && $type !== 'checkbox') {
 			$appearance = $this->appearanceText($bb, $hh, $this->form_button_border_width, [$value === '' ? $name : $value], '1', 'line');
 		}
 		if (!$this->mpdf->onlyCoreFonts) {
@@ -1396,19 +1392,20 @@ class Form
 	}
 
 	/**
-	 * Lays out the text a PDF/A widget shows, in the current font. PDF/A has every widget carry its own appearance
-	 * rather than leave it to the viewer, and the font can only be measured while the widget is being placed.
+	 * Lays out the text a widget's appearance shows, in the current font, which can only be measured while the widget
+	 * is being placed
 	 *
 	 * @param float $w the widget's width
 	 * @param float $h its height
 	 * @param float $border its border width, in points
-	 * @param string[] $lines the text, a line each (UTF-8)
+	 * @param string[] $lines the text, a line each, in the document's encoding
 	 * @param string $align '0', '1' or '2', left, centred or right as /Q has it
 	 * @param string $flow 'line' centres the first line on the height, 'wrap' runs the lines down from the top
 	 *  wrapped to the width, and 'list' runs them down unwrapped, as a list box shows its options
 	 * @param int[] $selected the lines a list box highlights
 	 *
-	 * @return mixed[] the font size, each line with where it starts, and the highlights, in points from the bottom left
+	 * @return mixed[] the font size, each line with where it starts and as the font encodes it, and the highlights, in
+	 *  points from the bottom left
 	 */
 	private function appearanceText($w, $h, $border, array $lines, $align, $flow, array $selected = [])
 	{
@@ -1452,7 +1449,7 @@ class Form
 				$x = $padding;
 			}
 
-			$layout['lines'][] = [$x, $y, $line];
+			$layout['lines'][] = [$x, $y, $this->mpdf->usingCoreFont ? $line : $this->writer->utf8ToUtf16BigEndian($line, false)];
 			if (in_array($i, $selected, true)) {
 				$layout['highlights'][] = [$border, $y + $descent * $size, $width - 2 * $border, $leading];
 			}
@@ -1497,15 +1494,22 @@ class Form
 	/**
 	 * The width of some text in ems of the current font, adding its characters to the font's subset
 	 *
-	 * @param string $text UTF-8
+	 * @param string $text in the document's encoding: Windows-1252 bytes in a core font, UTF-8 otherwise
 	 *
 	 * @return float
 	 */
 	private function emWidth($text)
 	{
+		$cw = $this->mpdf->CurrentFont['cw'];
 		$width = 0;
-		foreach ($this->mpdf->UTF8StringToArray($text) as $char) {
-			$width += $this->mpdf->_getCharWidth($this->mpdf->CurrentFont['cw'], $char, false);
+		if ($this->mpdf->usingCoreFont) {
+			for ($i = 0; $i < strlen($text); $i++) {
+				$width += isset($cw[$text[$i]]) ? $cw[$text[$i]] : 0;
+			}
+		} else {
+			foreach ($this->mpdf->UTF8StringToArray($text) as $char) {
+				$width += $this->mpdf->_getCharWidth($cw, $char, false);
+			}
 		}
 
 		return $width / 1000;
@@ -1513,7 +1517,7 @@ class Form
 
 	/**
 	 * Points a widget with an appearanceText() layout at the appearance writeAppearance() writes, the last of the
-	 * widget's objects. PDF/A has a button name its appearance by state, as a checkbox does, even with only the one.
+	 * widget's objects. A button names its appearance by state, as a checkbox does, even with only the one.
 	 *
 	 * @param mixed[] $form
 	 */
@@ -1532,8 +1536,8 @@ class Form
 	}
 
 	/**
-	 * Writes the appearance of a PDF/A text field, choice or push button: its background and border, then its icon
-	 * or the text appearanceText() laid out
+	 * Writes the appearance of a text field, choice or push button: its background and border, then its icon or the
+	 * text appearanceText() laid out
 	 *
 	 * @param mixed[] $form
 	 */
@@ -1562,8 +1566,7 @@ class Form
 			$s .= sprintf(' /Tx BMC q %.3F %.3F %.3F %.3F re W n BT', $border, $border, $width - 2 * $border, $height - 2 * $border);
 			$s .= sprintf(' /F%d %.3F Tf %s', $this->mpdf->fonts[$form['style']['font']]['i'], $form['AP']['size'], $form['style']['fontcolor']);
 			foreach ($form['AP']['lines'] as $line) {
-				$text = $this->writer->escape($this->writer->utf8ToUtf16BigEndian($line[2], false));
-				$s .= sprintf(' 1 0 0 1 %.3F %.3F Tm (%s) Tj', $line[0], $line[1], $text);
+				$s .= sprintf(' 1 0 0 1 %.3F %.3F Tm (%s) Tj', $line[0], $line[1], $this->writer->escape($line[2]));
 			}
 			$s .= ' ET Q EMC';
 		}
@@ -1600,13 +1603,12 @@ class Form
 	 */
 	private function appearanceColor($color, $operator)
 	{
-		if (!$this->mpdf->PDFA && !$this->mpdf->PDFX && !$this->mpdf->restrictColorSpace) {
-			return $color . ' ' . $operator;
-		}
-
 		$c = preg_split('/\s+/', trim($color));
-		if (count($c) === 1) {
-			return $color . ($operator === 'rg' ? ' g' : ' G');
+		if (count($c) === 1 || (!$this->mpdf->PDFA && !$this->mpdf->PDFX && !$this->mpdf->restrictColorSpace)) {
+			$operators = [1 => 'g', 3 => 'rg', 4 => 'k'];
+			$fill = isset($operators[count($c)]) ? $operators[count($c)] : 'rg';
+
+			return $color . ' ' . ($operator === 'rg' ? $fill : strtoupper($fill));
 		}
 
 		if (count($c) === 4) {

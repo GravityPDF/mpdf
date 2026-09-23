@@ -3,8 +3,8 @@
 namespace Mpdf;
 
 /**
- * Who draws an active form's widgets: a PDF/A document draws every one itself (#348), while other documents ask the
- * viewer to redraw them and name the ZapfDingbats font it redraws checkboxes with (#59)
+ * Every active form widget carries its own appearance. A PDF/A document relies on them alone (#348); other documents
+ * also ask the viewer to redraw the widgets, and name the ZapfDingbats font it redraws checkboxes with (#59).
  */
 class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -63,6 +63,69 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		unlink($text);
 
 		$this->assertSame([], $errors);
+	}
+
+	/**
+	 * Every widget of an ordinary document carries its appearance, while the viewer is still asked to redraw them and
+	 * the actions and flags PDF/A drops are kept
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param string $mode
+	 */
+	public function testWidgetsCarryAppearances($mode)
+	{
+		$pdf = $this->render($this->form(), ['mode' => $mode, 'useActiveForms' => true]);
+
+		$this->assertStringContainsString('/NeedAppearances true', $this->acroForm($pdf));
+
+		$refs = $this->annotationRefs($pdf);
+		$this->assertCount(10, $refs[0]);
+		foreach ($refs[0] as $ref) {
+			$this->assertStringContainsString('/AP <<', $this->object($pdf, $ref));
+		}
+
+		$widgets = implode('', $this->annotations($pdf));
+		$this->assertStringContainsString('/F 2 ', $widgets);
+		$this->assertStringContainsString('/F 0 ', $widgets);
+		$this->assertStringContainsString('/S /SubmitForm', $widgets);
+		$this->assertStringContainsString('/S /ResetForm', $widgets);
+		$this->assertStringContainsString('/AA << /D ', $widgets);
+	}
+
+	/**
+	 * Core fonts, whose text is Windows-1252, and embedded fonts, whose text is UTF-8
+	 *
+	 * @return string[][]
+	 */
+	public function modes()
+	{
+		return ['core fonts' => ['c'], 'embedded fonts' => ['utf-8']];
+	}
+
+	/**
+	 * A text field's appearance shows its value as the field's font encodes it
+	 *
+	 * @dataProvider values
+	 *
+	 * @param string $mode
+	 * @param string $shown the value as the appearance draws it
+	 */
+	public function testAppearanceShowsTheValue($mode, $shown)
+	{
+		$pdf = $this->render('<form><input type="text" name="t" value="Hello" /></form>', ['mode' => $mode, 'useActiveForms' => true]);
+
+		$this->assertStringContainsString('(' . $shown . ') Tj', $pdf);
+	}
+
+	/**
+	 * "Hello" in a core font and in an embedded one
+	 *
+	 * @return string[][]
+	 */
+	public function values()
+	{
+		return ['core fonts' => ['c', 'Hello'], 'embedded fonts' => ['utf-8', "\0H\0e\0l\0l\0o"]];
 	}
 
 	/**
