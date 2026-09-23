@@ -10307,21 +10307,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function placeHtmlHeaderLinksAndAnnots($n, $rotate, $adj)
 	{
+		// The turn is "0 -1 1 0 0 w cm": it takes the point X, Y of the header, measured up from its foot, to
+		// Y, w - X on the page, and the point x, y measured down from its top to h - y, x
 		foreach ($this->HTMLheaderPageLinks as $lk) {
 			$lk[1] -= $adj * Mpdf::SCALE;
 
 			if ($rotate) {
-				$lw = $lk[2];
-				$lh = $lk[3];
-				$lk[2] = $lh;
-				$lk[3] = $lw; // swap width and height
-
-				$ax = $lk[0] / Mpdf::SCALE;
-				$ay = $lk[1] / Mpdf::SCALE;
-				$bx = $ay - ($lh / Mpdf::SCALE);
-				$by = $this->w - $ax;
-				$lk[0] = $bx * Mpdf::SCALE;
-				$lk[1] = ($this->h - $by) * Mpdf::SCALE - $lw;
+				// The foot of the link becomes its left edge and its left end its top
+				list($lk[0], $lk[1], $lk[2], $lk[3]) = [$lk[1] - $lk[3], $this->w * Mpdf::SCALE - $lk[0], $lk[3], $lk[2]];
 			}
 
 			$this->PageLinks[$n][] = $lk;
@@ -10331,7 +10324,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$an['y'] += $adj;
 
 			if ($rotate) {
-				// "0 -1 1 0 0 w cm" takes the point x, y from the top left of the header to h - y, x on the page
 				list($an['x'], $an['y']) = [$this->h - $an['y'], $an['x']];
 			}
 

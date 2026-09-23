@@ -4,7 +4,8 @@ namespace Mpdf;
 
 /**
  * An annotation in an HTML header or footer is put on every page the header or footer is drawn on, and moves
- * and turns with it the way its links do (GravityPDF/mpdf#410).
+ * and turns with it the way its links do (GravityPDF/mpdf#410). Links in a header that forcePortraitHeaders
+ * turns are checked too: they used to be turned to the wrong place down the page.
  */
 class HtmlHeaderAnnotationTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -129,10 +130,8 @@ class HtmlHeaderAnnotationTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	}
 
 	/**
-	 * forcePortraitHeaders turns the header or footer of a landscape page a quarter turn, so its line runs down
-	 * the page from the side margin it starts at. The note turns with it, into the strip the margin leaves and
-	 * below where the line starts, rather than staying where it would be on a portrait page: for a header, on a
-	 * page this short, above its top edge
+	 * forcePortraitHeaders turns the header or footer of a landscape page a quarter turn, so the line in it
+	 * runs down the page from the side margin it starts at. Its link turns with it
 	 *
 	 * @dataProvider rotated
 	 *
@@ -140,17 +139,39 @@ class HtmlHeaderAnnotationTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	 * @param float $from
 	 * @param float $to
 	 */
-	public function testAnAnnotationTurnsWithARotatedHeader($method, $from, $to)
+	public function testALinkTurnsWithARotatedHeader($method, $from, $to)
 	{
-		$notes = $this->rects($this->annotations($this->rotatedDocument($method)), 'Text');
+		$links = $this->rects($this->annotations($this->rotatedDocument($method)), 'Link');
+
+		$this->assertCount(1, $links[0]);
+		list($x0, $top, $x1, $foot) = $links[0][0];
+		$this->assertGreaterThanOrEqual($from * Mpdf::SCALE, $x0, 'The link should be in the strip the margin leaves');
+		$this->assertLessThanOrEqual($to * Mpdf::SCALE, $x1, 'The link should be in the strip the margin leaves');
+		$this->assertEqualsWithDelta((210 - 15) * Mpdf::SCALE, $top, 0.01, 'The link should start at the side margin of the header');
+		$this->assertGreaterThan(0, $foot, 'The link should be on the page');
+	}
+
+	/**
+	 * The note turns with a rotated header or footer too, to the end of the link it follows, rather than
+	 * staying where it would be on a portrait page: for a header, on a page this short, above its top edge
+	 *
+	 * @dataProvider rotated
+	 *
+	 * @param string $method
+	 * @param float $from
+	 */
+	public function testAnAnnotationTurnsWithARotatedHeader($method, $from)
+	{
+		$annotations = $this->annotations($this->rotatedDocument($method));
+		$notes = $this->rects($annotations, 'Text');
+		$links = $this->rects($annotations, 'Link');
 
 		$this->assertCount(1, $notes[0]);
-		// The icon is 20pt across, wider than a footer's strip, so the note is placed by where it starts
-		list($x0, $bottom, , $top) = $notes[0][0];
-		$this->assertGreaterThanOrEqual($from * Mpdf::SCALE, $x0, 'The note should start in the strip the margin leaves');
-		$this->assertLessThanOrEqual($to * Mpdf::SCALE, $x0, 'The note should start in the strip the margin leaves');
-		$this->assertLessThan((210 - 15) * Mpdf::SCALE, $top, 'The note should be below where the line starts, at the side margin');
-		$this->assertGreaterThan(0, $bottom, 'The note should be on the page');
+		list(, , $x1, $foot) = $links[0][0];
+		$this->assertGreaterThanOrEqual($from * Mpdf::SCALE, $notes[0][0][0], 'The note should be in the strip the margin leaves');
+		$this->assertLessThanOrEqual(297 * Mpdf::SCALE, $notes[0][0][2], 'The note should be on the page');
+		$this->assertEqualsWithDelta($x1, $notes[0][0][0], 2, 'The note should be on the line of the link');
+		$this->assertEqualsWithDelta($foot, $notes[0][0][3], 5, 'The note should follow the link along the line');
 	}
 
 	/**
