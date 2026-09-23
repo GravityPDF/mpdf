@@ -145,6 +145,31 @@ class ColorConverter
 	}
 
 	/**
+	 * The alpha of an rgba() or cmyka() colour, including one restricted to grayscale
+	 *
+	 * @param string $c Binary color string
+	 *
+	 * @return float|null from 0 (transparent) to 1 (opaque), or null when the colour has no alpha
+	 */
+	public static function alpha($c)
+	{
+		if ($c[0] == static::MODE_RGBA) {
+			return ord($c[4]) / 100;
+		}
+
+		if ($c[0] == static::MODE_CMYKA) {
+			return ord($c[5]) / 100;
+		}
+
+		// ColorModeConverter::rgb2gray() marks a grayscale colour that kept its alpha with a "1"
+		if ($c[0] == static::MODE_GRAYSCALE && $c[2] == 1) {
+			return ord($c[3]) / 100;
+		}
+
+		return null;
+	}
+
+	/**
 	 * @param string $c Binary color string
 	 *
 	 * @return string
