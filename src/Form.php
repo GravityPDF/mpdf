@@ -637,6 +637,18 @@ class Form
 	}
 
 	/**
+	 * Whether the field's CSS border style takes its border away
+	 *
+	 * @param mixed[] $objattr
+	 *
+	 * @return bool
+	 */
+	private function borderStyleNone(array $objattr)
+	{
+		return isset($objattr['border-style']) && in_array($objattr['border-style'], ['none', 'hidden'], true);
+	}
+
+	/**
 	 * The /BS width and style an active field's CSS border sets, for SetFormText(), SetFormChoice() and
 	 * SetFormButton() to take over their defaults. A border of style none or hidden has no width.
 	 *
@@ -653,7 +665,7 @@ class Form
 			$border['W'] = sprintf('%.3F', $objattr['border-width'] * Mpdf::SCALE);
 		}
 		if (isset($objattr['border-style'])) {
-			if (in_array($objattr['border-style'], ['none', 'hidden'], true)) {
+			if ($this->borderStyleNone($objattr)) {
 				$border['W'] = '0';
 			} else {
 				// PDF has no double, groove or ridge border
@@ -703,7 +715,7 @@ class Form
 	private function setStaticBorder(array $objattr, $k)
 	{
 		$width = isset($objattr['border-width']) ? $objattr['border-width'] : 0.2;
-		$border = $width > 0 && !(isset($objattr['border-style']) && in_array($objattr['border-style'], ['none', 'hidden'], true));
+		$border = $width > 0 && !$this->borderStyleNone($objattr);
 
 		$this->mpdf->SetLineWidth(($border ? $width : 0.2) / $k);
 		if (isset($objattr['border-col'])) {
@@ -991,16 +1003,6 @@ class Form
 			}
 			$title = $this->writer->utf8ToUtf16BigEndian($title);
 		}
-		if ($background_col) {
-			$bg_c = $this->mpdf->SetColor($background_col, 'CodeOnly');
-		} else {
-			$bg_c = $this->form_background_color;
-		}
-		if ($border_col) {
-			$bc_c = $this->mpdf->SetColor($border_col, 'CodeOnly');
-		} else {
-			$bc_c = $this->form_border_color;
-		}
 
 		$f = [
 			'n' => $this->formCount,
@@ -1020,8 +1022,8 @@ class Form
 			'maxlen' => $maxlen,
 			'BS_W' => $border['W'],
 			'BS_S' => $border['S'],
-			'BC_C' => $bc_c,
-			'BG_C' => $bg_c,
+			'BC_C' => $this->activeColor($border_col, $this->form_border_color),
+			'BG_C' => $this->activeColor($background_col, $this->form_background_color),
 			'style' => [
 				'font' => $this->mpdf->FontFamily,
 				// A value drawn smaller to fit leaves the viewer to size it too, so it does not grow back once edited
@@ -1107,8 +1109,8 @@ class Form
 			'Q' => $align,
 			'BS_W' => $border['W'],
 			'BS_S' => $border['S'],
-			'BC_C' => $border_col ? $this->mpdf->SetColor($border_col, 'CodeOnly') : $this->form_border_color,
-			'BG_C' => $background_col ? $this->mpdf->SetColor($background_col, 'CodeOnly') : $this->form_background_color,
+			'BC_C' => $this->activeColor($border_col, $this->form_border_color),
+			'BG_C' => $this->activeColor($background_col, $this->form_background_color),
 			'style' => [
 				'font' => $this->mpdf->FontFamily,
 				// As with a text field, a choice drawn smaller to fit leaves the viewer to size the next one too
@@ -1290,16 +1292,6 @@ class Form
 		} else {
 			$activ = 0;
 		}
-		if ($background_col) {
-			$bg_c = $this->mpdf->SetColor($background_col, 'CodeOnly');
-		} else {
-			$bg_c = $this->form_button_background_color;
-		}
-		if ($border_col) {
-			$bc_c = $this->mpdf->SetColor($border_col, 'CodeOnly');
-		} else {
-			$bc_c = $this->form_button_border_color;
-		}
 		$f = ['n' => $this->formCount,
 			'typ' => 'Bt',
 			'page' => $this->mpdf->page,
@@ -1318,8 +1310,8 @@ class Form
 			'AC' => $this->form_button_text_click,
 			'BS_W' => $border['W'],
 			'BS_S' => $border['S'],
-			'BC_C' => $bc_c,
-			'BG_C' => $bg_c,
+			'BC_C' => $this->activeColor($border_col, $this->form_button_border_color),
+			'BG_C' => $this->activeColor($background_col, $this->form_button_background_color),
 			'activ' => $activ,
 			'disabled' => $disabled,
 			'noprint' => $noprint,
@@ -1717,9 +1709,6 @@ class Form
 			// A dashed border's style carries its dash array, as /S /D /D [3]
 			$dash = preg_match('/\/D (\[[^]]*\])/', $form['BS_S'], $m) ? ' ' . $m[1] . ' 0 d' : '';
 			$s .= sprintf(' %s %.3F w%s %.3F %.3F %.3F %.3F re S', $this->appearanceColor($form['BC_C'], 'RG'), $border, $dash, $border / 2, $border / 2, $width - $border, $height - $border);
-			if ($dash) {
-				$s .= ' [] 0 d';
-			}
 		}
 
 		if ($form['AP']['highlights']) {
@@ -1741,6 +1730,34 @@ class Form
 		}
 
 		$this->writeAppearanceStream($s, [$width, $height]);
+	}
+
+	/**
+	 * An active field's colour as /MK gives it: from its CSS, or else a default
+	 *
+	 * @param mixed $color a colour the field's CSS sets, or false
+	 * @param string $default e.g. '0.6 0.6 0.72'
+	 *
+	 * @return string
+	 */
+	private function activeColor($color, $default)
+	{
+		return $color ? $this->mpdf->SetColor($color, 'CodeOnly') : $default;
+	}
+
+	/**
+	 * The border and background colours of a text or choice field's /MK. A viewer that redraws the field draws a border
+	 * wherever /BC is given, whatever the width, so a field without a border has none.
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return string
+	 */
+	private function markColors($form)
+	{
+		$colors = (float) $form['BS_W'] > 0 ? '/BC [ ' . $form['BC_C'] . ' ] ' : '';
+
+		return $colors . '/BG [ ' . $form['BG_C'] . ' ] ';
 	}
 
 	/**
@@ -2126,13 +2143,7 @@ class Form
 		$temp .= '/S /' . $form['BS_S'] . ' ';
 		$this->writer->write("/BS << $temp >>");
 
-		$temp = '';
-		// A viewer that redraws the field draws a border wherever /BC is given, whatever its width
-		if ((float) $form['BS_W'] > 0) {
-			$temp .= '/BC [ ' . $form['BC_C'] . ' ] ';
-		}
-		$temp .= '/BG [ ' . $form['BG_C'] . ' ] ';
-		$this->writer->write('/MK << ' . $temp . ' >>');
+		$this->writer->write('/MK << ' . $this->markColors($form) . ' >>');
 
 		$this->writer->write('/NM ' . $this->writer->string(sprintf('%04u-%04u', $n, 6000 + $form['n'])));
 		$this->writer->write('/M ' . $this->writer->dateString());
@@ -2224,13 +2235,7 @@ class Form
 		$temp .= '/S /' . $form['BS_S'] . ' ';
 		$this->writer->write("/BS << $temp >>");
 
-		$temp = '';
-		// A viewer that redraws the field draws a border wherever /BC is given, whatever its width
-		if ((float) $form['BS_W'] > 0) {
-			$temp .= '/BC [ ' . $form['BC_C'] . ' ] ';
-		}
-		$temp .= '/BG [ ' . $form['BG_C'] . ' ] ';
-		$this->writer->write('/MK <<' . $temp . ' >>');
+		$this->writer->write('/MK <<' . $this->markColors($form) . ' >>');
 
 		$this->writer->write('/T ' . $this->writer->string($form['T']));
 		$this->writer->write('/TU ' . $this->writer->string($form['TU']));

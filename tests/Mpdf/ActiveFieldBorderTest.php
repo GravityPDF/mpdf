@@ -179,9 +179,14 @@ class ActiveFieldBorderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function widget($pdf, $name)
 	{
-		$this->assertSame(1, preg_match('/<<\s*\/Type \/Annot (?:(?!endobj).)*?\/T \(' . $name . '\)(?:(?!endobj).)*/s', $pdf, $match), 'The field should have a widget');
+		foreach ($this->annotationRefs($pdf)[0] as $ref) {
+			$annotation = $this->object($pdf, $ref);
+			if (strpos($annotation, '/T (' . $name . ')') !== false) {
+				return $annotation;
+			}
+		}
 
-		return $match[0];
+		$this->fail('The field ' . $name . ' should have a widget');
 	}
 
 }
