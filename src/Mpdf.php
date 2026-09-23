@@ -2025,17 +2025,53 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function transparencyAllowed()
 	{
-		if ($this->PDFX) {
-			return false;
-		}
+		return !$this->PDFX && $this->pdfaPart() !== '1';
+	}
 
+	/**
+	 * The PDF/A part the document conforms to, or null when it is not PDF/A
+	 *
+	 * @return string|null
+	 */
+	public function pdfaPart()
+	{
 		if (!$this->PDFA) {
-			return true;
+			return null;
 		}
 
 		list($part) = $this->pdfaConformance();
 
-		return $part !== '1';
+		return $part;
+	}
+
+	/**
+	 * The alpha the document may paint with: the one given, or opaque where transparency is not allowed
+	 *
+	 * @param float $alpha from 0 (transparent) to 1 (opaque)
+	 *
+	 * @return float
+	 */
+	public function allowedAlpha($alpha)
+	{
+		if ($alpha == 1 || $this->transparencyAllowed()) {
+			return $alpha;
+		}
+
+		$this->pdfaxWarning('Image opacity must be 100% (Opacity changed to 100%)');
+
+		return 1;
+	}
+
+	/**
+	 * Records what a PDF/A or PDF/X document had to change, unless it was asked to make such changes silently
+	 *
+	 * @param string $message
+	 */
+	private function pdfaxWarning($message)
+	{
+		if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
+			$this->PDFAXwarnings[] = $message;
+		}
 	}
 
 	/**
@@ -2057,12 +2093,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		//          HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity
 		// set alpha for stroking (CA) and non-stroking (ca) operations
 		// mode determines F (fill) S (stroke) B (both)
-		if (!$this->transparencyAllowed() && $alpha != 1) {
-			if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
-				$this->PDFAXwarnings[] = "Image opacity must be 100% (Opacity changed to 100%)";
-			}
-			$alpha = 1;
-		}
+		$alpha = $this->allowedAlpha($alpha);
 		$a = ['BM' => '/' . $bm];
 		if ($mode == 'F' || $mode == 'B') {
 			$a['ca'] = $alpha; // mPDF 5.7.2
@@ -17704,6 +17735,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$shadow .= 'W n' . "\n";
 
 				$sh['blur'] = abs($sh['blur']); // cannot have negative blur value
+				// A blur fades out through a soft mask, so without transparency the shadow keeps the hard edge at the blur's midpoint
+				if ($sh['blur'] && !$this->transparencyAllowed()) {
+					$this->pdfaxWarning('A box-shadow cannot be blurred without transparency (Shadow drawn without blur)');
+					$sh['blur'] = 0;
+				}
 				// Ensure spread/blur do not make effective shadow width/height < 0
 				// Could do more complex things but this just adjusts spread value
 				if (-$sh['spread'] + $sh['blur'] / 2 > min($w / 2, $h / 2)) {

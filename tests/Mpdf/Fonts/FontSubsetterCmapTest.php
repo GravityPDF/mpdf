@@ -117,6 +117,33 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * PDF/A-1 allows a symbolic TrueType font one cmap subtable, so makeSubsetSIP can be asked to leave out the
+	 * format 6 one under (1,0) and keep the format 4 one readers look up first
+	 *
+	 * @dataProvider oneCmapSubtableProvider
+	 */
+	public function testMakeSubsetSipWritesOneSubtableWhenAsked($oneCmapSubtable, array $encodings)
+	{
+		$file = $this->file('angerthas');
+		$program = $this->subsetter()->makeSubsetSIP($file, $this->pangram('angerthas'), 0, false, false, $oneCmapSubtable);
+
+		$this->assertSame($encodings, array_keys($this->encodingRecords($this->table($program, 'cmap'))));
+	}
+
+	/**
+	 * Whether one subtable is asked for, and the encodings the cmap then lists
+	 *
+	 * @return mixed[][]
+	 */
+	public function oneCmapSubtableProvider()
+	{
+		return [
+			'both subtables' => [false, ['1,0', '3,0']],
+			'one subtable' => [true, ['3,0']],
+		];
+	}
+
+	/**
 	 * The three builders share one format 4 subtable, so its bytes are pinned here directly rather
 	 * than only through the golden masters' hashes of whole programs.
 	 *
