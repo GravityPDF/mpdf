@@ -80,6 +80,48 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * An active field's value is fitted by its shaped width, and past the minimum size it is trimmed to the characters
+	 * that fit, shaped again on their own, so it draws what the page draws for those characters. The value is 52.77pt
+	 * wide shaped at 10pt, though its letters are 74.52pt wide apart.
+	 *
+	 * @dataProvider fittedShapedValues
+	 *
+	 * @param string $width the field's CSS width
+	 * @param string $da the font size /DA names
+	 * @param string $size the font size the appearance draws in
+	 * @param int $length how many of the value's characters it draws
+	 */
+	public function testShapedValueIsFittedByItsShapedWidth($width, $da, $size, $length)
+	{
+		$value = 'مرحبا بالعالم';
+		$field = function ($value, $width) {
+			return '<form><input type="text" name="t" value="' . $value . '" style="font-family: dejavusans; font-size: 10pt; width: ' . $width . '" /></form>';
+		};
+
+		$pdf = $this->render($field($value, $width), ['mode' => 'utf-8', 'useActiveForms' => true]);
+		$this->assertMatchesRegularExpression('/\/DA \(\/F\d+ ' . $da . ' Tf /', $this->object($pdf, $this->annotationRefs($pdf)[0][0]));
+		$this->assertMatchesRegularExpression('/BT \/F\d+ ' . preg_quote($size, '/') . ' Tf ET/', $pdf);
+
+		$page = $this->render($field(mb_substr($value, 0, $length, 'UTF-8'), '100mm'), ['mode' => 'utf-8']);
+		$this->assertSame($this->textShown($page), $this->textShown($pdf));
+	}
+
+	/**
+	 * A field its value fits only once shaped, one it is shrunk to fit, and one that trims it inside the word
+	 * "بالعالم", whose "ل" is drawn in its final form rather than joined to the "ع" after it
+	 *
+	 * @return mixed[][]
+	 */
+	public function fittedShapedValues()
+	{
+		return [
+			'fits once shaped' => ['20mm', '10', '10.000', 13],
+			'shrunk' => ['15mm', '0', '8.209', 13],
+			'trimmed at the minimum size' => ['8.2mm', '0', '6.000', 9],
+		];
+	}
+
+	/**
 	 * A text area with an auto font size is drawn at 12pt when its text fits, and smaller when it would otherwise run
 	 * past the bottom, as a viewer sizes it
 	 */
