@@ -123,8 +123,8 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A run of Plane 2 characters moves into the font's SIP font, and the text on each side of it
-	 * is kept whole, newline or not.
+	 * A run of Plane 2 characters moves into the font named by the current font's sip-ext, and the
+	 * text on each side of it is kept whole, newline or not.
 	 *
 	 * @dataProvider sipTextProvider
 	 *
