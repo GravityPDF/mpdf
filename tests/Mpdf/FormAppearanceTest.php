@@ -81,8 +81,8 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * An active field's value is fitted by its shaped width, and past the minimum size it is trimmed to the characters
-	 * that fit, shaped again on their own, so it draws what the page draws for those characters. The value is 52.77pt
-	 * wide shaped at 10pt, though its letters are 74.52pt wide apart.
+	 * that fit, shaped again on their own, so it draws what the page draws for them. The value is 52.77pt
+	 * wide shaped at 10pt, though its letters measured one by one come to 74.52pt.
 	 *
 	 * @dataProvider fittedShapedValues
 	 *
