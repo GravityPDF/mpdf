@@ -16492,7 +16492,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// mPDF 6
 		// ALL the chunks of textbuffer need to have at least basic OTLdata set
 		// First make sure each element/chunk has the OTLdata for Bidi set.
-		// A chunk that names no font is drawn in the font before it, as the loop that draws them below does
+		// A chunk that names no font is in the font of the chunk before it, as in the drawing loop below
 		$inCoreFont = $this->usingCoreFont;
 		for ($i = 0; $i < $array_size; $i++) {
 			$family = isset($arrayaux[$i][4]) ? $arrayaux[$i][4] : '';
