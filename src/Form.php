@@ -224,7 +224,7 @@ class Form
 				$this->mpdf->FontSizePt = 0.0;
 			}
 
-			$this->SetFormText($w, $h, $objattr['fieldname'], $val, $val, $objattr['title'], $flags, $fieldalign, false, (isset($objattr['maxlength']) ? $objattr['maxlength'] : false), $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false));
+			$this->SetFormText($w, $h, $objattr['fieldname'], $val, $val, $objattr['title'], $flags, $fieldalign, false, (isset($objattr['maxlength']) ? $objattr['maxlength'] : false), $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), $this->activeBorder($objattr));
 
 		} else {
 
@@ -313,7 +313,7 @@ class Form
 				$this->mpdf->FontSizePt = 0.0;
 			}
 
-			$this->SetFormText($w, $h, $objattr['fieldname'], $texto, $texto, (isset($objattr['title']) ? $objattr['title'] : ''), $flags, $fieldalign, false, -1, $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false));
+			$this->SetFormText($w, $h, $objattr['fieldname'], $texto, $texto, (isset($objattr['title']) ? $objattr['title'] : ''), $flags, $fieldalign, false, -1, $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), $this->activeBorder($objattr));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
@@ -410,7 +410,7 @@ class Form
 				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 			}
 
-			$this->SetFormChoice($w, $h, $objattr['fieldname'], $flags, $data, $rtlalign, $js);
+			$this->SetFormChoice($w, $h, $objattr['fieldname'], $flags, $data, $rtlalign, $js, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), $this->activeBorder($objattr));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
@@ -494,13 +494,13 @@ class Form
 
 				if ($objattr['subtype'] === 'RESET') {
 					$this->SetFormButtonText($objattr['value']);
-					$this->SetFormReset($w, $h, $objattr['fieldname'], $objattr['value'], $objattr['title'], $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
+					$this->SetFormReset($w, $h, $objattr['fieldname'], $objattr['value'], $objattr['title'], $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false), $this->activeBorder($objattr));
 				} elseif ($objattr['subtype'] === 'SUBMIT') {
 					$url = $this->formAction;
 					$type = $this->formExportType;
 					$method = $this->formMethod;
 					$this->SetFormButtonText($objattr['value']);
-					$this->SetFormSubmit($w, $h, $objattr['fieldname'], $objattr['value'], $url, $objattr['title'], $type, $method, $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
+					$this->SetFormSubmit($w, $h, $objattr['fieldname'], $objattr['value'], $url, $objattr['title'], $type, $method, $flags, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false), $this->activeBorder($objattr));
 				} elseif ($objattr['subtype'] === 'BUTTON') {
 					$this->SetFormButtonText($objattr['value']);
 					if (isset($objattr['onClick']) && $objattr['onClick']) {
@@ -508,7 +508,7 @@ class Form
 					} else {
 						$js = '';
 					}
-					$this->SetJSButton($w, $h, $objattr['fieldname'], $objattr['value'], $js, 0, $objattr['title'], $flags, false, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false));
+					$this->SetJSButton($w, $h, $objattr['fieldname'], $objattr['value'], $js, 0, $objattr['title'], $flags, false, (isset($objattr['background-col']) ? $objattr['background-col'] : false), (isset($objattr['border-col']) ? $objattr['border-col'] : false), (isset($objattr['noprint']) ? $objattr['noprint'] : false), $this->activeBorder($objattr));
 				}
 			}
 
@@ -637,6 +637,46 @@ class Form
 	}
 
 	/**
+	 * Whether the field's CSS border style is none or hidden
+	 *
+	 * @param mixed[] $objattr
+	 *
+	 * @return bool
+	 */
+	private function borderStyleNone(array $objattr)
+	{
+		return isset($objattr['border-style']) && in_array($objattr['border-style'], ['none', 'hidden'], true);
+	}
+
+	/**
+	 * The /BS width and style an active field's CSS border sets, in place of the defaults SetFormText(),
+	 * SetFormChoice() and SetFormButton() use. A border of style none or hidden gets no width.
+	 *
+	 * @param mixed[] $objattr
+	 *
+	 * @return string[] any of 'W', in points, and 'S', the style's /BS name with any dash array
+	 */
+	private function activeBorder(array $objattr)
+	{
+		$styles = ['solid' => 'S', 'dashed' => 'D /D [3]', 'dotted' => 'D /D [1]', 'inset' => 'I', 'outset' => 'B'];
+
+		$border = [];
+		if (isset($objattr['border-width'])) {
+			$border['W'] = sprintf('%.3F', $objattr['border-width'] * Mpdf::SCALE);
+		}
+		if (isset($objattr['border-style'])) {
+			if ($this->borderStyleNone($objattr)) {
+				$border['W'] = '0';
+			} else {
+				// PDF has no double, groove or ridge border
+				$border['S'] = isset($styles[$objattr['border-style']]) ? $styles[$objattr['border-style']] : 'S';
+			}
+		}
+
+		return $border;
+	}
+
+	/**
 	 * A colour the field's CSS sets, or else a default
 	 *
 	 * @param mixed[] $objattr
@@ -675,7 +715,7 @@ class Form
 	private function setStaticBorder(array $objattr, $k)
 	{
 		$width = isset($objattr['border-width']) ? $objattr['border-width'] : 0.2;
-		$border = $width > 0 && !(isset($objattr['border-style']) && in_array($objattr['border-style'], ['none', 'hidden'], true));
+		$border = $width > 0 && !$this->borderStyleNone($objattr);
 
 		$this->mpdf->SetLineWidth(($border ? $width : 0.2) / $k);
 		if (isset($objattr['border-col'])) {
@@ -925,7 +965,7 @@ class Form
 		return strtr($txt, $Win1252ToPDFDocEncoding);
 	}
 
-	function SetFormText($w, $h, $name, $value = '', $default = '', $title = '', $flags = [], $align = 'L', $hidden = false, $maxlen = -1, $js = '', $background_col = false, $border_col = false)
+	function SetFormText($w, $h, $name, $value = '', $default = '', $title = '', $flags = [], $align = 'L', $hidden = false, $maxlen = -1, $js = '', $background_col = false, $border_col = false, $border = [])
 	{
 		$this->formCount++;
 		if ($align === 'C') {
@@ -943,7 +983,8 @@ class Form
 		}
 		// A hidden input passes its flags as 0
 		$text = in_array(self::FLAG_PASSWORD, (array) $flags, true) ? str_repeat('*', mb_strlen($value, $this->mpdf->mb_enc)) : $value;
-		$appearance = $this->appearanceText($w, $h, $this->form_border_width, preg_split('/\r\n|\r|\n/', $text), $align, in_array(self::FLAG_TEXTAREA, (array) $flags, true) ? 'wrap' : 'line', [], !$hidden);
+		$border += ['W' => $this->form_border_width, 'S' => $this->form_border_style];
+		$appearance = $this->appearanceText($w, $h, $border['W'], preg_split('/\r\n|\r|\n/', $text), $align, in_array(self::FLAG_TEXTAREA, (array) $flags, true) ? 'wrap' : 'line', [], !$hidden);
 		if ($this->mpdf->onlyCoreFonts) {
 			$value = $this->Win1252ToPDFDocEncoding($value);
 			$default = $this->Win1252ToPDFDocEncoding($default);
@@ -962,16 +1003,6 @@ class Form
 			}
 			$title = $this->writer->utf8ToUtf16BigEndian($title);
 		}
-		if ($background_col) {
-			$bg_c = $this->mpdf->SetColor($background_col, 'CodeOnly');
-		} else {
-			$bg_c = $this->form_background_color;
-		}
-		if ($border_col) {
-			$bc_c = $this->mpdf->SetColor($border_col, 'CodeOnly');
-		} else {
-			$bc_c = $this->form_border_color;
-		}
 
 		$f = [
 			'n' => $this->formCount,
@@ -989,10 +1020,10 @@ class Form
 			'hidden' => $hidden,
 			'Q' => $align,
 			'maxlen' => $maxlen,
-			'BS_W' => $this->form_border_width,
-			'BS_S' => $this->form_border_style,
-			'BC_C' => $bc_c,
-			'BG_C' => $bg_c,
+			'BS_W' => $border['W'],
+			'BS_S' => $border['S'],
+			'BC_C' => $this->activeColor($border_col, $this->form_border_color),
+			'BG_C' => $this->activeColor($background_col, $this->form_background_color),
 			'style' => [
 				'font' => $this->mpdf->FontFamily,
 				// A value drawn smaller to fit leaves the viewer to size it too, so it does not grow back once edited
@@ -1029,7 +1060,7 @@ class Form
 		}
 	}
 
-	function SetFormChoice($w, $h, $name, $flags, $array, $align = 'L', $js = '')
+	function SetFormChoice($w, $h, $name, $flags, $array, $align = 'L', $js = '', $background_col = false, $border_col = false, $border = [])
 	{
 		$this->formCount++;
 		if ($this->mpdf->blk[$this->mpdf->blklvl]['direction'] === 'rtl') {
@@ -1040,10 +1071,11 @@ class Form
 		if (!preg_match('/^[a-zA-Z0-9_:\-]+$/', $name)) {
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
 		}
+		$border += ['W' => $this->form_border_width, 'S' => $this->form_border_style];
 		if (in_array(self::FLAG_COMBOBOX, $flags, true)) {
-			$appearance = $this->appearanceText($w, $h, $this->form_border_width, [$array['SEL'] ? $array['OPT'][$array['SEL'][0]] : ''], $align, 'line');
+			$appearance = $this->appearanceText($w, $h, $border['W'], [$array['SEL'] ? $array['OPT'][$array['SEL'][0]] : ''], $align, 'line');
 		} else {
-			$appearance = $this->appearanceText($w, $h, $this->form_border_width, $array['OPT'], $align, 'list', $array['SEL']);
+			$appearance = $this->appearanceText($w, $h, $border['W'], $array['OPT'], $align, 'list', $array['SEL']);
 		}
 		if ($this->mpdf->onlyCoreFonts) {
 			for ($i = 0; $i < count($array['VAL']); $i++) {
@@ -1075,10 +1107,10 @@ class Form
 			'OPT' => $array,
 			'FF' => $flags,
 			'Q' => $align,
-			'BS_W' => $this->form_border_width,
-			'BS_S' => $this->form_border_style,
-			'BC_C' => $this->form_border_color,
-			'BG_C' => $this->form_background_color,
+			'BS_W' => $border['W'],
+			'BS_S' => $border['S'],
+			'BC_C' => $this->activeColor($border_col, $this->form_border_color),
+			'BG_C' => $this->activeColor($background_col, $this->form_background_color),
 			'style' => [
 				'font' => $this->mpdf->FontFamily,
 				// As with a text field, a choice drawn smaller to fit leaves the viewer to size the next one too
@@ -1121,16 +1153,16 @@ class Form
 		$this->mpdf->x += $w;
 	}
 
-	function SetFormReset($w, $h, $name, $value = 'Reset', $title = '', $flags = [], $background_col = false, $border_col = false, $noprint = false)
+	function SetFormReset($w, $h, $name, $value = 'Reset', $title = '', $flags = [], $background_col = false, $border_col = false, $noprint = false, $border = [])
 	{
 		if (!$name) {
 			$name = 'Reset';
 		}
-		$this->SetFormButton($w, $h, $name, $value, 'reset', $title, $flags, false, false, $background_col, $border_col, $noprint);
+		$this->SetFormButton($w, $h, $name, $value, 'reset', $title, $flags, false, false, $background_col, $border_col, $noprint, $border);
 		$this->mpdf->x += $w;
 	}
 
-	function SetJSButton($w, $h, $name, $value, $js, $image_id = 0, $title = '', $flags = [], $indexed = false, $background_col = false, $border_col = false, $noprint = false)
+	function SetJSButton($w, $h, $name, $value, $js, $image_id = 0, $title = '', $flags = [], $indexed = false, $background_col = false, $border_col = false, $noprint = false, $border = [])
 	{
 		// pos => 1 = no caption, icon only; 0 = caption only
 		if ($image_id) {
@@ -1140,20 +1172,20 @@ class Form
 				'Indexed' => $indexed,
 			];
 		}
-		$this->SetFormButton($w, $h, $name, $value, 'js_button', $title, $flags, false, false, $background_col, $border_col, $noprint);
+		$this->SetFormButton($w, $h, $name, $value, 'js_button', $title, $flags, false, false, $background_col, $border_col, $noprint, $border);
 		if ($js) {
 			$this->SetFormButtonJS($name, $js);
 		}
 		$this->mpdf->x += $w;
 	}
 
-	function SetFormSubmit($w, $h, $name, $value = 'Submit', $url = '', $title = '', $typ = 'html', $method = 'POST', $flags = [], $background_col = false, $border_col = false, $noprint = false)
+	function SetFormSubmit($w, $h, $name, $value = 'Submit', $url = '', $title = '', $typ = 'html', $method = 'POST', $flags = [], $background_col = false, $border_col = false, $noprint = false, $border = [])
 	{
 		if (!$name) {
 			$name = 'Submit';
 		}
 
-		$this->SetFormButton($w, $h, $name, $value, 'submit', $title, $flags, false, false, $background_col, $border_col, $noprint);
+		$this->SetFormButton($w, $h, $name, $value, 'submit', $title, $flags, false, false, $background_col, $border_col, $noprint, $border);
 		// The button is not on record while a block is only being measured, or inside a header or footer
 		if (isset($this->forms[$this->formCount])) {
 			$this->forms[$this->formCount]['URL'] = $url;
@@ -1196,16 +1228,17 @@ class Form
 		$this->form_button_text_click = $ac ?: $ca;
 	}
 
-	function SetFormButton($bb, $hh, $name, $value, $type, $title = '', $flags = [], $checked = false, $disabled = false, $background_col = false, $border_col = false, $noprint = false)
+	function SetFormButton($bb, $hh, $name, $value, $type, $title = '', $flags = [], $checked = false, $disabled = false, $background_col = false, $border_col = false, $noprint = false, $border = [])
 	{
 		$this->formCount++;
 		if (!preg_match('/^[a-zA-Z0-9_:\-]+$/', $name)) {
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
 		}
+		$border += ['W' => $this->form_button_border_width, 'S' => $this->form_button_border_style];
 		$appearance = null;
 		if ($type !== 'radio' && $type !== 'checkbox') {
 			// A button showing an icon draws no caption to fit
-			$appearance = $this->appearanceText($bb, $hh, $this->form_button_border_width, [$value === '' ? $name : $value], '1', 'line', [], !isset($this->form_button_icon[$name]));
+			$appearance = $this->appearanceText($bb, $hh, $border['W'], [$value === '' ? $name : $value], '1', 'line', [], !isset($this->form_button_icon[$name]));
 		}
 		if (!$this->mpdf->onlyCoreFonts) {
 			if (isset($this->mpdf->CurrentFont['subset'])) {
@@ -1259,16 +1292,6 @@ class Form
 		} else {
 			$activ = 0;
 		}
-		if ($background_col) {
-			$bg_c = $this->mpdf->SetColor($background_col, 'CodeOnly');
-		} else {
-			$bg_c = $this->form_button_background_color;
-		}
-		if ($border_col) {
-			$bc_c = $this->mpdf->SetColor($border_col, 'CodeOnly');
-		} else {
-			$bc_c = $this->form_button_border_color;
-		}
 		$f = ['n' => $this->formCount,
 			'typ' => 'Bt',
 			'page' => $this->mpdf->page,
@@ -1285,10 +1308,10 @@ class Form
 			'CA' => $this->form_button_text,
 			'RC' => $this->form_button_text_over,
 			'AC' => $this->form_button_text_click,
-			'BS_W' => $this->form_button_border_width,
-			'BS_S' => $this->form_button_border_style,
-			'BC_C' => $bc_c,
-			'BG_C' => $bg_c,
+			'BS_W' => $border['W'],
+			'BS_S' => $border['S'],
+			'BC_C' => $this->activeColor($border_col, $this->form_button_border_color),
+			'BG_C' => $this->activeColor($background_col, $this->form_button_background_color),
 			'activ' => $activ,
 			'disabled' => $disabled,
 			'noprint' => $noprint,
@@ -1683,7 +1706,9 @@ class Form
 
 		$s = sprintf('%s 0 0 %.3F %.3F re f', $this->appearanceColor($form['BG_C'], 'rg'), $width, $height);
 		if ($border > 0) {
-			$s .= sprintf(' %s %.3F w %.3F %.3F %.3F %.3F re S', $this->appearanceColor($form['BC_C'], 'RG'), $border, $border / 2, $border / 2, $width - $border, $height - $border);
+			// A dashed border's style carries its dash array, as /S /D /D [3]
+			$dash = preg_match('/\/D (\[[^]]*\])/', $form['BS_S'], $m) ? ' ' . $m[1] . ' 0 d' : '';
+			$s .= sprintf(' %s %.3F w%s %.3F %.3F %.3F %.3F re S', $this->appearanceColor($form['BC_C'], 'RG'), $border, $dash, $border / 2, $border / 2, $width - $border, $height - $border);
 		}
 
 		if ($form['AP']['highlights']) {
@@ -1705,6 +1730,34 @@ class Form
 		}
 
 		$this->writeAppearanceStream($s, [$width, $height]);
+	}
+
+	/**
+	 * An active field's /MK colour: its CSS colour, or else the default
+	 *
+	 * @param mixed $color a colour the field's CSS sets, or false
+	 * @param string $default e.g. '0.6 0.6 0.72'
+	 *
+	 * @return string
+	 */
+	private function activeColor($color, $default)
+	{
+		return $color ? $this->mpdf->SetColor($color, 'CodeOnly') : $default;
+	}
+
+	/**
+	 * The border and background colours of a text or choice field's /MK. A viewer that redraws the field draws a border
+	 * wherever /BC is given, whatever the width, so a field without a border has none.
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return string
+	 */
+	private function markColors($form)
+	{
+		$colors = (float) $form['BS_W'] > 0 ? '/BC [ ' . $form['BC_C'] . ' ] ' : '';
+
+		return $colors . '/BG [ ' . $form['BG_C'] . ' ] ';
 	}
 
 	/**
@@ -2090,10 +2143,7 @@ class Form
 		$temp .= '/S /' . $form['BS_S'] . ' ';
 		$this->writer->write("/BS << $temp >>");
 
-		$temp = '';
-		$temp .= '/BC [ ' . $form['BC_C'] . ' ] ';
-		$temp .= '/BG [ ' . $form['BG_C'] . ' ] ';
-		$this->writer->write('/MK << ' . $temp . ' >>');
+		$this->writer->write('/MK << ' . $this->markColors($form) . ' >>');
 
 		$this->writer->write('/NM ' . $this->writer->string(sprintf('%04u-%04u', $n, 6000 + $form['n'])));
 		$this->writer->write('/M ' . $this->writer->dateString());
@@ -2185,10 +2235,7 @@ class Form
 		$temp .= '/S /' . $form['BS_S'] . ' ';
 		$this->writer->write("/BS << $temp >>");
 
-		$temp = '';
-		$temp .= '/BC [ ' . $form['BC_C'] . ' ] ';
-		$temp .= '/BG [ ' . $form['BG_C'] . ' ] ';
-		$this->writer->write('/MK <<' . $temp . ' >>');
+		$this->writer->write('/MK <<' . $this->markColors($form) . ' >>');
 
 		$this->writer->write('/T ' . $this->writer->string($form['T']));
 		$this->writer->write('/TU ' . $this->writer->string($form['TU']));
