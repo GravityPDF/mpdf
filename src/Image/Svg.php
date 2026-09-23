@@ -1341,6 +1341,24 @@ class Svg
 		return $current_style;
 	}
 
+	/**
+	 * The opacity multiplied by the alpha of an rgba() or cmyka() colour, as browsers combine the two
+	 *
+	 * @param string $col binary colour from ColorConverter::convert()
+	 * @param mixed $opacity the fill, stroke or stop opacity given; not a number when unset or invalid
+	 *
+	 * @return float|mixed
+	 */
+	private function withColorAlpha($col, $opacity)
+	{
+		$alpha = ColorConverter::alpha($col);
+		if ($alpha === null) {
+			return $opacity;
+		}
+
+		return is_numeric($opacity) ? $opacity * $alpha : $alpha;
+	}
+
 	//
 	//	Cette fonction ecrit le style dans le stream svg.
 	function svgStyle($critere_style, $attribs, $element)
@@ -1367,24 +1385,14 @@ class Svg
 		elseif (strtolower($critere_style['fill']) == 'currentcolor' && $element != 'line') {
 			$col = $this->colorConverter->convert($critere_style['color'], $this->mpdf->PDFAXwarnings);
 			if ($col) {
-				if ($col[0] == 5 && is_numeric($col[4])) {
-					$critere_style['fill-opacity'] = ord($col[4] / 100);
-				} // RGBa
-				if ($col[0] == 6 && is_numeric($col[5])) {
-					$critere_style['fill-opacity'] = ord($col[5] / 100);
-				} // CMYKa
+				$critere_style['fill-opacity'] = $this->withColorAlpha($col, $critere_style['fill-opacity']);
 				$path_style .= $this->mpdf->SetFColor($col, true) . ' ';
 				$style .= 'F';
 			}
 		} elseif ($critere_style['fill'] != 'none' && $element != 'line') {
 			$col = $this->colorConverter->convert($critere_style['fill'], $this->mpdf->PDFAXwarnings);
 			if ($col) {
-				if ($col[0] == 5 && is_numeric($col[4])) {
-					$critere_style['fill-opacity'] = ord($col[4] / 100);
-				} // RGBa
-				if ($col[0] == 6 && is_numeric($col[5])) {
-					$critere_style['fill-opacity'] = ord($col[5] / 100);
-				} // CMYKa
+				$critere_style['fill-opacity'] = $this->withColorAlpha($col, $critere_style['fill-opacity']);
 				$path_style .= $this->mpdf->SetFColor($col, true) . ' ';
 				$style .= 'F';
 			}
@@ -1408,12 +1416,7 @@ class Svg
 		elseif (strtolower($critere_style['stroke']) == 'currentcolor') {
 			$col = $this->colorConverter->convert($critere_style['color'], $this->mpdf->PDFAXwarnings);
 			if ($col) {
-				if ($col[0] == 5 && is_numeric($col[4])) {
-					$critere_style['stroke-opacity'] = ord($col[4] / 100);
-				} // RGBa
-				if ($col[0] == 6 && is_numeric($col[5])) {
-					$critere_style['stroke-opacity'] = ord($col[5] / 100);
-				} // CMYKa
+				$critere_style['stroke-opacity'] = $this->withColorAlpha($col, $critere_style['stroke-opacity']);
 				$path_style .= $this->mpdf->SetDColor($col, true) . ' ';
 				$style .= 'D';
 				$lw = $this->ConvertSVGSizePixels($critere_style['stroke-width']);
@@ -1424,12 +1427,7 @@ class Svg
 			if ($col) {
 				// mPDF 5.0.051
 				// mPDF 5.3.74
-				if ($col[0] == 5 && is_numeric($col[4])) {
-					$critere_style['stroke-opacity'] = ord($col[4] / 100);
-				} // RGBa
-				if ($col[0] == 6 && is_numeric($col[5])) {
-					$critere_style['stroke-opacity'] = ord($col[5] / 100);
-				} // CMYKa
+				$critere_style['stroke-opacity'] = $this->withColorAlpha($col, $critere_style['stroke-opacity']);
 				$path_style .= $this->mpdf->SetDColor($col, true) . ' ';
 				$style .= 'D';
 				$lw = $this->ConvertSVGSizePixels($critere_style['stroke-width']);
@@ -3577,11 +3575,9 @@ class Svg
 				$stop_opacity = $m[1];
 			} elseif (isset($attribs['stop-opacity'])) {
 				$stop_opacity = $attribs['stop-opacity'];
-			} elseif ($col[0] == 5) { // RGBa
-				$stop_opacity = ord($col[4] / 100);
-			} elseif ($col[0] == 6) { // CMYKa
-				$stop_opacity = ord($col[5] / 100);
 			}
+
+			$stop_opacity = $this->withColorAlpha($col, $stop_opacity);
 
 			$tmp_color = [
 				'color' => $color_final,
