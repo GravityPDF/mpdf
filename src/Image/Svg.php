@@ -3719,7 +3719,7 @@ class Svg
 				$this->pathBBox = [999999, 999999, -999999, -999999];
 
 				foreach ($commands as $c) {
-					if ((isset($c) && count($c) == 3) || (isset($c[2]) && $c[2] == '')) {
+					if (count($c) == 3 || (isset($c[2]) && $c[2] == '')) {
 						list($tmp, $command, $arguments) = $c;
 					} else {
 						list($tmp, $command) = $c;
