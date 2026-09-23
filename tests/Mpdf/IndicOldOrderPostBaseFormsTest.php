@@ -53,8 +53,7 @@ class IndicOldOrderPostBaseFormsTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
-	 * FreeSerif forms the post-base form its Consonant + Halant Lookups describe, where HarfBuzz
-	 * draws the consonant, the virama and the second consonant.
+	 * FreeSerif forms the post-base form its Consonant + Halant Lookups describe.
 	 *
 	 * @dataProvider dataRuns
 	 */

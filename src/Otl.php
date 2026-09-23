@@ -34,6 +34,18 @@ class Otl
 
 	use Strict;
 
+	/**
+	 * Try a Halant after the base against a pref, blwf or pstf Lookup as Consonant + Halant, the order
+	 * the original Indic script tags state them in.
+	 *
+	 * FreeSerif and FreeSans point their v2 script tags at the Lookups written for the original ones, so
+	 * read as written they form no post-base form: HarfBuzz and CoreText draw KA VIRAMA RA as three
+	 * glyphs. With the swap mPDF draws what the font draws under its original tags, and what HarfBuzz
+	 * draws once the Lookups are restated Halant + Consonant, so it differs from HarfBuzz on purpose.
+	 * HarfBuzz reads both orders when it looks for the base (consonant_position_from_face()), but not
+	 * when it substitutes. A font that states its Lookups in the v2 order covers the Halant and never
+	 * takes the swap. TTFontFile reads the classes both ways under _OTL_OLD_SPEC_COMPAT_2.
+	 */
 	const _OTL_OLD_SPEC_COMPAT_1 = true;
 
 	/**
@@ -1825,18 +1837,8 @@ class Otl
 						break;
 					}
 				} // Special case for Indic  ZZZ99S
-				// A Halant after the base is tried against a pref, blwf or pstf Lookup as Consonant +
-				// Halant, the order the original Indic script tags state them in. FreeSerif and FreeSans
-				// point their v2 script tags at the Lookups written for the original ones, in every Indic
-				// script they cover, so read as written they form no post-base form at all: HarfBuzz
-				// 14.3.1 and CoreText draw FreeSerif's KA VIRAMA RA as three glyphs, where the font draws
-				// dev_ka__ra.rkrf under its original tags. mPDF differs from HarfBuzz here on purpose. It
-				// draws what the font draws under its original tags, and what HarfBuzz draws once the
-				// Lookups are restated Halant + Consonant. HarfBuzz itself reads both orders when it looks
-				// for the base, and notes that Uniscribe does too (consonant_position_from_face()), but
-				// not when it substitutes. TTFontFile reads the classes the same way, under
-				// _OTL_OLD_SPEC_COMPAT_2. A font that states its Lookups in the v2 order covers the
-				// Halant, so never gets here.
+				// A Halant after the base the subtable does not cover: try it swapped with the consonant
+				// after it, for a v2 font whose Lookups state Consonant + Halant (see _OTL_OLD_SPEC_COMPAT_1)
 				// Only a masked feature reaches this: with no mask there is no bit for the test below to
 				// read, and pref, blwf and pstf all carry one
 				elseif ($mask && static::_OTL_OLD_SPEC_COMPAT_1 && $Type == 4 && !$is_old_spec && strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', $currGlyph) !== false) {
@@ -2095,7 +2097,7 @@ class Otl
 		}
 
 		// Special case for Indic: a v2 font whose pref, blwf or pstf Lookups state Consonant + Halant,
-		// as FreeSerif's do - see the call in applyGSUBlookupOverRun()
+		// as FreeSerif's do - see _OTL_OLD_SPEC_COMPAT_1
 
 		$this->reader->seek($subtable_offset);
 		$SubstFormat = $this->reader->readUInt16();
