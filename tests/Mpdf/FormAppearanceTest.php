@@ -3,8 +3,9 @@
 namespace Mpdf;
 
 /**
- * Every active form widget carries its own appearance. A PDF/A document relies on them alone (#348); other documents
- * also ask the viewer to redraw the widgets, and name the ZapfDingbats font it redraws checkboxes with (#59).
+ * Every active form widget carries its own appearance. A PDF/A document relies on them alone (#348). Other documents
+ * ask the viewer to redraw the widgets only for text the appearances cannot shape (#408), and then name the ZapfDingbats
+ * font it redraws checkboxes with (#59).
  */
 class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -12,39 +13,50 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * A checkbox or radio button puts ZaDb in the form's default resources, where a viewer redrawing it looks
+	 * A form asks the viewer to redraw its widgets only when a field shows text the appearances cannot shape or
+	 * reorder, and then names ZaDb for a checkbox or radio button to be redrawn in
 	 *
-	 * @dataProvider widgets
+	 * @dataProvider redraws
 	 *
 	 * @param string $html
+	 * @param bool $redraw whether /NeedAppearances is expected
 	 * @param bool $named whether ZaDb is expected
 	 */
-	public function testCheckboxesAndRadioButtonsNameZapfDingbats($html, $named)
+	public function testViewerRedrawsOnlyTextTheAppearancesCannotShape($html, $redraw, $named)
 	{
-		$form = $this->acroForm($this->render('<form>' . $html . '</form>', ['useActiveForms' => true]));
+		$form = $this->acroForm($this->render('<form>' . $html . '</form>', ['mode' => 'utf-8', 'useActiveForms' => true]));
 
-		$this->assertStringContainsString('/NeedAppearances true', $form);
+		$this->assertSame($redraw, strpos($form, '/NeedAppearances true') !== false);
 		$this->assertSame($named, strpos($form, '/ZaDb << /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>') !== false);
 	}
 
 	/**
-	 * A checkbox, a radio button and a text field, with whether each has ZaDb named
+	 * Latin, Arabic, Hebrew and Thai field text, with and without a checkbox or radio button
 	 *
 	 * @return mixed[][]
 	 */
-	public function widgets()
+	public function redraws()
 	{
+		$checkbox = ' <input type="checkbox" name="c" value="y" checked="checked" />';
+		$radio = ' <input type="radio" name="r" value="a" checked="checked" />';
+
 		return [
-			'checkbox' => ['<input type="checkbox" name="c" value="y" checked="checked" />', true],
-			'radio button' => ['<input type="radio" name="r" value="a" checked="checked" />', true],
-			'text field' => ['<input type="text" name="t" value="x" />', false],
+			'Latin, checkbox' => ['<input type="text" name="t" value="Hello" />' . $checkbox, false, false],
+			'Arabic value, checkbox' => ['<input type="text" name="t" value="مرحبا" style="font-family: dejavusans" />' . $checkbox, true, true],
+			'Hebrew option, radio button' => ['<select name="s" style="font-family: dejavusans"><option value="1">שלום</option></select>' . $radio, true, true],
+			'Thai caption' => ['<input type="submit" name="go" value="สวัสดี" style="font-family: garuda" />', true, false],
 		];
 	}
 
 	/**
-	 * Poppler redraws checkboxes and radio buttons without warning of an unknown font tag
+	 * Poppler draws a form with checkboxes and radio buttons without warning of an unknown font tag, whether it is
+	 * asked to redraw them or not
+	 *
+	 * @dataProvider values
+	 *
+	 * @param string $value the text field's value
 	 */
-	public function testPopplerFindsTheFontItRedrawsWith()
+	public function testPopplerFindsTheFontItRedrawsWith($value)
 	{
 		exec('pdftotext -v 2>&1', $version, $status);
 		if ($status !== 0) {
@@ -54,8 +66,9 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$pdf = tempnam(sys_get_temp_dir(), 'mpdf');
 		$text = $pdf . '.txt';
 		file_put_contents($pdf, $this->render(
-			'<form><input type="checkbox" name="c" value="y" checked="checked" /> <input type="radio" name="r" value="a" checked="checked" /></form>',
-			['useActiveForms' => true]
+			'<form><input type="text" name="t" value="' . $value . '" style="font-family: dejavusans" />'
+			. ' <input type="checkbox" name="c" value="y" checked="checked" /> <input type="radio" name="r" value="a" checked="checked" /></form>',
+			['mode' => 'utf-8', 'useActiveForms' => true]
 		));
 
 		exec('pdftotext ' . escapeshellarg($pdf) . ' ' . escapeshellarg($text) . ' 2>&1', $errors);
@@ -66,8 +79,18 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Every widget of an ordinary document carries its appearance, while the viewer is still asked to redraw them and
-	 * the actions and flags PDF/A drops are kept
+	 * A Latin value, which leaves the widgets as drawn, and an Arabic one, which has the viewer redraw them
+	 *
+	 * @return string[][]
+	 */
+	public function values()
+	{
+		return ['Latin' => ['Hello'], 'Arabic' => ['مرحبا']];
+	}
+
+	/**
+	 * Every widget of an ordinary document carries its appearance, which in Latin text the viewer is not asked to
+	 * redraw, and keeps the actions and flags PDF/A drops
 	 *
 	 * @dataProvider modes
 	 *
@@ -77,7 +100,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$pdf = $this->render($this->form(), ['mode' => $mode, 'useActiveForms' => true]);
 
-		$this->assertStringContainsString('/NeedAppearances true', $this->acroForm($pdf));
+		$this->assertStringNotContainsString('/NeedAppearances', $this->acroForm($pdf));
 
 		$refs = $this->annotationRefs($pdf);
 		$this->assertCount(10, $refs[0]);
@@ -106,7 +129,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * A text field's appearance shows its value as the field's font encodes it
 	 *
-	 * @dataProvider values
+	 * @dataProvider encodings
 	 *
 	 * @param string $mode
 	 * @param string $shown the value as the appearance draws it
@@ -123,7 +146,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @return string[][]
 	 */
-	public function values()
+	public function encodings()
 	{
 		return ['core fonts' => ['c', 'Hello'], 'embedded fonts' => ['utf-8', "\0H\0e\0l\0l\0o"]];
 	}
