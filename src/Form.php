@@ -729,8 +729,8 @@ class Form
 	}
 
 	/**
-	 * @return bool Whether a check box or radio button is set in ZapfDingbats, which PDF/X cannot embed
-	 *              and has no need of, since it removes the fields
+	 * @return bool Whether a check box or radio button is set in ZapfDingbats, which PDF/X cannot embed.
+	 *              Under PDFXauto the fields are drawn instead, so an active one is only refused.
 	 */
 	private function zapfDingbats()
 	{

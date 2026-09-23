@@ -369,21 +369,20 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testActiveFormFieldsAreDrawnOnThePage($version)
 	{
-		$this->assertStringContainsString('/AcroForm', $this->pdf(['useActiveForms' => true], $this->form()));
-
 		$mpdf = $this->mpdf(['PDFX' => $version, 'useActiveForms' => true], TextRecordingMpdf::class);
 		$mpdf->WriteHTML($this->form());
 		$pdf = $mpdf->OutputBinaryData();
 
 		$this->assertTrue($mpdf->useActiveForms, 'the setting is left as it was given');
-		foreach (['/AcroForm', '/Widget', '/Annots', '/JavaScript', '/SubmitForm', '/ResetForm'] as $interactive) {
+		foreach (['/AcroForm', '/Widget', '/Annots', '/JavaScript', '/SubmitForm', '/ResetForm', 'ZapfDingbats'] as $interactive) {
 			$this->assertStringNotContainsString($interactive, $pdf);
 		}
 
+		$drawn = array_map('trim', $mpdf->drawnText);
 		foreach (['Typed value', '******', 'Written', 'Chosen option', 'Alpha', 'Send', 'Clear', 'Run'] as $value) {
-			$this->assertContains($value, array_map('trim', $mpdf->drawnText));
+			$this->assertContains($value, $drawn);
 		}
-		$this->assertNotContains('Hidden value', array_map('trim', $mpdf->drawnText));
+		$this->assertNotContains('Hidden value', $drawn);
 
 		$static = $this->pdf(['PDFX' => $version, 'useActiveForms' => false], $this->form());
 		$this->assertSame($this->pages($static), $this->pages($pdf));
@@ -413,23 +412,6 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			sprintf('Form fields, file attachments and annotations within the TrimBox or BleedBox are not permitted in %s files. (Removed)', $mpdf->pdfxVersionLabel()),
 			$mpdf->PDFAXwarnings
 		);
-	}
-
-	/**
-	 * An active check box or radio button is drawn without the ZapfDingbats an active one is set in,
-	 * which PDF/X cannot embed
-	 *
-	 * @dataProvider pdfxVersions
-	 *
-	 * @param string $version
-	 */
-	public function testActiveCheckBoxesAndRadioButtonsAreDrawnWithoutZapfDingbats($version)
-	{
-		$html = '<form><input type="checkbox" name="box" value="1" checked="checked" /><input type="radio" name="radio" value="1" /></form>';
-
-		$pdf = $this->pdf(['PDFX' => $version, 'useActiveForms' => true], $html);
-		$this->assertStringNotContainsString('/Subtype /Widget', $pdf);
-		$this->assertStringNotContainsString('ZapfDingbats', $pdf);
 	}
 
 	/**
