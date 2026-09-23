@@ -6234,7 +6234,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			if ($directionality == 'rtl' || $this->biDirectional) {
 				if (!isset($OTLdata)) {
-					$unicode = $this->UTF8StringToArray($txt, false);
+					$unicode = $this->usingCoreFont ? $this->codePointsOfCoreFontText($txt) : $this->UTF8StringToArray($txt, false);
 					$is_strong = false;
 					$this->getBasicOTLdata($OTLdata, $unicode, $is_strong);
 				}
@@ -11217,6 +11217,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $out;
+	}
+
+	/**
+	 * The code points of text in a core font, which mPDF holds in Windows-1252, one per byte.
+	 *
+	 * @param string $str
+	 *
+	 * @return int[]
+	 */
+	private function codePointsOfCoreFontText($str)
+	{
+		return array_values(unpack('N*', mb_convert_encoding($str, 'UTF-32BE', 'windows-1252')));
 	}
 
 	// Convert utf-8 string to <HHHHHH> for Font Subsets
@@ -16502,10 +16514,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// mPDF 6
 		// ALL the chunks of textbuffer need to have at least basic OTLdata set
 		// First make sure each element/chunk has the OTLdata for Bidi set.
+		$coreFamilies = ['ccourier', 'ctimes', 'chelvetica', 'csymbol', 'czapfdingbats'];
+		// A chunk that names no font is drawn in the font before it, as the loop that draws them below does
+		$inCoreFont = $this->usingCoreFont;
 		for ($i = 0; $i < $array_size; $i++) {
+			$namesCoreFont = isset($arrayaux[$i][4]) && in_array($arrayaux[$i][4], $coreFamilies);
+			if (isset($arrayaux[$i][4]) && $arrayaux[$i][4] != '') {
+				$inCoreFont = $namesCoreFont;
+			}
 			if (empty($arrayaux[$i][18])) {
 				if (substr($arrayaux[$i][0], 0, 3) == Mpdf::OBJECT_IDENTIFIER) { // object identifier has been identified!
 					$unicode = [0xFFFC]; // Object replacement character
+				} elseif ($inCoreFont) {
+					$unicode = $this->codePointsOfCoreFontText($arrayaux[$i][0]);
 				} else {
 					$unicode = $this->UTF8StringToArray($arrayaux[$i][0], false);
 				}
@@ -16513,7 +16534,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->getBasicOTLdata($arrayaux[$i][18], $unicode, $is_strong);
 			}
 			// Gets messed up if try and use core fonts inside a paragraph of text which needs to be BiDi re-ordered or OTLdata set
-			if (($blockdir == 'rtl' || $this->biDirectional) && isset($arrayaux[$i][4]) && in_array($arrayaux[$i][4], ['ccourier', 'ctimes', 'chelvetica', 'csymbol', 'czapfdingbats'])) {
+			if (($blockdir == 'rtl' || $this->biDirectional) && $namesCoreFont) {
 				throw new \Mpdf\MpdfException("You cannot use core fonts in a document which contains RTL text.");
 			}
 		}
