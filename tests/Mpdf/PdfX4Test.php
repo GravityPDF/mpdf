@@ -4,6 +4,7 @@ namespace Mpdf;
 
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Utils\UtfString;
+use setasign\Fpdi\PdfParser\StreamReader;
 
 /**
  * PDF/X-4, which keeps the transparency, layers and colour fonts PDF/X-1a strips, beside PDF/X-1a
@@ -162,21 +163,19 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$source = new Mpdf(['pdf_version' => '1.7']);
 		$source->WriteHTML('<p>Imported</p>');
-		$file = tempnam(sys_get_temp_dir(), 'mpdf');
-		file_put_contents($file, $source->OutputBinaryData());
+		$data = $source->OutputBinaryData();
 
 		foreach ([['1a', '1.4'], ['4', '1.6']] as $case) {
 			list($version, $pdfVersion) = $case;
 			$mpdf = $this->mpdf(['PDFX' => $version]);
-			$mpdf->setSourceFile($file);
+			$mpdf->setSourceFile(StreamReader::createByString($data));
 			$mpdf->AddPage();
 			$mpdf->useTemplate($mpdf->importPage(1));
 			$this->assertStringStartsWith('%PDF-' . $pdfVersion . "\n", $mpdf->OutputBinaryData());
 		}
 
 		$mpdf = $this->mpdf(['PDFX' => '4', 'PDFXauto' => false]);
-		$mpdf->setSourceFile($file);
-		unlink($file);
+		$mpdf->setSourceFile(StreamReader::createByString($data));
 
 		$this->expectException(MpdfException::class);
 		$mpdf->OutputBinaryData();
