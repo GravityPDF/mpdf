@@ -1905,10 +1905,13 @@ class TTFontFile implements Fonts\FontSourceInterface
 						$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 						$Lookup[$i]['Subtable'][$c]['SubRuleSetCount'] = $SubRuleSetCount = $this->reader->readUInt16();
 						for ($s = 0; $s < $SubRuleSetCount; $s++) {
-							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
+							// A null offset is a glyph no context begins with, kept as 0
+							$offset = $this->reader->readUInt16();
+							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] = $offset ? $Lookup[$i]['Subtable'][$c]['Offset'] + $offset : 0;
 						}
 						for ($s = 0; $s < $SubRuleSetCount; $s++) {
-							$ruleOffsets = SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset']);
+							$ruleSetOffset = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'];
+							$ruleOffsets = $ruleSetOffset ? SequenceRule::ruleOffsets($this->reader, $ruleSetOffset) : [];
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount'] = count($ruleOffsets);
 							foreach ($ruleOffsets as $g => $ruleOffset) {
 								$this->reader->seek($ruleOffset);
@@ -2686,6 +2689,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 
 				if ($type == 5 && $format == 1) {
 					for ($s = 0; $s < $subtable['SubRuleSetCount']; $s++) {
+						// No rules were read for a glyph with a null rule set, or with an empty one
+						if (!isset($subtable['SubRuleSet'][$s]['SubRule'])) {
+							continue;
+						}
+
 						foreach ($subtable['SubRuleSet'][$s]['SubRule'] as $rctr => $rule) {
 							$inputGlyphs = $rule['GlyphCount'] > 1 ? $rule['InputGlyphs'] : [];
 							$inputGlyphs[0] = $subtable['SubRuleSet'][$s]['FirstGlyph'];
