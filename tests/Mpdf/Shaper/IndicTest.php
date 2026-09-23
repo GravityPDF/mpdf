@@ -161,7 +161,6 @@ class IndicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame([$preBase, $preBase, 0], array_column($info, 'mask'));
 	}
 
-
 	/**
 	 * @return array the diagnostics Otl and the shaper raised, and the codepoints of the drawn line
 	 */

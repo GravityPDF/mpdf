@@ -21,24 +21,24 @@ class IndicPreBaseBelowFormsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestC
 {
 
 	/**
-	 * Runs whose consonants before the base take a below-base form, and what FreeSerif draws for
-	 * them. Code points from 0xE000 are the Private Use stand-ins mPDF gives glyphs with no Unicode
-	 * value of their own.
+	 * Runs with a consonant before the base that has a below-base form in FreeSerif, keyed by the
+	 * glyphs hb-shape draws. Code points from 0xE000 are the Private Use stand-ins mPDF gives glyphs
+	 * with no Unicode value of their own.
 	 *
 	 * @return array[] code points in, code points drawn
 	 */
 	public function dataRuns()
 	{
 		return [
-			'Devanagari KA VIRAMA RA VIRAMA KA: half KA, rakaar, KA' => [
+			'Devanagari KA VIRAMA RA VIRAMA KA: dev_ka.half, dev_rakaar, kadeva' => [
 				[0x0915, 0x094D, 0x0930, 0x094D, 0x0915],
 				[0xE8C0, 0xE777, 0x0915],
 			],
-			'Gurmukhi RA VIRAMA KA: below-base RA, KA' => [
+			'Gurmukhi RA VIRAMA KA: gur_ra.blwf, ka_gur' => [
 				[0x0A30, 0x0A4D, 0x0A15],
 				[0xE808, 0x0A15],
 			],
-			'Malayalam RA VIRAMA LA VIRAMA KA: RA, below-base LA, KA' => [
+			'Malayalam RA VIRAMA LA VIRAMA KA: mal_r3xx, mal_l4, ka_mal' => [
 				[0x0D30, 0x0D4D, 0x0D32, 0x0D4D, 0x0D15],
 				[0xE319, 0xE2FE, 0x0D15],
 			],
