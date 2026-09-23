@@ -26,6 +26,7 @@ class Select extends Tag
 		if (isset($properties['COLOR'])) {
 			$this->mpdf->selectoption['COLOR'] = $this->colorConverter->convert($properties['COLOR'], $this->mpdf->PDFAXwarnings);
 		}
+		$this->mpdf->selectoption['STYLE'] = $this->formFieldStyle($properties);
 		$this->mpdf->specialcontent = 'type=select';
 		if (isset($attr['DISABLED'])) {
 			$this->mpdf->selectoption['DISABLED'] = $attr['DISABLED'];
@@ -118,6 +119,7 @@ class Select extends Tag
 		if (isset($this->mpdf->selectoption['SIZE'])) {
 			$objattr['size'] = $this->mpdf->selectoption['SIZE'];
 		}
+		$objattr = array_merge($objattr, $this->mpdf->selectoption['STYLE']);
 		$rows = 1;
 		if (isset($objattr['size']) && $objattr['size'] > 1) {
 			$rows = $objattr['size'];

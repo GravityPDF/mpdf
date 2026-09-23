@@ -6,6 +6,7 @@ use Mpdf\Strict;
 
 use Mpdf\Cache;
 use Mpdf\Color\ColorConverter;
+use Mpdf\Css\BorderMerger;
 use Mpdf\CssManager;
 use Mpdf\Form;
 use Mpdf\Image\ImageProcessor;
@@ -135,6 +136,45 @@ abstract class Tag
 		}
 
 		return $objattr;
+	}
+
+	/**
+	 * The background and border a form field's CSS sets, for Form to draw whether or not forms are active. What the
+	 * CSS leaves unset is left out, so Form keeps its default.
+	 *
+	 * @param string[] $properties the field's computed CSS
+	 *
+	 * @return mixed[] any of 'background-col', 'border-col', 'border-width' in mm and 'border-style'
+	 */
+	protected function formFieldStyle(array $properties)
+	{
+		$style = [];
+		if (isset($properties['BACKGROUND-COLOR'])) {
+			$style['background-col'] = $this->colorConverter->convert($properties['BACKGROUND-COLOR'], $this->mpdf->PDFAXwarnings);
+		}
+
+		if (!isset($properties['BORDER-TOP'])) {
+			return $style;
+		}
+
+		// The cascade folds border-top-width, -style and -color into BORDER-TOP, and keeps them. A part given only as a
+		// longhand brings BorderMerger's defaults for the others, which the field should not take.
+		$border = array_combine(array_keys(BorderMerger::DEFAULTS), array_pad(preg_split('/\s+/', trim($properties['BORDER-TOP']), 3), 3, ''));
+		$longhand = isset($properties['BORDER-TOP-WIDTH']) || isset($properties['BORDER-TOP-STYLE']) || isset($properties['BORDER-TOP-COLOR']);
+		foreach ($border as $part => $value) {
+			if ($value === '' || ($longhand && !isset($properties['BORDER-TOP-' . $part]) && $value === BorderMerger::DEFAULTS[$part])) {
+				continue;
+			}
+			if ($part === 'WIDTH') {
+				$style['border-width'] = $this->sizeConverter->convert($value, $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
+			} elseif ($part === 'STYLE') {
+				$style['border-style'] = strtolower($value);
+			} elseif ($color = $this->colorConverter->convert($value, $this->mpdf->PDFAXwarnings)) {
+				$style['border-col'] = $color;
+			}
+		}
+
+		return $style;
 	}
 
 	abstract public function open($attr, &$ahtml, &$ihtml);

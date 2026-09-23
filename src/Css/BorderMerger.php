@@ -6,6 +6,16 @@ use Mpdf\Exception\InvalidArgumentException;
 
 class BorderMerger
 {
+
+	/**
+	 * The parts a side's shorthand is built with when longhands give only some of them
+	 */
+	const DEFAULTS = [
+		'WIDTH' => '0px',
+		'STYLE' => 'none',
+		'COLOR' => '#000000',
+	];
+
 	/**
 	 * @var array<int> Border dominance levels for cell borders (top/right/bottom/left)
 	 */
@@ -44,12 +54,6 @@ class BorderMerger
 	protected function mergeSideBorder($side, $properties, &$cssProperties)
 	{
 		// Merges $a['BORDER-TOP-STYLE'] to $cssProperties['BORDER-TOP'] etc.
-		$defaults = [
-			'WIDTH' => '0px',
-			'STYLE' => 'none',
-			'COLOR' => '#000000'
-		];
-
 		$borderKey = 'BORDER-' . $side;
 		$currentBorder = isset($cssProperties[$borderKey]) ? trim($cssProperties[$borderKey]) : '';
 
@@ -74,7 +78,7 @@ class BorderMerger
 			} else {
 				// Build new border from scratch with defaults
 				if (!isset($borderParts)) {
-					$borderParts = $defaults;
+					$borderParts = self::DEFAULTS;
 				}
 
 				$borderParts[$el] = $value;

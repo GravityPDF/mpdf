@@ -85,13 +85,8 @@ class Input extends Tag
 			} elseif (isset($properties['TEXT-ALIGN'])) {
 				$objattr['text_align'] = $this->getAlign($properties['TEXT-ALIGN']);
 			}
-			if (isset($properties['BORDER-TOP-COLOR'])) {
-				$objattr['border-col'] = $this->colorConverter->convert($properties['BORDER-TOP-COLOR'], $this->mpdf->PDFAXwarnings);
-			}
-			if (isset($properties['BACKGROUND-COLOR'])) {
-				$objattr['background-col'] = $this->colorConverter->convert($properties['BACKGROUND-COLOR'], $this->mpdf->PDFAXwarnings);
-			}
 		}
+		$objattr = array_merge($objattr, $this->formFieldStyle($properties));
 
 		$type = '';
 		$texto = '';
