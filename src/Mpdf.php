@@ -1117,6 +1117,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->pdf_version = '1.6';
 		}
 
+		// Refuses an output intent PDF/X-4 cannot print to before any content is written
+		$this->pdfxOutputChannels();
+
 		$serviceFactory = new ServiceFactory($container);
 		$services = $serviceFactory->getServices(
 			$this,
@@ -1670,7 +1673,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * CMYK condition, and for PDF/X-4 as many as its profile has, three for the bundled sRGB profile it
 	 * embeds where the document names none. A CMYK output intent is had by naming a CMYK ICCProfile.
 	 *
-	 * @return int 1 for grey, 3 for RGB or Lab, 4 for CMYK
+	 * ISO 15930-7 has the printing condition print to grey, RGB or CMYK, and mPDF writes device colour
+	 * for it, so a profile of any other colour space, Lab among them, is refused.
+	 *
+	 * @throws \Mpdf\MpdfException Where the PDF/X-4 ICCProfile cannot be read or prints to another space
+	 *
+	 * @return int 1 for grey, 3 for RGB, 4 for CMYK
 	 */
 	public function pdfxOutputChannels()
 	{
@@ -1684,9 +1692,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if (!isset($this->iccChannels[$this->ICCProfile])) {
 			$header = is_readable($this->ICCProfile) ? (string) file_get_contents($this->ICCProfile, false, null, 0, 20) : '';
-			$channels = ['GRAY' => 1, 'RGB ' => 3, 'Lab ' => 3];
+			$channels = ['GRAY' => 1, 'RGB ' => 3, 'CMYK' => 4];
 			$space = substr($header, 16, 4);
-			$this->iccChannels[$this->ICCProfile] = isset($channels[$space]) ? $channels[$space] : 4;
+			if (!isset($channels[$space])) {
+				throw new \Mpdf\MpdfException(sprintf('The PDF/X-4 output intent must print to grey, RGB or CMYK, and ICCProfile "%s" does not.', $this->ICCProfile));
+			}
+			$this->iccChannels[$this->ICCProfile] = $channels[$space];
 		}
 
 		return $this->iccChannels[$this->ICCProfile];

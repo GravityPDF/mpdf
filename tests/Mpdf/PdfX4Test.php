@@ -39,33 +39,8 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function set_up()
 	{
-		$this->cmykProfile = $this->headerOnlyProfile('cmyk', 'prtr', 'CMYK');
-		$this->grayProfile = $this->headerOnlyProfile('gray', 'mntr', 'GRAY');
-	}
-
-	/**
-	 * @param string $name  Distinguishes the file
-	 * @param string $class The device class, e.g. 'prtr'
-	 * @param string $space The data colour space, e.g. 'CMYK'
-	 *
-	 * @return string The path of an ICC version 2.1 profile of that class and space with no tags
-	 */
-	private function headerOnlyProfile($name, $class, $space)
-	{
-		$header = str_repeat("\0", 128);
-		$header = substr_replace($header, pack('N', 0x02100000), 8, 4); // ICC version 2.1
-		$header = substr_replace($header, $class, 12, 4);
-		$header = substr_replace($header, $space, 16, 4);
-		$header = substr_replace($header, 'Lab ', 20, 4); // profile connection space
-		$header = substr_replace($header, 'acsp', 36, 4); // the file signature every profile carries
-
-		$profile = $header . pack('N', 0); // a tag table of no tags
-		$profile = substr_replace($profile, pack('N', strlen($profile)), 0, 4);
-
-		$file = sys_get_temp_dir() . '/mpdf-test-' . $name . '.icc';
-		file_put_contents($file, $profile);
-
-		return $file;
+		$this->cmykProfile = $this->writeProfile('cmyk', 'CMYK');
+		$this->grayProfile = $this->writeProfile('gray', 'GRAY', 'mntr');
 	}
 
 	/**
@@ -73,11 +48,35 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function tear_down()
 	{
-		foreach ([$this->cmykProfile, $this->grayProfile] as $file) {
-			if (file_exists($file)) {
-				unlink($file);
-			}
+		foreach (glob(sys_get_temp_dir() . '/mpdf-test-*.icc') as $profile) {
+			unlink($profile);
 		}
+	}
+
+	/**
+	 * @param string $name  Names the file
+	 * @param string $space The data colour space the profile prints to, e.g. 'CMYK' or 'Lab '
+	 * @param string $class The device class, 'prtr' for a printer or 'mntr' for a display
+	 *
+	 * @return string The path of an ICC version 2.1 profile of that class and space that is a header alone, carrying no tags
+	 */
+	private function writeProfile($name, $space, $class = 'prtr')
+	{
+		$path = sys_get_temp_dir() . '/mpdf-test-' . $name . '.icc';
+
+		$header = str_repeat("\0", 128);
+		$header = substr_replace($header, pack('N', 0x02100000), 8, 4); // ICC version 2.1
+		$header = substr_replace($header, $class, 12, 4); // device class
+		$header = substr_replace($header, $space, 16, 4); // data colour space
+		$header = substr_replace($header, 'Lab ', 20, 4); // profile connection space
+		$header = substr_replace($header, 'acsp', 36, 4); // the file signature every profile carries
+
+		$profile = $header . pack('N', 0); // a tag table of no tags
+		$profile = substr_replace($profile, pack('N', strlen($profile)), 0, 4);
+
+		file_put_contents($path, $profile);
+
+		return $path;
 	}
 
 	/**
@@ -219,6 +218,32 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('/OutputConditionIdentifier (Custom)', $pdf);
 		$this->assertSame(1, preg_match('/\/DestOutputProfile (\d+) 0 R/', $pdf, $match));
 		$this->assertStringStartsWith("<<\n/N 4\n", $this->object($pdf, $match[1]));
+	}
+
+	/**
+	 * The printing condition of PDF/X-4 is grey, RGB or CMYK, so a profile printing to Lab or to six
+	 * inks is refused rather than taken for CMYK
+	 *
+	 * @dataProvider unprintableSpaces
+	 *
+	 * @param string $space
+	 */
+	public function testAnOutputIntentOfAnotherColourSpaceIsRefused($space)
+	{
+		$profile = $this->writeProfile('other', $space);
+
+		$this->expectException(MpdfException::class);
+		$this->expectExceptionMessage('must print to grey, RGB or CMYK');
+
+		$this->pdf(['PDFX' => '4', 'ICCProfile' => $profile]);
+	}
+
+	/**
+	 * @return string[][] Data colour spaces no PDF/X-4 printing condition has
+	 */
+	public function unprintableSpaces()
+	{
+		return [['Lab '], ['XYZ '], ['6CLR']];
 	}
 
 	/**
