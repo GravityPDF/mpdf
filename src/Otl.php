@@ -2563,7 +2563,7 @@ class Otl
 	 */
 	private function _applyGSUBchainContextSubstFormat1($lookupID, $subtable, $ptr, $currGlyph, $currGID, $subtable_offset, $Type, $LuCoverage, $level, $currentTag, $is_old_spec, $tagInt, $ignore, $SubstFormat)
 	{
-		foreach ($this->chainedRuleSet($subtable_offset, $LuCoverage[$currGID], true) as $rule) {
+		foreach ($this->chainedRuleSet($subtable_offset, $LuCoverage[$currGID]) as $rule) {
 			list($Backtrack, $inputChars, $Lookahead, $SubstCount, $records) = $rule;
 
 			// Position 0 is the glyph the Coverage table selected this rule set by
@@ -2769,25 +2769,23 @@ class Otl
 	 * The rules of a Format 1 chained context subtable, GSUB Type 6 or GPOS Type 8, that start with
 	 * one glyph, decoded, for the life of the document.
 	 *
-	 * @param int  $offset        Where the subtable starts; the reader is just past its format
-	 * @param int  $coverageIndex The first glyph's index in the subtable's Coverage table
-	 * @param bool $followNull    Whether a null rule set offset is followed to the subtable's own
-	 *                            start rather than read as a glyph that begins no context, as GSUB
-	 *                            has always read it
+	 * @param int $offset        Where the subtable starts; the reader is just past its format
+	 * @param int $coverageIndex The first glyph's index in the subtable's Coverage table
 	 *
 	 * @return array Each rule in the order the font lists them, as [$backtrack, $input, $lookahead,
 	 *               $recordCount, $recordsAt]: the characters of each sequence, the input from
 	 *               position 1, how many lookup records the rule names, and where they start
 	 */
-	private function chainedRuleSet($offset, $coverageIndex, $followNull = false)
+	private function chainedRuleSet($offset, $coverageIndex)
 	{
 		if (!isset($this->LuDataCache[$this->otlCacheKey]['chainedRuleSet'][$offset][$coverageIndex])) {
 			// The count is not tested, which is how this format has always been read here
 			$this->reader->skip(4 + $coverageIndex * 2); // coverageOffset and chainedSeqRuleSetCount
 			$ruleSet = $this->reader->readUInt16();
 
+			// A null offset is a glyph no context begins with
 			$rules = [];
-			if ($ruleSet || $followNull) {
+			if ($ruleSet) {
 				foreach (SequenceRule::ruleOffsets($this->reader, $offset + $ruleSet) as $rule) {
 					$this->reader->seek($rule);
 					list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
