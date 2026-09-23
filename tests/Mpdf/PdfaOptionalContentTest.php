@@ -68,8 +68,8 @@ class PdfaOptionalContentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Print-only and screen-only content switch on the /AS entry PDF/A-2 forbids, so they are refused and drawn in
-	 * full, with no /AS written
+	 * Print-only and screen-only content switch on the /AS entry PDF/A-2 forbids, so they are refused, with no /AS
+	 * written: auto draws print-only content and leaves screen-only content out
 	 *
 	 * @dataProvider printOrScreen
 	 */

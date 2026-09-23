@@ -82,6 +82,12 @@ final class PageWriter
 				}
 			}
 
+			// Remove content left out of a PDF/A or PDF/X document, then any unpaired marker
+			if (strpos($thispage, '___DROPPED___') !== false) {
+				$thispage = preg_replace('/___DROPPED___START' . $this->mpdf->uniqstr . '.*?___DROPPED___END' . $this->mpdf->uniqstr . '/s', '', $thispage);
+				$thispage = str_replace(['___DROPPED___START' . $this->mpdf->uniqstr, '___DROPPED___END' . $this->mpdf->uniqstr], '', $thispage);
+			}
+
 			// Clean up repeated /GS1 gs statements
 			// For some reason using + for repetition instead of {2,20} crashes PHP Script Interpreter ???
 			$thispage = preg_replace('/(\/GS1 gs\n){2,20}/', "/GS1 gs\n", $thispage);

@@ -18,7 +18,7 @@ class Bookmark extends Tag
 			} else {
 				$objattr['bklevel'] = 0;
 			}
-			$e = Mpdf::OBJECT_IDENTIFIER . "type=bookmark,objattr=" . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
+			$e = Mpdf::OBJECT_IDENTIFIER . "type=bookmark,objattr=" . serialize($this->withSpanVisibility($objattr)) . Mpdf::OBJECT_IDENTIFIER;
 			if ($this->mpdf->tableLevel) {
 				$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['textbuffer'][] = [$e];
 			} // *TABLES*
