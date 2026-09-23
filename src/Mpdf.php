@@ -10194,22 +10194,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				$this->pages[$n] = preg_replace('/(___HEADER___MARKER' . $this->uniqstr . ')/', "\n" . $os . "\n" . '\\1', $this->pages[$n]);
 
-				$lks = $this->HTMLheaderPageLinks;
-				foreach ($lks as $lk) {
-					if ($rotate) {
-						$lw = $lk[2];
-						$lh = $lk[3];
-						$lk[2] = $lh;
-						$lk[3] = $lw; // swap width and height
-						$ax = $lk[0] / Mpdf::SCALE;
-						$ay = $lk[1] / Mpdf::SCALE;
-						$bx = $ay - ($lh / Mpdf::SCALE);
-						$by = $this->w - $ax;
-						$lk[0] = $bx * Mpdf::SCALE;
-						$lk[1] = ($this->h - $by) * Mpdf::SCALE - $lw;
-					}
-					$this->PageLinks[$n][] = $lk;
-				}
+				$this->placeHtmlHeaderLinksAndAnnots($n, $rotate, 0);
 				/* -- FORMS -- */
 				foreach ($this->HTMLheaderPageForms as $f) {
 					$this->form->forms[$f['n']] = $f;
@@ -10293,28 +10278,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				$this->pages[$n] = preg_replace('/(___HEADER___MARKER' . $this->uniqstr . ')/', "\n" . $os . "\n" . '\\1', $this->pages[$n]);
 
-				$lks = $this->HTMLheaderPageLinks;
-
-				foreach ($lks as $lk) {
-
-					$lk[1] -= $adj * Mpdf::SCALE;
-
-					if ($rotate) {
-						$lw = $lk[2];
-						$lh = $lk[3];
-						$lk[2] = $lh;
-						$lk[3] = $lw; // swap width and height
-
-						$ax = $lk[0] / Mpdf::SCALE;
-						$ay = $lk[1] / Mpdf::SCALE;
-						$bx = $ay - ($lh / Mpdf::SCALE);
-						$by = $this->w - $ax;
-						$lk[0] = $bx * Mpdf::SCALE;
-						$lk[1] = ($this->h - $by) * Mpdf::SCALE - $lw;
-					}
-
-					$this->PageLinks[$n][] = $lk;
-				}
+				$this->placeHtmlHeaderLinksAndAnnots($n, $rotate, $adj);
 
 				/* -- FORMS -- */
 				foreach ($this->HTMLheaderPageForms as $f) {
@@ -10331,6 +10295,48 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->page = $nb;
 		$this->state = 1;
+	}
+
+	/**
+	 * Puts the links and annotations of an HTML header or footer on page $n, shifted $adj mm down the page
+	 * and, where $rotate (forcePortraitHeaders on a landscape page), turned a quarter turn, as it is drawn.
+	 *
+	 * @param int $n
+	 * @param bool|null $rotate
+	 * @param float $adj
+	 */
+	private function placeHtmlHeaderLinksAndAnnots($n, $rotate, $adj)
+	{
+		foreach ($this->HTMLheaderPageLinks as $lk) {
+			$lk[1] -= $adj * Mpdf::SCALE;
+
+			if ($rotate) {
+				$lw = $lk[2];
+				$lh = $lk[3];
+				$lk[2] = $lh;
+				$lk[3] = $lw; // swap width and height
+
+				$ax = $lk[0] / Mpdf::SCALE;
+				$ay = $lk[1] / Mpdf::SCALE;
+				$bx = $ay - ($lh / Mpdf::SCALE);
+				$by = $this->w - $ax;
+				$lk[0] = $bx * Mpdf::SCALE;
+				$lk[1] = ($this->h - $by) * Mpdf::SCALE - $lw;
+			}
+
+			$this->PageLinks[$n][] = $lk;
+		}
+
+		foreach ($this->HTMLheaderPageAnnots as $an) {
+			$an['y'] += $adj;
+
+			if ($rotate) {
+				// "0 -1 1 0 0 w cm" takes the point x, y from the top left of the header to h - y, x on the page
+				list($an['x'], $an['y']) = [$this->h - $an['y'], $an['x']];
+			}
+
+			$this->PageAnnots[$n][] = $an;
+		}
 	}
 
 	/* -- ANNOTATIONS -- */
