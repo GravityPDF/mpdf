@@ -497,6 +497,18 @@ class FpdiStructMergerTest extends PdfUaTestCase
 	}
 
 	/**
+	 * An imported link annotation carries /Contents and /F once each, its source's /Contents kept.
+	 */
+	public function testImportedLinkWritesEachEntryOnce()
+	{
+		$output = $this->importTagged('<p><a href="https://example.com/a">Example</a></p>');
+
+		$this->assertSame(1, preg_match('#<</Type /Annot /Subtype /Link .*?>>\s*endobj#s', $output, $annot));
+		$this->assertSame(1, substr_count($annot[0], '/Contents'));
+		$this->assertSame(1, substr_count($annot[0], '/F '));
+	}
+
+	/**
 	 * Imports page 1 of a tagged document written from the HTML into a new PDF/UA document.
 	 *
 	 * @param string $html

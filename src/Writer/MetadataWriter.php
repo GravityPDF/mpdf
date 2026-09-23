@@ -659,9 +659,12 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						$rect = sprintf('%.3F %.3F %.3F %.3F', $pl[0], $pl[1], $pl[0] + $pl[2], $pl[1] - $pl[3]);
 						$this->writer->write('<</Type /Annot /Subtype /Link /Rect [' . $rect . ']', false);
 
+						// The entries an imported link brings from its source, some of which are written here
+						$importedEntries = isset($pl['importedLink']) ? $pl['importedLink']['pdfObject']->value : [];
+
 						// Removed as causing undesired effects in Chrome PDF viewer https://github.com/mpdf/mpdf/issues/283
 						// PDF/UA-1 needs it all the same: a link annotation must carry an alternate description (§7.18.5)
-						if ($this->mpdf->PDFUA) {
+						if ($this->mpdf->PDFUA && !isset($importedEntries['Contents'])) {
 							$contents = is_string($pl[4]) && strpos($pl[4], '@') !== 0 ? $pl[4] : 'Internal link';
 							$this->writer->write(' /Contents ' . $this->writer->utf16BigEndianTextString($contents), false);
 						}
@@ -677,6 +680,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 						if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->PDFUA) {
 							$this->writer->write(' /F 28', false);
+							unset($importedEntries['F']);
 						}
 
 						// An imported link carries its source annotation's own entries, which may include a border
@@ -729,7 +733,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							 * @license http://opensource.org/licenses/mit-license The MIT License
 							 */
 							if (isset($pl['importedLink'])) {
-								foreach ($pl['importedLink']['pdfObject']->value as $name => $entry) {
+								foreach ($importedEntries as $name => $entry) {
 									$this->writer->write('/' . $name . ' ', false);
 									$this->mpdf->writePdfType($entry);
 								}
