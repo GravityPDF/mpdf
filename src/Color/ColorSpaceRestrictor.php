@@ -165,7 +165,8 @@ class ColorSpaceRestrictor
 			}
 			$c = $this->withAllowedAlpha($this->colorModeConverter->rgb2cmyk($c));
 		} elseif ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) {
-			if (!$this->mpdf->PDFAauto && !$this->mpdf->transparencyAllowed()) {
+			// An opaque rgba() loses nothing by dropping its alpha
+			if (!$this->mpdf->PDFAauto && !$this->mpdf->transparencyAllowed() && $c[4] < 100) {
 				$PDFAXwarnings[] = "RGB color with transparency specified '" . $color . "' (converted to RGB without transparency)";
 			}
 			$c = $this->withAllowedAlpha($c);
@@ -193,7 +194,7 @@ class ColorSpaceRestrictor
 			}
 			$c = $this->withAllowedAlpha($this->colorModeConverter->cmyk2rgb($c));
 		} elseif ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace == 3)) {
-			if (!$this->mpdf->transparencyAllowed() && (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto))) {
+			if (!$this->mpdf->transparencyAllowed() && $c[5] < 100 && (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto))) {
 				$PDFAXwarnings[] = "CMYK color with transparency specified '" . $color . "' (converted to CMYK without transparency)";
 			}
 			$c = $this->withAllowedAlpha($c);

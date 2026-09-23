@@ -3578,7 +3578,7 @@ class Svg
 			$tmp_color = [
 				'color' => $color_final,
 				'offset' => (isset($attribs['offset']) ? $attribs['offset'] : ''),
-				'opacity' => $stop_opacity
+				'opacity' => $this->mpdf->allowedAlpha($stop_opacity)
 			];
 			array_push($this->svg_gradient[$last_gradid]['color'], $tmp_color);
 

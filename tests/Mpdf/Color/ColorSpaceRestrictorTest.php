@@ -61,4 +61,36 @@ class ColorSpaceRestrictorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 		$this->assertSame(["CMYK color with transparency specified 'cmyka(0, 100, 100, 0, 0.5)' (converted to RGB)"], $warnings);
 	}
 
+	/**
+	 * Without PDFAauto, PDF/A-1 reports the alpha it drops from a translucent colour, but not from an opaque one
+	 *
+	 * @dataProvider opaqueAlphaColors
+	 */
+	public function testOpaqueAlphaIsNotReported($config, $opaque, $translucent)
+	{
+		$mpdf = new Mpdf($config + ['PDFA' => true, 'PDFAversion' => '1-B']);
+		$restrictor = new ColorSpaceRestrictor($mpdf, new ColorModeConverter());
+
+		$warnings = [];
+		$restrictor->restrictColorSpace($opaque, 'opaque', $warnings);
+		$this->assertSame([], $warnings);
+
+		$restrictor->restrictColorSpace($translucent, 'translucent', $warnings);
+		$this->assertCount(1, $warnings);
+	}
+
+	/**
+	 * Configurations with an opaque and a translucent colour in the colour space each keeps: rgba() for an RGB output
+	 * intent, cmyka() for a CMYK one
+	 *
+	 * @return mixed[][]
+	 */
+	public function opaqueAlphaColors()
+	{
+		return [
+			'rgba()' => [[], [5, 255, 0, 0, 100], [5, 255, 0, 0, 50]],
+			'cmyka()' => [['restrictColorSpace' => 3], [6, 0, 100, 100, 0, 100], [6, 0, 100, 100, 0, 50]],
+		];
+	}
+
 }

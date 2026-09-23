@@ -123,6 +123,41 @@ class PdfaOptionalContentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The catalog lists every optional content group written, and the page resources name only those groups
+	 *
+	 * @dataProvider visibilityDocuments
+	 */
+	public function testEveryGroupWrittenIsListed($config, $html)
+	{
+		$pdf = $this->render($html, $config);
+
+		preg_match_all('#(\d+) 0 obj\s*<</Type /OCG #', $pdf, $written);
+		$written = array_map(static function ($number) {
+			return $number . ' 0 R';
+		}, $written[1]);
+		preg_match('#/OCGs \[([^\]]*)\]#', $this->optionalContentProperties($pdf), $listed);
+		preg_match('#/Properties <<(.*?)>>#s', $pdf, $properties);
+
+		$this->assertEqualsCanonicalizing($written, $this->references($listed[1]));
+		$this->assertEqualsCanonicalizing($written, $this->references($properties[1]));
+	}
+
+	/**
+	 * Documents using some of the visibility groups: a PDF/A-2 one with layers and hidden content, and plain ones
+	 * with print-only content, and with print-only and hidden content
+	 *
+	 * @return mixed[][]
+	 */
+	public function visibilityDocuments()
+	{
+		return [
+			'PDF/A-2b, layers and hidden' => [['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B'], $this->layeredContent()],
+			'plain, print-only' => [[], '<div style="visibility: printonly">Print</div>'],
+			'plain, print-only and hidden' => [[], '<div style="visibility: printonly">Print</div><div style="visibility: hidden">Hidden</div>'],
+		];
+	}
+
+	/**
 	 * The PDF/A versions that allow optional content
 	 *
 	 * @return string[][]
