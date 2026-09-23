@@ -9,13 +9,13 @@ use Mpdf\Utils\NumericString;
 /**
  * How a printed trade document writes its numbers, amounts, rates, dates and addresses
  *
- * It follows the preset of a country, one of those in Mpdf\Invoice\Preset or a PresetInterface of your own, and the
- * with methods adjust it further:
+ * It follows the preset of a country, one of those in Mpdf\Invoice\Preset or a PresetInterface of your own.
+ * withDateFormat() and the other with methods return a copy adjusted further:
  *
  *     (new Formatter(new GermanyPreset()))->withCurrencyFormat('GBP', '£%s')
  *
- * Amounts are to the cent but in a currency without one, such as the yen. An address is laid out as its party's
- * country lays them out, whichever preset is used: 75002 Paris, but New York, NY 10118.
+ * Amounts have two decimals, or none in a currency without a minor unit such as the yen. An address is laid out as its
+ * party's country lays it out, whichever preset is used: 75002 Paris, but New York, NY 10118.
  */
 class Formatter
 {
@@ -28,7 +28,7 @@ class Formatter
 	 *
 	 * @var string[][]
 	 */
-	private static $countryAddressFormats = [
+	private $addressFormats = [
 		'AU' => ['{street}', '{additional}', '{city} {subdivision} {postcode}', '{country}'],
 		'CA' => ['{street}', '{additional}', '{city} {subdivision} {postcode}', '{country}'],
 		'CN' => ['{street}', '{additional}', '{city}, {subdivision} {postcode}', '{country}'],
@@ -49,9 +49,12 @@ class Formatter
 	/**
 	 * The ISO 4217 currencies with no minor unit, whose amounts are written whole
 	 *
-	 * @var string[]
+	 * @var bool[]
 	 */
-	private static $wholeCurrencies = ['BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF'];
+	private static $wholeCurrencies = [
+		'BIF' => true, 'CLP' => true, 'DJF' => true, 'GNF' => true, 'ISK' => true, 'JPY' => true, 'KMF' => true, 'KRW' => true,
+		'PYG' => true, 'RWF' => true, 'UGX' => true, 'VND' => true, 'VUV' => true, 'XAF' => true, 'XOF' => true, 'XPF' => true,
+	];
 
 	/**
 	 * @var string
@@ -89,11 +92,6 @@ class Formatter
 	private $percentFormat;
 
 	/**
-	 * @var string[][]
-	 */
-	private $addressFormats;
-
-	/**
 	 * @param \Mpdf\Invoice\Preset\PresetInterface $preset
 	 */
 	public function __construct(PresetInterface $preset)
@@ -105,7 +103,21 @@ class Formatter
 		$this->dateFormat = $preset->getDateFormat();
 		$this->currencyFormats = $preset->getCurrencyFormats();
 		$this->percentFormat = $preset->getPercentFormat();
-		$this->addressFormats = self::$countryAddressFormats;
+	}
+
+	/**
+	 * A copy writing dates by another format
+	 *
+	 * @param string $format As DateTimeInterface::format() takes it, e.g. 'Y-m-d'
+	 *
+	 * @return self
+	 */
+	public function withDateFormat($format)
+	{
+		$formatter = clone $this;
+		$formatter->dateFormat = $format;
+
+		return $formatter;
 	}
 
 	/**
@@ -165,10 +177,7 @@ class Formatter
 	 */
 	public function number($number)
 	{
-		$decimal = NumericString::decimal($number, 4);
-		$point = strpos($decimal, '.');
-
-		return $this->separate((float) $decimal, $point === false ? 0 : strlen($decimal) - $point - 1);
+		return $this->separate(NumericString::decimal($number, 4));
 	}
 
 	/**
@@ -193,12 +202,22 @@ class Formatter
 	 */
 	public function money($amount, $currency)
 	{
-		$decimals = in_array($currency, self::$wholeCurrencies, true) ? 0 : 2;
+		$decimals = isset(self::$wholeCurrencies[$currency]) ? 0 : 2;
 		$amount = round($amount, $decimals);
 		$format = isset($this->currencyFormats[$currency]) ? $this->currencyFormats[$currency] : '%s ' . $currency;
-		$money = sprintf($format, $this->separate(abs($amount), $decimals));
+		$money = sprintf($format, $this->separate(number_format(abs($amount), $decimals, '.', '')));
 
 		return $amount < 0 ? '-' . $money : $money;
+	}
+
+	/**
+	 * @param \DateTimeInterface|null $date
+	 *
+	 * @return string|null Null when there is no date
+	 */
+	public function date($date)
+	{
+		return $date !== null ? $date->format($this->dateFormat) : null;
 	}
 
 	/**
@@ -225,7 +244,7 @@ class Formatter
 
 		$address = [];
 		foreach ($lines as $line) {
-			// Close the gaps the missing parts leave, then any comma left at either end
+			// Close the gaps the missing parts leave, and the commas they leave doubled in a layout with several
 			$line = trim(preg_replace(['/\s+/', '/ ?(, ?)+/'], [' ', ', '], strtr($line, $parts)), ' ,');
 			if ($line !== '') {
 				$address[] = $line;
@@ -236,42 +255,31 @@ class Formatter
 	}
 
 	/**
-	 * A number to so many decimals, its digits grouped and its decimal point as the preset writes them
+	 * A plain decimal such as -1234567.25 with its digits grouped and its decimal point as the preset writes them
 	 *
-	 * @param float $number
-	 * @param int $decimals
+	 * @param string $decimal
 	 *
 	 * @return string
 	 */
-	private function separate($number, $decimals)
+	private function separate($decimal)
 	{
-		$parts = explode('.', number_format(abs($number), $decimals, '.', ''));
+		$sign = $decimal[0] === '-' ? '-' : '';
+		$parts = explode('.', ltrim($decimal, '-'));
 		$integer = $parts[0];
 
-		$size = $this->groupingSizes[0];
-		if (strlen($integer) >= $size + $this->minimumGroupingDigits) {
-			$groups = [substr($integer, -$size)];
-			$integer = substr($integer, 0, -$size);
-			$size = $this->groupingSizes[count($this->groupingSizes) - 1];
+		if (strlen($integer) >= $this->groupingSizes[0] + $this->minimumGroupingDigits) {
+			$groups = [];
+			$size = $this->groupingSizes[0];
 			while (strlen($integer) > $size) {
 				array_unshift($groups, substr($integer, -$size));
 				$integer = substr($integer, 0, -$size);
+				$size = $this->groupingSizes[count($this->groupingSizes) - 1];
 			}
 			array_unshift($groups, $integer);
 			$integer = implode($this->thousandsSeparator, $groups);
 		}
 
-		return ($number < 0 ? '-' : '') . $integer . (isset($parts[1]) ? $this->decimalPoint . $parts[1] : '');
-	}
-
-	/**
-	 * @param \DateTimeInterface|null $date
-	 *
-	 * @return string|null Null when there is no date
-	 */
-	public function date($date)
-	{
-		return $date !== null ? $date->format($this->dateFormat) : null;
+		return $sign . $integer . (isset($parts[1]) ? $this->decimalPoint . $parts[1] : '');
 	}
 
 }

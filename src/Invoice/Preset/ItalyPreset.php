@@ -9,35 +9,23 @@ class ItalyPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDecimalPoint()
-	{
-		return ',';
-	}
+	protected $decimalPoint = ',';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getThousandsSeparator()
-	{
-		return '.';
-	}
+	protected $thousandsSeparator = '.';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'd/m/Y';
-	}
+	protected $dateFormat = 'd/m/Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['EUR' => "%s\xc2\xa0€"];
-	}
+	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];
 
 }

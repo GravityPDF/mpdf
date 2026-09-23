@@ -9,19 +9,13 @@ class ChinaPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'Y-m-d';
-	}
+	protected $dateFormat = 'Y-m-d';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['CNY' => '¥%s'];
-	}
+	protected $currencyFormats = ['CNY' => '¥%s'];
 
 }

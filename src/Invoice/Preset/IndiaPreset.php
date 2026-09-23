@@ -10,27 +10,18 @@ class IndiaPreset extends AbstractPreset
 {
 
 	/**
-	 * @return int[]
+	 * @var int[]
 	 */
-	public function getGroupingSizes()
-	{
-		return [3, 2];
-	}
+	protected $groupingSizes = [3, 2];
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'd/m/Y';
-	}
+	protected $dateFormat = 'd/m/Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['INR' => '₹%s'];
-	}
+	protected $currencyFormats = ['INR' => '₹%s'];
 
 }

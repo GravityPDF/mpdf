@@ -9,19 +9,13 @@ class CanadaEnglishPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'Y-m-d';
-	}
+	protected $dateFormat = 'Y-m-d';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['CAD' => '$%s'];
-	}
+	protected $currencyFormats = ['CAD' => '$%s'];
 
 }

@@ -3,7 +3,8 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How a country writes numbers, amounts, rates and dates, which a Formatter follows
+ * How a country writes numbers, amounts, rates and dates, which a Formatter follows. Addresses are not part of it: the
+ * Formatter lays each out as its party's country does, whatever the preset.
  */
 interface PresetInterface
 {

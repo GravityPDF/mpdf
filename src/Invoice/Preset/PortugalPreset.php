@@ -3,50 +3,34 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How Portugal writes numbers, amounts, rates and dates: 1021,11 € but 10 211,11 €, 5,5% and 23/09/2026, a four-digit
- * number being written whole
+ * How Portugal writes numbers, amounts, rates and dates: 1021,11 € but 10 211,11 €, 5,5% and 23/09/2026
  */
 class PortugalPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDecimalPoint()
-	{
-		return ',';
-	}
+	protected $decimalPoint = ',';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getThousandsSeparator()
-	{
-		return "\xc2\xa0";
-	}
+	protected $thousandsSeparator = self::NBSP;
 
 	/**
-	 * @return int
+	 * @var int
 	 */
-	public function getMinimumGroupingDigits()
-	{
-		return 2;
-	}
+	protected $minimumGroupingDigits = 2;
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'd/m/Y';
-	}
+	protected $dateFormat = 'd/m/Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['EUR' => "%s\xc2\xa0€"];
-	}
+	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];
 
 }

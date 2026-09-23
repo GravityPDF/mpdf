@@ -9,19 +9,13 @@ class AustraliaPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'd/m/Y';
-	}
+	protected $dateFormat = 'd/m/Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['AUD' => '$%s'];
-	}
+	protected $currencyFormats = ['AUD' => '$%s'];
 
 }

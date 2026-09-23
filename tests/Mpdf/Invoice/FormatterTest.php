@@ -108,6 +108,16 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A date format given replaces the preset's
+	 */
+	public function testTakesADateFormat()
+	{
+		$formatter = (new Formatter(new UnitedKingdomPreset()))->withDateFormat('Y-m-d');
+
+		$this->assertSame('2026-09-23', $formatter->date(new \DateTime('2026-09-23')));
+	}
+
+	/**
 	 * A with method returns an adjusted copy, leaving the formatter it was called on as it was
 	 */
 	public function testAdjustsACopy()
@@ -145,7 +155,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * An address is laid out as its party's country lays them out, each line closed up around the parts missing from it
+	 * An address is laid out as its party's country lays it out, each line closed up around the parts missing from it
 	 * and the lines left empty dropped, whatever the preset
 	 *
 	 * @dataProvider addressProvider

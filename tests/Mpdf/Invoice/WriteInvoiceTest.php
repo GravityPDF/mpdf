@@ -4,9 +4,7 @@ namespace Mpdf\Invoice;
 
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
 use Mpdf\Invoice\EN16931\Writer\CiiInvoiceWriter;
-use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
 use Mpdf\Invoice\PdfA3\FacturX;
-use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\MpdfException;
 use Mpdf\PageStreams;
 
@@ -15,16 +13,6 @@ class WriteInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	use InvoiceFixtures;
 	use PageStreams;
-
-	/**
-	 * The HTML writer, in the British convention
-	 *
-	 * @return \Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter
-	 */
-	private function htmlWriter()
-	{
-		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()));
-	}
 
 	/**
 	 * The HTML writer prints the invoice and the XML writer embeds it, in one call

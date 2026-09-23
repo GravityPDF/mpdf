@@ -8,7 +8,6 @@ use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Party;
 use Mpdf\Invoice\Preset\GermanyPreset;
-use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
@@ -19,23 +18,11 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use InvoiceFixtures;
 
 	/**
-	 * The writer in the British convention, with any labels given
-	 *
-	 * @param string[] $labels
-	 *
-	 * @return \Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter
-	 */
-	private function writer(array $labels = [])
-	{
-		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()), $labels);
-	}
-
-	/**
 	 * The invoice is written with its details, parties, lines, totals and payment, its text escaped
 	 */
 	public function testWritesTheInvoice()
 	{
-		$writer = $this->writer();
+		$writer = $this->htmlWriter();
 
 		$this->assertSame(WriterInterface::HTML, $writer->getFormat());
 		$this->assertStringEqualsFile(__DIR__ . '/../../../../data/invoice/invoice.html', $writer->write($this->invoice()));
@@ -46,7 +33,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testWritesTheReverseCharge()
 	{
-		$html = $this->writer()->write($this->reverseChargeInvoice());
+		$html = $this->htmlWriter()->write($this->reverseChargeInvoice());
 
 		$this->assertStringContainsString('VAT 0% on 900.00 EUR (Reverse charge)', $html);
 		$this->assertStringContainsString('<strong>900.00 EUR</strong>', $html);
@@ -59,7 +46,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testTakesLabels()
 	{
 		$invoice = $this->invoice()->setTypeCode(Invoice::TYPE_CREDIT_NOTE);
-		$html = $this->writer([Invoice::TYPE_CREDIT_NOTE => 'Avoir', 'issueDate' => 'Date', 'vatGroup' => 'TVA %1$s sur %2$s'])->write($invoice);
+		$html = $this->htmlWriter([Invoice::TYPE_CREDIT_NOTE => 'Avoir', 'issueDate' => 'Date', 'vatGroup' => 'TVA %1$s sur %2$s'])->write($invoice);
 
 		$this->assertStringContainsString('<h1>Avoir INV-2026-0001</h1>', $html);
 		$this->assertStringContainsString('<td>Date</td>', $html);
@@ -83,11 +70,11 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A party's address is laid out as its country lays them out: a British postcode on a line of its own
+	 * A party's address is laid out as its country lays it out: a British postcode on a line of its own
 	 */
 	public function testLaysOutTheAddressesByCountry()
 	{
-		$this->assertStringContainsString('<br>10 Downing Street<br>London<br>SW1A 2AA<br>GB</td>', $this->writer()->write($this->ukInvoice()));
+		$this->assertStringContainsString('<br>10 Downing Street<br>London<br>SW1A 2AA<br>GB</td>', $this->htmlWriter()->write($this->ukInvoice()));
 	}
 
 	/**
@@ -112,7 +99,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectException(MpdfException::class);
 		$this->expectExceptionMessage('writes invoices, not');
 
-		$this->writer()->write($document);
+		$this->htmlWriter()->write($document);
 	}
 
 }

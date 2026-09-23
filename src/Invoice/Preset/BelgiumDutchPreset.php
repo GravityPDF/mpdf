@@ -9,35 +9,23 @@ class BelgiumDutchPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDecimalPoint()
-	{
-		return ',';
-	}
+	protected $decimalPoint = ',';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getThousandsSeparator()
-	{
-		return '.';
-	}
+	protected $thousandsSeparator = '.';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'd/m/Y';
-	}
+	protected $dateFormat = 'd/m/Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['EUR' => "€\xc2\xa0%s"];
-	}
+	protected $currencyFormats = ['EUR' => '€' . self::NBSP . '%s'];
 
 }

@@ -5,8 +5,9 @@ namespace Mpdf\Invoice\Preset;
 use Mpdf\Strict;
 
 /**
- * What most countries share: a decimal point, commas between groups of three digits, and 5.5%. A country's preset
- * extends it with its dates and currency, and overrides whatever else it writes another way.
+ * A preset whose settings are properties: a country's preset sets its date and currency formats, and whatever else it
+ * writes differently from the English-speaking defaults of a decimal point, commas between groups of three digits and
+ * 5.5%
  */
 abstract class AbstractPreset implements PresetInterface
 {
@@ -14,11 +15,51 @@ abstract class AbstractPreset implements PresetInterface
 	use Strict;
 
 	/**
+	 * The no-break space most conventions put between groups of digits or before a symbol
+	 */
+	const NBSP = "\xc2\xa0";
+
+	/**
+	 * @var string
+	 */
+	protected $decimalPoint = '.';
+
+	/**
+	 * @var string
+	 */
+	protected $thousandsSeparator = ',';
+
+	/**
+	 * @var int[]
+	 */
+	protected $groupingSizes = [3];
+
+	/**
+	 * @var int
+	 */
+	protected $minimumGroupingDigits = 1;
+
+	/**
+	 * @var string
+	 */
+	protected $dateFormat;
+
+	/**
+	 * @var string[]
+	 */
+	protected $currencyFormats = [];
+
+	/**
+	 * @var string
+	 */
+	protected $percentFormat = '%s%%';
+
+	/**
 	 * @return string
 	 */
 	public function getDecimalPoint()
 	{
-		return '.';
+		return $this->decimalPoint;
 	}
 
 	/**
@@ -26,7 +67,7 @@ abstract class AbstractPreset implements PresetInterface
 	 */
 	public function getThousandsSeparator()
 	{
-		return ',';
+		return $this->thousandsSeparator;
 	}
 
 	/**
@@ -34,7 +75,7 @@ abstract class AbstractPreset implements PresetInterface
 	 */
 	public function getGroupingSizes()
 	{
-		return [3];
+		return $this->groupingSizes;
 	}
 
 	/**
@@ -42,7 +83,23 @@ abstract class AbstractPreset implements PresetInterface
 	 */
 	public function getMinimumGroupingDigits()
 	{
-		return 1;
+		return $this->minimumGroupingDigits;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getDateFormat()
+	{
+		return $this->dateFormat;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public function getCurrencyFormats()
+	{
+		return $this->currencyFormats;
 	}
 
 	/**
@@ -50,7 +107,7 @@ abstract class AbstractPreset implements PresetInterface
 	 */
 	public function getPercentFormat()
 	{
-		return '%s%%';
+		return $this->percentFormat;
 	}
 
 }

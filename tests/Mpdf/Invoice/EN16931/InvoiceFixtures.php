@@ -2,11 +2,15 @@
 
 namespace Mpdf\Invoice\EN16931;
 
+use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
+use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Party;
+use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 
 /**
- * The invoices behind the fixtures in tests/data/xml/einvoice, each of which Mustang validated for its profile
+ * The invoices behind the fixtures in tests/data/invoice, each XML one of which Mustang validated for its profile, and
+ * the HTML writer they are printed with
  */
 trait InvoiceFixtures
 {
@@ -86,6 +90,18 @@ trait InvoiceFixtures
 			->setVatId('FR32123456789')
 			->setLegalId('12345678900012', '0002')
 			->setEmail('billing@seller.example');
+	}
+
+	/**
+	 * The HTML writer in the British convention, with any labels given
+	 *
+	 * @param string[] $labels
+	 *
+	 * @return \Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter
+	 */
+	private function htmlWriter(array $labels = [])
+	{
+		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()), $labels);
 	}
 
 }

@@ -3,49 +3,34 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How France writes numbers, amounts, rates and dates: 1 021,11 €, 5,5 % and 23/09/2026, with no-break spaces
+ * How France writes numbers, amounts, rates and dates: 1 021,11 €, 5,5 % and 23/09/2026
  */
 class FrancePreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDecimalPoint()
-	{
-		return ',';
-	}
+	protected $decimalPoint = ',';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getThousandsSeparator()
-	{
-		return "\xc2\xa0";
-	}
+	protected $thousandsSeparator = self::NBSP;
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'd/m/Y';
-	}
+	protected $dateFormat = 'd/m/Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['EUR' => "%s\xc2\xa0€"];
-	}
+	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getPercentFormat()
-	{
-		return "%s\xc2\xa0%%";
-	}
+	protected $percentFormat = '%s' . self::NBSP . '%%';
 
 }

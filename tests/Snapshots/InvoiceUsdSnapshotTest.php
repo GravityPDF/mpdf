@@ -11,7 +11,7 @@ use Mpdf\Invoice\Party;
 use Mpdf\Invoice\Preset\UnitedStatesPreset;
 
 /**
- * An export to the United States invoiced in dollars with UnitedStatesPreset: the amounts after a dollar sign with commas between thousands,
+ * An export to the United States invoiced in dollars: the amounts after a dollar sign with commas between thousands,
  * the prepayment as -$, dates month first, the buyer's state before its ZIP code, and no VAT on the export with the
  * reason beside it
  *

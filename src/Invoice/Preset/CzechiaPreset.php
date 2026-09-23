@@ -3,49 +3,34 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How Czechia writes numbers, amounts, rates and dates: 1 021,11 Kč, 5,5 % and 23.09.2026, with no-break spaces
+ * How Czechia writes numbers, amounts, rates and dates: 1 021,11 Kč, 5,5 % and 23.09.2026
  */
 class CzechiaPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDecimalPoint()
-	{
-		return ',';
-	}
+	protected $decimalPoint = ',';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getThousandsSeparator()
-	{
-		return "\xc2\xa0";
-	}
+	protected $thousandsSeparator = self::NBSP;
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'd.m.Y';
-	}
+	protected $dateFormat = 'd.m.Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['CZK' => "%s\xc2\xa0Kč"];
-	}
+	protected $currencyFormats = ['CZK' => '%s' . self::NBSP . 'Kč'];
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getPercentFormat()
-	{
-		return "%s\xc2\xa0%%";
-	}
+	protected $percentFormat = '%s' . self::NBSP . '%%';
 
 }

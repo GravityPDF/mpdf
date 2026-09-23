@@ -4,49 +4,34 @@ namespace Mpdf\Invoice\Preset;
 
 /**
  * How Quebec and the rest of French-speaking Canada writes numbers, amounts, rates and dates: 1 021,11 $, 5,5 % and
- * 2026-09-23, with no-break spaces
+ * 2026-09-23
  */
 class CanadaQuebecPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDecimalPoint()
-	{
-		return ',';
-	}
+	protected $decimalPoint = ',';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getThousandsSeparator()
-	{
-		return "\xc2\xa0";
-	}
+	protected $thousandsSeparator = self::NBSP;
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'Y-m-d';
-	}
+	protected $dateFormat = 'Y-m-d';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['CAD' => "%s\xc2\xa0$"];
-	}
+	protected $currencyFormats = ['CAD' => '%s' . self::NBSP . '$'];
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getPercentFormat()
-	{
-		return "%s\xc2\xa0%%";
-	}
+	protected $percentFormat = '%s' . self::NBSP . '%%';
 
 }

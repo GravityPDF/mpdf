@@ -9,19 +9,13 @@ class UnitedStatesPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'm/d/Y';
-	}
+	protected $dateFormat = 'm/d/Y';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['USD' => '$%s'];
-	}
+	protected $currencyFormats = ['USD' => '$%s'];
 
 }

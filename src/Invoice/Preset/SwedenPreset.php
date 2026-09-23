@@ -3,49 +3,34 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How Sweden writes numbers, amounts, rates and dates: 1 021,11 kr, 5,5 % and 2026-09-23, with no-break spaces
+ * How Sweden writes numbers, amounts, rates and dates: 1 021,11 kr, 5,5 % and 2026-09-23
  */
 class SwedenPreset extends AbstractPreset
 {
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDecimalPoint()
-	{
-		return ',';
-	}
+	protected $decimalPoint = ',';
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getThousandsSeparator()
-	{
-		return "\xc2\xa0";
-	}
+	protected $thousandsSeparator = self::NBSP;
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getDateFormat()
-	{
-		return 'Y-m-d';
-	}
+	protected $dateFormat = 'Y-m-d';
 
 	/**
-	 * @return string[]
+	 * @var string[]
 	 */
-	public function getCurrencyFormats()
-	{
-		return ['SEK' => "%s\xc2\xa0kr"];
-	}
+	protected $currencyFormats = ['SEK' => '%s' . self::NBSP . 'kr'];
 
 	/**
-	 * @return string
+	 * @var string
 	 */
-	public function getPercentFormat()
-	{
-		return "%s\xc2\xa0%%";
-	}
+	protected $percentFormat = '%s' . self::NBSP . '%%';
 
 }
