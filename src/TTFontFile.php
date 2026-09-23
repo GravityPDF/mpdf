@@ -1958,7 +1958,9 @@ class TTFontFile implements Fonts\FontSourceInterface
 						$Lookup[$i]['Subtable'][$c]['CoverageTableOffset'] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
 						$Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount'] = $this->reader->readUInt16();
 						for ($b = 0; $b < $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount']; $b++) {
-							$Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][] = $Lookup[$i]['Subtable'][$c]['Offset'] + $this->reader->readUInt16();
+							// A null offset is a glyph no context begins with, kept as 0
+							$offset = $this->reader->readUInt16();
+							$Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][] = $offset ? $Lookup[$i]['Subtable'][$c]['Offset'] + $offset : 0;
 						}
 					} // Format 2: Class-based Chaining Context Glyph Substitution  p257
 					elseif ($SubstFormat == 2) {
@@ -2174,6 +2176,10 @@ class TTFontFile implements Fonts\FontSourceInterface
 						$Lookup[$i]['Subtable'][$c]['CoverageGlyphs'] = $CoverageGlyphs = $this->coverageHex();
 
 						for ($s = 0; $s < $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetCount']; $s++) {
+							if (!$Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s]) {
+								continue;
+							}
+
 							foreach (SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['ChainSubRuleSetOffset'][$s]) as $r => $ruleOffset) {
 								$this->reader->seek($ruleOffset);
 								list($backtrack, $input, $lookahead) = SequenceRule::chained($this->reader);
@@ -2733,6 +2739,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 					)));
 				} elseif ($format == 1) {
 					for ($s = 0; $s < $subtable['ChainSubRuleSetCount']; $s++) {
+						// No rules were read for a glyph with a null rule set, or with an empty one
+						if (!isset($subtable['ChainSubRuleSet'][$s])) {
+							continue;
+						}
+
 						$firstInputGlyph = $subtable['CoverageGlyphs'][$s];
 
 						foreach ($subtable['ChainSubRuleSet'][$s]['ChainSubRule'] as $rctr => $rule) {
