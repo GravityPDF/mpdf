@@ -10,6 +10,7 @@ use Mpdf\Fonts\FontSubsetter;
 use Mpdf\Mpdf;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
 use Mpdf\TTFontFile;
+use Mpdf\Utils\UtfString;
 use Psr\Log\LoggerInterface;
 
 class FontWriter implements \Psr\Log\LoggerAwareInterface
@@ -313,8 +314,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$ssfaid = 'A';
 					$subsetter = $this->subsetter();
 					$fontname = 'MPDFA' . $ssfaid . '+' . $font['name'];
-					// Every subset mPDF builds carries the 32-127 range whether the document drew it or not
-					$ascii = range(32, 127);
+					$ascii = $this->asciiRange();
 					$subset = array_combine($ascii, $ascii) + $font['subset'];
 					unset($subset[0]);
 					$ttfontstream = $subsetter->makeSubset($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']);
@@ -381,9 +381,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				$toUni .= "1 begincodespacerange\n";
 				$toUni .= "<0000> <FFFF>\n";
 				$toUni .= "endcodespacerange\n";
-				$toUni .= "1 beginbfrange\n";
-				$toUni .= "<0000> <FFFF> <0000>\n";
-				$toUni .= "endbfrange\n";
+				$toUni .= $this->identityRanges($font);
 				$toUni .= "endcmap\n";
 				$toUni .= "CMapName currentdict /CMap defineresource pop\n";
 				$toUni .= "end\n";
@@ -497,6 +495,70 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $drawn;
+	}
+
+	/**
+	 * The bfrange entries of an Identity-H font's ToUnicode CMap: every code the document drew in the
+	 * font, and the 32-127 range each subset carries, mapped to itself.
+	 *
+	 * An Identity-H font takes its codes from the text rather than from the font's own encoding, so a
+	 * code is the Unicode value it stands for and each range maps to where it starts. A range may run
+	 * no further than the end of the high byte it begins in: ISO 32000-1 9.10.3 increments the last
+	 * byte of the destination for each code, and asks that the byte is no more than
+	 * 255 - (srcCode2 - srcCode1), which mapping the whole two-byte space in one range cannot meet.
+	 *
+	 * @param array $font The font as the document holds it, whose subset is the codes drawn
+	 *
+	 * @return string The bfrange blocks, of at most the hundred entries a block may hold
+	 */
+	private function identityRanges(array $font)
+	{
+		$codes = array_fill_keys($this->asciiRange(), true);
+
+		foreach ($font['subset'] as $u) {
+			if ($u > 0) {
+				// The code units the character is drawn as: one, or a surrogate pair above the basic plane
+				foreach (unpack('n*', mb_convert_encoding(UtfString::code2utf($u), 'UTF-16BE', 'UTF-8')) as $unit) {
+					$codes[$unit] = true;
+				}
+			}
+		}
+
+		ksort($codes);
+
+		// Codes that follow each other inside one high byte make a range
+		$ranges = [];
+		foreach (array_keys($codes) as $code) {
+			$last = count($ranges) - 1;
+
+			if ($last >= 0 && $code === $ranges[$last][1] + 1 && ($code >> 8) === ($ranges[$last][0] >> 8)) {
+				$ranges[$last][1] = $code;
+				continue;
+			}
+
+			$ranges[] = [$code, $code];
+		}
+
+		$cmap = '';
+		foreach (array_chunk($ranges, 100) as $block) {
+			$cmap .= count($block) . " beginbfrange\n";
+			foreach ($block as $range) {
+				$cmap .= sprintf("<%04X> <%04X> <%04X>\n", $range[0], $range[1], $range[0]);
+			}
+			$cmap .= "endbfrange\n";
+		}
+
+		return $cmap;
+	}
+
+	/**
+	 * The 32-127 range every subset font carries, whether the document drew it or not.
+	 *
+	 * @return int[]
+	 */
+	private function asciiRange()
+	{
+		return range(32, 127);
 	}
 
 	/**
