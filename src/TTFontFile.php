@@ -2880,8 +2880,9 @@ class TTFontFile implements Fonts\FontSourceInterface
 	/**
 	 * The glyphs one class of a ClassDef holds, as a "|"-joined string.
 	 *
-	 * Class 0 is every glyph the ClassDef does not mention, so a ClassDef never lists it and
-	 * _getClasses() never returns a key for it. A rule may still name it, and gets the empty string:
+	 * Class 0 is every glyph the ClassDef puts in no other class, and _getClasses() never returns a
+	 * key for it, even where the ClassDef lists glyphs as class 0. A rule may still name it, and gets
+	 * the empty string:
 	 * nothing matches it in the parser, and the dump renders it as "[NOT <the other classes>]".
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table
@@ -3422,8 +3423,9 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 * A Class Definition table as one "|"-separated hex string per class, which is the form the
 	 * cached GSUB data carries and the shaper's ignore strings are matched against.
 	 *
-	 * Unlike Otl::_getClasses this keeps class 0, and unlike Otl it drops glyphs no character
-	 * reaches rather than testing for them at match time.
+	 * Class 0 is dropped, as Otl::_getClasses drops it. A Format 1 table gives every glyph in its
+	 * range a class, so it can list glyphs as class 0, but they are in class 0 whether it lists them
+	 * or not. A glyph no character reaches is dropped too, since no character can match it.
 	 *
 	 * @param int $offset Where the ClassDef starts, as ClassDef::offset() gives it
 	 *
@@ -3436,7 +3438,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 		foreach (ClassDef::pairsAt($this->reader, $offset) as $pair) {
 			list($glyphID, $class) = $pair;
 
-			if (isset($this->glyphToChar[$glyphID][0])) {
+			if ($class > 0 && isset($this->glyphToChar[$glyphID][0])) {
 				$GlyphByClass[$class][] = GlyphString::of($this->glyphToChar[$glyphID][0]);
 			}
 		}

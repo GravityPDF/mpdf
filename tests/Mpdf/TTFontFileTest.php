@@ -217,6 +217,44 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A Class Definition can list glyphs as class 0: Format 1 gives a class to every glyph in its
+	 * range, and Format 2 can state a range of class 0. Those glyphs are left out, as Otl leaves them
+	 * out, so class 0 still holds no list of glyphs and the other classes are what it excludes.
+	 *
+	 * Glyphs 40, 41 and 42 are A, B and C, in classes 1, 0 and 2. The table starts two bytes in,
+	 * because offset 0 means there is no table.
+	 *
+	 * @dataProvider dataClassDefinitionsListingClassZero
+	 *
+	 * @param string $table The Class Definition table
+	 */
+	public function testGlyphsAClassDefinitionListsAsClassZeroAreLeftOut($table)
+	{
+		$this->ttf->glyphToChar = [40 => [0x41], 41 => [0x42], 42 => [0x43]];
+
+		$reader = new \ReflectionProperty($this->ttf, 'reader');
+		if (PHP_VERSION_ID < 80100) {
+			$reader->setAccessible(true);
+		}
+		$reader->setValue($this->ttf, new Fonts\BlobReader(pack('n', 0) . $table));
+
+		$this->assertSame([1 => '00041', 2 => '00043'], $this->ttf->_getClasses(2));
+	}
+
+	/**
+	 * The same three classes as Format 1 and as Format 2.
+	 *
+	 * @return array
+	 */
+	public function dataClassDefinitionsListingClassZero()
+	{
+		return [
+			'Format 1' => [pack('n*', 1, 40, 3, 1, 0, 2)],
+			'Format 2' => [pack('n*', 2, 3, 40, 40, 1, 41, 41, 0, 42, 42, 2)],
+		];
+	}
+
+	/**
 	 * Class 0 of a Class Definition is every glyph the other classes do not name, so it has no list of
 	 * glyphs to match against and mPDF matches nothing at such a position. Every input position above
 	 * the first already said so; the first read InputClasses by the class and got null.
