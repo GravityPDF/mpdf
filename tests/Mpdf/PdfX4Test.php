@@ -2,6 +2,7 @@
 
 namespace Mpdf;
 
+use Mpdf\Color\GrayIccProfile;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Utils\UtfString;
 use setasign\Fpdi\PdfParser\StreamReader;
@@ -72,13 +73,14 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @param array $config Merged over automatic fixing and no compression
+	 * @param array  $config Merged over automatic fixing and no compression
+	 * @param string $class  Mpdf, or a subclass of it
 	 *
 	 * @return Mpdf A document titled, as PDF/X requires - the fallback where it is not is tested below
 	 */
-	private function mpdf(array $config = [])
+	private function mpdf(array $config = [], $class = Mpdf::class)
 	{
-		$mpdf = new Mpdf($config + ['mode' => 'utf-8', 'PDFXauto' => true]);
+		$mpdf = new $class($config + ['mode' => 'utf-8', 'PDFXauto' => true]);
 		$mpdf->SetCompression(false);
 		$mpdf->SetTitle('Document');
 
@@ -810,6 +812,243 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * DeviceGray is permitted only where the output intent is grey or CMYK, so under the default sRGB
+	 * one each neutral colour - the default text colour among them - is set in an ICC-based grey colour
+	 * space the page's resources name, on a profile mPDF generates
+	 */
+	public function testGreyIsSetInAnIccBasedColourSpaceForAnRgbOutputIntent()
+	{
+		$mpdf = $this->mpdf(['PDFX' => '4']);
+		$this->assertTrue($mpdf->writesCalibratedGray());
+		$mpdf->WriteHTML('<p>Text</p>');
+		$mpdf->SetDrawColor(0);
+		$mpdf->SetFillColor(128);
+		$mpdf->Rect(20, 60, 30, 10, 'DF');
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertStringContainsString('/CSGRAY cs 0.000 sc', $pdf);
+		$this->assertStringContainsString('/CSGRAY CS 0.000 SC', $pdf);
+		$this->assertStringContainsString('/CSGRAY cs 0.502 sc', $pdf);
+		$this->assertNoDeviceGrayButSoftMasks($pdf);
+
+		$this->assertSame(1, preg_match('/\/ColorSpace <<\n\/CSGRAY (\d+) 0 R/', $pdf, $match), 'the page resources name it');
+		$this->assertSame(1, preg_match('/^\[\/ICCBased (\d+) 0 R\]/', $this->object($pdf, $match[1]), $profile));
+		$this->assertStringStartsWith('<</N 1 /Length ' . strlen(GrayIccProfile::build()) . '>>', $this->object($pdf, $profile[1]));
+		$this->assertSame(GrayIccProfile::build(), $this->stream($pdf, $profile[1]));
+		$this->assertSame(1, substr_count($pdf, 'Gray, sRGB tone curve (mPDF)'), 'written once');
+	}
+
+	/**
+	 * Anywhere DeviceGray is permitted, grey stays DeviceGray and no grey profile is written
+	 *
+	 * @dataProvider deviceGrayDocuments
+	 *
+	 * @param array       $config
+	 * @param string|null $space  The data colour space of an ICCProfile to print to, if any
+	 */
+	public function testGreyStaysDeviceGrayWhereItIsPermitted(array $config, $space = null)
+	{
+		if ($space) {
+			$config['ICCProfile'] = $this->writeProfile(strtolower($space), $space);
+		}
+
+		$mpdf = $this->mpdf($config + ['PDFAauto' => true]);
+		$this->assertFalse($mpdf->writesCalibratedGray());
+		$mpdf->WriteHTML('<p>Text</p><div style="background: linear-gradient(0, 255); height: 10mm">Gradient</div>');
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertStringContainsString('0.000 g', $pdf);
+		$this->assertStringNotContainsString('CSGRAY', $pdf);
+		$this->assertStringNotContainsString('Gray, sRGB tone curve (mPDF)', $pdf);
+	}
+
+	/**
+	 * @return array[] Documents that may use DeviceGray
+	 */
+	public function deviceGrayDocuments()
+	{
+		return [
+			'not PDF/X' => [[]],
+			'PDF/X-1a' => [['PDFX' => true]],
+			'PDF/X-4 printing to CMYK' => [['PDFX' => '4'], 'CMYK'],
+			'PDF/X-4 printing to grey' => [['PDFX' => '4'], 'GRAY'],
+			'PDF/A' => [['PDFA' => true]],
+		];
+	}
+
+	/**
+	 * A greyscale JPEG or PNG keeps its data and names the ICC-based grey colour space; the soft mask of
+	 * a PNG with alpha, which mPDF draws in RGB, stays DeviceGray, as ISO 32000 has a soft mask be
+	 */
+	public function testGreyImagesAreInTheIccBasedGreyColourSpace()
+	{
+		$html = '<img src="' . __DIR__ . '/../data/img/exif-orientation-6-gray.jpg" />'
+			. '<img src="data:image/png;base64,' . base64_encode($this->greyPng(false)) . '" />'
+			. '<img src="data:image/png;base64,' . base64_encode($this->greyPng(true)) . '" />';
+
+		$pdf = $this->pdf(['PDFX' => '4'], $html);
+		$this->assertNoDeviceGrayButSoftMasks($pdf);
+
+		$images = $this->imageObjects($pdf);
+		$this->assertCount(4, $images, 'three images and a soft mask');
+		$this->assertSame(1, preg_match('/\/CSGRAY (\d+) 0 R/', $pdf, $gray));
+		$spaces = [];
+		foreach ($images as $image) {
+			preg_match('/\/ColorSpace (\S+(?: 0 R)?)\n/', $image[0], $space);
+			$spaces[] = $space[1];
+		}
+		$this->assertSame([$gray[1] . ' 0 R', $gray[1] . ' 0 R', '/DeviceGray', '/DeviceRGB'], $spaces, 'the JPEG, the PNG, then the soft mask and the PNG with alpha');
+
+		$mpdf = $this->mpdf(['PDFX' => '4'], DeviceGrayMpdf::class);
+		$mpdf->WriteHTML($html);
+		$this->assertSame(array_column($this->imageObjects($mpdf->OutputBinaryData()), 1), array_column($images, 1), 'not encoded again');
+	}
+
+	/**
+	 * A gradient of grey stops, and the luminosity soft mask behind an rgba gradient or a box-shadow - its
+	 * shading and the transparency group it is blended in - are in the ICC-based grey colour space
+	 */
+	public function testGradientsAndTheirSoftMasksAreInTheIccBasedGreyColourSpace()
+	{
+		$html = '<div style="background: linear-gradient(0, 255); height: 10mm">Linear</div>'
+			. '<div style="background: radial-gradient(0, 200); height: 10mm">Radial</div>'
+			. '<div style="background: linear-gradient(rgba(255, 0, 0, 0.5), rgba(0, 0, 255, 1)); height: 10mm">Translucent</div>'
+			. '<div style="box-shadow: 2mm 2mm 2mm 0; height: 10mm; width: 40mm">Grey shadow</div>'
+			. '<div style="box-shadow: 2mm 2mm 2mm rgba(0, 0, 0, 0.5); height: 10mm; width: 40mm">Translucent shadow</div>';
+
+		$pdf = $this->pdf(['PDFX' => '4'], $html);
+		$this->assertNoDeviceGrayButSoftMasks($pdf);
+
+		$this->assertSame(1, preg_match('/\/CSGRAY (\d+) 0 R/', $pdf, $gray));
+		$grey = $gray[1] . ' 0 R';
+		$this->assertStringContainsString("/ShadingType 2\n/ColorSpace " . $grey . "\n", $pdf, 'the grey linear gradient');
+		$this->assertStringContainsString("/ShadingType 3\n/ColorSpace " . $grey . "\n", $pdf, 'the grey radial gradient');
+		$this->assertStringContainsString("/ShadingType 6\n/ColorSpace " . $grey . "\n", $pdf, 'the grey shadow');
+		$this->assertGreaterThan(1, substr_count($pdf, '/Group << /Type /Group /S /Transparency /CS ' . $grey . ' >>'), 'the groups of the soft masks');
+	}
+
+	/**
+	 * A colour font's soft masks - of a gradient's alpha, of the shapes of a clip path - are drawn in the
+	 * ICC-based grey colour space its Type3 font's resources name; the soft masks of its images stay
+	 * DeviceGray
+	 */
+	public function testColourFontSoftMasksAreInTheIccBasedGreyColourSpace()
+	{
+		$emoji = '';
+		foreach ([0x1F600, 0x2764, 0x1F468, 0x1F469, 0x1F467, 0x1F44D] as $codepoint) {
+			$emoji .= UtfString::code2utf($codepoint);
+		}
+
+		$colrV1 = $this->colourFontPdf(['PDFX' => '4', 'default_font' => 'colrv1'], $emoji);
+		$this->assertNoDeviceGrayButSoftMasks($colrV1);
+		$this->assertSame(1, preg_match('/\/CSGRAY (\d+) 0 R/', $colrV1, $gray));
+		$this->assertStringContainsString('/Group <</S /Transparency /CS ' . $gray[1] . ' 0 R>>', $colrV1, 'a luminosity mask');
+
+		$svg = $this->colourFontPdf(['PDFX' => '4', 'default_font' => 'svg'], $emoji);
+		$this->assertNoDeviceGrayButSoftMasks($svg);
+		$this->assertStringContainsString("/CSGRAY cs 0 sc\n", $svg, 'the clip path of several shapes');
+		$this->assertSame(1, preg_match('/\/ColorSpace <<\/CSGRAY \d+ 0 R >>/', $svg), 'named by the Type3 font');
+
+		$cbdt = $this->colourFontPdf(['PDFX' => '4']);
+		$this->assertNoDeviceGrayButSoftMasks($cbdt);
+		$this->assertStringContainsString('/SMask', $cbdt);
+	}
+
+	/**
+	 * A content stream starts in black in DeviceGray, so each page - headers, footers and watermark
+	 * included - and each form drawn from SVG sets black in the ICC-based grey colour space before it
+	 * draws anything. A form drawn as a background looks the colour space up in its pattern's resources.
+	 */
+	public function testEachPageAndFormStartsInTheIccBasedGreyColourSpace()
+	{
+		$svg = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="20" height="20"/><text x="22" y="15">SVG</text></svg>');
+
+		$mpdf = $this->mpdf(['PDFX' => '4']);
+		$mpdf->SetHTMLHeader('<div>Header</div>');
+		$mpdf->SetHTMLFooter('<div>Footer</div>');
+		$mpdf->SetWatermarkText('Watermark');
+		$mpdf->showWatermarkText = true;
+		$mpdf->WriteHTML('<p>Page one</p><img src="' . $svg . '" /><pagebreak /><div style="background: url(' . $svg . '); height: 20mm">Page two</div>');
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertNoDeviceGrayButSoftMasks($pdf);
+
+		$start = "/CSGRAY cs 0.000 sc /CSGRAY CS 0.000 SC\n";
+		$this->assertSame(2, preg_match_all('/\/Contents (\d+) 0 R/', $pdf, $contents));
+		foreach ($contents[1] as $number) {
+			$this->assertStringStartsWith($start, $this->stream($pdf, $number));
+		}
+
+		$this->assertSame(1, preg_match('/(\d+) 0 obj\n<<\/Type \/XObject\n\/Subtype \/Form\n/', $pdf, $form));
+		$this->assertStringStartsWith($start, $this->stream($pdf, $form[1]));
+
+		$this->assertSame(1, preg_match('/\/XObject <<\/FO\d+ \d+ 0 R >>\n\/ColorSpace <<\/CSGRAY \d+ 0 R >>/', $pdf), 'the background pattern\'s resources');
+	}
+
+	/**
+	 * Grey in the ICC-based colour space draws as it did in DeviceGray, pixel for pixel
+	 */
+	public function testGreyDrawsAsItDidInDeviceGray()
+	{
+		if (!class_exists('Imagick')) {
+			$this->markTestSkipped('Imagick is not installed');
+		}
+
+		$html = '<p>Text in the default colour</p>'
+			. '<div style="background: linear-gradient(0, 255); height: 10mm">A grey gradient</div>'
+			. '<img src="' . __DIR__ . '/../data/img/exif-orientation-6-gray.jpg" width="20mm" />'
+			. '<img src="data:image/png;base64,' . base64_encode($this->greyPng(false)) . '" width="40mm" />'
+			. '<img src="data:image/png;base64,' . base64_encode($this->greyPng(true)) . '" width="40mm" />'
+			. '<div style="background: linear-gradient(rgba(255, 0, 0, 0.5), rgba(0, 0, 255, 1)); height: 10mm">Translucent</div>'
+			. '<div style="box-shadow: 2mm 2mm 2mm 0; height: 10mm; width: 40mm">Shadow</div>';
+
+		$pixels = [];
+		foreach ([Mpdf::class, DeviceGrayMpdf::class] as $class) {
+			$mpdf = $this->mpdf(['PDFX' => '4'], $class);
+			$mpdf->SetWatermarkText('Watermark');
+			$mpdf->showWatermarkText = true;
+			$mpdf->WriteHTML($html);
+			$mpdf->SetFillColor(128);
+			$mpdf->Rect(20, 250, 30, 10, 'F');
+			$pdf = $mpdf->OutputBinaryData();
+			$this->assertSame($mpdf->writesCalibratedGray(), strpos($pdf, 'CSGRAY') !== false);
+
+			$image = new \Imagick();
+			$image->setResolution(120, 120);
+			try {
+				$image->readImageBlob($pdf);
+			} catch (\ImagickException $e) {
+				$this->markTestSkipped('Imagick cannot read a PDF here (' . trim($e->getMessage()) . ')');
+			}
+			$pixels[] = $image;
+		}
+
+		$difference = $pixels[0]->compareImages($pixels[1], \Imagick::METRIC_ROOTMEANSQUAREDERROR);
+		$this->assertSame(0.0, (float) $difference[1]);
+	}
+
+	/**
+	 * mPDF reads back what it writes: a page imported into another document keeps its grey in the
+	 * ICC-based colour space
+	 */
+	public function testADocumentWithIccBasedGreyIsImportedByMpdf()
+	{
+		$file = tempnam(sys_get_temp_dir(), 'mpdf');
+		file_put_contents($file, $this->pdf(['PDFX' => '4'], '<p>Text</p><div style="background: linear-gradient(0, 255); height: 10mm">Gradient</div>'));
+
+		$mpdf = $this->mpdf();
+		$pages = $mpdf->setSourceFile($file);
+		$mpdf->AddPage();
+		$mpdf->useTemplate($mpdf->importPage(1));
+		$pdf = $mpdf->OutputBinaryData();
+		unlink($file);
+
+		$this->assertSame(1, $pages);
+		$this->assertStringContainsString('/CSGRAY cs 0.000 sc', $pdf);
+		$this->assertStringContainsString('Gray, sRGB tone curve (mPDF)', $pdf);
+	}
+
+	/**
 	 * @param array $config Merged over automatic fixing and no compression
 	 *
 	 * @return Mpdf A document with no title of its own
@@ -833,11 +1072,12 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * @param array $config Merged over mpdf()'s configuration
+	 * @param array       $config Merged over mpdf()'s configuration
+	 * @param string|null $text   What to draw, the grinning face where not given
 	 *
-	 * @return string A document drawing the grinning face in a test colour font, the CBDT one by default
+	 * @return string A document drawing the text in a test colour font, the CBDT one by default
 	 */
-	private function colourFontPdf(array $config)
+	private function colourFontPdf(array $config, $text = null)
 	{
 		return $this->pdf($config + [
 			'fontRegistry' => new FontRegistry([]),
@@ -845,8 +1085,103 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontdata' => [
 				'cbdt' => ['R' => 'TestEmoji-CBDT.ttf', 'useOTL' => 0xFF],
 				'colr' => ['R' => 'TestEmoji-COLRv0.ttf', 'useOTL' => 0xFF],
+				'colrv1' => ['R' => 'TestEmoji-COLRv1.ttf', 'useOTL' => 0xFF],
+				'svg' => ['R' => 'TestEmoji-SVG.ttf', 'useOTL' => 0xFF],
 			],
 			'default_font' => 'cbdt',
-		], '<p>' . UtfString::code2utf(0x1F600) . '</p>');
+		], '<p>' . ($text === null ? UtfString::code2utf(0x1F600) : $text) . '</p>');
+	}
+
+	/**
+	 * Asserts that no content stream sets a colour with g or G, and that nothing names /DeviceGray but
+	 * the soft masks of images
+	 *
+	 * @param string $pdf An uncompressed document
+	 */
+	private function assertNoDeviceGrayButSoftMasks($pdf)
+	{
+		preg_match_all('/(\d+) 0 obj\n((?:(?!endobj).)*?)stream\n(.*?)\nendstream/s', $pdf, $streams, PREG_SET_ORDER);
+		foreach ($streams as $stream) {
+			// Images, fonts and ICC profiles are binary
+			if (!preg_match('/\/Subtype \/Image|\/Length1|\/N \d/', $stream[2])) {
+				$this->assertSame(0, preg_match('/(^|\s)[\d.]+ [gG]\s/', $stream[3]), sprintf('object %d sets a colour in DeviceGray', $stream[1]));
+			}
+		}
+
+		$softMasks = $this->softMasks($pdf);
+		preg_match_all('/\n(\d+) 0 obj\n((?:(?!endobj).)*)/s', $pdf, $objects, PREG_SET_ORDER);
+		foreach ($objects as $object) {
+			if (strpos($object[2], '/DeviceGray') !== false) {
+				$this->assertContains($object[1], $softMasks, sprintf('object %d names /DeviceGray and is not a soft mask', $object[1]));
+			}
+		}
+	}
+
+	/**
+	 * @param string $pdf
+	 *
+	 * @return string[] The object number of each image an image names as its /SMask
+	 */
+	private function softMasks($pdf)
+	{
+		preg_match_all('/\/SMask (\d+) 0 R/', $pdf, $masks);
+
+		return $masks[1];
+	}
+
+	/**
+	 * @param string $pdf An uncompressed document
+	 *
+	 * @return array[] Each image, as [its dictionary, its data], by object number
+	 */
+	private function imageObjects($pdf)
+	{
+		preg_match_all('/\n(\d+) 0 obj\n<<\/Type \/XObject\n\/Subtype \/Image\n(.*?)>>\nstream\n(.*?)\nendstream/s', $pdf, $images, PREG_SET_ORDER);
+
+		$byNumber = [];
+		foreach ($images as $image) {
+			$byNumber[$image[1]] = [$image[2], $image[3]];
+		}
+
+		return $byNumber;
+	}
+
+	/**
+	 * @param string     $pdf    An uncompressed document
+	 * @param int|string $number An object with a stream
+	 *
+	 * @return string Its stream
+	 */
+	private function stream($pdf, $number)
+	{
+		preg_match('/stream\n(.*)\nendstream/s', $this->object($pdf, $number), $match);
+
+		return $match[1];
+	}
+
+	/**
+	 * @param bool $alpha Whether it has an alpha channel, which mPDF writes as a soft mask
+	 *
+	 * @return string A 16 by 16 greyscale PNG of every grey level, made here
+	 */
+	private function greyPng($alpha)
+	{
+		$rows = '';
+		for ($y = 0; $y < 16; $y++) {
+			$rows .= "\0"; // no filter
+			for ($x = 0; $x < 16; $x++) {
+				$rows .= chr($y * 16 + $x) . ($alpha ? chr(255 - $x * 16) : '');
+			}
+		}
+
+		$chunk = function ($type, $data) {
+			return pack('N', strlen($data)) . $type . $data . pack('N', crc32($type . $data));
+		};
+
+		// Colour type 0 is grey, 4 grey with alpha
+		return "\x89PNG\r\n\x1a\n"
+			. $chunk('IHDR', pack('NNCCCCC', 16, 16, 8, $alpha ? 4 : 0, 0, 0, 0))
+			. $chunk('IDAT', gzcompress($rows))
+			. $chunk('IEND', '');
 	}
 }
