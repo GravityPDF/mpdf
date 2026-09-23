@@ -475,6 +475,52 @@ class FpdiStructMergerTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A header cell's /Scope and a cell's /ColSpan come across with an imported table.
+	 */
+	public function testImportedTableKeepsScopeAndSpans()
+	{
+		$output = $this->importTagged(
+			'<table><tr><th scope="col" colspan="2">Totals</th></tr><tr><td>1</td><td>2</td></tr></table>'
+		);
+
+		$this->assertStringContainsString('/O /Table /Scope /Column /ColSpan 2', $output);
+	}
+
+	/**
+	 * A form field's widget is not imported, so no empty Form element is left behind for it.
+	 */
+	public function testImportedFormFieldLeavesNoEmptyFormElement()
+	{
+		$output = $this->importTagged('<p>Name <input type="text" name="fname" title="Name"></p>', ['useActiveForms' => true]);
+
+		$this->assertStringNotContainsString('/S /Form', $output);
+	}
+
+	/**
+	 * Imports page 1 of a tagged document written from the HTML into a new PDF/UA document.
+	 *
+	 * @param string $html
+	 * @param array  $config For the source document
+	 *
+	 * @return string The new document, uncompressed
+	 */
+	private function importTagged($html, $config = [])
+	{
+		$source = $this->makeMpdf($config);
+		$source->WriteHTML($html);
+		$this->taggedPdf = tempnam(sys_get_temp_dir(), 'mpdf_tagged_') . '.pdf';
+		$source->Output($this->taggedPdf, 'F');
+
+		$mpdf = $this->makeMpdf();
+		$mpdf->setSourceFile($this->taggedPdf);
+		$pageId = $mpdf->importPage(1);
+		$mpdf->AddPage();
+		$mpdf->useImportedPage($pageId);
+
+		return $mpdf->Output(null, 'S');
+	}
+
+	/**
 	 * A text string without a byte order mark is read as PDFDocEncoding, whose 0x80-0xA0 range differs
 	 * from Windows-1252 (ISO 32000-1 Annex D).
 	 *

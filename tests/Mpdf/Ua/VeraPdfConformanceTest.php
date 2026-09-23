@@ -463,17 +463,51 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A tagged page holding a table with header cells and spans, a form field and a linked image
+	 * passes once imported into a document that is not PDFUAauto.
+	 *
+	 * @return void
+	 */
+	public function testFpdiTaggedImportOfTableFormAndLinkPassesUa1()
+	{
+		$png = 'data:image/png;base64,'
+			. 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8'
+			. 'z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
+		$sourceFixture = $this->makeTaggedSourceFixture(
+			'<h1>Tagged source</h1>'
+			. '<table border="1"><tr><th scope="col" colspan="2">Totals</th></tr>'
+			. '<tr><th scope="row">Q1</th><td>10</td></tr></table>'
+			. '<p>Name <input type="text" name="fname" title="Name"></p>'
+			. '<p><a href="https://example.com"><img src="' . $png . '" alt="Example home" width="20" height="20"></a></p>',
+			['useActiveForms' => true]
+		);
+
+		$mpdf = $this->makeMpdf(['enableImports' => true]);
+		$mpdf->setSourceFile($sourceFixture);
+		$pageId = $mpdf->importPage(1);
+		$mpdf->AddPage();
+		$mpdf->useImportedPage($pageId);
+		$pdf = $mpdf->Output(null, 'S');
+		@unlink($sourceFixture);
+		$this->assertVeraPdfCompliant($pdf, 'tagged FPDI import of a table, a form field and a link');
+	}
+
+	/**
 	 * Writes a tagged PDF/UA document to import.
+	 *
+	 * @param string $html
+	 * @param array  $config
 	 *
 	 * @return string The file's path
 	 */
-	private function makeTaggedSourceFixture()
+	private function makeTaggedSourceFixture($html = '', $config = [])
 	{
-		$source = $this->makeMpdf();
-		$source->WriteHTML(
-			'<h1>Tagged source heading</h1>'
-			. '<p>Tagged source body paragraph generated for a tagged FPDI import.</p>'
-		);
+		if ($html === '') {
+			$html = '<h1>Tagged source heading</h1>'
+				. '<p>Tagged source body paragraph generated for a tagged FPDI import.</p>';
+		}
+		$source = $this->makeMpdf($config);
+		$source->WriteHTML($html);
 		$path = tempnam(sys_get_temp_dir(), 'mpdf_ua_fpdi_tagged_') . '.pdf';
 		$source->Output($path, 'F');
 		return $path;

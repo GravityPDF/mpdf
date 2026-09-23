@@ -939,6 +939,8 @@ class FpdiStructMerger
 			}
 		}
 
+		$this->copyStructureAttributes($resolved, $parser, $hostElem);
+
 		$kRef = PdfDictionary::get($resolved, 'K');
 		if (!($kRef instanceof PdfNull)) {
 			try {
@@ -999,7 +1001,59 @@ class FpdiStructMerger
 			}
 		}
 
+		// The annotation of a Form or Link is not brought across with it: a widget is not imported at
+		// all, and an imported link is given an element of its own. One with nothing else is dropped.
+		if (($hostType === 'Form' || $hostType === 'Link') && $hostElem->getMcids() === [] && $hostElem->getChildren() === []) {
+			$hostParent->removeChild($hostElem);
+			return null;
+		}
+
 		return $hostElem;
+	}
+
+	/**
+	 * Copy the attributes of a source element that name nothing else in its document: a header
+	 * cell's /Scope, a cell's spans, a list's numbering and a block's placement. Without them its
+	 * table no longer reads as one (Matterhorn 15-003, 15-005). /Headers and /ID are left out, as
+	 * they would have to be renamed to stay unique here.
+	 *
+	 * @param PdfDictionary                      $resolved
+	 * @param \setasign\Fpdi\PdfParser\PdfParser $parser
+	 * @param StructureElement                   $hostElem
+	 */
+	private function copyStructureAttributes(PdfDictionary $resolved, $parser, StructureElement $hostElem)
+	{
+		try {
+			$attributes = PdfType::resolve(PdfDictionary::get($resolved, 'A'), $parser);
+		} catch (\Exception $e) {
+			return;
+		}
+		// An array of attribute objects may carry revision numbers between them
+		$objects = $attributes instanceof PdfArray ? $attributes->value : [$attributes];
+
+		foreach ($objects as $object) {
+			try {
+				$object = PdfType::resolve($object, $parser);
+				if (!($object instanceof PdfDictionary)) {
+					continue;
+				}
+				foreach (['Scope', 'ListNumbering', 'Placement'] as $key) {
+					$value = PdfType::resolve(PdfDictionary::get($object, $key), $parser);
+					// Written back as a name, so only a plain one is taken
+					if ($value instanceof PdfName && preg_match('/\A[A-Za-z]+\z/', $value->value)) {
+						$hostElem->setAttribute($key, $value->value);
+					}
+				}
+				foreach (['ColSpan', 'RowSpan'] as $key) {
+					$value = PdfType::resolve(PdfDictionary::get($object, $key), $parser);
+					if ($value instanceof PdfNumeric && (int) $value->value > 1) {
+						$hostElem->setAttribute($key, (int) $value->value);
+					}
+				}
+			} catch (\Exception $e) {
+				continue;
+			}
+		}
 	}
 
 	/**
