@@ -19,7 +19,7 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$mpdf = $this->pdfA3();
 		$mpdf->WriteHTML('<h1>Invoice INV-2026-0001</h1>');
-		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
+		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
 
 		return $mpdf;
 	}
@@ -53,7 +53,7 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testReadsTheLevelFromTheInvoice($guideline, $level, $filename, $relationship)
 	{
-		$facturX = new FacturX($this->invoice($guideline));
+		$facturX = new FacturX($this->invoiceXml($guideline));
 		$file = $facturX->getAssociatedFile();
 
 		$this->assertSame($filename, $file['name']);
@@ -68,7 +68,7 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTakesTheLevelItIsGiven()
 	{
-		$facturX = new FacturX($this->invoice(), 'extended');
+		$facturX = new FacturX($this->invoiceXml(), 'extended');
 
 		$properties = $facturX->getXmpProperties();
 		$this->assertSame('EXTENDED', $properties['ConformanceLevel']);
@@ -231,7 +231,7 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectException(MpdfException::class);
 		$this->expectExceptionMessage('SetEmbeddedInvoice() needs a PDF/A-3 document for Mpdf\Invoice\FacturX, but this one is ' . $kind . '. Set PDFA to true and PDFAversion to 3-B or 3-U in the constructor configuration.');
 
-		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
+		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
 	}
 
 }

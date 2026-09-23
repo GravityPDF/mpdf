@@ -19,6 +19,7 @@
 # whatever the platform. A CRLF checkout would fail that comparison on Windows without
 # anything about the parser or the font having changed.
 tests/data/fontcache/** text eol=lf
+tests/data/invoice/** text eol=lf
 tests/data/otldump/** text eol=lf
 tests/data/shaping/** text eol=lf
 tests/data/subset/** text eol=lf

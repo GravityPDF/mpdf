@@ -19,7 +19,7 @@ class EmbeddedInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testEmbedsAnInvoiceOfAnotherSpecification()
 	{
 		$mpdf = $this->pdfA3();
-		$mpdf->SetEmbeddedInvoice(new Zugferd1($this->invoice(self::COMFORT)));
+		$mpdf->SetEmbeddedInvoice(new Zugferd1($this->invoiceXml(self::COMFORT)));
 		$output = $this->output($mpdf);
 
 		$this->assertMatchesRegularExpression('/\/EmbeddedFiles << \/Names \[\(ZUGFeRD-invoice\.xml\) \d+ 0 R\]/', $output);
@@ -37,8 +37,8 @@ class EmbeddedInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testReplacesTheInvoice()
 	{
 		$mpdf = $this->pdfA3();
-		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
-		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice(), FacturX::EXTENDED));
+		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
+		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml(), FacturX::EXTENDED));
 		$output = $this->output($mpdf);
 
 		$this->assertMatchesRegularExpression('/\/EmbeddedFiles << \/Names \[\(factur-x\.xml\) \d+ 0 R\]/', $output);
@@ -54,7 +54,7 @@ class EmbeddedInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectException(MpdfException::class);
 		$this->expectExceptionMessage('Guideline "urn:cen.eu:en16931:2017" is not a ZUGFeRD guideline, so the conformance level is unknown. Pass one of BASIC, COMFORT, EXTENDED as the second argument to the Mpdf\Invoice\Zugferd1 constructor.');
 
-		new Zugferd1($this->invoice('urn:cen.eu:en16931:2017'));
+		new Zugferd1($this->invoiceXml('urn:cen.eu:en16931:2017'));
 	}
 
 	/**
@@ -84,7 +84,7 @@ class EmbeddedInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$mpdf = $this->mpdf(['mode' => '', 'PDFX' => true, 'PDFXauto' => true]);
 		try {
-			$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
+			$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
 			$this->fail('A PDF/X document took a Factur-X invoice');
 		} catch (MpdfException $e) {
 			// FacturXTest checks the wording
@@ -101,7 +101,7 @@ class EmbeddedInvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testChecksTheDocumentAgainAtOutput()
 	{
 		$mpdf = $this->pdfA3();
-		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
+		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
 		$mpdf->PDFAversion = '2-B';
 
 		$this->expectException(MpdfException::class);

@@ -35,6 +35,38 @@ class FacturX implements EmbeddedInvoiceInterface
 	const XRECHNUNG = 'XRECHNUNG';
 
 	/**
+	 * The guideline ID (BT-24) a MINIMUM invoice names
+	 */
+	const GUIDELINE_MINIMUM = 'urn:factur-x.eu:1p0:minimum';
+
+	/**
+	 * The guideline ID a BASIC WL invoice names
+	 */
+	const GUIDELINE_BASIC_WL = 'urn:factur-x.eu:1p0:basicwl';
+
+	/**
+	 * The guideline ID a BASIC invoice names
+	 */
+	const GUIDELINE_BASIC = 'urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic';
+
+	/**
+	 * The guideline ID an EN 16931 invoice names, EN 16931's own
+	 */
+	const GUIDELINE_EN16931 = 'urn:cen.eu:en16931:2017';
+
+	/**
+	 * The guideline ID an EXTENDED invoice names
+	 */
+	const GUIDELINE_EXTENDED = 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended';
+
+	/**
+	 * What every XRechnung guideline ID starts with, followed by its version, e.g. _3.0
+	 *
+	 * @see https://xeinkauf.de/xrechnung/
+	 */
+	const GUIDELINE_XRECHNUNG = 'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung';
+
+	/**
 	 * @var string
 	 */
 	protected $xml;
@@ -88,12 +120,12 @@ class FacturX implements EmbeddedInvoiceInterface
 	protected function getGuidelines()
 	{
 		return [
-			'urn:factur-x.eu:1p0:minimum' => self::MINIMUM,
-			'urn:factur-x.eu:1p0:basicwl' => self::BASIC_WL,
-			'urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic' => self::BASIC,
-			'urn:cen.eu:en16931:2017' => self::EN16931,
-			'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended' => self::EXTENDED,
-			'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung*' => self::XRECHNUNG,
+			self::GUIDELINE_MINIMUM => self::MINIMUM,
+			self::GUIDELINE_BASIC_WL => self::BASIC_WL,
+			self::GUIDELINE_BASIC => self::BASIC,
+			self::GUIDELINE_EN16931 => self::EN16931,
+			self::GUIDELINE_EXTENDED => self::EXTENDED,
+			self::GUIDELINE_XRECHNUNG . '*' => self::XRECHNUNG,
 		];
 	}
 
