@@ -30,6 +30,11 @@ final class ImageWriter
 	{
 		$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
 
+		// Each image's object number by its 'i'. A soft mask is added before the image it masks, which
+		// names it by this rather than as the object before its own, since the ICC-based sRGB colour
+		// space may be written between the two.
+		$objects = [];
+
 		foreach ($this->mpdf->images as $file => $info) {
 
 			$calibrated = empty($info['icc']) && ($info['cs'] === 'DeviceRGB' || $info['cs'] === 'Indexed') ? $this->writer->calibratedRgb() : null;
@@ -38,6 +43,7 @@ final class ImageWriter
 			$this->writer->object();
 
 			$this->mpdf->images[$file]['n'] = $this->mpdf->n;
+			$objects[$info['i']] = $this->mpdf->n;
 
 			$this->writer->write('<</Type /XObject');
 			$this->writer->write('/Subtype /Image');
@@ -50,7 +56,7 @@ final class ImageWriter
 			}
 
 			if (isset($info['masked'])) {
-				$this->writer->write('/SMask ' . ($this->mpdf->n - 1) . ' 0 R');
+				$this->writer->write('/SMask ' . $objects[$info['masked']] . ' 0 R');
 			}
 
 			// set color space

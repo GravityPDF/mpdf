@@ -90,7 +90,7 @@ class Type3FontWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('Indexed', $image['cs']);
 		$this->assertSame($depth, $image['bpc']);
 		$this->assertSame(sprintf('/DecodeParms <</Predictor 15 /Colors 1 /BitsPerComponent %d /Columns 13>>', $depth), $image['parms']);
-		$this->assertTrue($image['masked']);
+		$this->assertSame($this->mpdf->images[$key . '-mask']['i'], $image['masked']);
 
 		$rgba = file_get_contents(self::DIR . $name . '.rgba');
 		$rebuilt = new PngPixels($this->png(13, 7, $depth, 3, $image['data'], $image['pal']));

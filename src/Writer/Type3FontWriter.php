@@ -378,8 +378,9 @@ class Type3FontWriter implements GlyphResources
 		$image = ['w' => $decoded['width'], 'h' => $decoded['height'], 'bpc' => 8, 'f' => 'FlateDecode', 'type' => 'png', 'interpolation' => true];
 
 		if ($decoded['alpha'] !== '') {
-			$this->mpdf->images[$key . '-mask'] = $image + ['cs' => 'DeviceGray', 'data' => $decoded['alpha'], 'i' => count($this->mpdf->images) + 1];
-			$image['masked'] = true;
+			$mask = count($this->mpdf->images) + 1;
+			$this->mpdf->images[$key . '-mask'] = $image + ['cs' => 'DeviceGray', 'data' => $decoded['alpha'], 'i' => $mask];
+			$image['masked'] = $mask;
 		}
 
 		if ($decoded['palette'] === '') {
