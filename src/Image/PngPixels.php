@@ -225,7 +225,7 @@ class PngPixels
 		$pixels = '';
 		$previous = str_repeat("\0", $stride);
 		for ($y = 0, $pos = 0; $y < $height; $y++, $pos += $stride + 1) {
-			$row = $this->unfilter(ord($data[$pos]), substr($data, $pos + 1, $stride), $previous, $bpp);
+			$row = self::unfilter(ord($data[$pos]), substr($data, $pos + 1, $stride), $previous, $bpp);
 			$unpacked = $this->samples($row, $header['bitDepth'], $header['colorType'] === 3, $samples);
 			$pixels .= $header['key'] === '' ? $unpacked : $this->keyed($row, $unpacked, $header['key'], $channels);
 			$previous = $row;
@@ -246,7 +246,7 @@ class PngPixels
 	 *
 	 * @throws \Mpdf\MpdfException If the filter type is not one PNG defines
 	 */
-	private function unfilter($filter, $row, $previous, $bpp)
+	public static function unfilter($filter, $row, $previous, $bpp)
 	{
 		$stride = strlen($row);
 

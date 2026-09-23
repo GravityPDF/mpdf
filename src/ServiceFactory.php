@@ -24,6 +24,7 @@ use Mpdf\Pdf\Protection;
 use Mpdf\Writer\BaseWriter;
 use Mpdf\Writer\BackgroundWriter;
 use Mpdf\Writer\ColorWriter;
+use Mpdf\Writer\CrossReferenceWriter;
 use Mpdf\Writer\BookmarkWriter;
 use Mpdf\Writer\FontWriter;
 use Mpdf\Writer\FormWriter;
@@ -169,6 +170,7 @@ class ServiceFactory
 		$colorWriter = new ColorWriter($mpdf, $writer);
 		$backgroundWriter = new BackgroundWriter($mpdf, $writer);
 		$javaScriptWriter = new JavaScriptWriter($mpdf, $writer);
+		$crossReferenceWriter = new CrossReferenceWriter($mpdf, $writer, $metadataWriter);
 
 		$resourceWriter = new ResourceWriter(
 			$mpdf,
@@ -223,7 +225,8 @@ class ServiceFactory
 			'colorWriter' => $colorWriter,
 			'backgroundWriter' => $backgroundWriter,
 			'javaScriptWriter' => $javaScriptWriter,
-			'resourceWriter' => $resourceWriter
+			'resourceWriter' => $resourceWriter,
+			'crossReferenceWriter' => $crossReferenceWriter
 		];
 	}
 
@@ -266,6 +269,7 @@ class ServiceFactory
 			'backgroundWriter',
 			'javaScriptWriter',
 			'resourceWriter',
+			'crossReferenceWriter',
 		];
 	}
 

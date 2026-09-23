@@ -456,6 +456,10 @@ class ConfigVariables
 
 			'pdf_version' => '1.4',
 
+			// Pack the objects that are not streams into compressed object streams, and write the cross-reference as a
+			// compressed stream (PDF 1.5). Only when compressing, and never when encrypting or for PDF/X or PDF/A-1.
+			'useObjectStreams' => false,
+
 			'fontDir' => [],
 
 			'tempDir' => __DIR__ . '/../../tmp',
