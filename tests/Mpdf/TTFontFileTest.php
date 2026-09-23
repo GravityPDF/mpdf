@@ -213,8 +213,8 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A Class Definition can list glyphs as class 0: Format 1 gives a class to every glyph in its
-	 * range, and Format 2 can state a range of class 0. Those glyphs are left out, as Otl leaves them
-	 * out, so class 0 still holds no list of glyphs and the other classes are what it excludes.
+	 * range, and Format 2 can state a range of class 0. The parser leaves those glyphs out, as Otl
+	 * does, so a rule naming class 0 gets no glyph list and class 0 excludes only the other classes.
 	 *
 	 * Glyphs 40, 41 and 42 are A, B and C, in classes 1, 0 and 2. The table starts two bytes in,
 	 * because offset 0 means there is no table.
