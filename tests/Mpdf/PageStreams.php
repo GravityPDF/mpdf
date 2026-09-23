@@ -123,6 +123,26 @@ trait PageStreams
 	}
 
 	/**
+	 * The content stream of each page, in order. Unlike pages(), no other stream is included, such as an embedded
+	 * font's ToUnicode map.
+	 *
+	 * @param string $pdf
+	 *
+	 * @return string[]
+	 */
+	private function pageContents($pdf)
+	{
+		$contents = [];
+		foreach ($this->pageObjects($pdf) as $number) {
+			preg_match('#/Contents (\d+) 0 R#', $this->object($pdf, $number), $ref);
+			preg_match('/stream\n(.*?)\nendstream/s', $this->object($pdf, $ref[1]), $stream);
+			$contents[] = $stream[1];
+		}
+
+		return $contents;
+	}
+
+	/**
 	 * The object numbers each page lists in its /Annots array, as one array of numbers per page
 	 *
 	 * @param string $pdf

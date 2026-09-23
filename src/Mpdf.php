@@ -19,6 +19,7 @@ use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 use Mpdf\Utils\Path;
+use Mpdf\Writer\OptionalContentWriter;
 use Psr\Log\NullLogger;
 use Mpdf\Unicode\Ucdn;
 use Mpdf\Unicode\Bidi;
@@ -51,9 +52,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const OBJECT_IDENTIFIER = "\xbb\xa4\xac";
 
 	/**
-	 * The optional content group each visibility draws in: OC1 to OC3, marked used by bits 1, 2 and 4 of $hasOC
+	 * The optional content group each visibility draws in, by its resource name in OptionalContentWriter
 	 */
-	const VISIBILITY_GROUPS = ['printonly' => 1, 'screenonly' => 2, 'hidden' => 3];
+	const VISIBILITY_GROUPS = ['printonly' => 'OC1', 'screenonly' => 'OC2', 'hidden' => 'OC3'];
 
 	var $useFixedNormalLineHeight; // mPDF 6
 	var $useFixedTextBaseline; // mPDF 6
@@ -2178,7 +2179,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->writer->write('___DROPPED___START' . $this->uniqstr);
 		} elseif ($v != 'visible') {
 			$this->writer->write($this->visibilityBegins($v));
-			$this->hasOC = ($this->hasOC | 1 << (self::VISIBILITY_GROUPS[$v] - 1));
+			$this->hasOC = ($this->hasOC | OptionalContentWriter::VISIBILITY_GROUPS[self::VISIBILITY_GROUPS[$v]][0]);
 		}
 		$this->visibility = $v;
 	}
@@ -2214,7 +2215,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException('Incorrect visibility: ' . $v);
 		}
 
-		return '/OC /OC' . self::VISIBILITY_GROUPS[$v] . ' BDC';
+		return '/OC /' . self::VISIBILITY_GROUPS[$v] . ' BDC';
 	}
 
 	/**
@@ -7625,10 +7626,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$rtlalign = 'L';
 		}
 
+		// An object left out is not drawn, and registers no link, field, bookmark or entry
+		$blockDropped = $this->visibilityDropped($this->visibility);
+
 		foreach ($this->objectbuffer as $ib => $objattr) {
 
-			// An object left out is not drawn, and registers no link, field, bookmark or entry
-			if ($this->visibilityDropped($this->visibility) || (isset($objattr['visibility']) && $this->visibilityDropped($objattr['visibility']))) {
+			if ($blockDropped || (isset($objattr['visibility']) && $this->visibilityDropped($objattr['visibility']))) {
 				continue;
 			}
 
@@ -24598,10 +24601,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function IndexEntry($txt, $xref = '')
 	{
-		if ($this->visibilityDropped($this->visibility)) {
-			return;
-		}
-
 		if ($xref) {
 			$this->IndexEntrySee($txt, $xref);
 			return;

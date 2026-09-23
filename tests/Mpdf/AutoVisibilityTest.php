@@ -12,6 +12,11 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
+	 * PDF/A-1b under auto, which allows no optional content
+	 */
+	const PDFA1_AUTO = ['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'];
+
+	/**
 	 * A block and a span with each visibility are in the page content or not, and the text around them is
 	 *
 	 * @dataProvider autoVisibilities
@@ -23,7 +28,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'<p>Before</p><div style="visibility: ' . $visibility . '; border: 1px solid #000; background: #ccc">Block</div>'
 			. '<p>Line <span style="visibility: ' . $visibility . '">Span</span> After</p>'
 		);
-		$pages = implode('', $this->contents($this->output($mpdf)));
+		$pages = implode('', $this->pageContents($this->output($mpdf)));
 
 		$this->assertTrue($this->drawn($pages, 'Before'));
 		$this->assertTrue($this->drawn($pages, 'After'));
@@ -41,7 +46,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function autoVisibilities()
 	{
 		$configs = [
-			'PDF/A-1b' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'], false],
+			'PDF/A-1b' => [self::PDFA1_AUTO, false],
 			'PDF/A-2b' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B'], true],
 			'PDF/X-1a' => [['PDFX' => true, 'PDFXauto' => true], false],
 		];
@@ -99,23 +104,23 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A link, form field, annotation, bookmark and index entry register when their block or span is drawn, and not
-	 * when it is left out
+	 * A link, form field, annotation, image title, bookmark and index entry register when their block or span is
+	 * drawn, and not when it is left out
 	 *
 	 * @dataProvider registeringElements
 	 */
 	public function testLeftOutContentRegistersNothing($tag, $visibility, $registered)
 	{
-		$mpdf = $this->document(['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B', 'useActiveForms' => true]);
+		$mpdf = $this->document(self::PDFA1_AUTO + ['useActiveForms' => true, 'title2annots' => true]);
 		$mpdf->WriteHTML(
 			'<p>Before</p><' . $tag . ' style="visibility: ' . $visibility . '">Content <a href="https://example.com">link</a>'
 			. ' <input type="text" name="field" value="Value" /> <annotation content="Note" /> <bookmark content="Mark" />'
-			. ' <indexentry content="Entry" /></' . $tag . '><p>After</p>'
+			. ' <indexentry content="Entry" /> <img src="' . $this->pngImage() . '" title="Title" /></' . $tag . '><p>After</p>'
 		);
 		$pdf = $this->output($mpdf);
 
 		$this->assertCount($registered, isset($mpdf->PageLinks[1]) ? $mpdf->PageLinks[1] : []);
-		$this->assertCount($registered, isset($mpdf->PageAnnots[1]) ? $mpdf->PageAnnots[1] : []);
+		$this->assertCount(2 * $registered, isset($mpdf->PageAnnots[1]) ? $mpdf->PageAnnots[1] : []);
 		$this->assertCount($registered, $mpdf->BMoutlines);
 		$this->assertCount($registered, $mpdf->Reference);
 		$this->assertSame($registered, substr_count($pdf, '/Subtype /Widget'));
@@ -146,13 +151,13 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$html = '<p>Before</p><div style="visibility: %s; border: 1px solid #000">'
 			. str_repeat('<p>Screen</p>', 60) . '</div><p>After</p>';
 
-		$mpdf = $this->document(['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B']);
+		$mpdf = $this->document(self::PDFA1_AUTO);
 		$mpdf->WriteHTML(sprintf($html, 'screenonly'));
-		$pages = $this->contents($this->output($mpdf));
+		$pages = $this->pageContents($this->output($mpdf));
 
-		$visible = $this->document(['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B']);
+		$visible = $this->document(self::PDFA1_AUTO);
 		$visible->WriteHTML(sprintf($html, 'visible'));
-		$visiblePages = $this->contents($this->output($visible));
+		$visiblePages = $this->pageContents($this->output($visible));
 
 		$this->assertGreaterThan(2, count($pages));
 		$this->assertCount(count($visiblePages), $pages);
@@ -168,7 +173,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testDrawingResumesWithTheStateSet()
 	{
-		$mpdf = $this->document(['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B']);
+		$mpdf = $this->document(self::PDFA1_AUTO);
 		$mpdf->AddPage();
 		$mpdf->SetDrawColor(255, 0, 0);
 		$mpdf->SetLineWidth(1);
@@ -180,7 +185,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->SetDrawColor(0, 0, 255);
 		$mpdf->SetLineWidth(2);
 		$mpdf->Line(10, 20, 50, 20);
-		$page = $this->contents($this->output($mpdf))[0];
+		$page = $this->pageContents($this->output($mpdf))[0];
 
 		$before = substr($page, 0, strrpos($page, ' m '));
 		preg_match_all('/([\d.]+ [\d.]+ [\d.]+) RG/', $before, $colours);
@@ -201,25 +206,6 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function document($config)
 	{
 		return $this->mpdf($config + ['mode' => 'utf-8']);
-	}
-
-	/**
-	 * The content stream of each page, in order. Other streams, such as an embedded font's, are left out.
-	 *
-	 * @param string $pdf
-	 *
-	 * @return string[]
-	 */
-	private function contents($pdf)
-	{
-		$contents = [];
-		foreach ($this->pageObjects($pdf) as $number) {
-			preg_match('#/Contents (\d+) 0 R#', $this->object($pdf, $number), $ref);
-			preg_match('/\n' . $ref[1] . ' 0 obj\s*<<\/Length \d+>>\s*stream\n(.*?)\nendstream/s', $pdf, $stream);
-			$contents[] = $stream[1];
-		}
-
-		return $contents;
 	}
 
 	/**
