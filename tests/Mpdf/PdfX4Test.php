@@ -773,7 +773,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$html = '<p style="color: cmyk(0, 100, 100, 0)">Text</p>'
 			. '<div style="background: linear-gradient(cmyk(0, 100, 0, 0), cmyk(100, 0, 0, 0)); height: 10mm">Gradient</div>';
 
-		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->writeProfile('grey', 'GRAY')], $html);
+		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->grayProfile], $html);
 
 		$this->assertStringNotContainsString('DeviceCMYK', $pdf);
 		$this->assertSame(0, preg_match('/[\d.]+ [\d.]+ [\d.]+ [\d.]+ k\b/', $pdf));
@@ -795,7 +795,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString("/Separation /PANTONE#20300#20C\n/DeviceRGB <<\n/Range [0 1 0 1 0 1] /C0 [1 1 1] \n/C1 [0.000 0.557 1.000]", $pdf);
 		$this->assertStringNotContainsString('DeviceCMYK', $pdf);
 
-		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->writeProfile('grey', 'GRAY')], $html, $spot);
+		$pdf = $this->pdf(['PDFX' => '4', 'ICCProfile' => $this->grayProfile], $html, $spot);
 		$this->assertSame(1, preg_match('/\/Separation \/PANTONE#20300#20C\n(\d+) 0 R <</', $pdf, $match));
 		$this->assertSame('[/ICCBased', substr($this->object($pdf, $match[1]), 0, 10));
 
