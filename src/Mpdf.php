@@ -2070,7 +2070,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->PDFAXwarnings[] = "Cannot set visibility to anything other than full when using PDFA or PDFX";
 			return '';
 		} elseif (!$this->PDFA && !$this->PDFX) {
-			$this->pdf_version = '1.5';
+			$this->setMinPdfVersion('1.5');
 		}
 		if ($this->visibility != 'visible') {
 			$this->writer->write('EMC');
@@ -2895,7 +2895,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->PDFAXwarnings[] = "Cannot use layers when using PDFA or PDFX";
 				return '';
 			} elseif (!$this->PDFA && !$this->PDFX) {
-				$this->pdf_version = '1.5';
+				$this->setMinPdfVersion('1.5');
 			}
 		}
 		$this->current_layer = $id;
@@ -10461,6 +10461,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+		if ($this->crossReferenceWriter->usesObjectStreams()) {
+			$this->setMinPdfVersion('1.5');
+		}
+		$this->raiseHeaderVersion();
+
 		$this->pageWriter->writePages();
 
 		// @log Writing document resources
@@ -10507,6 +10512,23 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->crossReferenceWriter->writeCrossReference();
 
 		$this->state = 3;
+	}
+
+	/**
+	 * Raise the version in the file header, written by Open(), to the pdf_version the document's features have asked
+	 * for since. No object has been written yet, so the header's length can change without moving an offset.
+	 */
+	private function raiseHeaderVersion()
+	{
+		$chunks = $this->buffer->detach();
+
+		if ($chunks && preg_match('/^%PDF-(\d+\.\d+)/', $chunks[0], $match) && version_compare($this->pdf_version, $match[1], '>')) {
+			$chunks[0] = '%PDF-' . $this->pdf_version . substr($chunks[0], strlen($match[0]));
+		}
+
+		foreach ($chunks as $chunk) {
+			$this->buffer->append($chunk);
+		}
 	}
 
 	function _beginpage(

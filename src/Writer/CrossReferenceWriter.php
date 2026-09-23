@@ -196,7 +196,7 @@ final class CrossReferenceWriter
 	 *
 	 * @return bool
 	 */
-	private function usesObjectStreams()
+	public function usesObjectStreams()
 	{
 		return $this->mpdf->useObjectStreams
 			&& $this->mpdf->compress
@@ -257,7 +257,7 @@ final class CrossReferenceWriter
 
 		$first = reset($ranges);
 		for ($i = 0; $i < $first[0]; $i++) {
-			$this->mpdf->buffer->append($i === 0 ? $this->header($chunks[0]) : $chunks[$i]);
+			$this->mpdf->buffer->append($chunks[$i]);
 		}
 
 		$compressed = [];
@@ -441,22 +441,6 @@ final class CrossReferenceWriter
 		}
 
 		return $ranges ?: null;
-	}
-
-	/**
-	 * The file header, raised to PDF 1.5 where it asks for less
-	 *
-	 * @param string $header
-	 *
-	 * @return string
-	 */
-	private function header($header)
-	{
-		if (preg_match('/^%PDF-(\d+\.\d+)/', $header, $match) && version_compare($match[1], '1.5', '<')) {
-			return '%PDF-1.5' . substr($header, strlen($match[0]));
-		}
-
-		return $header;
 	}
 
 	/**
