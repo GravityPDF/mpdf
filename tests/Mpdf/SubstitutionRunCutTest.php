@@ -17,7 +17,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @return \Mpdf\Mpdf With the default font selected
 	 */
-	private function mpdf($defaultFont, $backupFont)
+	private function mpdf($defaultFont, $backupFont = 'garuda')
 	{
 		// No font packages, so nothing the suite installs is put ahead of these
 		$mpdf = new Mpdf([
@@ -26,7 +26,6 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontDir' => [
 				__DIR__ . '/../../packages/Dejavu-Family/fonts',
 				__DIR__ . '/../../packages/Garuda/fonts',
-				__DIR__ . '/../../packages/SunExt/fonts',
 			],
 			'fontdata' => [
 				'dejavusans' => ['R' => 'DejaVuSans.ttf'],
@@ -139,7 +138,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$i = 0;
 		$e = $tokens[0];
 
-		$mpdf = $this->mpdf('dejavusanssip', 'garuda');
+		$mpdf = $this->mpdf('dejavusanssip');
 		$this->assertSame(4, $mpdf->SubstituteCharsSIP($tokens, $i, $e));
 
 		$this->assertSame([
