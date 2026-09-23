@@ -637,7 +637,7 @@ class Form
 	}
 
 	/**
-	 * Whether the field's CSS border style takes its border away
+	 * Whether the field's CSS border style is none or hidden
 	 *
 	 * @param mixed[] $objattr
 	 *
@@ -649,8 +649,8 @@ class Form
 	}
 
 	/**
-	 * The /BS width and style an active field's CSS border sets, for SetFormText(), SetFormChoice() and
-	 * SetFormButton() to take over their defaults. A border of style none or hidden has no width.
+	 * The /BS width and style an active field's CSS border sets, in place of the defaults SetFormText(),
+	 * SetFormChoice() and SetFormButton() use. A border of style none or hidden gets no width.
 	 *
 	 * @param mixed[] $objattr
 	 *
@@ -1733,7 +1733,7 @@ class Form
 	}
 
 	/**
-	 * An active field's colour as /MK gives it: from its CSS, or else a default
+	 * An active field's /MK colour: its CSS colour, or else the default
 	 *
 	 * @param mixed $color a colour the field's CSS sets, or false
 	 * @param string $default e.g. '0.6 0.6 0.72'
