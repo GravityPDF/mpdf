@@ -26076,14 +26076,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($l > 0) {
-				$patt = mb_substr($writehtml_e, $start, $l, 'UTF-8');
-				if (preg_match("/(.*?)(" . preg_quote($patt, '/') . ")(.*)/u", $writehtml_e, $m)) {
-					$writehtml_a[$writehtml_i] = $writehtml_e = $m[1];
-					array_splice($writehtml_a, $writehtml_i + 1, 0, ['span style="font-family: ' . $font . '"', $m[2], '/span', $m[3]]);
-					$this->subPos = $writehtml_i + 3;
+				$run = mb_substr($writehtml_e, $start, $l, 'UTF-8');
+				$rest = mb_substr($writehtml_e, $start + $l, null, 'UTF-8');
+				$writehtml_a[$writehtml_i] = $writehtml_e = mb_substr($writehtml_e, 0, $start, 'UTF-8');
+				array_splice($writehtml_a, $writehtml_i + 1, 0, ['span style="font-family: ' . $font . '"', $run, '/span', $rest]);
+				$this->subPos = $writehtml_i + 3;
 
-					return 4;
-				}
+				return 4;
 			}
 		}
 
@@ -26255,10 +26254,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				if ($l > 0) {
-					$step = $this->substitutionStep($text, $from, $start, $l, $font);
-					if ($step !== null) {
-						return $step;
-					}
+					return $this->substitutionStep($text, $from, $start, $l, $font);
 				}
 			}
 
@@ -26287,10 +26283,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				if ($l > 0) {
-					$step = $this->substitutionStep($text, $from, $start, $l, $font);
-					if ($step !== null) {
-						return $step;
-					}
+					return $this->substitutionStep($text, $from, $start, $l, $font);
 				}
 			}
 
@@ -26390,10 +26383,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($l > 0) {
-				$step = $this->substitutionStep($text, $from, $start, $l, $font);
-				if ($step !== null) {
-					return $step;
-				}
+				return $this->substitutionStep($text, $from, $start, $l, $font);
 			}
 		}
 
@@ -26412,32 +26402,23 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * @param string $replacement What a core font draws in place of the run, which is not the text it
 	 *                            replaces
 	 *
-	 * @return array|null ['before', 'insert', 'rest', 'from' => where 'rest' starts in the token,
-	 *                    'batch' => whether the scan may take another run in the same pass, which needs
-	 *                    'from' to be right and the tokens to leave the document's fonts alone], or null
-	 *                    where the run could not be found in the text
+	 * @return array ['before', 'insert', 'rest', 'from' => where 'rest' starts in the token,
+	 *               'batch' => whether the scan may take another run in the same pass, which needs the
+	 *               tokens to leave the document's fonts alone]
 	 */
 	private function substitutionStep($text, $from, $start, $l, $font, $replacement = null)
 	{
-		$patt = mb_substr($text, $start - $from, $l);
-
-		if (!preg_match("/(.*?)(" . preg_quote($patt, '/') . ")(.*)/u", $text, $m)) {
-			return null;
-		}
-
-		// A newline in $text stops the match short of the end of it, and then what is left no longer
-		// lines up with the codepoints the token was decoded to
-		$aligned = $m[0] === $text;
+		$offset = $start - $from;
 
 		return [
-			'before' => $m[1],
+			'before' => mb_substr($text, 0, $offset, 'UTF-8'),
 			'insert' => $replacement === null
-				? ['span style="font-family: ' . $font . '"', $m[2], '/span']
+				? ['span style="font-family: ' . $font . '"', mb_substr($text, $offset, $l, 'UTF-8'), '/span']
 				: [$font, $replacement, '/' . $font],
-			'rest' => $m[3],
-			'from' => $from + mb_strlen($m[1]) + mb_strlen($m[2]),
+			'rest' => mb_substr($text, $offset + $l, null, 'UTF-8'),
+			'from' => $start + $l,
 			// What a core font tag adds to the document is left for the next pass to find out
-			'batch' => $aligned && $replacement === null && $this->spanAddsNoFont($font),
+			'batch' => $replacement === null && $this->spanAddsNoFont($font),
 		];
 	}
 
