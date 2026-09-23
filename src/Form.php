@@ -592,13 +592,14 @@ class Form
 			if (!empty($objattr['checked'])) {
 				$checked = true;
 			}
-			if ($this->formUseZapD) {
+			$zapfDingbats = $this->zapfDingbats();
+			if ($zapfDingbats) {
 				$save_font = $this->mpdf->FontFamily;
 				$save_currentfont = $this->mpdf->currentfontfamily;
 				$this->mpdf->SetFont('czapfdingbats');
 			}
 			$this->SetCheckBox($w, $h, $objattr['fieldname'], $objattr['value'], $objattr['title'], $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
-			if ($this->formUseZapD) {
+			if ($zapfDingbats) {
 				$this->mpdf->SetFont($save_font);
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
@@ -644,13 +645,14 @@ class Form
 			if (!empty($objattr['checked'])) {
 				$checked = true;
 			}
-			if ($this->formUseZapD) {
+			$zapfDingbats = $this->zapfDingbats();
+			if ($zapfDingbats) {
 				$save_font = $this->mpdf->FontFamily;
 				$save_currentfont = $this->mpdf->currentfontfamily;
 				$this->mpdf->SetFont('czapfdingbats');
 			}
 			$this->SetRadio($w, $h, $objattr['fieldname'], $objattr['value'], (isset($objattr['title']) ? $objattr['title'] : ''), $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
-			if ($this->formUseZapD) {
+			if ($zapfDingbats) {
 				$this->mpdf->SetFont($save_font);
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
@@ -724,6 +726,15 @@ class Form
 			}
 		}
 		return $total;
+	}
+
+	/**
+	 * @return bool Whether a check box or radio button is set in ZapfDingbats, which PDF/X cannot embed
+	 *              and has no need of, since it removes the fields
+	 */
+	private function zapfDingbats()
+	{
+		return $this->formUseZapD && !$this->mpdf->PDFX;
 	}
 
 	// In _putpages

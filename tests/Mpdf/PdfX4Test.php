@@ -333,6 +333,23 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * An active check box or radio button is removed like any other field, rather than refused for
+	 * the ZapfDingbats it would be drawn with
+	 *
+	 * @dataProvider pdfxVersions
+	 *
+	 * @param string $version
+	 */
+	public function testActiveCheckBoxesAndRadioButtonsAreRemoved($version)
+	{
+		$html = '<form><input type="checkbox" name="box" value="1" checked="checked" /><input type="radio" name="radio" value="1" /></form>';
+
+		$pdf = $this->pdf(['PDFX' => $version, 'useActiveForms' => true], $html);
+		$this->assertStringNotContainsString('/Subtype /Widget', $pdf);
+		$this->assertStringNotContainsString('ZapfDingbats', $pdf);
+	}
+
+	/**
 	 * PDF/X-4 keeps opacity, which PDF/X-1a sets to full
 	 */
 	public function testPdfx4KeepsOpacity()
