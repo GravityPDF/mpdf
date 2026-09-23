@@ -10,11 +10,8 @@ namespace Mpdf;
  *   $ hb-shape --font-file=FreeSerif.ttf --unicodes=0915,094D,0930 --no-positions --no-clusters
  *   [kadeva|virama|radeva]
  *
- * The glyphs pinned here are what hb-shape 14.3.1 and CoreText draw with FreeSerif under its original
- * script tags only, and with the v2 Lookups restated Halant + Consonant:
- *
- *   $ hb-shape --font-file=FreeSerif-v2-order.ttf --unicodes=0915,094D,0930 --no-positions --no-clusters
- *   [dev_ka__ra.rkrf]
+ * The glyphs expected here are what hb-shape 14.3.1 draws from a copy of FreeSerif with the v2 script
+ * records removed, and from a copy whose v2 Lookups also state Halant + Consonant.
  */
 class IndicOldOrderPostBaseFormsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
