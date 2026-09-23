@@ -758,25 +758,13 @@ class Type3FontWriter implements GlyphResources
 	 */
 	private function writeToUnicode(array $codes, array $subset, array $ligatureText)
 	{
-		$entries = [];
+		$codeToChars = [];
 		foreach ($codes as $code) {
 			$char = $subset[$code];
-			$text = isset($ligatureText[$char]) ? $ligatureText[$char] : [$char];
-			$utf8 = implode('', array_map('Mpdf\Utils\UtfString::code2utf', $text));
-			$entries[] = sprintf('<%02X> <%s>', $code, strtoupper(bin2hex(mb_convert_encoding($utf8, 'UTF-16BE', 'UTF-8'))));
+			$codeToChars[$code] = isset($ligatureText[$char]) ? $ligatureText[$char] : [$char];
 		}
 
-		$cmap = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
-			. "/CIDSystemInfo <</Registry (Adobe) /Ordering (UCS) /Supplement 0>> def\n"
-			. "/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n"
-			. "1 begincodespacerange\n<00> <FF>\nendcodespacerange\n";
-
-		// A bfchar block holds 100 entries at most
-		foreach (array_chunk($entries, 100) as $block) {
-			$cmap .= count($block) . " beginbfchar\n" . implode("\n", $block) . "\nendbfchar\n";
-		}
-
-		$cmap .= "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n";
+		$cmap = ToUnicode::byteCMap($codeToChars);
 
 		$this->writer->object();
 		$this->writer->write('<</Length ' . $this->writer->streamLength($cmap) . '>>');
