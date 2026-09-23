@@ -3,15 +3,23 @@
 namespace Mpdf\Color;
 
 /**
- * A monochrome ICC profile (version 2.1) whose tone curve is sRGB's, so that grey level g is the sRGB
- * neutral (g, g, g) and draws as DeviceGray g does. PDF/X-4 printing to an RGB output intent permits no
- * DeviceGray, so mPDF writes grey in an ICC-based colour space built on this profile instead.
+ * Builds data/iccprofiles/Gray_sRGB_TRC.icc, a monochrome ICC profile (version 2.1) whose tone curve is
+ * sRGB's, so that grey level g is the sRGB neutral (g, g, g) and draws as DeviceGray g does. PDF/X-4
+ * printing to an RGB output intent permits no DeviceGray, so mPDF writes grey in an ICC-based colour
+ * space built on this profile instead. What composer grayprofile:update runs - see
+ * utils/grayprofile_update.php.
  *
- * The profile is generated rather than bundled: it is the header, a tag table, and four tags - a
- * description, a copyright, the D50 media white point and the grey tone curve.
+ * mPDF builds its own profile rather than shipping someone else's, so the file carries no third-party
+ * licence. It is the header, a tag table, and four tags: a description, a copyright, the D50 media
+ * white point and the grey tone curve.
  */
 final class GrayIccProfile
 {
+
+	/**
+	 * Where mPDF reads the profile from
+	 */
+	const FILE = __DIR__ . '/../../../data/iccprofiles/Gray_sRGB_TRC.icc';
 
 	/**
 	 * The number of entries in the tone curve, which a reader interpolates between
@@ -46,7 +54,7 @@ final class GrayIccProfile
 			. 'mntr' // device class: display
 			. 'GRAY' // data colour space
 			. 'XYZ ' // profile connection space
-			. pack('n6', 2026, 1, 1, 0, 0, 0) // created, fixed so that a document written twice is the same
+			. pack('n6', 2026, 1, 1, 0, 0, 0) // created, fixed so that building it again gives the same file
 			. 'acsp'
 			. str_repeat("\0", 24) // platform, flags, manufacturer, model and attributes
 			. pack('N', 0) // rendering intent: perceptual

@@ -2,7 +2,6 @@
 
 namespace Mpdf;
 
-use Mpdf\Color\GrayIccProfile;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Utils\UtfString;
 use setasign\Fpdi\PdfParser\StreamReader;
@@ -19,6 +18,8 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * The bundled sRGB profile, which a PDF/X-4 document embeds where it names none of its own
 	 */
 	const SRGB = __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc';
+
+	const GRAY = __DIR__ . '/../../data/iccprofiles/Gray_sRGB_TRC.icc';
 
 	/**
 	 * @var string The path a CMYK profile is written to, for a CMYK output intent
@@ -814,7 +815,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/**
 	 * DeviceGray is permitted only where the output intent is grey or CMYK, so under the default sRGB
 	 * one each neutral colour - the default text colour among them - is set in an ICC-based grey colour
-	 * space the page's resources name, on a profile mPDF generates
+	 * space the page's resources name, on the grey profile mPDF ships
 	 */
 	public function testGreyIsSetInAnIccBasedColourSpaceForAnRgbOutputIntent()
 	{
@@ -833,8 +834,8 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(1, preg_match('/\/ColorSpace <<\n\/CSGRAY (\d+) 0 R/', $pdf, $match), 'the page resources name it');
 		$this->assertSame(1, preg_match('/^\[\/ICCBased (\d+) 0 R\]/', $this->object($pdf, $match[1]), $profile));
-		$this->assertStringStartsWith('<</N 1 /Length ' . strlen(GrayIccProfile::build()) . '>>', $this->object($pdf, $profile[1]));
-		$this->assertSame(GrayIccProfile::build(), $this->stream($pdf, $profile[1]));
+		$this->assertStringStartsWith('<</N 1 /Length ' . filesize(self::GRAY) . '>>', $this->object($pdf, $profile[1]));
+		$this->assertSame(file_get_contents(self::GRAY), $this->stream($pdf, $profile[1]));
 		$this->assertSame(1, substr_count($pdf, 'Gray, sRGB tone curve (mPDF)'), 'written once');
 	}
 

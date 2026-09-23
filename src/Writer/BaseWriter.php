@@ -2,7 +2,6 @@
 
 namespace Mpdf\Writer;
 
-use Mpdf\Color\GrayIccProfile;
 use Mpdf\Strict;
 use Mpdf\Mpdf;
 use Mpdf\Utils\PdfDate;
@@ -309,7 +308,8 @@ final class BaseWriter
 	/**
 	 * The colour space grey is written in where it may not be DeviceGray: PDF/X-4 permits DeviceGray only
 	 * where its output intent is grey or CMYK, so under an RGB one grey is written in an ICC-based space
-	 * whose profile mPDF generates. Written the first time it is asked for, so asked for between objects.
+	 * whose profile is data/iccprofiles/Gray_sRGB_TRC.icc. Written the first time it is asked for, so asked
+	 * for between objects.
 	 *
 	 * @return int|null The object number of the ICC-based colour space, or null where grey is DeviceGray
 	 */
@@ -320,7 +320,7 @@ final class BaseWriter
 		}
 
 		if ($this->calibratedGray === null) {
-			$this->calibratedGray = $this->iccBased(GrayIccProfile::build(), 1);
+			$this->calibratedGray = $this->iccBased(file_get_contents(__DIR__ . '/../../data/iccprofiles/Gray_sRGB_TRC.icc'), 1);
 		}
 
 		return $this->calibratedGray;

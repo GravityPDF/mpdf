@@ -1752,7 +1752,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * PDF/X-4 permits DeviceGray only where its output intent is grey or CMYK. Printing to an RGB output
 	 * intent, grey is written in an ICC-based colour space whose profile has sRGB's tone curve, so that
-	 * each grey draws as it does in DeviceGray - see \Mpdf\Color\GrayIccProfile.
+	 * each grey draws as it does in DeviceGray - data/iccprofiles/Gray_sRGB_TRC.icc.
 	 *
 	 * @return bool Whether grey is written in that colour space rather than in DeviceGray
 	 */

@@ -3,7 +3,7 @@
 namespace Mpdf\Color;
 
 /**
- * The grey ICC profile mPDF generates, read back field by field as ICC.1:2001-04 lays it out
+ * The grey ICC profile mPDF ships, read back field by field as ICC.1:2001-04 lays it out
  */
 class GrayIccProfileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -14,13 +14,13 @@ class GrayIccProfileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private $profile;
 
 	/**
-	 * Builds the profile
+	 * Reads the profile
 	 */
 	protected function set_up()
 	{
 		parent::set_up();
 
-		$this->profile = GrayIccProfile::build();
+		$this->profile = file_get_contents(GrayIccProfile::FILE);
 	}
 
 	/**
@@ -81,11 +81,12 @@ class GrayIccProfileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Built the same each time, so that a document written twice is the same
+	 * The file is what the generator builds, so neither changes without the other - composer
+	 * grayprofile:update rewrites it
 	 */
-	public function testTheProfileIsTheSameEachTime()
+	public function testTheFileIsWhatTheGeneratorBuilds()
 	{
-		$this->assertSame($this->profile, GrayIccProfile::build());
+		$this->assertSame(GrayIccProfile::build(), $this->profile);
 	}
 
 	/**
