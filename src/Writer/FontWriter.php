@@ -211,7 +211,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 
 					$subset = $font['subsets'][$sfid];
 					unset($subset[0]);
-					$ttfontstream = $subsetter->makeSubsetSIP($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL']); // mPDF 5.7.1
+					$ttfontstream = $subsetter->makeSubsetSIP($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL'], $this->mpdf->pdfaPart() === '1'); // mPDF 5.7.1
 					$ttfontsize = strlen($ttfontstream);
 					$fontstream = gzcompress($ttfontstream);
 					$widthstring = '';
@@ -384,6 +384,12 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$this->writer->write(' /Style << /Panose ' . $this->writer->hexString($font['panose']) . ' >>');
 				}
 
+				// PDF/A-1 requires a CIDSet of a subset, written after the font file
+				$cidSet = $asSubset && $this->mpdf->pdfaPart() === '1';
+				if ($cidSet) {
+					$this->writer->write('/CIDSet ' . ($this->mpdf->n + 3) . ' 0 R');
+				}
+
 				if ($asSubset) {
 					$this->writer->write('/FontFile2 ' . ($this->mpdf->n + 2) . ' 0 R');
 				} elseif ($font['fontkey']) {
@@ -438,10 +444,33 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$this->writer->write('endobj');
 					unset($subsetter);
 				}
+
+				if ($cidSet) {
+					$this->writeCidSet(array_keys($codeToGlyph));
+				}
 			} else {
 				throw new \Mpdf\MpdfException(sprintf('Unsupported font type: %s (%s)', $type, $name));
 			}
 		}
+	}
+
+	/**
+	 * Writes a CIDSet stream: one bit per CID from 0, the high bit of the first byte first, set for each CID the
+	 * font program has a glyph for. CID 0 is always there, as .notdef.
+	 *
+	 * @param int[] $cids
+	 */
+	private function writeCidSet(array $cids)
+	{
+		$bits = str_repeat("\x00", (max($cids) >> 3) + 1);
+		foreach (array_merge([0], $cids) as $cid) {
+			$bits[$cid >> 3] = chr(ord($bits[$cid >> 3]) | (0x80 >> ($cid & 7)));
+		}
+
+		$this->writer->object();
+		$this->writer->write('<</Length ' . $this->writer->streamLength($bits) . '>>');
+		$this->writer->stream($bits);
+		$this->writer->write('endobj');
 	}
 
 	/**

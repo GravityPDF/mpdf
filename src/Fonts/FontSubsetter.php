@@ -403,6 +403,7 @@ class FontSubsetter
 	 * @param int    $TTCfontID Which font of a TrueType Collection, or 0 for a plain font
 	 * @param bool   $debug     Whether to check the font's own tables as they are read
 	 * @param int    $useOTL    Whether the document laid the font out with its OTL tables
+	 * @param bool   $oneCmapSubtable Whether the cmap may hold only its (3,0) subtable, as PDF/A-1 requires
 	 *
 	 * @return string The font program to embed
 	 *
@@ -410,7 +411,7 @@ class FontSubsetter
 	 *                                       into more segments than the format 4 subtable's length
 	 *                                       field can state
 	 */
-	public function makeSubsetSIP($file, array $subset, $TTCfontID = 0, $debug = false, $useOTL = 0)
+	public function makeSubsetSIP($file, array $subset, $TTCfontID = 0, $debug = false, $useOTL = 0, $oneCmapSubtable = false)
 	{
 		$this->open($file);
 
@@ -418,7 +419,7 @@ class FontSubsetter
 		try {
 			$this->readTableDirectory($TTCfontID, $debug);
 
-			return $this->buildSubsetSIP($subset, $TTCfontID, $useOTL);
+			return $this->buildSubsetSIP($subset, $TTCfontID, $useOTL, $oneCmapSubtable);
 		} finally {
 			$this->reader->close();
 		}
@@ -427,7 +428,7 @@ class FontSubsetter
 	/**
 	 * @return string See makeSubsetSIP
 	 */
-	private function buildSubsetSIP(array $subset, $TTCfontID, $useOTL)
+	private function buildSubsetSIP(array $subset, $TTCfontID, $useOTL, $oneCmapSubtable)
 	{
 		list($indexToLocFormat, $numberOfHMetrics, $numGlyphs) = $this->readHeaders();
 
@@ -558,11 +559,12 @@ class FontSubsetter
 		// cmap - Character to glyph mapping
 		$format6Length = 10 + 2 * count($subset);
 
-		if ($format6Length > 0xFFFF) {
+		if ($format6Length > 0xFFFF || $oneCmapSubtable) {
 			// A format 6 subtable states its length in a uint16, so past 32,762 characters it cannot be
 			// written. It maps the same codes to the same glyphs as the format 4 subtable, and a reader
 			// looks a symbolic TrueType font's codes up in (3,0) before (1,0) (ISO 32000-1, 9.6.6.4),
-			// so leave (1,0) out rather than refuse a font the format 4 subtable maps whole.
+			// so leave (1,0) out rather than refuse a font the format 4 subtable maps whole, or one
+			// PDF/A-1 allows a single subtable.
 			$cmapstr = TableWriter::uint16s([0, 1, 3, 0]) . TableWriter::uint32(12) . $cmapstr4;
 		} else {
 			$cmapstr = TableWriter::uint16s([0, 2, 1, 0]) . TableWriter::uint32(20)

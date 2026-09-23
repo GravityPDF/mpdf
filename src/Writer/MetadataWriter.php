@@ -874,7 +874,10 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						}
 
 						$fill = $this->annotationFill($pl['opt']);
-						$annot .= ' /C [' . preg_replace('/ (rg|g|k)$/', '', $fill) . ']';
+						// PDF/A-1 allows /C only with an RGB output intent; the appearance still carries the colour
+						if ($this->mpdf->pdfaPart() !== '1' || $this->mpdf->restrictColorSpace !== 3) {
+							$annot .= ' /C [' . preg_replace('/ (rg|g|k)$/', '', $fill) . ']';
+						}
 
 						// Kept apart, as a popup reuses $w and $h for its own size
 						$appearanceWidth = $w;
@@ -905,7 +908,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 						if (!$fileAttachment) {
 							// Subj is PDF 1.5 spec, after PDF/X-1a (PDF 1.3) and PDF/A-1 (PDF 1.4)
-							if (isset($pl['opt']['subj']) && !$this->mpdf->PDFX && (!$this->mpdf->PDFA || $this->mpdf->pdfaConformance()[0] !== '1')) {
+							if (isset($pl['opt']['subj']) && !$this->mpdf->PDFX && $this->mpdf->pdfaPart() !== '1') {
 								$annot .= ' /Subj ' . $this->writer->utf16BigEndianTextString($pl['opt']['subj']);
 							}
 							if ($this->writesPopup($pl)) {

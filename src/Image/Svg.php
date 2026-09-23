@@ -1510,9 +1510,7 @@ class Svg
 			} elseif ($critere_style['fill-opacity'] < 0) {
 				$opacity = 0;
 			}
-			$gs = $this->mpdf->AddExtGState(['ca' => $opacity, 'BM' => '/Normal']);
-			$this->mpdf->extgstates[$gs]['fo'] = true;
-			$path_style .= sprintf(' /GS%d gs ', $gs);
+			$path_style .= $this->opacityState(['ca' => $opacity]);
 		}
 
 		if (isset($critere_style['stroke-opacity'])) {
@@ -1526,9 +1524,7 @@ class Svg
 			} elseif ($critere_style['stroke-opacity'] < 0) {
 				$opacity = 0;
 			}
-			$gs = $this->mpdf->AddExtGState(['CA' => $opacity, 'BM' => '/Normal']);
-			$this->mpdf->extgstates[$gs]['fo'] = true;
-			$path_style .= sprintf(' /GS%d gs ', $gs);
+			$path_style .= $this->opacityState(['CA' => $opacity]);
 		}
 
 		switch ($style) {
@@ -2434,9 +2430,7 @@ class Svg
 					}
 				}
 
-				$gs = $this->mpdf->AddExtGState(['ca' => $fopacity, 'CA' => $sopacity, 'BM' => '/Normal']);
-				$this->mpdf->extgstates[$gs]['fo'] = true;
-				$opacitystr = sprintf(' /GS%d gs ', $gs);
+				$opacitystr = $this->opacityState(['ca' => $fopacity, 'CA' => $sopacity]);
 
 				$fillstr = '';
 				if (isset($current_style['fill']) && $current_style['fill'] != 'none') {
@@ -2610,9 +2604,7 @@ class Svg
 				}
 			}
 
-			$gs = $this->mpdf->AddExtGState(['ca' => $fopacity, 'CA' => $sopacity, 'BM' => '/Normal']);
-			$this->mpdf->extgstates[$gs]['fo'] = true;
-			$opacitystr = sprintf(' /GS%d gs ', $gs);
+			$opacitystr = $this->opacityState(['ca' => $fopacity, 'CA' => $sopacity]);
 
 			$fillstr = '';
 
@@ -4180,6 +4172,23 @@ class Svg
 
 				break;
 		}
+	}
+
+	/**
+	 * The operator that sets the fill (ca) and stroke (CA) opacities given, painting opaque where the document does
+	 * not allow transparency
+	 *
+	 * @param float[] $alphas
+	 *
+	 * @return string
+	 */
+	private function opacityState(array $alphas)
+	{
+		$alphas = array_map([$this->mpdf, 'allowedAlpha'], $alphas);
+		$gs = $this->mpdf->AddExtGState($alphas + ['BM' => '/Normal']);
+		$this->mpdf->extgstates[$gs]['fo'] = true;
+
+		return sprintf(' /GS%d gs ', $gs);
 	}
 
 	private function computeBezierBoundingBox($start, $c)
