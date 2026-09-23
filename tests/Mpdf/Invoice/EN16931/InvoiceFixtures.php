@@ -3,14 +3,18 @@
 namespace Mpdf\Invoice\EN16931;
 
 use Mpdf\Invoice\AllowanceCharge;
+use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
+use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Output\OutputInterface;
 use Mpdf\Invoice\Party;
 use Mpdf\Invoice\PaymentMeans;
+use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\Invoice\WriterInterface;
 
 /**
- * The invoices behind the fixtures in tests/data/invoice, whose XML Mustang validated for each profile
+ * The invoices behind the fixtures in tests/data/invoice, whose XML Mustang validated for each profile, and the HTML
+ * writer they are printed with
  */
 trait InvoiceFixtures
 {
@@ -222,6 +226,18 @@ trait InvoiceFixtures
 		$writer->method('output')->willReturn($output);
 
 		return $writer;
+	}
+
+	/**
+	 * The HTML writer in the British convention, with any labels given
+	 *
+	 * @param string[] $labels
+	 *
+	 * @return \Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter
+	 */
+	private function htmlWriter(array $labels = [])
+	{
+		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()), $labels);
 	}
 
 }

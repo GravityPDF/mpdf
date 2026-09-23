@@ -6,7 +6,6 @@ use Mpdf\Invoice\EN16931\InvoiceFixtures;
 use Mpdf\Invoice\EN16931\Writer\CiiInvoiceWriter;
 use Mpdf\Invoice\FacturX;
 use Mpdf\Invoice\Output\EmbeddedInvoiceOutput;
-use Mpdf\Invoice\Output\HtmlOutput;
 use Mpdf\Invoice\Output\AttachmentOutput;
 use Mpdf\Invoice\Output\OutputInterface;
 use Mpdf\MpdfException;
@@ -20,7 +19,7 @@ class DocumentComposerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * An HTML writer prints the invoice and the XML writer embeds it, in one call
+	 * The HTML writer prints the invoice and the XML writer embeds it, in one call
 	 */
 	public function testPrintsAndEmbedsTheInvoice()
 	{
@@ -33,7 +32,7 @@ class DocumentComposerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * With only an HTML writer the invoice is printed and nothing is embedded, so the document need not be PDF/A
+	 * With only the HTML writer the invoice is printed and nothing is embedded, so the document need not be PDF/A
 	 */
 	public function testPrintsTheInvoiceAlone()
 	{
@@ -42,7 +41,9 @@ class DocumentComposerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$output = $this->output($mpdf);
 
 		$this->assertStringNotContainsString('/EmbeddedFiles', $output);
-		$this->assertStringContainsString('Invoice INV-2026-0001', $this->drawnText($output));
+		$text = $this->drawnText($output);
+		$this->assertStringContainsString('Invoice INV-2026-0001', $text);
+		$this->assertStringContainsString('1,021.11 EUR', $text);
 	}
 
 	/**
@@ -124,16 +125,6 @@ class DocumentComposerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		DocumentComposer::compose($mpdf, $this->invoice(), [$this->htmlWriter(), $this->writerOf($output)]);
 
 		$this->assertSame(1, $mpdf->page);
-	}
-
-	/**
-	 * An HTML writer that prints the fixture invoice's number
-	 *
-	 * @return \Mpdf\Invoice\WriterInterface
-	 */
-	private function htmlWriter()
-	{
-		return $this->writerOf(new HtmlOutput('<h1>Invoice INV-2026-0001</h1>'));
 	}
 
 }
