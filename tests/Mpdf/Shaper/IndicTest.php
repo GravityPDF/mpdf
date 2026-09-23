@@ -22,14 +22,24 @@ class IndicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return ($serial << 4) | $type;
 	}
 
-	private function reorder($info)
+	/**
+	 * Run initial_reordering_syllable() over one syllable, with a font offering none of the features
+	 * the base search reads.
+	 *
+	 * @param array[] $info      The glyph info of the syllable
+	 * @param int     $script    The UCDN script number
+	 * @param bool    $isOldSpec Whether the font has only the original Indic script tags
+	 *
+	 * @return array[] The glyph info after reordering
+	 */
+	private function reorder($info, $script = Ucdn::SCRIPT_DEVANAGARI, $isOldSpec = false)
 	{
 		Indic::initial_reordering_syllable(
 			$info,
-			[],
-			Indic::$indic_configs[Ucdn::SCRIPT_DEVANAGARI],
-			Ucdn::SCRIPT_DEVANAGARI,
-			false,
+			['rphf' => [], 'pref' => [], 'blwf' => [], 'pstf' => []],
+			Indic::$indic_configs[$script],
+			$script,
+			$isOldSpec,
 			0,
 			count($info)
 		);
@@ -104,64 +114,36 @@ class IndicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Consonant, virama, consonant in each script, with whether HarfBuzz's config for that script
-	 * applies blwf before the base (BLWF_MODE_PRE_AND_POST) as well as after it.
+	 * Consonant, virama, consonant in each script. HarfBuzz applies blwf before the base as well as
+	 * after it (BLWF_MODE_PRE_AND_POST) in all of them but Telugu and Kannada, and only for fonts
+	 * with the v2 script tags.
 	 *
-	 * @return array[] script, code points, whether the new-spec pre-base glyphs carry the blwf bit
+	 * @return array[] script, code points, whether the font is old spec, whether the glyphs before
+	 *                 the base carry the blwf bit
 	 */
 	public function dataPreBaseBelowForms()
 	{
 		return [
-			'Devanagari' => [Ucdn::SCRIPT_DEVANAGARI, [0x0915, 0x094D, 0x0915], true],
-			'Bengali' => [Ucdn::SCRIPT_BENGALI, [0x0995, 0x09CD, 0x0995], true],
-			'Gurmukhi' => [Ucdn::SCRIPT_GURMUKHI, [0x0A15, 0x0A4D, 0x0A15], true],
-			'Gujarati' => [Ucdn::SCRIPT_GUJARATI, [0x0A95, 0x0ACD, 0x0A95], true],
-			'Oriya' => [Ucdn::SCRIPT_ORIYA, [0x0B15, 0x0B4D, 0x0B15], true],
-			'Tamil' => [Ucdn::SCRIPT_TAMIL, [0x0B95, 0x0BCD, 0x0B95], true],
-			'Malayalam' => [Ucdn::SCRIPT_MALAYALAM, [0x0D15, 0x0D4D, 0x0D15], true],
-			'Telugu' => [Ucdn::SCRIPT_TELUGU, [0x0C15, 0x0C4D, 0x0C15], false],
-			'Kannada' => [Ucdn::SCRIPT_KANNADA, [0x0C95, 0x0CCD, 0x0C95], false],
+			'Devanagari' => [Ucdn::SCRIPT_DEVANAGARI, [0x0915, 0x094D, 0x0915], false, true],
+			'Bengali' => [Ucdn::SCRIPT_BENGALI, [0x0995, 0x09CD, 0x0995], false, true],
+			'Gurmukhi' => [Ucdn::SCRIPT_GURMUKHI, [0x0A15, 0x0A4D, 0x0A15], false, true],
+			'Gujarati' => [Ucdn::SCRIPT_GUJARATI, [0x0A95, 0x0ACD, 0x0A95], false, true],
+			'Oriya' => [Ucdn::SCRIPT_ORIYA, [0x0B15, 0x0B4D, 0x0B15], false, true],
+			'Tamil' => [Ucdn::SCRIPT_TAMIL, [0x0B95, 0x0BCD, 0x0B95], false, true],
+			'Malayalam' => [Ucdn::SCRIPT_MALAYALAM, [0x0D15, 0x0D4D, 0x0D15], false, true],
+			'Telugu' => [Ucdn::SCRIPT_TELUGU, [0x0C15, 0x0C4D, 0x0C15], false, false],
+			'Kannada' => [Ucdn::SCRIPT_KANNADA, [0x0C95, 0x0CCD, 0x0C95], false, false],
+			'Devanagari, old-spec font' => [Ucdn::SCRIPT_DEVANAGARI, [0x0915, 0x094D, 0x0915], true, false],
 		];
 	}
 
 	/**
-	 * The consonant and virama before the base are marked for blwf as well as for half in the scripts
-	 * whose HarfBuzz config is BLWF_MODE_PRE_AND_POST, and for half only in Telugu and Kannada. The
-	 * base itself is marked for neither.
+	 * The consonant and virama before the base are marked for half, and for blwf too where the
+	 * script and font call for it. The base is marked for neither.
 	 *
 	 * @dataProvider dataPreBaseBelowForms
 	 */
-	public function testPreBaseGlyphsAreMarkedForBlwfWhereTheScriptAppliesItBeforeTheBase($script, $codepoints, $preBaseBlwf)
-	{
-		$info = $this->reorderConjunct($script, $codepoints, false);
-
-		$preBase = Indic::FLAG(Indic::HALF) | ($preBaseBlwf ? Indic::FLAG(Indic::BLWF) : 0);
-		$this->assertSame([$preBase, $preBase, 0], array_column($info, 'mask'));
-	}
-
-	/**
-	 * A font with only the original Indic script tags gets no pre-base blwf bit, as in HarfBuzz,
-	 * which reserves it for the v2 tags.
-	 */
-	public function testAnOldSpecFontGetsNoPreBaseBlwf()
-	{
-		$info = $this->reorderConjunct(Ucdn::SCRIPT_DEVANAGARI, [0x0915, 0x094D, 0x0915], true);
-
-		$preBase = Indic::FLAG(Indic::HALF);
-		$this->assertSame([$preBase, $preBase, 0], array_column($info, 'mask'));
-	}
-
-	/**
-	 * Run initial_reordering_syllable() over consonant, virama, consonant with a font offering none
-	 * of the features the base search reads, so the last consonant is the base.
-	 *
-	 * @param int   $script     The UCDN script number
-	 * @param int[] $codepoints Consonant, virama, consonant
-	 * @param bool  $isOldSpec  Whether the font has only the original Indic script tags
-	 *
-	 * @return array[] The glyph info after reordering
-	 */
-	private function reorderConjunct($script, $codepoints, $isOldSpec)
+	public function testPreBaseGlyphsAreMarkedForBlwfWhereHarfBuzzAppliesItBeforeTheBase($script, $codepoints, $isOldSpec, $preBaseBlwf)
 	{
 		$info = [];
 		foreach ($codepoints as $i => $codepoint) {
@@ -173,18 +155,12 @@ class IndicTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			];
 		}
 
-		Indic::initial_reordering_syllable(
-			$info,
-			['rphf' => [], 'pref' => [], 'blwf' => [], 'pstf' => []],
-			Indic::$indic_configs[$script],
-			$script,
-			$isOldSpec,
-			0,
-			count($info)
-		);
+		$info = $this->reorder($info, $script, $isOldSpec);
 
-		return $info;
+		$preBase = Indic::FLAG(Indic::HALF) | ($preBaseBlwf ? Indic::FLAG(Indic::BLWF) : 0);
+		$this->assertSame([$preBase, $preBase, 0], array_column($info, 'mask'));
 	}
+
 
 	/**
 	 * @return array the diagnostics Otl and the shaper raised, and the codepoints of the drawn line

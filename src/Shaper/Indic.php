@@ -1341,18 +1341,18 @@ class Indic
 	 */
 
 	public static $indic_configs = [/* index is SCRIPT_number from UCDN */
-		9 => [true, 0x094D, 1, 10, 0, 0],
-		10 => [true, 0x09CD, 1, 9, 0, 0],
-		11 => [true, 0x0A4D, 1, 7, 0, 0],
-		12 => [true, 0x0ACD, 1, 10, 0, 0],
-		13 => [true, 0x0B4D, 1, 5, 0, 0],
-		14 => [true, 0x0BCD, 1, 12, 0, 0],
-		15 => [true, 0x0C4D, 1, 12, 1, 1],
-		16 => [true, 0x0CCD, 1, 12, 0, 1],
-		17 => [true, 0x0D4D, 1, 5, 3, 0],
-		18 => [false, 0x0DCA, 0, 5, 1, 0], /* Sinhala */
-		30 => [false, 0x17D2, 0, 10, 2, 0], /* Khmer */
-		84 => [false, 0xA9C0, 1, 10, 0, 0], /* Javanese */
+		9 => [true, 0x094D, 1, 10, 0, self::BLWF_MODE_PRE_AND_POST],
+		10 => [true, 0x09CD, 1, 9, 0, self::BLWF_MODE_PRE_AND_POST],
+		11 => [true, 0x0A4D, 1, 7, 0, self::BLWF_MODE_PRE_AND_POST],
+		12 => [true, 0x0ACD, 1, 10, 0, self::BLWF_MODE_PRE_AND_POST],
+		13 => [true, 0x0B4D, 1, 5, 0, self::BLWF_MODE_PRE_AND_POST],
+		14 => [true, 0x0BCD, 1, 12, 0, self::BLWF_MODE_PRE_AND_POST],
+		15 => [true, 0x0C4D, 1, 12, 1, self::BLWF_MODE_POST_ONLY],
+		16 => [true, 0x0CCD, 1, 12, 0, self::BLWF_MODE_POST_ONLY],
+		17 => [true, 0x0D4D, 1, 5, 3, self::BLWF_MODE_PRE_AND_POST],
+		18 => [false, 0x0DCA, 0, 5, 1, self::BLWF_MODE_PRE_AND_POST], /* Sinhala */
+		30 => [false, 0x17D2, 0, 10, 2, self::BLWF_MODE_PRE_AND_POST], /* Khmer */
+		84 => [false, 0xA9C0, 1, 10, 0, self::BLWF_MODE_PRE_AND_POST], /* Javanese */
 	];
 
 
