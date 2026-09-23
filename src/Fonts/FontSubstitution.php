@@ -22,8 +22,8 @@ class FontSubstitution
 	private $mpdf;
 
 	/**
-	 * @var array[] What metrics() read of each font the document had not loaded, by family, so it is
-	 *              not read again for every emoji
+	 * @var array What metrics() read of each font the document has not loaded, by family, so it is not
+	 *            read again for every emoji
 	 */
 	private $tried = [];
 
@@ -145,9 +145,8 @@ class FontSubstitution
 	}
 
 	/**
-	 * What the scan needs to know of a font: the document's own entry for it where the document has
-	 * loaded it, and otherwise its metrics, read without adding it to the document so that asking about
-	 * a font the scan then passes over leaves no trace.
+	 * What the scan needs to know of a font: the document's entry for it where the document has loaded
+	 * it, and otherwise its metrics, read without adding it to the document.
 	 *
 	 * @param string $family The font's key in fontdata
 	 *
