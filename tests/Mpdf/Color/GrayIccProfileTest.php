@@ -54,7 +54,7 @@ class GrayIccProfileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertStringStartsWith('desc', $this->tag('desc'));
 		$this->assertStringContainsString("Gray, sRGB tone curve (mPDF)\0", $this->tag('desc'));
-		$this->assertStringStartsWith('text', $this->tag('cprt'));
+		$this->assertSame('text' . pack('N', 0) . GrayIccProfile::COPYRIGHT . "\0", $this->tag('cprt'), 'mPDF\'s licence');
 		$this->assertSame('XYZ ', substr($this->tag('wtpt'), 0, 4));
 		$this->assertSame([0.9642, 1.0, 0.8249], $this->xyz(substr($this->tag('wtpt'), 8)), 'the media white point, D50');
 	}

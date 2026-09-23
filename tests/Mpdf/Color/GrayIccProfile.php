@@ -9,9 +9,9 @@ namespace Mpdf\Color;
  * space built on this profile instead. What composer grayprofile:update runs - see
  * utils/grayprofile_update.php.
  *
- * mPDF builds its own profile rather than shipping someone else's, so the file carries no third-party
- * licence. It is the header, a tag table, and four tags: a description, a copyright, the D50 media
- * white point and the grey tone curve.
+ * mPDF builds its own profile rather than shipping someone else's, so the file is under mPDF's own
+ * licence, GPL-2.0-only, which its copyright tag states. It is the header, a tag table, and four tags: a
+ * description, a copyright, the D50 media white point and the grey tone curve.
  */
 final class GrayIccProfile
 {
@@ -20,6 +20,11 @@ final class GrayIccProfile
 	 * Where mPDF reads the profile from
 	 */
 	const FILE = __DIR__ . '/../../../data/iccprofiles/Gray_sRGB_TRC.icc';
+
+	/**
+	 * The copyright tag's text
+	 */
+	const COPYRIGHT = 'Copyright 2026 mPDF contributors. Licensed under the GNU General Public License version 2 (GPL-2.0-only).';
 
 	/**
 	 * The number of entries in the tone curve, which a reader interpolates between
@@ -34,7 +39,7 @@ final class GrayIccProfile
 		$d50 = self::xyz(0.9642, 1.0, 0.8249);
 		$tags = [
 			'desc' => self::description('Gray, sRGB tone curve (mPDF)'),
-			'cprt' => 'text' . pack('N', 0) . "No copyright, use freely\0",
+			'cprt' => 'text' . pack('N', 0) . self::COPYRIGHT . "\0",
 			'wtpt' => $d50,
 			'kTRC' => self::curve(),
 		];
