@@ -720,7 +720,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 							// PushPin
 							$f = $pl['opt']['file'];
-							$f = preg_replace('/^.*\//', '', $f);
+							$f = preg_replace('/^.*[\/\\\\]/', '', $f); // a Windows path separates with backslashes
 							$f = preg_replace('/[^a-zA-Z0-9._]/', '', $f);
 
 							if (isset($ids['filespec'])) {
