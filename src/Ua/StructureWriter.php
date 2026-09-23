@@ -313,8 +313,9 @@ class StructureWriter
 	 * around it is drawn, so the order elements were added in does not tell where the block's own
 	 * text falls between them. Content drawn on a page is numbered as it is drawn, so a child is put
 	 * after the block's content drawn before its own; a child without any, such as a Form, after
-	 * the content the block had when the child was added. Children keep their order, and content
-	 * of an imported page keeps the order its source gave it.
+	 * the content the block had when the child was added. Children keep their order, but for a
+	 * table's footer, which HTML lets come before the body, and content of an imported page keeps
+	 * the order its source gave it.
 	 *
 	 * @param StructureElement $elem
 	 *
@@ -322,11 +323,16 @@ class StructureWriter
 	 */
 	private function kidsInReadingOrder(StructureElement $elem)
 	{
+		$children = $elem->getChildren();
+		if ($elem->getType() === 'Table') {
+			$children = $this->footAfterBody($children);
+		}
+
 		$mcids = $elem->getMcids();
 		$count = count($mcids);
 		$kids = [];
 		$next = 0;
-		foreach ($elem->getChildren() as $child) {
+		foreach ($children as $child) {
 			$key = $this->firstContentKey($child);
 			while ($next < $count) {
 				$mcr = $mcids[$next];
@@ -343,6 +349,37 @@ class StructureWriter
 		}
 
 		return array_merge($kids, array_slice($mcids, $next));
+	}
+
+	/**
+	 * A table's row groups with its TFoot after the last TBody, where the footer is drawn
+	 *
+	 * @param StructureElement[] $children
+	 *
+	 * @return StructureElement[]
+	 */
+	private function footAfterBody(array $children)
+	{
+		$feet = [];
+		$others = [];
+		$lastBody = -1;
+		foreach ($children as $child) {
+			if ($child->getType() === 'TFoot') {
+				$feet[] = $child;
+				continue;
+			}
+			if ($child->getType() === 'TBody') {
+				$lastBody = count($others);
+			}
+			$others[] = $child;
+		}
+		if ($feet === [] || $lastBody < 0) {
+			return $children;
+		}
+
+		array_splice($others, $lastBody + 1, 0, $feet);
+
+		return $others;
 	}
 
 	/**

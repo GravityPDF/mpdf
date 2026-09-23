@@ -12993,6 +12993,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 
+			// A header or footer repeated at a page break is read once, where the table has it
+			if ($this->PDFUA) {
+				$this->ua->getStructureTree()->openArtifact();
+			}
+
 
 			// Advance down page by half width of top border
 			if ($horf == 'H') { // Only if header
@@ -13478,6 +13483,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}// end column $content
 				$this->y = $y + $h; // Update y coordinate
 			}// end row $i
+			if ($this->PDFUA) {
+				$this->ua->getStructureTree()->closeArtifact();
+			}
 			unset($table);
 			$this->colsums = [];
 		}
