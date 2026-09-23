@@ -72,6 +72,14 @@ class StructureElement
 	protected $objNum;
 
 	/**
+	 * How much marked content the parent owned when this element was added, which places an element
+	 * with no content of its own, such as a Form, among the parent's content
+	 *
+	 * @var int
+	 */
+	protected $parentContentBefore;
+
+	/**
 	 * @param string $type       A standard PDF structure type
 	 * @param array  $attributes PDF attribute names, not HTML ones: ['Scope' => 'Row'], not ['scope' => 'row']
 	 *
@@ -95,6 +103,7 @@ class StructureElement
 		$this->textRuns   = [];
 		$this->id         = null;
 		$this->objNum     = 0;
+		$this->parentContentBefore = 0;
 	}
 
 	/** @return string */
@@ -151,6 +160,12 @@ class StructureElement
 		return $this->objNum;
 	}
 
+	/** @return int How much marked content the parent owned when this element was added */
+	public function getParentContentBefore()
+	{
+		return $this->parentContentBefore;
+	}
+
 	// The mutators below are for StructureTree and StructureWriter; tag classes go through
 	// StructureTree::open(), addContent() and addObjref().
 
@@ -165,11 +180,11 @@ class StructureElement
 	}
 
 	/**
-	 * An id whose bytes are the same written as a PDF name and as a PDF string.
+	 * An id in the form a TH's /ID and a TD's /Headers both take, so readers matching the two on
+	 * their bytes find each other.
 	 *
-	 * A TH's /ID is a string while a TD's /Headers names it, and readers match the two on their
-	 * bytes. Letters are lowercased because the HTML parser uppercases id="" but leaves headers=""
-	 * and the aria attributes as written, and anything outside [a-z0-9_.-] is #-escaped.
+	 * Letters are lowercased because the HTML parser uppercases id="" but leaves headers="" and the
+	 * aria attributes as written, and anything outside [a-z0-9_.-] is #-escaped.
 	 *
 	 * @param string $id
 	 *
@@ -334,6 +349,7 @@ class StructureElement
 	public function addChild(StructureElement $child)
 	{
 		$child->parent    = $this;
+		$child->parentContentBefore = count($this->mcids);
 		$this->children[] = $child;
 	}
 

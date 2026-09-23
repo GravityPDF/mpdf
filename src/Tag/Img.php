@@ -434,7 +434,8 @@ class Img extends Tag
 				$objattr['transform'] = $properties['TRANSFORM'];
 			}
 
-			$objattr['pdfua_alt'] = $alt;
+			// An image marked presentational is decorative, as with alt=""
+			$objattr['pdfua_alt'] = \Mpdf\Ua\StructType::isPresentational($attr) ? '' : $alt;
 
 			// The areas of the map are linked when the image is drawn
 			if (isset($attr['USEMAP']) && $attr['USEMAP'] !== '') {

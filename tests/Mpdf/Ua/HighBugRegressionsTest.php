@@ -12,8 +12,8 @@ class HighBugRegressionsTest extends PdfUaTestCase
 {
 
 	/**
-	 * A TH's /ID is the same bytes as the name a TD's /Headers uses for it, so the two can be
-	 * matched (Matterhorn 09-004/09-005).
+	 * A TH's /ID is the same byte string a TD's /Headers uses for it, so the two can be matched
+	 * (Matterhorn 09-004/09-005).
 	 */
 	public function testThIdBytesEqualHeadersReferenceBytes()
 	{
@@ -27,10 +27,10 @@ class HighBugRegressionsTest extends PdfUaTestCase
 		$this->assertMatchesRegularExpression('@/ID\s*\(rate\)@', $output);
 		$this->assertMatchesRegularExpression('@/ID\s*\(qty\)@', $output);
 
-		$this->assertMatchesRegularExpression('@/Headers\s*\[\s*/rate\s*\]@', $output);
-		$this->assertMatchesRegularExpression('@/Headers\s*\[\s*/qty\s*\]@', $output);
+		$this->assertMatchesRegularExpression('@/Headers\s*\[\s*\(rate\)\s*\]@', $output);
+		$this->assertMatchesRegularExpression('@/Headers\s*\[\s*\(qty\)\s*\]@', $output);
 
-		// A UTF-16BE /ID could never equal the name in /Headers
+		// A UTF-16BE /ID could never equal the string in /Headers
 		$this->assertStringNotContainsString("\xFE\xFFr\x00a\x00t\x00e", $output);
 	}
 
@@ -47,7 +47,7 @@ class HighBugRegressionsTest extends PdfUaTestCase
 
 		// ( is #28 and ) is #29
 		$this->assertStringContainsString('/ID (col#281#29)', $output);
-		$this->assertStringContainsString('/Headers [/col#281#29]', $output);
+		$this->assertStringContainsString('/Headers [(col#281#29)]', $output);
 	}
 
 	/**

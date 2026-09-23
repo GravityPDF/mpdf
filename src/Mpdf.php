@@ -12993,6 +12993,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 
+			// A header or footer repeated at a page break is read once, where the table has it
+			if ($this->PDFUA) {
+				$this->ua->getStructureTree()->openArtifact();
+			}
+
 
 			// Advance down page by half width of top border
 			if ($horf == 'H') { // Only if header
@@ -13478,6 +13483,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}// end column $content
 				$this->y = $y + $h; // Update y coordinate
 			}// end row $i
+			if ($this->PDFUA) {
+				$this->ua->getStructureTree()->closeArtifact();
+			}
 			unset($table);
 			$this->colsums = [];
 		}
@@ -28344,8 +28352,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (count($svgi[0])) {
 			for ($i = 0; $i < count($svgi[0]); $i++) {
 				$file = $this->cache->write('/_tempSVG' . uniqid(random_int(1, 100000), true) . '_' . $i . '.svg', $svgi[0][$i]);
-				$class = $this->svgClassAttribute($svgi[0][$i]);
-				$html = str_replace($svgi[0][$i], '<img src="' . $file . '"' . ($class !== '' ? ' class="' . $class . '"' : '') . ' />', $html);
+				// The class the SVG was styled by, and under PDF/UA what names it or hides it from assistive technology
+				$names = $this->PDFUA ? ['class', 'role', 'aria-label', 'aria-labelledby', 'aria-describedby', 'aria-hidden'] : ['class'];
+				$attributes = '';
+				foreach ($names as $name) {
+					$value = $this->svgAttribute($svgi[0][$i], $name);
+					if ($value !== '') {
+						$attributes .= ' ' . $name . '="' . $value . '"';
+					}
+				}
+				$html = str_replace($svgi[0][$i], '<img src="' . $file . '"' . $attributes . ' />', $html);
 			}
 		}
 
@@ -28494,25 +28510,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * The class an embedded SVG was given, so the img element it becomes can still be reached by the
-	 * selectors written for it. The value may be double quoted, single quoted or unquoted, as any
-	 * attribute value may be; a double quote is dropped because no class name can hold one.
+	 * An attribute of an embedded SVG, to be given to the img element it becomes. The value may be
+	 * double quoted, single quoted or unquoted, as any attribute value may be; a double quote is
+	 * dropped so the value can be written back between double quotes.
 	 *
 	 * @param string $svg
+	 * @param string $name
 	 *
 	 * @return string
 	 */
-	private function svgClassAttribute($svg)
+	private function svgAttribute($svg, $name)
 	{
 		$matches = [];
-		if (!preg_match('/^<svg\b[^>]*?\sclass\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>"\']+))/si', $svg, $matches)) {
+		$pattern = '/^<svg\b[^>]*?\s' . preg_quote($name, '/') . '\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>"\']+))/si';
+		if (!preg_match($pattern, $svg, $matches)) {
 			return '';
 		}
 
 		// PCRE drops the groups after the one that took part
-		$class = array_pop($matches);
+		$value = array_pop($matches);
 
-		return str_replace('"', '', $class);
+		return str_replace('"', '', $value);
 	}
 
 	// mPDF 5.7+

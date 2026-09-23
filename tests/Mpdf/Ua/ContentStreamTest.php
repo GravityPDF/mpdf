@@ -342,7 +342,7 @@ class ContentStreamTest extends PdfUaTestCase
 	}
 
 	/**
-	 * td headers="col1 col2" becomes a Table attribute of /Headers [/col1 /col2] on the TD
+	 * td headers="col1 col2" becomes a Table attribute of /Headers [(col1) (col2)] on the TD
 	 * (Matterhorn 09-004/09-005).
 	 */
 	public function testTdHeadersAttributeMapsToStructElement()
@@ -353,9 +353,7 @@ class ContentStreamTest extends PdfUaTestCase
 			. '</table>';
 		$output = $this->getOutput($this->makeMpdf(), $html);
 		$this->assertStringContainsString('/O /Table', $output);
-		$this->assertStringContainsString('/Headers', $output);
-		$this->assertStringContainsString('/col1', $output);
-		$this->assertStringContainsString('/col2', $output);
+		$this->assertStringContainsString('/Headers [(col1) (col2)]', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 

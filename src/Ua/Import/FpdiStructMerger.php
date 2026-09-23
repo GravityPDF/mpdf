@@ -939,6 +939,8 @@ class FpdiStructMerger
 			}
 		}
 
+		$this->copyStructureAttributes($resolved, $parser, $hostElem);
+
 		$kRef = PdfDictionary::get($resolved, 'K');
 		if (!($kRef instanceof PdfNull)) {
 			try {
@@ -999,7 +1001,50 @@ class FpdiStructMerger
 			}
 		}
 
+		// The annotation of a Form or Link is not brought across with it: a widget is not imported at
+		// all, and an imported link is given an element of its own. One with nothing else is dropped.
+		if (($hostType === 'Form' || $hostType === 'Link') && $hostElem->getMcids() === [] && $hostElem->getChildren() === []) {
+			$hostParent->removeChild($hostElem);
+			return null;
+		}
+
 		return $hostElem;
+	}
+
+	/**
+	 * Copy the attributes of a source element that name nothing else in its document: a header
+	 * cell's /Scope, a cell's spans, a list's numbering and a block's placement. Without them its
+	 * table no longer reads as one (Matterhorn 15-003, 15-005). /Headers and /ID are left out, as
+	 * they would have to be renamed to stay unique here.
+	 *
+	 * @param PdfDictionary                      $resolved
+	 * @param \setasign\Fpdi\PdfParser\PdfParser $parser
+	 * @param StructureElement                   $hostElem
+	 */
+	private function copyStructureAttributes(PdfDictionary $resolved, $parser, StructureElement $hostElem)
+	{
+		$kinds = ['Scope' => 'name', 'ListNumbering' => 'name', 'Placement' => 'name', 'ColSpan' => 'span', 'RowSpan' => 'span'];
+
+		// An array of attribute objects may carry revision numbers between them, which are skipped
+		foreach ($this->normaliseKidsToArray(PdfDictionary::get($resolved, 'A'), $parser) as $object) {
+			try {
+				$object = PdfType::resolve($object, $parser);
+				if (!($object instanceof PdfDictionary)) {
+					continue;
+				}
+				foreach ($kinds as $key => $kind) {
+					$value = PdfType::resolve(PdfDictionary::get($object, $key), $parser);
+					// A name is written back as it is, so only a plain one is taken
+					if ($kind === 'name' && $value instanceof PdfName && preg_match('/\A[A-Za-z]+\z/', $value->value)) {
+						$hostElem->setAttribute($key, $value->value);
+					} elseif ($kind === 'span' && $value instanceof PdfNumeric && (int) $value->value > 1) {
+						$hostElem->setAttribute($key, (int) $value->value);
+					}
+				}
+			} catch (\Exception $e) {
+				continue;
+			}
+		}
 	}
 
 	/**

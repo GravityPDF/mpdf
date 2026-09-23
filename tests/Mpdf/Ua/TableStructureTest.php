@@ -129,6 +129,53 @@ class TableStructureTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A <tfoot> written before <tbody>, as HTML 4 asked, is read after the body, where it is drawn.
+	 */
+	public function testFooterWrittenBeforeTheBodyIsReadAfterIt()
+	{
+		$mpdf = $this->makeMpdf();
+		$html = '<table>'
+			. '<thead><tr><th>Head</th></tr></thead>'
+			. '<tfoot><tr><td>Foot</td></tr></tfoot>'
+			. '<tbody><tr><td>Body</td></tr></tbody>'
+			. '</table>';
+		$output = preg_replace('/\s+/', ' ', $this->getOutput($mpdf, $html));
+
+		$table = $this->findFirstOfType($mpdf->getPdfUaStructureTree()->getRoot(), 'Table');
+		$refs = [];
+		foreach ($table->getChildren() as $group) {
+			$refs[$group->getType()] = $group->getObjNum() . ' 0 R';
+		}
+
+		$this->assertStringContainsString(
+			'/S /Table /P ' . $table->getParent()->getObjNum() . ' 0 R /K [' . $refs['THead'] . ' ' . $refs['TBody'] . ' ' . $refs['TFoot'] . ']',
+			$output
+		);
+	}
+
+	/**
+	 * The header and footer rows a table repeats at each page break are artifacts; each cell is read
+	 * once, on the page where the table has it.
+	 */
+	public function testRowsRepeatedAtAPageBreakAreArtifacts()
+	{
+		$rows = str_repeat('<tr><td>Body</td></tr>', 80);
+		$mpdf = $this->makeMpdf();
+		$this->getOutput(
+			$mpdf,
+			'<table><thead><tr><th>Head</th></tr></thead><tfoot><tr><td>Foot</td></tr></tfoot><tbody>' . $rows . '</tbody></table>'
+		);
+		$this->assertGreaterThan(1, count($mpdf->pages));
+
+		$table = $this->findFirstOfType($mpdf->getPdfUaStructureTree()->getRoot(), 'Table');
+		$th = $this->findFirstOfType($this->firstChildOfType($table, 'THead'), 'TH');
+		$footCell = $this->findFirstOfType($this->firstChildOfType($table, 'TFoot'), 'TD');
+
+		$this->assertCount(1, $th->getMcids());
+		$this->assertCount(1, $footCell->getMcids());
+	}
+
+	/**
 	 * @param \Mpdf\Ua\StructureElement $node
 	 * @param string                    $type
 	 *

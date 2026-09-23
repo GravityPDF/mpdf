@@ -463,17 +463,51 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A tagged page holding a table with header cells and spans, a form field and a linked image
+	 * passes once imported into a document that is not PDFUAauto.
+	 *
+	 * @return void
+	 */
+	public function testFpdiTaggedImportOfTableFormAndLinkPassesUa1()
+	{
+		$png = 'data:image/png;base64,'
+			. 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8'
+			. 'z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
+		$sourceFixture = $this->makeTaggedSourceFixture(
+			'<h1>Tagged source</h1>'
+			. '<table border="1"><tr><th scope="col" colspan="2">Totals</th></tr>'
+			. '<tr><th scope="row">Q1</th><td>10</td></tr></table>'
+			. '<p>Name <input type="text" name="fname" title="Name"></p>'
+			. '<p><a href="https://example.com"><img src="' . $png . '" alt="Example home" width="20" height="20"></a></p>',
+			['useActiveForms' => true]
+		);
+
+		$mpdf = $this->makeMpdf(['enableImports' => true]);
+		$mpdf->setSourceFile($sourceFixture);
+		$pageId = $mpdf->importPage(1);
+		$mpdf->AddPage();
+		$mpdf->useImportedPage($pageId);
+		$pdf = $mpdf->Output(null, 'S');
+		@unlink($sourceFixture);
+		$this->assertVeraPdfCompliant($pdf, 'tagged FPDI import of a table, a form field and a link');
+	}
+
+	/**
 	 * Writes a tagged PDF/UA document to import.
+	 *
+	 * @param string $html
+	 * @param array  $config
 	 *
 	 * @return string The file's path
 	 */
-	private function makeTaggedSourceFixture()
+	private function makeTaggedSourceFixture($html = '', $config = [])
 	{
-		$source = $this->makeMpdf();
-		$source->WriteHTML(
-			'<h1>Tagged source heading</h1>'
-			. '<p>Tagged source body paragraph generated for a tagged FPDI import.</p>'
-		);
+		if ($html === '') {
+			$html = '<h1>Tagged source heading</h1>'
+				. '<p>Tagged source body paragraph generated for a tagged FPDI import.</p>';
+		}
+		$source = $this->makeMpdf($config);
+		$source->WriteHTML($html);
 		$path = tempnam(sys_get_temp_dir(), 'mpdf_ua_fpdi_tagged_') . '.pdf';
 		$source->Output($path, 'F');
 		return $path;
@@ -869,6 +903,21 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A document that is PDF/A-2b and PDF/UA-1 at once passes both, its pdfuaid schema declared as
+	 * PDF/A requires.
+	 *
+	 * @return void
+	 */
+	public function testPdfA2bDocumentPassesUa1And2b()
+	{
+		$mpdf = $this->makeMpdf(['PDFA' => true, 'PDFAversion' => '2-B']);
+		$pdf = $this->getOutput($mpdf, '<h1>Archived and accessible</h1><p>Both at once.</p>');
+
+		$this->assertVeraPdfCompliant($pdf, 'PDF/A-2b and PDF/UA-1');
+		$this->assertVeraPdfCompliant($pdf, 'PDF/A-2b and PDF/UA-1', '2b');
+	}
+
+	/**
 	 * mpdf-examples example64_protected_document.php: SetProtection() keeps 'extract' and leaves the
 	 * XMP unencrypted.
 	 *
@@ -1178,6 +1227,26 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A figure holding an image and its caption passes, as does one given a name with aria-label.
+	 *
+	 * @return void
+	 */
+	public function testFigureWithCaptionPassesUa1()
+	{
+		$png = 'data:image/png;base64,'
+			. 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8'
+			. 'z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
+
+		$html = '<h1>Figures</h1>'
+			. '<figure><img src="' . $png . '" width="20" height="20" alt="A red pixel">'
+			. '<figcaption>Figure 1. One pixel</figcaption></figure>'
+			. '<figure aria-label="Sales by quarter"><p>Q1 10, Q2 20</p></figure>';
+
+		$pdf = $this->getOutput($this->makeMpdf(), $html);
+		$this->assertVeraPdfCompliant($pdf, 'figures with captions');
+	}
+
+	/**
 	 * Reads an HTML fixture from tests/data/html/pdfua-examples/, skipping the test when it is missing.
 	 *
 	 * @param string $name The file name without .html
@@ -1193,13 +1262,14 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Asserts veraPDF finds the document ua1 compliant, listing the failed rules when it does not.
+	 * Asserts veraPDF finds the document compliant, listing the failed rules when it does not.
 	 *
 	 * @param string $pdfBytes
-	 * @param string $label What the document is, for the failure message
+	 * @param string $label   What the document is, for the failure message
+	 * @param string $flavour The veraPDF profile, ua1 unless another is named
 	 * @return void
 	 */
-	private function assertVeraPdfCompliant($pdfBytes, $label)
+	private function assertVeraPdfCompliant($pdfBytes, $label, $flavour = 'ua1')
 	{
 		$tmpFile = tempnam(sys_get_temp_dir(), 'mpdf-ua1-');
 
@@ -1211,7 +1281,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 
 		$result = null;
 		try {
-			$result = $this->runVeraPdf($pdfFile);
+			$result = $this->runVeraPdf($pdfFile, $flavour);
 		} finally {
 			if (is_file($pdfFile)) {
 				unlink($pdfFile);
@@ -1221,7 +1291,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 		if (!$result['isCompliant']) {
 			$errorSummary = implode("\n", $result['errors']);
 			$this->fail(
-				'veraPDF ua1 validation FAILED for "' . $label . "\".\n\n"
+				'veraPDF ' . $flavour . ' validation FAILED for "' . $label . "\".\n\n"
 				. 'Failures (' . count($result['errors']) . "):\n" . $errorSummary
 			);
 		}
@@ -1230,16 +1300,17 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Runs veraPDF's ua1 profile over a file.
+	 * Runs a veraPDF profile over a file.
 	 *
 	 * @param string $pdfPath
+	 * @param string $flavour
 	 * @return array ['isCompliant' => bool, 'errors' => string[]]
 	 */
-	private function runVeraPdf($pdfPath)
+	private function runVeraPdf($pdfPath, $flavour)
 	{
 		// stderr is thrown away: left in a pipe nobody reads, veraPDF would block once it filled
 		$cmd = escapeshellarg($this->veraPdfBin)
-			. ' --flavour ua1 --format json '
+			. ' --flavour ' . escapeshellarg($flavour) . ' --format json '
 			. escapeshellarg($pdfPath)
 			. ' 2>/dev/null';
 

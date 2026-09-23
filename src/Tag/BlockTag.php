@@ -42,9 +42,9 @@ abstract class BlockTag extends Tag
 			$structType = \Mpdf\Ua\StructType::fromHtmlTag($tag, $attr);
 		}
 
-		if (!empty($attr['ROLE'])) {
-			$role = strtolower($attr['ROLE']);
-			if ($role === 'none' || $role === 'presentation' || $role === 'separator') {
+		$role = isset($attr['ROLE']) ? strtolower(trim($attr['ROLE'])) : '';
+		if ($role !== '') {
+			if ($role === 'separator') {
 				$structType = '__artifact__';
 			} elseif ($role === 'heading') {
 				$level = isset($attr['ARIA-LEVEL']) ? (int) $attr['ARIA-LEVEL'] : 2;
@@ -86,8 +86,22 @@ abstract class BlockTag extends Tag
 			}
 		}
 
-		if (isset($attr['ARIA-HIDDEN']) && strtolower($attr['ARIA-HIDDEN']) === 'true') {
+		if (\Mpdf\Ua\StructType::isPresentational($attr)) {
 			$structType = '__artifact__';
+		}
+
+		// A Figure needs an /Alt (ISO 14289-1 §7.3). A <figure> without a name of its own is a Div, its
+		// image and caption tagged within it; a block with role="img" and no name is an error like an
+		// <img> without alt.
+		if ($structType === 'Figure' && empty($attr['ARIA-LABEL']) && empty($attr['ARIA-LABELLEDBY'])) {
+			if ($role === 'img') {
+				$message = 'PDF/UA-1: a block with role="img" has no aria-label or aria-labelledby to name it.';
+				if (!$this->mpdf->PDFUAauto) {
+					throw new \Mpdf\MpdfException($message . ' Enable PDFUAauto to tag it as a Div.');
+				}
+				$this->ua->addWarning($message . ' Tagged as a Div.');
+			}
+			$structType = 'Div';
 		}
 
 		if ($structType !== null && $structType !== '__artifact__'

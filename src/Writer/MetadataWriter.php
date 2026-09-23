@@ -148,6 +148,35 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				. '" xmlns:pdfuaid="http://www.aiim.org/pdfua/ns/id/">' . "\n";
 			$m .= '    <pdfuaid:part>1</pdfuaid:part>' . "\n";
 			$m .= '   </rdf:Description>' . "\n";
+
+			// PDF/A allows only the XMP schemas it names, and any other declared in an extension schema
+			// (ISO 19005-1 §6.7.8, ISO 19005-2 §6.6.2.3.2)
+			if ($this->mpdf->PDFA) {
+				$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '"'
+					. ' xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/"'
+					. ' xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"'
+					. ' xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#">' . "\n";
+				$m .= '    <pdfaExtension:schemas>' . "\n";
+				$m .= '     <rdf:Bag>' . "\n";
+				$m .= '      <rdf:li rdf:parseType="Resource">' . "\n";
+				$m .= '       <pdfaSchema:schema>PDF/UA Universal Accessibility Schema</pdfaSchema:schema>' . "\n";
+				$m .= '       <pdfaSchema:namespaceURI>http://www.aiim.org/pdfua/ns/id/</pdfaSchema:namespaceURI>' . "\n";
+				$m .= '       <pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>' . "\n";
+				$m .= '       <pdfaSchema:property>' . "\n";
+				$m .= '        <rdf:Seq>' . "\n";
+				$m .= '         <rdf:li rdf:parseType="Resource">' . "\n";
+				$m .= '          <pdfaProperty:name>part</pdfaProperty:name>' . "\n";
+				$m .= '          <pdfaProperty:valueType>Integer</pdfaProperty:valueType>' . "\n";
+				$m .= '          <pdfaProperty:category>internal</pdfaProperty:category>' . "\n";
+				$m .= '          <pdfaProperty:description>Indicates, which part of ISO 14289 standard is followed</pdfaProperty:description>' . "\n";
+				$m .= '         </rdf:li>' . "\n";
+				$m .= '        </rdf:Seq>' . "\n";
+				$m .= '       </pdfaSchema:property>' . "\n";
+				$m .= '      </rdf:li>' . "\n";
+				$m .= '     </rdf:Bag>' . "\n";
+				$m .= '    </pdfaExtension:schemas>' . "\n";
+				$m .= '   </rdf:Description>' . "\n";
+			}
 		}
 
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/">' . "\n";
@@ -630,9 +659,12 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 						$rect = sprintf('%.3F %.3F %.3F %.3F', $pl[0], $pl[1], $pl[0] + $pl[2], $pl[1] - $pl[3]);
 						$this->writer->write('<</Type /Annot /Subtype /Link /Rect [' . $rect . ']', false);
 
+						// The entries an imported link brings from its source, some of which are written here
+						$importedEntries = isset($pl['importedLink']) ? $pl['importedLink']['pdfObject']->value : [];
+
 						// Removed as causing undesired effects in Chrome PDF viewer https://github.com/mpdf/mpdf/issues/283
 						// PDF/UA-1 needs it all the same: a link annotation must carry an alternate description (§7.18.5)
-						if ($this->mpdf->PDFUA) {
+						if ($this->mpdf->PDFUA && !isset($importedEntries['Contents'])) {
 							$contents = is_string($pl[4]) && strpos($pl[4], '@') !== 0 ? $pl[4] : 'Internal link';
 							$this->writer->write(' /Contents ' . $this->writer->utf16BigEndianTextString($contents), false);
 						}
@@ -648,6 +680,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 						if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->PDFUA) {
 							$this->writer->write(' /F 28', false);
+							unset($importedEntries['F']);
 						}
 
 						// An imported link carries its source annotation's own entries, which may include a border
@@ -661,9 +694,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$tree = $this->ua->getStructureTree();
 							$linkStructElem = isset($pl['structElem']) ? $pl['structElem'] : null;
 							if ($linkStructElem === null) {
-								$tree->open('Link', []);
-								$linkStructElem = $tree->getCurrent();
-								$tree->close();
+								$linkStructElem = $tree->addLeaf('Link');
 							}
 							$linkStructParent = $tree->nextAnnotStructParent($linkStructElem);
 							$linkStructElem->addObjref($linkStructParent, $linkAnnotObjNum);
@@ -699,11 +730,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							 * @copyright Copyright (c) 2024 Setasign GmbH & Co. KG (https://www.setasign.com)
 							 * @license http://opensource.org/licenses/mit-license The MIT License
 							 */
-							if (isset($pl['importedLink'])) {
-								foreach ($pl['importedLink']['pdfObject']->value as $name => $entry) {
-									$this->writer->write('/' . $name . ' ', false);
-									$this->mpdf->writePdfType($entry);
-								}
+							foreach ($importedEntries as $name => $entry) {
+								$this->writer->write('/' . $name . ' ', false);
+								$this->mpdf->writePdfType($entry);
 							}
 							$this->writer->write('>>');
 						} else {
@@ -943,15 +972,16 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 					$this->form->_putFormItems($n, $hPt);
 
-					// and its Form element made once the widget has an object number
+					// and joins its Form element once it has an object number. A widget drawn where no
+					// element could be made, as in a running header, is given one at the end of the document.
 					if ($this->mpdf->PDFUA) {
 						foreach ($this->form->forms as $ref => $frm) {
 							if (isset($frm['page'], $frm['structParent'], $frm['obj'])
 								&& $frm['page'] == $n
 							) {
-								$this->ua->getStructureTree()->open('Form', []);
-								$formElem = $this->ua->getStructureTree()->getCurrent();
-								$this->ua->getStructureTree()->close();
+								$formElem = isset($frm['pdfua_elem'])
+									? $frm['pdfua_elem']
+									: $this->ua->getStructureTree()->addLeaf('Form');
 								$formElem->addObjref($frm['structParent'], $frm['obj']);
 								$this->ua->getStructureTree()->registerAnnotStructParent(
 									$frm['structParent'],

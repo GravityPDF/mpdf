@@ -169,6 +169,61 @@ class StructureElementsTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A figure with no name of its own is a Div holding the Figure of its image and the Caption, so
+	 * no Figure is left without /Alt.
+	 */
+	public function testUnnamedFigureGroupsItsImageAndCaptionInADiv()
+	{
+		$mpdf = $this->makeMpdf();
+		$this->getOutput(
+			$mpdf,
+			'<figure><img src="' . __DIR__ . '/../../data/img/tiger.jpg" alt="A tiger" width="20" />'
+			. '<figcaption>Caption</figcaption></figure>'
+		);
+
+		$figure = $mpdf->getPdfUaStructureTree()->getRoot()->getChildren()[0];
+		$this->assertSame('Div', $figure->getType());
+		$types = [];
+		foreach ($figure->getChildren() as $child) {
+			$types[] = $child->getType();
+		}
+		$this->assertSame(['Figure', 'Caption'], $types);
+		$this->assertSame('A tiger', $figure->getChildren()[0]->getAttributes()['Alt']);
+	}
+
+	/**
+	 * A figure named with aria-label stays a Figure, the label its /Alt.
+	 */
+	public function testNamedFigureKeepsItsType()
+	{
+		$mpdf = $this->makeMpdf();
+		$this->getOutput($mpdf, '<figure aria-label="Sales chart"><p>Bars</p></figure>');
+
+		$figure = $mpdf->getPdfUaStructureTree()->getRoot()->getChildren()[0];
+		$this->assertSame('Figure', $figure->getType());
+		$this->assertSame('Sales chart', $figure->getAttributes()['Alt']);
+	}
+
+	/**
+	 * A block with role="img" and no name throws, as an img without alt does, and under PDFUAauto
+	 * is tagged Div with a warning.
+	 */
+	public function testUnnamedRoleImgBlockThrowsOrIsADiv()
+	{
+		try {
+			$this->getOutput($this->makeMpdf(), '<div role="img">Bars</div>');
+			$this->fail('An unnamed role="img" block must throw without PDFUAauto');
+		} catch (\Mpdf\MpdfException $e) {
+			$this->assertStringContainsString('role="img"', $e->getMessage());
+		}
+
+		$mpdf = $this->makeMpdf(['PDFUAauto' => true]);
+		$this->getOutput($mpdf, '<div role="img">Bars</div>');
+		$this->assertSame('Div', $mpdf->getPdfUaStructureTree()->getRoot()->getChildren()[0]->getType());
+		$this->assertCount(1, $mpdf->getPdfUaWarnings());
+	}
+
+	/**
 	 * scope="rowgroup" becomes /Scope /Row, since PDF has no row group scope.
 	 */
 	public function testThScopeRowgroupMapsToScopeRow()

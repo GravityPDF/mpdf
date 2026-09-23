@@ -1007,7 +1007,7 @@ class Form
 				];
 				$this->mpdf->columnForms[$this->mpdf->CurrCol][(int) $this->mpdf->x][(int) $this->mpdf->y] = $this->formCount;
 			}
-			$this->forms[$this->formCount] = $f;
+			$this->addBodyForm($f);
 		}
 		if (!in_array($this->mpdf->FontFamily, $this->form_fonts)) {
 			$this->form_fonts[] = $this->mpdf->FontFamily;
@@ -1080,7 +1080,7 @@ class Form
 					'h' => $h];
 				$this->mpdf->columnForms[$this->mpdf->CurrCol][(int) $this->mpdf->x][(int) $this->mpdf->y] = $this->formCount;
 			}
-			$this->forms[$this->formCount] = $f;
+			$this->addBodyForm($f);
 		}
 		if (!in_array($this->mpdf->FontFamily, $this->form_fonts)) {
 			$this->form_fonts[] = $this->mpdf->FontFamily;
@@ -1283,7 +1283,7 @@ class Form
 					'h' => $hh];
 				$this->mpdf->columnForms[$this->mpdf->CurrCol][(int) $this->mpdf->x][(int) $this->mpdf->y] = $this->formCount;
 			}
-			$this->forms[$this->formCount] = $f;
+			$this->addBodyForm($f);
 		}
 		if (!in_array($this->mpdf->FontFamily, $this->form_fonts)) {
 			$this->form_fonts[] = $this->mpdf->FontFamily;
@@ -1955,6 +1955,20 @@ class Form
 		$this->mpdf->getPdfUaMarkedContentHelper()->begin('Artifact', -1);
 
 		return true;
+	}
+
+	/**
+	 * Record a widget drawn in the body. Under PDF/UA its Form element is made here, inside the element
+	 * the widget is drawn in, so the field is read beside its label; the widget joins it once written.
+	 *
+	 * @param array $f
+	 */
+	private function addBodyForm(array $f)
+	{
+		if ($this->mpdf->PDFUA) {
+			$f['pdfua_elem'] = $this->mpdf->getPdfUaStructureTree()->addLeaf('Form');
+		}
+		$this->forms[$this->formCount] = $f;
 	}
 
 	/**
