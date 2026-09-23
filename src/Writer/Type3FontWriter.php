@@ -7,6 +7,7 @@ use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\Color\ColorGlyphSource;
 use Mpdf\Fonts\Color\GlyphResources;
 use Mpdf\Fonts\FontCache;
+use Mpdf\Image\ImageProcessor;
 use Mpdf\Image\ImageTypeGuesser;
 use Mpdf\Image\PngPixels;
 use Mpdf\Log\Context as LogContext;
@@ -179,8 +180,8 @@ class Type3FontWriter implements GlyphResources
 	 * Registers an image a glyph draws, once however many glyphs draw it. Each is interpolated, since a
 	 * glyph's bitmap is drawn larger than its strike more often than not.
 	 *
-	 * A JPEG is written as it stands, with DCTDecode. A PNG with transparency is two images, the second
-	 * its /SMask, which ImageWriter expects to find written just before it.
+	 * A JPEG is written as it stands, with DCTDecode. A PNG with transparency is two images, registered
+	 * together so that the second is named as the first's /SMask.
 	 *
 	 * A palette PNG - every one in Noto Color Emoji - is written as /Indexed with its image data as the
 	 * file holds it, which is half the size of the same pixels expanded to RGB and deflated again. Any
@@ -220,7 +221,10 @@ class Type3FontWriter implements GlyphResources
 				return null;
 			}
 
-			$this->mpdf->images[$key] = $image + ['i' => count($this->mpdf->images) + 1];
+			$mask = isset($image['mask']) ? $image['mask'] : null;
+			unset($image['mask']);
+
+			ImageProcessor::register($this->mpdf, $key, $image, $mask);
 		}
 
 		$this->drawn['images'][$key] = $key;
@@ -344,14 +348,15 @@ class Type3FontWriter implements GlyphResources
 	}
 
 	/**
-	 * Decodes a PNG, and registers its /SMask where it has transparency
+	 * Decodes a PNG, taking its alpha out as the soft mask to register alongside it
 	 *
 	 * @throws \Mpdf\MpdfException Where the PNG cannot be decoded
 	 *
 	 * @param string $data A PNG
 	 * @param string $key  Its key in Mpdf::$images
 	 *
-	 * @return array The image, as Mpdf::$images holds it, less its number
+	 * @return array The image, as Mpdf::$images holds it, less its number; its 'mask' is the soft mask to
+	 *               register alongside it, where it has transparency
 	 */
 	private function png($data, $key)
 	{
@@ -359,8 +364,7 @@ class Type3FontWriter implements GlyphResources
 		$image = ['w' => $decoded['width'], 'h' => $decoded['height'], 'bpc' => 8, 'f' => 'FlateDecode', 'type' => 'png', 'interpolation' => true];
 
 		if ($decoded['alpha'] !== '') {
-			$this->mpdf->images[$key . '-mask'] = $image + ['cs' => 'DeviceGray', 'data' => $decoded['alpha'], 'i' => count($this->mpdf->images) + 1];
-			$image['masked'] = true;
+			$image['mask'] = $image + ['cs' => 'DeviceGray', 'data' => $decoded['alpha']];
 		}
 
 		if ($decoded['palette'] === '') {

@@ -276,6 +276,22 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 		];
 	}
 
+	/**
+	 * Redraws an image into another colour space, separating its alpha channel out where it has one
+	 *
+	 * @param string      $data             The image, which is read back through GD
+	 * @param string      $colspace         The colour space it is in
+	 * @param string      $targetcs         The colour space to write it in
+	 * @param int         $w                Its width in pixels
+	 * @param int         $h                Its height in pixels
+	 * @param int|false   $dpi              The pixels per unit its pHYs chunk gives, where it has one
+	 * @param bool        $mask             Whether its alpha is to be kept, as a soft mask
+	 * @param float|false $gamma_correction The gamma to correct the samples by, or 0 for none
+	 * @param int|false   $pngcolortype     Its PNG colour type, where it is a PNG
+	 *
+	 * @return array The image, as Mpdf::$images holds it, less its number; its 'mask' is the soft mask
+	 *               to register alongside it, where it has one
+	 */
 	private function convertImage(&$data, $colspace, $targetcs, $w, $h, $dpi, $mask, $gamma_correction = false, $pngcolortype = false)
 	{
 		if (!function_exists('gd_info')) {
@@ -483,11 +499,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 				if ($dpi) {
 					$minfo['set-dpi'] = $dpi;
 				}
-				$tempfile = '_tempImgPNG' . md5($data) . random_int(1, 10000) . '.png';
-				$imgmask = count($this->mpdf->images) + 1;
-				$minfo['i'] = $imgmask;
-				$this->mpdf->images[$tempfile] = $minfo;
-				$info['masked'] = $imgmask;
+				$info['mask'] = $minfo;
 			} elseif ($trns) {
 				$info['trns'] = $trns;
 			}
@@ -1161,6 +1173,8 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * Add an image to the document's collection the first time it is read
 	 *
+	 * An image carrying a 'mask' is registered with it, so that the two are numbered and written together.
+	 *
 	 * @param array $info
 	 * @param string $file
 	 * @param bool $firstTime
@@ -1170,11 +1184,45 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function keepImage(array $info, $file, $firstTime, $interpolation)
 	{
+		$mask = isset($info['mask']) ? $info['mask'] : null;
+		unset($info['mask']);
+
 		if ($firstTime) {
-			$info['i'] = count($this->mpdf->images) + 1;
 			$info['interpolation'] = $interpolation; // mPDF 6
-			$this->mpdf->images[$file] = $info;
+			$info = self::register($this->mpdf, $file, $info, $mask);
 		}
+
+		return $info;
+	}
+
+	/**
+	 * Adds an image to the document, together with the soft mask its alpha is drawn from
+	 *
+	 * The two belong to one another: the image's 'masked' is the number of its mask, which ImageWriter
+	 * writes as the image's /SMask. Registering them apart is what let an image come to name whatever
+	 * object happened to be written before it, which renders wrong and says nothing.
+	 *
+	 * Static, and given the document, because the writer of a colour font registers the images its glyphs
+	 * draw without an ImageProcessor of its own: those are decoded by PngPixels rather than by GD, which
+	 * would keep seven bits of their alpha and draw them differently from one build to the next.
+	 *
+	 * @param \Mpdf\Mpdf $mpdf The document to register them on
+	 * @param string     $key  The key the image is held under, e.g. its path; its mask takes '-mask' after it
+	 * @param array      $info The image, as Mpdf::$images holds it, less its number
+	 * @param array|null $mask Its soft mask, likewise, or null where it has none
+	 *
+	 * @return array The image as it was registered, with its number and, where it has a mask, its mask's
+	 */
+	public static function register(Mpdf $mpdf, $key, array $info, $mask = null)
+	{
+		if ($mask !== null) {
+			$mask['i'] = count($mpdf->images) + 1;
+			$mpdf->images[$key . '-mask'] = $mask;
+			$info['masked'] = $mask['i'];
+		}
+
+		$info['i'] = count($mpdf->images) + 1;
+		$mpdf->images[$key] = $info;
 
 		return $info;
 	}
@@ -1559,11 +1607,9 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 					return $this->imageError($file, $firstTime, 'Error parsing temporary file (' . $tempfile_alpha . ') created with GD library to parse PNG image');
 				}
 
-				$imgmask = count($this->mpdf->images) + 1;
 				$minfo['cs'] = 'DeviceGray';
-				$minfo['i'] = $imgmask;
-				$this->mpdf->images[$tempfile_alpha] = $minfo;
-				// embed image, masked with previously embedded mask
+
+				// embed image, masked with the alpha channel taken out of it above
 
 				// $info = $this->getImage($tempfile, false);
 				$data = file_get_contents($tempfile);
@@ -1575,18 +1621,13 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 					return $this->imageError($file, $firstTime, 'Error parsing temporary file (' . $tempfile . ') created with GD library to parse PNG image');
 				}
 
-				$info['masked'] = $imgmask;
+				$info['mask'] = $minfo;
 				if ($ppUx) {
 					$info['set-dpi'] = $ppUx;
 				}
 				$info['type'] = 'png';
-				if ($firstTime) {
-					$info['i'] = count($this->mpdf->images) + 1;
-					$info['interpolation'] = $interpolation; // mPDF 6
-					$this->mpdf->images[$file] = $info;
-				}
 
-				return $info;
+				return $this->keepImage($info, $file, $firstTime, $interpolation);
 			}
 
 			// No alpha/transparency set (but cannot read directly because e.g. bit-depth != 8, interlaced etc)
@@ -1625,17 +1666,12 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 				$info['set-dpi'] = $ppUx;
 			}
 			$info['type'] = 'png';
-			if ($firstTime) {
-				$info['i'] = count($this->mpdf->images) + 1;
-				$info['interpolation'] = $interpolation; // mPDF 6
-				if ($icc) {
-					$info['ch'] = $channels;
-					$info['icc'] = $icc;
-				}
-				$this->mpdf->images[$file] = $info;
+			if ($firstTime && $icc) {
+				$info['ch'] = $channels;
+				$info['icc'] = $icc;
 			}
 
-			return $info;
+			return $this->keepImage($info, $file, $firstTime, $interpolation);
 
 		} else { // PNG image with no need to convert alph channels, bpc <> 8 etc.
 
@@ -1703,13 +1739,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			return $this->imageError($file, $firstTime, 'Error parsing or converting PNG image');
 		}
 
-		if ($firstTime) {
-			$info['i'] = count($this->mpdf->images) + 1;
-			$info['interpolation'] = $interpolation; // mPDF 6
-			$this->mpdf->images[$file] = $info;
-		}
-
-		return $info;
+		return $this->keepImage($info, $file, $firstTime, $interpolation);
 	}
 
 	public function processWebp($data, $file, $firstTime)
