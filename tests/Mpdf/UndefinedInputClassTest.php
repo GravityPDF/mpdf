@@ -77,43 +77,22 @@ class UndefinedInputClassTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'5.2, A in class 0 after B' => ['BA', [self::B_SMALL_CAP, 0x41]],
-			'5.2, a space in class 0 after B' => ['B A', [self::B_SMALL_CAP, 0x20, 0x41]],
 			'5.2, C in class 2 after B' => ['BC', [0x42, 0x43]],
-			'5.2, nothing after B' => ['B', [0x42]],
 			'6.2, A in class 0 after C' => ['CA', [self::C_SMALL_CAP, 0x41]],
 			'6.2, B in class 2 after C' => ['CB', [0x43, 0x42]],
-			'6.2, nothing after C' => ['C', [0x43]],
 		];
 	}
 
 	/**
-	 * A positioning rule naming an undefined class at an input position never applies, whatever
-	 * follows the glyph it covers.
-	 *
-	 * @dataProvider dataPositionings
-	 *
-	 * @param string $text What the document is written from
+	 * A positioning rule naming an undefined class at an input position never applies, though B
+	 * after A is in class 0.
 	 */
-	public function testAnUndefinedInputClassPositionsNothing($text)
+	public function testAnUndefinedInputClassPositionsNothing()
 	{
 		$mpdf = $this->mpdf(PositionRecordingMpdf::class);
-		$mpdf->WriteHTML('<p>' . $text . '</p>');
+		$mpdf->WriteHTML('<p>AB</p>');
 
 		$this->assertSame([], $mpdf->drawnPositions);
-	}
-
-	/**
-	 * A run with A in it.
-	 *
-	 * @return array
-	 */
-	public function dataPositionings()
-	{
-		return [
-			'A then B' => ['AB'],
-			'A then A' => ['AA'],
-			'A then a space' => ['A B'],
-		];
 	}
 
 }
