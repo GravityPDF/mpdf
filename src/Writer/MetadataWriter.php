@@ -489,15 +489,15 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 			if ($this->mpdf->hasOC) {
 
-				if (($this->mpdf->hasOC & 1) === 1) {
+				if ($this->mpdf->n_ocg_print) {
 					$p = $this->mpdf->n_ocg_print . ' 0 R';
 				}
 
-				if (($this->mpdf->hasOC & 2) === 2) {
+				if ($this->mpdf->n_ocg_view) {
 					$v = $this->mpdf->n_ocg_view . ' 0 R';
 				}
 
-				if (($this->mpdf->hasOC & 4) === 4) {
+				if ($this->mpdf->n_ocg_hidden) {
 					$h = $this->mpdf->n_ocg_hidden . ' 0 R';
 				}
 
