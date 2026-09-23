@@ -202,6 +202,18 @@ $mpdf->PDFXauto = true;
 $mpdf->OutputFile($cmykInSrgb);
 $cases['device-cmyk-in-srgb'] = ['file' => $cmykInSrgb, 'breaks' => ['no-device-cmyk'], 'what' => 'DeviceCMYK in a document printing to sRGB'];
 
+// A spot colour in a document that prints to sRGB, and the same falling back to DeviceCMYK
+$spot = $directory . '/spot-srgb.pdf';
+$mpdf = document();
+$mpdf->AddSpotColor('PANTONE 300 C', 100, 44, 0, 0);
+$mpdf->WriteHTML('<p style="color: spot(PANTONE 300 C, 80%)">A spot colour</p>');
+$mpdf->OutputFile($spot);
+$cases['spot-srgb'] = ['file' => $spot, 'breaks' => [], 'what' => 'a spot colour in a document printing to sRGB'];
+
+$cmykSpot = $directory . '/cmyk-spot-in-srgb.pdf';
+mutate($spot, $cmykSpot, "/DeviceRGB <<\n/Range", "/DeviceCMYK<<\n/Range");
+$cases['cmyk-spot-in-srgb'] = ['file' => $cmykSpot, 'breaks' => ['no-device-cmyk'], 'what' => 'a spot colour falling back to DeviceCMYK in a document printing to sRGB'];
+
 // Everything PDF/X refuses, in a document that is not PDF/X at all
 $nonconformant = $directory . '/nonconformant.pdf';
 $configVariables = new ConfigVariables();

@@ -167,7 +167,7 @@ class ServiceFactory
 		$pageWriter = new PageWriter($mpdf, $form, $writer, $metadataWriter);
 		$bookmarkWriter = new BookmarkWriter($mpdf, $writer);
 		$optionalContentWriter = new OptionalContentWriter($mpdf, $writer);
-		$colorWriter = new ColorWriter($mpdf, $writer);
+		$colorWriter = new ColorWriter($mpdf, $writer, $colorModeConverter);
 		$backgroundWriter = new BackgroundWriter($mpdf, $writer);
 		$javaScriptWriter = new JavaScriptWriter($mpdf, $writer);
 

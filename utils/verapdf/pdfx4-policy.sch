@@ -36,15 +36,16 @@
 
 	<!--
 		A colour space is used where something names it: a shading, an image or form XObject, a page's
-		resources, or the base of an Indexed space. The alternate of an ICC-based space is not a use of
-		it - every ICC-based space in a document from mPDF carries DeviceRGB as its alternate.
+		resources, the base of an Indexed space, or the alternate of a spot colour. The alternate of an
+		ICC-based space is not a use of it - every ICC-based space in a document from mPDF carries
+		DeviceRGB as its alternate.
 	-->
 	<pattern id="colour-spaces">
 		<rule context="/report/jobs/job/featuresReport">
 
-			<assert test="not(iccProfiles/iccProfile[@id = current()/outputIntents/outputIntent/destOutputIntent/@id][normalize-space(dataColorSpace) = 'CMYK' or normalize-space(dataColorSpace) = 'GRAY']) or count(documentResources/colorSpaces/colorSpace[@family = 'DeviceRGB'][@id = current()/documentResources/shadings/shading/colorSpace/@id or @id = current()/documentResources/xobjects/xobject/colorSpace/@id or @id = current()/pages/page/resources/colorSpaces/colorSpace/@id or @id = current()/documentResources/colorSpaces/colorSpace/base/@id]) = 0">[no-device-rgb] Printing to a CMYK or grey output intent, a PDF/X-4 document may not use DeviceRGB, and this one does.</assert>
+			<assert test="not(iccProfiles/iccProfile[@id = current()/outputIntents/outputIntent/destOutputIntent/@id][normalize-space(dataColorSpace) = 'CMYK' or normalize-space(dataColorSpace) = 'GRAY']) or count(documentResources/colorSpaces/colorSpace[@family = 'DeviceRGB'][@id = current()/documentResources/shadings/shading/colorSpace/@id or @id = current()/documentResources/xobjects/xobject/colorSpace/@id or @id = current()/pages/page/resources/colorSpaces/colorSpace/@id or @id = current()/documentResources/colorSpaces/colorSpace/base/@id or @id = current()/documentResources/colorSpaces/colorSpace[@family = 'Separation' or @family = 'DeviceN']/alternate/@id]) = 0">[no-device-rgb] Printing to a CMYK or grey output intent, a PDF/X-4 document may not use DeviceRGB, and this one does.</assert>
 
-			<assert test="not(iccProfiles/iccProfile[@id = current()/outputIntents/outputIntent/destOutputIntent/@id][normalize-space(dataColorSpace) = 'RGB' or normalize-space(dataColorSpace) = 'GRAY']) or count(documentResources/colorSpaces/colorSpace[@family = 'DeviceCMYK'][@id = current()/documentResources/shadings/shading/colorSpace/@id or @id = current()/documentResources/xobjects/xobject/colorSpace/@id or @id = current()/pages/page/resources/colorSpaces/colorSpace/@id or @id = current()/documentResources/colorSpaces/colorSpace/base/@id]) = 0">[no-device-cmyk] Printing to an RGB or grey output intent, a PDF/X-4 document may not use DeviceCMYK, and this one does.</assert>
+			<assert test="not(iccProfiles/iccProfile[@id = current()/outputIntents/outputIntent/destOutputIntent/@id][normalize-space(dataColorSpace) = 'RGB' or normalize-space(dataColorSpace) = 'GRAY']) or count(documentResources/colorSpaces/colorSpace[@family = 'DeviceCMYK'][@id = current()/documentResources/shadings/shading/colorSpace/@id or @id = current()/documentResources/xobjects/xobject/colorSpace/@id or @id = current()/pages/page/resources/colorSpaces/colorSpace/@id or @id = current()/documentResources/colorSpaces/colorSpace/base/@id or @id = current()/documentResources/colorSpaces/colorSpace[@family = 'Separation' or @family = 'DeviceN']/alternate/@id]) = 0">[no-device-cmyk] Printing to an RGB or grey output intent, a PDF/X-4 document may not use DeviceCMYK, and this one does.</assert>
 
 		</rule>
 	</pattern>
