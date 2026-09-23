@@ -88,7 +88,7 @@ class CrossReferenceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 			'not compressed, so readable' => [['useObjectStreams' => true], false, false],
 			'encrypted, as each string is encrypted where it is written' => [['useObjectStreams' => true], true, true],
 			'PDF/X-1a, built on PDF 1.4' => [['useObjectStreams' => true, 'mode' => '', 'PDFX' => true, 'PDFXauto' => true], true, false],
-			'PDF/A-1b, built on PDF 1.4' => [['useObjectStreams' => true, 'mode' => '', 'PDFA' => true, 'PDFAauto' => true], true, false],
+			'PDF/A-1b, built on PDF 1.4' => [['useObjectStreams' => true, 'mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'], true, false],
 		];
 	}
 

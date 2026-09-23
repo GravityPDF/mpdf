@@ -95,10 +95,10 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		return [
 			'file not allowed, forms' => [['mode' => 'c', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
 			'embedded fonts, forms' => [['useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
-			'file allowed, forms' => [['mode' => 'c', 'useActiveForms' => true, 'allowAnnotationFiles' => true], true, [array_merge($withFile, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
-			'PDF/A-2 appearances, file not a PDF/A' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'allowAnnotationFiles' => true], false, [$notes, $second]],
+			'file allowed, forms' => [['mode' => 'c', 'useActiveForms' => true, 'allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], true, [array_merge($withFile, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
+			'PDF/A-2 appearances, file not a PDF/A' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], false, [$notes, $second]],
 			'PDF/A-2 appearances, forms' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
-			'PDF/A-3 appearances and file' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B', 'allowAnnotationFiles' => true], false, [$withFile, $second]],
+			'PDF/A-3 appearances and file' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B', 'allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], false, [$withFile, $second]],
 		];
 	}
 
@@ -112,7 +112,7 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 	 */
 	private function html($forms)
 	{
-		$html = '<p><a href="#b">link</a> <annotation content="Popup" popup="true" /> <annotation content="File" file="' . __FILE__ . '" />'
+		$html = '<p><a href="#b">link</a> <annotation content="Popup" popup="true" /> <annotation content="File" file="' . __DIR__ . '/../data/annotation-files/sample.txt' . '" />'
 			. ' <annotation content="Plain" /> <annotation content="Placed" popup="[10,10,50,50]" color="#ff0000" /></p>';
 
 		if ($forms) {
