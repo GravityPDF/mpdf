@@ -63,6 +63,13 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 					$this->assertStringContainsString('/Type /XObject /Subtype /Form', $this->object($pdf, $appearance[1]));
 				}
 
+				if ($subtype[1] === 'Widget' && preg_match('/\/AP << (.*?) >>\n/', $annot, $appearances)) {
+					preg_match_all('/(\d+) 0 R/', $appearances[1], $streams);
+					foreach ($streams[1] as $stream) {
+						$this->assertMatchesRegularExpression('/\/Length \d+ \/Resources 2 0 R>>\nstream\n/', $this->object($pdf, $stream));
+					}
+				}
+
 				if ($subtype[1] === 'Widget' && preg_match('/\/Parent (\d+) 0 R/', $annot, $group)) {
 					$this->assertMatchesRegularExpression('/\/Kids \[[^\]]*\b' . $ref . ' 0 R/', $this->object($pdf, $group[1]));
 				}
@@ -89,6 +96,7 @@ class AnnotationObjectNumbersTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 			'file not allowed, forms' => [['mode' => 'c', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
 			'file allowed, forms' => [['mode' => 'c', 'useActiveForms' => true, 'allowAnnotationFiles' => true], true, [array_merge($withFile, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
 			'PDF/A-2 appearances, file not a PDF/A' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'allowAnnotationFiles' => true], false, [$notes, $second]],
+			'PDF/A-2 appearances, forms' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B', 'useActiveForms' => true], true, [array_merge($notes, $widgets), array_merge($second, ['Widget', 'Widget', 'Widget'])]],
 			'PDF/A-3 appearances and file' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B', 'allowAnnotationFiles' => true], false, [$withFile, $second]],
 		];
 	}

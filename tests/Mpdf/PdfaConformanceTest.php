@@ -109,6 +109,32 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * An active form conforms: checkboxes and radio buttons are drawn without ZapfDingbats, every widget carries its
+	 * appearance, and the JavaScript, submit and reset actions PDF/A forbids are left out (#348)
+	 *
+	 * @dataProvider documents
+	 */
+	public function testActiveFormConforms($version, $config)
+	{
+		$mpdf = $this->pdfa($version, $config + ['useActiveForms' => true]);
+		$mpdf->WriteHTML(
+			'<form action="https://example.com/submit">'
+			. '<p>Text <input type="text" name="t" value="Ελληνικά" onchange="app.alert(1)" />'
+			. ' <input type="password" name="p" value="secret" /> <input type="hidden" name="h" value="x" /></p>'
+			. '<p><textarea name="a" rows="3" cols="20">A longer value that wraps onto the lines below</textarea></p>'
+			. '<p>Check <input type="checkbox" name="c" value="y" checked="checked" /> <input type="checkbox" name="d" value="n" /></p>'
+			. '<p>Radio <input type="radio" name="r" value="a" checked="checked" /> <input type="radio" name="r" value="b" /></p>'
+			. '<p><select name="s" onchange="app.alert(2)"><option value="1">One</option><option value="2" selected="selected">Two</option></select>'
+			. ' <select name="m" size="3" multiple="multiple"><option value="1">One</option><option value="2" selected="selected">Two</option></select></p>'
+			. '<p><input type="submit" name="go" value="Send" /> <input type="reset" name="rs" value="Reset" />'
+			. ' <input type="button" name="b" value="Push" onclick="app.alert(3)" noprint="noprint" /></p>'
+			. '</form>'
+		);
+
+		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
+	}
+
+	/**
 	 * Each PDF/A version, with the default sRGB output intent and with a CMYK one
 	 *
 	 * @return mixed[][]

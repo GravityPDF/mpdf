@@ -592,13 +592,13 @@ class Form
 			if (!empty($objattr['checked'])) {
 				$checked = true;
 			}
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$save_font = $this->mpdf->FontFamily;
 				$save_currentfont = $this->mpdf->currentfontfamily;
 				$this->mpdf->SetFont('czapfdingbats');
 			}
 			$this->SetCheckBox($w, $h, $objattr['fieldname'], $objattr['value'], $objattr['title'], $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$this->mpdf->SetFont($save_font);
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
@@ -644,13 +644,13 @@ class Form
 			if (!empty($objattr['checked'])) {
 				$checked = true;
 			}
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$save_font = $this->mpdf->FontFamily;
 				$save_currentfont = $this->mpdf->currentfontfamily;
 				$this->mpdf->SetFont('czapfdingbats');
 			}
 			$this->SetRadio($w, $h, $objattr['fieldname'], $objattr['value'], (isset($objattr['title']) ? $objattr['title'] : ''), $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$this->mpdf->SetFont($save_font);
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
@@ -713,7 +713,7 @@ class Form
 				$total+=2;
 			} elseif ($form['subtype'] === 'checkbox') {
 				$total++;
-				if (!$this->formUseZapD) {
+				if (!$this->usesZapfDingbats()) {
 					$total++;
 				}
 			}
@@ -723,7 +723,21 @@ class Form
 				$total++;
 			}
 		}
+		if (isset($form['AP'])) {
+			$total++;
+		}
 		return $total;
+	}
+
+	/**
+	 * Whether checkboxes and radio buttons are drawn in ZapfDingbats. PDF/A and PDF/X cannot use it, as mPDF cannot
+	 * embed a core font, so they draw their own shapes instead.
+	 *
+	 * @return bool
+	 */
+	private function usesZapfDingbats()
+	{
+		return $this->formUseZapD && !$this->mpdf->PDFA && !$this->mpdf->PDFX;
 	}
 
 	/**
@@ -818,18 +832,45 @@ class Form
 				}
 				$f .= '/F' . $this->mpdf->fonts[$fn]['i'] . ' ' . $this->mpdf->fonts[$fn]['n'] . ' 0 R ';
 			}
+			// Viewers asked to redraw checkboxes and radio buttons do so in a ZapfDingbats font named ZaDb, which has to
+			// be here. PDF/A draws every widget in advance, and neither it nor PDF/X can name a font it does not embed.
+			if (!$this->mpdf->PDFA && !$this->mpdf->PDFX && ($this->form_checkboxes || $this->form_radio_groups)) {
+				$f .= '/ZaDb << /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >> ';
+			}
 			$this->writer->write('/DR << /Font << ' . $f . ' >> >>');
 			// CO Calculation Order
 			if ($this->pdf_array_co) {
 				$this->writer->write('/CO [' . $this->pdf_array_co . ']');
 			}
-			$this->writer->write('/NeedAppearances true');
+			if (!$this->mpdf->PDFA) {
+				$this->writer->write('/NeedAppearances true');
+			}
 			$this->writer->write('>>');
 		}
 	}
 
+	/**
+	 * Whether a form field may run JavaScript, submit or reset the form. PDF/A forbids all three, so there the action
+	 * is left out, with a warning unless PDFAauto is on.
+	 *
+	 * @return bool
+	 */
+	private function actionAllowed()
+	{
+		if (!$this->mpdf->PDFA) {
+			return true;
+		}
+
+		$this->mpdf->pdfaxWarning('Form fields cannot run JavaScript, submit or reset the form in PDFA files (Action removed)');
+
+		return false;
+	}
+
 	function SetFormButtonJS($name, $js)
 	{
+		if (!$this->actionAllowed()) {
+			return;
+		}
 		$js = str_replace("\t", ' ', trim($js));
 		if (isset($name) && isset($js)) {
 			$this->array_form_button_js[$this->writer->escape($name)] = [
@@ -840,6 +881,9 @@ class Form
 
 	function SetFormChoiceJS($name, $js)
 	{
+		if (!$this->actionAllowed()) {
+			return;
+		}
 		$js = str_replace("\t", ' ', trim($js));
 		if (isset($name) && isset($js)) {
 			$this->array_form_choice_js[$this->writer->escape($name)] = [
@@ -850,6 +894,9 @@ class Form
 
 	function SetFormTextJS($name, $js)
 	{
+		if (!$this->actionAllowed()) {
+			return;
+		}
 		for ($i = 0; $i < count($js); $i++) {
 			$j = str_replace("\t", ' ', trim($js[$i][1]));
 			$format = $js[$i][0];
@@ -888,6 +935,12 @@ class Form
 		}
 		if (!preg_match('/^[a-zA-Z0-9_:\-]+$/', $name)) {
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
+		}
+		$appearance = null;
+		if ($this->mpdf->PDFA) {
+			// A hidden input passes its flags as 0
+			$text = in_array(self::FLAG_PASSWORD, (array) $flags, true) ? str_repeat('*', mb_strlen($value, 'UTF-8')) : $value;
+			$appearance = $this->appearanceText($w, $h, $this->form_border_width, preg_split('/\r\n|\r|\n/', $text), $align, in_array(self::FLAG_TEXTAREA, (array) $flags, true) ? 'wrap' : 'line');
 		}
 		if ($this->mpdf->onlyCoreFonts) {
 			$value = $this->Win1252ToPDFDocEncoding($value);
@@ -942,7 +995,8 @@ class Form
 				'font' => $this->mpdf->FontFamily,
 				'fontsize' => $this->mpdf->FontSizePt,
 				'fontcolor' => $this->mpdf->TextColor,
-			]
+			],
+			'AP' => $appearance,
 		];
 
 		if (is_array($js) && count($js) > 0) {
@@ -983,6 +1037,12 @@ class Form
 		if (!preg_match('/^[a-zA-Z0-9_:\-]+$/', $name)) {
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
 		}
+		$appearance = null;
+		if ($this->mpdf->PDFA && in_array(self::FLAG_COMBOBOX, $flags, true)) {
+			$appearance = $this->appearanceText($w, $h, $this->form_border_width, [$array['SEL'] ? $array['OPT'][$array['SEL'][0]] : ''], $align, 'line');
+		} elseif ($this->mpdf->PDFA) {
+			$appearance = $this->appearanceText($w, $h, $this->form_border_width, $array['OPT'], $align, 'list', $array['SEL']);
+		}
 		if ($this->mpdf->onlyCoreFonts) {
 			for ($i = 0; $i < count($array['VAL']); $i++) {
 				$array['VAL'][$i] = $this->Win1252ToPDFDocEncoding($array['VAL'][$i]);
@@ -1021,7 +1081,8 @@ class Form
 				'font' => $this->mpdf->FontFamily,
 				'fontsize' => $this->mpdf->FontSizePt,
 				'fontcolor' => $this->mpdf->TextColor,
-			]
+			],
+			'AP' => $appearance,
 		];
 		if ($js) {
 			$this->SetFormChoiceJS($name, $js);
@@ -1138,6 +1199,10 @@ class Form
 		if (!preg_match('/^[a-zA-Z0-9_:\-]+$/', $name)) {
 			throw new \Mpdf\MpdfException('Field [' . $name . '] must have a name attribute, which can only contain letters, numbers, colon(:), undersore(_) or hyphen(-)');
 		}
+		$appearance = null;
+		if ($this->mpdf->PDFA && $type !== 'radio' && $type !== 'checkbox') {
+			$appearance = $this->appearanceText($bb, $hh, $this->form_button_border_width, [$value === '' ? $name : $value], '1', 'line');
+		}
 		if (!$this->mpdf->onlyCoreFonts) {
 			if (isset($this->mpdf->CurrentFont['subset'])) {
 				$this->mpdf->UTF8StringToArray($title); // Add characters to font subset
@@ -1227,7 +1292,8 @@ class Form
 				'font' => $this->mpdf->FontFamily,
 				'fontsize' => $this->mpdf->FontSizePt,
 				'fontcolor' => $this->mpdf->TextColor,
-			]
+			],
+			'AP' => $appearance,
 		];
 		if ($this->mpdf->writingHTMLheader || $this->mpdf->writingHTMLfooter) {
 			$this->mpdf->HTMLheaderPageForms[] = $f;
@@ -1329,6 +1395,235 @@ class Form
 		return $flag;
 	}
 
+	/**
+	 * Lays out the text a PDF/A widget shows, in the current font. PDF/A has every widget carry its own appearance
+	 * rather than leave it to the viewer, and the font can only be measured while the widget is being placed.
+	 *
+	 * @param float $w the widget's width
+	 * @param float $h its height
+	 * @param float $border its border width, in points
+	 * @param string[] $lines the text, a line each (UTF-8)
+	 * @param string $align '0', '1' or '2', left, centred or right as /Q has it
+	 * @param string $flow 'line' centres the first line on the height, 'wrap' runs the lines down from the top
+	 *  wrapped to the width, and 'list' runs them down unwrapped, as a list box shows its options
+	 * @param int[] $selected the lines a list box highlights
+	 *
+	 * @return mixed[] the font size, each line with where it starts, and the highlights, in points from the bottom left
+	 */
+	private function appearanceText($w, $h, $border, array $lines, $align, $flow, array $selected = [])
+	{
+		$width = $w * Mpdf::SCALE;
+		$height = $h * Mpdf::SCALE;
+		$padding = $border + 2;
+
+		$desc = $this->mpdf->CurrentFont['desc'];
+		$ascent = (isset($desc['Ascent']) ? $desc['Ascent'] : 800) / 1000;
+		$descent = (isset($desc['Descent']) ? $desc['Descent'] : -200) / 1000;
+
+		$size = $this->mpdf->FontSizePt;
+		if (!$size) {
+			$size = $flow === 'line' ? max(1, ($height - 2 * $padding) / ($ascent - $descent)) : 12;
+		}
+		$leading = ($ascent - $descent) * $size;
+
+		$top = 0;
+		if ($flow === 'wrap') {
+			$lines = $this->wrap($lines, ($width - 2 * $padding) / $size);
+		} elseif ($flow === 'line') {
+			$lines = array_slice($lines, 0, 1);
+		} elseif ($selected && min($selected) >= floor(($height - 2 * $padding) / $leading)) {
+			// A list box too short to show its first selected option starts at it
+			$top = min($selected);
+		}
+
+		$layout = ['size' => $size, 'lines' => [], 'highlights' => []];
+		foreach (array_slice($lines, $top, null, true) as $i => $line) {
+			$y = $flow === 'line' ? ($height - $leading) / 2 - $descent * $size : $height - $padding - $ascent * $size - ($i - $top) * $leading;
+			if ($y + $ascent * $size < 0) {
+				break;
+			}
+
+			$lineWidth = $this->emWidth($line) * $size;
+			if ($align === '1') {
+				$x = ($width - $lineWidth) / 2;
+			} elseif ($align === '2') {
+				$x = $width - $padding - $lineWidth;
+			} else {
+				$x = $padding;
+			}
+
+			$layout['lines'][] = [$x, $y, $line];
+			if (in_array($i, $selected, true)) {
+				$layout['highlights'][] = [$border, $y + $descent * $size, $width - 2 * $border, $leading];
+			}
+		}
+
+		return $layout;
+	}
+
+	/**
+	 * Breaks lines of text at spaces so that each fits a width
+	 *
+	 * @param string[] $lines
+	 * @param float $width in ems of the current font
+	 *
+	 * @return string[]
+	 */
+	private function wrap(array $lines, $width)
+	{
+		$space = $this->emWidth(' ');
+		$wrapped = [];
+		foreach ($lines as $line) {
+			$current = null;
+			$currentWidth = 0;
+			foreach (explode(' ', $line) as $word) {
+				$wordWidth = $this->emWidth($word);
+				if ($current === null) {
+					list($current, $currentWidth) = [$word, $wordWidth];
+				} elseif ($currentWidth + $space + $wordWidth > $width) {
+					$wrapped[] = $current;
+					list($current, $currentWidth) = [$word, $wordWidth];
+				} else {
+					$current .= ' ' . $word;
+					$currentWidth += $space + $wordWidth;
+				}
+			}
+			$wrapped[] = $current;
+		}
+
+		return $wrapped;
+	}
+
+	/**
+	 * The width of some text in ems of the current font, adding its characters to the font's subset
+	 *
+	 * @param string $text UTF-8
+	 *
+	 * @return float
+	 */
+	private function emWidth($text)
+	{
+		$width = 0;
+		foreach ($this->mpdf->UTF8StringToArray($text) as $char) {
+			$width += $this->mpdf->_getCharWidth($this->mpdf->CurrentFont['cw'], $char, false);
+		}
+
+		return $width / 1000;
+	}
+
+	/**
+	 * Points a widget with an appearanceText() layout at the appearance writeAppearance() writes, the last of the
+	 * widget's objects. PDF/A has a button name its appearance by state, as a checkbox does, even with only the one.
+	 *
+	 * @param mixed[] $form
+	 */
+	private function writeAppearanceReference($form)
+	{
+		if (!isset($form['AP'])) {
+			return;
+		}
+
+		$appearance = ($this->mpdf->n + $this->getCountItems($form) - 1) . ' 0 R';
+		if ($form['typ'] === 'Bt') {
+			$this->writer->write('/AP << /N << /Push ' . $appearance . ' >> >> /AS /Push');
+		} else {
+			$this->writer->write('/AP << /N ' . $appearance . ' >>');
+		}
+	}
+
+	/**
+	 * Writes the appearance of a PDF/A text field, choice or push button: its background and border, then its icon
+	 * or the text appearanceText() laid out
+	 *
+	 * @param mixed[] $form
+	 */
+	private function writeAppearance($form)
+	{
+		if (!isset($form['AP'])) {
+			return;
+		}
+
+		$width = $form['w'] * Mpdf::SCALE;
+		$height = $form['h'] * Mpdf::SCALE;
+		$border = (float) $form['BS_W'];
+
+		$s = sprintf('%s 0 0 %.3F %.3F re f', $this->appearanceColor($form['BG_C'], 'rg'), $width, $height);
+		if ($border > 0) {
+			$s .= sprintf(' %s %.3F w %.3F %.3F %.3F %.3F re S', $this->appearanceColor($form['BC_C'], 'RG'), $border, $border / 2, $border / 2, $width - $border, $height - $border);
+		}
+
+		foreach ($form['AP']['highlights'] as $highlight) {
+			$s .= vsprintf(' %s %.3F %.3F %.3F %.3F re f', array_merge([$this->appearanceColor('0.6 0.75 0.85', 'rg')], $highlight));
+		}
+
+		if (isset($this->form_button_icon[$form['T']])) {
+			$s .= sprintf(' q %.3F 0 0 %.3F 0 0 cm /I%d Do Q', $width, $height, $this->form_button_icon[$form['T']]['image_id']);
+		} elseif ($form['AP']['lines']) {
+			$s .= sprintf(' /Tx BMC q %.3F %.3F %.3F %.3F re W n BT', $border, $border, $width - 2 * $border, $height - 2 * $border);
+			$s .= sprintf(' /F%d %.3F Tf %s', $this->mpdf->fonts[$form['style']['font']]['i'], $form['AP']['size'], $form['style']['fontcolor']);
+			foreach ($form['AP']['lines'] as $line) {
+				$text = $this->writer->escape($this->writer->utf8ToUtf16BigEndian($line[2], false));
+				$s .= sprintf(' 1 0 0 1 %.3F %.3F Tm (%s) Tj', $line[0], $line[1], $text);
+			}
+			$s .= ' ET Q EMC';
+		}
+
+		$this->writeAppearanceStream($s, [$width, $height]);
+	}
+
+	/**
+	 * Writes a stream a widget shows
+	 *
+	 * @param string $content
+	 * @param float[]|null $box the width and height it draws in, in points, which the viewer fits to the widget
+	 */
+	private function writeAppearanceStream($content, $box)
+	{
+		$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
+		$xobject = $box ? sprintf('/Type /XObject /Subtype /Form /BBox [0 0 %.3F %.3F] ', $box[0], $box[1]) : '';
+		$p = $this->mpdf->compress ? gzcompress($content) : $content;
+
+		$this->writer->object();
+		$this->writer->write('<<' . $xobject . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
+		$this->writer->stream($p);
+		$this->writer->write('endobj');
+	}
+
+	/**
+	 * The operator that paints a form colour, given as 1, 3 or 4 components, in the colour space the document is
+	 * restricted to
+	 *
+	 * @param string $color e.g. '0.6 0.6 0.72'
+	 * @param string $operator 'rg' to fill, 'RG' to stroke
+	 *
+	 * @return string
+	 */
+	private function appearanceColor($color, $operator)
+	{
+		if (!$this->mpdf->PDFA && !$this->mpdf->PDFX && !$this->mpdf->restrictColorSpace) {
+			return $color . ' ' . $operator;
+		}
+
+		$c = preg_split('/\s+/', trim($color));
+		if (count($c) === 1) {
+			return $color . ($operator === 'rg' ? ' g' : ' G');
+		}
+
+		if (count($c) === 4) {
+			$css = vsprintf('cmyk(%.1F, %.1F, %.1F, %.1F)', array_map(function ($v) {
+				return (float) $v * 100;
+			}, $c));
+		} else {
+			$css = vsprintf('rgb(%d, %d, %d)', array_map(function ($v) {
+				return round((float) $v * 255);
+			}, $c));
+		}
+
+		$warnings = [];
+
+		return $this->mpdf->SetColor($this->colorConverter->convert($css, $warnings), $operator === 'rg' ? 'Fill' : 'Draw');
+	}
+
 	function _form_rect($x, $y, $w, $h, $hPt)
 	{
 		$x *= Mpdf::SCALE;
@@ -1421,7 +1716,11 @@ class Form
 		$this->writer->write('/M ' . $this->writer->dateString());
 		$this->writer->write('/Rect [ ' . $this->_form_rect($form['x'], $form['y'], $form['w'], $form['h'], $hPt) . ' ]');
 
-		$form['noprint'] ? $this->writer->write('/F 0 ') : $this->writer->write('/F 4 ');
+		if ($form['noprint'] && $this->mpdf->PDFA) {
+			$this->mpdf->pdfaxWarning('Form buttons are printed in PDFA files (noprint ignored)');
+		}
+
+		$form['noprint'] && !$this->mpdf->PDFA ? $this->writer->write('/F 0 ') : $this->writer->write('/F 4 ');
 
 		$this->writer->write('/FT /Btn ');
 		$this->writer->write('/H /P ');
@@ -1472,11 +1771,11 @@ class Form
 				$this->writer->write('/AS /Off ');
 			}
 
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts['czapfdingbats']['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 				$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off /Off >> >>');
 			} else {
-				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$this->mpdf->CurrentFont['fontkey']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
+				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 				$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
 			}
 
@@ -1506,10 +1805,10 @@ class Form
 			$form['FF'][] = self::FLAG_RADIO; // must be same as radio button group setting?
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts['czapfdingbats']['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 			} else {
-				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$this->mpdf->CurrentFont['fontkey']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
+				$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 			}
 
 			$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
@@ -1532,7 +1831,9 @@ class Form
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write('/MK << ' . $temp . ' >>');
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
-			$this->writer->write('/AA << /D << /S /ResetForm /Flags 1 >> >>');
+			if ($this->actionAllowed()) {
+				$this->writer->write('/AA << /D << /S /ResetForm /Flags 1 >> >>');
+			}
 			$form['FF'][] = 17;
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 		}
@@ -1562,7 +1863,9 @@ class Form
 			}
 			// To submit a value, needs to be in /AP dictionary, AND this object must contain a /Fields entry
 			// listing all fields to output
-			$this->writer->write('/AA << /D << /S /SubmitForm /F ' . $this->writer->string($form['URL']) . ' /Flags ' . $flag . ' >> >>');
+			if ($this->actionAllowed()) {
+				$this->writer->write('/AA << /D << /S /SubmitForm /F ' . $this->writer->string($form['URL']) . ' /Flags ' . $flag . ' >> >>');
+			}
 			$form['FF'][] = 17;
 			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 		}
@@ -1597,6 +1900,7 @@ class Form
 			}
 		}
 
+		$this->writeAppearanceReference($form);
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
@@ -1613,66 +1917,58 @@ class Form
 			$put_js = null;
 		}
 
-		// RADIO and CHECK BOX appearance streams
-		$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
+		$this->writeAppearance($form);
+
+		// RADIO and CHECK BOX appearance streams, the shapes drawn a font size across
+		$box = null;
+		if (!$this->usesZapfDingbats()) {
+			$box = [$form['style']['fontsize'], $form['style']['fontsize']];
+		}
 		if ($form['subtype'] === 'radio') {
 			// output 2 appearance streams for radio buttons on/off
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$fs = sprintf('%.3F', $form['style']['fontsize'] * 1.25);
 				$fi = 'czapfdingbats';
 				$r_on = 'q ' . $radio_color . ' rg BT /F' . $this->mpdf->fonts[$fi]['i'] . ' ' . $fs . ' Tf 0 0 Td (4) Tj ET Q';
 				$r_off = 'q ' . $radio_color . ' rg BT /F' . $this->mpdf->fonts[$fi]['i'] . ' ' . $fs . ' Tf 0 0 Td (8) Tj ET Q';
 			} else {
 				$matrix = sprintf('%.3F 0 0 %.3F 0 %.3F', $form['style']['fontsize'] * 1.33 / 10, $form['style']['fontsize'] * 1.25 / 10, $form['style']['fontsize']);
-				$fill = $radio_background_color . ' rg 3.778 -7.410 m 2.800 -7.410 1.947 -7.047 1.225 -6.322 c 0.500 -5.600 0.138 -4.747 0.138 -3.769 c 0.138 -2.788 0.500 -1.938 1.225 -1.213 c 1.947 -0.491 2.800 -0.128 3.778 -0.128 c 4.757 -0.128 5.610 -0.491 6.334 -1.213 c 7.056 -1.938 7.419 -2.788 7.419 -3.769 c 7.419 -4.747 7.056 -5.600 6.334 -6.322 c 5.610 -7.047 4.757 -7.410 3.778 -7.410 c h f ';
+				$color = $this->appearanceColor($radio_color, 'rg');
+				$background = $this->appearanceColor($radio_background_color, 'rg');
+				$fill = $background . ' 3.778 -7.410 m 2.800 -7.410 1.947 -7.047 1.225 -6.322 c 0.500 -5.600 0.138 -4.747 0.138 -3.769 c 0.138 -2.788 0.500 -1.938 1.225 -1.213 c 1.947 -0.491 2.800 -0.128 3.778 -0.128 c 4.757 -0.128 5.610 -0.491 6.334 -1.213 c 7.056 -1.938 7.419 -2.788 7.419 -3.769 c 7.419 -4.747 7.056 -5.600 6.334 -6.322 c 5.610 -7.047 4.757 -7.410 3.778 -7.410 c h f ';
 				$circle = '3.778 -6.963 m 4.631 -6.963 5.375 -6.641 6.013 -6.004 c 6.653 -5.366 6.972 -4.619 6.972 -3.769 c 6.972 -2.916 6.653 -2.172 6.013 -1.532 c 5.375 -0.894 4.631 -0.576 3.778 -0.576 c 2.928 -0.576 2.182 -0.894 1.544 -1.532 c 0.904 -2.172 0.585 -2.916 0.585 -3.769 c 0.585 -4.619 0.904 -5.366 1.544 -6.004 c 2.182 -6.641 2.928 -6.963 3.778 -6.963 c h 3.778 -7.410 m 2.800 -7.410 1.947 -7.047 1.225 -6.322 c 0.500 -5.600 0.138 -4.747 0.138 -3.769 c 0.138 -2.788 0.500 -1.938 1.225 -1.213 c 1.947 -0.491 2.800 -0.128 3.778 -0.128 c 4.757 -0.128 5.610 -0.491 6.334 -1.213 c 7.056 -1.938 7.419 -2.788 7.419 -3.769 c 7.419 -4.747 7.056 -5.600 6.334 -6.322 c 5.610 -7.047 4.757 -7.410 3.778 -7.410 c h f ';
-				$r_on = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $circle . '  ' . $radio_color . ' rg
+				$r_on = 'q ' . $matrix . ' cm ' . $fill . $color . ' ' . $circle . '  ' . $color . '
 5.184 -5.110 m 4.800 -5.494 4.354 -5.685 3.841 -5.685 c 3.331 -5.685 2.885 -5.494 2.501 -5.110 c 2.119 -4.725 1.925 -4.279 1.925 -3.769 c 1.925 -3.257 2.119 -2.810 2.501 -2.429 c 2.885 -2.044 3.331 -1.853 3.841 -1.853 c 4.354 -1.853 4.800 -2.044 5.184 -2.429 c 5.566 -2.810 5.760 -3.257 5.760 -3.769 c 5.760 -4.279 5.566 -4.725 5.184 -5.110 c h
 f Q ';
-				$r_off = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $circle . '  Q ';
+				$r_off = 'q ' . $matrix . ' cm ' . $fill . $color . ' ' . $circle . '  Q ';
 			}
 
-			$this->writer->object();
-			$p = $this->mpdf->compress ? gzcompress($r_on) : $r_on;
-			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
-			$this->writer->stream($p);
-			$this->writer->write('endobj');
-
-			$this->writer->object();
-			$p = $this->mpdf->compress ? gzcompress($r_off) : $r_off;
-			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
-			$this->writer->stream($p);
-			$this->writer->write('endobj');
+			$this->writeAppearanceStream($r_on, $box);
+			$this->writeAppearanceStream($r_off, $box);
 		}
 
 		if ($form['subtype'] === 'checkbox') {
 			// First output appearance stream for check box on
-			if ($this->formUseZapD) {
+			if ($this->usesZapfDingbats()) {
 				$fs = sprintf('%.3F', $form['style']['fontsize'] * 1.25);
 				$fi = 'czapfdingbats';
 				$cb_on = 'q ' . $radio_color . ' rg BT /F' . $this->mpdf->fonts[$fi]['i'] . ' ' . $fs . ' Tf 0 0 Td (4) Tj ET Q';
 				$cb_off = 'q ' . $radio_color . ' rg BT /F' . $this->mpdf->fonts[$fi]['i'] . ' ' . $fs . ' Tf 0 0 Td (8) Tj ET Q';
 			} else {
 				$matrix = sprintf('%.3F 0 0 %.3F 0 %.3F', $form['style']['fontsize'] * 1.33 / 10, $form['style']['fontsize'] * 1.25 / 10, $form['style']['fontsize']);
-				$fill = $radio_background_color . ' rg 7.395 -0.070 m 7.395 -7.344 l 0.121 -7.344 l 0.121 -0.070 l 7.395 -0.070 l h  f ';
+				$color = $this->appearanceColor($radio_color, 'rg');
+				$background = $this->appearanceColor($radio_background_color, 'rg');
+				$fill = $background . ' 7.395 -0.070 m 7.395 -7.344 l 0.121 -7.344 l 0.121 -0.070 l 7.395 -0.070 l h  f ';
 				$square = '0.508 -6.880 m 6.969 -6.880 l 6.969 -0.534 l 0.508 -0.534 l 0.508 -6.880 l h 7.395 -0.070 m 7.395 -7.344 l 0.121 -7.344 l 0.121 -0.070 l 7.395 -0.070 l h ';
-				$cb_on = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $square . ' f ' . $radio_color . ' rg
+				$cb_on = 'q ' . $matrix . ' cm ' . $fill . $color . ' ' . $square . ' f ' . $color . '
 6.321 -1.352 m 5.669 -2.075 5.070 -2.801 4.525 -3.532 c 3.979 -4.262 3.508 -4.967 3.112 -5.649 c 3.080 -5.706 3.039 -5.779 2.993 -5.868 c 2.858 -6.118 2.638 -6.243 2.334 -6.243 c 2.194 -6.243 2.100 -6.231 2.052 -6.205 c 2.003 -6.180 1.954 -6.118 1.904 -6.020 c 1.787 -5.788 1.688 -5.523 1.604 -5.226 c 1.521 -4.930 1.480 -4.721 1.480 -4.600 c 1.480 -4.535 1.491 -4.484 1.512 -4.447 c 1.535 -4.410 1.579 -4.367 1.647 -4.319 c 1.733 -4.259 1.828 -4.210 1.935 -4.172 c 2.040 -4.134 2.131 -4.115 2.205 -4.115 c 2.267 -4.115 2.341 -4.232 2.429 -4.469 c 2.437 -4.494 2.444 -4.511 2.448 -4.522 c 2.451 -4.531 2.456 -4.546 2.465 -4.568 c 2.546 -4.795 2.614 -4.910 2.668 -4.910 c 2.714 -4.910 2.898 -4.652 3.219 -4.136 c 3.539 -3.620 3.866 -3.136 4.197 -2.683 c 4.426 -2.367 4.633 -2.103 4.816 -1.889 c 4.998 -1.676 5.131 -1.544 5.211 -1.493 c 5.329 -1.426 5.483 -1.368 5.670 -1.319 c 5.856 -1.271 6.066 -1.238 6.296 -1.217 c 6.321 -1.352 l h  f  Q ';
-				$cb_off = 'q ' . $matrix . ' cm ' . $fill . $radio_color . ' rg ' . $square . ' f Q ';
+				$cb_off = 'q ' . $matrix . ' cm ' . $fill . $color . ' ' . $square . ' f Q ';
 			}
-			$this->writer->object();
-			$p = $this->mpdf->compress ? gzcompress($cb_on) : $cb_on;
-			$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
-			$this->writer->stream($p);
-			$this->writer->write('endobj');
+			$this->writeAppearanceStream($cb_on, $box);
 
 			// output appearance stream for check box off (only if not using ZapfDingbats)
-			if (!$this->formUseZapD) {
-				$this->writer->object();
-				$p = $this->mpdf->compress ? gzcompress($cb_off) : $cb_off;
-				$this->writer->write('<<' . $filter . '/Length ' . $this->writer->streamLength($p) . ' /Resources 2 0 R>>');
-				$this->writer->stream($p);
-				$this->writer->write('endobj');
+			if (!$this->usesZapfDingbats()) {
+				$this->writeAppearanceStream($cb_off, $box);
 			}
 		}
 		return $n;
@@ -1747,6 +2043,7 @@ f Q ';
 			$put_js = 1;
 		}
 
+		$this->writeAppearanceReference($form);
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
@@ -1756,6 +2053,8 @@ f Q ';
 			unset($this->array_form_choice_js[$form['T']]);
 			$put_js = null;
 		}
+
+		$this->writeAppearance($form);
 
 		return $n;
 	}
@@ -1773,7 +2072,8 @@ f Q ';
 		$this->writer->write('/Subtype /Widget ');
 
 		$this->writer->write('/Rect [ ' . $this->_form_rect($form['x'], $form['y'], $form['w'], $form['h'], $hPt) . ' ] ');
-		$form['hidden'] ? $this->writer->write('/F 2 ') : $this->writer->write('/F 4 ');
+		// PDF/A has every annotation printed; a hidden input takes up no space in any case
+		$form['hidden'] && !$this->mpdf->PDFA ? $this->writer->write('/F 2 ') : $this->writer->write('/F 4 ');
 		$this->writer->write('/FT /Tx ');
 
 		$this->writer->write('/H /N ');
@@ -1836,6 +2136,7 @@ f Q ';
 			$this->writer->write('/AA << ' . $js_str . ' >>');
 		}
 
+		$this->writeAppearanceReference($form);
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
@@ -1857,6 +2158,8 @@ f Q ';
 				unset($this->array_form_text_js[$form['T']]['C']);
 			}
 		}
+
+		$this->writeAppearance($form);
 		return $n;
 	}
 }
