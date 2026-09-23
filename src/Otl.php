@@ -4839,8 +4839,8 @@ class Otl
 	 * strpos(), which reads from the front of the table for every position of every rule.
 	 *
 	 * Position 0 of $Input is not read - the caller has already matched the glyph at $ptr against it.
-	 * A backtrack or lookahead position that is null is class 0 and is matched against the class 0
-	 * exclusions rather than a set.
+	 * A position that is null is class 0 and is matched against the class 0 exclusions rather than a
+	 * set.
 	 *
 	 * @param array $ignore     Characters to walk past at every position, as a map of unicode => 1
 	 * @param array $class0excl The glyphs in every class but 0, which is what a rule naming class 0 at
@@ -4887,15 +4887,15 @@ class Otl
 			// If outside scope of current syllable - return no match
 			if ($this->restrictToSyllable && isset($this->OTLdata[$checkpos]['syllable']) && $this->OTLdata[$checkpos]['syllable'] != $current_syllable) {
 				return false;
-			} // If Input Class 0 specified, matches anything NOT in $class0excl. Falsy rather than null, so
-			// a class the ClassDef does not define still reads as class 0 here
-			elseif (!$Input[$i] && isset($this->OTLdata[$checkpos]) && !isset($class0excl[$this->OTLdata[$checkpos]['uni']])) {
-				$matched[] = $checkpos;
-			} elseif (isset($this->OTLdata[$checkpos]) && isset($Input[$i][$this->OTLdata[$checkpos]['uni']])) {
-				$matched[] = $checkpos;
-			} else {
+			} elseif (!isset($this->OTLdata[$checkpos])) {
 				return false;
 			}
+			// A null set is class 0, which matches anything NOT in $class0excl
+			$uni = $this->OTLdata[$checkpos]['uni'];
+			if ($Input[$i] === null ? isset($class0excl[$uni]) : !isset($Input[$i][$uni])) {
+				return false;
+			}
+			$matched[] = $checkpos;
 		}
 
 		// LOOKAHEAD
@@ -5137,8 +5137,7 @@ class Otl
 	 *
 	 * Class 0 is null: it is every glyph the other classes leave out, which checkContextMatchMultiple
 	 * tests against the ClassDef's class 0 exclusions rather than a set. Any other class the table
-	 * does not define is an empty set, so a backtrack or lookahead position naming it matches
-	 * nothing. The input sequence still reads an empty set as class 0.
+	 * does not define is an empty set, so a position naming it matches nothing.
 	 *
 	 * @param array $classes      class => map of unicode => 1, as _getClasses returns it
 	 * @param int[] $classIndices The class each position names, in glyph sequence order
