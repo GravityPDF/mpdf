@@ -261,56 +261,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException('ext-zlib is required for compression of associated files');
 		}
 
-		// for each file, we create the spec object + the stream object
 		foreach ($this->mpdf->associatedFiles as $k => $file) {
-			// spec
-			$this->writer->object();
-			$this->mpdf->associatedFiles[$k]['_root'] = $this->mpdf->n; // we store the root ref of object for future reference (e.g. /EmbeddedFiles catalog)
-			$this->writer->write('<</F ' . $this->writer->string($file['name']));
-			if (!empty($file['description'])) {
-				$this->writer->write('/Desc ' . $this->writer->string($file['description']));
-			}
-			$this->writer->write('/Type /Filespec');
-			$this->writer->write('/EF <<');
-			$this->writer->write('/F ' . ($this->mpdf->n + 1) . ' 0 R');
-			$this->writer->write('/UF ' . ($this->mpdf->n + 1) . ' 0 R');
-			$this->writer->write('>>');
-			if (!empty($file['AFRelationship'])) {
-				$this->writer->write('/AFRelationship /' . $file['AFRelationship']);
-			}
-			$this->writer->write('/UF ' . $this->writer->string($file['name']));
-			$this->writer->write('>>');
-			$this->writer->write('endobj');
-
-			$fileContent = null;
-			if (isset($file['path'])) {
-				$fileContent = @file_get_contents($file['path']);
-			} elseif (isset($file['content'])) {
-				$fileContent = $file['content'];
-			}
-
-			if (!$fileContent) {
-				throw new \Mpdf\MpdfException(sprintf('Cannot access associated file - %s', isset($file['path']) ? $file['path'] : $file['name']));
-			}
-
-			$filestream = gzcompress($fileContent);
-			$this->writer->object();
-			$this->writer->write('<</Type /EmbeddedFile');
-			if (!empty($file['mime'])) {
-				$this->writer->write('/Subtype /' . $this->writer->escapeSlashes($file['mime']));
-			}
-			$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
-			$this->writer->write('/Filter /FlateDecode');
-			if (isset($file['path'])) {
-				// The file's own date, not the document's
-				$this->writer->write('/Params <</ModDate '.$this->writer->string('D:' . PdfDate::format(filemtime($file['path']))).' >>');
-			} else {
-				$this->writer->write('/Params <</ModDate ' . $this->writer->dateString() . ' >>');
-			}
-
-			$this->writer->write('>>');
-			$this->writer->stream($filestream);
-			$this->writer->write('endobj');
+			// we store the root ref of object for future reference (e.g. /EmbeddedFiles catalog)
+			$this->mpdf->associatedFiles[$k]['_root'] = $this->writeAssociatedFile($file, $this->mpdf->n + 1);
 		}
 
 		// AF array
@@ -323,6 +276,66 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('endobj');
 
 		$this->mpdf->associatedFilesRoot = $this->mpdf->n;
+	}
+
+	/**
+	 * Writes an associated file's specification as object $specId, then its embedded file stream as the one after
+	 *
+	 * @param mixed[] $file name, and optionally description, AFRelationship and mime, with the file's path or content
+	 * @param int $specId
+	 *
+	 * @return int the file specification's object number
+	 */
+	private function writeAssociatedFile(array $file, $specId)
+	{
+		$this->beginObject($specId);
+		$this->writer->write('<</F ' . $this->writer->string($file['name']));
+		if (!empty($file['description'])) {
+			$this->writer->write('/Desc ' . $this->writer->string($file['description']));
+		}
+		$this->writer->write('/Type /Filespec');
+		$this->writer->write('/EF <<');
+		$this->writer->write('/F ' . ($specId + 1) . ' 0 R');
+		$this->writer->write('/UF ' . ($specId + 1) . ' 0 R');
+		$this->writer->write('>>');
+		if (!empty($file['AFRelationship'])) {
+			$this->writer->write('/AFRelationship /' . $file['AFRelationship']);
+		}
+		$this->writer->write('/UF ' . $this->writer->string($file['name']));
+		$this->writer->write('>>');
+		$this->writer->write('endobj');
+
+		$fileContent = null;
+		if (isset($file['path'])) {
+			$fileContent = @file_get_contents($file['path']);
+		} elseif (isset($file['content'])) {
+			$fileContent = $file['content'];
+		}
+
+		if (!$fileContent) {
+			throw new \Mpdf\MpdfException(sprintf('Cannot access associated file - %s', isset($file['path']) ? $file['path'] : $file['name']));
+		}
+
+		$filestream = gzcompress($fileContent);
+		$this->beginObject($specId + 1);
+		$this->writer->write('<</Type /EmbeddedFile');
+		if (!empty($file['mime'])) {
+			$this->writer->write('/Subtype /' . $this->writer->escapeSlashes($file['mime']));
+		}
+		$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
+		$this->writer->write('/Filter /FlateDecode');
+		if (isset($file['path'])) {
+			// The file's own date, not the document's
+			$this->writer->write('/Params <</ModDate '.$this->writer->string('D:' . PdfDate::format(filemtime($file['path']))).' >>');
+		} else {
+			$this->writer->write('/Params <</ModDate ' . $this->writer->dateString() . ' >>');
+		}
+
+		$this->writer->write('>>');
+		$this->writer->stream($filestream);
+		$this->writer->write('endobj');
+
+		return $specId;
 	}
 
 	public function writeCatalog() //_putcatalog
@@ -707,15 +720,19 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 							// PushPin
 							$f = $pl['opt']['file'];
-							$f = preg_replace('/^.*\//', '', $f);
+							$f = preg_replace('/^.*[\/\\\\]/', '', $f); // a Windows path separates with backslashes
 							$f = preg_replace('/[^a-zA-Z0-9._]/', '', $f);
 
-							$annot .= '/FS <</Type /Filespec /F ' . $this->writer->string($f);
-							if ($this->mpdf->PDFA) {
-								$annot .= ' /UF ' . $this->writer->string($f);
+							if (isset($ids['filespec'])) {
+								$annot .= '/FS ' . $ids['filespec'] . ' 0 R /AF [' . $ids['filespec'] . ' 0 R]';
+							} else {
+								$annot .= '/FS <</Type /Filespec /F ' . $this->writer->string($f);
+								if ($this->mpdf->PDFA) {
+									$annot .= ' /UF ' . $this->writer->string($f);
+								}
+								$annot .= '/EF <</F ' . $ids['file'] . ' 0 R>>';
+								$annot .= '>>';
 							}
-							$annot .= '/EF <</F ' . $ids['file'] . ' 0 R>>';
-							$annot .= '>>';
 
 						} else {
 							$annot .= '/Subtype /Text';
@@ -802,14 +819,23 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 								throw new \Mpdf\MpdfException('mPDF Error: Cannot access file attachment - ' . $pl['opt']['file']);
 							}
 
-							$filestream = gzcompress($file);
-							$this->beginObject($ids['file']);
-							$this->writer->write('<</Type /EmbeddedFile');
-							$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
-							$this->writer->write('/Filter /FlateDecode');
-							$this->writer->write('>>');
-							$this->writer->stream($filestream);
-							$this->writer->write('endobj');
+							if (isset($ids['filespec'])) {
+								$this->writeAssociatedFile([
+									'name' => $f,
+									'AFRelationship' => 'Unspecified',
+									'mime' => 'application/octet-stream',
+									'content' => $file,
+								], $ids['filespec']);
+							} else {
+								$filestream = gzcompress($file);
+								$this->beginObject($ids['file']);
+								$this->writer->write('<</Type /EmbeddedFile');
+								$this->writer->write('/Length ' . $this->writer->streamLength($filestream));
+								$this->writer->write('/Filter /FlateDecode');
+								$this->writer->write('>>');
+								$this->writer->stream($filestream);
+								$this->writer->write('endobj');
+							}
 
 						} elseif ($this->writesPopup($pl)) {
 							$this->beginObject($ids['popup']);
@@ -870,7 +896,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 * Numbers the objects writeAnnotations() writes, in the order it writes them, starting at $id
 	 *
 	 * Each page gets its links, then its annotations, then its form widgets. An annotation's ids name the annotation
-	 * itself, its embedded file or else its popup, and its appearance under PDF/A. The radio groups come last.
+	 * itself, its embedded file (under PDF/A-3 its file specification, then the file) or else its popup, and its
+	 * appearance under PDF/A. The radio groups come last.
 	 *
 	 * @param int $id the object number after the last page's
 	 *
@@ -896,7 +923,10 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				foreach ($this->mpdf->PageAnnots[$n] as $key => $pl) {
 					$ids = ['annot' => $annots[$n][] = $id++];
 
-					if ($pl['opt']['file']) {
+					if ($pl['opt']['file'] && $this->associatesAnnotationFiles()) {
+						$ids['filespec'] = $id++;
+						$ids['file'] = $id++;
+					} elseif ($pl['opt']['file']) {
 						$ids['file'] = $id++;
 					} elseif (!empty($pl['opt']['popup'])) {
 						$ids['popup'] = $annots[$n][] = $id++;
@@ -946,7 +976,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Begins the object numberAnnotations() gave $id, which is the next after the objects already written
+	 * Begins object $id, numbered by numberAnnotations() or next after the objects already written
 	 *
 	 * @param int $id
 	 */
@@ -954,6 +984,23 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->writer->object($id);
 		$this->mpdf->n = $id;
+	}
+
+	/**
+	 * Whether an annotation's file is written as a PDF/A-3 associated file, with a MIME type, an AFRelationship and
+	 * the annotation's /AF naming it
+	 *
+	 * @return bool
+	 */
+	private function associatesAnnotationFiles()
+	{
+		if (!$this->mpdf->PDFA) {
+			return false;
+		}
+
+		list($part) = $this->mpdf->pdfaConformance();
+
+		return $part === '3';
 	}
 
 	/**
