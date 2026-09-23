@@ -93,7 +93,7 @@ class Form
 	var $form_radio_groups;
 
 	/**
-	 * @var array[] push buttons that share a name, written as one field whose kids are the widgets, by name
+	 * @var array[] by name, the push buttons that share it, which are written as one field with the widgets as kids
 	 */
 	private $buttonGroups = [];
 
@@ -759,6 +759,8 @@ class Form
 	}
 
 	/**
+	 * Whether a field is a submit, reset, script or image button, which is pressed rather than switched on and off
+	 *
 	 * @param mixed[] $form
 	 *
 	 * @return bool

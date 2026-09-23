@@ -130,8 +130,8 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * An active form conforms: checkboxes and radio buttons are drawn without ZapfDingbats, every widget carries its
-	 * appearance, and the JavaScript, submit and reset actions PDF/A forbids are left out (#348). Two buttons share a
-	 * name, so are kids of one field (#443).
+	 * appearance, and the JavaScript, submit and reset actions PDF/A forbids are left out (#348). Two of the buttons
+	 * share a name and are written as kids of one field (#443).
 	 *
 	 * @dataProvider documents
 	 */
