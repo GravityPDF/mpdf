@@ -4102,9 +4102,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		/* -- CJK-FONTS -- */
 		if (in_array($family, $this->available_CJK_fonts)) {
-			if (empty($this->Big5_widths)) {
-				require __DIR__ . '/../data/CJKdata.php';
-			}
 			$this->AddCJKFont($family); // don't need to add style
 			return;
 		}
@@ -4452,9 +4449,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				/* -- CJK-FONTS -- */
 				if (in_array($fontkey, $this->available_CJK_fonts)) {
 					if (!isset($this->fonts[$fontkey])) { // already added
-						if (empty($this->Big5_widths)) {
-							require __DIR__ . '/../data/CJKdata.php';
-						}
 						$this->AddCJKFont($family); // don't need to add style
 					}
 				} else { // Test to see if requested font/style is available - or substitute /* -- END CJK-FONTS -- */
@@ -11376,7 +11370,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add Big5 font with proportional Latin
 		$family = 'big5';
 		$name = 'MSungStd-Light-Acro';
-		$cw = $this->Big5_widths;
+		$cw = $this->cjkWidths('big5');
 		$CMap = 'UniCNS-UTF16-H';
 		$registry = ['ordering' => 'CNS1', 'supplement' => 4];
 		$desc = [
@@ -11399,7 +11393,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add GB font with proportional Latin
 		$family = 'gb';
 		$name = 'STSongStd-Light-Acro';
-		$cw = $this->GB_widths;
+		$cw = $this->cjkWidths('gb');
 		$CMap = 'UniGB-UTF16-H';
 		$registry = ['ordering' => 'GB1', 'supplement' => 4];
 		$desc = [
@@ -11423,7 +11417,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add SJIS font with proportional Latin
 		$family = 'sjis';
 		$name = 'KozMinPro-Regular-Acro';
-		$cw = $this->SJIS_widths;
+		$cw = $this->cjkWidths('sjis');
 		$CMap = 'UniJIS-UTF16-H';
 		$registry = ['ordering' => 'Japan1', 'supplement' => 5];
 		$desc = [
@@ -11447,7 +11441,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add UHC font with proportional Latin
 		$family = 'uhc';
 		$name = 'HYSMyeongJoStd-Medium-Acro';
-		$cw = $this->UHC_widths;
+		$cw = $this->cjkWidths('uhc');
 		$CMap = 'UniKS-UTF16-H';
 		$registry = ['ordering' => 'Korea1', 'supplement' => 2];
 		$desc = [

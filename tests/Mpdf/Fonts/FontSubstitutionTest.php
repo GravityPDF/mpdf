@@ -161,8 +161,10 @@ class FontSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$cw = $this->substitution->widths('big5');
 
-		$this->assertSame($this->mpdf->cjkWidths('big5'), $cw);
 		$this->assertSame(['dejavusans'], array_keys($this->mpdf->fonts));
+
+		$this->mpdf->AddFont('big5');
+		$this->assertSame($this->mpdf->fonts['big5']['cw'], $cw);
 	}
 
 	/**

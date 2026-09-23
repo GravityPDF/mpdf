@@ -158,6 +158,8 @@ class FontSubstitution
 	private function metrics($family)
 	{
 		if (isset($this->mpdf->fonts[$family])) {
+			unset($this->tried[$family]);
+
 			return $this->mpdf->fonts[$family];
 		}
 
