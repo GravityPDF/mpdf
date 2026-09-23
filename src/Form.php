@@ -175,7 +175,7 @@ class Form
 
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_NO_EXPORT;
-				$objattr['color'] = [3, 128, 128, 128];  // gray out disabled
+				$objattr['color'] = $this->colorConverter->convert(128, $this->mpdf->PDFAXwarnings); // gray out disabled
 			}
 
 			if (!empty($objattr['required'])) {
@@ -279,7 +279,7 @@ class Form
 
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_NO_EXPORT;
-				$objattr['color'] = [3, 128, 128, 128];   // gray out disabled
+				$objattr['color'] = $this->colorConverter->convert(128, $this->mpdf->PDFAXwarnings); // gray out disabled
 			}
 
 			if (!empty($objattr['required'])) {
@@ -380,7 +380,7 @@ class Form
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
 				$flags[] = self::FLAG_NO_EXPORT;
-				$objattr['color'] = [3, 128, 128, 128]; // gray out disabled
+				$objattr['color'] = $this->colorConverter->convert(128, $this->mpdf->PDFAXwarnings); // gray out disabled
 			}
 			if (!empty($objattr['required'])) {
 				$flags[] = self::FLAG_REQUIRED;
@@ -517,7 +517,7 @@ class Form
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
 				$flags[] = self::FLAG_NO_EXPORT;
-				$objattr['color'] = [3, 128, 128, 128];
+				$objattr['color'] = $this->colorConverter->convert(128, $this->mpdf->PDFAXwarnings);
 			}
 
 			$this->mpdf->SetTColor(isset($objattr['color']) ? $objattr['color'] : $this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
