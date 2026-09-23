@@ -2,6 +2,7 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\MpdfException;
 use Mpdf\Strict;
 
 /**
@@ -145,9 +146,15 @@ class PaymentMeans
 	 * @param string $typeCode BANK_CARD, CREDIT_CARD or DEBIT_CARD
 	 *
 	 * @return self
+	 *
+	 * @throws \Mpdf\MpdfException When given more than the ten characters EN 16931 allows, lest a whole card number be written
 	 */
 	public static function card($lastDigits, $cardholderName = null, $typeCode = self::BANK_CARD)
 	{
+		if (strlen($lastDigits) > 10) {
+			throw new MpdfException('Give a card\'s last four to six digits, never its whole number (EN 16931 BR-51)');
+		}
+
 		$means = new self($typeCode);
 		$means->cardNumber = (string) $lastDigits;
 		$means->cardholderName = $cardholderName;

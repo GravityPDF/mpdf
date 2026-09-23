@@ -44,6 +44,13 @@ class FacturX
 	];
 
 	/**
+	 * The guideline ID of the XRechnung version the CII writer writes; any XRechnung version reads as XRECHNUNG
+	 *
+	 * @var string
+	 */
+	private static $xrechnungGuideline = 'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0';
+
+	/**
 	 * @var string
 	 */
 	private $xml;
@@ -74,9 +81,10 @@ class FacturX
 	}
 
 	/**
-	 * The guideline ID an invoice of a conformance level names in ExchangedDocumentContext
+	 * The guideline ID an invoice of a conformance level names in ExchangedDocumentContext; XRechnung 3.0's for
+	 * XRECHNUNG
 	 *
-	 * @param string $conformanceLevel Any level but XRECHNUNG, whose guideline ID names the XRechnung version
+	 * @param string $conformanceLevel
 	 *
 	 * @return string
 	 *
@@ -84,7 +92,9 @@ class FacturX
 	 */
 	public static function getGuideline($conformanceLevel)
 	{
-		return array_search(self::checkLevel($conformanceLevel, self::$guidelines), self::$guidelines, true);
+		$level = self::checkLevel($conformanceLevel, array_merge(array_values(self::$guidelines), [self::XRECHNUNG]));
+
+		return $level === self::XRECHNUNG ? self::$xrechnungGuideline : array_search($level, self::$guidelines, true);
 	}
 
 	/**

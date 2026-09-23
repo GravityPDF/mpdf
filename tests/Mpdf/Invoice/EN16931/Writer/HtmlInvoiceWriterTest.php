@@ -111,6 +111,15 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The option to pay VAT on debits is printed, as France requires it to be mentioned
+	 */
+	public function testMentionsVatOnDebits()
+	{
+		$this->assertStringContainsString('<br>VAT is paid on debits</p>', $this->htmlWriter()->write($this->frenchInvoice()));
+		$this->assertStringNotContainsString('debits', $this->htmlWriter()->write($this->invoice()));
+	}
+
+	/**
 	 * A party's address is laid out as its country lays it out: a British postcode on a line of its own
 	 */
 	public function testLaysOutTheAddressesByCountry()

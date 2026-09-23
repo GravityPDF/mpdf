@@ -16,11 +16,18 @@ use Mpdf\MpdfException;
  * Writes an invoice as the Cross Industry Invoice of a Factur-X / ZUGFeRD profile
  *
  * MINIMUM carries the parties and totals, BASIC WL adds addresses, the VAT breakdown, allowances, charges and payment
- * details, and EN 16931 adds the lines. Only EN 16931 is a full e-invoice: Germany does not accept MINIMUM or BASIC WL
- * as one, nor does France's reform, which leaves them for documents that travel with an invoice sent some other way.
+ * details, EN 16931 adds the lines, and XRECHNUNG writes EN 16931 as Germany's XRechnung 3.0 requires. Only EN 16931
+ * and XRechnung are full e-invoices: Germany accepts neither MINIMUM nor BASIC WL as one, and France's reform accepts
+ * BASIC WL only until September 2027 and MINIMUM never.
  *
- * From BASIC WL up the invoice is first checked against the EN 16931 business rules its content can break, and refused
- * with the rules it breaks.
+ * From BASIC WL up the invoice is first checked against the EN 16931 business rules its content can break, and XRechnung's
+ * too for XRECHNUNG, and refused with the rules it breaks.
+ *
+ * forFrance() adds the checks of France's 2026 reform, whose platforms take EN 16931, and BASIC WL until September
+ * 2027.
+ *
+ * XRechnung is meant to be sent as XML on its own: the German administration does not take it embedded in a PDF,
+ * though ZUGFeRD defines an XRECHNUNG profile that embeds it as xrechnung.xml.
  *
  *     $mpdf->WriteInvoice($invoice, [new CiiInvoiceWriter(FacturX::EN16931)]);
  */
@@ -28,11 +35,41 @@ class CiiInvoiceWriter extends CiiWriter
 {
 
 	/**
+	 * The business process XRechnung requires, and names when the buyer asks for none
+	 *
+	 * @var string
+	 */
+	private static $peppolBillingProcess = 'urn:fdc:peppol.eu:2017:poacc:billing:01:1.0';
+
+	/**
+	 * @var bool
+	 */
+	private $france = false;
+
+	/**
 	 * @return string[]
 	 */
 	protected function getProfiles()
 	{
-		return [FacturX::MINIMUM, FacturX::BASIC_WL, FacturX::EN16931];
+		return [FacturX::MINIMUM, FacturX::BASIC_WL, FacturX::EN16931, FacturX::XRECHNUNG];
+	}
+
+	/**
+	 * Check invoices against the rules France's 2026 e-invoicing reform adds too, as its platforms will
+	 *
+	 * @return $this
+	 *
+	 * @throws \Mpdf\MpdfException When the profile is one France does not take
+	 */
+	public function forFrance()
+	{
+		if (!$this->includes(FacturX::BASIC_WL) || $this->includes(FacturX::XRECHNUNG)) {
+			throw new MpdfException(sprintf('France\'s reform does not take %s; use EN 16931, or BASIC WL until September 2027', $this->getProfile()));
+		}
+
+		$this->france = true;
+
+		return $this;
 	}
 
 	/**
@@ -56,15 +93,23 @@ class CiiInvoiceWriter extends CiiWriter
 			throw new MpdfException('MINIMUM cannot carry a prepaid amount, so its amount due would not add up; use BASIC WL or above');
 		}
 
-		if ($this->includes(FacturX::BASIC_WL)) {
+		if ($this->france) {
+			Rules::checkFrance($document);
+		} elseif ($this->includes(FacturX::XRECHNUNG)) {
+			Rules::checkXRechnung($document);
+		} elseif ($this->includes(FacturX::BASIC_WL)) {
 			Rules::check($document);
 		}
 
 		$root = $this->createRoot('rsm:CrossIndustryInvoice', 'urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100');
 
 		$context = $this->append($root, 'rsm:ExchangedDocumentContext');
-		if ($document->getBusinessProcess() !== null) {
-			$this->append($this->append($context, 'ram:BusinessProcessSpecifiedDocumentContextParameter'), 'ram:ID', $document->getBusinessProcess());
+		$process = $document->getBusinessProcess();
+		if ($process === null && $this->includes(FacturX::XRECHNUNG)) {
+			$process = self::$peppolBillingProcess;
+		}
+		if ($process !== null) {
+			$this->append($this->append($context, 'ram:BusinessProcessSpecifiedDocumentContextParameter'), 'ram:ID', $process);
 		}
 		$this->append($this->append($context, 'ram:GuidelineSpecifiedDocumentContextParameter'), 'ram:ID', FacturX::getGuideline($this->getProfile()));
 
@@ -280,7 +325,7 @@ class CiiInvoiceWriter extends CiiWriter
 				$this->append($tax, 'ram:TypeCode', 'VAT');
 				$this->appendIfSet($tax, 'ram:ExemptionReason', $invoice->getExemptionReason($group['category']));
 				$this->append($tax, 'ram:BasisAmount', $this->amount($group['basis']));
-				$this->appendCategory($tax, $group['category'], $group['rate']);
+				$this->appendCategory($tax, $group['category'], $group['rate'], $this->includes(FacturX::XRECHNUNG), $invoice->isVatOnDebits());
 			}
 
 			foreach ($invoice->getAllowanceCharges() as $allowanceCharge) {
@@ -366,16 +411,22 @@ class CiiInvoiceWriter extends CiiWriter
 	}
 
 	/**
-	 * The VAT category and its rate. Category O (not subject to VAT) has no rate in EN 16931
+	 * The VAT category and its rate. Category O (not subject to VAT) has no rate in EN 16931, but XRechnung wants one,
+	 * 0, in the VAT breakdown
 	 *
 	 * @param \DOMElement $tax
 	 * @param string $category
 	 * @param float $rate
+	 * @param bool $alwaysRate
+	 * @param bool $onDebits Whether the VAT falls due when invoiced, which the breakdown gives as due date type 5
 	 */
-	private function appendCategory(\DOMElement $tax, $category, $rate)
+	private function appendCategory(\DOMElement $tax, $category, $rate, $alwaysRate = false, $onDebits = false)
 	{
 		$this->append($tax, 'ram:CategoryCode', $category);
-		if ($category !== LineItem::NOT_SUBJECT_TO_VAT) {
+		if ($onDebits) {
+			$this->append($tax, 'ram:DueDateTypeCode', '5');
+		}
+		if ($alwaysRate || $category !== LineItem::NOT_SUBJECT_TO_VAT) {
 			$this->append($tax, 'ram:RateApplicablePercent', $this->decimal($rate));
 		}
 	}

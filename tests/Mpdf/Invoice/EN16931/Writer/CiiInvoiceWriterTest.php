@@ -2,7 +2,10 @@
 
 namespace Mpdf\Invoice\EN16931\Writer;
 
+use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\EN16931\InvoiceFixtures;
+use Mpdf\Invoice\LineItem;
+use Mpdf\Invoice\PaymentMeans;
 use Mpdf\Invoice\PdfA3\FacturX;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
@@ -22,6 +25,7 @@ class CiiInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		FacturX::MINIMUM => 'MINIMUM/FACTUR-X_MINIMUM.xsd',
 		FacturX::BASIC_WL => 'BASIC-WL/FACTUR-X_BASICWL.xsd',
 		FacturX::EN16931 => 'EN16931/FACTUR-X_EN16931.xsd',
+		FacturX::XRECHNUNG => 'EN16931/FACTUR-X_EN16931.xsd',
 	];
 
 	/**
@@ -41,6 +45,8 @@ class CiiInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'EN 16931 credit note' => [FacturX::EN16931, 'creditNote', 'en16931-credit-note.xml'],
 			'BASIC WL intra-community' => [FacturX::BASIC_WL, 'intraCommunityInvoice', 'basic-wl-intra-community.xml'],
 			'EN 16931 intra-community' => [FacturX::EN16931, 'intraCommunityInvoice', 'en16931-intra-community.xml'],
+			'XRechnung' => [FacturX::XRECHNUNG, 'xrechnungInvoice', 'xrechnung.xml'],
+			'EN 16931 France' => [FacturX::EN16931, 'frenchInvoice', 'en16931-france.xml'],
 		];
 	}
 
@@ -102,6 +108,56 @@ class CiiInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * XRechnung names its business process when the invoice gives none, and a rate for VAT category O in the breakdown
+	 */
+	public function testWritesWhatXRechnungAddsToEn16931()
+	{
+		$xml = (new CiiInvoiceWriter(FacturX::XRECHNUNG))->write($this->xrechnungInvoice());
+
+		$this->assertStringContainsString('<ram:ID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</ram:ID>', $xml);
+		$this->assertStringContainsString('<ram:ID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</ram:ID>', $xml);
+
+		$invoice = $this->xrechnungInvoice();
+		$invoice->getSeller()->setVatId(null);
+		$invoice->getBuyer()->setVatId(null);
+		$notSubject = new Invoice('INV-2026-0102', new \DateTime('2026-09-23'), 'EUR', $invoice->getSeller(), $invoice->getBuyer());
+		$notSubject->addLine(new LineItem('Donation', 1, 10, 0, 'O'))
+			->setExemptionReason('O', 'Not subject to VAT')
+			->setBuyerReference('04011000-12345-34')
+			->setDueDate(new \DateTime('2026-10-23'))
+			->addPaymentMeans(PaymentMeans::sepaCreditTransfer('FR7630006000011234567890189'));
+
+		$xml = (new CiiInvoiceWriter(FacturX::XRECHNUNG))->write($notSubject);
+		$this->assertStringContainsString("<ram:CategoryCode>O</ram:CategoryCode>\n        <ram:RateApplicablePercent>0</ram:RateApplicablePercent>\n      </ram:ApplicableTradeTax>", $xml);
+		$this->assertMatchesSchema($xml, self::$schemas[FacturX::XRECHNUNG]);
+	}
+
+	/**
+	 * For France the VAT on debits option is given in the breakdown, and the French rules checked
+	 */
+	public function testWritesForFrance()
+	{
+		$xml = (new CiiInvoiceWriter(FacturX::EN16931))->forFrance()->write($this->frenchInvoice());
+		$this->assertStringContainsString("<ram:CategoryCode>S</ram:CategoryCode>\n        <ram:DueDateTypeCode>5</ram:DueDateTypeCode>", $xml);
+
+		$this->expectException(MpdfException::class);
+		$this->expectExceptionMessage('BR-FR-08');
+
+		(new CiiInvoiceWriter(FacturX::EN16931))->forFrance()->write($this->invoice());
+	}
+
+	/**
+	 * France takes neither MINIMUM nor XRechnung
+	 */
+	public function testRefusesAProfileFranceDoesNotTake()
+	{
+		$this->expectException(MpdfException::class);
+		$this->expectExceptionMessage('France\'s reform does not take MINIMUM');
+
+		(new CiiInvoiceWriter(FacturX::MINIMUM))->forFrance();
+	}
+
+	/**
 	 * An invoice that breaks an EN 16931 rule is refused from BASIC WL up, naming the rule
 	 */
 	public function testRefusesAnInvoiceThatBreaksTheRules()
@@ -123,7 +179,7 @@ class CiiInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function refusedProvider()
 	{
 		return [
-			'unknown profile' => ['EXTENDED', 'invoice', 'Profile "EXTENDED" is not one of MINIMUM, BASIC WL, EN 16931'],
+			'unknown profile' => ['EXTENDED', 'invoice', 'Profile "EXTENDED" is not one of MINIMUM, BASIC WL, EN 16931, XRECHNUNG'],
 			'no lines' => ['EN 16931', 'blankInvoice', 'An invoice needs at least one line'],
 			'prepaid MINIMUM' => ['MINIMUM', 'invoice', 'MINIMUM cannot carry a prepaid amount'],
 		];

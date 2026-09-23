@@ -117,6 +117,55 @@ trait InvoiceFixtures
 	}
 
 	/**
+	 * The first invoice as XRechnung needs it: the seller's contact, the buyer's Leitweg-ID as its reference and its
+	 * electronic address, and a discount for early payment in the Skonto form
+	 *
+	 * @return \Mpdf\Invoice\EN16931\Invoice
+	 */
+	private function xrechnungInvoice()
+	{
+		$invoice = $this->invoice()
+			->setBuyerReference('04011000-12345-34')
+			->setPaymentTerms("30 days net\n#SKONTO#TAGE=14#PROZENT=2.00#\n");
+		$invoice->getSeller()->setContact('Accounts', '+33 1 23 45 67 89', 'accounts@seller.example');
+		$invoice->getBuyer()->setElectronicAddress('04011000-12345-34', '0204');
+
+		return $invoice;
+	}
+
+	/**
+	 * A French services invoice as the 2026 reform needs it: both parties identified by SIREN and reached at addresses
+	 * starting with it, its cadre de facturation, VAT on debits, and the three mandatory mentions as notes
+	 *
+	 * @return \Mpdf\Invoice\EN16931\Invoice
+	 */
+	private function frenchInvoice()
+	{
+		$seller = (new Party('Vendeur SARL', 'FR'))
+			->setAddress('12 rue de la Paix', '75002', 'Paris')
+			->setVatId('FR32123456789')
+			->setLegalId('123456789', '0002')
+			->setElectronicAddress('123456789', '0225');
+		$buyer = (new Party('Acheteur SAS', 'FR'))
+			->setAddress('8 quai de Saône', '69002', 'Lyon')
+			->setVatId('FR44987654321')
+			->setLegalId('987654321', '0002')
+			->setElectronicAddress('987654321_FACTURES', '0225');
+
+		$invoice = new Invoice('FA-2026-0042', new \DateTime('2026-09-23'), 'EUR', $seller, $buyer);
+
+		return $invoice->addLine((new LineItem('Conseil', 7.5, 120, 20))->setUnitCode('HUR'))
+			->setBusinessProcess('S1')
+			->setVatOnDebits()
+			->setDeliveryDate(new \DateTime('2026-09-20'))
+			->setDueDate(new \DateTime('2026-10-23'))
+			->addPaymentMeans(PaymentMeans::sepaCreditTransfer('FR7630006000011234567890189', 'AGRIFRPP'))
+			->addNote('Indemnité forfaitaire pour frais de recouvrement : 40 €', 'PMT')
+			->addNote('Pénalités de retard : trois fois le taux d’intérêt légal', 'PMD')
+			->addNote('Pas d’escompte pour paiement anticipé', 'AAB');
+	}
+
+	/**
 	 * The German buyer every invoice here is to
 	 *
 	 * @return \Mpdf\Invoice\Party

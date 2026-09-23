@@ -4,6 +4,7 @@ namespace Mpdf\Invoice\EN16931;
 
 use Mpdf\Invoice\AllowanceCharge;
 use Mpdf\Invoice\LineItem;
+use Mpdf\Invoice\PaymentMeans;
 use Mpdf\MpdfException;
 
 class InvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
@@ -98,6 +99,9 @@ class InvoiceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'negative allowance' => [function () {
 				AllowanceCharge::allowance(-5, 'Discount');
 			}, 'positive amount'],
+			'whole card number' => [function () {
+				PaymentMeans::card('4242424242424242');
+			}, 'never its whole number'],
 			'invoice allowance without VAT' => [function () {
 				$this->invoice()->addAllowanceCharge(AllowanceCharge::allowance(5, 'Discount'));
 			}, 'call setVat()'],

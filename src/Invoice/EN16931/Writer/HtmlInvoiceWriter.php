@@ -83,6 +83,7 @@ class HtmlInvoiceWriter implements WriterInterface
 		'account' => 'Account',
 		'directDebit' => 'Direct debit from %1$s under mandate %2$s, creditor ID %3$s',
 		'card' => 'Card ending %s',
+		'vatOnDebits' => 'VAT is paid on debits',
 	];
 
 	/**
@@ -363,6 +364,10 @@ class HtmlInvoiceWriter implements WriterInterface
 
 		foreach ($invoice->getPaymentMeans() as $means) {
 			$lines = array_merge($lines, $this->paymentMeans($means));
+		}
+
+		if ($invoice->isVatOnDebits()) {
+			$lines[] = $this->labels['vatOnDebits'];
 		}
 
 		$lines = $this->filled($lines);

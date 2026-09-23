@@ -79,6 +79,11 @@ class Invoice extends TradeDocument
 	private $precedingInvoices = [];
 
 	/**
+	 * @var bool
+	 */
+	private $vatOnDebits = false;
+
+	/**
 	 * @param string $typeCode One of the TYPE_ constants, or another UNTDID 1001 invoice code
 	 *
 	 * @return $this
@@ -91,8 +96,9 @@ class Invoice extends TradeDocument
 	}
 
 	/**
-	 * @param string $businessProcess The business process the invoice belongs to, e.g. the French reform's cadre de
-	 *                                facturation
+	 * @param string $businessProcess The business process the invoice belongs to: in France the cadre de facturation,
+	 *                                B1 for goods, S1 for services or M1 for both, B2, S2 or M2 when already paid, and so
+	 *                                on; for XRechnung the Peppol process, which the writer names when none is given
 	 *
 	 * @return $this
 	 */
@@ -209,6 +215,21 @@ class Invoice extends TradeDocument
 	}
 
 	/**
+	 * The seller pays the VAT on these services when it invoices them rather than when it is paid, the French option
+	 * pour le paiement de la TVA d'après les débits
+	 *
+	 * @param bool $onDebits
+	 *
+	 * @return $this
+	 */
+	public function setVatOnDebits($onDebits = true)
+	{
+		$this->vatOnDebits = (bool) $onDebits;
+
+		return $this;
+	}
+
+	/**
 	 * An invoice this one corrects or credits, which the law requires a credit note or corrected invoice to name
 	 *
 	 * @param string $id Its number
@@ -311,6 +332,14 @@ class Invoice extends TradeDocument
 	public function getPrecedingInvoices()
 	{
 		return $this->precedingInvoices;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function isVatOnDebits()
+	{
+		return $this->vatOnDebits;
 	}
 
 	/**
