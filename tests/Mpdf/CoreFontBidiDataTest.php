@@ -33,7 +33,7 @@ class CoreFontBidiDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * In a UTF-8 document whose default font is a core font, a chunk that names no font is in that core font
-	 * and is read as Windows-1252, while the UTF-8 of the TrueType span after it gets its bidi data from OTL.
+	 * and is read as Windows-1252. The TrueType span after it already has bidi data from OTL.
 	 */
 	public function testAChunkNamingNoFontInACoreDefaultFont()
 	{
@@ -47,8 +47,7 @@ class CoreFontBidiDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A chunk in a TrueType font that has not been given bidi data by OTL is still read as UTF-8, after a
-	 * chunk in a core font.
+	 * A chunk in a TrueType font without OTL is read as UTF-8, even after a chunk in a core font.
 	 */
 	public function testATrueTypeChunkAfterACoreFontChunk()
 	{
