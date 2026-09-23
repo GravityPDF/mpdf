@@ -215,7 +215,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$ttfontsize = strlen($ttfontstream);
 					$fontstream = gzcompress($ttfontstream);
 					$widthstring = '';
-					$toUnistring = '';
+					$toUniEntries = [];
 
 					foreach ($font['subsets'][$sfid] as $cp => $u) {
 						$w = $this->mpdf->_getCharWidth($font['cw'], $u);
@@ -231,9 +231,9 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 							$h1 = ord($utf16[1]);
 							$l2 = ord($utf16[2]);
 							$h2 = ord($utf16[3]);
-							$toUnistring .= sprintf("<%02s> <%02s%02s%02s%02s>\n", strtoupper(dechex($cp)), strtoupper(dechex($l1)), strtoupper(dechex($h1)), strtoupper(dechex($l2)), strtoupper(dechex($h2)));
+							$toUniEntries[] = sprintf('<%02s> <%02s%02s%02s%02s>', strtoupper(dechex($cp)), strtoupper(dechex($l1)), strtoupper(dechex($h1)), strtoupper(dechex($l2)), strtoupper(dechex($h2)));
 						} else {
-							$toUnistring .= sprintf("<%02s> <%04s>\n", strtoupper(dechex($cp)), strtoupper(dechex($u)));
+							$toUniEntries[] = sprintf('<%02s> <%04s>', strtoupper(dechex($cp)), strtoupper(dechex($u)));
 						}
 					}
 
@@ -284,9 +284,12 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$toUni .= "<00> <FF>\n";
 					// $toUni .= sprintf("<00> <%02s>\n", strtoupper(dechex(count($font['subsets'][$sfid])-1)));
 					$toUni .= "endcodespacerange\n";
-					$toUni .= count($font['subsets'][$sfid]) . " beginbfchar\n";
-					$toUni .= $toUnistring;
-					$toUni .= "endbfchar\n";
+
+					// A bfchar block holds 100 entries at most
+					foreach (array_chunk($toUniEntries, 100) as $block) {
+						$toUni .= count($block) . " beginbfchar\n" . implode("\n", $block) . "\nendbfchar\n";
+					}
+
 					$toUni .= "endcmap\n";
 					$toUni .= "CMapName currentdict /CMap defineresource pop\n";
 					$toUni .= "end\n";
