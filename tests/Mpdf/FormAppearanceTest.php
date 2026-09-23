@@ -343,7 +343,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		list(, , $bottom, , $height, $size) = $clip;
 		$row = $height / $rows;
 
-		preg_match_all('/ 1 0 0 1 -?[\d.]+ (-?[\d.]+) Tm \(/', $appearance, $baselines);
+		preg_match_all('/BT -?[\d.]+ (-?[\d.]+) Td \(/', $appearance, $baselines);
 		$this->assertCount($rows, $baselines[1]);
 		foreach ($baselines[1] as $i => $baseline) {
 			$rowBottom = $bottom + ($rows - 1 - $i) * $row;
