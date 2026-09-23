@@ -45,6 +45,18 @@ jobs:
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-*/policy.xml
           php -r '$i = new Imagick(); $i->setResolution(120, 120); $i->readImage("tests/data/snapshots/fixed-position-html.pdf"); printf("%s read %d page of %dx%d px\n", Imagick::getVersion()["versionString"], $i->getNumberImages(), $i->getImageWidth(), $i->getImageHeight());'
 
+      - name: "Locate Composer cache"
+        id: composer-cache
+        shell: bash
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: "Cache Composer downloads"
+        uses: "actions/cache@v6"
+        with:
+          path: "${{ steps.composer-cache.outputs.dir }}"
+          key: "composer-${{ runner.os }}-php8.5-${{ hashFiles('composer.json') }}"
+          restore-keys: "composer-${{ runner.os }}-php8.5-"
+
       - name: "Install dependencies"
         run: "composer install --no-interaction --no-progress"
 
