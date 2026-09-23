@@ -2882,8 +2882,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 *
 	 * Class 0 is every glyph the ClassDef puts in no other class, and _getClasses() never returns a
 	 * key for it, even where the ClassDef lists glyphs as class 0. A rule may still name it, and gets
-	 * the empty string:
-	 * nothing matches it in the parser, and the dump renders it as "[NOT <the other classes>]".
+	 * the empty string: nothing matches it in the parser, and the dump renders it as
+	 * "[NOT <the other classes>]".
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table
 	 *

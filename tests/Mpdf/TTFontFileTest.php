@@ -206,12 +206,7 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testAClassDefinitionTableAtOffsetZeroHasNoClasses()
 	{
 		$this->ttf->glyphToChar = [40 => [0x41]];
-
-		$reader = new \ReflectionProperty($this->ttf, 'reader');
-		if (PHP_VERSION_ID < 80100) {
-			$reader->setAccessible(true);
-		}
-		$reader->setValue($this->ttf, new Fonts\BlobReader(pack('n*', 1, 40, 1, 1)));
+		$this->readFrom(pack('n*', 1, 40, 1, 1));
 
 		$this->assertSame([], $this->ttf->_getClassDefinitionTable(0));
 	}
@@ -231,12 +226,7 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testGlyphsAClassDefinitionListsAsClassZeroAreLeftOut($table)
 	{
 		$this->ttf->glyphToChar = [40 => [0x41], 41 => [0x42], 42 => [0x43]];
-
-		$reader = new \ReflectionProperty($this->ttf, 'reader');
-		if (PHP_VERSION_ID < 80100) {
-			$reader->setAccessible(true);
-		}
-		$reader->setValue($this->ttf, new Fonts\BlobReader(pack('n', 0) . $table));
+		$this->readFrom(pack('n', 0) . $table);
 
 		$this->assertSame([1 => '00041', 2 => '00043'], $this->ttf->_getClasses(2));
 	}
@@ -358,6 +348,20 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			['NotoSans-Regular.ttf', 'NotoSans-Regular'],
 			['Manjari-Regular.ttf', 'Manjari-Regular'],
 		];
+	}
+
+	/**
+	 * Point the parser's reader at a table held in memory.
+	 *
+	 * @param string $bytes
+	 */
+	private function readFrom($bytes)
+	{
+		$reader = new \ReflectionProperty($this->ttf, 'reader');
+		if (PHP_VERSION_ID < 80100) {
+			$reader->setAccessible(true);
+		}
+		$reader->setValue($this->ttf, new Fonts\BlobReader($bytes));
 	}
 
 	/**
