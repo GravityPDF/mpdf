@@ -22,6 +22,20 @@ class MetadataTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A document that is PDF/A as well declares the pdfuaid schema in a PDF/A extension schema, as
+	 * PDF/A allows no other; one that is only PDF/UA has no need to.
+	 */
+	public function testPdfaDocumentDeclaresThePdfuaidSchema()
+	{
+		$output = $this->getOutput($this->makeMpdf(['PDFA' => true]), '<p>Hello PDF/UA</p>');
+		$this->assertStringContainsString('<pdfaSchema:namespaceURI>http://www.aiim.org/pdfua/ns/id/</pdfaSchema:namespaceURI>', $output);
+		$this->assertStringContainsString('<pdfaProperty:name>part</pdfaProperty:name>', $output);
+
+		$output = $this->getOutput($this->makeMpdf(), '<p>Hello PDF/UA</p>');
+		$this->assertStringNotContainsString('pdfaExtension', $output);
+	}
+
+	/**
 	 * The catalog marks the document as tagged.
 	 */
 	public function testCatalogContainsMarkInfo()

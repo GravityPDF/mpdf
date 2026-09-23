@@ -869,6 +869,21 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * A document that is PDF/A-2b and PDF/UA-1 at once passes both, its pdfuaid schema declared as
+	 * PDF/A requires.
+	 *
+	 * @return void
+	 */
+	public function testPdfA2bDocumentPassesUa1And2b()
+	{
+		$mpdf = $this->makeMpdf(['PDFA' => true, 'PDFAversion' => '2-B']);
+		$pdf = $this->getOutput($mpdf, '<h1>Archived and accessible</h1><p>Both at once.</p>');
+
+		$this->assertVeraPdfCompliant($pdf, 'PDF/A-2b and PDF/UA-1');
+		$this->assertVeraPdfCompliant($pdf, 'PDF/A-2b and PDF/UA-1', '2b');
+	}
+
+	/**
 	 * mpdf-examples example64_protected_document.php: SetProtection() keeps 'extract' and leaves the
 	 * XMP unencrypted.
 	 *
@@ -1213,13 +1228,14 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Asserts veraPDF finds the document ua1 compliant, listing the failed rules when it does not.
+	 * Asserts veraPDF finds the document compliant, listing the failed rules when it does not.
 	 *
 	 * @param string $pdfBytes
-	 * @param string $label What the document is, for the failure message
+	 * @param string $label   What the document is, for the failure message
+	 * @param string $flavour The veraPDF profile, ua1 unless another is named
 	 * @return void
 	 */
-	private function assertVeraPdfCompliant($pdfBytes, $label)
+	private function assertVeraPdfCompliant($pdfBytes, $label, $flavour = 'ua1')
 	{
 		$tmpFile = tempnam(sys_get_temp_dir(), 'mpdf-ua1-');
 
@@ -1231,7 +1247,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 
 		$result = null;
 		try {
-			$result = $this->runVeraPdf($pdfFile);
+			$result = $this->runVeraPdf($pdfFile, $flavour);
 		} finally {
 			if (is_file($pdfFile)) {
 				unlink($pdfFile);
@@ -1241,7 +1257,7 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 		if (!$result['isCompliant']) {
 			$errorSummary = implode("\n", $result['errors']);
 			$this->fail(
-				'veraPDF ua1 validation FAILED for "' . $label . "\".\n\n"
+				'veraPDF ' . $flavour . ' validation FAILED for "' . $label . "\".\n\n"
 				. 'Failures (' . count($result['errors']) . "):\n" . $errorSummary
 			);
 		}
@@ -1250,16 +1266,17 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
-	 * Runs veraPDF's ua1 profile over a file.
+	 * Runs a veraPDF profile over a file.
 	 *
 	 * @param string $pdfPath
+	 * @param string $flavour
 	 * @return array ['isCompliant' => bool, 'errors' => string[]]
 	 */
-	private function runVeraPdf($pdfPath)
+	private function runVeraPdf($pdfPath, $flavour)
 	{
 		// stderr is thrown away: left in a pipe nobody reads, veraPDF would block once it filled
 		$cmd = escapeshellarg($this->veraPdfBin)
-			. ' --flavour ua1 --format json '
+			. ' --flavour ' . escapeshellarg($flavour) . ' --format json '
 			. escapeshellarg($pdfPath)
 			. ' 2>/dev/null';
 
