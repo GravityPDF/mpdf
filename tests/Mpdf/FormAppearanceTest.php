@@ -94,8 +94,8 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testShapedValueIsFittedByItsShapedWidth($width, $da, $size, $length)
 	{
 		$value = 'مرحبا بالعالم';
-		$field = function ($value, $width) {
-			return '<form><input type="text" name="t" value="' . $value . '" style="font-family: dejavusans; font-size: 10pt; width: ' . $width . '" /></form>';
+		$field = function ($text, $cssWidth) {
+			return '<form><input type="text" name="t" value="' . $text . '" style="font-family: dejavusans; font-size: 10pt; width: ' . $cssWidth . '" /></form>';
 		};
 
 		$pdf = $this->render($field($value, $width), ['mode' => 'utf-8', 'useActiveForms' => true]);

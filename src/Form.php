@@ -65,9 +65,9 @@ class Form
 	private $formCount;
 
 	/**
-	 * @var float[] the width of each word appearanceText() has measured in the current field's font, in ems
+	 * @var mixed[][] the text appearanceText() has shaped for the current field, as shapedText() returns it
 	 */
-	private $emWidths = [];
+	private $shaped = [];
 
 	// Active Forms
 	var $formSubmitNoValueFields;
@@ -1699,7 +1699,7 @@ class Form
 		$descent = (isset($desc['Descent']) ? $desc['Descent'] : -200) / 1000;
 
 		// GetStringWidth() and Text() read the size from the font state, but the field keeps its own: 0 for auto
-		$this->emWidths = [];
+		$this->shaped = [];
 		$fieldSize = $this->mpdf->FontSizePt;
 		$size = $fieldSize;
 		$this->mpdf->SetFontSize($size ?: 12, false);
@@ -1756,8 +1756,8 @@ class Form
 				$y = ($height - $leading) / 2 - $descent * $size;
 			}
 
-			list($text, $OTLdata) = $this->shapeText($line);
-			$lineWidth = $this->mpdf->GetStringWidth($text, true, $OTLdata) * Mpdf::SCALE;
+			list($text, $OTLdata, $em) = $this->shapedText($line);
+			$lineWidth = $em * $size;
 			if ($align === '1') {
 				$x = ($width - $lineWidth) / 2;
 			} elseif ($align === '2') {
@@ -1830,7 +1830,7 @@ class Form
 
 	/**
 	 * The width of some text in ems of the current font, shaped as it is drawn, adding its characters to the font's
-	 * subset. Kept for the rest of the field, as wrapping measures the same words at each size it tries.
+	 * subset
 	 *
 	 * @param string $text in the document's encoding: Windows-1252 bytes in a core font, UTF-8 otherwise
 	 *
@@ -1838,12 +1838,27 @@ class Form
 	 */
 	private function emWidth($text)
 	{
-		if (!isset($this->emWidths[$text])) {
+		$shaped = $this->shapedText($text);
+
+		return $shaped[2];
+	}
+
+	/**
+	 * Some text shaped by shapeText() and measured, kept for the rest of the field, as wrapping measures the same words
+	 * at each size it tries and fitting measures the line it then draws
+	 *
+	 * @param string $text in the document's encoding
+	 *
+	 * @return mixed[] the text as drawn, its OTL data, and its width in ems of the current font
+	 */
+	private function shapedText($text)
+	{
+		if (!isset($this->shaped[$text])) {
 			list($shaped, $OTLdata) = $this->shapeText($text);
-			$this->emWidths[$text] = $this->mpdf->GetStringWidth($shaped, true, $OTLdata) / $this->mpdf->FontSize;
+			$this->shaped[$text] = [$shaped, $OTLdata, $this->mpdf->GetStringWidth($shaped, true, $OTLdata) / $this->mpdf->FontSize];
 		}
 
-		return $this->emWidths[$text];
+		return $this->shaped[$text];
 	}
 
 	/**
@@ -1900,6 +1915,7 @@ class Form
 			$s .= sprintf(' q %.3F 0 0 %.3F 0 0 cm /I%d Do Q', $width, $height, $this->form_button_icon[$form['n']]['image_id']);
 		} elseif ($form['AP']['lines']) {
 			$s .= sprintf(' /Tx BMC q %.3F %.3F %.3F %.3F re W n', $border, $border, $width - 2 * $border, $height - 2 * $border);
+			// Text() writes no Tf, so the font is set once in the text state its lines inherit
 			$s .= sprintf(' BT /F%d %.3F Tf ET %s', $this->mpdf->fonts[$form['style']['font']]['i'], $form['AP']['size'], $form['style']['fontcolor']);
 			$s .= ' ' . implode(' ', $form['AP']['lines']) . ' Q EMC';
 		}
