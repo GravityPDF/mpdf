@@ -112,7 +112,7 @@ class Input extends Tag
 			case 'HIDDEN':
 				$this->mpdf->ignorefollowingspaces = true; //Eliminate exceeding left-side spaces
 				if ($this->mpdf->useActiveForms) {
-					$this->form->SetFormText(0, 0, $objattr['fieldname'], $objattr['value'], $objattr['value'], '', 0, '', true);
+					$this->form->SetFormText(0, 0, (isset($objattr['fieldname']) ? $objattr['fieldname'] : ''), $objattr['value'], $objattr['value'], '', 0, '', true);
 				}
 				if ($this->mpdf->InlineProperties[$tag]) {
 					$this->mpdf->restoreInlineProperties($this->mpdf->InlineProperties[$tag]);

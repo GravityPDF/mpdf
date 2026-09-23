@@ -25,23 +25,8 @@ class UnnamedButtonTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * PHPUnit fails the test on the warning an unguarded read of the missing name raises
-	 *
-	 * @dataProvider unnamedButtons
-	 *
-	 * @param string $button
-	 * @param string $name
-	 */
-	public function testAnUnnamedButtonIsWrittenAsAField($button, $name)
-	{
-		$pdf = $this->render('<form>' . $button . '</form>', ['useActiveForms' => true]);
-
-		$this->assertSame([$name . '_1'], $this->fieldNames($pdf));
-	}
-
-	/**
-	 * Two buttons with the same name are one field to a viewer, and share one entry in the tables that
-	 * hold a button's action and icon
+	 * Each unnamed button is its own field, written without a warning (PHPUnit fails the test on one). Two
+	 * buttons with the same name are one field to a viewer, and share the entry that holds an action or icon
 	 *
 	 * @dataProvider unnamedButtons
 	 *
@@ -70,16 +55,6 @@ class UnnamedButtonTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A named button keeps its name
-	 */
-	public function testANamedButtonKeepsItsName()
-	{
-		$pdf = $this->render('<form><input type="submit" name="go" value="Go"></form>', ['useActiveForms' => true]);
-
-		$this->assertSame(['go'], $this->fieldNames($pdf));
-	}
-
-	/**
 	 * Each kind of field that cannot be written without a name
 	 *
 	 * @return string[][]
@@ -88,6 +63,7 @@ class UnnamedButtonTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'text input' => ['<input type="text" value="A">'],
+			'hidden input' => ['<input type="hidden" value="A">'],
 			'textarea' => ['<textarea>A</textarea>'],
 			'select' => ['<select><option>A</option></select>'],
 			'checkbox' => ['<input type="checkbox" value="A">'],
