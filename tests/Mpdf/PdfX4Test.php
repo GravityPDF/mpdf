@@ -164,6 +164,34 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A page imported from a later version of PDF leaves the version at the one the PDF/X version is
+	 * written as, and the strict mode refuses it
+	 */
+	public function testAnImportedPageKeepsThePdfxVersion()
+	{
+		$source = new Mpdf(['pdf_version' => '1.7']);
+		$source->WriteHTML('<p>Imported</p>');
+		$file = tempnam(sys_get_temp_dir(), 'mpdf');
+		file_put_contents($file, $source->OutputBinaryData());
+
+		foreach ([['1a', '1.4'], ['4', '1.6']] as $case) {
+			list($version, $pdfVersion) = $case;
+			$mpdf = $this->mpdf(['PDFX' => $version]);
+			$mpdf->setSourceFile($file);
+			$mpdf->AddPage();
+			$mpdf->useTemplate($mpdf->importPage(1));
+			$this->assertStringStartsWith('%PDF-' . $pdfVersion . "\n", $mpdf->OutputBinaryData());
+		}
+
+		$mpdf = $this->mpdf(['PDFX' => '4', 'PDFXauto' => false]);
+		$mpdf->setSourceFile($file);
+		unlink($file);
+
+		$this->expectException(MpdfException::class);
+		$mpdf->OutputBinaryData();
+	}
+
+	/**
 	 * PDF/X-4 permits an RGB output intent, so a document that names no profile prints to sRGB, and
 	 * embeds the bundled sRGB profile, which is 3 kB, as its output condition
 	 */
