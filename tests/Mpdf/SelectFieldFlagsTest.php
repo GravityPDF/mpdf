@@ -27,6 +27,8 @@ class SelectFieldFlagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'editable and spellchecked' => ['editable spellcheck="true"', [Form::FLAG_COMBOBOX, Form::FLAG_EDITABLE]],
 			'spellchecked but not editable' => ['spellcheck="true"', [Form::FLAG_COMBOBOX, Form::FLAG_NO_SPELLCHECK]],
 			'editable and spellchecked with a size of four' => ['editable spellcheck="true" size="4"', [Form::FLAG_NO_SPELLCHECK]],
+			'disabled' => ['disabled', [Form::FLAG_READONLY, Form::FLAG_NO_EXPORT, Form::FLAG_COMBOBOX, Form::FLAG_NO_SPELLCHECK]],
+			'disabled="disabled"' => ['disabled="disabled"', [Form::FLAG_READONLY, Form::FLAG_NO_EXPORT, Form::FLAG_COMBOBOX, Form::FLAG_NO_SPELLCHECK]],
 		];
 	}
 
