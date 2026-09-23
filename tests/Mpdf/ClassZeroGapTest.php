@@ -6,16 +6,15 @@ namespace Mpdf;
  * Class 0 in a class-based chained context rule (GSUB 6.2, GPOS 8.2) leaves out every glyph the
  * ClassDef puts in another class, including classes numbered above a gap.
  *
- * NotoSans-ClassZeroGap-Synthetic is NotoSans-ClassZeroContext-Synthetic beside it with ordfeminine
- * given its codepoint U+00AA and `calt` running one chained context lookup of three Format 2
- * subtables. In each, one ClassDef puts C in class 1 and ordfeminine in class 3, with nothing in
+ * NotoSans-ClassZeroGap-Synthetic is NotoSans-ClassZeroContext-Synthetic with ordfeminine mapped to
+ * U+00AA and a `calt` lookup of three Format 2 chained context subtables. In each, one ClassDef puts C in class 1 and ordfeminine in class 3, with nothing in
  * class 2, and the one rule names class 0 in that ClassDef's sequence:
  *
- *   #0  covers B, lookahead ClassDef. B then class 0 becomes b.sc.
- *   #1  covers C, input ClassDef. C then class 0 becomes c.sc.
- *   #2  covers A, backtrack ClassDef. Class 0 then A becomes a.sc.
+ *   #0  lookahead ClassDef: B followed by class 0 becomes b.sc.
+ *   #1  input ClassDef: C followed by class 0 becomes c.sc.
+ *   #2  backtrack ClassDef: A after class 0 becomes a.sc.
  *
- * `hb-shape` draws what each case expects.
+ * The expected codepoints are what `hb-shape` draws.
  */
 class ClassZeroGapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
