@@ -79,6 +79,8 @@ class PdfX4RgbAndGreySnapshotTest extends Snapshot
 		$html = ob_get_clean();
 
 		$this->mpdf = $this->createMpdf(['PDFX' => '4', 'PDFXauto' => true]);
+		// PDF/X needs a title, and would otherwise take the name of the file it is written to
+		$this->mpdf->SetTitle('PDF/X-4, grey and RGB');
 		$this->mpdf->SetBasePath(__DIR__ . '/../data');
 
 		$this->mpdf->WriteHTML($html);
