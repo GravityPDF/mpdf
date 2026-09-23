@@ -4,6 +4,7 @@ namespace Mpdf;
 
 use Mpdf\Strict;
 use Mpdf\Color\ColorConverter;
+use Mpdf\Shaper\OtlData;
 use Mpdf\Writer\BaseWriter;
 use Mpdf\Writer\FormWriter;
 
@@ -232,23 +233,10 @@ class Form
 			$this->mpdf->x += $this->form_element_spacing['input']['outer']['h'] / $k;
 			$this->mpdf->y += $this->form_element_spacing['input']['outer']['v'] / $k;
 
-			// Chop texto to max length $w-inner-padding
-			while ($this->mpdf->GetStringWidth($texto) > $w - ($this->form_element_spacing['input']['inner']['h'] * 2)) {
-				$texto = mb_substr($texto, 0, mb_strlen($texto, $this->mpdf->mb_enc) - 1, $this->mpdf->mb_enc);
-			}
-
 			// DIRECTIONALITY
 			if (preg_match('/([' . $this->mpdf->pregRTLchars . '])/u', $texto)) {
 				$this->mpdf->biDirectional = true;
 			}
-
-			// Use OTL OpenType Table Layout - GSUB & GPOS
-			if (!empty($this->mpdf->CurrentFont['useOTL'])) {
-				$texto = $this->otl->applyOTL($texto, $this->mpdf->CurrentFont['useOTL']);
-				$OTLdata = $this->otl->OTLdata;
-			}
-
-			$this->mpdf->magic_reverse_dir($texto, $this->mpdf->directionality, $OTLdata);
 
 			$this->mpdf->SetLineWidth(0.2 / $k);
 
@@ -263,7 +251,7 @@ class Form
 				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 			}
 
-			$this->mpdf->Cell($w, $h, $texto, 1, 0, $rtlalign, 1, '', 0, $this->form_element_spacing['input']['inner']['h'] / $k, $this->form_element_spacing['input']['inner']['h'] / $k, 'M', 0, false, $OTLdata);
+			$this->fittedCell($w, $h, $texto, 1, $rtlalign, 1, $this->form_element_spacing['input']['inner']['h'] / $k);
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 		}
@@ -468,9 +456,7 @@ class Form
 				$this->mpdf->biDirectional = true;
 			} // *RTL*
 
-			$this->mpdf->magic_reverse_dir($texto, $this->mpdf->directionality, $objattr['OTLdata']);
-
-			$this->mpdf->Cell($w - ($this->mpdf->FontSize * 1.4), $h, $texto, 1, 0, $rtlalign, 1, '', 0, $this->form_element_spacing['select']['inner']['h'] / $k, $this->form_element_spacing['select']['inner']['h'] / $k, 'M', 0, false, $objattr['OTLdata']);
+			$this->fittedCell($w - ($this->mpdf->FontSize * 1.4), $h, $texto, 1, $rtlalign, 1, $this->form_element_spacing['select']['inner']['h'] / $k, $objattr['OTLdata']);
 			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
 			$save_font = $this->mpdf->FontFamily;
 			$save_currentfont = $this->mpdf->currentfontfamily;
@@ -647,15 +633,7 @@ class Form
 				$this->mpdf->biDirectional = true;
 			}
 
-			// Use OTL OpenType Table Layout - GSUB & GPOS
-			if (!empty($this->mpdf->CurrentFont['useOTL'])) {
-				$texto = $this->otl->applyOTL($texto, $this->mpdf->CurrentFont['useOTL']);
-				$OTLdata = $this->otl->OTLdata;
-			}
-
-			$this->mpdf->magic_reverse_dir($texto, $this->mpdf->directionality, $OTLdata);
-
-			$this->mpdf->Cell($w, $h, $texto, '', 0, 'C', 0, '', 0, 0, 0, 'M', 0, false, $OTLdata);
+			$this->fittedCell($w, $h, $texto, '', 'C', 0, 0);
 			$this->mpdf->SetFColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 		}
 	}
@@ -988,7 +966,7 @@ class Form
 		}
 		// A hidden input passes its flags as 0
 		$text = in_array(self::FLAG_PASSWORD, (array) $flags, true) ? str_repeat('*', mb_strlen($value, $this->mpdf->mb_enc)) : $value;
-		$appearance = $this->appearanceText($w, $h, $this->form_border_width, preg_split('/\r\n|\r|\n/', $text), $align, in_array(self::FLAG_TEXTAREA, (array) $flags, true) ? 'wrap' : 'line');
+		$appearance = $this->appearanceText($w, $h, $this->form_border_width, preg_split('/\r\n|\r|\n/', $text), $align, in_array(self::FLAG_TEXTAREA, (array) $flags, true) ? 'wrap' : 'line', [], !$hidden);
 		if ($this->mpdf->onlyCoreFonts) {
 			$value = $this->Win1252ToPDFDocEncoding($value);
 			$default = $this->Win1252ToPDFDocEncoding($default);
@@ -1040,7 +1018,8 @@ class Form
 			'BG_C' => $bg_c,
 			'style' => [
 				'font' => $this->mpdf->FontFamily,
-				'fontsize' => $this->mpdf->FontSizePt,
+				// A value drawn smaller to fit leaves the viewer to size it too, so it does not grow back once edited
+				'fontsize' => $appearance['size'] < $this->mpdf->FontSizePt ? 0 : $this->mpdf->FontSizePt,
 				'fontcolor' => $this->mpdf->TextColor,
 			],
 			'AP' => $appearance,
@@ -1125,7 +1104,8 @@ class Form
 			'BG_C' => $this->form_background_color,
 			'style' => [
 				'font' => $this->mpdf->FontFamily,
-				'fontsize' => $this->mpdf->FontSizePt,
+				// As with a text field, a choice drawn smaller to fit leaves the viewer to size the next one too
+				'fontsize' => $appearance['size'] < $this->mpdf->FontSizePt ? 0 : $this->mpdf->FontSizePt,
 				'fontcolor' => $this->mpdf->TextColor,
 			],
 			'AP' => $appearance,
@@ -1178,7 +1158,6 @@ class Form
 		if (!$name) {
 			$name = $this->unnamedButtonName('Button');
 		}
-		$this->SetFormButton($w, $h, $name, $value, 'js_button', $title, $flags, false, false, $background_col, $border_col, $noprint);
 		// pos => 1 = no caption, icon only; 0 = caption only
 		if ($image_id) {
 			$this->form_button_icon[$this->writer->escape($name)] = [
@@ -1187,6 +1166,7 @@ class Form
 				'Indexed' => $indexed,
 			];
 		}
+		$this->SetFormButton($w, $h, $name, $value, 'js_button', $title, $flags, false, false, $background_col, $border_col, $noprint);
 		if ($js) {
 			$this->SetFormButtonJS($name, $js);
 		}
@@ -1263,7 +1243,8 @@ class Form
 		}
 		$appearance = null;
 		if ($type !== 'radio' && $type !== 'checkbox') {
-			$appearance = $this->appearanceText($bb, $hh, $this->form_button_border_width, [$value === '' ? $name : $value], '1', 'line');
+			// A button showing an icon draws no caption to fit
+			$appearance = $this->appearanceText($bb, $hh, $this->form_button_border_width, [$value === '' ? $name : $value], '1', 'line', [], !isset($this->form_button_icon[$name]));
 		}
 		if (!$this->mpdf->onlyCoreFonts) {
 			if (isset($this->mpdf->CurrentFont['subset'])) {
@@ -1352,7 +1333,8 @@ class Form
 			'noprint' => $noprint,
 			'style' => [
 				'font' => $this->mpdf->FontFamily,
-				'fontsize' => $this->mpdf->FontSizePt,
+				// A push button's caption cannot be edited, so a viewer redrawing it keeps to the size it was fitted at
+				'fontsize' => $appearance ? $appearance['size'] : $this->mpdf->FontSizePt,
 				'fontcolor' => $this->mpdf->TextColor,
 			],
 			'AP' => $appearance,
@@ -1458,6 +1440,106 @@ class Form
 	}
 
 	/**
+	 * Draws a field's text into the page with Cell(), shaped, and fitted inside its padding by fitLine()
+	 *
+	 * @param float $w
+	 * @param float $h
+	 * @param string $text
+	 * @param int|string $border
+	 * @param string $align
+	 * @param int $fill
+	 * @param float $padding on the left and on the right
+	 * @param mixed[]|false|null $OTLdata the text's OTL data if it has been shaped already, as a select's option has
+	 */
+	private function fittedCell($w, $h, $text, $border, $align, $fill, $padding, $OTLdata = null)
+	{
+		// Each cut is shaped on its own, as letters can join differently at the end
+		$cuts = [];
+		$cut = function ($length) use ($text, $OTLdata, &$cuts) {
+			if (!isset($cuts[$length])) {
+				$data = $OTLdata ? OtlData::slice($OTLdata, 0, $length) : $OTLdata;
+				$cuts[$length] = $this->shapeText(mb_substr($text, 0, $length, $this->mpdf->mb_enc), $data);
+			}
+
+			return $cuts[$length];
+		};
+
+		$size = $this->mpdf->FontSizePt;
+		list($fit, $length) = $this->fitLine($size, $w - 2 * $padding, mb_strlen($text, $this->mpdf->mb_enc), function ($length) use ($cut) {
+			list($shaped, $OTLdata) = $cut($length);
+
+			return $this->mpdf->GetStringWidth($shaped, true, $OTLdata);
+		});
+		list($shaped, $OTLdata) = $cut($length);
+
+		$this->mpdf->SetFontSize($fit);
+		$this->mpdf->Cell($w, $h, $shaped, $border, 0, $align, $fill, '', 0, $padding, $padding, 'M', 0, false, $OTLdata);
+		$this->mpdf->SetFontSize($size);
+	}
+
+	/**
+	 * Runs text through OTL, unless it has been already, and puts it in visual order, in the current font, as page text
+	 * is drawn
+	 *
+	 * @param string $text
+	 * @param mixed[]|false|null $OTLdata its OTL data if it has been shaped already
+	 *
+	 * @return mixed[] the text and its OTL data
+	 */
+	private function shapeText($text, $OTLdata = null)
+	{
+		if ($OTLdata === null && !empty($this->mpdf->CurrentFont['useOTL'])) {
+			$text = $this->otl->applyOTL($text, $this->mpdf->CurrentFont['useOTL']);
+			$OTLdata = $this->otl->OTLdata;
+		}
+
+		$this->mpdf->magic_reverse_dir($text, $this->mpdf->directionality, $OTLdata);
+
+		return [$text, $OTLdata];
+	}
+
+	/**
+	 * Fits a line of a field's text to the room it has. Text too wide is drawn smaller in proportion, rounded down to the
+	 * precision Tf is written at, but not below half the field's size or 6pt, whichever is larger. Past that it loses
+	 * the characters at its end that still do not fit.
+	 *
+	 * @param float $size the field's font size, in points
+	 * @param float $room
+	 * @param int $length the text's length in characters
+	 * @param callable $measure the width, in $room's units, of the text's first so many characters at $size
+	 *
+	 * @return mixed[] the font size, and how many of the characters are drawn
+	 */
+	private function fitLine($size, $room, $length, $measure)
+	{
+		$width = $measure($length);
+		// A button or select is as wide as its text, and taking its padding back off that can leave a rounding error
+		if ($width <= $room + 1e-6) {
+			return [$size, $length];
+		}
+
+		$fit = max(min($size, max($size / 2, 6)), floor($size * $room / $width * 1000) / 1000);
+		// Widths scale with the font size, so the text is measured at the field's size against room scaled to match
+		$room *= $size / $fit;
+
+		if ($width > $room) {
+			// The longest start of the text that fits, found by halving so that long text is measured O(log n) times
+			$longest = $length;
+			$length = 0;
+			while ($longest - $length > 1) {
+				$middle = (int) (($length + $longest) / 2);
+				if ($measure($middle) > $room) {
+					$longest = $middle;
+				} else {
+					$length = $middle;
+				}
+			}
+		}
+
+		return [$fit, $length];
+	}
+
+	/**
 	 * Lays out the text a widget's appearance shows, in the current font, which can only be measured while the widget
 	 * is being placed. Notes text in a right-to-left script or one with a shaper of its own, which the layout does not
 	 * reorder or shape.
@@ -1470,11 +1552,13 @@ class Form
 	 * @param string $flow 'line' centres the first line on the height, 'wrap' runs the lines down from the top
 	 *  wrapped to the width, and 'list' runs them down unwrapped, as a list box shows its options
 	 * @param int[] $selected the lines a list box highlights
+	 * @param bool $fit whether a 'line' is fitted to the widget as fitLine() does. Not for a hidden field, which has no
+	 *  room, or a button that shows an icon instead
 	 *
 	 * @return mixed[] the font size, each line with where it starts and as the font encodes it, and the highlights, in
 	 *  points from the bottom left
 	 */
-	private function appearanceText($w, $h, $border, array $lines, $align, $flow, array $selected = [])
+	private function appearanceText($w, $h, $border, array $lines, $align, $flow, array $selected = [], $fit = true)
 	{
 		if (!$this->mpdf->usingCoreFont && !$this->complexText) {
 			foreach ($lines as $line) {
@@ -1494,15 +1578,23 @@ class Form
 		$ascent = (isset($desc['Ascent']) ? $desc['Ascent'] : 800) / 1000;
 		$descent = (isset($desc['Descent']) ? $desc['Descent'] : -200) / 1000;
 
+		$room = $width - 2 * $padding;
+
 		$size = $this->mpdf->FontSizePt;
 		if (!$size) {
 			$size = $flow === 'line' ? max(1, ($height - 2 * $padding) / ($ascent - $descent)) : 12;
+		} elseif ($fit && $flow === 'line') {
+			$line = $lines[0];
+			list($size, $length) = $this->fitLine($size, $room, mb_strlen($line, $this->mpdf->mb_enc), function ($length) use ($line, $size) {
+				return $this->emWidth(mb_substr($line, 0, $length, $this->mpdf->mb_enc)) * $size;
+			});
+			$lines = [mb_substr($line, 0, $length, $this->mpdf->mb_enc)];
 		}
 		$leading = ($ascent - $descent) * $size;
 
 		$top = 0;
 		if ($flow === 'wrap') {
-			$lines = $this->wrap($lines, ($width - 2 * $padding) / $size);
+			$lines = $this->wrap($lines, $room / $size);
 		} elseif ($flow === 'line') {
 			$lines = array_slice($lines, 0, 1);
 		} elseif ($selected && min($selected) >= floor(($height - 2 * $padding) / $leading)) {

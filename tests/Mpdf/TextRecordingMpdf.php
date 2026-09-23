@@ -23,12 +23,16 @@ class TextRecordingMpdf extends Mpdf
 	/** The font family each of those lines was drawn in, in the same order. */
 	public $drawnFontFamily = [];
 
+	/** The font size, in points, each of those lines was drawn at, in the same order. */
+	public $drawnFontSize = [];
+
 	function Cell($w, $h = 0, $txt = '', $border = 0, $ln = 0, $align = '', $fill = 0, $link = '', $currentx = 0, $lcpaddingL = 0, $lcpaddingR = 0, $valign = 'M', $spanfill = 0, $exactWidth = false, $OTLdata = false, $textvar = 0, $lineBox = false)
 	{
 		if (is_string($txt) && trim($txt) !== '') {
 			$this->drawnText[] = $txt;
 			$this->drawnOTLdata[] = $OTLdata;
 			$this->drawnFontFamily[] = $this->FontFamily;
+			$this->drawnFontSize[] = $this->FontSizePt;
 		}
 
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);
