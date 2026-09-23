@@ -2,11 +2,13 @@
 
 namespace Mpdf\Invoice\EN16931;
 
+use Mpdf\Invoice\Party;
+use Mpdf\Invoice\PaymentMeans;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Utils\Arrays;
 
 /**
- * An EN 16931 invoice or credit note, and how it is to be paid
+ * An EN 16931 invoice or credit note: where the goods went, how it is to be paid, and which invoice it corrects
  */
 class Invoice extends TradeDocument
 {
@@ -27,9 +29,19 @@ class Invoice extends TradeDocument
 	private $typeCode = self::TYPE_INVOICE;
 
 	/**
+	 * @var string|null
+	 */
+	private $businessProcess;
+
+	/**
 	 * @var \DateTimeInterface|null
 	 */
 	private $deliveryDate;
+
+	/**
+	 * @var \Mpdf\Invoice\Party|null
+	 */
+	private $deliverTo;
 
 	/**
 	 * @var \DateTimeInterface|null
@@ -47,19 +59,9 @@ class Invoice extends TradeDocument
 	private $paymentReference;
 
 	/**
-	 * @var string|null
+	 * @var \Mpdf\Invoice\PaymentMeans[]
 	 */
-	private $iban;
-
-	/**
-	 * @var string|null
-	 */
-	private $bic;
-
-	/**
-	 * @var string|null
-	 */
-	private $accountName;
+	private $paymentMeans = [];
 
 	/**
 	 * @var float
@@ -70,6 +72,11 @@ class Invoice extends TradeDocument
 	 * @var string[]
 	 */
 	private $exemptionReasons = [];
+
+	/**
+	 * @var array[] Each with id and issueDate
+	 */
+	private $precedingInvoices = [];
 
 	/**
 	 * @param string $typeCode One of the TYPE_ constants, or another UNTDID 1001 invoice code
@@ -84,6 +91,19 @@ class Invoice extends TradeDocument
 	}
 
 	/**
+	 * @param string $businessProcess The business process the invoice belongs to, e.g. the French reform's cadre de
+	 *                                facturation
+	 *
+	 * @return $this
+	 */
+	public function setBusinessProcess($businessProcess)
+	{
+		$this->businessProcess = $businessProcess;
+
+		return $this;
+	}
+
+	/**
 	 * @param \DateTimeInterface $date When the goods or services were supplied
 	 *
 	 * @return $this
@@ -91,6 +111,21 @@ class Invoice extends TradeDocument
 	public function setDeliveryDate(\DateTimeInterface $date)
 	{
 		$this->deliveryDate = $date;
+
+		return $this;
+	}
+
+	/**
+	 * Where the goods were delivered, when not to the buyer; EN 16931 requires its country for an intra-community
+	 * supply (VAT category K)
+	 *
+	 * @param \Mpdf\Invoice\Party $party
+	 *
+	 * @return $this
+	 */
+	public function setDeliverTo(Party $party)
+	{
+		$this->deliverTo = $party;
 
 		return $this;
 	}
@@ -120,7 +155,7 @@ class Invoice extends TradeDocument
 	}
 
 	/**
-	 * @param string $reference The remittance reference the buyer should quote with the transfer
+	 * @param string $reference The remittance reference the buyer should quote with the payment
 	 *
 	 * @return $this
 	 */
@@ -132,19 +167,16 @@ class Invoice extends TradeDocument
 	}
 
 	/**
-	 * The account the buyer pays by credit transfer
+	 * A way the buyer can pay, e.g. PaymentMeans::sepaCreditTransfer($iban); give one for each account the buyer may
+	 * pay into
 	 *
-	 * @param string $iban
-	 * @param string|null $bic
-	 * @param string|null $accountName
+	 * @param \Mpdf\Invoice\PaymentMeans $means
 	 *
 	 * @return $this
 	 */
-	public function setPaymentAccount($iban, $bic = null, $accountName = null)
+	public function addPaymentMeans(PaymentMeans $means)
 	{
-		$this->iban = $iban;
-		$this->bic = $bic;
-		$this->accountName = $accountName;
+		$this->paymentMeans[] = $means;
 
 		return $this;
 	}
@@ -177,6 +209,21 @@ class Invoice extends TradeDocument
 	}
 
 	/**
+	 * An invoice this one corrects or credits, which the law requires a credit note or corrected invoice to name
+	 *
+	 * @param string $id Its number
+	 * @param \DateTimeInterface|null $issueDate
+	 *
+	 * @return $this
+	 */
+	public function addPrecedingInvoice($id, $issueDate = null)
+	{
+		$this->precedingInvoices[] = ['id' => $id, 'issueDate' => $issueDate];
+
+		return $this;
+	}
+
+	/**
 	 * @return string
 	 */
 	public function getTypeCode()
@@ -185,11 +232,27 @@ class Invoice extends TradeDocument
 	}
 
 	/**
+	 * @return string|null
+	 */
+	public function getBusinessProcess()
+	{
+		return $this->businessProcess;
+	}
+
+	/**
 	 * @return \DateTimeInterface|null
 	 */
 	public function getDeliveryDate()
 	{
 		return $this->deliveryDate;
+	}
+
+	/**
+	 * @return \Mpdf\Invoice\Party|null
+	 */
+	public function getDeliverTo()
+	{
+		return $this->deliverTo;
 	}
 
 	/**
@@ -217,27 +280,11 @@ class Invoice extends TradeDocument
 	}
 
 	/**
-	 * @return string|null
+	 * @return \Mpdf\Invoice\PaymentMeans[]
 	 */
-	public function getIban()
+	public function getPaymentMeans()
 	{
-		return $this->iban;
-	}
-
-	/**
-	 * @return string|null
-	 */
-	public function getBic()
-	{
-		return $this->bic;
-	}
-
-	/**
-	 * @return string|null
-	 */
-	public function getAccountName()
-	{
-		return $this->accountName;
+		return $this->paymentMeans;
 	}
 
 	/**
@@ -256,6 +303,14 @@ class Invoice extends TradeDocument
 	public function getExemptionReason($vatCategory)
 	{
 		return Arrays::get($this->exemptionReasons, $vatCategory, null);
+	}
+
+	/**
+	 * @return array[] Each with id and issueDate
+	 */
+	public function getPrecedingInvoices()
+	{
+		return $this->precedingInvoices;
 	}
 
 	/**

@@ -26,6 +26,13 @@ class LineItem
 	private static $vatCategories = ['S', 'Z', 'E', 'AE', 'K', 'G', 'O', 'L', 'M'];
 
 	/**
+	 * The categories that charge no VAT, whose rate EN 16931 requires to be 0
+	 *
+	 * @var string[]
+	 */
+	private static $zeroRatedCategories = ['Z', 'E', 'AE', 'K', 'G'];
+
+	/**
 	 * @var string
 	 */
 	private $name;
@@ -61,9 +68,15 @@ class LineItem
 	private $description;
 
 	/**
+	 * @var \Mpdf\Invoice\AllowanceCharge[]
+	 */
+	private $allowanceCharges = [];
+
+	/**
 	 * @param string $name
 	 * @param float $quantity
-	 * @param float $unitPrice The net price of one unit, before VAT
+	 * @param float $unitPrice The net price of one unit, before VAT; never negative, so give a credit as a negative
+	 *                         quantity or an allowance
 	 * @param float $vatRate The VAT rate in percent, e.g. 20; 0 for categories that charge none
 	 * @param string $vatCategory S (standard), Z (zero rated), E (exempt), AE (reverse charge), K (intra-community),
 	 *                            G (export), O (not subject to VAT), L or M (Canary Islands, Ceuta and Melilla)
@@ -72,8 +85,10 @@ class LineItem
 	 */
 	public function __construct($name, $quantity, $unitPrice, $vatRate, $vatCategory = 'S')
 	{
-		if (!in_array($vatCategory, self::$vatCategories, true)) {
-			throw new MpdfException(sprintf('VAT category "%s" is not one of %s', $vatCategory, implode(', ', self::$vatCategories)));
+		self::checkVat($vatCategory, $vatRate);
+
+		if ($unitPrice < 0) {
+			throw new MpdfException(sprintf('The price of "%s" is negative; EN 16931 takes a negative quantity or an allowance instead', $name));
 		}
 
 		$this->name = $name;
@@ -81,6 +96,44 @@ class LineItem
 		$this->unitPrice = (float) $unitPrice;
 		$this->vatRate = (float) $vatRate;
 		$this->vatCategory = $vatCategory;
+	}
+
+	/**
+	 * Refuse a VAT category EN 16931 does not know, or a rate its category cannot have: standard rated (S) above 0,
+	 * the categories that charge no VAT at 0
+	 *
+	 * @param string $category
+	 * @param float $rate
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	public static function checkVat($category, $rate)
+	{
+		if (!in_array($category, self::$vatCategories, true)) {
+			throw new MpdfException(sprintf('VAT category "%s" is not one of %s', $category, implode(', ', self::$vatCategories)));
+		}
+
+		if ($category === 'S' && $rate <= 0) {
+			throw new MpdfException('A standard rated (S) VAT category needs a rate above 0; use Z for zero rated');
+		}
+
+		if ((in_array($category, self::$zeroRatedCategories, true) || $category === self::NOT_SUBJECT_TO_VAT) && $rate != 0) {
+			throw new MpdfException(sprintf('VAT category %s charges no VAT, so its rate is 0', $category));
+		}
+	}
+
+	/**
+	 * A discount taken off or a charge added to this line alone, which counts towards its net amount
+	 *
+	 * @param \Mpdf\Invoice\AllowanceCharge $allowanceCharge
+	 *
+	 * @return $this
+	 */
+	public function addAllowanceCharge(AllowanceCharge $allowanceCharge)
+	{
+		$this->allowanceCharges[] = $allowanceCharge;
+
+		return $this;
 	}
 
 	/**
@@ -164,13 +217,26 @@ class LineItem
 	}
 
 	/**
-	 * The quantity times the unit price, rounded to the cent
+	 * @return \Mpdf\Invoice\AllowanceCharge[]
+	 */
+	public function getAllowanceCharges()
+	{
+		return $this->allowanceCharges;
+	}
+
+	/**
+	 * The quantity times the unit price, rounded to the cent, less the line's allowances and plus its charges
 	 *
 	 * @return float
 	 */
 	public function getNetAmount()
 	{
-		return round($this->quantity * $this->unitPrice, 2);
+		$amount = round($this->quantity * $this->unitPrice, 2);
+		foreach ($this->allowanceCharges as $allowanceCharge) {
+			$amount += $allowanceCharge->getSignedAmount();
+		}
+
+		return round($amount, 2);
 	}
 
 }

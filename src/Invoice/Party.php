@@ -65,7 +65,32 @@ class Party
 	/**
 	 * @var string|null
 	 */
-	private $email;
+	private $taxNumber;
+
+	/**
+	 * @var string|null
+	 */
+	private $electronicAddress;
+
+	/**
+	 * @var string|null
+	 */
+	private $electronicAddressScheme;
+
+	/**
+	 * @var string|null
+	 */
+	private $contactName;
+
+	/**
+	 * @var string|null
+	 */
+	private $contactPhone;
+
+	/**
+	 * @var string|null
+	 */
+	private $contactEmail;
 
 	/**
 	 * @param string $name
@@ -134,13 +159,49 @@ class Party
 	}
 
 	/**
-	 * @param string $email The address the party receives electronic documents at
+	 * @param string $taxNumber The number the seller's tax office knows it by, for a seller without a VAT identifier,
+	 *                          e.g. a German Steuernummer
 	 *
 	 * @return $this
 	 */
-	public function setEmail($email)
+	public function setTaxNumber($taxNumber)
 	{
-		$this->email = $email;
+		$this->taxNumber = $taxNumber;
+
+		return $this;
+	}
+
+	/**
+	 * The address the party receives electronic invoices at
+	 *
+	 * @param string $address
+	 * @param string $scheme The CEF EAS scheme of the address: EM for an email address, 0204 for a German Leitweg-ID,
+	 *                       0088 for a GLN, 0208 for a Belgian company number, 0225 for a French routing identifier
+	 *
+	 * @return $this
+	 */
+	public function setElectronicAddress($address, $scheme = 'EM')
+	{
+		$this->electronicAddress = $address;
+		$this->electronicAddressScheme = $scheme;
+
+		return $this;
+	}
+
+	/**
+	 * The person to contact at the party
+	 *
+	 * @param string $name
+	 * @param string|null $phone
+	 * @param string|null $email
+	 *
+	 * @return $this
+	 */
+	public function setContact($name, $phone = null, $email = null)
+	{
+		$this->contactName = $name;
+		$this->contactPhone = $phone;
+		$this->contactEmail = $email;
 
 		return $this;
 	}
@@ -228,9 +289,49 @@ class Party
 	/**
 	 * @return string|null
 	 */
-	public function getEmail()
+	public function getTaxNumber()
 	{
-		return $this->email;
+		return $this->taxNumber;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getElectronicAddress()
+	{
+		return $this->electronicAddress;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getElectronicAddressScheme()
+	{
+		return $this->electronicAddressScheme;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getContactName()
+	{
+		return $this->contactName;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getContactPhone()
+	{
+		return $this->contactPhone;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getContactEmail()
+	{
+		return $this->contactEmail;
 	}
 
 }

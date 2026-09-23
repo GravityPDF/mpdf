@@ -20,6 +20,7 @@ abstract class CiiWriter implements WriterInterface
 	 * @var string[]
 	 */
 	private static $namespaces = [
+		'qdt' => 'urn:un:unece:uncefact:data:standard:QualifiedDataType:100',
 		'ram' => 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100',
 		'udt' => 'urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100',
 	];
@@ -82,7 +83,7 @@ abstract class CiiWriter implements WriterInterface
 	}
 
 	/**
-	 * Create the document's root element, declaring the given rsm namespace and the shared ram and udt ones
+	 * Create the document's root element, declaring the given rsm namespace and the shared qdt, ram and udt ones
 	 *
 	 * @param string $root The root element, e.g. rsm:CrossIndustryInvoice
 	 * @param string $rsmNamespace
@@ -154,13 +155,14 @@ abstract class CiiWriter implements WriterInterface
 	 * @param \DOMElement $parent
 	 * @param string $name
 	 * @param \DateTimeInterface $date
+	 * @param string $prefix udt for most dates, qdt for a referenced document's
 	 *
 	 * @return \DOMElement
 	 */
-	protected function appendDate(\DOMElement $parent, $name, \DateTimeInterface $date)
+	protected function appendDate(\DOMElement $parent, $name, \DateTimeInterface $date, $prefix = 'udt')
 	{
 		$element = $this->append($parent, $name);
-		$this->append($element, 'udt:DateTimeString', $date->format('Ymd'), ['format' => '102']);
+		$this->append($element, $prefix . ':DateTimeString', $date->format('Ymd'), ['format' => '102']);
 
 		return $element;
 	}

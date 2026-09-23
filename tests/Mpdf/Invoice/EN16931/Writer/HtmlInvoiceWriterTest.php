@@ -70,6 +70,47 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A line's discount shows under it, and the invoice's discount and shipping between the lines and the total before
+	 * VAT, with the card it was paid by and the seller's contact
+	 */
+	public function testWritesAllowancesChargesAndCard()
+	{
+		$html = $this->htmlWriter()->write($this->shopInvoice());
+
+		$this->assertStringContainsString('<br><small>Display model -50.00 EUR</small>', $html);
+		$this->assertStringContainsString('>Total of the lines</td><td class="invoice-number">592.00 EUR<', $html);
+		$this->assertStringContainsString('>Loyalty discount</td><td class="invoice-number">-59.20 EUR<', $html);
+		$this->assertStringContainsString('>Shipping</td><td class="invoice-number">24.90 EUR<', $html);
+		$this->assertStringContainsString('>Total excluding VAT</td><td class="invoice-number">557.70 EUR<', $html);
+		$this->assertStringContainsString('Card ending 4242', $html);
+		$this->assertStringContainsString('Contact: Accounts, +33 1 23 45 67 89, accounts@seller.example', $html);
+	}
+
+	/**
+	 * A credit note names the invoice it corrects
+	 */
+	public function testNamesTheInvoiceCorrected()
+	{
+		$html = $this->htmlWriter()->write($this->creditNote());
+
+		$this->assertStringContainsString('<h1>Credit note CN-2026-0007</h1>', $html);
+		$this->assertStringContainsString('<td>Corrects invoice</td><td>INV-2026-0001 (23/09/2026)</td>', $html);
+	}
+
+	/**
+	 * Where the goods went takes a column of its own, a direct debit says which account it is taken from, and an
+	 * electronic address that is not an email address is left to the XML
+	 */
+	public function testWritesTheDeliveryAndDirectDebit()
+	{
+		$html = $this->htmlWriter()->write($this->intraCommunityInvoice());
+
+		$this->assertStringContainsString('<td width="33%"><strong>Deliver to</strong><br>Buyer GmbH Lager<br>Industriestraße 5<br>20457 Hamburg<br>DE</td>', $html);
+		$this->assertStringContainsString('Direct debit from DE02120300000000202051 under mandate MANDATE-42, creditor ID FR98ZZZ999999', $html);
+		$this->assertStringNotContainsString('04011000-12345-34', $html);
+	}
+
+	/**
 	 * A party's address is laid out as its country lays it out: a British postcode on a line of its own
 	 */
 	public function testLaysOutTheAddressesByCountry()

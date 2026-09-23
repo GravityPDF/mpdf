@@ -2,10 +2,12 @@
 
 namespace Mpdf\Invoice\EN16931\Writer;
 
+use Mpdf\Invoice\AllowanceCharge;
 use Mpdf\Invoice\EN16931\Invoice;
 use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Party;
+use Mpdf\Invoice\PaymentMeans;
 use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
@@ -55,15 +57,21 @@ class HtmlInvoiceWriter implements WriterInterface
 		'dueDate' => 'Due date',
 		'buyerReference' => 'Your reference',
 		'orderReference' => 'Order',
+		'precedingInvoice' => 'Corrects invoice',
 		'seller' => 'From',
 		'buyer' => 'To',
+		'deliverTo' => 'Deliver to',
 		'vatId' => 'VAT ID',
+		'contact' => 'Contact',
 		'item' => 'Item',
 		'quantity' => 'Quantity',
 		'unitPrice' => 'Unit price',
 		'vat' => 'VAT',
 		'vatGroup' => 'VAT %1$s on %2$s',
 		'amount' => 'Amount',
+		'allowance' => 'Discount',
+		'charge' => 'Charge',
+		'linesTotal' => 'Total of the lines',
 		'lineTotal' => 'Total excluding VAT',
 		'grandTotal' => 'Total including VAT',
 		'prepaid' => 'Paid in advance',
@@ -72,6 +80,9 @@ class HtmlInvoiceWriter implements WriterInterface
 		'iban' => 'IBAN',
 		'bic' => 'BIC',
 		'accountName' => 'Account name',
+		'account' => 'Account',
+		'directDebit' => 'Direct debit from %1$s under mandate %2$s, creditor ID %3$s',
+		'card' => 'Card ending %s',
 	];
 
 	/**
@@ -121,15 +132,20 @@ class HtmlInvoiceWriter implements WriterInterface
 
 		$html .= '<h1>' . $this->escape($title . ' ' . $document->getId()) . '</h1>' . "\n";
 		$html .= $this->details($document);
-		$html .= '<table class="invoice-parties" width="100%"><tr>'
-			. $this->party($this->labels['seller'], $document->getSeller())
-			. $this->party($this->labels['buyer'], $document->getBuyer())
-			. '</tr></table>' . "\n";
+		$parties = [$this->labels['seller'] => $document->getSeller(), $this->labels['buyer'] => $document->getBuyer()];
+		if ($document->getDeliverTo() !== null) {
+			$parties[$this->labels['deliverTo']] = $document->getDeliverTo();
+		}
+		$html .= '<table class="invoice-parties" width="100%"><tr>';
+		foreach ($parties as $label => $party) {
+			$html .= $this->party($label, $party, floor(100 / count($parties)));
+		}
+		$html .= '</tr></table>' . "\n";
 		$html .= $this->lines($document);
 		$html .= $this->payment($document);
 
 		foreach ($document->getNotes() as $note) {
-			$html .= '<p>' . nl2br($this->escape($note)) . '</p>' . "\n";
+			$html .= '<p>' . nl2br($this->escape($note['content'])) . '</p>' . "\n";
 		}
 
 		return $html;
@@ -150,6 +166,7 @@ class HtmlInvoiceWriter implements WriterInterface
 			'dueDate' => $this->date($invoice->getDueDate()),
 			'buyerReference' => $invoice->getBuyerReference(),
 			'orderReference' => $invoice->getOrderReference(),
+			'precedingInvoice' => $this->precedingInvoices($invoice),
 		];
 
 		$html = '<table class="invoice-details">';
@@ -161,21 +178,42 @@ class HtmlInvoiceWriter implements WriterInterface
 	}
 
 	/**
-	 * A seller or buyer's cell: name, address, VAT ID and email
+	 * The invoices this one corrects, each with its date when it has one
+	 *
+	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
+	 *
+	 * @return string|null
+	 */
+	private function precedingInvoices(Invoice $invoice)
+	{
+		$references = [];
+		foreach ($invoice->getPrecedingInvoices() as $preceding) {
+			$date = $this->date($preceding['issueDate']);
+			$references[] = $date !== null ? $preceding['id'] . ' (' . $date . ')' : $preceding['id'];
+		}
+
+		return $references ? implode(', ', $references) : null;
+	}
+
+	/**
+	 * A party's cell: name, address, VAT ID, contact, and email address when it receives invoices at one
 	 *
 	 * @param string $label
 	 * @param \Mpdf\Invoice\Party $party
+	 * @param int $width The percentage of the row the cell takes
 	 *
 	 * @return string
 	 */
-	private function party($label, Party $party)
+	private function party($label, Party $party, $width)
 	{
+		$contact = array_filter([$party->getContactName(), $party->getContactPhone(), $party->getContactEmail()], 'is_string');
 		$lines = array_merge([$party->getName()], $this->formatter->address($party), [
 			$party->getVatId() !== null ? $this->labels['vatId'] . ' ' . $party->getVatId() : null,
-			$party->getEmail(),
+			$contact ? $this->labels['contact'] . ': ' . implode(', ', $contact) : null,
+			$party->getElectronicAddressScheme() === 'EM' ? $party->getElectronicAddress() : null,
 		]);
 
-		return '<td width="50%"><strong>' . $this->escape($label) . '</strong><br>'
+		return '<td width="' . $width . '%"><strong>' . $this->escape($label) . '</strong><br>'
 			. implode('<br>', array_map([$this, 'escape'], $this->filled($lines)))
 			. '</td>';
 	}
@@ -198,6 +236,10 @@ class HtmlInvoiceWriter implements WriterInterface
 			$item = $this->escape($line->getName());
 			if ($line->getDescription() !== null) {
 				$item .= '<br><small>' . $this->escape($line->getDescription()) . '</small>';
+			}
+			foreach ($line->getAllowanceCharges() as $allowanceCharge) {
+				$item .= '<br><small>' . $this->escape($this->allowanceChargeLabel($allowanceCharge) . ' '
+					. $this->formatter->money($allowanceCharge->getSignedAmount(), $currency)) . '</small>';
 			}
 
 			$html .= $this->row('td', $item, [
@@ -231,7 +273,24 @@ class HtmlInvoiceWriter implements WriterInterface
 	}
 
 	/**
-	 * The line total, the VAT of each category and rate, and the total, less any prepayment; the last in bold
+	 * What an allowance or charge is for: its reason, or Discount or Charge
+	 *
+	 * @param \Mpdf\Invoice\AllowanceCharge $allowanceCharge
+	 *
+	 * @return string
+	 */
+	private function allowanceChargeLabel(AllowanceCharge $allowanceCharge)
+	{
+		if ($allowanceCharge->getReason() !== null) {
+			return $allowanceCharge->getReason();
+		}
+
+		return $this->labels[$allowanceCharge->isCharge() ? 'charge' : 'allowance'];
+	}
+
+	/**
+	 * The total of the lines and the invoice's allowances and charges, the total excluding VAT, the VAT of each
+	 * category and rate, and the total, less any prepayment; the last in bold
 	 *
 	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
 	 *
@@ -241,7 +300,14 @@ class HtmlInvoiceWriter implements WriterInterface
 	{
 		$currency = $invoice->getCurrency();
 
-		$totals = [[$this->labels['lineTotal'], $invoice->getLineTotal()]];
+		$totals = [];
+		if ($invoice->getAllowanceCharges()) {
+			$totals[] = [$this->labels['linesTotal'], $invoice->getLineTotal()];
+			foreach ($invoice->getAllowanceCharges() as $allowanceCharge) {
+				$totals[] = [$this->allowanceChargeLabel($allowanceCharge), $allowanceCharge->getSignedAmount()];
+			}
+		}
+		$totals[] = [$this->labels['lineTotal'], $invoice->getTaxBasisTotal()];
 		foreach ($invoice->getVatBreakdown() as $group) {
 			$label = sprintf($this->labels['vatGroup'], $this->rate($group['category'], $group['rate']), $this->formatter->money($group['basis'], $currency));
 			$reason = $invoice->getExemptionReason($group['category']);
@@ -282,7 +348,7 @@ class HtmlInvoiceWriter implements WriterInterface
 	}
 
 	/**
-	 * The payment terms and the account to pay into, when there are any
+	 * The payment terms and reference, and each way to pay, when there are any
 	 *
 	 * @param \Mpdf\Invoice\EN16931\Invoice $invoice
 	 *
@@ -291,20 +357,50 @@ class HtmlInvoiceWriter implements WriterInterface
 	private function payment(Invoice $invoice)
 	{
 		$lines = [$invoice->getPaymentTerms()];
+		if ($invoice->getPaymentReference() !== null) {
+			$lines[] = $this->labels['paymentReference'] . ': ' . $invoice->getPaymentReference();
+		}
 
-		$account = [
-			'paymentReference' => $invoice->getPaymentReference(),
-			'iban' => $invoice->getIban(),
-			'bic' => $invoice->getBic(),
-			'accountName' => $invoice->getAccountName(),
-		];
-		foreach ($this->filled($account) as $label => $value) {
-			$lines[] = $this->labels[$label] . ': ' . $value;
+		foreach ($invoice->getPaymentMeans() as $means) {
+			$lines = array_merge($lines, $this->paymentMeans($means));
 		}
 
 		$lines = $this->filled($lines);
 
 		return $lines ? '<p>' . implode('<br>', array_map([$this, 'escape'], $lines)) . '</p>' . "\n" : '';
+	}
+
+	/**
+	 * How to pay by one means: the account to transfer to, the account a direct debit is taken from, or the card
+	 *
+	 * @param \Mpdf\Invoice\PaymentMeans $means
+	 *
+	 * @return string[]
+	 */
+	private function paymentMeans(PaymentMeans $means)
+	{
+		$lines = [$means->getInformation()];
+
+		if ($means->getAccount() !== null) {
+			$account = [
+				$means->isIban() ? 'iban' : 'account' => $means->getAccount(),
+				'bic' => $means->getBic(),
+				'accountName' => $means->getAccountName(),
+			];
+			foreach ($this->filled($account) as $label => $value) {
+				$lines[] = $this->labels[$label] . ': ' . $value;
+			}
+		}
+
+		if ($means->getMandateReference() !== null) {
+			$lines[] = sprintf($this->labels['directDebit'], $means->getDebitedAccount(), $means->getMandateReference(), $means->getCreditorId());
+		}
+
+		if ($means->getCardNumber() !== null) {
+			$lines[] = sprintf($this->labels['card'], $means->getCardNumber());
+		}
+
+		return $lines;
 	}
 
 	/**

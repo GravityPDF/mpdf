@@ -8,6 +8,7 @@ use Mpdf\Invoice\EN16931\Writer\HtmlInvoiceWriter;
 use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\LineItem;
 use Mpdf\Invoice\Party;
+use Mpdf\Invoice\PaymentMeans;
 use Mpdf\Invoice\Preset\UnitedStatesPreset;
 
 /**
@@ -38,7 +39,7 @@ class InvoiceUsdSnapshotTest extends InvoiceSnapshot
 		$buyer = (new Party('Buyer Inc.', 'US'))
 			->setAddress('350 Fifth Avenue', '10118', 'New York', 'Suite 4200')
 			->setCountrySubdivision('NY')
-			->setEmail('ap@buyer.example');
+			->setElectronicAddress('ap@buyer.example');
 
 		$invoice = new Invoice('INV-2026-0002', new \DateTime('2026-09-23'), 'USD', $this->seller(), $buyer);
 		$invoice->addLine((new LineItem('Consulting', 12.5, 185, 0, 'G'))->setUnitCode('HUR')->setDescription('September retainer'))
@@ -47,7 +48,7 @@ class InvoiceUsdSnapshotTest extends InvoiceSnapshot
 			->setDeliveryDate(new \DateTime('2026-09-20'))
 			->setDueDate(new \DateTime('2026-10-23'))
 			->setPaymentTerms('Net 30')
-			->setPaymentAccount('FR7630006000011234567890189', 'AGRIFRPP', 'Seller SARL')
+			->addPaymentMeans(PaymentMeans::creditTransfer('FR7630006000011234567890189', 'AGRIFRPP', 'Seller SARL'))
 			->setPrepaidAmount(1500)
 			->setOrderReference('PO-7781');
 

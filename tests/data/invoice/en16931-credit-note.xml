@@ -2,22 +2,44 @@
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
   <rsm:ExchangedDocumentContext>
     <ram:GuidelineSpecifiedDocumentContextParameter>
-      <ram:ID>urn:factur-x.eu:1p0:basicwl</ram:ID>
+      <ram:ID>urn:cen.eu:en16931:2017</ram:ID>
     </ram:GuidelineSpecifiedDocumentContextParameter>
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
-    <ram:ID>INV-2026-0001</ram:ID>
-    <ram:TypeCode>380</ram:TypeCode>
+    <ram:ID>CN-2026-0007</ram:ID>
+    <ram:TypeCode>381</ram:TypeCode>
     <ram:IssueDateTime>
-      <udt:DateTimeString format="102">20260923</udt:DateTimeString>
+      <udt:DateTimeString format="102">20261002</udt:DateTimeString>
     </ram:IssueDateTime>
-    <ram:IncludedNote>
-      <ram:Content>Late payment penalty: 3x the legal interest rate</ram:Content>
-    </ram:IncludedNote>
   </rsm:ExchangedDocument>
   <rsm:SupplyChainTradeTransaction>
+    <ram:IncludedSupplyChainTradeLineItem>
+      <ram:AssociatedDocumentLineDocument>
+        <ram:LineID>1</ram:LineID>
+      </ram:AssociatedDocumentLineDocument>
+      <ram:SpecifiedTradeProduct>
+        <ram:Name>Consulting</ram:Name>
+      </ram:SpecifiedTradeProduct>
+      <ram:SpecifiedLineTradeAgreement>
+        <ram:NetPriceProductTradePrice>
+          <ram:ChargeAmount>120</ram:ChargeAmount>
+        </ram:NetPriceProductTradePrice>
+      </ram:SpecifiedLineTradeAgreement>
+      <ram:SpecifiedLineTradeDelivery>
+        <ram:BilledQuantity unitCode="HUR">1.5</ram:BilledQuantity>
+      </ram:SpecifiedLineTradeDelivery>
+      <ram:SpecifiedLineTradeSettlement>
+        <ram:ApplicableTradeTax>
+          <ram:TypeCode>VAT</ram:TypeCode>
+          <ram:CategoryCode>S</ram:CategoryCode>
+          <ram:RateApplicablePercent>20</ram:RateApplicablePercent>
+        </ram:ApplicableTradeTax>
+        <ram:SpecifiedTradeSettlementLineMonetarySummation>
+          <ram:LineTotalAmount>180.00</ram:LineTotalAmount>
+        </ram:SpecifiedTradeSettlementLineMonetarySummation>
+      </ram:SpecifiedLineTradeSettlement>
+    </ram:IncludedSupplyChainTradeLineItem>
     <ram:ApplicableHeaderTradeAgreement>
-      <ram:BuyerReference>BR-42</ram:BuyerReference>
       <ram:SellerTradeParty>
         <ram:Name>Seller SARL</ram:Name>
         <ram:SpecifiedLegalOrganization>
@@ -52,9 +74,6 @@
           <ram:ID schemeID="VA">DE123456789</ram:ID>
         </ram:SpecifiedTaxRegistration>
       </ram:BuyerTradeParty>
-      <ram:BuyerOrderReferencedDocument>
-        <ram:IssuerAssignedID>PO-1234</ram:IssuerAssignedID>
-      </ram:BuyerOrderReferencedDocument>
     </ram:ApplicableHeaderTradeAgreement>
     <ram:ApplicableHeaderTradeDelivery>
       <ram:ActualDeliverySupplyChainEvent>
@@ -64,42 +83,36 @@
       </ram:ActualDeliverySupplyChainEvent>
     </ram:ApplicableHeaderTradeDelivery>
     <ram:ApplicableHeaderTradeSettlement>
-      <ram:PaymentReference>INV-2026-0001</ram:PaymentReference>
       <ram:InvoiceCurrencyCode>EUR</ram:InvoiceCurrencyCode>
       <ram:SpecifiedTradeSettlementPaymentMeans>
         <ram:TypeCode>58</ram:TypeCode>
         <ram:PayeePartyCreditorFinancialAccount>
-          <ram:IBANID>FR7630006000011234567890189</ram:IBANID>
+          <ram:IBANID>DE02120300000000202051</ram:IBANID>
         </ram:PayeePartyCreditorFinancialAccount>
       </ram:SpecifiedTradeSettlementPaymentMeans>
       <ram:ApplicableTradeTax>
-        <ram:CalculatedAmount>180.00</ram:CalculatedAmount>
+        <ram:CalculatedAmount>36.00</ram:CalculatedAmount>
         <ram:TypeCode>VAT</ram:TypeCode>
-        <ram:BasisAmount>900.00</ram:BasisAmount>
+        <ram:BasisAmount>180.00</ram:BasisAmount>
         <ram:CategoryCode>S</ram:CategoryCode>
         <ram:RateApplicablePercent>20</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>
-      <ram:ApplicableTradeTax>
-        <ram:CalculatedAmount>2.14</ram:CalculatedAmount>
-        <ram:TypeCode>VAT</ram:TypeCode>
-        <ram:BasisAmount>38.97</ram:BasisAmount>
-        <ram:CategoryCode>S</ram:CategoryCode>
-        <ram:RateApplicablePercent>5.5</ram:RateApplicablePercent>
-      </ram:ApplicableTradeTax>
       <ram:SpecifiedTradePaymentTerms>
-        <ram:Description>30 days net</ram:Description>
-        <ram:DueDateDateTime>
-          <udt:DateTimeString format="102">20261023</udt:DateTimeString>
-        </ram:DueDateDateTime>
+        <ram:Description>Refunded within 14 days</ram:Description>
       </ram:SpecifiedTradePaymentTerms>
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
-        <ram:LineTotalAmount>938.97</ram:LineTotalAmount>
-        <ram:TaxBasisTotalAmount>938.97</ram:TaxBasisTotalAmount>
-        <ram:TaxTotalAmount currencyID="EUR">182.14</ram:TaxTotalAmount>
-        <ram:GrandTotalAmount>1121.11</ram:GrandTotalAmount>
-        <ram:TotalPrepaidAmount>100.00</ram:TotalPrepaidAmount>
-        <ram:DuePayableAmount>1021.11</ram:DuePayableAmount>
+        <ram:LineTotalAmount>180.00</ram:LineTotalAmount>
+        <ram:TaxBasisTotalAmount>180.00</ram:TaxBasisTotalAmount>
+        <ram:TaxTotalAmount currencyID="EUR">36.00</ram:TaxTotalAmount>
+        <ram:GrandTotalAmount>216.00</ram:GrandTotalAmount>
+        <ram:DuePayableAmount>216.00</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
+      <ram:InvoiceReferencedDocument>
+        <ram:IssuerAssignedID>INV-2026-0001</ram:IssuerAssignedID>
+        <ram:FormattedIssueDateTime>
+          <qdt:DateTimeString format="102">20260923</qdt:DateTimeString>
+        </ram:FormattedIssueDateTime>
+      </ram:InvoiceReferencedDocument>
     </ram:ApplicableHeaderTradeSettlement>
   </rsm:SupplyChainTradeTransaction>
 </rsm:CrossIndustryInvoice>
