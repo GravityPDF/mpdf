@@ -61,6 +61,14 @@ class StaticListBoxSnapshotTest extends Snapshot
 				<option>jolly</option>
 			</select></p>
 
+			<h3>Thirty options, six rows tall, scrolled to the first selection</h3>
+
+			<p>Item <select name="thirty" size="6" multiple>
+				<?php for ($i = 1; $i <= 30; $i++) { ?>
+				<option<?php echo $i === 17 || $i === 19 ? ' selected' : ''; ?>>Option <?php echo $i; ?></option>
+				<?php } ?>
+			</select> after</p>
+
 			<h3>Beside a drop-down</h3>
 
 			<p>List <select name="list" size="3">
