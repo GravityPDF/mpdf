@@ -88,8 +88,8 @@ class ClassDefTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * An offset of 0 is a subtable stating no Class Definition table, so nothing is read, even with
-	 * the reader sitting at the start of a valid table
+	 * An offset of 0 means there is no Class Definition table: nothing is read, even where the reader
+	 * sits at the start of one
 	 */
 	public function testGlyphsByClassAtAZeroOffsetReadsNoTable()
 	{

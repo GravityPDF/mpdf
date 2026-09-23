@@ -200,8 +200,8 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A Class Definition offset of 0 is no table, as ClassDef::offset() gives it, so no glyph is in
-	 * any class - even where the reader sits at the start of a table that would put one in class 1
+	 * A Class Definition offset of 0 means there is no table, so no glyph is in any class - even where
+	 * the reader sits at the start of a table that puts glyph 40 in class 1
 	 */
 	public function testAClassDefinitionTableAtOffsetZeroHasNoClasses()
 	{
