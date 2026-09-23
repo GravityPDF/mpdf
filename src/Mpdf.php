@@ -2218,7 +2218,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetVisibility($v)
 	{
-		if (($this->PDFA || $this->PDFX) && $this->visibility != 'visible') {
+		if (($this->PDFA || $this->PDFX) && $v != 'visible') {
 			$this->PDFAXwarnings[] = "Cannot set visibility to anything other than full when using PDFA or PDFX";
 			return '';
 		} elseif (!$this->PDFA && !$this->PDFX) {

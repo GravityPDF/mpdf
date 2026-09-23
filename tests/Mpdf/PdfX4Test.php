@@ -444,6 +444,26 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Print-only or hidden content needs optional content with usage application dictionaries, the /AS
+	 * PDF/X-4 forbids and the optional content PDF/X-1a has none of, so it is shown in full instead
+	 *
+	 * @dataProvider pdfxVersions
+	 *
+	 * @param string $version
+	 */
+	public function testVisibilityIsLeftFull($version)
+	{
+		$html = '<div style="visibility: printonly; background: #ccc">Print only</div><p style="visibility: hidden">Hidden</p>';
+
+		$pdf = $this->pdf(['PDFX' => $version], $html);
+		$this->assertStringNotContainsString('/OC /OC', $pdf);
+		$this->assertStringNotContainsString('/OCProperties', $pdf);
+
+		$this->expectException(MpdfException::class);
+		$this->pdf(['PDFX' => $version, 'PDFXauto' => false], $html);
+	}
+
+	/**
 	 * Each page is blended in the colour space of the output intent
 	 */
 	public function testPagesAreBlendedInTheColourSpaceOfTheOutputIntent()
