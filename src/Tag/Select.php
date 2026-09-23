@@ -45,8 +45,12 @@ class Select extends Tag
 		if (isset($attr['MULTIPLE'])) {
 			$this->mpdf->selectoption['MULTIPLE'] = $attr['MULTIPLE'];
 		}
-		if (isset($attr['SIZE']) && $attr['SIZE'] > 1) {
-			$this->mpdf->selectoption['SIZE'] = $attr['SIZE'];
+		$size = isset($attr['SIZE']) ? (int) $attr['SIZE'] : 0;
+		if ($size < 1 && isset($attr['MULTIPLE'])) {
+			$size = 4; // as in HTML, a multiple select with no size is a list box four rows tall
+		}
+		if ($size > 1) {
+			$this->mpdf->selectoption['SIZE'] = $size;
 		}
 		if ($this->mpdf->useActiveForms) {
 			if (isset($attr['NAME'])) {
