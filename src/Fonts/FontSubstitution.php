@@ -22,8 +22,8 @@ class FontSubstitution
 	private $mpdf;
 
 	/**
-	 * @var array[] What drawnWidths() needs of each backup font widths() tried without the document
-	 *              loading it, by family, so its metrics are not read again for every emoji
+	 * @var array[] What metrics() read of each font the document had not loaded, by family, so it is
+	 *              not read again for every emoji
 	 */
 	private $tried = [];
 
@@ -118,78 +118,81 @@ class FontSubstitution
 	}
 
 	/**
-	 * The character widths of a font the substitution scan might move text into.
-	 *
-	 * Where the document has not loaded the font they come from its metrics, generated into the font
-	 * cache if need be, so that trying a font does not add it to the document whether or not its
-	 * metrics were cached. A font that draws nothing here has no widths - see drawnWidths().
+	 * The character widths of a font the substitution scan might move text into. A font that draws
+	 * nothing here has no widths - see drawnWidths().
 	 *
 	 * @param string $family The font's key in fontdata
 	 *
-	 * @return string|null Null where there is no such font
+	 * @return string|array|null Null where SetFont() would not add a font under that name
 	 */
 	public function widths($family)
 	{
-		if (isset($this->mpdf->fonts[$family])) {
-			return $this->drawnWidths($this->mpdf->fonts[$family]);
-		}
+		$font = $this->metrics($family);
 
-		if (!isset($this->tried[$family])) {
-			if (!$this->addsAsNamed($family)) {
-				return $this->loadedWidths($family);
-			}
-
-			$this->tried[$family] = array_intersect_key(
-				$this->mpdf->fontMetrics($family, ''),
-				['cw' => true, 'colorFormats' => true, 'hasOutlines' => true]
-			);
-		}
-
-		return $this->drawnWidths($this->tried[$family]);
-	}
-
-	/**
-	 * @param string $family
-	 *
-	 * @return bool Whether SetFont() adds the family's regular TrueType font under its own name, rather
-	 *              than a CJK or core font, or another family standing in for it
-	 */
-	private function addsAsNamed($family)
-	{
-		return !$this->mpdf->onlyCoreFonts
-			&& empty($this->mpdf->fonttrans[$family])
-			&& in_array($family, $this->mpdf->available_unifonts, true)
-			&& !in_array($family, $this->mpdf->available_CJK_fonts, true);
+		return $font === null ? null : $this->drawnWidths($font);
 	}
 
 	/**
 	 * @param string $family The font's key in fontdata
 	 *
-	 * @return string|null What drawnWidths() gives for the font, loaded to find them, or null where there
-	 *                     is no such font
-	 */
-	private function loadedWidths($family)
-	{
-		$this->loadFont($family);
-
-		return isset($this->mpdf->fonts[$family]) ? $this->drawnWidths($this->mpdf->fonts[$family]) : null;
-	}
-
-	/**
-	 * Whether a backup font is drawn in colour. The font is loaded to ask, cached or not, so it takes
-	 * the same number in the document either way.
-	 *
-	 * @param string $family The font's key in fontdata
-	 *
-	 * @return bool
+	 * @return bool Whether a backup font is drawn in colour
 	 */
 	private function isColorFont($family)
 	{
-		if (!isset($this->mpdf->fonts[$family])) {
-			$this->loadFont($family);
+		$font = $this->metrics($family);
+
+		return $font !== null && ColorFormats::drawsInColor($font, $this->mpdf);
+	}
+
+	/**
+	 * What the scan needs to know of a font: the document's own entry for it where the document has
+	 * loaded it, and otherwise its metrics, read without adding it to the document so that asking about
+	 * a font the scan then passes over leaves no trace.
+	 *
+	 * @param string $family The font's key in fontdata
+	 *
+	 * @return array|null The font's 'cw', and 'colorFormats' and 'hasOutlines' where it has them, or null
+	 *                    where SetFont() would not add a font under that name: a core font, a fonttrans
+	 *                    alias, or a family with no regular font
+	 */
+	private function metrics($family)
+	{
+		if (isset($this->mpdf->fonts[$family])) {
+			return $this->mpdf->fonts[$family];
 		}
 
-		return ColorFormats::drawsInColor($this->mpdf->fonts[$family], $this->mpdf);
+		if (!array_key_exists($family, $this->tried)) {
+			$this->tried[$family] = $this->unloadedMetrics($family);
+		}
+
+		return $this->tried[$family];
+	}
+
+	/**
+	 * @param string $family The font's key in fontdata, not loaded in the document
+	 *
+	 * @return array|null What metrics() gives for the font
+	 */
+	private function unloadedMetrics($family)
+	{
+		if ($this->mpdf->onlyCoreFonts || !empty($this->mpdf->fonttrans[$family])) {
+			return null;
+		}
+
+		if (in_array($family, $this->mpdf->available_CJK_fonts, true)) {
+			$cw = $this->mpdf->cjkWidths($family);
+
+			return $cw === null ? null : ['cw' => $cw];
+		}
+
+		if (!in_array($family, $this->mpdf->available_unifonts, true)) {
+			return null;
+		}
+
+		return array_intersect_key(
+			$this->mpdf->fontMetrics($family, ''),
+			['cw' => true, 'colorFormats' => true, 'hasOutlines' => true]
+		);
 	}
 
 	/**
@@ -204,20 +207,6 @@ class FontSubstitution
 	public function drawnWidths(array $font)
 	{
 		return ColorFormats::blank($font, $this->mpdf) ? '' : $font['cw'];
-	}
-
-	/**
-	 * Adds a font to the document without leaving it the current one
-	 *
-	 * @param string $family The font's key in fontdata
-	 */
-	private function loadFont($family)
-	{
-		$prevFontFamily = $this->mpdf->FontFamily;
-		$prevFontStyle = $this->mpdf->currentfontstyle;
-		$prevFontSizePt = $this->mpdf->FontSizePt;
-		$this->mpdf->SetFont($family, '', '', false);
-		$this->mpdf->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
 	}
 
 }

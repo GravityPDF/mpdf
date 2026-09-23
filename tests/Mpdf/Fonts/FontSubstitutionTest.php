@@ -143,6 +143,40 @@ class FontSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Putting the colour fonts first asks each backup font whether it draws in colour, and adds none
+	 * of them to the document
+	 */
+	public function testOrderingByColourAddsNoFont()
+	{
+		$this->substitution->backupFontOrder(Emoji::PRESENTATION_EMOJI);
+
+		$this->assertSame(['dejavusans'], array_keys($this->mpdf->fonts));
+	}
+
+	/**
+	 * An Adobe CJK font's widths are the ones AddCJKFont() gives it, and asking for them adds none of
+	 * its styles
+	 */
+	public function testTheWidthsOfACjkFontComeBackWithoutAddingIt()
+	{
+		$cw = $this->substitution->widths('big5');
+
+		$this->assertSame($this->mpdf->cjkWidths('big5'), $cw);
+		$this->assertSame(['dejavusans'], array_keys($this->mpdf->fonts));
+	}
+
+	/**
+	 * A fonttrans alias has no widths of its own, and asking does not add the font it stands for
+	 */
+	public function testAnAliasHasNoWidths()
+	{
+		$this->mpdf->fonttrans['emojialias'] = 'notoemoji';
+
+		$this->assertNull($this->substitution->widths('emojialias'));
+		$this->assertSame(['dejavusans'], array_keys($this->mpdf->fonts));
+	}
+
+	/**
 	 * A family fontdata does not name has no widths
 	 */
 	public function testAnUnknownFamilyHasNoWidths()
