@@ -238,22 +238,23 @@ class Form
 				$this->mpdf->biDirectional = true;
 			}
 
-			$this->mpdf->SetLineWidth(0.2 / $k);
+			$border = $this->setStaticBorder($objattr, $k);
 
 			if (!empty($objattr['disabled'])) {
 				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
 				$this->mpdf->SetTColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
 			} elseif (!empty($objattr['readonly'])) {
 				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
 			} else {
-				$this->mpdf->SetFColor($this->colorConverter->convert(250, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+				$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 250));
+				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
 			}
 
-			$this->fittedCell($w, $h, $texto, 1, $rtlalign, 1, $this->form_element_spacing['input']['inner']['h'] / $k);
+			$this->fittedCell($w, $h, $texto, $border ? 1 : 0, $rtlalign, 1, $this->form_element_spacing['input']['inner']['h'] / $k);
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+			$this->resetStaticBorder($objattr);
 		}
 	}
 
@@ -332,20 +333,20 @@ class Form
 			$this->mpdf->x += $this->form_element_spacing['textarea']['outer']['h'] / $k;
 			$this->mpdf->y += $this->form_element_spacing['textarea']['outer']['v'] / $k;
 
-			$this->mpdf->SetLineWidth(0.2 / $k);
+			$border = $this->setStaticBorder($objattr, $k);
 
 			if (!empty($objattr['disabled'])) {
 				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
 				$this->mpdf->SetTColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
 			} elseif (!empty($objattr['readonly'])) {
 				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
 			} else {
-				$this->mpdf->SetFColor($this->colorConverter->convert(250, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor(isset($objattr['color']) ? $objattr['color'] : $this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+				$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 250));
+				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
 			}
 
-			$this->mpdf->Rect($this->mpdf->x, $this->mpdf->y, $w, $h, 'DF');
+			$this->mpdf->Rect($this->mpdf->x, $this->mpdf->y, $w, $h, $border ? 'DF' : 'F');
 			$ClipPath = sprintf('q %.3F %.3F %.3F %.3F re W n ', $this->mpdf->x * Mpdf::SCALE, ($this->mpdf->h - $this->mpdf->y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE);
 			$this->writer->write($ClipPath);
 
@@ -360,6 +361,7 @@ class Form
 			$this->writer->write('Q');
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+			$this->resetStaticBorder($objattr);
 		}
 	}
 
@@ -430,13 +432,13 @@ class Form
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
 		} else {
-			$this->mpdf->SetLineWidth(0.2 / $k);
+			$border = $this->setStaticBorder($objattr, $k) ? 1 : 0;
 			if (!empty($objattr['disabled'])) {
 				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
 				$this->mpdf->SetTColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
 			} else {
-				$this->mpdf->SetFColor($this->colorConverter->convert(250, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+				$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 250));
+				$this->mpdf->SetTColor($this->fieldColor($objattr, 'color', 0));
 			}
 			$w -= $this->form_element_spacing['select']['outer']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['select']['outer']['v'] * 2 / $k;
@@ -448,7 +450,7 @@ class Form
 				$this->mpdf->biDirectional = true;
 			} // *RTL*
 
-			$this->fittedCell($w - ($this->mpdf->FontSize * 1.4), $h, $texto, 1, $rtlalign, 1, $this->form_element_spacing['select']['inner']['h'] / $k, $objattr['OTLdata']);
+			$this->fittedCell($w - ($this->mpdf->FontSize * 1.4), $h, $texto, $border, $rtlalign, 1, $this->form_element_spacing['select']['inner']['h'] / $k, $objattr['OTLdata']);
 			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
 			$save_font = $this->mpdf->FontFamily;
 			$save_currentfont = $this->mpdf->currentfontfamily;
@@ -462,15 +464,16 @@ class Form
 				} else {
 					$down = '=';
 				}
-				$this->mpdf->Cell($this->mpdf->FontSize * 1.4, $h, $down, 1, 0, 'C', 1);
+				$this->mpdf->Cell($this->mpdf->FontSize * 1.4, $h, $down, $border, 0, 'C', 1);
 			} else {
 				$this->mpdf->SetFont('czapfdingbats');
-				$this->mpdf->Cell($this->mpdf->FontSize * 1.4, $h, chr(116), 1, 0, 'C', 1);
+				$this->mpdf->Cell($this->mpdf->FontSize * 1.4, $h, chr(116), $border, 0, 'C', 1);
 			}
 			$this->mpdf->SetFont($save_font);
 			$this->mpdf->currentfontfamily = $save_currentfont;
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+			$this->resetStaticBorder($objattr);
 		}
 	}
 
@@ -537,15 +540,18 @@ class Form
 
 		} else {
 
-			$this->mpdf->SetLineWidth(0.2 / $k);
-			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
+			$border = $this->setStaticBorder($objattr, $k);
+			$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 190));
+			if (isset($objattr['color'])) {
+				$this->mpdf->SetTColor($objattr['color']);
+			}
 
 			$w -= $this->form_element_spacing['button']['outer']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['button']['outer']['v'] * 2 / $k;
 
 			$this->mpdf->x += $this->form_element_spacing['button']['outer']['h'] / $k;
 			$this->mpdf->y += $this->form_element_spacing['button']['outer']['v'] / $k;
-			$this->mpdf->RoundedRect($this->mpdf->x, $this->mpdf->y, $w, $h, 0.5 / $k, 'DF');
+			$this->mpdf->RoundedRect($this->mpdf->x, $this->mpdf->y, $w, $h, 0.5 / $k, $border ? 'DF' : 'F');
 
 			$w -= $this->form_element_spacing['button']['inner']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['button']['inner']['v'] * 2 / $k;
@@ -560,6 +566,10 @@ class Form
 
 			$this->fittedCell($w, $h, $texto, '', 'C', 0, 0);
 			$this->mpdf->SetFColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+			if (isset($objattr['color'])) {
+				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+			}
+			$this->resetStaticBorder($objattr);
 		}
 	}
 
@@ -584,15 +594,15 @@ class Form
 			$ty = $y + (($h - $ih) / 2);
 			$rx = $lx + $iw;
 			$by = $ty + $ih;
-			$this->mpdf->SetLineWidth(0.2 / $k);
+			$border = $this->setStaticBorder($objattr, $k);
 			if (!empty($objattr['disabled'])) {
 				$this->mpdf->SetFColor($this->colorConverter->convert(225, $this->mpdf->PDFAXwarnings));
 				$this->mpdf->SetDColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
 			} else {
-				$this->mpdf->SetFColor($this->colorConverter->convert(250, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+				$this->mpdf->SetFColor($this->fieldColor($objattr, 'background-col', 250));
+				$this->mpdf->SetDColor($this->fieldColor($objattr, 'border-col', 0));
 			}
-			$this->mpdf->Rect($lx, $ty, $iw, $ih, 'DF');
+			$this->mpdf->Rect($lx, $ty, $iw, $ih, $border ? 'DF' : 'F');
 			if (!empty($objattr['checked'])) {
 				//Round join and cap
 				$this->mpdf->SetLineCap(1);
@@ -621,7 +631,7 @@ class Form
 			}
 			$this->SetRadio($w, $h, $objattr['fieldname'], $objattr['value'], (isset($objattr['title']) ? $objattr['title'] : ''), $checked, $flags, (isset($objattr['disabled']) ? $objattr['disabled'] : false));
 		} else {
-			$this->mpdf->SetLineWidth(0.2 / $k);
+			$border = $this->setStaticBorder($objattr, $k);
 			$radius = $this->mpdf->FontSize * 0.35;
 			$cx = $x + ($w / 2);
 			$cy = $y + ($h / 2);
@@ -629,18 +639,71 @@ class Form
 			if (isset($objattr['color']) && $objattr['color']) {
 				$color = $objattr['color'];
 			}
+			// The ring takes the text colour unless the border has its own
+			$ring = isset($objattr['border-col']) ? $objattr['border-col'] : $color;
 			if (!empty($objattr['disabled'])) {
-				$this->mpdf->SetFColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
-				$this->mpdf->SetDColor($this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings));
-			} else {
+				$color = $ring = $this->colorConverter->convert(127, $this->mpdf->PDFAXwarnings);
+			}
+			$background = isset($objattr['background-col']);
+			$this->mpdf->SetFColor($background ? $objattr['background-col'] : $color);
+			$this->mpdf->SetDColor($ring);
+			if ($border || $background) {
+				$this->mpdf->Circle($cx, $cy, $radius, ($border ? 'D' : '') . ($background ? 'F' : ''));
+			}
+			if (!empty($objattr['checked'])) {
 				$this->mpdf->SetFColor($color);
 				$this->mpdf->SetDColor($color);
-			}
-			$this->mpdf->Circle($cx, $cy, $radius, 'D');
-			if (!empty($objattr['checked'])) {
 				$this->mpdf->Circle($cx, $cy, $radius * 0.4, 'DF');
 			}
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
+			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
+		}
+	}
+
+	/**
+	 * A colour the field's CSS sets, or else a default
+	 *
+	 * @param mixed[] $objattr
+	 * @param string $key 'color', 'background-col' or 'border-col'
+	 * @param int $grey the default, from 0 for black to 255 for white
+	 *
+	 * @return string
+	 */
+	private function fieldColor(array $objattr, $key, $grey)
+	{
+		return isset($objattr[$key]) ? $objattr[$key] : $this->colorConverter->convert($grey, $this->mpdf->PDFAXwarnings);
+	}
+
+	/**
+	 * Sets the line a field drawn into the page is outlined with: its CSS border width and colour, or else 0.2mm in
+	 * the colour already set. A field without a border keeps the 0.2mm line for a checkbox's cross.
+	 *
+	 * @param mixed[] $objattr
+	 * @param float $k how much a table shrinks the field
+	 *
+	 * @return bool whether the field has a border
+	 */
+	private function setStaticBorder(array $objattr, $k)
+	{
+		$width = isset($objattr['border-width']) ? $objattr['border-width'] : 0.2;
+		$border = $width > 0 && !(isset($objattr['border-style']) && in_array($objattr['border-style'], ['none', 'hidden'], true));
+
+		$this->mpdf->SetLineWidth(($border ? $width : 0.2) / $k);
+		if (isset($objattr['border-col'])) {
+			$this->mpdf->SetDColor($objattr['border-col']);
+		}
+
+		return $border;
+	}
+
+	/**
+	 * Puts back the black a field's CSS border colour replaced, as the following text expects
+	 *
+	 * @param mixed[] $objattr
+	 */
+	private function resetStaticBorder(array $objattr)
+	{
+		if (isset($objattr['border-col'])) {
 			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 		}
 	}

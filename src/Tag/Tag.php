@@ -137,6 +137,51 @@ abstract class Tag
 		return $objattr;
 	}
 
+	/**
+	 * The background and border a form field's CSS sets, which Form draws whether or not the field is active. Anything
+	 * the CSS leaves unset is left out, for Form to use its own default.
+	 *
+	 * @param string[] $properties the field's computed CSS
+	 *
+	 * @return mixed[] any of 'background-col', 'border-col', 'border-width' in mm and 'border-style'
+	 */
+	protected function formFieldStyle(array $properties)
+	{
+		$style = [];
+		if (isset($properties['BACKGROUND-COLOR'])) {
+			$style['background-col'] = $this->colorConverter->convert($properties['BACKGROUND-COLOR'], $this->mpdf->PDFAXwarnings);
+		}
+
+		if (!isset($properties['BORDER-TOP'])) {
+			return $style;
+		}
+
+		// The cascade folds border-top-width, -style and -color into BORDER-TOP. Given without the shorthand, one of
+		// them comes with these defaults for the other two, which the field should not take.
+		$defaults = ['WIDTH' => '0px', 'STYLE' => 'none', 'COLOR' => '#000000'];
+		$border = array_combine(array_keys($defaults), array_pad(preg_split('/\s+/', trim($properties['BORDER-TOP']), 3), 3, ''));
+		$longhand = isset($properties['BORDER-TOP-WIDTH']) || isset($properties['BORDER-TOP-STYLE']) || isset($properties['BORDER-TOP-COLOR']);
+		foreach ($defaults as $part => $default) {
+			if ($longhand && !isset($properties['BORDER-TOP-' . $part]) && $border[$part] === $default) {
+				$border[$part] = '';
+			}
+		}
+
+		if ($border['WIDTH'] !== '') {
+			$style['border-width'] = $this->sizeConverter->convert($border['WIDTH'], $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
+		}
+		if ($border['STYLE'] !== '') {
+			$style['border-style'] = strtolower($border['STYLE']);
+		}
+		if ($border['COLOR'] !== '') {
+			$style['border-col'] = $this->colorConverter->convert($border['COLOR'], $this->mpdf->PDFAXwarnings);
+		}
+
+		return array_filter($style, function ($value) {
+			return $value !== false;
+		});
+	}
+
 	abstract public function open($attr, &$ahtml, &$ihtml);
 
 	abstract public function close(&$ahtml, &$ihtml);
