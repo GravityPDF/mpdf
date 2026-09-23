@@ -34,8 +34,8 @@ use Mpdf\Fonts\FontCache;
  * subtable header puts A and the space glyph in class 1, so rule #0 did match and mPDF drew b.sc.
  *
  * The rule names class 1 rather than the class 0 a real font would state at a position it has no
- * ClassDef for, because a class 0 backtrack or lookahead position has never matched anything in
- * mPDF - so a class 0 rule draws the same either way and would pin nothing.
+ * ClassDef for, because a class 0 rule matches whichever way the header is read.
+ * NotoSans-ClassZeroContext-Synthetic, built from this font, covers class 0 at those positions.
  */
 class NullClassDefOffsetTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
