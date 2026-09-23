@@ -28,7 +28,7 @@ class TableHeadersTest extends PdfUaTestCase
 		$this->assertStringContainsString('/O /Table /Scope /Column', $output);
 
 		$this->assertStringContainsString('/ID (h1)', $output);
-		$this->assertStringContainsString('/Headers [/h1]', $output);
+		$this->assertStringContainsString('/Headers [(h1)]', $output);
 
 		$th = $this->findFirstOfType($mpdf->getPdfUaStructureTree()->getRoot(), 'TH');
 		$this->assertNotNull($th, 'a TH struct element must exist');
@@ -116,7 +116,7 @@ class TableHeadersTest extends PdfUaTestCase
 		$output = $this->getOutput($mpdf, $html);
 
 		$this->assertStringContainsString('/ID (sub)', $output);
-		$this->assertStringContainsString('/Headers [/top]', $output);
+		$this->assertStringContainsString('/Headers [(top)]', $output);
 		$this->assertBdcEmcBalanced($output);
 	}
 

@@ -165,11 +165,11 @@ class StructureElement
 	}
 
 	/**
-	 * An id whose bytes are the same written as a PDF name and as a PDF string.
+	 * An id in the form a TH's /ID and a TD's /Headers both take, so readers matching the two on
+	 * their bytes find each other.
 	 *
-	 * A TH's /ID is a string while a TD's /Headers names it, and readers match the two on their
-	 * bytes. Letters are lowercased because the HTML parser uppercases id="" but leaves headers=""
-	 * and the aria attributes as written, and anything outside [a-z0-9_.-] is #-escaped.
+	 * Letters are lowercased because the HTML parser uppercases id="" but leaves headers="" and the
+	 * aria attributes as written, and anything outside [a-z0-9_.-] is #-escaped.
 	 *
 	 * @param string $id
 	 *

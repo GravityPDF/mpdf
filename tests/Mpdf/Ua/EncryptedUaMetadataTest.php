@@ -83,8 +83,8 @@ class EncryptedUaMetadataTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The /ID of a header cell is a string, so it is encrypted with the rest; only the /Headers names
-	 * that refer to it are left as they are.
+	 * The /ID of a header cell and the /Headers strings that refer to it are encrypted with the rest,
+	 * so both decrypt to the same bytes.
 	 *
 	 * @return void
 	 */
@@ -94,7 +94,7 @@ class EncryptedUaMetadataTest extends PdfUaTestCase
 		$mpdf->SetProtection(['print']);
 		$output = $this->getOutput($mpdf, '<table><tr><th id="colhead">Head</th></tr><tr><td headers="colhead">Cell</td></tr></table>');
 
-		$this->assertStringContainsString('/Headers [/colhead]', $output);
-		$this->assertStringNotContainsString('/ID (colhead)', $output);
+		$this->assertStringContainsString('/Headers [(', $output);
+		$this->assertStringNotContainsString('(colhead)', $output);
 	}
 }

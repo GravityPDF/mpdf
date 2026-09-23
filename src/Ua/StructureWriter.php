@@ -155,9 +155,9 @@ class StructureWriter
 			$this->writer->write('/P ' . $this->rootObjNum . ' 0 R');
 		}
 
-		// A byte string rather than text, as a cell's /Headers names it and the two are matched byte for
-		// byte. The ID has been through StructureElement::sanitiseIdForPdf(), whose output reads the same
-		// both ways; that is asserted by its characters, as sanitising twice escapes '#' again.
+		// A byte string rather than text, as the strings in a cell's /Headers are matched against it byte
+		// for byte. The ID has been through StructureElement::sanitiseIdForPdf(); that is asserted by its
+		// characters, as sanitising twice escapes '#' again.
 		if ($elem->getId() !== null) {
 			$id = $elem->getId();
 			assert(
@@ -313,12 +313,12 @@ class StructureWriter
 				}
 				$parts[] = '/' . $key . ' [' . implode(' ', $coords) . ']';
 			} elseif ($key === 'Headers' && is_array($value)) {
-				// The /ID of each header cell, as a name
-				$nameList = [];
+				// The /ID of each header cell, as the byte string ISO 32000-1 Table 344 asks for
+				$idList = [];
 				foreach ($value as $id) {
-					$nameList[] = '/' . $id;
+					$idList[] = $this->writer->string($id);
 				}
-				$parts[] = '/' . $key . ' [' . implode(' ', $nameList) . ']';
+				$parts[] = '/' . $key . ' [' . implode(' ', $idList) . ']';
 			} elseif (is_int($value) || is_float($value)) {
 				$parts[] = '/' . $key . ' ' . $this->formatNumber($value);
 			} else {
