@@ -3,7 +3,7 @@
 namespace Mpdf;
 
 /**
- * Documents mPDF writes as PDF/A-2 and PDF/A-3 pass veraPDF
+ * Documents mPDF writes as PDF/A-1b, PDF/A-2 and PDF/A-3 pass veraPDF
  *
  * @group conformance
  */
@@ -35,7 +35,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A document with transparency, text outside Latin-1 and annotations conforms, with an RGB or a CMYK output
-	 * intent
+	 * intent. PDF/A-1 paints what is transparent opaque, and refuses a watermark outright.
 	 *
 	 * @dataProvider documents
 	 */
@@ -45,10 +45,11 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$mpdf = $this->pdfa($version, $config);
 		$mpdf->SetWatermarkText('DRAFT');
-		$mpdf->showWatermarkText = true;
+		$mpdf->showWatermarkText = $mpdf->transparencyAllowed();
 		$mpdf->WriteHTML(
 			'<bookmark content="Start" /><h1>PDF/A</h1>'
 			. '<p style="font-family: dejavusans">Ελληνικά “quoted” <a href="https://example.com">link</a></p>'
+			. '<p style="font-family: freeserif">नमस्ते</p>'
 			. '<p style="color: cmyka(0, 100, 100, 0, 0.5)">Translucent CMYK</p>'
 			. '<div style="background: linear-gradient(rgba(255, 0, 0, 1), rgba(0, 0, 255, 0.2)); height: 10mm"></div>'
 			. '<div style="border: 1mm solid rgba(0, 128, 0, 0.4); box-shadow: 1mm 1mm 1mm rgba(0, 0, 0, 0.5)">Borders</div>'
@@ -56,6 +57,8 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<img src="' . $img . 'pngpixels/rgba8-None.png" /> <img src="' . $img . 'pngpixels/la8-PNG.png" />'
 			. '<img src="' . $img . 'truecolour-trns.png" /> <img style="opacity: 0.5" src="' . $img . 'tiger.jpg" width="20" />'
 			. '<img src="' . $img . 'demo.svg" width="40" />'
+			. '<svg width="100" height="50"><rect width="80" height="40" fill="red" fill-opacity="0.3" stroke="blue"'
+			. ' stroke-opacity="0.4" opacity="0.5" /><text x="5" y="30" fill-opacity="0.5">SVG</text></svg>'
 		);
 
 		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
@@ -100,7 +103,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The PDF/A versions that allow transparency, each with the default sRGB output intent and with a CMYK one
+	 * Each PDF/A version, with the default sRGB output intent and with a CMYK one
 	 *
 	 * @return mixed[][]
 	 */
@@ -109,7 +112,7 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$cmyk = ['restrictColorSpace' => 3, 'ICCProfile' => __DIR__ . '/../../data/iccprofiles/SWOP2006_Coated3v2.icc'];
 
 		$documents = [];
-		foreach (['2-B', '2-U', '3-B', '3-U'] as $version) {
+		foreach (['1-B', '2-B', '2-U', '3-B', '3-U'] as $version) {
 			$documents[$version . ' RGB'] = [$version, []];
 			$documents[$version . ' CMYK'] = [$version, $cmyk];
 		}
