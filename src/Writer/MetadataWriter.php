@@ -694,9 +694,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$tree = $this->ua->getStructureTree();
 							$linkStructElem = isset($pl['structElem']) ? $pl['structElem'] : null;
 							if ($linkStructElem === null) {
-								$tree->open('Link', []);
-								$linkStructElem = $tree->getCurrent();
-								$tree->close();
+								$linkStructElem = $tree->addLeaf('Link');
 							}
 							$linkStructParent = $tree->nextAnnotStructParent($linkStructElem);
 							$linkStructElem->addObjref($linkStructParent, $linkAnnotObjNum);
@@ -732,11 +730,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							 * @copyright Copyright (c) 2024 Setasign GmbH & Co. KG (https://www.setasign.com)
 							 * @license http://opensource.org/licenses/mit-license The MIT License
 							 */
-							if (isset($pl['importedLink'])) {
-								foreach ($importedEntries as $name => $entry) {
-									$this->writer->write('/' . $name . ' ', false);
-									$this->mpdf->writePdfType($entry);
-								}
+							foreach ($importedEntries as $name => $entry) {
+								$this->writer->write('/' . $name . ' ', false);
+								$this->mpdf->writePdfType($entry);
 							}
 							$this->writer->write('>>');
 						} else {
@@ -983,13 +979,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							if (isset($frm['page'], $frm['structParent'], $frm['obj'])
 								&& $frm['page'] == $n
 							) {
-								if (isset($frm['pdfua_elem'])) {
-									$formElem = $frm['pdfua_elem'];
-								} else {
-									$this->ua->getStructureTree()->open('Form', []);
-									$formElem = $this->ua->getStructureTree()->getCurrent();
-									$this->ua->getStructureTree()->close();
-								}
+								$formElem = isset($frm['pdfua_elem'])
+									? $frm['pdfua_elem']
+									: $this->ua->getStructureTree()->addLeaf('Form');
 								$formElem->addObjref($frm['structParent'], $frm['obj']);
 								$this->ua->getStructureTree()->registerAnnotStructParent(
 									$frm['structParent'],

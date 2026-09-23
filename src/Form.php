@@ -1965,11 +1965,8 @@ class Form
 	 */
 	private function addBodyForm(array $f)
 	{
-		$tree = $this->mpdf->PDFUA ? $this->mpdf->getPdfUaStructureTree() : null;
-		if ($tree !== null && !$tree->isInArtifact()) {
-			$tree->open('Form');
-			$f['pdfua_elem'] = $tree->getCurrent();
-			$tree->close();
+		if ($this->mpdf->PDFUA) {
+			$f['pdfua_elem'] = $this->mpdf->getPdfUaStructureTree()->addLeaf('Form');
 		}
 		$this->forms[$this->formCount] = $f;
 	}

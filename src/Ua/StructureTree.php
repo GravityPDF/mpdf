@@ -167,6 +167,26 @@ class StructureTree
 	}
 
 	/**
+	 * Add an element inside the current one without opening it, for content such as an annotation
+	 * that joins it later
+	 *
+	 * @param string $type A standard structure type
+	 *
+	 * @return StructureElement|null Null inside an artifact
+	 */
+	public function addLeaf($type)
+	{
+		if ($this->isInArtifact()) {
+			return null;
+		}
+		$this->open($type);
+		$elem = $this->getCurrent();
+		$this->close();
+
+		return $elem;
+	}
+
+	/**
 	 * Close the innermost open element, never the Document, and nothing inside an artifact
 	 */
 	public function close()

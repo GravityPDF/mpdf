@@ -28352,9 +28352,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (count($svgi[0])) {
 			for ($i = 0; $i < count($svgi[0]); $i++) {
 				$file = $this->cache->write('/_tempSVG' . uniqid(random_int(1, 100000), true) . '_' . $i . '.svg', $svgi[0][$i]);
-				// The class the SVG was styled by, and what names it or hides it from assistive technology
+				// The class the SVG was styled by, and under PDF/UA what names it or hides it from assistive technology
+				$names = $this->PDFUA ? ['class', 'role', 'aria-label', 'aria-labelledby', 'aria-describedby', 'aria-hidden'] : ['class'];
 				$attributes = '';
-				foreach (['class', 'role', 'aria-label', 'aria-labelledby', 'aria-describedby', 'aria-hidden'] as $name) {
+				foreach ($names as $name) {
 					$value = $this->svgAttribute($svgi[0][$i], $name);
 					if ($value !== '') {
 						$attributes .= ' ' . $name . '="' . $value . '"';

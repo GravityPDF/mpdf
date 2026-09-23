@@ -148,6 +148,22 @@ class StructType
 	}
 
 	/**
+	 * Whether an element is kept from assistive technology: role="none" or "presentation", or
+	 * aria-hidden="true"
+	 *
+	 * @param array $attr Attributes with uppercase keys
+	 *
+	 * @return bool
+	 */
+	public static function isPresentational(array $attr)
+	{
+		$role = isset($attr['ROLE']) ? strtolower(trim($attr['ROLE'])) : '';
+
+		return $role === 'none' || $role === 'presentation'
+			|| (isset($attr['ARIA-HIDDEN']) && strtolower($attr['ARIA-HIDDEN']) === 'true');
+	}
+
+	/**
 	 * @param string $type
 	 *
 	 * @return bool Whether $type is a standard structure type

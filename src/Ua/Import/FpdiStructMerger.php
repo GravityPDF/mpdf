@@ -1023,30 +1023,21 @@ class FpdiStructMerger
 	 */
 	private function copyStructureAttributes(PdfDictionary $resolved, $parser, StructureElement $hostElem)
 	{
-		try {
-			$attributes = PdfType::resolve(PdfDictionary::get($resolved, 'A'), $parser);
-		} catch (\Exception $e) {
-			return;
-		}
-		// An array of attribute objects may carry revision numbers between them
-		$objects = $attributes instanceof PdfArray ? $attributes->value : [$attributes];
+		$kinds = ['Scope' => 'name', 'ListNumbering' => 'name', 'Placement' => 'name', 'ColSpan' => 'span', 'RowSpan' => 'span'];
 
-		foreach ($objects as $object) {
+		// An array of attribute objects may carry revision numbers between them, which are skipped
+		foreach ($this->normaliseKidsToArray(PdfDictionary::get($resolved, 'A'), $parser) as $object) {
 			try {
 				$object = PdfType::resolve($object, $parser);
 				if (!($object instanceof PdfDictionary)) {
 					continue;
 				}
-				foreach (['Scope', 'ListNumbering', 'Placement'] as $key) {
+				foreach ($kinds as $key => $kind) {
 					$value = PdfType::resolve(PdfDictionary::get($object, $key), $parser);
-					// Written back as a name, so only a plain one is taken
-					if ($value instanceof PdfName && preg_match('/\A[A-Za-z]+\z/', $value->value)) {
+					// A name is written back as it is, so only a plain one is taken
+					if ($kind === 'name' && $value instanceof PdfName && preg_match('/\A[A-Za-z]+\z/', $value->value)) {
 						$hostElem->setAttribute($key, $value->value);
-					}
-				}
-				foreach (['ColSpan', 'RowSpan'] as $key) {
-					$value = PdfType::resolve(PdfDictionary::get($object, $key), $parser);
-					if ($value instanceof PdfNumeric && (int) $value->value > 1) {
+					} elseif ($kind === 'span' && $value instanceof PdfNumeric && (int) $value->value > 1) {
 						$hostElem->setAttribute($key, (int) $value->value);
 					}
 				}

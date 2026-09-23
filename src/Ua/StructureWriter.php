@@ -90,7 +90,6 @@ class StructureWriter
 
 		$this->pageRefMap = $this->buildPageRefMap();
 
-		$this->firstContentKeys = [];
 		$this->writeElement($this->tree->getRoot());
 		$this->firstContentKeys = [];
 
@@ -267,12 +266,11 @@ class StructureWriter
 			}
 			$kParts[] = (string) $mcids[0]['mcid'];
 		} else {
-			foreach ($this->kidsInReadingOrder($elem) as $kid) {
-				if ($kid instanceof StructureElement) {
-					$kParts[] = $kid->getObjNum() . ' 0 R';
+			foreach ($this->kidsInReadingOrder($elem) as $mcr) {
+				if ($mcr instanceof StructureElement) {
+					$kParts[] = $mcr->getObjNum() . ' 0 R';
 					continue;
 				}
-				$mcr = $kid;
 				$pageObjNum = (isset($mcr['pageRef']) && $mcr['pageRef'] > 0)
 					? $mcr['pageRef']
 					: (isset($pageRefs[$mcr['page']]) ? $pageRefs[$mcr['page']] : 0);
@@ -329,11 +327,15 @@ class StructureWriter
 		}
 
 		$mcids = $elem->getMcids();
+		if ($mcids === [] || $children === []) {
+			return array_merge($children, $mcids);
+		}
+
 		$count = count($mcids);
 		$kids = [];
 		$next = 0;
 		foreach ($children as $child) {
-			$key = $this->firstContentKey($child);
+			$key = $next < $count ? $this->firstContentKey($child) : null;
 			while ($next < $count) {
 				$mcr = $mcids[$next];
 				$before = ($key === null || !empty($mcr['stm']))

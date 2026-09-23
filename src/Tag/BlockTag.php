@@ -42,9 +42,9 @@ abstract class BlockTag extends Tag
 			$structType = \Mpdf\Ua\StructType::fromHtmlTag($tag, $attr);
 		}
 
-		if (!empty($attr['ROLE'])) {
-			$role = strtolower($attr['ROLE']);
-			if ($role === 'none' || $role === 'presentation' || $role === 'separator') {
+		$role = isset($attr['ROLE']) ? strtolower(trim($attr['ROLE'])) : '';
+		if ($role !== '') {
+			if ($role === 'separator') {
 				$structType = '__artifact__';
 			} elseif ($role === 'heading') {
 				$level = isset($attr['ARIA-LEVEL']) ? (int) $attr['ARIA-LEVEL'] : 2;
@@ -86,7 +86,7 @@ abstract class BlockTag extends Tag
 			}
 		}
 
-		if (isset($attr['ARIA-HIDDEN']) && strtolower($attr['ARIA-HIDDEN']) === 'true') {
+		if (\Mpdf\Ua\StructType::isPresentational($attr)) {
 			$structType = '__artifact__';
 		}
 
@@ -94,7 +94,7 @@ abstract class BlockTag extends Tag
 		// image and caption tagged within it; a block with role="img" and no name is an error like an
 		// <img> without alt.
 		if ($structType === 'Figure' && empty($attr['ARIA-LABEL']) && empty($attr['ARIA-LABELLEDBY'])) {
-			if (isset($attr['ROLE']) && strtolower(trim($attr['ROLE'])) === 'img') {
+			if ($role === 'img') {
 				$message = 'PDF/UA-1: a block with role="img" has no aria-label or aria-labelledby to name it.';
 				if (!$this->mpdf->PDFUAauto) {
 					throw new \Mpdf\MpdfException($message . ' Enable PDFUAauto to tag it as a Div.');
