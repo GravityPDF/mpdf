@@ -1910,7 +1910,8 @@ class TTFontFile implements Fonts\FontSourceInterface
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] = $offset ? $Lookup[$i]['Subtable'][$c]['Offset'] + $offset : 0;
 						}
 						for ($s = 0; $s < $SubRuleSetCount; $s++) {
-							$ruleOffsets = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'] ? SequenceRule::ruleOffsets($this->reader, $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset']) : [];
+							$ruleSetOffset = $Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['Offset'];
+							$ruleOffsets = $ruleSetOffset ? SequenceRule::ruleOffsets($this->reader, $ruleSetOffset) : [];
 							$Lookup[$i]['Subtable'][$c]['SubRuleSet'][$s]['SubRuleCount'] = count($ruleOffsets);
 							foreach ($ruleOffsets as $g => $ruleOffset) {
 								$this->reader->seek($ruleOffset);
