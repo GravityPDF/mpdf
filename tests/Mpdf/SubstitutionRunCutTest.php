@@ -26,11 +26,14 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontDir' => [
 				__DIR__ . '/../../packages/Dejavu-Family/fonts',
 				__DIR__ . '/../../packages/Garuda/fonts',
+				__DIR__ . '/../../packages/SunExt/fonts',
 			],
 			'fontdata' => [
 				'dejavusans' => ['R' => 'DejaVuSans.ttf'],
 				'dejavusansmono' => ['R' => 'DejaVuSansMono.ttf'],
 				'garuda' => ['R' => 'Garuda.ttf'],
+				'dejavusanssip' => ['R' => 'DejaVuSans.ttf', 'sip-ext' => 'sun-extb'],
+				'sun-extb' => ['R' => 'Sun-ExtB.ttf'],
 			],
 			'default_font' => $defaultFont,
 			'useSubstitutions' => true,
@@ -118,6 +121,47 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			"three\nfour",
 		], $tokens);
 		$this->assertSame($tokens[0], $e);
+	}
+
+	/**
+	 * A run of Plane 2 characters moves into the font's SIP font, and the text on each side of it
+	 * is kept whole, newline or not.
+	 *
+	 * @dataProvider sipTextProvider
+	 *
+	 * @param string $before The text ahead of the run
+	 * @param string $after  The text after it
+	 */
+	public function testAPlane2RunKeepsTheTextEitherSideOfIt($before, $after)
+	{
+		$run = $this->text([0x20000, 0x20001]);
+		$tokens = [$before . $run . $after];
+		$i = 0;
+		$e = $tokens[0];
+
+		$mpdf = $this->mpdf('dejavusanssip', 'garuda');
+		$this->assertSame(4, $mpdf->SubstituteCharsSIP($tokens, $i, $e));
+
+		$this->assertSame([
+			$before,
+			'span style="font-family: sun-extb"',
+			$run,
+			'/span',
+			$after,
+		], $tokens);
+		$this->assertSame($tokens[0], $e);
+	}
+
+	/**
+	 * @return array<string, string[]> The text ahead of a Plane 2 run and the text after it
+	 */
+	public function sipTextProvider()
+	{
+		return [
+			'no newline' => ['one two', 'three four'],
+			'newline before the run' => ["one\ntwo", 'three'],
+			'newline after the run' => ['two', "three\nfour"],
+		];
 	}
 
 }
