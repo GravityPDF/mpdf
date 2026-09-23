@@ -200,6 +200,23 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A Class Definition offset of 0 is no table, as ClassDef::offset() gives it, so no glyph is in
+	 * any class - even where the reader sits at the start of a table that would put one in class 1
+	 */
+	public function testAClassDefinitionTableAtOffsetZeroHasNoClasses()
+	{
+		$this->ttf->glyphToChar = [40 => [0x41]];
+
+		$reader = new \ReflectionProperty($this->ttf, 'reader');
+		if (PHP_VERSION_ID < 80100) {
+			$reader->setAccessible(true);
+		}
+		$reader->setValue($this->ttf, new Fonts\BlobReader(pack('n*', 1, 40, 1, 1)));
+
+		$this->assertSame([], $this->ttf->_getClassDefinitionTable(0));
+	}
+
+	/**
 	 * Class 0 of a Class Definition is every glyph the other classes do not name, so it has no list of
 	 * glyphs to match against and mPDF matches nothing at such a position. Every input position above
 	 * the first already said so; the first read InputClasses by the class and got null.

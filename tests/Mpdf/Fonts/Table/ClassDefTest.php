@@ -78,13 +78,25 @@ class ClassDefTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testGlyphsByClassGroupsInTableOrderWithTheLowestClassFirst()
 	{
-		$table = pack('n*', 2, 3, 50, 51, 2, 40, 41, 0, 45, 45, 2);
+		$font = pack('n*', 0xFFFF, 2, 3, 50, 51, 2, 40, 41, 0, 45, 45, 2);
 
 		$this->assertSame(
 			[0 => [40, 41], 2 => [50, 51, 45]],
-			ClassDef::glyphsByClass(new BlobReader($table))
+			ClassDef::glyphsByClassAt(new BlobReader($font), 2)
 		);
-		$this->assertSame([], ClassDef::glyphsByClass(new BlobReader(pack('n*', 2, 0))));
+		$this->assertSame([], ClassDef::glyphsByClassAt(new BlobReader(pack('n*', 0xFFFF, 2, 0)), 2));
+	}
+
+	/**
+	 * An offset of 0 is a subtable stating no Class Definition table, so nothing is read, even with
+	 * the reader sitting at the start of a valid table
+	 */
+	public function testGlyphsByClassAtAZeroOffsetReadsNoTable()
+	{
+		$reader = new BlobReader(pack('n*', 1, 40, 2, 1, 2));
+
+		$this->assertSame([], ClassDef::glyphsByClassAt($reader, 0));
+		$this->assertSame(0, $reader->tell());
 	}
 
 }
