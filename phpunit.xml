@@ -11,6 +11,10 @@
 		</testsuite>
 	</testsuites>
 
+	<listeners>
+		<listener class="Mpdf\ReleaseFinishedTests"/>
+	</listeners>
+
 	<coverage processUncoveredFiles="true">
 		<include>
 			<directory suffix=".php">src</directory>
