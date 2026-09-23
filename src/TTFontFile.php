@@ -1428,12 +1428,11 @@ class TTFontFile implements Fonts\FontSourceInterface
 			// GlyphClassDef
 			if ($GlyphClassDef_offset) {
 
-				$this->reader->seek($gdef_offset + $GlyphClassDef_offset);
 				// 1 Base glyph (single character, spacing glyph)
 				// 2 Ligature glyph (multiple character, spacing glyph)
 				// 3 Mark glyph (non-spacing combining glyph)
 				// 4 Component glyph (part of single character, spacing glyph)
-				$GlyphByClass = $this->_getClassDefinitionTable();
+				$GlyphByClass = $this->_getClassDefinitionTable($gdef_offset + $GlyphClassDef_offset);
 			} else {
 				$GlyphByClass = [];
 			}
@@ -1498,8 +1497,7 @@ class TTFontFile implements Fonts\FontSourceInterface
 			// Not required for mDPF
 			// MarkAttachmentType
 			if ($MarkAttachClassDef_offset) {
-				$this->reader->seek($gdef_offset + $MarkAttachClassDef_offset);
-				$MarkAttachmentTypes = $this->_getClassDefinitionTable();
+				$MarkAttachmentTypes = $this->_getClassDefinitionTable($gdef_offset + $MarkAttachClassDef_offset);
 				$this->reportMarkAttachmentTypes($MarkAttachmentTypes);
 				foreach ($MarkAttachmentTypes as $class => $glyphs) {
 					if (is_array($Marks) && count($Marks)) {
@@ -1643,18 +1641,14 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 *
 	 * @see https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2#class-definition-table
 	 *
-	 * @param int $offset Seek here first. GDEF's two class definitions are read where the caller
-	 *                    already is; a GPOS PairPos subtable names its two by offset.
+	 * @param int $offset From the start of the file, as ClassDef::offset() gives it: 0 is no table at
+	 *                    all, and puts no glyph in any class
 	 */
-	function _getClassDefinitionTable($offset = 0)
+	function _getClassDefinitionTable($offset)
 	{
-		if ($offset > 0) {
-			$this->reader->seek($offset);
-		}
-
 		$GlyphByClass = [];
 
-		foreach (ClassDef::glyphsByClass($this->reader) as $class => $glyphIDs) {
+		foreach (ClassDef::glyphsByClassAt($this->reader, $offset) as $class => $glyphIDs) {
 			$glyphs = [];
 			foreach ($glyphIDs as $glyphID) {
 				// Several fonts (dejavu..., FreeSerif) carry a MarkAttachClassDef Format 1 with startGlyphID

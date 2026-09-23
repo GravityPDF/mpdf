@@ -886,10 +886,8 @@ class OtlDump extends TTFontFile
 
 								// NB Class1Count includes Class 0 even though it is not defined by $ClassDef1
 								// i.e. Class1Count = 5; Class1 will contain array(indices 1-4);
-								// A 0 offset is answered here rather than passed on, because
-								// _getClassDefinitionTable() reads it as "from where the reader is"
-								$Class1 = $ClassDef1 ? $this->_getClassDefinitionTable($ClassDef1) : [];
-								$Class2 = $ClassDef2 ? $this->_getClassDefinitionTable($ClassDef2) : [];
+								$Class1 = $this->_getClassDefinitionTable($ClassDef1);
+								$Class2 = $this->_getClassDefinitionTable($ClassDef2);
 
 								$this->reader->seek($subtable_offset + 16);
 
