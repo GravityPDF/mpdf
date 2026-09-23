@@ -7,8 +7,8 @@ namespace Mpdf;
  * the ClassDef does not define matches nothing, while one naming class 0 matches any glyph the
  * ClassDef puts in no other class.
  *
- * NotoSans-UndefinedInputClass-Synthetic is NotoSans-ClassZeroContext-Synthetic beside it with its
- * GSUB replaced and a GPOS added. Each context lookup has one Format 2 subtable, and its second
+ * NotoSans-UndefinedInputClass-Synthetic is NotoSans-ClassZeroContext-Synthetic with its GSUB
+ * replaced and a GPOS added. Each context lookup has one Format 2 subtable, and its second
  * input position names a class above the highest one its ClassDef defines:
  *
  *   calt  5.2 covering B, B in class 1 and C in class 2. Rule #0 names class 3 and substitutes
@@ -25,9 +25,7 @@ class UndefinedInputClassTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	const FONT = 'NotoSans-UndefinedInputClass-Synthetic';
 
-	/** a.sc, b.sc and c.sc have no codepoint, so they are mapped into the Private Use Area */
-	const A_SMALL_CAP = 0xE001;
-
+	/** b.sc and c.sc have no codepoint, so they are mapped into the Private Use Area */
 	const B_SMALL_CAP = 0xE002;
 
 	const C_SMALL_CAP = 0xE003;
@@ -52,8 +50,8 @@ class UndefinedInputClassTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A substitution rule naming an undefined class at an input position never applies, so the class
-	 * 0 rule after it does wherever the next glyph is in class 0.
+	 * A substitution rule naming an undefined class at an input position never applies. The class 0
+	 * rule after it applies where the next glyph is in class 0.
 	 *
 	 * @dataProvider dataSubstitutions
 	 *
