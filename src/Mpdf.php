@@ -26098,10 +26098,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($l > 0) {
-				$run = mb_substr($writehtml_e, $start, $l, 'UTF-8');
-				$rest = mb_substr($writehtml_e, $start + $l, null, 'UTF-8');
-				$writehtml_a[$writehtml_i] = $writehtml_e = mb_substr($writehtml_e, 0, $start, 'UTF-8');
-				array_splice($writehtml_a, $writehtml_i + 1, 0, ['span style="font-family: ' . $font . '"', $run, '/span', $rest]);
+				$step = $this->substitutionStep($writehtml_e, 0, $start, $l, $font);
+				$writehtml_a[$writehtml_i] = $writehtml_e = $step['before'];
+				array_splice($writehtml_a, $writehtml_i + 1, 0, array_merge($step['insert'], [$step['rest']]));
 				$this->subPos = $writehtml_i + 3;
 
 				return 4;
