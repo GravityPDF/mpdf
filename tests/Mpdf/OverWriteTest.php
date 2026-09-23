@@ -9,6 +9,8 @@ use setasign\Fpdi\PdfParser\StreamReader;
 class OverWriteTest extends BaseMpdfTest
 {
 
+	use ObjectOffsets;
+
 	/**
 	 * @var string[]
 	 */
@@ -64,28 +66,6 @@ class OverWriteTest extends BaseMpdfTest
 		$this->mpdf->compress = $compress;
 
 		return $this->mpdf->OverWrite($file, ['MAIN HEADING'], ['replacement'], Destination::STRING_RETURN);
-	}
-
-	/**
-	 * Every object the cross-reference places in the file is at the offset it gives
-	 *
-	 * @param string $pdf
-	 *
-	 * @return int How many objects were checked
-	 */
-	private function assertEachOffsetLandsOnItsObject($pdf)
-	{
-		$crossReference = (new PdfParser(StreamReader::createByString($pdf)))->getCrossReference();
-		$checked = 0;
-		for ($number = 1; $number < $crossReference->getSize(); $number++) {
-			$offset = $crossReference->getOffsetFor($number);
-			if (is_int($offset)) {
-				$this->assertSame($number . ' 0 obj', substr($pdf, $offset, strlen($number . ' 0 obj')), 'Object ' . $number);
-				$checked++;
-			}
-		}
-
-		return $checked;
 	}
 
 	/**

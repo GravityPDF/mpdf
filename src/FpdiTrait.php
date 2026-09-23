@@ -102,11 +102,13 @@ trait FpdiTrait
 	/**
 	 * Set the minimal PDF version.
 	 *
+	 * Not under PDF/A or PDF/X, which keep the version their standard is built on.
+	 *
 	 * @param string $pdfVersion
 	 */
 	protected function setMinPdfVersion($pdfVersion)
 	{
-		if (\version_compare($pdfVersion, $this->pdf_version, '>')) {
+		if (!$this->PDFA && !$this->PDFX && \version_compare($pdfVersion, $this->pdf_version, '>')) {
 			$this->pdf_version = $pdfVersion;
 		}
 	}
