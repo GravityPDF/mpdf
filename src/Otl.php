@@ -4796,6 +4796,8 @@ class Otl
 	 * strpos(), which reads from the front of the table for every position of every rule.
 	 *
 	 * Position 0 of $Input is not read - the caller has already matched the glyph at $ptr against it.
+	 * A backtrack or lookahead position that is null is class 0 and is matched against the class 0
+	 * exclusions rather than a set.
 	 *
 	 * @param array $ignore     Characters to walk past at every position, as a map of unicode => 1
 	 * @param array $class0excl The glyphs in every class but 0, which is what a rule naming class 0 at
@@ -4823,11 +4825,10 @@ class Otl
 				return false;
 			} elseif (!isset($this->OTLdata[$checkpos])) {
 				return false;
-			} elseif ($Backtrack[$i] === null) { // Class 0 matches anything NOT in $bclass0excl
-				if (isset($bclass0excl[$this->OTLdata[$checkpos]['uni']])) {
-					return false;
-				}
-			} elseif (!isset($Backtrack[$i][$this->OTLdata[$checkpos]['uni']])) {
+			}
+			// A null set is class 0, which matches anything NOT in $bclass0excl
+			$uni = $this->OTLdata[$checkpos]['uni'];
+			if ($Backtrack[$i] === null ? isset($bclass0excl[$uni]) : !isset($Backtrack[$i][$uni])) {
 				return false;
 			}
 		}
@@ -4843,7 +4844,8 @@ class Otl
 			// If outside scope of current syllable - return no match
 			if ($this->restrictToSyllable && isset($this->OTLdata[$checkpos]['syllable']) && $this->OTLdata[$checkpos]['syllable'] != $current_syllable) {
 				return false;
-			} // If Input Class 0 specified, matches anything NOT in $class0excl
+			} // If Input Class 0 specified, matches anything NOT in $class0excl. Falsy rather than null, so
+			// a class the ClassDef does not define still reads as class 0 here, as it always has
 			elseif (!$Input[$i] && isset($this->OTLdata[$checkpos]) && !isset($class0excl[$this->OTLdata[$checkpos]['uni']])) {
 				$matched[] = $checkpos;
 			} elseif (isset($this->OTLdata[$checkpos]) && isset($Input[$i][$this->OTLdata[$checkpos]['uni']])) {
@@ -4864,11 +4866,10 @@ class Otl
 				return false;
 			} elseif (!isset($this->OTLdata[$checkpos])) {
 				return false;
-			} elseif ($Lookahead[$i] === null) { // Class 0 matches anything NOT in $lclass0excl
-				if (isset($lclass0excl[$this->OTLdata[$checkpos]['uni']])) {
-					return false;
-				}
-			} elseif (!isset($Lookahead[$i][$this->OTLdata[$checkpos]['uni']])) {
+			}
+			// A null set is class 0, which matches anything NOT in $lclass0excl
+			$uni = $this->OTLdata[$checkpos]['uni'];
+			if ($Lookahead[$i] === null ? isset($lclass0excl[$uni]) : !isset($Lookahead[$i][$uni])) {
 				return false;
 			}
 		}
@@ -5105,11 +5106,7 @@ class Otl
 	{
 		$sets = [];
 		foreach ($classIndices as $i => $class) {
-			if (!$class) {
-				$sets[$i] = null;
-			} else {
-				$sets[$i] = isset($classes[$class]) ? $classes[$class] : [];
-			}
+			$sets[$i] = !$class ? null : (isset($classes[$class]) ? $classes[$class] : []);
 		}
 
 		return $sets;
