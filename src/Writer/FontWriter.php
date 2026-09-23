@@ -215,25 +215,13 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 					$ttfontsize = strlen($ttfontstream);
 					$fontstream = gzcompress($ttfontstream);
 					$widthstring = '';
-					$toUniEntries = [];
 
-					foreach ($font['subsets'][$sfid] as $cp => $u) {
+					foreach ($font['subsets'][$sfid] as $u) {
 						$w = $this->mpdf->_getCharWidth($font['cw'], $u);
 						if ($w !== false) {
 							$widthstring .= $w . ' ';
 						} else {
 							$widthstring .= round($subsetter->defaultWidth) . ' ';
-						}
-						if ($u > 65535) {
-							$utf8 = chr(($u >> 18) + 240) . chr((($u >> 12) & 63) + 128) . chr((($u >> 6) & 63) + 128) . chr(($u & 63) + 128);
-							$utf16 = mb_convert_encoding($utf8, 'UTF-16BE', 'UTF-8');
-							$l1 = ord($utf16[0]);
-							$h1 = ord($utf16[1]);
-							$l2 = ord($utf16[2]);
-							$h2 = ord($utf16[3]);
-							$toUniEntries[] = sprintf('<%02s> <%02s%02s%02s%02s>', strtoupper(dechex($cp)), strtoupper(dechex($l1)), strtoupper(dechex($h1)), strtoupper(dechex($l2)), strtoupper(dechex($h2)));
-						} else {
-							$toUniEntries[] = sprintf('<%02s> <%04s>', strtoupper(dechex($cp)), strtoupper(dechex($u)));
 						}
 					}
 
@@ -270,30 +258,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 
 					// ToUnicode
 					$this->writer->object();
-					$toUni = "/CIDInit /ProcSet findresource begin\n";
-					$toUni .= "12 dict begin\n";
-					$toUni .= "begincmap\n";
-					$toUni .= "/CIDSystemInfo\n";
-					$toUni .= "<</Registry (Adobe)\n";
-					$toUni .= "/Ordering (UCS)\n";
-					$toUni .= "/Supplement 0\n";
-					$toUni .= ">> def\n";
-					$toUni .= "/CMapName /Adobe-Identity-UCS def\n";
-					$toUni .= "/CMapType 2 def\n";
-					$toUni .= "1 begincodespacerange\n";
-					$toUni .= "<00> <FF>\n";
-					// $toUni .= sprintf("<00> <%02s>\n", strtoupper(dechex(count($font['subsets'][$sfid])-1)));
-					$toUni .= "endcodespacerange\n";
-
-					// A bfchar block holds 100 entries at most
-					foreach (array_chunk($toUniEntries, 100) as $block) {
-						$toUni .= count($block) . " beginbfchar\n" . implode("\n", $block) . "\nendbfchar\n";
-					}
-
-					$toUni .= "endcmap\n";
-					$toUni .= "CMapName currentdict /CMap defineresource pop\n";
-					$toUni .= "end\n";
-					$toUni .= "end\n";
+					$toUni = ToUnicode::byteCMap($font['subsets'][$sfid]);
 					$this->writer->write('<</Length ' . $this->writer->streamLength($toUni) . '>>');
 					$this->writer->stream($toUni);
 					$this->writer->write('endobj');
