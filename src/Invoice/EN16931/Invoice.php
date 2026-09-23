@@ -3,6 +3,7 @@
 namespace Mpdf\Invoice\EN16931;
 
 use Mpdf\Invoice\TradeDocument;
+use Mpdf\Utils\Arrays;
 
 /**
  * An EN 16931 invoice or credit note, and how it is to be paid
@@ -254,7 +255,7 @@ class Invoice extends TradeDocument
 	 */
 	public function getExemptionReason($vatCategory)
 	{
-		return isset($this->exemptionReasons[$vatCategory]) ? $this->exemptionReasons[$vatCategory] : null;
+		return Arrays::get($this->exemptionReasons, $vatCategory, null);
 	}
 
 	/**

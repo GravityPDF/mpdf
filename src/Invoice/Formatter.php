@@ -4,6 +4,7 @@ namespace Mpdf\Invoice;
 
 use Mpdf\Invoice\Preset\PresetInterface;
 use Mpdf\Strict;
+use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 
 /**
@@ -227,23 +228,19 @@ class Formatter
 	{
 		$decimals = isset(self::$wholeCurrencies[$currency]) ? 0 : 2;
 		$amount = round($amount, $decimals);
-		$format = isset($this->currencyFormats[$currency]) ? $this->currencyFormats[$currency] : '%s ' . $currency;
+		$format = Arrays::get($this->currencyFormats, $currency, '%s ' . $currency);
 		$money = sprintf($format, $this->separate(number_format(abs($amount), $decimals, '.', '')));
 
 		return $amount < 0 ? '-' . $money : $money;
 	}
 
 	/**
-	 * @param \DateTimeInterface|null $date
+	 * @param \DateTimeInterface $date
 	 *
-	 * @return string|null Null when there is no date
+	 * @return string
 	 */
-	public function date($date)
+	public function date(\DateTimeInterface $date)
 	{
-		if ($date === null) {
-			return null;
-		}
-
 		// The name goes in after formatting, so its letters are not read as format characters
 		$formatted = $date->format(str_replace('{month}', "\x01", $this->dateFormat));
 
@@ -261,7 +258,7 @@ class Formatter
 	public function address(Party $party)
 	{
 		$country = $party->getCountryCode();
-		$lines = isset($this->addressFormats[$country]) ? $this->addressFormats[$country] : self::$defaultAddressFormat;
+		$lines = Arrays::get($this->addressFormats, $country, self::$defaultAddressFormat);
 
 		$parts = [
 			'{street}' => (string) $party->getStreet(),

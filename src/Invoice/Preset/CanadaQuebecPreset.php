@@ -3,21 +3,11 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How Quebec and the rest of French-speaking Canada writes numbers, amounts, rates and dates: 1 021,11 $, 5,5 % and
- * 2026-09-23
+ * How Quebec and the rest of French-speaking Canada writes numbers, amounts, rates and dates: as France does, but in
+ * dollars and with dates year first, 1 021,11 $ and 2026-09-23
  */
-class CanadaQuebecPreset extends AbstractPreset
+class CanadaQuebecPreset extends FrancePreset
 {
-
-	/**
-	 * @var string
-	 */
-	protected $decimalPoint = ',';
-
-	/**
-	 * @var string
-	 */
-	protected $thousandsSeparator = self::NBSP;
 
 	/**
 	 * @var string
@@ -27,16 +17,6 @@ class CanadaQuebecPreset extends AbstractPreset
 	/**
 	 * @var string[]
 	 */
-	protected $monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-
-	/**
-	 * @var string[]
-	 */
 	protected $currencyFormats = ['CAD' => '%s' . self::NBSP . '$'];
-
-	/**
-	 * @var string
-	 */
-	protected $percentFormat = '%s' . self::NBSP . '%%';
 
 }

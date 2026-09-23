@@ -10,18 +10,36 @@ use Mpdf\Invoice\TradeDocument;
 use Mpdf\Invoice\WriterInterface;
 use Mpdf\MpdfException;
 use Mpdf\Strict;
+use Mpdf\Utils\Arrays;
 
 /**
  * Writes an invoice as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how to pay
  *
  * A Formatter sets how its numbers, amounts and dates are written, and labels translate it:
  *
- *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter(new Formatter(new FrancePreset()), ['380' => 'Facture'])]);
+ *     $mpdf->WriteInvoice($invoice, [new HtmlInvoiceWriter(new Formatter(new FrancePreset()), [Invoice::TYPE_INVOICE => 'Facture'])]);
  */
 class HtmlInvoiceWriter implements WriterInterface
 {
 
 	use Strict;
+
+	/**
+	 * The styles the invoice's classes are drawn with
+	 *
+	 * @var string
+	 */
+	private static $css = '<style>
+.invoice-details td { padding: 0 4mm 0.5mm 0; }
+.invoice-parties { margin-top: 4mm; }
+.invoice-parties td { vertical-align: top; }
+.invoice-lines { border-collapse: collapse; margin: 6mm 0 4mm; }
+.invoice-lines th { border-bottom: 0.3mm solid #444; padding: 1.5mm; }
+.invoice-lines td { border-bottom: 0.1mm solid #ccc; padding: 1.5mm; vertical-align: top; }
+.invoice-lines .invoice-total td { border-bottom: none; padding: 0.8mm 1.5mm; }
+.invoice-text { text-align: left; }
+.invoice-number { text-align: right; }
+</style>';
 
 	/**
 	 * @var string[]
@@ -97,19 +115,9 @@ class HtmlInvoiceWriter implements WriterInterface
 			throw new MpdfException(sprintf('%s writes invoices, not %s', __CLASS__, get_class($document)));
 		}
 
-		$title = isset($this->labels[$document->getTypeCode()]) ? $this->labels[$document->getTypeCode()] : $this->labels[Invoice::TYPE_INVOICE];
+		$title = Arrays::get($this->labels, $document->getTypeCode(), $this->labels[Invoice::TYPE_INVOICE]);
 
-		$html = '<style>
-.invoice-details td { padding: 0 4mm 0.5mm 0; }
-.invoice-parties { margin-top: 4mm; }
-.invoice-parties td { vertical-align: top; }
-.invoice-lines { border-collapse: collapse; margin: 6mm 0 4mm; }
-.invoice-lines th { border-bottom: 0.3mm solid #444; padding: 1.5mm; }
-.invoice-lines td { border-bottom: 0.1mm solid #ccc; padding: 1.5mm; vertical-align: top; }
-.invoice-lines .invoice-total td { border-bottom: none; padding: 0.8mm 1.5mm; }
-.invoice-text { text-align: left; }
-.invoice-number { text-align: right; }
-</style>' . "\n";
+		$html = self::$css . "\n";
 
 		$html .= '<h1>' . $this->escape($title . ' ' . $document->getId()) . '</h1>' . "\n";
 		$html .= $this->details($document);
@@ -137,9 +145,9 @@ class HtmlInvoiceWriter implements WriterInterface
 	private function details(Invoice $invoice)
 	{
 		$details = [
-			'issueDate' => $this->formatter->date($invoice->getIssueDate()),
-			'deliveryDate' => $this->formatter->date($invoice->getDeliveryDate()),
-			'dueDate' => $this->formatter->date($invoice->getDueDate()),
+			'issueDate' => $this->date($invoice->getIssueDate()),
+			'deliveryDate' => $this->date($invoice->getDeliveryDate()),
+			'dueDate' => $this->date($invoice->getDueDate()),
 			'buyerReference' => $invoice->getBuyerReference(),
 			'orderReference' => $invoice->getOrderReference(),
 		];
@@ -310,6 +318,18 @@ class HtmlInvoiceWriter implements WriterInterface
 	private function rate($category, $rate)
 	{
 		return $category === LineItem::NOT_SUBJECT_TO_VAT ? $category : $this->formatter->percent($rate);
+	}
+
+	/**
+	 * A date as the formatter writes it, or null when there is none
+	 *
+	 * @param \DateTimeInterface|null $date
+	 *
+	 * @return string|null
+	 */
+	private function date($date)
+	{
+		return $date !== null ? $this->formatter->date($date) : null;
 	}
 
 	/**

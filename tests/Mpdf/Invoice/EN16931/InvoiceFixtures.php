@@ -9,8 +9,8 @@ use Mpdf\Invoice\Party;
 use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 
 /**
- * The invoices behind the fixtures in tests/data/invoice, each XML one of which Mustang validated for its profile, and
- * the HTML writer they are printed with
+ * The invoices behind the fixtures in tests/data/invoice, whose XML Mustang validated for each profile, and the HTML
+ * writer they are printed with
  */
 trait InvoiceFixtures
 {
@@ -41,7 +41,7 @@ trait InvoiceFixtures
 	}
 
 	/**
-	 * The same invoice for services under the reverse charge, so with no VAT and a reason for none
+	 * The blank invoice with one line of services under the reverse charge, so with no VAT and a reason for none
 	 *
 	 * @return \Mpdf\Invoice\EN16931\Invoice
 	 */
@@ -55,7 +55,7 @@ trait InvoiceFixtures
 	}
 
 	/**
-	 * The parties, dates and payment details both invoices share, with no lines yet
+	 * The parties, dates and payment details every invoice here shares, with no lines yet
 	 *
 	 * @return \Mpdf\Invoice\EN16931\Invoice
 	 */

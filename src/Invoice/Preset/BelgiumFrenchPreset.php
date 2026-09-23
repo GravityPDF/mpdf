@@ -3,39 +3,15 @@
 namespace Mpdf\Invoice\Preset;
 
 /**
- * How French-speaking Belgium writes numbers, amounts, rates and dates: 1.021,11 €, 5,5 % and 23/09/2026
+ * How French-speaking Belgium writes numbers, amounts, rates and dates: as France does, but with a dot between groups
+ * of digits, 1.021,11 €
  */
-class BelgiumFrenchPreset extends AbstractPreset
+class BelgiumFrenchPreset extends FrancePreset
 {
 
 	/**
 	 * @var string
 	 */
-	protected $decimalPoint = ',';
-
-	/**
-	 * @var string
-	 */
 	protected $thousandsSeparator = '.';
-
-	/**
-	 * @var string
-	 */
-	protected $dateFormat = 'd/m/Y';
-
-	/**
-	 * @var string[]
-	 */
-	protected $monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-
-	/**
-	 * @var string[]
-	 */
-	protected $currencyFormats = ['EUR' => '%s' . self::NBSP . '€'];
-
-	/**
-	 * @var string
-	 */
-	protected $percentFormat = '%s' . self::NBSP . '%%';
 
 }

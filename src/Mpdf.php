@@ -834,7 +834,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * @var \Mpdf\Invoice\PdfA3\FacturX|null
 	 */
-	var $facturX; // see SetFacturX below
+	var $facturX;
 
 	var $aliasNbPg; // alias for total number of pages
 	var $aliasNbPgGp; // alias for total number of pages in page group
@@ -2024,30 +2024,36 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	function WriteInvoice(TradeDocument $document, array $writers)
 	{
-		$outputs = [WriterInterface::HTML => [], WriterInterface::XML => []];
+		$html = [];
+		$xml = null;
 		foreach ($writers as $writer) {
 			if (!$writer instanceof WriterInterface) {
 				throw new \Mpdf\MpdfException('Each invoice writer must implement ' . WriterInterface::class);
 			}
 
-			$format = $writer->getFormat();
-			if (!isset($outputs[$format])) {
-				throw new \Mpdf\MpdfException(sprintf('Invoice writer format "%s" is not one mPDF can write', $format));
-			}
+			switch ($writer->getFormat()) {
+				case WriterInterface::HTML:
+					$html[] = $writer->write($document);
+					break;
 
-			if ($format === WriterInterface::XML && $outputs[$format]) {
-				throw new \Mpdf\MpdfException('A Factur-X document embeds one invoice XML, so takes one XML writer');
-			}
+				case WriterInterface::XML:
+					if ($xml !== null) {
+						throw new \Mpdf\MpdfException('A Factur-X document embeds one invoice XML, so takes one XML writer');
+					}
+					$xml = $writer->write($document);
+					break;
 
-			$outputs[$format][] = $writer->write($document);
+				default:
+					throw new \Mpdf\MpdfException(sprintf('Invoice writer format "%s" is not one mPDF can write', $writer->getFormat()));
+			}
 		}
 
-		foreach ($outputs[WriterInterface::XML] as $xml) {
+		if ($xml !== null) {
 			$this->SetFacturX($xml);
 		}
 
-		foreach ($outputs[WriterInterface::HTML] as $html) {
-			$this->WriteHTML($html);
+		foreach ($html as $page) {
+			$this->WriteHTML($page);
 		}
 	}
 
@@ -10433,8 +10439,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('endobj');
 
 		if ($this->facturX) {
-			list($part) = explode('-', $this->PDFAversion);
-			if (!$this->PDFA || (int) $part !== 3) {
+			if (!$this->PDFA || (int) $this->PDFAversion !== 3) {
 				throw new \Mpdf\MpdfException('A Factur-X invoice must be PDF/A-3. Set PDFA to true and PDFAversion to 3-B');
 			}
 

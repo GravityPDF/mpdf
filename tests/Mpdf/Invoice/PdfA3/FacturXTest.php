@@ -11,22 +11,13 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * @var string
-	 */
-	private static $invoice;
-
-	/**
-	 * The EN 16931 invoice fixture
+	 * The EN 16931 invoice the CII writer's fixture holds
 	 *
 	 * @return string
 	 */
 	private function invoice()
 	{
-		if (self::$invoice === null) {
-			self::$invoice = file_get_contents(__DIR__ . '/../../../data/xml/factur-x-en16931.xml');
-		}
-
-		return self::$invoice;
+		return file_get_contents(__DIR__ . '/../../../data/invoice/en16931.xml');
 	}
 
 	/**

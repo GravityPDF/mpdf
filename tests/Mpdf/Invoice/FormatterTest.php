@@ -261,7 +261,7 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A number keeps up to four decimals and no trailing zeros, a nearly zero amount has no sign, and no date is null
+	 * A number keeps up to four decimals and no trailing zeros, and a nearly zero amount has no sign
 	 */
 	public function testRoundsAndLeavesOutWhatIsNotThere()
 	{
@@ -272,7 +272,6 @@ class FormatterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('3', $formatter->number(3.0));
 		$this->assertSame('-1,500.25', $formatter->number(-1500.25));
 		$this->assertSame('0.00 EUR', $formatter->money(-0.001, 'EUR'));
-		$this->assertNull($formatter->date(null));
 	}
 
 	/**
