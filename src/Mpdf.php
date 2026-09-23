@@ -26040,7 +26040,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SubstituteCharsSIP(&$writehtml_a, &$writehtml_i, &$writehtml_e)
 	{
-		if (preg_match("/^(.*?)([\x{20000}-\x{2FFFF}]+)(.*)/u", $writehtml_e, $m)) {
+		if (preg_match("/^(.*?)([\x{20000}-\x{2FFFF}]+)(.*)/su", $writehtml_e, $m)) {
 			if (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) {
 				$font = $this->CurrentFont['sipext'];
 				if (!in_array($font, $this->available_unifonts)) {
