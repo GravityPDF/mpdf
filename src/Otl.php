@@ -1833,9 +1833,11 @@ class Otl
 				// Only a masked feature reaches this: with no mask there is no bit for the test below to
 				// read, and pref, blwf and pstf all carry one
 				elseif ($mask && static::_OTL_OLD_SPEC_COMPAT_1 && $Type == 4 && !$is_old_spec && strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', $currGlyph) !== false) {
-					// only apply when 'pref blwf pstf' tags, and when mask indicates
+					// only apply when 'pref blwf pstf' tags, and when mask indicates. Not before the base
+					// (the glyphs marked for half): there a Consonant-Halant Lookup meets the text in its
+					// own order, and swapping would take the Halant of the consonant before
 					if (strpos('pref blwf pstf', $tag) !== false) {
-						if (!($this->OTLdata[$ptr]['mask'] & $mask)) {
+						if (!($this->OTLdata[$ptr]['mask'] & $mask) || ($this->OTLdata[$ptr]['mask'] & Indic::FLAG(Indic::HALF))) {
 							continue;
 						}
 
