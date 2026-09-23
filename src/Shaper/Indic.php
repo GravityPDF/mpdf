@@ -783,6 +783,9 @@ class Indic
 
 			/* Pre-base */
 			$mask = self::FLAG(self::HALF);
+			if (!$is_old_spec && $indic_config[5] == self::BLWF_MODE_PRE_AND_POST) {
+				$mask |= self::FLAG(self::BLWF);
+			}
 			for ($i = $start; $i < $base; $i++) {
 				$info[$i]['mask'] |= $mask;
 			}
@@ -1321,6 +1324,10 @@ class Indic
 	const REPH_MODE_VIS_REPHA = 2; /* Encoded Repha character, no reordering needed. */
 	const REPH_MODE_LOG_REPHA = 3; /* Encoded Repha character, needs reordering. */
 
+	// blwf_mode
+	const BLWF_MODE_PRE_AND_POST = 0; /* Below-forms feature applied to pre-base and post-base. */
+	const BLWF_MODE_POST_ONLY = 1;    /* Below-forms feature applied to post-base only. */
+
 	/*
 	  struct of indic_configs{
 	  KEY - script;
@@ -1329,22 +1336,23 @@ class Indic
 	  2 - base_pos;
 	  3 - reph_pos;
 	  4 - reph_mode;
+	  5 - blwf_mode;
 	  };
 	 */
 
 	public static $indic_configs = [/* index is SCRIPT_number from UCDN */
-		9 => [true, 0x094D, 1, 10, 0],
-		10 => [true, 0x09CD, 1, 9, 0],
-		11 => [true, 0x0A4D, 1, 7, 0],
-		12 => [true, 0x0ACD, 1, 10, 0],
-		13 => [true, 0x0B4D, 1, 5, 0],
-		14 => [true, 0x0BCD, 1, 12, 0],
-		15 => [true, 0x0C4D, 1, 12, 1],
-		16 => [true, 0x0CCD, 1, 12, 0],
-		17 => [true, 0x0D4D, 1, 5, 3],
-		18 => [false, 0x0DCA, 0, 5, 1], /* Sinhala */
-		30 => [false, 0x17D2, 0, 10, 2], /* Khmer */
-		84 => [false, 0xA9C0, 1, 10, 0], /* Javanese */
+		9 => [true, 0x094D, 1, 10, 0, self::BLWF_MODE_PRE_AND_POST],
+		10 => [true, 0x09CD, 1, 9, 0, self::BLWF_MODE_PRE_AND_POST],
+		11 => [true, 0x0A4D, 1, 7, 0, self::BLWF_MODE_PRE_AND_POST],
+		12 => [true, 0x0ACD, 1, 10, 0, self::BLWF_MODE_PRE_AND_POST],
+		13 => [true, 0x0B4D, 1, 5, 0, self::BLWF_MODE_PRE_AND_POST],
+		14 => [true, 0x0BCD, 1, 12, 0, self::BLWF_MODE_PRE_AND_POST],
+		15 => [true, 0x0C4D, 1, 12, 1, self::BLWF_MODE_POST_ONLY],
+		16 => [true, 0x0CCD, 1, 12, 0, self::BLWF_MODE_POST_ONLY],
+		17 => [true, 0x0D4D, 1, 5, 3, self::BLWF_MODE_PRE_AND_POST],
+		18 => [false, 0x0DCA, 0, 5, 1, self::BLWF_MODE_PRE_AND_POST], /* Sinhala */
+		30 => [false, 0x17D2, 0, 10, 2, self::BLWF_MODE_PRE_AND_POST], /* Khmer */
+		84 => [false, 0xA9C0, 1, 10, 0, self::BLWF_MODE_PRE_AND_POST], /* Javanese */
 	];
 
 
