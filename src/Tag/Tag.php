@@ -139,8 +139,8 @@ abstract class Tag
 	}
 
 	/**
-	 * The background and border a form field's CSS sets, which Form draws whether or not the field is active. Anything
-	 * the CSS leaves unset is left out, for Form to use its own default.
+	 * The background and border a form field's CSS sets, for Form to draw whether or not forms are active. What the
+	 * CSS leaves unset is left out, so Form keeps its default.
 	 *
 	 * @param string[] $properties the field's computed CSS
 	 *

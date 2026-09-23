@@ -651,8 +651,8 @@ class Form
 	}
 
 	/**
-	 * Sets the fill and text colours of a text field, text area or select drawn into the page: its CSS colours, or
-	 * else black on near-white, with a grey fill when it cannot be edited and grey text too when it is disabled
+	 * Fills a text field, text area or select drawn into the page and colours its text as its CSS says, or else black
+	 * on near-white. Grey fill for a field that cannot be edited, and grey text for a disabled one, win over the CSS.
 	 *
 	 * @param mixed[] $objattr
 	 * @param bool $greyed whether it cannot be edited
@@ -686,7 +686,7 @@ class Form
 	}
 
 	/**
-	 * Puts back the black a field's CSS border colour replaced, as the following text expects
+	 * Strokes in black again after a field drawn in its CSS border colour
 	 *
 	 * @param mixed[] $objattr
 	 */

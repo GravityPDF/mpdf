@@ -8,7 +8,7 @@ class BorderMerger
 {
 
 	/**
-	 * What a side's shorthand takes for the parts that only longhands were given for
+	 * The parts a side's shorthand is built with when longhands give only some of them
 	 */
 	const DEFAULTS = [
 		'WIDTH' => '0px',
