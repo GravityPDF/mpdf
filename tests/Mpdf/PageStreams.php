@@ -255,6 +255,60 @@ trait PageStreams
 	}
 
 	/**
+	 * Where each image on a page is placed, keyed w/h/x in millimetres
+	 *
+	 * @param string $html
+	 * @param int $page Counted from 0
+	 *
+	 * @return array[]
+	 */
+	private function imagePlacements($html, $page = 0)
+	{
+		$pages = $this->pages($this->render($html));
+		$this->assertArrayHasKey($page, $pages);
+		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $pages[$page], $matches, PREG_SET_ORDER);
+
+		return array_map(function ($match) {
+			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $match[2] / Mpdf::SCALE, 'x' => $match[3] / Mpdf::SCALE];
+		}, $matches);
+	}
+
+	/**
+	 * The width of the only image on the first page, in millimetres
+	 *
+	 * @param string $html
+	 *
+	 * @return float
+	 */
+	private function drawnWidth($html)
+	{
+		$placements = $this->imagePlacements($html);
+		$this->assertCount(1, $placements);
+
+		return $placements[0]['w'];
+	}
+
+	/**
+	 * The fill colour each piece of text on the first page is drawn in, keyed by that text
+	 *
+	 * @param string $html
+	 *
+	 * @return string[]
+	 */
+	private function textColours($html)
+	{
+		$pages = $this->pages($this->render($html));
+		preg_match_all('/q ([\d. ]+ (?:rg|g)) .*?\((.*?)\) Tj/', $pages[0], $drawn, PREG_SET_ORDER);
+
+		$colours = [];
+		foreach ($drawn as $text) {
+			$colours[$text[2]] = $text[1];
+		}
+
+		return $colours;
+	}
+
+	/**
 	 * $needle appears $count times in the string for page $page and not at all in the others
 	 */
 	private function assertOnlyOnPage($page, $count, $needle, array $strings, $what)

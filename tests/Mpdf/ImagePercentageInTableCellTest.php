@@ -57,40 +57,6 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
-	 * Where each image on a page is placed, keyed w/h/x in millimetres
-	 *
-	 * @param string $html
-	 * @param int $page Counted from 0
-	 *
-	 * @return array[]
-	 */
-	private function placements($html, $page = 0)
-	{
-		$pages = $this->pages($this->render($html));
-		$this->assertArrayHasKey($page, $pages);
-		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $pages[$page], $matches, PREG_SET_ORDER);
-
-		return array_map(function ($match) {
-			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $match[2] / Mpdf::SCALE, 'x' => $match[3] / Mpdf::SCALE];
-		}, $matches);
-	}
-
-	/**
-	 * The width of the only image on the first page, in millimetres
-	 *
-	 * @param string $html
-	 *
-	 * @return float
-	 */
-	private function drawnWidth($html)
-	{
-		$placements = $this->placements($html);
-		$this->assertCount(1, $placements);
-
-		return $placements[0]['w'];
-	}
-
-	/**
 	 * Lengths given as percentages, each in the middle of three 60mm columns, and an absolute length that means the
 	 * same in a cell as anywhere else
 	 *
@@ -138,7 +104,7 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	{
 		$html = $this->table([['20%', 'one'], ['20%', $this->image('max-width: 100%')], ['60%', 'three']]);
 
-		$placement = $this->placements($html)[0];
+		$placement = $this->imagePlacements($html)[0];
 		$this->assertEqualsWithDelta(36, $placement['w'], 0.05);
 		$this->assertEqualsWithDelta(15 + 36, $placement['x'], 0.05);
 	}
@@ -164,7 +130,7 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 			. $this->image('width: 100%') . '</td></tr></table>';
 		$html = $this->table([['50%', 'one'], ['50%', $inner]]);
 
-		$placement = $this->placements($html)[0];
+		$placement = $this->imagePlacements($html)[0];
 		$this->assertEqualsWithDelta(45, $placement['w'], 0.05);
 		$this->assertEqualsWithDelta(15 + 90 + 45, $placement['x'], 0.05);
 	}
@@ -224,8 +190,8 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 			. '<td style="width: 70mm; padding: 0">' . $this->image('width: 70mm') . '</td>'
 			. '<td style="width: 40mm; padding: 0">' . $this->image('max-width: 100%') . '</td></tr></table>';
 
-		$this->assertEqualsWithDelta(40, $this->placements($table)[1]['w'], 0.05, 'at the top of a page');
-		$this->assertEqualsWithDelta(40, $this->placements('<div style="height: 200mm"></div>' . $table, 1)[1]['w'], 0.05, 'moved to a new page');
+		$this->assertEqualsWithDelta(40, $this->imagePlacements($table)[1]['w'], 0.05, 'at the top of a page');
+		$this->assertEqualsWithDelta(40, $this->imagePlacements('<div style="height: 200mm"></div>' . $table, 1)[1]['w'], 0.05, 'moved to a new page');
 	}
 
 	/**
