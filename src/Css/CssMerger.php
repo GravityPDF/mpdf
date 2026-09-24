@@ -697,6 +697,12 @@ class CssMerger
 			return;
 		}
 
+		// Content of a table cell pushes no block level, so its descendant rules are the cell's
+		if ($this->mpdf->tableLevel && isset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl])) {
+			$this->mergeDescendantCss($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl], $tag, $attr, $classes);
+			return;
+		}
+
 		$level = $this->getBlockLevel($inherit);
 		if (!isset($this->mpdf->blk[$level]['cascadeCSS'])) {
 			return;
