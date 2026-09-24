@@ -15841,7 +15841,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$f['y'] = $y + (($f['y'] - $y) * $shrink_f);
 				$f['w'] *= $shrink_f;
 				$f['h'] *= $shrink_f;
-				$f['style']['fontsize'] *= $shrink_f;
+				$f['style']['fontsize'] = round($f['style']['fontsize'] * $shrink_f, 3);
+				$f['BS_W'] = round($f['BS_W'] * $shrink_f, 3);
+				if (isset($f['AP'])) {
+					// The appearance was laid out at the unscaled size
+					$f['AP']['scale'] = $shrink_f;
+				}
 			}
 			$this->form->forms[$f['n']] = $f;
 		}
