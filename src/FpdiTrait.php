@@ -23,6 +23,7 @@ trait FpdiTrait
 		writePdfType as fpdiWritePdfType;
 		useImportedPage as fpdiUseImportedPage;
 		importPage as fpdiImportPage;
+		adjustLastLink as fpdiAdjustLastLink;
 		setSourceFile as fpdiSetSourceFile;
 		setSourceFileWithParserParams as fpdiSetSourceFileWithParserParams;
 	}
@@ -466,6 +467,11 @@ trait FpdiTrait
 				// The object numbers are not known until the document is written, when
 				// patchMergedSubtreeObjectNumbers() fills them in
 				$pdfuaMerger->mergePageStructSubtree($pageId, 0, 0);
+				foreach ($this->importedPages[$pageId]['externalLinks'] as $i => $link) {
+					if (isset($link['sourceObjectNumber'])) {
+						$this->importedPages[$pageId]['externalLinks'][$i]['structElem'] = $pdfuaMerger->getImportedLinkElement($pageId, $link['sourceObjectNumber']);
+					}
+				}
 				// Every placement, a page template reused included
 				$pdfuaMerger->recordHostPage($pageId, $this->page);
 			} else {
@@ -520,6 +526,27 @@ trait FpdiTrait
 		}
 
 		return $newSize;
+	}
+
+	/**
+	 * Tag the link just made for an imported link annotation with the element that tagged it in
+	 * its source, rather than a Link element of its own at the end of the document
+	 *
+	 * @param array     $externalLink
+	 * @param float|int $xPt
+	 * @param float|int $scaleX
+	 * @param float|int $yPt
+	 * @param float|int $newHeightPt
+	 * @param float|int $scaleY
+	 * @param array     $importedPage
+	 */
+	protected function adjustLastLink($externalLink, $xPt, $scaleX, $yPt, $newHeightPt, $scaleY, $importedPage)
+	{
+		$this->fpdiAdjustLastLink($externalLink, $xPt, $scaleX, $yPt, $newHeightPt, $scaleY, $importedPage);
+
+		if (isset($externalLink['structElem'])) {
+			$this->PageLinks[$this->page][count($this->PageLinks[$this->page]) - 1]['structElem'] = $externalLink['structElem'];
+		}
 	}
 
 	/**
@@ -668,6 +695,11 @@ trait FpdiTrait
 				'source'     => $this->lastSetSourceKey,
 				'pageNumber' => (int) $pageNumber,
 			];
+			$this->importedPages[$pageId]['externalLinks'] = $this->ua->getFpdiStructMerger()->identifyImportedLinks(
+				$this->importedPages[$pageId]['readerId'],
+				(int) $pageNumber,
+				$this->importedPages[$pageId]['externalLinks']
+			);
 		}
 
 		return $pageId;
