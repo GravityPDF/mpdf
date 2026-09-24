@@ -1147,6 +1147,7 @@ abstract class BlockTag extends Tag
 						}
 					}
 				}
+				$content = str_replace(Mpdf::CORE_ZERO_WIDTH_SPACE, '', $content);
 				/* -- TOC -- */
 				if (isset($this->mpdf->h2toc[$tag])) {
 					$objattr = [];
