@@ -42,7 +42,8 @@ class ColorFormats
 	/**
 	 * Whether a document may draw colour fonts in colour: not where PDF/A-1b or PDF/X-1a forbid the
 	 * transparency every colour format is drawn with, nor where restrictColorSpace holds the document to
-	 * colours an RGB bitmap is not.
+	 * colours an RGB bitmap is not. PDF/X-4 allows the transparency, and its RGB is written calibrated
+	 * where the output intent is not RGB - see Type3FontWriter.
 	 *
 	 * Asked whenever it matters rather than once, since each of those settings can be changed on the
 	 * document after the fonts it starts with are added.
@@ -53,7 +54,7 @@ class ColorFormats
 	 */
 	public static function inColor(Mpdf $mpdf)
 	{
-		return !$mpdf->PDFA && !$mpdf->PDFX && !$mpdf->restrictColorSpace;
+		return !$mpdf->PDFA && !$mpdf->isPdfx1a() && !$mpdf->restrictColorSpace;
 	}
 
 	/**

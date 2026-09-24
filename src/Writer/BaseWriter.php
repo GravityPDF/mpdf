@@ -27,6 +27,33 @@ final class BaseWriter
 	 */
 	private $protection;
 
+	/**
+	 * The profile of the ICC-based sRGB colour space, and of PDF/A's output intent where it names none
+	 */
+	const SRGB_PROFILE = __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc';
+
+	/**
+	 * The profile of the ICC-based grey colour space
+	 */
+	const GRAY_PROFILE = __DIR__ . '/../../data/iccprofiles/Gray_sRGB_TRC.icc';
+
+	/**
+	 * The name the ICC-based sRGB colour space is set by. It is upper case throughout, because mPDF
+	 * makes a stroking operator out of a filling one by upper-casing the whole of it.
+	 */
+	const CALIBRATED_RGB = 'CSRGB';
+
+
+	/**
+	 * The name the ICC-based grey colour space is set by, upper case for the same reason
+	 */
+	const CALIBRATED_GRAY = 'CSGRAY';
+
+	/**
+	 * @var int[] The object numbers of the ICC-based colour spaces written, by profile
+	 */
+	private $calibrated = [];
+
 	public function __construct(Mpdf $mpdf, Protection $protection)
 	{
 		$this->mpdf = $mpdf;
@@ -298,6 +325,97 @@ final class BaseWriter
 		}
 
 		return $this->date;
+	}
+
+	/**
+	 * The colour space RGB is written in where it may not be DeviceRGB: PDF/X-4 permits DeviceRGB only
+	 * where its output intent is RGB, so otherwise RGB is written in an ICC-based sRGB colour space. It is
+	 * written the first time it is asked for, and so is asked for only between objects.
+	 *
+	 * @return int|null The object number of the ICC-based colour space, or null where RGB is DeviceRGB
+	 */
+	public function calibratedRgb()
+	{
+		return $this->mpdf->writesCalibratedRgb() ? $this->calibrated(self::SRGB_PROFILE, 3) : null;
+	}
+
+	/**
+	 * The colour space grey is written in where it may not be DeviceGray: PDF/X-4 permits DeviceGray only
+	 * where its output intent is grey or CMYK, so under an RGB one grey is written in an ICC-based space
+	 * whose profile is data/iccprofiles/Gray_sRGB_TRC.icc. Written the first time it is asked for, so asked
+	 * for between objects.
+	 *
+	 * @return int|null The object number of the ICC-based colour space, or null where grey is DeviceGray
+	 */
+	public function calibratedGray()
+	{
+		return $this->mpdf->writesCalibratedGray() ? $this->calibrated(self::GRAY_PROFILE, 1) : null;
+	}
+
+	/**
+	 * The colour space DeviceCMYK an imported page paints in is taken to be where PDF/X-4 does not permit
+	 * it: under an RGB or grey output intent, where mPDF converts its own CMYK, but cannot convert what it
+	 * imports. DeviceCMYK says nothing of the press it was made for, so it is taken as the bundled SWOP
+	 * profile, the one mPDF prints to by default. Written the first time it is asked for, so asked for
+	 * between objects.
+	 *
+	 * @return int|null The object number of the ICC-based colour space, or null where CMYK is DeviceCMYK
+	 */
+	public function calibratedCmyk()
+	{
+		return $this->mpdf->pdfxConvertsCmyk() ? $this->calibrated(Mpdf::PDFX4_OUTPUT_PROFILE, 4) : null;
+	}
+
+	/**
+	 * @return string The colour space grey is written in, for a dictionary to name: /DeviceGray, or a
+	 *                reference to the ICC-based grey colour space - see calibratedGray()
+	 */
+	public function grayColorSpace()
+	{
+		$calibrated = $this->calibratedGray();
+
+		return $calibrated === null ? '/DeviceGray' : $calibrated . ' 0 R';
+	}
+
+	/**
+	 * @param string $path     An ICC profile
+	 * @param int    $channels The number of colour components it has
+	 *
+	 * @return int The object number of the ICC-based colour space on that profile, written the first time
+	 */
+	private function calibrated($path, $channels)
+	{
+		if (!isset($this->calibrated[$path])) {
+			$this->calibrated[$path] = $this->iccBased(file_get_contents($path), $channels);
+		}
+
+		return $this->calibrated[$path];
+	}
+
+	/**
+	 * @param string $profile  An ICC profile
+	 * @param int    $channels The number of colour components it has
+	 *
+	 * @return int The object number of an ICC-based colour space on that profile, written with it
+	 */
+	private function iccBased($profile, $channels)
+	{
+		$filter = '';
+		if ($this->mpdf->compress) {
+			$profile = gzcompress($profile);
+			$filter = '/Filter /FlateDecode ';
+		}
+
+		$this->object();
+		$this->write('<</N ' . $channels . ' ' . $filter . '/Length ' . strlen($profile) . '>>');
+		$this->stream($profile);
+		$this->write('endobj');
+
+		$this->object();
+		$this->write('[/ICCBased ' . ($this->mpdf->n - 1) . ' 0 R]');
+		$this->write('endobj');
+
+		return $this->mpdf->n;
 	}
 
 	/**

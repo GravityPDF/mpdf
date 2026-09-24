@@ -101,7 +101,7 @@ class SvgColorAlphaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'PDF/A-1b' => [['mode' => 'utf-8', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B']],
-			'PDF/X-1a' => [['mode' => 'utf-8', 'PDFX' => true, 'PDFXauto' => true]],
+			'PDF/X-1a' => [['mode' => 'utf-8', 'PDFX' => true, 'PDFXversion' => '1a', 'PDFXauto' => true]],
 		];
 	}
 

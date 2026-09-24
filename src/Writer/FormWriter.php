@@ -28,6 +28,8 @@ final class FormWriter
 
 	public function writeFormObjects() // _putformobjects
 	{
+		$initialColor = $this->mpdf->initialColor();
+
 		foreach ($this->mpdf->formobjects as $file => $info) {
 
 			$this->writer->object();
@@ -49,7 +51,8 @@ final class FormWriter
 				$this->writer->write('/Filter /FlateDecode');
 			}
 
-			$data = $this->mpdf->compress ? gzcompress($info['data']) : $info['data'];
+			$data = $initialColor . $info['data'];
+			$data = $this->mpdf->compress ? gzcompress($data) : $data;
 			$this->writer->write('/Length ' . $this->writer->streamLength($data) . '>>');
 			$this->writer->stream($data);
 

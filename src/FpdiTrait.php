@@ -2,6 +2,7 @@
 
 namespace Mpdf;
 
+use Mpdf\Import\DeviceColorScanner;
 use Mpdf\Import\ObjectStreamCrossReference;
 use Mpdf\Import\PdfParser;
 use setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException;
@@ -9,11 +10,13 @@ use setasign\Fpdi\PdfParser\Filter\AsciiHex;
 use setasign\Fpdi\PdfParser\StreamReader;
 use setasign\Fpdi\PdfParser\Type\PdfHexString;
 use setasign\Fpdi\PdfParser\Type\PdfIndirectObject;
+use setasign\Fpdi\PdfParser\Type\PdfDictionary;
 use setasign\Fpdi\PdfParser\Type\PdfIndirectObjectReference;
 use setasign\Fpdi\PdfParser\Type\PdfNull;
 use setasign\Fpdi\PdfParser\Type\PdfNumeric;
 use setasign\Fpdi\PdfParser\Type\PdfStream;
 use setasign\Fpdi\PdfParser\Type\PdfString;
+use setasign\Fpdi\PdfParser\Type\PdfToken;
 use setasign\Fpdi\PdfParser\Type\PdfType;
 use setasign\Fpdi\PdfParser\Type\PdfTypeException;
 use setasign\Fpdi\PdfReader\PageBoundaries;
@@ -38,6 +41,21 @@ trait FpdiTrait
 	 * @var int
 	 */
 	protected $templateId = 0;
+
+	/**
+	 * The default colour spaces each imported document's resource dictionaries name, by reader id: the
+	 * ICC-based space a device colour space PDF/X does not permit is painted in instead
+	 *
+	 * @var string[][] Object references, by DefaultRGB or DefaultGray
+	 */
+	private $importDefaultSpaces = [];
+
+	/**
+	 * The objects of each imported document that are resource dictionaries, by reader id
+	 *
+	 * @var bool[][] By object number
+	 */
+	private $importResourceObjects = [];
 
 	/**
 	 * Whether a reference in an imported document names a generation of its object other than the one the document's
@@ -102,13 +120,23 @@ trait FpdiTrait
 	/**
 	 * Set the minimal PDF version.
 	 *
-	 * Not under PDF/A or PDF/X, which keep the version their standard is built on.
+	 * Not under PDF/A, which keeps the version its standard is built on. PDF/X-1a:2003 is written as PDF 1.4 and
+	 * PDF/X-4 as PDF 1.6, and neither may say more, so a page imported from a later version leaves the version
+	 * where it is.
 	 *
 	 * @param string $pdfVersion
 	 */
 	protected function setMinPdfVersion($pdfVersion)
 	{
-		if (!$this->PDFA && !$this->PDFX && \version_compare($pdfVersion, $this->pdf_version, '>')) {
+		if ($this->PDFX) {
+			$ceiling = $this->isPdfx4() ? '1.6' : '1.4';
+			if (\version_compare($pdfVersion, $ceiling, '>')) {
+				$this->pdfaxWarning(sprintf('A page imported from a PDF %s file may use more than the PDF %s that %s is written as.', $pdfVersion, $ceiling, $this->pdfxVersionLabel()));
+				$pdfVersion = $ceiling;
+			}
+		}
+
+		if (!$this->PDFA && \version_compare($pdfVersion, $this->pdf_version, '>')) {
 			$this->pdf_version = $pdfVersion;
 		}
 	}
@@ -253,7 +281,16 @@ trait FpdiTrait
 	{
 		$this->currentReaderId = null;
 
+		if ($this->PDFX) {
+			$this->conformImportedColor();
+		}
+
 		foreach ($this->importedPages as $key => $pageData) {
+			// An imported page is drawn in a transparency group of its own, which PDF/X-1a and PDF/A-1 forbid
+			if (!$this->transparencyAllowed()) {
+				unset($pageData['stream']->value->value['Group']);
+			}
+
 			$this->writer->object();
 			$this->importedPages[$key]['objectNumber'] = $this->n;
 			$this->currentReaderId = $pageData['readerId'];
@@ -284,6 +321,119 @@ trait FpdiTrait
 		$this->currentReaderId = null;
 	}
 
+	/**
+	 * PDF/X permits only the device colour spaces its output intent prints to, and mPDF writes what it
+	 * imports as it was. So where an imported page paints in one PDF/X-4 does not permit, its resource
+	 * dictionaries name a default colour space (ISO 32000-1, 8.6.5.6): the ICC-based space mPDF paints its
+	 * own RGB or grey in, or for CMYK under an RGB or grey intent the bundled SWOP profile - a guess at the
+	 * press the CMYK was made for, so made only under PDFXauto, as mPDF's other conversions are. DeviceRGB in
+	 * PDF/X-1a, which permits no ICC-based colour, cannot be remapped, and is warned of, and refused
+	 * without PDFXauto.
+	 *
+	 * Asked between objects, as the ICC-based colour spaces are written when first asked for.
+	 */
+	private function conformImportedColor()
+	{
+		$this->importDefaultSpaces = [];
+		$this->importResourceObjects = [];
+
+		$scanners = [];
+		foreach ($this->importedPages as $pageData) {
+			$readerId = $pageData['readerId'];
+			if (!isset($scanners[$readerId])) {
+				$scanners[$readerId] = new DeviceColorScanner($this->getPdfReader($readerId)->getParser());
+			}
+			$scanners[$readerId]->scan($pageData['stream']);
+		}
+
+		$permitted = $this->isPdfx4()
+			? [1 => ['Gray'], 3 => ['RGB'], 4 => ['Gray', 'CMYK']][$this->pdfxOutputChannels()]
+			: ['Gray', 'CMYK'];
+		$intent = [1 => 'grey', 3 => 'RGB', 4 => 'CMYK'][$this->pdfxOutputChannels()];
+		$remaps = ['RGB' => 'calibratedRgb', 'Gray' => 'calibratedGray', 'CMYK' => 'calibratedCmyk'];
+
+		foreach ($scanners as $readerId => $scanner) {
+			$defaults = [];
+			foreach (array_diff($scanner->used(), $permitted) as $family) {
+				$space = $this->writer->{$remaps[$family]}();
+
+				if ($space === null) {
+					$this->pdfaxWarning(sprintf(
+						'An imported page paints in Device%s, which %s files printing to %s do not permit, and mPDF cannot convert what it imports. (Left as it is)',
+						$family,
+						$this->pdfxVersionLabel(),
+						$intent
+					));
+					continue;
+				}
+
+				if ($family === 'CMYK') {
+					$this->pdfaxWarning(sprintf('An imported page paints in DeviceCMYK, which PDF/X-4 files printing to %s do not permit. (Painted as the CMYK of the bundled SWOP profile)', $intent));
+				}
+
+				$defaults['Default' . $family] = $space . ' 0 R';
+			}
+
+			if ($defaults) {
+				$this->importDefaultSpaces[$readerId] = $defaults;
+				$this->importResourceObjects[$readerId] = $scanner->resourceObjects();
+			}
+		}
+	}
+
+	/**
+	 * @param PdfType $value An object of the document being imported from, as it is about to be written
+	 *
+	 * @return PdfType The object, with the default colour spaces its document's resource dictionaries name
+	 */
+	private function withImportDefaultSpaces(PdfType $value)
+	{
+		if (!isset($this->importDefaultSpaces[$this->currentReaderId])) {
+			return $value;
+		}
+
+		if ($value instanceof PdfIndirectObject && $value->value instanceof PdfDictionary
+			&& isset($this->importResourceObjects[$this->currentReaderId][$value->objectNumber])) {
+			return PdfIndirectObject::create($value->objectNumber, $value->generationNumber, $this->resourcesWithDefaults($value->value));
+		}
+
+		if ($value instanceof PdfDictionary && isset($value->value['Resources']) && $value->value['Resources'] instanceof PdfDictionary) {
+			$entries = $value->value;
+			$entries['Resources'] = $this->resourcesWithDefaults($entries['Resources']);
+
+			return PdfDictionary::create($entries);
+		}
+
+		return $value;
+	}
+
+	/**
+	 * @param PdfDictionary $resources A resource dictionary of the document being imported from
+	 *
+	 * @return PdfDictionary A copy naming the default colour spaces, where it names none of its own
+	 */
+	private function resourcesWithDefaults(PdfDictionary $resources)
+	{
+		$spaces = [];
+		if (isset($resources->value['ColorSpace'])) {
+			$named = PdfType::resolve($resources->value['ColorSpace'], $this->getPdfReader($this->currentReaderId)->getParser());
+			if ($named instanceof PdfDictionary) {
+				$spaces = $named->value;
+			}
+		}
+
+		foreach ($this->importDefaultSpaces[$this->currentReaderId] as $name => $reference) {
+			if (!isset($spaces[$name])) {
+				$spaces[$name] = PdfToken::create($reference);
+			}
+		}
+
+		$entries = $resources->value;
+		$entries['ColorSpace'] = PdfDictionary::create($spaces);
+
+		return PdfDictionary::create($entries);
+	}
+
 	public function getImportedPages()
 	{
 		return $this->importedPages;
@@ -302,6 +452,10 @@ trait FpdiTrait
 	 */
 	public function writePdfType(PdfType $value)
 	{
+		if ($this->importDefaultSpaces && ($value instanceof PdfDictionary || $value instanceof PdfIndirectObject)) {
+			$value = $this->withImportDefaultSpaces($value);
+		}
+
 		// A reference whose generation is not the object's current one is to an object that no longer exists
 		if ($value instanceof PdfIndirectObjectReference && $this->isStale($value)) {
 			$value = new PdfNull();

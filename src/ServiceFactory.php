@@ -166,10 +166,10 @@ class ServiceFactory
 		$xmpExtensions = new XmpExtensions();
 		$metadataWriter = new MetadataWriter($mpdf, $writer, $form, $protection, $assetFetcher, $xmpExtensions, $logger);
 		$imageWriter = new ImageWriter($mpdf, $writer);
-		$pageWriter = new PageWriter($mpdf, $writer, $metadataWriter);
+		$pageWriter = new PageWriter($mpdf, $form, $writer, $metadataWriter);
 		$bookmarkWriter = new BookmarkWriter($mpdf, $writer);
 		$optionalContentWriter = new OptionalContentWriter($mpdf, $writer);
-		$colorWriter = new ColorWriter($mpdf, $writer);
+		$colorWriter = new ColorWriter($mpdf, $writer, $colorModeConverter);
 		$backgroundWriter = new BackgroundWriter($mpdf, $writer);
 		$javaScriptWriter = new JavaScriptWriter($mpdf, $writer);
 		$crossReferenceWriter = new CrossReferenceWriter($mpdf, $writer, $metadataWriter);

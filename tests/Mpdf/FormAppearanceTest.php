@@ -311,7 +311,7 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$pdf = $this->render(
 			'<form><input type="checkbox" name="c" value="y" checked="checked" /> <input type="radio" name="r" value="a" /></form>',
-			['mode' => 'utf-8', 'PDFX' => true, 'PDFXauto' => true, 'useActiveForms' => true]
+			['mode' => 'utf-8', 'PDFX' => true, 'PDFXversion' => '1a', 'PDFXauto' => true, 'useActiveForms' => true]
 		);
 
 		$this->assertStringNotContainsString('/BaseFont /ZapfDingbats', $pdf);

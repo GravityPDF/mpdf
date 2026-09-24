@@ -35,7 +35,7 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'PDF/A-2b' => [['PDFA' => true, 'PDFAversion' => '2-B'], true],
 			'PDF/A-2u' => [['PDFA' => true, 'PDFAversion' => '2-U'], true],
 			'PDF/A-3b' => [['PDFA' => true, 'PDFAversion' => '3-B'], true],
-			'PDF/X-1a' => [['PDFX' => true], false],
+			'PDF/X-1a' => [['PDFX' => true, 'PDFXversion' => '1a'], false],
 		];
 	}
 
@@ -204,7 +204,7 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * An annotation keeps its subject under PDF/A-2 and PDF/A-3, which are based on PDF 1.7, and loses it under
-	 * PDF/A-1 and PDF/X-1a, which predate /Subj
+	 * PDF/A-1, which predates /Subj. PDF/X has no annotation on the page to keep a subject
 	 *
 	 * @dataProvider subjectConfigs
 	 */
@@ -228,7 +228,6 @@ class PDFA2Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'PDF/A-1b' => [$this->pdfaConfig('1-B'), false],
 			'PDF/A-2b' => [$this->pdfaConfig('2-B'), true],
 			'PDF/A-3b' => [$this->pdfaConfig('3-B'), true],
-			'PDF/X-1a' => [['PDFX' => true, 'PDFXauto' => true], false],
 		];
 	}
 

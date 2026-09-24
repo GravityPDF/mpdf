@@ -20,7 +20,8 @@ class DocumentProfileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'plain' => [[], '1.4', [], []],
 			'PDF/A-1b' => [['PDFA' => true, 'PDFAversion' => '1-B'], '1.4', [DocumentProfile::PDFA => '1-B'], [DocumentProfile::PDFA => 'PDF/A-1b']],
 			'PDF/A-3u' => [['PDFA' => true, 'PDFAversion' => '3-u'], '1.7', [DocumentProfile::PDFA => '3-U'], [DocumentProfile::PDFA => 'PDF/A-3u']],
-			'PDF/X-1a' => [['PDFX' => true], '1.4', [DocumentProfile::PDFX => '1a'], [DocumentProfile::PDFX => 'PDF/X-1a:2003']],
+			'PDF/X-1a' => [['PDFX' => true, 'PDFXversion' => '1a'], '1.4', [DocumentProfile::PDFX => '1a'], [DocumentProfile::PDFX => 'PDF/X-1a:2003']],
+			'PDF/X-4' => [['PDFX' => true], '1.6', [DocumentProfile::PDFX => '4'], [DocumentProfile::PDFX => 'PDF/X-4']],
 		];
 	}
 

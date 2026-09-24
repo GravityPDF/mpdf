@@ -1,0 +1,81 @@
+# https://help.github.com/en/categories/automating-your-workflow-with-github-actions
+#
+# A veraPDF policy check over the features of mPDF's PDF/X-4 output. veraPDF has no PDF/X validation
+# profile, so this is NOT a conformance verdict - see utils/verapdf/pdfx4_policy.php.
+
+name: "PDF/X-4 Policy"
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "master"
+      - "development"
+      - "test"
+      - "gravitypdf"
+
+jobs:
+
+  policy:
+
+    name: "veraPDF policy"
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v7"
+
+      - name: "Install PHP"
+        uses: "shivammathur/setup-php@v2"
+        with:
+          coverage: "none"
+          php-version: "8.5"
+          extensions: "mbstring, gd, bcmath, bz2"
+          tools: composer:v2
+          ini-values: error_reporting=-1
+
+      - name: "Install Java"
+        uses: "actions/setup-java@v5"
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: "Install veraPDF"
+        run: |
+          curl -fsSL -o verapdf-installer.zip https://software.verapdf.org/rel/verapdf-installer.zip
+          unzip -q verapdf-installer.zip -d "$RUNNER_TEMP"
+          cat > "$RUNNER_TEMP/auto-install.xml" <<XML
+          <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+          <AutomatedInstallation langpack="eng">
+            <com.izforge.izpack.panels.htmlhello.HTMLHelloPanel id="welcome"/>
+            <com.izforge.izpack.panels.target.TargetPanel id="install_dir">
+              <installpath>$RUNNER_TEMP/verapdf</installpath>
+            </com.izforge.izpack.panels.target.TargetPanel>
+            <com.izforge.izpack.panels.packs.PacksPanel id="sdk_pack_select">
+              <pack index="0" name="veraPDF Mac and *nix Scripts" selected="true"/>
+              <pack index="1" name="veraPDF Validation model" selected="true"/>
+              <pack index="2" name="veraPDF Documentation" selected="false"/>
+              <pack index="3" name="veraPDF Sample Plugins" selected="false"/>
+            </com.izforge.izpack.panels.packs.PacksPanel>
+            <com.izforge.izpack.panels.install.InstallPanel id="install"/>
+            <com.izforge.izpack.panels.finish.FinishPanel id="finish"/>
+          </AutomatedInstallation>
+          XML
+          java -jar "$RUNNER_TEMP"/verapdf-greenfield-*/verapdf-izpack-installer-*.jar "$RUNNER_TEMP/auto-install.xml"
+          "$RUNNER_TEMP/verapdf/verapdf" --version
+          echo "VERAPDF_BIN=$RUNNER_TEMP/verapdf/verapdf" >> "$GITHUB_ENV"
+
+      - name: "Install dependencies"
+        run: "composer install --no-interaction --no-progress"
+
+      - name: "Policy check"
+        run: php utils/verapdf/pdfx4_policy.php "$VERAPDF_BIN"
+
+      - name: "Upload the documents"
+        if: failure()
+        uses: "actions/upload-artifact@v4"
+        with:
+          name: "pdfx4-policy-documents"
+          path: "tmp/verapdf"
+          if-no-files-found: "ignore"

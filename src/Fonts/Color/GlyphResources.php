@@ -22,6 +22,21 @@ interface GlyphResources
 	public function image($data);
 
 	/**
+	 * @param float[] $rgb      [red, green, blue], from 0 to 1
+	 * @param bool    $stroking Whether it is the colour strokes are painted in, rather than fills
+	 *
+	 * @return string Content setting that colour, e.g. '1.000 0.800 0.200 rg'
+	 */
+	public function rgb(array $rgb, $stroking = false);
+
+	/**
+	 * @param float $level From 0, black, to 1
+	 *
+	 * @return string Content setting that grey as the fill colour, e.g. '0 g'
+	 */
+	public function gray($level);
+
+	/**
 	 * @param float $opacity From 0, transparent, to 1
 	 *
 	 * @return string Content setting fills and strokes to that opacity, e.g. '/GS2 gs'

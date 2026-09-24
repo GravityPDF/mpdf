@@ -31,6 +31,10 @@ class ColorModeConverter
 	}
 
 	/**
+	 * Black is the black ink alone. Painting it as all four inks at once - registration black - is 400%
+	 * total area coverage, past what any press allows, and would be a jump away from every near-black
+	 * value: rgb(1, 1, 1) is already K 99.6% and nothing else.
+	 *
 	 * @param float[] $c
 	 *
 	 * @return float[]
@@ -44,13 +48,10 @@ class ColorModeConverter
 
 		if ($min == 1) {
 			if ($c[0] == 5) {
-				return [6, 100, 100, 100, 100, $c[4]];
+				return [6, 0, 0, 0, 100, $c[4]];
 			}
 
-			return [4, 100, 100, 100, 100];
-			// For K-Black
-			//if ($c[0]==5) { return array (6,0,0,0,100, $c[4]); }
-			//else { return array (4,0,0,0,100); }
+			return [4, 0, 0, 0, 100];
 		}
 
 		$K = $min;

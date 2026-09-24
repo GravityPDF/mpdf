@@ -74,7 +74,7 @@ class PDFA1Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$documents = [
 			'PDF/A-1b' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'], false],
 			'PDF/A-2b' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B'], true],
-			'PDF/X-1a' => [['PDFX' => true, 'PDFXauto' => true], false],
+			'PDF/X-1a' => [['PDFX' => true, 'PDFXversion' => '1a', 'PDFXauto' => true], false],
 		];
 
 		$cases = [];

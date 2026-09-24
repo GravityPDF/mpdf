@@ -164,7 +164,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 				$this->mpdf->fonts[$k]['n'] = $this->mpdf->n + 1;
 
 				if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
-					throw new \Mpdf\MpdfException('Core fonts are not allowed in PDF/A1-b or PDFX/1-a files (Times, Helvetica, Courier etc.)');
+					throw new \Mpdf\MpdfException('Core fonts are not allowed in PDF/A1-b or ' . $this->mpdf->pdfxVersionLabel() . ' files (Times, Helvetica, Courier etc.)');
 				}
 
 				$this->writer->object();
@@ -211,7 +211,7 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 
 					$subset = $font['subsets'][$sfid];
 					unset($subset[0]);
-					$ttfontstream = $subsetter->makeSubsetSIP($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL'], $this->mpdf->pdfaPart() === '1'); // mPDF 5.7.1
+					$ttfontstream = $subsetter->makeSubsetSIP($font['ttffile'], $subset, $font['TTCfontID'], $this->mpdf->debugfonts, $font['useOTL'], $this->oneCmapSubtable()); // mPDF 5.7.1
 					$ttfontsize = strlen($ttfontstream);
 					$fontstream = gzcompress($ttfontstream);
 					$widthstring = '';
@@ -590,6 +590,17 @@ class FontWriter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $this->type3FontWriter;
+	}
+
+	/**
+	 * PDF/A-1 and PDF/X preflight allow a symbolic TrueType font one cmap subtable. PDF/A-2 onwards keeps
+	 * a second, for older readers.
+	 *
+	 * @return bool Whether a symbolic TrueType subset carries its (3,0) cmap subtable alone
+	 */
+	private function oneCmapSubtable()
+	{
+		return $this->mpdf->pdfaPart() === '1' || (bool) $this->mpdf->PDFX;
 	}
 
 	/**

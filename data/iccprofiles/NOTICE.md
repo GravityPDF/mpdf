@@ -6,15 +6,19 @@ licence — they are aggregated data assets, not part of mPDF's source code, and
 are redistributed here under the terms their publishers grant. Do not alter these
 files; ship them byte-for-byte.
 
-To use a different output condition (e.g. your house print profile), set the
-`ICCProfile` config key to the path of your own `.icc` file — it overrides the
-bundled default and nothing here is embedded.
+To use a different output condition (e.g. your house print profile, or an RGB
+output intent for PDF/X-4), set the `ICCProfile` config key to the path of your
+own `.icc` file — it overrides the bundled default. A PDF/X output intent must be
+an output device (`prtr`) profile.
 
 ---
 
 ## sRGB_IEC61966-2-1.icc
 
-- **Colour space:** RGB (used as the PDF/A and default output-intent profile).
+- **Colour space:** RGB, device class `mntr` (display). Used as the PDF/A
+  output-intent profile. Also the ICC-based colour space RGB is written in where
+  a PDF/X-4 document prints to a CMYK or grey output intent, which permits no
+  DeviceRGB. Being a display profile, it is not a PDF/X output intent.
 - **Publisher / copyright:** International Color Consortium.
 - **Embedded copyright string:** `Copyright International Color Consortium, 2009`.
 - **Terms:** Distributed by the ICC as a freely redistributable reference
@@ -24,8 +28,10 @@ bundled default and nothing here is embedded.
 ## SWOP2006_Coated3v2.icc
 
 - **Colour space:** CMYK, device class `prtr` (printer), ICC v2.
-  A CMYK output intent: point `ICCProfile` at it, with `restrictColorSpace` set
-  to 3, to write a CMYK PDF/A document. Nothing embeds it unless asked.
+  The output intent a **PDF/X-4** document embeds where it names no
+  `ICCProfile`, identified by the CGATS TR 003 characterisation it is built on.
+  Point `ICCProfile` at it, with `restrictColorSpace` set to 3, to write a CMYK
+  PDF/A document.
   Represents U.S. web-coated (SWOP) publication printing, 2006, grade 3 coated.
 - **Publisher:** IDEAlliance, with permission of X-Rite, Inc.
 - **Copyright:** X-Rite, Inc.

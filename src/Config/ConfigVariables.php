@@ -154,12 +154,19 @@ class ConfigVariables
 			// 3 - allow CMYK / SPOT COLOR / Grayscale [convert RGB->CMYK]
 			'restrictColorSpace' => 0,
 
-			// PDFX/1-a Compliant files
-			// true=Forces compliance with PDFX-1a spec
+			// PDF/X Compliant files
+			// true=Forces compliance with the PDF/X version PDFXversion names
 			// Cannot be used with 'restrictColorSpace' (i.e. no RGB)
 			'PDFX' => false,
-			// Overrides warnings making changes when possible to force PDFX1-a compliance
+			// Overrides warnings making changes when possible to force PDF/X compliance
 			'PDFXauto' => false,
+			// The PDF/X version to write
+			//   4   PDF/X-4 (ISO 15930-7, PDF 1.6). The general choice for print, and the version print workflows
+			//       and the Ghent Workgroup specifications expect. Keeps transparency and layers, and prints to
+			//       the CMYK, RGB or grey condition ICCProfile names (SWOP where it names none)
+			//   1a  PDF/X-1a:2003 (ISO 15930-4, PDF 1.4). For printers and publications that accept only it:
+			//       CMYK and spot colour only, and translucent content is drawn opaque
+			'PDFXversion' => '4',
 
 			// PDF/A Compliant files
 			// true=Forces compliance with the PDF/A part and level PDFAversion names
@@ -183,7 +190,8 @@ class ConfigVariables
 
 			// Colour profile OutputIntent
 			// sRGB_IEC61966-2-1 (=default if blank and PDFA), or other added .icc profile
-			// Must be CMYK for PDFX, or appropriate type for PDFA(RGB or CMYK)
+			// Must be CMYK for PDF/X-1a, or appropriate type for PDFA(RGB or CMYK) or PDF/X-4
+			// PDF/X-4 embeds SWOP2006_Coated3v2 (CMYK) where blank. PDF/X takes a printer (prtr) profile only
 			'ICCProfile' => '',
 
 			'spotColors' => [],

@@ -113,7 +113,20 @@ class ColorSpaceRestrictor
 	 */
 	private function restrictRgbColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
-		if ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace == 3)) {
+		// PDF/X-4 keeps RGB as it is: printing to an RGB condition it is DeviceRGB, and printing to any
+		// other it is written in the ICC-based sRGB colour space, so that the press converts the colours
+		// of the content and of the images together - see Mpdf::writesCalibratedRgb()
+		if ($this->mpdf->isPdfx4()) {
+			if ($this->mpdf->pdfxRgbIntent()) {
+				return $c;
+			}
+
+			$gray = $this->neutralToGray($c);
+
+			return $gray === null ? $c : $gray;
+		}
+
+		if (($this->mpdf->PDFX && !$this->mpdf->pdfxRgbIntent()) || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace == 3)) {
 			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$PDFAXwarnings[] = "RGB color specified '" . $color . "' (converted to CMYK)";
 			}
@@ -136,8 +149,8 @@ class ColorSpaceRestrictor
 	 */
 	private function restrictCmykColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
-		if ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) {
-			if ($this->mpdf->PDFA && !$this->mpdf->PDFAauto) {
+		if (($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) || $this->mpdf->pdfxConvertsCmyk()) {
+			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$PDFAXwarnings[] = "CMYK color specified '" . $color . "' (converted to RGB)";
 			}
 			$c = $this->colorModeConverter->cmyk2rgb($c);
@@ -159,6 +172,11 @@ class ColorSpaceRestrictor
 	 */
 	private function restrictRgbaColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
+		// PDF/X-4 keeps the transparency, which the colour space it settles on carries
+		if ($this->mpdf->isPdfx4()) {
+			return $this->restrictRgbColorSpace($c, $color, $PDFAXwarnings);
+		}
+
 		if ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace == 3)) {
 			if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
 				$PDFAXwarnings[] = "RGB color with transparency specified '" . $color . "' (converted to CMYK" . ($this->mpdf->transparencyAllowed() ? ')' : ' without transparency)');
@@ -180,6 +198,30 @@ class ColorSpaceRestrictor
 	}
 
 	/**
+	 * Tagging black sRGB would have the press make it out of all four inks, which fringes text where the
+	 * plates are a hair out of register. A neutral colour goes to DeviceGray instead, which ISO 15930-7
+	 * permits where the output condition is CMYK or grey, and which such a condition takes as its black
+	 * separation. A colour that is neutral but translucent keeps its RGB, since DeviceGray carries no
+	 * alpha for mPDF to put it back into.
+	 *
+	 * @param float[] $c A colour in RGB or RGBA
+	 *
+	 * @return float[]|null That colour in DeviceGray, or null where it is not neutral and opaque
+	 */
+	private function neutralToGray($c)
+	{
+		if ($c[1] != $c[2] || $c[2] != $c[3]) {
+			return null;
+		}
+
+		if ($c[0] == 5 && $c[4] < 100) {
+			return null;
+		}
+
+		return [1, $c[1]];
+	}
+
+	/**
 	 * @param mixed $c
 	 * @param string $color
 	 * @param string[] $PDFAXwarnings
@@ -188,6 +230,10 @@ class ColorSpaceRestrictor
 	 */
 	private function restrictCmykaColorSpace($c, $color, &$PDFAXwarnings = [])
 	{
+		if ($this->mpdf->isPdfx4()) {
+			return $this->restrictCmykColorSpace($c, $color, $PDFAXwarnings);
+		}
+
 		if ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace != 3) {
 			if (!$this->mpdf->PDFAauto) {
 				$PDFAXwarnings[] = "CMYK color with transparency specified '" . $color . "' (converted to RGB" . ($this->mpdf->transparencyAllowed() ? ')' : ' without transparency)');

@@ -53,7 +53,7 @@ class Select extends Tag
 		if ($size > 1) {
 			$this->mpdf->selectoption['SIZE'] = $size;
 		}
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			if (isset($attr['NAME'])) {
 				$this->mpdf->selectoption['NAME'] = $attr['NAME'];
 			}
@@ -77,7 +77,7 @@ class Select extends Tag
 		}
 
 		// A list box shows every option, so it is as wide as the widest, as an active one is
-		if ($this->mpdf->useActiveForms || isset($this->mpdf->selectoption['MULTIPLE']) || isset($this->mpdf->selectoption['SIZE'])) {
+		if ($this->mpdf->activeForms() || isset($this->mpdf->selectoption['MULTIPLE']) || isset($this->mpdf->selectoption['SIZE'])) {
 			$w = isset($this->mpdf->selectoption['MAXWIDTH']) ? $this->mpdf->selectoption['MAXWIDTH'] : 0;
 		} else {
 			$w = $this->mpdf->GetStringWidth($texto, true, $OTLdata);

@@ -37,7 +37,7 @@ class PdfaOptionalContentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'PDF/A-2u' => [['PDFA' => true, 'PDFAversion' => '2-U'], true],
 			'PDF/A-3b' => [['PDFA' => true, 'PDFAversion' => '3-B'], true],
 			'PDF/A-3u' => [['PDFA' => true, 'PDFAversion' => '3-U'], true],
-			'PDF/X-1a' => [['PDFX' => true], false],
+			'PDF/X-1a' => [['PDFX' => true, 'PDFXversion' => '1a'], false],
 		];
 	}
 

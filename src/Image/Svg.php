@@ -371,6 +371,8 @@ class Svg
 	{
 		$n = count($this->mpdf->gradients) + 1;
 
+		$gradient_info = $this->inOneColorSpace($gradient_info);
+
 		// Get bounding dimensions of element
 		$w = 100;
 		$h = 100;
@@ -762,15 +764,6 @@ class Svg
 			$min = $gradient_info['color'][0]['offset'];
 
 			for ($i = 0; $i < ($stops); $i++) {
-				if (!$gradient_info['color'][$i]['color']) {
-					if ($gradient_info['colorspace'] == 'RGB') {
-						$gradient_info['color'][$i]['color'] = '0 0 0';
-					} elseif ($gradient_info['colorspace'] == 'Gray') {
-						$gradient_info['color'][$i]['color'] = '0';
-					} elseif ($gradient_info['colorspace'] == 'CMYK') {
-						$gradient_info['color'][$i]['color'] = '1 1 1 1';
-					}
-				}
 				$offset = ($gradient_info['color'][$i]['offset'] - $min) / $range;
 				$this->mpdf->gradients[$n]['stops'][] = [
 					'col' => $gradient_info['color'][$i]['color'],
@@ -991,15 +984,6 @@ class Svg
 			$min = $gradient_info['color'][0]['offset'];
 
 			for ($i = 0; $i < ($stops); $i++) {
-				if (!$gradient_info['color'][$i]['color']) {
-					if ($gradient_info['colorspace'] == 'RGB') {
-						$gradient_info['color'][$i]['color'] = '0 0 0';
-					} elseif ($gradient_info['colorspace'] == 'Gray') {
-						$gradient_info['color'][$i]['color'] = '0';
-					} elseif ($gradient_info['colorspace'] == 'CMYK') {
-						$gradient_info['color'][$i]['color'] = '1 1 1 1';
-					}
-				}
 				$offset = ($gradient_info['color'][$i]['offset'] - $min) / $range;
 				$this->mpdf->gradients[$n]['stops'][] = [
 					'col' => $gradient_info['color'][$i]['color'],
@@ -2968,6 +2952,29 @@ class Svg
 		array_push($this->txt_style, $current_style);
 	}
 
+	/**
+	 * A shading function gives every stop the same number of components, so the stops are written in the
+	 * one colour space they can all be written in, rather than the space of whichever stop came last
+	 *
+	 * @param array $gradient_info
+	 *
+	 * @return array The gradient, its stops written in that colour space
+	 */
+	private function inOneColorSpace(array $gradient_info)
+	{
+		$colors = [];
+		foreach ($gradient_info['color'] as $stop) {
+			$colors[] = $stop['col'];
+		}
+
+		$gradient_info['colorspace'] = $this->colorConverter->gradientColorSpace($colors);
+		foreach ($gradient_info['color'] as $i => $stop) {
+			$gradient_info['color'][$i]['color'] = $this->colorConverter->gradientComponents($stop['col'], $gradient_info['colorspace']);
+		}
+
+		return $gradient_info;
+	}
+
 	function svgAddGradient($id, $array_gradient)
 	{
 
@@ -3550,17 +3557,6 @@ class Svg
 				$col = $this->colorConverter->convert('#000000', $this->mpdf->PDFAXwarnings);
 			} // In case "transparent" or "inherit" returned
 
-			if ($col[0] == 3 || $col[0] == 5) { // RGB
-				$color_final = sprintf('%.3F %.3F %.3F', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255);
-				$this->svg_gradient[$last_gradid]['colorspace'] = 'RGB';
-			} elseif ($col[0] == 4 || $col[0] == 6) { // CMYK
-				$color_final = sprintf('%.3F %.3F %.3F %.3F', ord($col[1]) / 100, ord($col[2]) / 100, ord($col[3]) / 100, ord($col[4]) / 100);
-				$this->svg_gradient[$last_gradid]['colorspace'] = 'CMYK';
-			} elseif ($col[0] == 1) { // Grayscale
-				$color_final = sprintf('%.3F', ord($col[1]) / 255);
-				$this->svg_gradient[$last_gradid]['colorspace'] = 'Gray';
-			}
-
 			$stop_opacity = 1;
 
 			if (isset($attribs['style']) and preg_match('/stop-opacity:\s*([0-9.]*)/i', $attribs['style'], $m)) {
@@ -3572,7 +3568,7 @@ class Svg
 			$stop_opacity = $this->withColorAlpha($col, $stop_opacity);
 
 			$tmp_color = [
-				'color' => $color_final,
+				'col' => $col, // written in the colour space every stop fits - see inOneColorSpace()
 				'offset' => (isset($attribs['offset']) ? $attribs['offset'] : ''),
 				'opacity' => $this->mpdf->allowedAlpha($stop_opacity)
 			];
