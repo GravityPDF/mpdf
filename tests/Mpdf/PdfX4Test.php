@@ -1612,6 +1612,33 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Printing to CMYK, an SVG drawn as a background sets its RGB in the ICC-based sRGB colour space and
+	 * its spot colour by name. The form names the resources the pages share, and they name both; the
+	 * pattern's own content draws the form and nothing else.
+	 */
+	public function testAFormDrawnAsABackgroundFindsTheColourSpacesItSetsInItsResources()
+	{
+		$svg = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="20" height="20" fill="#ff0000"/><rect x="20" width="20" height="20" fill="spot(PANTONE 300 C, 50%)"/></svg>');
+
+		$pdf = $this->pdf(['PDFX' => true], '<div style="background: url(' . $svg . '); height: 20mm"></div>', function (Mpdf $mpdf) {
+			$mpdf->AddSpotColor('PANTONE 300 C', 100, 44, 0, 0);
+		});
+
+		$this->assertSame(1, preg_match('/(\d+) 0 obj\n<<\/Type \/XObject\n\/Subtype \/Form\n.*?\/Resources (\d+) 0 R\n/s', $pdf, $form));
+		$content = $this->stream($pdf, $form[1]);
+		$this->assertStringContainsString('/CSRGB cs 1.000 0.000 0.000 sc', $content);
+		$this->assertStringContainsString('/CS1 cs 0.500 scn', $content);
+
+		$this->assertSame(1, preg_match('/\/ColorSpace <<\n(.*?)>>/s', $this->object($pdf, $form[2]), $spaces));
+		$this->assertSame(1, preg_match('/^\/CSRGB (\d+) 0 R$/m', $spaces[1], $rgb), 'the ICC-based sRGB colour space');
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $rgb[1]));
+		$this->assertSame(1, preg_match('/^\/CS1 \d+ 0 R$/m', $spaces[1]), 'the spot colour');
+
+		$this->assertSame(1, preg_match('/\/PatternType 1 .*?stream\n(.*?)\nendstream/s', $pdf, $pattern));
+		$this->assertSame(1, preg_match('/^q [\d. -]+ cm \/FO\d+ Do Q$/', $pattern[1]), 'the pattern draws the form alone');
+	}
+
+	/**
 	 * Grey in the ICC-based colour space draws as it did in DeviceGray, pixel for pixel
 	 */
 	public function testGreyDrawsAsItDidInDeviceGray()
