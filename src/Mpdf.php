@@ -7088,6 +7088,83 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * Whether a list marker drawn now is the content of the Lbl element Li::open() made.
+	 *
+	 * @return bool
+	 */
+	private function listMarkerHasLbl()
+	{
+		return !$this->ColActive && isset($this->blk[$this->blklvl]['pdfua_li_lbl_elem']);
+	}
+
+	/**
+	 * Open the marked content a line's chunk is drawn in: that of the inline element restoreFont()
+	 * says it is in, or else the block's.
+	 *
+	 * Table cell text always has an inline element (the cell, or one inside it). An object that
+	 * marks its own content is drawn by printLineObject() after its chunk, and opens nothing here
+	 * unless its chunk draws a span's background or border. In an artifact every object is drawn
+	 * after the line's text, inside the artifact's marked content.
+	 *
+	 * @param int  $k The chunk's key in $objectbuffer
+	 * @param bool $is_table
+	 * @return bool Whether the chunk is an object that marks its own content
+	 */
+	private function markLineChunk($k, $is_table)
+	{
+		$object = empty($this->objectbuffer[$k]) ? null : $this->objectbuffer[$k];
+		$tagged = $object !== null
+			&& in_array($object['type'], ['image', 'barcode', 'textcircle', 'listmarker', 'input', 'textarea', 'select'], true)
+			&& ($object['type'] !== 'listmarker' || $this->listMarkerHasLbl())
+			&& empty($this->flowingBlockAttr['pdfua_artifact_open'])
+			&& !$this->ua->getStructureTree()->isInArtifact();
+		if ($tagged && !$this->spanbgcolor && empty($this->spanborddet)) {
+			return true;
+		}
+		$inlineElem = $object === null ? $this->ua->getAnchorState()->getInlineContentElem() : null;
+		if ($inlineElem !== null) {
+			$this->ensureInlineBdcOpen($inlineElem);
+		} elseif (!$is_table) {
+			$this->ensureBlockBdcOpen();
+		}
+
+		return $tagged;
+	}
+
+	/**
+	 * Draw the object of a line's chunk now, so its marked content comes between the text before
+	 * and after it, and not inside the text's. The next chunk of text begins its marked content again.
+	 *
+	 * What the object tags goes in the element the chunk is in, such as the Link around an image.
+	 *
+	 * @param int         $k        The chunk's key in $objectbuffer
+	 * @param bool        $is_table
+	 * @param string|bool $blockdir
+	 * @return void
+	 */
+	private function printLineObject($k, $is_table, $blockdir)
+	{
+		$this->closeBlockBdcIfOpen();
+
+		$parent = $this->ua->getAnchorState()->getInlineContentElem();
+		if ($parent === null && !$is_table && isset($this->flowingBlockAttr['pdfua_struct_elem'])) {
+			$parent = $this->flowingBlockAttr['pdfua_struct_elem'];
+		}
+
+		$line = $this->objectbuffer;
+		$this->objectbuffer = [$k => $line[$k]];
+		if ($parent !== null) {
+			$this->ua->getStructureTree()->pushExisting($parent);
+		}
+		$this->printobjectbuffer($is_table, $blockdir);
+		if ($parent !== null) {
+			$this->ua->getStructureTree()->close();
+		}
+		unset($line[$k]);
+		$this->objectbuffer = $line;
+	}
+
+	/**
 	 * Mark where a table cell's block frames begin, once the TD or TH element is open.
 	 *
 	 * @return void
@@ -7701,19 +7778,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->restoreFont($font[$k]);  // mPDF 5.7
 
 
-				// Mark the chunk against the element restoreFont() says it is in. Table cell text
-				// always has one (the cell, or an element inside it); a cell chunk without one is
-				// an image or widget, which printobjectbuffer() marks itself.
-				if ($this->PDFUA) {
-					$pdfuaInlineElem = (!isset($this->objectbuffer[$k]) || !$this->objectbuffer[$k])
-						? $this->ua->getAnchorState()->getInlineContentElem()
-						: null;
-					if ($pdfuaInlineElem !== null) {
-						$this->ensureInlineBdcOpen($pdfuaInlineElem);
-					} elseif (!$is_table) {
-						$this->ensureBlockBdcOpen();
-					}
-				}
+				$pdfuaLineObject = $this->PDFUA && $this->markLineChunk($k, $is_table);
 
 				if ($is_table && substr($align, 0, 1) == 'D' && $aord == 0) {
 					$dp = $this->decimal_align[substr($align, 0, 2)];
@@ -7792,6 +7857,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				} else {
 					$this->Cell($stringWidth, $stackHeight, $chunk, '', 0, '', $fill, $this->HREF, 0, 0, 0, 'M', $fill, true, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, (isset($lineBox[$k]) ? $lineBox[$k] : false)); // first or middle part	// mPDF 5.7.1
+				}
+				if ($pdfuaLineObject) {
+					$this->printLineObject($k, $is_table, $blockdir);
 				}
 
 
@@ -8534,9 +8602,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				// on the structure stack
 				$pdfuaLblMcid = null;
 				if ($this->PDFUA
-					&& !$this->ColActive
 					&& !$this->ua->getStructureTree()->isInArtifact()
-					&& isset($this->blk[$this->blklvl]['pdfua_li_lbl_elem'])
+					&& $this->listMarkerHasLbl()
 				) {
 					$structParents = $this->pdfuaStructParents();
 					$pdfuaLblMcid = $this->ua->getStructureTree()->addContentForElement(
@@ -9585,17 +9652,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->restoreFont($font[$k]);  // mPDF 5.7
 
 
-						// As in finishFlowingBlock()
-						if ($this->PDFUA) {
-							$pdfuaInlineElem = (!isset($this->objectbuffer[$k]) || !$this->objectbuffer[$k])
-								? $this->ua->getAnchorState()->getInlineContentElem()
-								: null;
-							if ($pdfuaInlineElem !== null) {
-								$this->ensureInlineBdcOpen($pdfuaInlineElem);
-							} elseif (!$is_table) {
-								$this->ensureBlockBdcOpen();
-							}
-						}
+						$pdfuaLineObject = $this->PDFUA && $this->markLineChunk($k, $is_table);
 
 						$this->SetSpacing(($this->fixedlSpacing * Mpdf::SCALE) + $jcharspacing, ($this->fixedlSpacing + $this->minwSpacing) * Mpdf::SCALE + $jws);
 						// Now unset these values so they don't influence GetStringwidth below or in fn. Cell
@@ -9665,6 +9722,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							}
 						} else {
 							$this->Cell($stringWidth, $stackHeight, $chunk, '', 0, '', $fill, $this->HREF, 0, 0, 0, 'M', $fill, true, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, (isset($lineBox[$k]) ? $lineBox[$k] : false)); // first or middle part
+						}
+						if ($pdfuaLineObject) {
+							$this->printLineObject($k, $is_table, $blockdir);
 						}
 
 
