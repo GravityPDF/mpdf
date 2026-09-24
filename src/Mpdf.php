@@ -4864,29 +4864,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Just output text
 		if ($this->usingCoreFont && !($textvar & TextVars::FC_SMALLCAPS) && !($textvar & TextVars::FC_KERNING)) {
 			$txt2 = $this->writer->escape($txt2);
-			$s .= sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
+			$sub = sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
 		} // IF NOT corefonts [AND NO wordspacing] AND NOT SIP/SMP AND NOT SmCaps AND NOT Kerning AND NOT OTL
 		// Just output text
 		elseif (!$this->usingCoreFont && !($textvar & TextVars::FC_SMALLCAPS) && !($textvar & TextVars::FC_KERNING) && !(isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0xFF) && !empty($OTLdata['GPOSinfo']))) {
 			// IF SIP/SMP
 			if ($this->CurrentFont['sip'] || $this->CurrentFont['smp']) {
 				$txt2 = $this->UTF8toSubset($txt2);
-				$s .=sprintf('BT ' . $aix . ' %s Tj ET', $px, $py, $txt2);
+				$sub = sprintf('BT ' . $aix . ' %s Tj ET', $px, $py, $txt2);
 			} // NOT SIP/SMP
 			else {
 				$txt2 = $this->writer->utf8ToUtf16BigEndian($txt2, false);
 				$txt2 = $this->writer->escape($txt2);
-				$s .=sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
+				$sub = sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
 			}
 		} // IF NOT corefonts [AND IS wordspacing] AND NOT SIP AND NOT SmCaps AND NOT Kerning AND NOT OTL
 		// Not required here (cf. Cell() )
 		// ELSE (IF SmCaps || Kerning || OTL) [corefonts or not corefonts; SIP or SMP or BMP]
 		else {
-			$s .= $this->applyGPOSpdf($txt2, $aix, $px, $py, $OTLdata, $textvar);
+			$sub = $this->applyGPOSpdf($txt2, $aix, $px, $py, $OTLdata, $textvar);
 		}
 		/*         * ************** END ************************ */
 
-		$s .= ' ';
+		$s .= $this->withLogicalActualText($sub, $OTLdata) . ' ';
 
 		if (($textvar & TextVars::FD_UNDERLINE) && $txt != '') { // mPDF 5.7.1
 			$c = strtoupper($this->TextColor); // change 0 0 0 rg to 0 0 0 RG
@@ -5707,6 +5707,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			/** ************** END SIMILAR TO Text() ************************ */
 
+			$sub = $this->withLogicalActualText($sub, $OTLdata);
+
 			if ($this->shrin_k > 1) {
 				$shrin_k = $this->shrin_k;
 			} else {
@@ -5898,6 +5900,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
+	/**
+	 * Wrap text drawn right to left in marked content whose /ActualText gives its characters in
+	 * the order they were written, which is the order assistive technology has to read them in
+	 * (Matterhorn 09-001).
+	 *
+	 * @param string      $sub     The text-showing operators
+	 * @param array|false $OTLdata The run's OTL data, carrying 'actualText' once Bidi has reordered it
+	 *
+	 * @return string
+	 */
+	private function withLogicalActualText($sub, $OTLdata)
+	{
+		if (!$this->PDFUA || empty($OTLdata['actualText'])) {
+			return $sub;
+		}
+		$actualTextWriter = $this->ua->getLigatureActualTextWriter();
+
+		return $actualTextWriter->buildBdcBytes($actualTextWriter->getActualTextEncoding($OTLdata['actualText']))
+			. ' ' . $sub . ' ' . $actualTextWriter->buildEmcBytes();
+	}
+
 	function applyGPOSpdf($txt, $aix, $x, $y, $OTLdata, $textvar = 0)
 	{
 		$sipset = (isset($this->CurrentFont['sip']) && $this->CurrentFont['sip'])
@@ -5947,10 +5970,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$isLigHere = false;
 			$ligActualTextHex = '';
 			if ($ligActualTextWriter !== null
-				&& isset($GPOSinfo[$i]['ligature_source'])
-				&& count($GPOSinfo[$i]['ligature_source']) > 1
+				&& isset($GPOSinfo[$i]['source_chars'])
+				&& count($GPOSinfo[$i]['source_chars']) > 1
 			) {
-				$srcCp = $GPOSinfo[$i]['ligature_source'];
+				$srcCp = $GPOSinfo[$i]['source_chars'];
 				if (!$ligActualTextWriter->toUnicodeCovers($c, $srcCp, $this->CurrentFont)) {
 					$isLigHere = true;
 					$ligActualTextHex = $ligActualTextWriter->getActualTextEncoding($srcCp);

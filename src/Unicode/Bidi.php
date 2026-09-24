@@ -357,6 +357,8 @@ class Bidi
 				}
 			}
 			$maxlevel = max($chardata[$i]['level'], $maxlevel);
+			$chardata[$i]['lidx'] = $i;
+			$chardata[$i]['src'] = $chardata[$i]['char'];
 		}
 
 		// NB
@@ -435,6 +437,10 @@ class Bidi
 		$chunkOTLdata['group'] = $group;
 		if ($useGPOS) {
 			$chunkOTLdata['GPOSinfo'] = $GPOS;
+		}
+		$logicalText = self::logicalText($chardata, 'char');
+		if ($logicalText !== null) {
+			$chunkOTLdata['actualText'] = $logicalText;
 		}
 
 		return [$e, $rtl_content];
@@ -1068,6 +1074,8 @@ class Bidi
 
 				$carac['group'] = $cOTLdata[$nc]['group'][$i];
 				$carac['chunkid'] = $chunkorder[$nc]; // gives font id and/or object ID
+				$carac['lidx'] = count($bidiData);
+				$carac['src'] = $carac['uni'];
 
 				$maxlevel = max((isset($carac['level']) ? $carac['level'] : 0), $maxlevel);
 				$bidiData[] = $carac;
@@ -1144,6 +1152,7 @@ class Bidi
 
 		$nc = -1; // New chunk order ID
 		$chunkid = -1;
+		$drawn = [];
 
 		foreach ($bidiData as $carac) {
 			if ($carac['chunkid'] != $chunkid) {
@@ -1152,8 +1161,10 @@ class Bidi
 				$cctr = 0;
 				$content[$nc] = '';
 				$cOTLdata[$nc]['group'] = '';
+				$drawn[$nc] = [];
 			}
 			if ($carac['uni'] != 0xFFFC) {   // Object replacement character (65532)
+				$drawn[$nc][] = $carac;
 				$content[$nc] .= UtfString::code2utf($carac['uni']);
 				$cOTLdata[$nc]['group'] .= $carac['group'];
 				if (!empty($carac['GPOSinfo'])) {
@@ -1166,5 +1177,47 @@ class Bidi
 			$chunkid = $carac['chunkid'];
 			$cctr++;
 		}
+
+		foreach ($drawn as $nc => $chars) {
+			$logicalText = self::logicalText($chars, 'uni');
+			if ($logicalText !== null) {
+				$cOTLdata[$nc]['actualText'] = $logicalText;
+			}
+		}
+	}
+
+	/**
+	 * The characters of a run in the order they were written, for the /ActualText that lets the
+	 * run be read back in that order once it is drawn right to left.
+	 *
+	 * Mirrored characters are given back as written, and a ligature as the characters it was
+	 * formed from where the shaper recorded them.
+	 *
+	 * @param array  $chars    The run's characters in the order they are drawn, each with the 'lidx'
+	 *                         and 'src' it had before reordering
+	 * @param string $drawnKey The key holding the character that is drawn
+	 *
+	 * @return int[]|null Null when the run is drawn in the order it was written
+	 */
+	private static function logicalText(array $chars, $drawnKey)
+	{
+		$reordered = false;
+		$lastIndex = -1;
+		$byIndex = [];
+		foreach ($chars as $char) {
+			if ($char['lidx'] < $lastIndex || $char[$drawnKey] != $char['src']) {
+				$reordered = true;
+			}
+			$lastIndex = $char['lidx'];
+			$byIndex[$char['lidx']] = isset($char['GPOSinfo']['source_chars'])
+				? $char['GPOSinfo']['source_chars']
+				: [$char['src']];
+		}
+		if (!$reordered) {
+			return null;
+		}
+		ksort($byIndex);
+
+		return call_user_func_array('array_merge', array_values($byIndex));
 	}
 }

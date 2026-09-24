@@ -704,7 +704,14 @@ class Otl
 			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
 		}
 
+		$unshaped = $this->mpdf->PDFUA ? $this->OTLdata : [];
 		$multiple = Arabic::shape($this->OTLdata, $this->GSUBdata[$this->GSUBfont]['rtlSUB'], $usetags);
+		// The shaper puts a letter into its form without GSUBsubstitute(), so the letter is kept here
+		foreach ($unshaped as $i => $glyph) {
+			if ($this->OTLdata[$i]['uni'] != $glyph['uni'] && !isset($glyph['GPOSinfo']['source_chars'])) {
+				$this->OTLdata[$i]['GPOSinfo']['source_chars'] = [$glyph['uni']];
+			}
+		}
 
 		// A form the font states as more than one glyph goes in through the same Multiple Substitution
 		// path GSUB uses, which carries the ligature and mark bookkeeping over the run getting longer.
@@ -3104,6 +3111,25 @@ class Otl
 	}
 
 	/**
+	 * The characters the glyph at $pos stands for: its own, until a substitution replaces it.
+	 *
+	 * A substitute is often a glyph the font maps to no character, or to a presentation form, so
+	 * under PDF/UA the characters are kept for the /ActualText of a ligature or of right-to-left
+	 * text. They ride in GPOSinfo as 'source_chars' to outlast OtlData::slice(); only under
+	 * PDF/UA, as any GPOSinfo sends a run off the plain Tj path.
+	 *
+	 * @param int $pos
+	 *
+	 * @return int[]
+	 */
+	private function sourceChars($pos)
+	{
+		return isset($this->OTLdata[$pos]['GPOSinfo']['source_chars'])
+			? $this->OTLdata[$pos]['GPOSinfo']['source_chars']
+			: [$this->OTLdata[$pos]['uni']];
+	}
+
+	/**
 	 * Put the substitute glyphs in place of the ones at $pos, and carry the ligature and mark
 	 * bookkeeping over the change in length.
 	 *
@@ -3122,6 +3148,9 @@ class Otl
 		// LookupType 3: Alternate Forms : 1 to 1(n)
 		// LookupType 8: Reverse Chaining Contextual Single Substitution : 1 to 1
 		if ($Type == 1 || $Type == 3 || $Type == 8) {
+			if ($this->mpdf->PDFUA) {
+				$this->OTLdata[$pos]['GPOSinfo']['source_chars'] = $this->sourceChars($pos);
+			}
 			$this->OTLdata[$pos]['uni'] = $substitute;
 			$this->OTLdata[$pos]['hex'] = GlyphString::of($substitute);
 			return 1;
@@ -3185,6 +3214,13 @@ class Otl
 				// runs and so has to survive 'ccmp' taking a letter apart into its base and its dots
 				if (isset($this->OTLdata[$pos]['joining'])) {
 					$newOTLdata[$i]['joining'] = $this->OTLdata[$pos]['joining'];
+				}
+			}
+			// The first glyph stands for the characters, the rest for none
+			if ($newOTLdata && $this->mpdf->PDFUA) {
+				$newOTLdata[0]['GPOSinfo']['source_chars'] = $this->sourceChars($pos);
+				for ($i = 1; $i < $nsub; $i++) {
+					$newOTLdata[$i]['GPOSinfo']['source_chars'] = [];
 				}
 			}
 			if ($newOTLdata && ($this->shaper == 'K' || $this->shaper == 'T' || $this->shaper == 'L')) {
@@ -3387,19 +3423,15 @@ class Otl
 			$this->recordLigatureText($substitute, $GlyphPos);
 
 			// The characters the ligature stands for, taken before the splice drops its components, for
-			// its /ActualText. They ride in GPOSinfo to outlast sliceOTLdata(); only under PDF/UA, as
-			// any GPOSinfo sends a run off the plain Tj path.
+			// its /ActualText
 			if ($this->mpdf->PDFUA) {
-				$ligSrc = [$this->OTLdata[$pos]['uni']];
+				$ligSrc = $this->sourceChars($pos);
 				for ($ligi = 1; $ligi < count($GlyphPos); $ligi++) {
 					if (isset($this->OTLdata[$GlyphPos[$ligi]]['uni'])) {
-						$ligSrc[] = $this->OTLdata[$GlyphPos[$ligi]]['uni'];
+						$ligSrc = array_merge($ligSrc, $this->sourceChars($GlyphPos[$ligi]));
 					}
 				}
-				if (!isset($newOTLdata[0]['GPOSinfo'])) {
-					$newOTLdata[0]['GPOSinfo'] = [];
-				}
-				$newOTLdata[0]['GPOSinfo']['ligature_source'] = $ligSrc;
+				$newOTLdata[0]['GPOSinfo']['source_chars'] = $ligSrc;
 			}
 
 			// The components need not be contiguous, so the ligature and whatever stands between its

@@ -4,7 +4,8 @@ namespace Mpdf\Ua;
 
 /**
  * Wraps a ligature in a /Span with /ActualText, so the characters it was formed from can be
- * read back when the font's ToUnicode map has no entry for it (Matterhorn 24-001).
+ * read back when the font's ToUnicode map has no entry for it (Matterhorn 24-001). Text drawn
+ * right to left is wrapped the same way, to be read back in the order it was written.
  */
 class LigatureActualTextWriter
 {
