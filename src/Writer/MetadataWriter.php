@@ -3,6 +3,7 @@
 namespace Mpdf\Writer;
 
 use Mpdf\AssetFetcherInterface;
+use Mpdf\Color\ColorModeConverter;
 use Mpdf\File\FileTypeAllowList;
 use Mpdf\Strict;
 use Mpdf\Form;
@@ -36,6 +37,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		'xmp' => 'http://ns.adobe.com/xap/1.0/',
 		'dc' => 'http://purl.org/dc/elements/1.1/',
 		'pdfx' => 'http://ns.adobe.com/pdfx/1.3/',
+		'pdfxid' => 'http://www.npes.org/pdfx/ns/id/',
 		'pdfaid' => 'http://www.aiim.org/pdfa/ns/id/',
 		'xmpMM' => 'http://ns.adobe.com/xap/1.0/mm/',
 		'pdfaExtension' => 'http://www.aiim.org/pdfa/ns/extension/',
@@ -128,6 +130,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		if (!empty($this->mpdf->keywords)) {
 			$m .= '    <pdf:Keywords>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</pdf:Keywords>' . "\n";
 		}
+		if ($this->mpdf->isPdfx4()) {
+			$m .= '    <pdf:Trapped>False</pdf:Trapped>' . "\n";
+		}
 		$m .= '   </rdf:Description>' . "\n";
 
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('xmp') . '>' . "\n";
@@ -143,32 +148,32 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('dc') . '>' . "\n";
 		$m .= '    <dc:format>application/pdf</dc:format>' . "\n";
 		if (!empty($this->mpdf->title)) {
-			$m .= '    <dc:title>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->title, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:title>' . "\n";
+			$m .= '    <dc:title>' . "\n";
+			$m .= "\t <rdf:Alt>\n";
+			$m .= "\t  " . '<rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->title, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Alt>\n";
+			$m .= "\t</dc:title>\n";
 		}
 		if (!empty($this->mpdf->keywords)) {
-			$m .= '    <dc:subject>
-	 <rdf:Bag>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Bag>
-	</dc:subject>' . "\n";
+			$m .= '    <dc:subject>' . "\n";
+			$m .= "\t <rdf:Bag>\n";
+			$m .= "\t  " . '<rdf:li>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Bag>\n";
+			$m .= "\t</dc:subject>\n";
 		}
 		if (!empty($this->mpdf->subject)) {
-			$m .= '    <dc:description>
-	 <rdf:Alt>
-	  <rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->subject, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Alt>
-	</dc:description>' . "\n";
+			$m .= '    <dc:description>' . "\n";
+			$m .= "\t <rdf:Alt>\n";
+			$m .= "\t  " . '<rdf:li xml:lang="x-default">' . htmlspecialchars($this->mpdf->subject, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Alt>\n";
+			$m .= "\t</dc:description>\n";
 		}
 		if (!empty($this->mpdf->author)) {
-			$m .= '    <dc:creator>
-	 <rdf:Seq>
-	  <rdf:li>' . htmlspecialchars($this->mpdf->author, ENT_QUOTES | ENT_XML1) . '</rdf:li>
-	 </rdf:Seq>
-	</dc:creator>' . "\n";
+			$m .= '    <dc:creator>' . "\n";
+			$m .= "\t <rdf:Seq>\n";
+			$m .= "\t  " . '<rdf:li>' . htmlspecialchars($this->mpdf->author, ENT_QUOTES | ENT_XML1) . '</rdf:li>' . "\n";
+			$m .= "\t </rdf:Seq>\n";
+			$m .= "\t</dc:creator>\n";
 		}
 		$m .= '   </rdf:Description>' . "\n";
 
@@ -189,8 +194,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		// This bit is specific to PDFX-1a
-		if ($this->mpdf->PDFX) {
+		if ($this->mpdf->isPdfx4()) {
+			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('pdfxid') . ' pdfxid:GTS_PDFXVersion="PDF/X-4"/>' . "\n";
+		} elseif ($this->mpdf->PDFX) {
 			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('pdfx') . ' pdfx:Apag_PDFX_Checkup="1.3" pdfx:GTS_PDFXConformance="PDF/X-1a:2003" pdfx:GTS_PDFXVersion="PDF/X-1:2003"/>' . "\n";
 		} elseif ($this->mpdf->PDFA) {
 			list($part, $conformance) = $this->mpdf->pdfaConformance();
@@ -205,6 +211,11 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('xmpMM') . '>' . "\n";
 		$m .= '    <xmpMM:DocumentID>uuid:' . $uuid . '</xmpMM:DocumentID>' . "\n";
+		if ($this->mpdf->isPdfx4()) {
+			$m .= '    <xmpMM:InstanceID>uuid:' . $uuid . '</xmpMM:InstanceID>' . "\n";
+			$m .= '    <xmpMM:VersionID>1</xmpMM:VersionID>' . "\n";
+			$m .= '    <xmpMM:RenditionClass>default</xmpMM:RenditionClass>' . "\n";
+		}
 		$m .= '   </rdf:Description>' . "\n";
 		$m .= '  </rdf:RDF>' . "\n";
 		$m .= ' </x:xmpmeta>' . "\n";
@@ -347,7 +358,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('/ModDate ' . $this->writer->dateString());
 		if ($this->mpdf->PDFX) {
 			$this->writer->write('/Trapped/False');
-			$this->writer->write('/GTS_PDFXVersion(PDF/X-1a:2003)');
+			$this->writer->write('/GTS_PDFXVersion(' . $this->mpdf->pdfxVersionLabel() . ')');
 		}
 	}
 
@@ -371,12 +382,19 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				$this->writer->write('/OutputCondition ()');
 			}
 			$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
-		} elseif ($this->mpdf->PDFX) { // always a CMYK profile
+		} elseif ($this->mpdf->PDFX) { // a CMYK condition, except where PDF/X-4 embeds another profile
 			$this->writer->write('/S /GTS_PDFX');
 			if ($this->mpdf->ICCProfile) {
 				$this->writer->write('/Info (' . $ICCProfile . ')');
 				$this->writer->write('/OutputConditionIdentifier (Custom)');
 				$this->writer->write('/OutputCondition ()');
+				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
+			} elseif ($this->mpdf->isPdfx4()) {
+				// Where the document names none, the bundled SWOP profile, characterised by CGATS TR 003
+				$this->writer->write('/Info (U.S. Web Coated \\(SWOP\\) grade 3)');
+				$this->writer->write('/OutputConditionIdentifier (CGATS TR 003)');
+				$this->writer->write('/OutputCondition (SWOP 2006 Coated #3)');
+				$this->writer->write('/RegistryName (http://www.color.org)');
 				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
 			} else {
 				$this->writer->write('/Info (CGATS TR 001)');
@@ -388,20 +406,18 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
-		if ($this->mpdf->PDFX && !$this->mpdf->ICCProfile) {
+		// PDF/X-1a naming no ICCProfile names its condition alone; PDF/A falls back to sRGB
+		$profile = $this->mpdf->PDFX ? $this->mpdf->pdfxOutputProfile() : ($this->mpdf->ICCProfile ?: BaseWriter::SRGB_PROFILE);
+		if ($profile === null) {
 			return;
 		}
 
 		$this->writer->object();
 
-		if ($this->mpdf->ICCProfile) {
-			if (!file_exists($this->mpdf->ICCProfile)) {
-				throw new \Mpdf\MpdfException(sprintf('Unable to find ICC profile "%s"', $this->mpdf->ICCProfile));
-			}
-			$s = file_get_contents($this->mpdf->ICCProfile);
-		} else {
-			$s = file_get_contents(__DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc');
+		if (!file_exists($profile)) {
+			throw new \Mpdf\MpdfException(sprintf('Unable to find ICC profile "%s"', $profile));
 		}
+		$s = file_get_contents($profile);
 
 		if ($this->mpdf->compress) {
 			$s = gzcompress($s);
@@ -409,7 +425,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write('<<');
 
-		if ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
+		if ($this->mpdf->PDFX) {
+			$this->writer->write('/N ' . $this->mpdf->pdfxOutputChannels());
+		} elseif ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3) {
 			$this->writer->write('/N 4');
 		} else {
 			$this->writer->write('/N 3');
@@ -520,6 +538,9 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		// AES-256 encryption is PDF 2.0, or PDF 1.7 with Adobe's extension level 8
 		if ($this->mpdf->encrypted) {
 			$this->writer->write('/Extensions <</ADBE <</BaseVersion /1.7 /ExtensionLevel 8>>>>');
+		} elseif ($this->mpdf->isPdfx4() && version_compare($this->mpdf->pdf_version, '1.6', '<')) {
+			// PDF/X-4 is based on PDF 1.6, which the header may predate where PDFX was set after it was written
+			$this->writer->write('/Version /1.6');
 		}
 
 		$this->writer->write('/Pages 1 0 R');
@@ -1317,6 +1338,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 * The fill operator for an annotation's colour, yellow if it has none
 	 *
 	 * A spot colour falls back to yellow too, as neither the /C array nor the appearance can name its colour space.
+	 * Both take a device colour, and PDF/X-4 permits only the device colour space its output intent prints to, so
+	 * there the colour is converted to that space: the ICC-based spaces the page content is set in cannot stand in.
 	 *
 	 * @param mixed[] $opt
 	 *
@@ -1324,11 +1347,57 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function annotationFill(array $opt)
 	{
-		if (empty($opt['c']) || $opt['c'][0] == 2) {
-			return '1.000 1.000 0.000 rg';
+		$c = [3, 255, 255, 0];
+		if (!empty($opt['c']) && $opt['c'][0] != 2) {
+			$c = [(int) $opt['c'][0], ord($opt['c'][1]), ord($opt['c'][2]), ord($opt['c'][3]), ord($opt['c'][4])];
+		}
+		if ($c[0] == 5 || $c[0] == 6) {
+			$c[0] -= 2; // the annotation's opacity is its /CA, not part of its colour
 		}
 
-		return $this->mpdf->SetColor($opt['c']);
+		if ($this->mpdf->isPdfx4()) {
+			$c = $this->inOutputIntentSpace($c);
+		}
+
+		if ($c[0] == 1) {
+			return sprintf('%.3F g', $c[1] / 255);
+		}
+
+		if ($c[0] == 4) {
+			return sprintf('%.3F %.3F %.3F %.3F k', $c[1] / 100, $c[2] / 100, $c[3] / 100, $c[4] / 100);
+		}
+
+		return sprintf('%.3F %.3F %.3F rg', $c[1] / 255, $c[2] / 255, $c[3] / 255);
+	}
+
+	/**
+	 * @param float[] $c A grey, RGB or CMYK colour, as ColorModeConverter takes it
+	 *
+	 * @return float[] The colour in the device colour space the PDF/X-4 output intent prints to
+	 */
+	private function inOutputIntentSpace(array $c)
+	{
+		$converter = new ColorModeConverter();
+		$channels = $this->mpdf->pdfxOutputChannels();
+
+		if ($c[0] == 1 && $channels !== 1) {
+			// DeviceGray is the black of a CMYK intent, and is not permitted under an RGB one
+			return $channels === 4 ? $c : [3, $c[1], $c[1], $c[1]];
+		}
+
+		if ($c[0] == 4 && $channels !== 4) {
+			$c = $converter->cmyk2rgb($c);
+		}
+
+		if ($c[0] == 3 && $channels === 4) {
+			return $converter->rgb2cmyk($c);
+		}
+
+		if ($c[0] == 3 && $channels === 1) {
+			return $converter->rgb2gray($c);
+		}
+
+		return $c;
 	}
 
 	/**

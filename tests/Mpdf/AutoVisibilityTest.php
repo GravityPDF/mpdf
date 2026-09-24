@@ -48,7 +48,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$configs = [
 			'PDF/A-1b' => [self::PDFA1_AUTO, false],
 			'PDF/A-2b' => [['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '2-B'], true],
-			'PDF/X-1a' => [['PDFX' => true, 'PDFXauto' => true], false],
+			'PDF/X-1a' => [['PDFX' => true, 'PDFXversion' => '1a', 'PDFXauto' => true], false],
 		];
 
 		$cases = [];
@@ -89,7 +89,7 @@ class AutoVisibilityTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$pdfa1 = ['PDFA' => true, 'PDFAversion' => '1-B'];
 		$pdfa2 = ['PDFA' => true, 'PDFAversion' => '2-B'];
-		$pdfx = ['PDFX' => true];
+		$pdfx = ['PDFX' => true, 'PDFXversion' => '1a'];
 
 		return [
 			'PDF/A-1b, printonly' => [$pdfa1, 'printonly'],

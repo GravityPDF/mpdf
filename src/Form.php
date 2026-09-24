@@ -173,7 +173,7 @@ class Form
 	function print_ob_text($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// TEXT/PASSWORD INPUT
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 
 			$flags = [];
 
@@ -251,7 +251,7 @@ class Form
 	function print_ob_textarea($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// TEXTAREA
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 
 			$flags = [self::FLAG_TEXTAREA];
 
@@ -352,7 +352,7 @@ class Form
 		// As in HTML, a select is a drop-down unless it is multiple or given a size of two or more rows
 		$multiple = !empty($objattr['multiple']);
 		$combo = !$multiple && (!isset($objattr['size']) || $objattr['size'] < 2);
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -439,7 +439,7 @@ class Form
 			$save_currentfont = $this->mpdf->currentfontfamily;
 			if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
 				if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
-					$this->mpdf->PDFAXwarnings[] = 'Core Adobe font Zapfdingbats cannot be embedded in mPDF - used in Form element: Select - which is required for PDFA1-b or PDFX/1-a. (Different character/font will be substituted.)';
+					$this->mpdf->PDFAXwarnings[] = 'Core Adobe font Zapfdingbats cannot be embedded in mPDF - used in Form element: Select - which is required for PDFA1-b or ' . $this->mpdf->pdfxVersionLabel() . '. (Different character/font will be substituted.)';
 				}
 				$this->mpdf->SetFont('sans');
 				if ($this->mpdf->_charDefined($this->mpdf->CurrentFont['cw'], 9660)) {
@@ -530,7 +530,7 @@ class Form
 	function print_ob_imageinput($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $is_table)
 	{
 		// INPUT/BUTTON as IMAGE
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -554,7 +554,7 @@ class Form
 	function print_ob_button($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir)
 	{
 		// BUTTON
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -626,7 +626,7 @@ class Form
 	function print_ob_checkbox($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $x, $y)
 	{
 		// CHECKBOX
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;
@@ -669,7 +669,7 @@ class Form
 	function print_ob_radio($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $x, $y)
 	{
 		// RADIO
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			$flags = [];
 			if (!empty($objattr['disabled'])) {
 				$flags[] = self::FLAG_READONLY;

@@ -102,13 +102,23 @@ trait FpdiTrait
 	/**
 	 * Set the minimal PDF version.
 	 *
-	 * Not under PDF/A or PDF/X, which keep the version their standard is built on.
+	 * Not under PDF/A, which keeps the version its standard is built on. PDF/X-1a:2003 is written as PDF 1.4 and
+	 * PDF/X-4 as PDF 1.6, and neither may say more, so a page imported from a later version leaves the version
+	 * where it is.
 	 *
 	 * @param string $pdfVersion
 	 */
 	protected function setMinPdfVersion($pdfVersion)
 	{
-		if (!$this->PDFA && !$this->PDFX && \version_compare($pdfVersion, $this->pdf_version, '>')) {
+		if ($this->PDFX) {
+			$ceiling = $this->isPdfx4() ? '1.6' : '1.4';
+			if (\version_compare($pdfVersion, $ceiling, '>')) {
+				$this->pdfaxWarning(sprintf('A page imported from a PDF %s file may use more than the PDF %s that %s is written as.', $pdfVersion, $ceiling, $this->pdfxVersionLabel()));
+				$pdfVersion = $ceiling;
+			}
+		}
+
+		if (!$this->PDFA && \version_compare($pdfVersion, $this->pdf_version, '>')) {
 			$this->pdf_version = $pdfVersion;
 		}
 	}

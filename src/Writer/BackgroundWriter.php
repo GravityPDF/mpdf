@@ -124,11 +124,20 @@ final class BackgroundWriter
 				throw new \Mpdf\MpdfException('Problem: Image object not found for background pattern ' . $img['i']);
 			}
 
+			// An SVG or WMF form has no resources of its own, so it looks up the ICC-based grey colour space
+			// it sets by name in its pattern's - see Mpdf::initialColor()
+			$form = $itype === 'svg' || $itype === 'wmf';
+			$calibratedGray = $form ? $this->writer->calibratedGray() : null;
+
 			$this->writer->object();
 			$this->writer->write('<</ProcSet [/PDF /Text /ImageB /ImageC /ImageI]');
 
-			if ($itype === 'svg' || $itype === 'wmf') {
+			if ($form) {
 				$this->writer->write('/XObject <</FO' . $image_id . ' ' . $img_obj . ' 0 R >>');
+
+				if ($calibratedGray) {
+					$this->writer->write('/ColorSpace <</' . BaseWriter::CALIBRATED_GRAY . ' ' . $calibratedGray . ' 0 R >>');
+				}
 
 				// ******* ADD ANY ExtGStates, Shading AND Fonts needed for the FormObject
 				// Set in classes/svg array['fo'] = true
@@ -321,14 +330,26 @@ final class BackgroundWriter
 
 			if (empty($grad['is_mask'])) {
 
+				$colorspace = isset($grad['colorspace']) ? $grad['colorspace'] : 'RGB';
+
+				// Where DeviceRGB or DeviceGray is not permitted, the stops are in the ICC-based colour space
+				// the content sets its own RGB or grey in. It is an object of its own, so it is written before
+				// the shading that names it - see Mpdf::writesCalibratedRgb() and writesCalibratedGray()
+				$calibrated = null;
+				if ($colorspace === 'RGB') {
+					$calibrated = $this->writer->calibratedRgb();
+				} elseif ($colorspace === 'Gray') {
+					$calibrated = $this->writer->calibratedGray();
+				}
+
 				$this->writer->object();
 				$this->writer->write('<<');
 				$this->writer->write('/ShadingType ' . $grad['type']);
 
-				if (isset($grad['colorspace'])) {
-					$this->writer->write('/ColorSpace /Device' . $grad['colorspace']);  // Can use CMYK if all C0 and C1 above have 4 values
+				if ($calibrated) {
+					$this->writer->write('/ColorSpace ' . $calibrated . ' 0 R');
 				} else {
-					$this->writer->write('/ColorSpace /DeviceRGB');
+					$this->writer->write('/ColorSpace /Device' . $colorspace);  // Can use CMYK if all C0 and C1 above have 4 values
 				}
 
 				if ($grad['type'] == 2) {
@@ -384,10 +405,13 @@ final class BackgroundWriter
 				// luminosity pattern
 				$transid = $id + $maxid;
 
+				// The mask is drawn and blended in grey
+				$gray = $this->writer->grayColorSpace();
+
 				$this->writer->object();
 				$this->writer->write('<<');
 				$this->writer->write('/ShadingType ' . $grad['type']);
-				$this->writer->write('/ColorSpace /DeviceGray');
+				$this->writer->write('/ColorSpace ' . $gray);
 
 				if ($grad['type'] == 2) {
 					$this->writer->write(sprintf('/Coords [%.3F %.3F %.3F %.3F]', $grad['coords'][0], $grad['coords'][1], $grad['coords'][2], $grad['coords'][3]));
@@ -435,7 +459,7 @@ final class BackgroundWriter
 				$this->writer->write('<< /Type /XObject /Subtype /Form /FormType 1 ' . $filter);
 				$this->writer->write('/Length ' . $this->writer->streamLength($p));
 				$this->writer->write('/BBox [-' . ($this->mpdf->wPt / 2) . ' -' . ($this->mpdf->hPt / 2) . ' ' . (2 * $this->mpdf->wPt) . ' ' . (2 * $this->mpdf->hPt) . ']');
-				$this->writer->write('/Group << /Type /Group /S /Transparency /CS /DeviceGray >>');
+				$this->writer->write('/Group << /Type /Group /S /Transparency /CS ' . $gray . ' >>');
 				$this->writer->write('/Resources <<');
 				$this->writer->write('/ExtGState << /a0 << /ca 1 /CA 1 >> >>');
 				$this->writer->write('/Pattern << /p' . $transid . ' ' . $this->mpdf->gradients[$transid]['pattern'] . ' 0 R >>');

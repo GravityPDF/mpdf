@@ -204,6 +204,63 @@ class ColorConverter
 	}
 
 	/**
+	 * A shading function gives every stop of a gradient the same number of components, so the stops are
+	 * written in one colour space: grey where every stop is grey, CMYK where any is CMYK, keeping the
+	 * inks the document names, and RGB otherwise
+	 *
+	 * @param string[] $colors Binary color strings
+	 *
+	 * @return string 'Gray', 'RGB' or 'CMYK'
+	 */
+	public function gradientColorSpace(array $colors)
+	{
+		$space = 'Gray';
+
+		foreach ($colors as $c) {
+			if ($c[0] == static::MODE_CMYK || $c[0] == static::MODE_CMYKA) {
+				return 'CMYK';
+			}
+
+			if ($c[0] != static::MODE_GRAYSCALE) {
+				$space = 'RGB';
+			}
+		}
+
+		return $space;
+	}
+
+	/**
+	 * @param string $c     Binary color string
+	 * @param string $space The colour space gradientColorSpace() settled on for the stops
+	 *
+	 * @return string The colour's components in that space, as a shading function writes them
+	 */
+	public function gradientComponents($c, $space)
+	{
+		if ($c[0] == static::MODE_CMYK || $c[0] == static::MODE_CMYKA) {
+			return sprintf('%.3F %.3F %.3F %.3F', ord($c[1]) / 100, ord($c[2]) / 100, ord($c[3]) / 100, ord($c[4]) / 100);
+		}
+
+		if ($c[0] == static::MODE_GRAYSCALE) {
+			$gray = ord($c[1]) / 255;
+
+			if ($space === 'CMYK') {
+				return sprintf('0.000 0.000 0.000 %.3F', 1 - $gray);
+			}
+
+			return $space === 'RGB' ? sprintf('%.3F %.3F %.3F', $gray, $gray, $gray) : sprintf('%.3F', $gray);
+		}
+
+		if ($space === 'CMYK') {
+			$cmyk = $this->colorModeConverter->rgb2cmyk([static::MODE_RGB, ord($c[1]), ord($c[2]), ord($c[3])]);
+
+			return sprintf('%.3F %.3F %.3F %.3F', $cmyk[1] / 100, $cmyk[2] / 100, $cmyk[3] / 100, $cmyk[4] / 100);
+		}
+
+		return sprintf('%.3F %.3F %.3F', ord($c[1]) / 255, ord($c[2]) / 255, ord($c[3]) / 255);
+	}
+
+	/**
 	 * @param string $color
 	 * @param string[] $PDFAXwarnings
 	 *

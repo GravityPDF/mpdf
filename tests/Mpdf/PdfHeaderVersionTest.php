@@ -87,7 +87,7 @@ class PdfHeaderVersionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				$mpdf->EndLayer();
 			}, '1.4'],
 			'PDF/A-1b keeps 1.4 over an imported PDF 1.6 page' => [['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '1-B'], self::import('1.6'), '1.4'],
-			'PDF/X-1a keeps 1.4 over an imported PDF 1.6 page' => [['mode' => '', 'PDFX' => true, 'PDFXauto' => true], self::import('1.6'), '1.4'],
+			'PDF/X-1a keeps 1.4 over an imported PDF 1.6 page' => [['mode' => '', 'PDFX' => true, 'PDFXversion' => '1a', 'PDFXauto' => true], self::import('1.6'), '1.4'],
 		];
 	}
 

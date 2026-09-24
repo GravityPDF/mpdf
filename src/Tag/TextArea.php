@@ -38,7 +38,7 @@ class TextArea extends Tag
 				$objattr['title'] = mb_convert_encoding($objattr['title'], $this->mpdf->mb_enc, 'UTF-8');
 			}
 		}
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			if (isset($attr['NAME'])) {
 				$objattr['fieldname'] = $attr['NAME'];
 			}
@@ -73,7 +73,7 @@ class TextArea extends Tag
 		}
 		$objattr['fontfamily'] = $this->mpdf->FontFamily;
 		$objattr['fontsize'] = $this->mpdf->FontSizePt;
-		if ($this->mpdf->useActiveForms) {
+		if ($this->mpdf->activeForms()) {
 			if (isset($properties['TEXT-ALIGN'])) {
 				$objattr['text_align'] = $this->getAlign($properties['TEXT-ALIGN']);
 			} elseif (isset($attr['ALIGN'])) {
@@ -138,7 +138,7 @@ class TextArea extends Tag
 		$objattr['rows'] = $rowsize;
 		$objattr['cols'] = $colsize;
 
-		if ($properties['FONT-SIZE'] === 'auto' && $this->mpdf->useActiveForms) {
+		if ($properties['FONT-SIZE'] === 'auto' && $this->mpdf->activeForms()) {
 			$objattr['use_auto_fontsize'] = true;
 		}
 

@@ -69,7 +69,7 @@ class StaticListBoxTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheHighlightIsCmykInAPdfxDocument()
 	{
-		$page = $this->page('<select name="fruit" size="3">' . $this->options(['Apple', 'Banana'], [0]) . '</select>', ['PDFX' => true, 'mode' => 'utf-8']);
+		$page = $this->page('<select name="fruit" size="3">' . $this->options(['Apple', 'Banana'], [0]) . '</select>', ['PDFX' => true, 'PDFXversion' => '1a', 'PDFXauto' => true, 'mode' => 'utf-8']);
 
 		$this->assertStringNotContainsString(self::HIGHLIGHT, $page);
 		$this->assertMatchesRegularExpression('/[\d.]+ [\d.]+ [\d.]+ [\d.]+ k\n[\d.]+ [\d.]+ [\d.]+ -[\d.]+ re f\n/', $page);

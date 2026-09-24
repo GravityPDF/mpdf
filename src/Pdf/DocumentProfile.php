@@ -8,7 +8,8 @@ use Mpdf\Strict;
 /**
  * The PDF version a document is written as, and each standard it is written to with the version applied
  *
- * A standard's version is spelt as mPDF's configuration spells it: '3-B' for PDF/A-3b, '1a' for PDF/X-1a:2003.
+ * A standard's version is spelt as mPDF's configuration spells it: '3-B' for PDF/A-3b, '1a' for PDF/X-1a:2003 and
+ * '4' for PDF/X-4.
  */
 class DocumentProfile
 {
@@ -23,7 +24,7 @@ class DocumentProfile
 	const PDFA = 'PDF/A';
 
 	/**
-	 * PDF/X (ISO 15930), for print exchange; its version is the part, e.g. 1a for PDF/X-1a:2003
+	 * PDF/X (ISO 15930), for print exchange; its version is the part, e.g. 1a for PDF/X-1a:2003 or 4 for PDF/X-4
 	 *
 	 * @see https://pdfa.org/resource/iso-15930-pdfx/
 	 */
@@ -64,12 +65,16 @@ class DocumentProfile
 		}
 
 		if ($mpdf->PDFX) {
-			$standards[self::PDFX] = '1a';
+			$standards[self::PDFX] = $mpdf->pdfxVersion();
 		}
 
-		// The catalog's /Version raises the header's to 1.7 for PDF/A-2 onwards, which ISO 32000-1 underlies, and for AES-256
+		// The catalog's /Version raises the header's to 1.7 for PDF/A-2 onwards, which ISO 32000-1 underlies, and for AES-256,
+		// and to 1.6 for PDF/X-4, which PDF 1.6 underlies
 		$raised = ($mpdf->PDFA && $mpdf->pdfaPart() !== '1') || $mpdf->encrypted;
 		$version = $raised && version_compare($mpdf->pdf_version, '1.7', '<') ? '1.7' : $mpdf->pdf_version;
+		if ($mpdf->isPdfx4() && version_compare($version, '1.6', '<')) {
+			$version = '1.6';
+		}
 
 		return new self($version, $standards);
 	}

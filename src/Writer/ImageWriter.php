@@ -34,10 +34,22 @@ final class ImageWriter
 	{
 		$filter = $this->mpdf->compress ? '/Filter /FlateDecode ' : '';
 
+		// Soft masks, which ISO 32000 has be DeviceGray even where other grey images may not be, by number
+		$masks = [];
+		foreach ($this->mpdf->images as $info) {
+			if (isset($info['masked'])) {
+				$masks[$info['masked']] = true;
+			}
+		}
+
 		// The object each image was written at, by its number, which is what a soft mask is named by
 		$written = [];
 
 		foreach ($this->mpdf->images as $file => $info) {
+
+			$calibrated = empty($info['icc']) && ($info['cs'] === 'DeviceRGB' || $info['cs'] === 'Indexed') ? $this->writer->calibratedRgb() : null;
+			$rgb = $calibrated ? $calibrated . ' 0 R' : '/DeviceRGB';
+			$gray = $info['cs'] === 'DeviceGray' && empty($info['icc']) && !isset($masks[$info['i']]) ? $this->writer->grayColorSpace() : '/DeviceGray';
 
 			$this->writer->object();
 
@@ -49,7 +61,8 @@ final class ImageWriter
 			$this->writer->write('/Width ' . $info['w']);
 			$this->writer->write('/Height ' . $info['h']);
 
-			if (isset($info['interpolation']) && $info['interpolation']) {
+			// PDF/X does not permit interpolation
+			if (isset($info['interpolation']) && $info['interpolation'] && !$this->mpdf->PDFX) {
 				$this->writer->write('/Interpolate true'); // mPDF 6 - image interpolation shall be performed by a conforming reader
 			}
 
@@ -64,12 +77,18 @@ final class ImageWriter
 				$icc = true;
 				$this->writer->write('/ColorSpace [/ICCBased ' . ($this->mpdf->n + 1) . ' 0 R]');
 			} elseif ($info['cs'] === 'Indexed') {
-				if ($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
+				if ($this->mpdf->isPdfx1a() || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) {
 					throw new \Mpdf\MpdfException('PDFA1-b and PDFX/1-a files do not permit using mixed colour space (' . $file . ').');
 				}
-				$this->writer->write('/ColorSpace [/Indexed /DeviceRGB ' . (strlen($info['pal']) / 3 - 1) . ' ' . ($this->mpdf->n + 1) . ' 0 R]');
+				$this->writer->write('/ColorSpace [/Indexed ' . $rgb . ' ' . (strlen($info['pal']) / 3 - 1) . ' ' . ($this->mpdf->n + 1) . ' 0 R]');
 			} else {
-				$this->writer->write('/ColorSpace /' . $info['cs']);
+				if ($info['cs'] === 'DeviceRGB') {
+					$this->writer->write('/ColorSpace ' . $rgb);
+				} elseif ($info['cs'] === 'DeviceGray') {
+					$this->writer->write('/ColorSpace ' . $gray);
+				} else {
+					$this->writer->write('/ColorSpace /' . $info['cs']);
+				}
 				if ($info['cs'] === 'DeviceCMYK') {
 					if ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace !== 3) {
 						throw new \Mpdf\MpdfException('PDFA1-b does not permit Images using mixed colour space (' . $file . ').');
@@ -77,7 +96,7 @@ final class ImageWriter
 					if ($info['type'] === 'jpg') {
 						$this->writer->write('/Decode [1 0 1 0 1 0 1 0]');
 					}
-				} elseif (($this->mpdf->PDFX || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) && $info['cs'] === 'DeviceRGB') {
+				} elseif (($this->mpdf->isPdfx1a() || ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3)) && $info['cs'] === 'DeviceRGB') {
 					throw new \Mpdf\MpdfException('PDFA1-b and PDFX/1-a files do not permit using mixed colour space (' . $file . ').');
 				}
 			}

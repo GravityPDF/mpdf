@@ -165,6 +165,7 @@ class Gradient
 	//    (fx, fy) should be inside the circle, otherwise some areas will not be defined
 	// $col = array(R,G,B/255); or array(G/255); or array(C,M,Y,K/100)
 	// $stops = array('col'=>$col [, 'opacity'=>0-1] [, 'offset'=>0-1])
+	// $colorspace is kept for callers, but the stops settle the colour space - see ColorConverter::gradientColorSpace()
 	public function Gradient($x, $y, $w, $h, $type, $stops = [], $colorspace = 'RGB', $coords = '', $extend = '', $return = false, $is_mask = false)
 	{
 		if ($type && stripos($type, 'L') === 0) {
@@ -173,9 +174,10 @@ class Gradient
 			$type = self::TYPE_RADIAL;
 		}
 
-		if ($colorspace !== 'CMYK' && $colorspace !== 'Gray') {
-			$colorspace = 'RGB';
-		}
+		// The stops settle the colour space, which a parser names from one stop alone
+		$colorspace = $this->colorConverter->gradientColorSpace(array_map(function ($stop) {
+			return $stop['col'];
+		}, $stops));
 
 		$bboxw = $w;
 		$bboxh = $h;
@@ -545,14 +547,7 @@ class Gradient
 		}
 
 		for ($i = 0; $i < count($stops); $i++) {
-			// mPDF 5.3.74
-			if ($colorspace === 'CMYK') {
-				$this->mpdf->gradients[$n]['stops'][$i]['col'] = sprintf('%.3F %.3F %.3F %.3F', ord($stops[$i]['col'][1]) / 100, ord($stops[$i]['col'][2]) / 100, ord($stops[$i]['col'][3]) / 100, ord($stops[$i]['col'][4]) / 100);
-			} elseif ($colorspace === 'Gray') {
-				$this->mpdf->gradients[$n]['stops'][$i]['col'] = sprintf('%.3F', ord($stops[$i]['col'][1]) / 255);
-			} else {
-				$this->mpdf->gradients[$n]['stops'][$i]['col'] = sprintf('%.3F %.3F %.3F', ord($stops[$i]['col'][1]) / 255, ord($stops[$i]['col'][2]) / 255, ord($stops[$i]['col'][3]) / 255);
-			}
+			$this->mpdf->gradients[$n]['stops'][$i]['col'] = $this->colorConverter->gradientComponents($stops[$i]['col'], $colorspace);
 			if (!isset($stops[$i]['opacity'])) {
 				$stops[$i]['opacity'] = 1;
 			} elseif ($stops[$i]['opacity'] > 1 || $stops[$i]['opacity'] < 0) {

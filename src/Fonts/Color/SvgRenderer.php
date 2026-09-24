@@ -370,7 +370,7 @@ class SvgRenderer
 			$set[] = sprintf('[%s] %s d', Geometry::numbers($dashes), Geometry::number($this->length($style['stroke-dashoffset'], 0)));
 		}
 		if ($rgb !== null) {
-			$set[] = vsprintf('%.3F %.3F %.3F RG', $rgb);
+			$set[] = $this->resources->rgb($rgb, true);
 		}
 
 		return 'q ' . implode(' ', $set) . "\n" . $outline . "S\nQ\n";
@@ -636,7 +636,7 @@ class SvgRenderer
 			return null;
 		}
 
-		$mask = "0 g\n";
+		$mask = $this->resources->gray(0) . "\n";
 		foreach ($pieces as $piece) {
 			$mask .= $piece[0] . ($piece[1] ? 'f*' : 'f') . "\n";
 		}

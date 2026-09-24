@@ -87,6 +87,7 @@
 		"arabicjoining:update": "@php utils/arabicjoining_update.php",
 		"emoji:update": "@php utils/emoji_update.php",
 		"fontcache:update": "@php utils/fontcache_update.php",
+		"grayprofile:update": "@php utils/grayprofile_update.php",
 		"otlanguages:update": "@php utils/otlanguages_update.php",
 		"otldump:update": "@php utils/otldump_update.php",
 		"shaping:update": "@php utils/shaping_update.php",

@@ -55,9 +55,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const OBJECT_IDENTIFIER = "\xbb\xa4\xac";
 
 	/**
+	 * The name a document is sent under where Output() is given none
+	 */
+	const DEFAULT_OUTPUT_NAME = 'mpdf.pdf';
+
+	/**
 	 * The optional content group each visibility draws in, by its resource name in OptionalContentWriter
 	 */
 	const VISIBILITY_GROUPS = ['printonly' => 'OC1', 'screenonly' => 'OC2', 'hidden' => 'OC3'];
+
+	/**
+	 * The output intent profile a PDF/X-4 document embeds where ICCProfile names none: U.S. web-coated
+	 * (SWOP) grade 3, a printer profile, as ISO 15930-7 asks of the output intent
+	 */
+	const PDFX4_OUTPUT_PROFILE = __DIR__ . '/../data/iccprofiles/SWOP2006_Coated3v2.icc';
 
 	var $useFixedNormalLineHeight; // mPDF 6
 	var $useFixedTextBaseline; // mPDF 6
@@ -95,6 +106,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	var $PDFX;
 	var $PDFXauto;
+	var $PDFXversion;
+
+	/**
+	 * @var int[] The number of colour components of each ICC profile read, by path
+	 */
+	private $iccChannels = [];
+
+	/**
+	 * @var bool Whether the content sets colour in the ICC-based sRGB colour space, which the page's
+	 *           resource dictionary then names - see SetColor()
+	 */
+	private $usesCalibratedRgb = false;
+
+	/**
+	 * @var bool Whether the content sets colour in the ICC-based grey colour space, which the page's
+	 *           resource dictionary then names - see SetColor()
+	 */
+	private $usesCalibratedGray = false;
 
 	var $PDFA;
 	var $PDFAversion;
@@ -1120,6 +1149,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$originalConfig = $config;
 		$config = $this->initConfig($originalConfig);
 
+		if ($this->isPdfx4() && version_compare($this->pdf_version, '1.6', '<')) {
+			$this->pdf_version = '1.6';
+		}
+
+		// Refuses an output intent PDF/X-4 cannot print to before any content is written
+		$this->pdfxOutputChannels();
+
 		$serviceFactory = new ServiceFactory($container);
 		$services = $serviceFactory->getServices(
 			$this,
@@ -1644,6 +1680,231 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $config;
 	}
 
+	/**
+	 * @return string|null The PDF/X version PDFXversion names, '4' or '1a', or null where the document is not PDF/X
+	 */
+	public function pdfxVersion()
+	{
+		if (!$this->PDFX) {
+			return null;
+		}
+
+		$version = strtolower((string) $this->PDFXversion);
+
+		if (!in_array($version, ['4', '1a'], true)) {
+			throw new \Mpdf\MpdfException(sprintf('PDFXversion (%s) is not valid. (Use: 4 for PDF/X-4, or 1a for PDF/X-1a:2003)', $this->PDFXversion));
+		}
+
+		return $version;
+	}
+
+	/**
+	 * @return bool Whether the document is PDF/X-4, which unlike PDF/X-1a allows transparency and layers
+	 */
+	public function isPdfx4()
+	{
+		return $this->pdfxVersion() === '4';
+	}
+
+	/**
+	 * @return bool Whether the document is PDF/X-1a, which permits no transparency, layers or RGB
+	 */
+	public function isPdfx1a()
+	{
+		return $this->pdfxVersion() === '1a';
+	}
+
+	/**
+	 * @return string The PDF/X version the document conforms to, as warnings and its metadata name it
+	 */
+	public function pdfxVersionLabel()
+	{
+		return $this->isPdfx4() ? 'PDF/X-4' : 'PDF/X-1a:2003';
+	}
+
+	/**
+	 * PDF/X permits no interactive form field, so under PDFXauto fields are drawn on the page as with
+	 * useActiveForms off, and keep the values they show. Without PDFXauto they stay active and the
+	 * document is refused when written.
+	 *
+	 * @return bool Whether form fields are written as interactive fields rather than drawn
+	 */
+	public function activeForms()
+	{
+		return $this->useActiveForms && !($this->PDFX && $this->PDFXauto);
+	}
+
+	/**
+	 * @return string|null The ICC profile the PDF/X output intent embeds: ICCProfile, or for PDF/X-4 the
+	 *                     bundled SWOP profile where it names none. Null for PDF/X-1a naming none, whose
+	 *                     output intent names the CGATS TR 001 condition alone.
+	 */
+	public function pdfxOutputProfile()
+	{
+		if (!$this->PDFX) {
+			return null;
+		}
+
+		if ($this->ICCProfile) {
+			return $this->ICCProfile;
+		}
+
+		return $this->isPdfx4() ? self::PDFX4_OUTPUT_PROFILE : null;
+	}
+
+	/**
+	 * The number of colour components of the PDF/X output intent: four for PDF/X-1a, which prints to a
+	 * CMYK condition, and for PDF/X-4 as many as its profile has, four for the bundled SWOP profile it
+	 * embeds where the document names none.
+	 *
+	 * ISO 15930-7 has the printing condition print to grey, RGB or CMYK, and mPDF writes device colour
+	 * for it, so a profile of any other colour space, Lab among them, is refused. PDF/X-1a prints to CMYK
+	 * alone. Either takes an output device profile, of the 'prtr' class: a display profile such as sRGB
+	 * describes no printing condition, and preflight refuses it.
+	 *
+	 * @throws \Mpdf\MpdfException Where the PDF/X ICCProfile cannot be read, prints to another space or is
+	 *                              not a printer profile
+	 *
+	 * @return int 1 for grey, 3 for RGB, 4 for CMYK
+	 */
+	public function pdfxOutputChannels()
+	{
+		$profile = $this->pdfxOutputProfile();
+		if ($profile === null) {
+			return 4;
+		}
+
+		if (!isset($this->iccChannels[$profile])) {
+			$header = is_readable($profile) ? (string) file_get_contents($profile, false, null, 0, 20) : '';
+			list($channels, $permitted) = $this->isPdfx4()
+				? [['GRAY' => 1, 'RGB ' => 3, 'CMYK' => 4], 'grey, RGB or CMYK']
+				: [['CMYK' => 4], 'CMYK'];
+			$space = substr($header, 16, 4);
+			if (!isset($channels[$space])) {
+				throw new \Mpdf\MpdfException(sprintf('The %s output intent must print to %s, and ICCProfile "%s" does not.', $this->isPdfx4() ? 'PDF/X-4' : 'PDF/X-1a', $permitted, $profile));
+			}
+			$class = substr($header, 12, 4);
+			if ($class !== 'prtr') {
+				throw new \Mpdf\MpdfException(sprintf('The %s output intent must be a printer (prtr) profile, and ICCProfile "%s" is of the %s class.', $this->pdfxVersionLabel(), $profile, trim($class)));
+			}
+			$this->iccChannels[$profile] = $channels[$space];
+		}
+
+		return $this->iccChannels[$profile];
+	}
+
+	/**
+	 * @return bool Whether the document is PDF/X-4 printed to an RGB output intent, where RGB colour is
+	 *              written as it is
+	 */
+	public function pdfxRgbIntent()
+	{
+		return $this->pdfxOutputChannels() === 3;
+	}
+
+	/**
+	 * @return bool Whether the document is PDF/X-4 printed to a grey or RGB output intent, which may not
+	 *              use DeviceCMYK, so that CMYK is converted to RGB
+	 */
+	public function pdfxConvertsCmyk()
+	{
+		return $this->isPdfx4() && $this->pdfxOutputChannels() !== 4;
+	}
+
+	/**
+	 * PDF/X-4 printing to a CMYK or grey output condition may not use DeviceRGB, so rather than convert
+	 * its RGB with a formula that knows nothing of the press - no profile, no rendering intent, no black
+	 * generation, no ink limit - mPDF writes it in an ICC-based sRGB colour space and leaves the press
+	 * one colour-managed conversion to make, of the colours in the content and in the images alike.
+	 *
+	 * @return bool Whether RGB is written in that colour space rather than in DeviceRGB
+	 */
+	public function writesCalibratedRgb()
+	{
+		return $this->isPdfx4() && !$this->pdfxRgbIntent();
+	}
+
+	/**
+	 * @return bool Whether the content has set a colour in the ICC-based sRGB colour space, so that the
+	 *              page's resource dictionary must name it
+	 */
+	public function usesCalibratedRgb()
+	{
+		return $this->usesCalibratedRgb;
+	}
+
+	/**
+	 * PDF/X-4 permits DeviceGray only where its output intent is grey or CMYK. Printing to an RGB output
+	 * intent, grey is written in an ICC-based colour space whose profile has sRGB's tone curve, so that
+	 * each grey draws as it does in DeviceGray - data/iccprofiles/Gray_sRGB_TRC.icc.
+	 *
+	 * @return bool Whether grey is written in that colour space rather than in DeviceGray
+	 */
+	public function writesCalibratedGray()
+	{
+		return $this->isPdfx4() && $this->pdfxRgbIntent();
+	}
+
+	/**
+	 * @return bool Whether the content has set a colour in the ICC-based grey colour space, so that the
+	 *              page's resource dictionary must name it
+	 */
+	public function usesCalibratedGray()
+	{
+		return $this->usesCalibratedGray;
+	}
+
+	/**
+	 * A content stream starts in black in DeviceGray. Where DeviceGray is not permitted, each page and
+	 * each form drawn from SVG or WMF starts by setting black in the ICC-based grey colour space, so that
+	 * nothing drawn before a colour is set falls back to DeviceGray.
+	 *
+	 * @return string Content setting the fill and stroke colours, or nothing where grey is DeviceGray
+	 */
+	public function initialColor()
+	{
+		if (!$this->writesCalibratedGray()) {
+			return '';
+		}
+
+		$black = $this->colorConverter->convert(0, $this->PDFAXwarnings);
+
+		return $this->SetColor($black, 'Fill') . ' ' . $this->SetColor($black, 'Draw') . "\n";
+	}
+
+	/**
+	 * PDF/X requires a document title, which SetTitle() sets. Where none is set the document does not
+	 * conform, so mPDF says so; and where it is to fix the document it titles it after the name the
+	 * document is written under, so that what is produced conforms rather than is merely tolerated.
+	 *
+	 * Asked as the document is closed, before the title is written to the Info dictionary and to the XMP
+	 * metadata. Closed by Close() rather than Output(), the document has no name to be titled after, and
+	 * takes mPDF's default one.
+	 *
+	 * @param string|null $name The name Output() was given, which may name no file
+	 */
+	private function requirePdfxTitle($name)
+	{
+		if (!$this->PDFX || !empty($this->title)) {
+			return;
+		}
+
+		$title = pathinfo((string) $name, PATHINFO_FILENAME);
+		if ($title === '') {
+			$title = pathinfo(self::DEFAULT_OUTPUT_NAME, PATHINFO_FILENAME);
+		}
+
+		$this->PDFAXwarnings[] = sprintf(
+			'A document title is required in %s files, and SetTitle() set none. (Title set to the file name "%s")',
+			$this->pdfxVersionLabel(),
+			$title
+		);
+
+		if ($this->PDFXauto) {
+			$this->title = $title;
+		}
+	}
+
 	private function initConstructorParams(array $config)
 	{
 		$constructor = [
@@ -2089,13 +2350,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Whether the document may use transparency: PDF/A-1 and PDF/X-1a forbid it, PDF/A-2 onwards does not
+	 * Whether the document may use transparency: PDF/A-1 and PDF/X-1a forbid it, PDF/A-2 onwards and PDF/X-4 do not
 	 *
 	 * @return bool
 	 */
 	public function transparencyAllowed()
 	{
-		return !$this->PDFX && $this->pdfaPart() !== '1';
+		return !$this->isPdfx1a() && $this->pdfaPart() !== '1';
 	}
 
 	/**
@@ -2146,7 +2407,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/**
 	 * Whether the document may use optional content, which layers and the visibility property draw with: PDF/A-1 and
-	 * PDF/X-1a forbid it along with transparency, PDF/A-2 onwards allows it
+	 * PDF/X-1a forbid it along with transparency, PDF/A-2 onwards and PDF/X-4 allow it
 	 *
 	 * @return bool
 	 */
@@ -2211,8 +2472,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function SetVisibility($v)
 	{
 		$dropped = $this->visibilityDropped($v);
-		// PDF/A-2 forbids the /AS that switches print-only and screen-only content, but hidden content needs none
-		if ($v !== 'visible' && (!$this->optionalContentAllowed() || ($this->PDFA && $v !== 'hidden'))) {
+		if (!$this->visibilityAllowed($v)) {
 			$this->PDFAXwarnings[] = "Cannot set visibility to " . $v . " when using PDFA or PDFX";
 			if (!$dropped) {
 				return '';
@@ -2239,8 +2499,30 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * Whether content may be drawn with this visibility. PDF/A-2 forbids the /AS that switches print-only and
+	 * screen-only content, but hidden content needs none; PDF/X-4 forbids the /AS too, and PDF/X has no hidden
+	 * content either
+	 *
+	 * @param string $v
+	 *
+	 * @return bool
+	 */
+	private function visibilityAllowed($v)
+	{
+		if ($v === 'visible') {
+			return true;
+		}
+
+		if ($this->PDFX || !$this->optionalContentAllowed()) {
+			return false;
+		}
+
+		return !$this->PDFA || $v === 'hidden';
+	}
+
+	/**
 	 * Whether content with this visibility is left out: under PDFAauto and PDFXauto, what would not print is dropped,
-	 * which is screen-only content, and hidden content where optional content is not allowed
+	 * which is screen-only content, and hidden content where it is not allowed
 	 *
 	 * @param string $v
 	 *
@@ -2248,7 +2530,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function visibilityDropped($v)
 	{
-		if ($v !== 'screenonly' && ($v !== 'hidden' || $this->optionalContentAllowed())) {
+		if ($v !== 'screenonly' && ($v !== 'hidden' || $this->visibilityAllowed($v))) {
 			return false;
 		}
 
@@ -2310,12 +2592,23 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function Close()
 	{
+		$this->closeDocument(null);
+	}
+
+	/**
+	 * @param string|null $name The name Output() was given, which an untitled PDF/X document is titled after
+	 */
+	private function closeDocument($name)
+	{
 		// @log Closing last page
 
 		// Terminate document
 		if ($this->state == 3) {
 			return;
 		}
+
+		// Before the Info dictionary and the metadata are written
+		$this->requirePdfxTitle($name);
 
 		if ($this->page == 0) {
 			$this->AddPage($this->CurOrientation);
@@ -3687,6 +3980,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (!$col) {
 			return '';
 		} // mPDF 6
+
+		// Where DeviceRGB or DeviceGray is not permitted, RGB or grey is set in the ICC-based sRGB or grey
+		// colour space the page's resources name. CodeOnly asks for the device colour's components alone.
+		$calibrated = null;
+		if ($type !== 'CodeOnly') {
+			if (($col[0] == 3 || $col[0] == 5) && $this->writesCalibratedRgb()) {
+				$this->usesCalibratedRgb = true;
+				$calibrated = [Writer\BaseWriter::CALIBRATED_RGB, sprintf('%.3F %.3F %.3F', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255)];
+			} elseif ($col[0] == 1 && $this->writesCalibratedGray()) {
+				$this->usesCalibratedGray = true;
+				$calibrated = [Writer\BaseWriter::CALIBRATED_GRAY, sprintf('%.3F', ord($col[1]) / 255)];
+			}
+		}
+
+		if ($calibrated) {
+			return $type === 'Draw'
+				? sprintf('/%s CS %s SC', $calibrated[0], $calibrated[1])
+				: sprintf('/%s cs %s sc', $calibrated[0], $calibrated[1]);
+		}
+
 		if ($col[0] == 3 || $col[0] == 5) { // RGB / RGBa
 			$out = sprintf('%.3F %.3F %.3F rg', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255);
 		} elseif ($col[0] == 1) { // GRAYSCALE
@@ -4596,11 +4909,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (($family == 'csymbol') || ($family == 'czapfdingbats') || ($family == 'ctimes') || ($family == 'ccourier') || ($family == 'chelvetica')) {
 			if ($this->PDFA || $this->PDFX) {
 				if ($family == 'csymbol' || $family == 'czapfdingbats') {
-					throw new \Mpdf\MpdfException("Symbol and Zapfdingbats cannot be embedded in mPDF (required for PDFA1-b or PDFX/1-a).");
+					throw new \Mpdf\MpdfException("Symbol and Zapfdingbats cannot be embedded in mPDF (required for PDFA1-b or " . $this->pdfxVersionLabel() . ").");
 				}
 				if ($family == 'ctimes' || $family == 'ccourier' || $family == 'chelvetica') {
 					if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
-						$this->PDFAXwarnings[] = "Core Adobe font " . ucfirst($family) . " cannot be embedded in mPDF, which is required for PDFA1-b or PDFX/1-a. (Embedded font will be substituted.)";
+						$this->PDFAXwarnings[] = "Core Adobe font " . ucfirst($family) . " cannot be embedded in mPDF, which is required for PDFA1-b or " . $this->pdfxVersionLabel() . ". (Embedded font will be substituted.)";
 					}
 					if ($family == 'chelvetica') {
 						$family = 'sans';
@@ -4753,7 +5066,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->setMBencoding('UTF-8');
 		} else {  // if using core fonts
 			if ($this->PDFA || $this->PDFX) {
-				throw new \Mpdf\MpdfException('Core Adobe fonts cannot be embedded in mPDF (required for PDFA1-b or PDFX/1-a) - cannot use option to use core fonts.');
+				throw new \Mpdf\MpdfException('Core Adobe fonts cannot be embedded in mPDF (required for PDFA1-b or ' . $this->pdfxVersionLabel() . ') - cannot use option to use core fonts.');
 			}
 			$this->setMBencoding('windows-1252');
 
@@ -10138,7 +10451,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Finish document if necessary
 		if ($this->state < 3) {
-			$this->Close();
+			$this->closeDocument($name);
 		}
 
 		$this->reportBlankColorFonts();
@@ -10157,7 +10470,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if (($this->PDFA || $this->PDFX) && $this->encrypted) {
-			throw new \Mpdf\MpdfException('PDF/A1-b or PDF/X1-a does not permit encryption of documents.');
+			throw new \Mpdf\MpdfException(sprintf('%s does not permit encryption of documents.', $this->PDFA ? 'PDF/A1-b' : $this->pdfxVersionLabel()));
 		}
 
 		if (count($this->PDFAXwarnings) && (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto))) {
@@ -10165,7 +10478,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$standard = 'PDFA/1-b';
 				$option = '$mpdf->PDFAauto';
 			} else {
-				$standard = 'PDFX/1-a ';
+				$standard = $this->pdfxVersionLabel();
 				$option = '$mpdf->PDFXauto';
 			}
 
@@ -10193,7 +10506,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$dest = strtoupper($dest);
 		if (empty($dest)) {
 			if (empty($name)) {
-				$name = 'mpdf.pdf';
+				$name = self::DEFAULT_OUTPUT_NAME;
 				$dest = Destination::INLINE;
 			} else {
 				$dest = Destination::FILE;
@@ -10584,9 +10897,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if (!$this->transparencyAllowed()) {
-			if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
-				$this->PDFAXwarnings[] = "Annotation markers cannot be semi-transparent in PDFA1-b or PDFX/1-a, so they may make underlying text unreadable. (Annotation markers moved to right margin)";
-			}
+			$this->pdfaxWarning("Annotation markers cannot be semi-transparent in PDFA1-b or PDFX/1-a, so they may make underlying text unreadable. (Annotation markers moved to right margin)");
 			$x = ($this->w) - $this->rMargin * 0.66;
 		}
 		if (!$this->annotMargin) {
@@ -10633,6 +10944,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function _enddoc()
 	{
+		// PDF/X permits no JavaScript
+		if ($this->PDFX && $this->js !== null) {
+			$this->pdfaxWarning('JavaScript is not permitted in ' . $this->pdfxVersionLabel() . ' files. (JavaScript removed)');
+			$this->js = null;
+		}
+
+		// Nor any embedded file, which is what an associated file is written as
+		if ($this->PDFX && $this->associatedFiles) {
+			$this->pdfaxWarning('Associated files are not permitted in ' . $this->pdfxVersionLabel() . ' files. (Associated files removed)');
+			$this->associatedFiles = [];
+		}
+
 		// @log Writing Headers & Footers
 
 		$this->_puthtmlheaders();
@@ -11592,7 +11915,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 
 		if ($this->PDFA || $this->PDFX) {
-			throw new \Mpdf\MpdfException("Adobe CJK fonts cannot be embedded in mPDF (required for PDFA1-b and PDFX/1-a).");
+			throw new \Mpdf\MpdfException("Adobe CJK fonts cannot be embedded in mPDF (required for PDFA1-b and " . $this->pdfxVersionLabel() . ").");
 		}
 		if ($family == 'big5') {
 			$this->AddBig5Font();
@@ -14258,11 +14581,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$e = mb_convert_case($e, MB_CASE_TITLE, "UTF-8");
 					} // mPDF 5.7.1
 				} else {
-					if ($this->checkSIP && (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) && $this->subPos < $i && (!$this->specialcontent || !$this->useActiveForms)) {
+					if ($this->checkSIP && (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) && $this->subPos < $i && (!$this->specialcontent || !$this->activeForms())) {
 						$cnt += $this->SubstituteCharsSIP($a, $i, $e);
 					}
 
-					if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->CurrentFont['type'] != 'Type0' && $this->subPos < $i && (!$this->specialcontent || !$this->useActiveForms)) {
+					if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->CurrentFont['type'] != 'Type0' && $this->subPos < $i && (!$this->specialcontent || !$this->activeForms())) {
 						$cnt += $this->SubstituteCharsMB($a, $i, $e);
 					}
 
@@ -14276,7 +14599,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					/* -- OTL -- */
 					// Use OTL OpenType Table Layout - GSUB & GPOS
-					if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL'] && (!$this->specialcontent || !$this->useActiveForms)) {
+					if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL'] && (!$this->specialcontent || !$this->activeForms())) {
 						if (!$this->otl) {
 							$this->otl = new Otl($this, $this->fontCache);
 						}
@@ -14321,7 +14644,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 						// Active Forms. A static list box draws every option, so keeps each one's layout too
 						if (isset($this->selectoption['ACTIVE']) && $this->selectoption['ACTIVE']) {
-							$listBox = !$this->useActiveForms && (isset($this->selectoption['MULTIPLE']) || isset($this->selectoption['SIZE']));
+							$listBox = !$this->activeForms() && (isset($this->selectoption['MULTIPLE']) || isset($this->selectoption['SIZE']));
 							$this->selectoption['ITEMS'][] = ['exportValue' => $this->selectoption['currentVAL'], 'content' => $e, 'selected' => $this->selectoption['currentSEL'], 'OTLdata' => $listBox && !empty($this->OTLdata) ? $this->OTLdata : false];
 						}
 						$this->OTLdata = [];

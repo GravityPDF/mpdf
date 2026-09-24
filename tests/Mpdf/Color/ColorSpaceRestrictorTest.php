@@ -41,7 +41,7 @@ class ColorSpaceRestrictorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 			'CMYK PDF/A-2 draws rgba() as cmyka()' => [$pdfa2 + $cmyk, [5, 255, 0, 0, 0.5], [6, 0, 100, 100, 0, 0.5]],
 			'CMYK PDF/A-1 draws cmyka() as CMYK' => [$pdfa1 + $cmyk, [6, 0, 100, 100, 0, 0.5], [4, 0, 100, 100, 0]],
 			'CMYK PDF/A-2 keeps cmyka()' => [$pdfa2 + $cmyk, [6, 0, 100, 100, 0, 0.5], [6, 0, 100, 100, 0, 0.5]],
-			'PDF/X draws cmyka() as CMYK' => [['PDFX' => true], [6, 0, 100, 100, 0, 0.5], [4, 0, 100, 100, 0]],
+			'PDF/X draws cmyka() as CMYK' => [['PDFX' => true, 'PDFXversion' => '1a'], [6, 0, 100, 100, 0, 0.5], [4, 0, 100, 100, 0]],
 		];
 	}
 
