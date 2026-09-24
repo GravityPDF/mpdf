@@ -27,6 +27,11 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	const PDFX1A = ['PDFX' => true, 'PDFXversion' => '1a'];
 
 	/**
+	 * @var string A directory of this test's own, so that runs side by side cannot remove each other's files
+	 */
+	private $dir;
+
+	/**
 	 * @var string The path a CMYK profile is written to, for a CMYK output intent
 	 */
 	private $cmykProfile;
@@ -50,19 +55,23 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function set_up()
 	{
+		$this->dir = sys_get_temp_dir() . '/mpdf-pdfx4-' . uniqid('', true);
+		mkdir($this->dir);
+
 		$this->cmykProfile = $this->writeProfile('cmyk', 'CMYK');
 		$this->grayProfile = $this->writeProfile('gray', 'GRAY');
 		$this->rgbProfile = $this->writeProfile('rgb', 'RGB ');
 	}
 
 	/**
-	 * Leaves no profile behind
+	 * Leaves no profile or document behind
 	 */
 	public function tear_down()
 	{
-		foreach (glob(sys_get_temp_dir() . '/mpdf-test-*.icc') as $profile) {
-			unlink($profile);
+		foreach (glob($this->dir . '/*') as $file) {
+			unlink($file);
 		}
+		rmdir($this->dir);
 	}
 
 	/**
@@ -74,7 +83,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function writeProfile($name, $space, $class = 'prtr')
 	{
-		$path = sys_get_temp_dir() . '/mpdf-test-' . $name . '.icc';
+		$path = $this->dir . '/mpdf-test-' . $name . '.icc';
 
 		$header = str_repeat("\0", 128);
 		$header = substr_replace($header, pack('N', 0x02100000), 8, 4); // ICC version 2.1
@@ -1269,7 +1278,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAnUntitledPdfxDocumentIsRefused(array $pdfx)
 	{
-		$file = sys_get_temp_dir() . '/mpdf-test-untitled.pdf';
+		$file = $this->dir . '/mpdf-test-untitled.pdf';
 
 		$mpdf = $this->untitled($pdfx + ['PDFXauto' => false]);
 		$mpdf->WriteHTML('<p>Text</p>');
@@ -1311,7 +1320,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAnUntitledPdfxDocumentIsTitledAfterItsFile()
 	{
-		$file = sys_get_temp_dir() . '/Quarterly Report.pdf';
+		$file = $this->dir . '/Quarterly Report.pdf';
 
 		$mpdf = $this->untitled(['PDFX' => true]);
 		$mpdf->WriteHTML('<p>Text</p>');
@@ -1379,7 +1388,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testASetTitleIsKept()
 	{
-		$file = sys_get_temp_dir() . '/mpdf-test-titled.pdf';
+		$file = $this->dir . '/mpdf-test-titled.pdf';
 
 		$mpdf = $this->untitled(['PDFX' => true]);
 		$mpdf->SetTitle('Annual Accounts');
@@ -1398,7 +1407,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testANonPdfxDocumentIsNotTitled()
 	{
-		$file = sys_get_temp_dir() . '/mpdf-test-plain.pdf';
+		$file = $this->dir . '/mpdf-test-plain.pdf';
 
 		$mpdf = $this->untitled([]);
 		$mpdf->WriteHTML('<p>Text</p>');
