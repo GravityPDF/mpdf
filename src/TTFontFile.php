@@ -13,6 +13,7 @@ use Mpdf\Fonts\Table\Loca;
 use Mpdf\Fonts\Table\LookupFlag;
 use Mpdf\Fonts\Table\SequenceRule;
 use Mpdf\Fonts\TableChecksum;
+use Mpdf\Shaper\Indic;
 use Mpdf\Unicode\Emoji;
 
 // NOTE*** If you change the defined constants below, be sure to delete all temporary font data files in /ttfontdata/
@@ -70,25 +71,6 @@ class TTFontFile implements Fonts\FontSourceInterface
 	 * @var bool[]
 	 */
 	private static $indicClasses = ['rphf' => false, 'half' => false, 'pref' => true, 'blwf' => true, 'pstf' => true];
-
-	/**
-	 * The virama of each Indic script, which is the glyph a substitution pairs a consonant with to
-	 * state its class
-	 *
-	 * @var true[]
-	 */
-	private static $viramas = [
-		'0094D' => true,
-		'009CD' => true,
-		'00A4D' => true,
-		'00ACD' => true,
-		'00B4D' => true,
-		'00BCD' => true,
-		'00C4D' => true,
-		'00CCD' => true,
-		'00D4D' => true,
-		'00DCA' => true,
-	];
 
 	/**
 	 * The font file, as something that can be read
@@ -2613,14 +2595,14 @@ class TTFontFile implements Fonts\FontSourceInterface
 	private function indicConsonant(array $match, $postBase, $isOldSpec)
 	{
 		if (count($match) == 3) {
-			return !$postBase && isset(self::$viramas[$match[1]]) && $match[2] === '0200D' ? $match[0] : null;
+			return !$postBase && isset(Indic::$viramas[$match[1]]) && $match[2] === '0200D' ? $match[0] : null;
 		}
 
-		if ($postBase && !$isOldSpec && isset(self::$viramas[$match[0]])) {
+		if ($postBase && !$isOldSpec && isset(Indic::$viramas[$match[0]])) {
 			return $match[1];
 		}
 
-		if (isset(self::$viramas[$match[1]]) && (!$postBase || $isOldSpec || _OTL_OLD_SPEC_COMPAT_2)) {
+		if (isset(Indic::$viramas[$match[1]]) && (!$postBase || $isOldSpec || _OTL_OLD_SPEC_COMPAT_2)) {
 			return $match[0];
 		}
 

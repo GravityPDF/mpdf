@@ -1875,7 +1875,7 @@ class Otl
 				// after it, for a v2 font whose Lookups state Consonant + Halant (see _OTL_OLD_SPEC_COMPAT_1)
 				// Only a masked feature reaches this: with no mask there is no bit for the test below to
 				// read, and pref, blwf and pstf all carry one
-				elseif ($mask && static::_OTL_OLD_SPEC_COMPAT_1 && $Type == 4 && !$is_old_spec && strpos('0094D 009CD 00A4D 00ACD 00B4D 00BCD 00C4D 00CCD 00D4D', $currGlyph) !== false) {
+				elseif ($mask && static::_OTL_OLD_SPEC_COMPAT_1 && $Type == 4 && !$is_old_spec && isset(Indic::$viramas[$currGlyph])) {
 					// only apply when 'pref blwf pstf' tags, and when mask indicates. Not before the base:
 					// the text there is already in the Lookup's Consonant-Halant order, and a swap would
 					// take the Halant of the consonant before
