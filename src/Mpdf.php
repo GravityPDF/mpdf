@@ -424,6 +424,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $floatbuffer;
 	var $floatmargins;
 
+	/**
+	 * The top and bottom of each floated image drawn in a column since the columns were last laid out, by column,
+	 * so balancing does not split a column beside one
+	 *
+	 * @var array[]
+	 */
+	var $columnFloats;
+
 	var $bullet;
 	var $bulletarray;
 
@@ -1305,6 +1313,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->PageAnnots = [];
 		$this->PageNumSubstitutions = [];
 		$this->breakpoints = []; // used in columnbuffer
+		$this->columnFloats = [];
 		$this->tableLevel = 0;
 		$this->tbctr = []; // counter for nested tables at each level
 		$this->page_box = new PageBox();
@@ -17386,6 +17395,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- END CSS-IMAGE-FLOAT -- */
 
 					list($skipln) = $this->inlineObject($objattr['type'], '', $this->y, $objattr, $this->lMargin, ($this->flowingBlockAttr['contentWidth'] / Mpdf::SCALE), $maxWidth, $this->flowingBlockAttr['height'], false, $is_table);
+					/* -- COLUMNS -- */
+					// A floated image too tall or wide for an empty column is set in its line as before
+					if ($this->ColActive && isset($objattr['float'])) {
+						$columnHeight = $this->PageBreakTrigger - ($this->CurrCol < $this->NbCol - 1 ? $this->y0 : $this->tMargin);
+						if (abs($objattr['height']) > $columnHeight || $objattr['width'] > $this->blk[$this->blklvl]['inner_width']) {
+							unset($objattr['float']);
+						}
+					}
+					/* -- END COLUMNS -- */
 					//  1 -> New line needed because of width
 					// -1 -> Will fit width on line but NEW PAGE REQUIRED because of height
 					// -2 -> Will not fit on line therefore needs new line but thus NEW PAGE REQUIRED
@@ -17504,6 +17522,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$objattr['OUTER-HEIGHT'] = $h;
 						$objattr['OUTER-X'] = $fx;
 						$objattr['OUTER-Y'] = $fy;
+						/* -- COLUMNS -- */
+						if ($this->ColActive) {
+							$objattr['column'] = $this->CurrCol;
+							$objattr['columnbuffer_from'] = count($this->columnbuffer);
+						}
+						/* -- END COLUMNS -- */
 						if ($objattr['float'] == 'R') {
 							// If R float already exists at this level
 							$this->floatmargins['R']['skipline'] = false;
@@ -25280,6 +25304,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // *TABLES*
 		/* -- COLUMNS -- */
 		if ($this->ColActive == 1) {
+			// A floated image stays in the column it was placed in
+			$this->printfloatbuffer(); // *CSS-IMAGE-FLOAT*
 			if ($this->CurrCol < $this->NbCol - 1) {
 				// Go to the next column
 				$this->CurrCol++;
@@ -25326,6 +25352,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function SetColumns($NbCol, $vAlign = '', $gap = 5)
 	{
 		// NbCol = number of columns
+		// A floated image is drawn in its column before the columns are laid out
+		if ($this->ColActive) {
+			$this->printfloatbuffer(); // *CSS-IMAGE-FLOAT*
+		}
 		// Anything less than 2 turns columns off
 		if ($NbCol < 2) { // SET COLUMNS OFF
 			if ($this->ColActive) {
@@ -25348,6 +25378,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->col_BMoutlines = [];
 			$this->col_toc = [];
 			$this->breakpoints = [];
+			$this->columnFloats = [];
 		} else { // SET COLUMNS ON
 			if ($this->ColActive) {
 				$this->ColActive = 0;
@@ -25372,6 +25403,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->col_BMoutlines = [];
 			$this->col_toc = [];
 			$this->breakpoints = [];
+			$this->columnFloats = [];
 			if ((strtoupper($vAlign) == 'J') || (strtoupper($vAlign) == 'JUSTIFY')) {
 				$vAlign = 'J';
 			} else {
@@ -25428,6 +25460,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function NewColumn()
 	{
 		if ($this->ColActive == 1) {
+			// A floated image stays in the column it was placed in
+			$this->printfloatbuffer(); // *CSS-IMAGE-FLOAT*
 			if ($this->CurrCol < $this->NbCol - 1) {
 				// Go to the next column
 				$this->CurrCol++;
@@ -25504,6 +25538,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$breaks = [];
 			foreach ($this->breakpoints as $c => $bpa) {
 				foreach ($bpa as $rely) {
+					if ($this->besideColumnFloat($c, $rely)) {
+						continue;
+					}
 					$breaks[] = $rely + $this->ColDetails[$c]['add_y'] - $this->y0;
 				}
 			}
@@ -25925,6 +25962,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->col_BMoutlines = [];
 		$this->col_toc = [];
 		$this->breakpoints = [];
+		$this->columnFloats = [];
 	}
 
 	// mPDF 5.7+
@@ -26362,6 +26400,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function printfloatbuffer()
 	{
 		if (count($this->floatbuffer)) {
+			/* -- COLUMNS -- */
+			if ($this->ColActive) {
+				$this->printColumnFloats();
+				$this->floatbuffer = [];
+				$this->floatmargins = [];
+
+				return;
+			}
+			/* -- END COLUMNS -- */
 			$this->objectbuffer = $this->floatbuffer;
 			$this->printobjectbuffer(false);
 			$this->objectbuffer = [];
@@ -26369,6 +26416,72 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->floatmargins = [];
 		}
 	}
+
+	/* -- COLUMNS -- */
+	/**
+	 * Draw the floated images into the column buffer, each where balancing the columns will keep it with the lines
+	 * beside it
+	 *
+	 * A float is drawn after the lines that wrap around it, but balancing assigns columns in buffer order, so it is
+	 * filed before the first line level with or below its top. The object buffer and current column are put back.
+	 */
+	private function printColumnFloats()
+	{
+		$column = $this->CurrCol;
+		$objects = $this->objectbuffer;
+
+		foreach ($this->floatbuffer as $float) {
+			$this->CurrCol = isset($float['column']) ? $float['column'] : $column;
+			$top = $float['OUTER-Y'];
+			$bottom = $top + $float['OUTER-HEIGHT'];
+			$columnBottom = isset($this->ColDetails[$this->CurrCol]['bottom_margin']) ? $this->ColDetails[$this->CurrCol]['bottom_margin'] : 0;
+			$drawnFrom = count($this->columnbuffer);
+
+			$this->objectbuffer = [$float];
+			$this->printobjectbuffer(false);
+
+			$this->ColDetails[$this->CurrCol]['bottom_margin'] = max($columnBottom, $bottom);
+			$this->columnFloats[$this->CurrCol][] = [$top, $bottom];
+
+			// columnbuffer_from may sit before an earlier float's splice: the scan still finds the first level line
+			$drawn = array_splice($this->columnbuffer, $drawnFrom);
+			$at = count($this->columnbuffer);
+			for ($i = isset($float['columnbuffer_from']) ? $float['columnbuffer_from'] : $drawnFrom; $i < $drawnFrom; $i++) {
+				if ($this->columnbuffer[$i]['col'] == $this->CurrCol && $this->columnbuffer[$i]['y'] >= $top - 0.001) {
+					$at = $i;
+					break;
+				}
+			}
+			array_splice($this->columnbuffer, $at, 0, $drawn);
+		}
+
+		$this->CurrCol = $column;
+		$this->objectbuffer = $objects;
+	}
+
+	/**
+	 * Whether a column break at this height would split the column beside a floated image
+	 *
+	 * @param int $column
+	 * @param float $y
+	 *
+	 * @return bool
+	 */
+	private function besideColumnFloat($column, $y)
+	{
+		if (empty($this->columnFloats[$column])) {
+			return false;
+		}
+
+		foreach ($this->columnFloats[$column] as $extent) {
+			if ($y > $extent[0] + 0.001 && $y < $extent[1] - 0.001) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+	/* -- END COLUMNS -- */
 
 	function Circle($x, $y, $r, $style = 'S')
 	{
