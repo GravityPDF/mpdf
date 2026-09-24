@@ -94,7 +94,9 @@ class FormFieldShrinkTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame($drawn, $mpdf->drawnText[0]);
 		$this->assertEqualsWithDelta($size, $mpdf->drawnFontSize[0], 0.001);
-		$this->assertEqualsWithDelta(10, $mpdf->drawnFontSize[1], 0.001, 'The arrow keeps the field\'s size');
+		$this->assertCount(1, $mpdf->drawnText, 'The arrow is a path, not text');
+		preg_match('/ ([\d.]+) [\d.]+ m ([\d.]+) [\d.]+ l [\d.]+ [\d.]+ l f Q/', $mpdf->pages[$mpdf->page], $arrow);
+		$this->assertEqualsWithDelta(5, $arrow[2] - $arrow[1], 0.001, 'The arrow keeps the field\'s size, half an em wide');
 	}
 
 	/**
