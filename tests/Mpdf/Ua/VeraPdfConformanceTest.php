@@ -272,6 +272,57 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * Text and graphics drawn with the drawing methods after WriteHTML() pass, in strict and in
+	 * auto mode.
+	 *
+	 * @dataProvider directDrawingProvider
+	 *
+	 * @param callable $draw
+	 * @param bool     $auto Whether PDFUAauto is on
+	 *
+	 * @return void
+	 */
+	public function testDirectDrawingApiPassesUa1($draw, $auto)
+	{
+		$mpdf = $this->makeMpdf(['PDFUAauto' => $auto]);
+		$mpdf->WriteHTML('<h1>Direct drawing</h1>');
+		call_user_func($draw, $mpdf);
+		$pdf = $mpdf->Output(null, 'S');
+		$this->assertVeraPdfCompliant($pdf, 'direct drawing API');
+	}
+
+	/**
+	 * Each drawing method, in strict and in auto mode
+	 *
+	 * @return array<string, array{0: callable, 1: bool}>
+	 */
+	public function directDrawingProvider()
+	{
+		$calls = array_merge(
+			DirectDrawingTest::textCallProvider(),
+			DirectDrawingTest::graphicCallProvider(),
+			[
+				'Cell with a link' => DirectDrawingTest::linkedTextCallProvider()['Cell'],
+				'Write with a link' => DirectDrawingTest::linkedTextCallProvider()['Write'],
+				'MultiCell across pages' => [function (\Mpdf\Mpdf $mpdf) {
+					$mpdf->MultiCell(60, 5, str_repeat("A line of text\n", 80));
+				}],
+				'AutosizeText' => [function (\Mpdf\Mpdf $mpdf) {
+					$mpdf->AutosizeText('Autosized', 50, 'dejavusans', '', 20);
+				}],
+			]
+		);
+
+		$cases = [];
+		foreach ($calls as $name => $args) {
+			$cases[$name] = [$args[0], false];
+			$cases[$name . ' (auto)'] = [$args[0], true];
+		}
+
+		return $cases;
+	}
+
+	/**
 	 * An image map of rect, circle and poly areas, declared after its image, passes.
 	 *
 	 * @return void

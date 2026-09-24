@@ -449,6 +449,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	var $cellFrameBaseStack = [];
 
+	/**
+	 * While a text-drawing call such as Cell() or Write() is made from outside WriteHTML(): the
+	 * element its text is marked against (null until something is drawn), whether the call opened
+	 * that element itself, the Link inside it holding linked text, and the Link element Link()
+	 * would otherwise have used, while linked text is being drawn; null the rest of the time.
+	 *
+	 * @var array{elem: \Mpdf\Ua\StructureElement|null, opened: bool, link: \Mpdf\Ua\StructureElement|null, savedLink: \Mpdf\Ua\StructureElement|null|false}|null
+	 */
+	private $pdfuaDirectText;
+
 	var $saveHTMLFooter_height;
 	var $saveHTMLFooterE_height;
 
@@ -4062,7 +4072,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function Line($x1, $y1, $x2, $y2)
 	{
 		// Draw a line
+		$pdfuaArtifact = $this->beginDirectGraphic();
 		$this->writer->write(sprintf('%.3F %.3F m %.3F %.3F l S', $x1 * Mpdf::SCALE, ($this->h - $y1) * Mpdf::SCALE, $x2 * Mpdf::SCALE, ($this->h - $y2) * Mpdf::SCALE));
+		$this->endDirectGraphic($pdfuaArtifact);
 	}
 
 	function Arrow($x1, $y1, $x2, $y2, $headsize = 3, $fill = 'B', $angle = 25)
@@ -4087,6 +4099,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$x5 = $x3 - ($x3 - $x4) / 2; // mid point of base of arrowhead - to join arrow line to
 		$y5 = $y3 - ($y3 - $y4) / 2;
 
+		$pdfuaArtifact = $this->beginDirectGraphic();
+
 		$s = '';
 		$s .= sprintf('%.3F %.3F m %.3F %.3F l S', $x1 * Mpdf::SCALE, ($this->h - $y1) * Mpdf::SCALE, $x5 * Mpdf::SCALE, $y5 * Mpdf::SCALE);
 		$this->writer->write($s);
@@ -4095,6 +4109,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$s .= sprintf('%.3F %.3F m %.3F %.3F l %.3F %.3F l %.3F %.3F l %.3F %.3F l ', $x5 * Mpdf::SCALE, $y5 * Mpdf::SCALE, $x3 * Mpdf::SCALE, $y3 * Mpdf::SCALE, $x2 * Mpdf::SCALE, ($this->h - $y2) * Mpdf::SCALE, $x4 * Mpdf::SCALE, $y4 * Mpdf::SCALE, $x5 * Mpdf::SCALE, $y5 * Mpdf::SCALE);
 		$s .= $fill;
 		$this->writer->write($s);
+
+		$this->endDirectGraphic($pdfuaArtifact);
 	}
 
 	function Rect($x, $y, $w, $h, $style = '')
@@ -4107,7 +4123,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} else {
 			$op = 'S';
 		}
+		$pdfuaArtifact = $this->beginDirectGraphic();
 		$this->writer->write(sprintf('%.3F %.3F %.3F %.3F re %s', $x * Mpdf::SCALE, ($this->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE, $op));
+		$this->endDirectGraphic($pdfuaArtifact);
 	}
 
 	function AddFontDirectory($directory)
@@ -4693,6 +4711,135 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * Whether content drawn now is outside any marked content and any artifact, as it is when a
+	 * drawing method is called directly rather than from WriteHTML(), which marks what it draws.
+	 *
+	 * @return bool
+	 */
+	private function isUnmarkedPdfuaDrawing()
+	{
+		return $this->PDFUA
+			&& $this->ua->getMarkedContentHelper()->getDepth() === 0
+			&& !$this->ua->getStructureTree()->isInArtifact();
+	}
+
+	/**
+	 * Start a text-drawing call made directly, such as Cell() or Write(). Its text joins the open
+	 * structure element, or a P of its own when that element only groups others (the Document
+	 * after WriteHTML() has finished, say). A call made while another is in progress, as Write()
+	 * makes Cell(), belongs to the outer one.
+	 *
+	 * @return bool Whether this call started it, for endDirectText()
+	 */
+	private function beginDirectText()
+	{
+		if ($this->pdfuaDirectText !== null || !$this->isUnmarkedPdfuaDrawing()) {
+			return false;
+		}
+		$this->pdfuaDirectText = ['elem' => null, 'opened' => false, 'link' => null, 'savedLink' => false];
+
+		return true;
+	}
+
+	/**
+	 * @param bool $started What beginDirectText() returned
+	 *
+	 * @return void
+	 */
+	private function endDirectText($started)
+	{
+		if (!$started) {
+			return;
+		}
+		if ($this->pdfuaDirectText['opened']) {
+			$this->ua->getStructureTree()->close();
+		}
+		$this->pdfuaDirectText = null;
+	}
+
+	/**
+	 * Open marked content for text a direct call is about to write on the current page, as
+	 * content of the call's element. The element is chosen on the first text drawn, so a call
+	 * drawing none adds none. Linked text goes in a Link inside it, which the annotation that
+	 * Link() makes for the text joins.
+	 *
+	 * @param mixed $link As given to Cell()
+	 *
+	 * @return bool Whether marked content was opened, to be closed with endDirectTextContent()
+	 */
+	private function beginDirectTextContent($link = '')
+	{
+		if ($this->pdfuaDirectText === null || !$this->isUnmarkedPdfuaDrawing()) {
+			return false;
+		}
+		$tree = $this->ua->getStructureTree();
+		if ($this->pdfuaDirectText['elem'] === null) {
+			if (\Mpdf\Ua\StructType::isGrouping($tree->getCurrent()->getType())) {
+				$tree->open('P');
+				$this->pdfuaDirectText['opened'] = true;
+			}
+			$this->pdfuaDirectText['elem'] = $tree->getCurrent();
+		}
+		$elem = $this->pdfuaDirectText['elem'];
+		if ($link != '') {
+			if ($this->pdfuaDirectText['link'] === null) {
+				$this->pdfuaDirectText['link'] = $tree->addLeaf('Link');
+			}
+			$elem = $this->pdfuaDirectText['link'];
+			$this->pdfuaDirectText['savedLink'] = $this->ua->getAnchorState()->getLinkStructElem();
+			$this->ua->getAnchorState()->setLinkStructElem($elem);
+		}
+		$mcid = $tree->addContentForElement($elem, $this->pdfuaStructParents());
+		$this->ua->getMarkedContentHelper()->begin($elem->getType(), $mcid);
+
+		return true;
+	}
+
+	/**
+	 * @param bool $opened What beginDirectTextContent() returned
+	 *
+	 * @return void
+	 */
+	private function endDirectTextContent($opened)
+	{
+		if (!$opened) {
+			return;
+		}
+		$this->ua->getMarkedContentHelper()->end();
+		if ($this->pdfuaDirectText['savedLink'] !== false) {
+			$this->ua->getAnchorState()->setLinkStructElem($this->pdfuaDirectText['savedLink']);
+			$this->pdfuaDirectText['savedLink'] = false;
+		}
+	}
+
+	/**
+	 * Mark a graphic drawn directly, such as Rect() or Line(), as an artifact
+	 *
+	 * @return bool Whether marked content was opened, to be closed with endDirectGraphic()
+	 */
+	private function beginDirectGraphic()
+	{
+		if (!$this->isUnmarkedPdfuaDrawing()) {
+			return false;
+		}
+		$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
+
+		return true;
+	}
+
+	/**
+	 * @param bool $opened What beginDirectGraphic() returned
+	 *
+	 * @return void
+	 */
+	private function endDirectGraphic($opened)
+	{
+		if ($opened) {
+			$this->ua->getMarkedContentHelper()->end();
+		}
+	}
+
+	/**
 	 * The operator that selects the current font and size.
 	 *
 	 * Tf is allowed outside a text object. PDF/UA-1 drops the empty BT/ET around it, which veraPDF
@@ -4943,7 +5090,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($return) {
 			return $s . " \n";
 		}
+
+		$pdfuaDirectText = $this->beginDirectText();
+		$pdfuaMarked = $this->beginDirectTextContent();
 		$this->writer->write($s);
+		$this->endDirectTextContent($pdfuaMarked);
+		$this->endDirectText($pdfuaDirectText);
 	}
 
 	/**
@@ -5210,6 +5362,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	function Cell($w, $h = 0, $txt = '', $border = 0, $ln = 0, $align = '', $fill = 0, $link = '', $currentx = 0, $lcpaddingL = 0, $lcpaddingR = 0, $valign = 'M', $spanfill = 0, $exactWidth = false, $OTLdata = false, $textvar = 0, $lineBox = false)
 	{
+		$pdfuaDirectText = $this->beginDirectText();
+
 		// NON_BREAKING SPACE
 		if ($this->usingCoreFont) {
 			$txt = str_replace(chr(160), chr(32), $txt);
@@ -5288,6 +5442,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		/* -- END COLUMNS -- */
 
+		// Opened once the page break above is behind it, as marked content ends on the page it began
+		$pdfuaMarked = $txt !== '' && $this->beginDirectTextContent($link);
 
 		if ($w == 0) {
 			$w = $this->w - $this->rMargin - $this->x;
@@ -5870,6 +6026,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->Link($this->x, $boxtop, $w, $boxheight, $link);
 			}
 		}
+
+		// A cell drawing only a fill or border is decoration
+		$pdfuaArtifact = !$pdfuaMarked && $s !== '' && $this->pdfuaDirectText !== null && $this->beginDirectGraphic();
 		if ($s) {
 			$this->writer->write($s);
 		}
@@ -5878,6 +6037,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->ws && !$this->usingCoreFont) {
 			$this->writer->write(sprintf('BT %.3F Tc ET', $this->charspacing));
 		}
+		$this->endDirectTextContent($pdfuaMarked);
+		$this->endDirectGraphic($pdfuaArtifact);
+		$this->endDirectText($pdfuaDirectText);
 		$this->lasth = $h;
 		if (strpos($txt, "\n") !== false) {
 			$ln = 1; // cell recognizes \n from <BR> tag
@@ -6337,6 +6499,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$OTLdata = false,
 		$maxrows = false
 	) {
+		$pdfuaDirectText = $this->beginDirectText();
+
 		// maxrows is called from mpdfform->TEXTAREA
 		// Parameter (pre-)encoded - When called internally from form::textarea -
 		// mb_encoding already done and OTL - but not reverse RTL
@@ -6465,6 +6629,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->Cell($w, $h, $tmp, $b, 2, $align, $fill, $link, 0, 0, 0, 'M', 0, false, $tmpOTLdata);
 
 					if ($maxrows != false && isset($this->form) && ($this->y - $start_y) / $h > $maxrows) {
+						$this->endDirectText($pdfuaDirectText);
 						return false;
 					}
 
@@ -6560,6 +6725,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if ($maxrows != false && isset($this->form) && ($this->y - $start_y) / $h > $maxrows) {
+						$this->endDirectText($pdfuaDirectText);
 						return false;
 					}
 
@@ -6598,6 +6764,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->Cell($w, $h, substr($s, $j, $i - $j), $b, 2, $align, $fill, $link);
 
 					if ($maxrows != false && isset($this->form) && ($this->y - $start_y) / $h > $maxrows) {
+						$this->endDirectText($pdfuaDirectText);
 						return false;
 					}
 
@@ -6661,6 +6828,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if ($maxrows != false && isset($this->form) && ($this->y - $start_y) / $h > $maxrows) {
+						$this->endDirectText($pdfuaDirectText);
 						return false;
 					}
 
@@ -6709,6 +6877,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$this->x = $this->lMargin;
+		$this->endDirectText($pdfuaDirectText);
 	}
 
 	/* -- DIRECTW -- */
@@ -6719,7 +6888,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->directWrite = new DirectWrite($this, $this->otl, $this->sizeConverter, $this->colorConverter);
 		}
 
+		$pdfuaDirectText = $this->beginDirectText();
 		$this->directWrite->Write($h, $txt, $currentx, $link, $directionality, $align, $fill);
+		$this->endDirectText($pdfuaDirectText);
 	}
 
 	/* -- END DIRECTW -- */
@@ -11805,13 +11976,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$wx = ($this->w / 2) - $adj + $offset / 3;
 		$wy = ($this->h / 2) + $opp;
 
+		// Opened in the structure tree too, so Text() does not tag the watermark as a paragraph
 		if ($this->PDFUA) {
 			$this->pages[$this->page] .= '/Artifact <</Type /Background>> BDC' . "\n";
+			$this->ua->getStructureTree()->openArtifact();
 		}
 		$this->Rotate($angle, $wx, $wy);
 		$this->Text($wx, $wy, $texte, $OTLdata, $textvar);
 		$this->Rotate(0);
 		if ($this->PDFUA) {
+			$this->ua->getStructureTree()->closeArtifact();
 			$this->pages[$this->page] .= 'EMC' . "\n";
 		}
 
@@ -11876,7 +12050,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->directWrite = new DirectWrite($this, $this->otl, $this->sizeConverter, $this->colorConverter);
 		}
 
+		$pdfuaDirectText = $this->beginDirectText();
 		$this->directWrite->CircularText($x, $y, $r, $text, $align, $fontfamily, $fontsize, $fontstyle, $kerning, $fontwidth, $divider);
+		$this->endDirectText($pdfuaDirectText);
 	}
 
 	// From Invoice
@@ -11891,6 +12067,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} else {
 			$op = 'S';
 		}
+
+		$pdfuaArtifact = $this->beginDirectGraphic();
 
 		$MyArc = 4 / 3 * (sqrt(2) - 1);
 		$this->writer->write(sprintf('%.3F %.3F m', ($x + $r) * Mpdf::SCALE, ($hp - $y) * Mpdf::SCALE));
@@ -11915,6 +12093,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->_Arc($xc - $r, $yc - $r * $MyArc, $xc - $r * $MyArc, $yc - $r, $xc, $yc - $r);
 		$this->writer->write($op);
+
+		$this->endDirectGraphic($pdfuaArtifact);
 	}
 
 	function _Arc($x1, $y1, $x2, $y2, $x3, $y3)
@@ -11934,7 +12114,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (empty($this->directWrite)) {
 			$this->directWrite = new DirectWrite($this, $this->otl, $this->sizeConverter, $this->colorConverter);
 		}
+		$pdfuaDirectText = $this->beginDirectText();
 		$this->directWrite->Shaded_box($text, $font, $fontstyle, $szfont, $width, $style, $radius, $fill, $color, $pad);
+		$this->endDirectText($pdfuaDirectText);
 	}
 
 	/* -- END DIRECTW -- */
@@ -18033,7 +18215,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// artifact, which is allowed; a fixed-position block is written as though it were one.
 		$pdfuaArtifactOpened = false;
 		if ($this->PDFUA) {
-			$this->writer->write('/Artifact BMC');
+			$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
 			$pdfuaArtifactOpened = true;
 		}
 
@@ -19076,7 +19258,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->blk[$blvl]['bb_painted'][$this->page] = true;
 
 		if ($pdfuaArtifactOpened) {
-			$this->writer->write('EMC');
+			$this->ua->getMarkedContentHelper()->end();
 		}
 	}
 	function PaintDivLnBorder($state = 0, $blvl = 0, $h = 0)
@@ -21986,7 +22168,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			&& !($buffer && !$bSeparate)
 			&& $this->ua->getMarkedContentHelper()->getDepth() === 0
 		) {
-			$this->writer->write('/Artifact BMC');
+			$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
 			$pdfuaArtifactOpened = true;
 		}
 
@@ -22058,7 +22240,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 				if ($pdfuaArtifactOpened) {
-					$this->writer->write('EMC');
+					$this->ua->getMarkedContentHelper()->end();
 				}
 				return;
 			}
@@ -22517,7 +22699,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if ($pdfuaArtifactOpened) {
-			$this->writer->write('EMC');
+			$this->ua->getMarkedContentHelper()->end();
 		}
 	}
 
@@ -26668,10 +26850,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$h = $this->h;
 
+		$pdfuaArtifact = $this->beginDirectGraphic();
 		$this->writer->write(sprintf('%.3F %.3F m %.3F %.3F %.3F %.3F %.3F %.3F c', ($x + $rx) * Mpdf::SCALE, ($h - $y) * Mpdf::SCALE, ($x + $rx) * Mpdf::SCALE, ($h - ($y - $ly)) * Mpdf::SCALE, ($x + $lx) * Mpdf::SCALE, ($h - ($y - $ry)) * Mpdf::SCALE, $x * Mpdf::SCALE, ($h - ($y - $ry)) * Mpdf::SCALE));
 		$this->writer->write(sprintf('%.3F %.3F %.3F %.3F %.3F %.3F c', ($x - $lx) * Mpdf::SCALE, ($h - ($y - $ry)) * Mpdf::SCALE, ($x - $rx) * Mpdf::SCALE, ($h - ($y - $ly)) * Mpdf::SCALE, ($x - $rx) * Mpdf::SCALE, ($h - $y) * Mpdf::SCALE));
 		$this->writer->write(sprintf('%.3F %.3F %.3F %.3F %.3F %.3F c', ($x - $rx) * Mpdf::SCALE, ($h - ($y + $ly)) * Mpdf::SCALE, ($x - $lx) * Mpdf::SCALE, ($h - ($y + $ry)) * Mpdf::SCALE, $x * Mpdf::SCALE, ($h - ($y + $ry)) * Mpdf::SCALE));
 		$this->writer->write(sprintf('%.3F %.3F %.3F %.3F %.3F %.3F c %s', ($x + $lx) * Mpdf::SCALE, ($h - ($y + $ry)) * Mpdf::SCALE, ($x + $rx) * Mpdf::SCALE, ($h - ($y + $ly)) * Mpdf::SCALE, ($x + $rx) * Mpdf::SCALE, ($h - $y) * Mpdf::SCALE, $op));
+		$this->endDirectGraphic($pdfuaArtifact);
 	}
 
 	/* -- DIRECTW -- */
