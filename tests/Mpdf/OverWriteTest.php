@@ -109,6 +109,25 @@ class OverWriteTest extends BaseMpdfTest
 	}
 
 	/**
+	 * A core font writes its text in cp1252 and escapes the parentheses, so the text searched for has to be written
+	 * the same way to be found
+	 */
+	public function testCoreFontTextWithCharactersOutsideAsciiIsReplaced()
+	{
+		$mpdf = new Mpdf(['mode' => 'c']);
+		$mpdf->compress = false;
+		$mpdf->WriteHTML('<p>Café (x) text</p>');
+		$source = $mpdf->Output('', Destination::STRING_RETURN);
+		$mpdf->cleanup();
+
+		$pdf = $this->mpdf->OverWrite($this->file($source), ['Café (x)'], ['Thé (y)'], Destination::STRING_RETURN);
+		$text = implode("\n", array_column($this->streams($pdf), 1));
+
+		$this->assertStringContainsString("(Th\xE9 \\(y\\) text) Tj", $text);
+		$this->assertStringNotContainsString('Caf', $text);
+	}
+
+	/**
 	 * The offsets the method keeps have to still add up, or the reader has to repair the file
 	 */
 	public function testTheCrossReferenceTableStillPointsAtItself()

@@ -28327,7 +28327,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$replacement[$k] = $this->writer->escape($replacement[$k]);
 			}
 		} else {
-			foreach ($replacement as $k => $val) {
+			foreach ($search as $k => $val) {
+				$search[$k] = mb_convert_encoding($search[$k], $this->mb_enc, 'utf-8');
+				$search[$k] = $this->writer->escape($search[$k]);
 				$replacement[$k] = mb_convert_encoding($replacement[$k], $this->mb_enc, 'utf-8');
 				$replacement[$k] = $this->writer->escape($replacement[$k]);
 			}
