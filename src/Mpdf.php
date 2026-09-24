@@ -25552,7 +25552,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$newcolumn = 0;
 			foreach ($this->columnbuffer as $key => $s) {
 				if (isset($s['rel_y'])) { // only process position sensitive data
-					if ($s['rel_y'] >= $cbr[$newcolumn]) {
+					// The last break is the foot of the content, so whatever sits at or below it stays in the last column
+					if ($newcolumn < $this->NbCol - 1 && $s['rel_y'] >= $cbr[$newcolumn]) {
 						$newcolumn++;
 					} else {
 						$newcolumn = $last_new_col;
