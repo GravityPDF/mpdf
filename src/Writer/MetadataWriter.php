@@ -407,7 +407,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('endobj');
 
 		// PDF/X-1a naming no ICCProfile names its condition alone; PDF/A falls back to sRGB
-		$profile = $this->mpdf->PDFX ? $this->mpdf->pdfxOutputProfile() : ($this->mpdf->ICCProfile ?: BaseWriter::SRGB_PROFILE);
+		$profile = $this->mpdf->outputIntentProfile();
 		if ($profile === null) {
 			return;
 		}
@@ -425,13 +425,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write('<<');
 
-		if ($this->mpdf->PDFX) {
-			$this->writer->write('/N ' . $this->mpdf->pdfxOutputChannels());
-		} elseif ($this->mpdf->PDFA && $this->mpdf->restrictColorSpace === 3) {
-			$this->writer->write('/N 4');
-		} else {
-			$this->writer->write('/N 3');
-		}
+		$this->writer->write('/N ' . $this->mpdf->outputIntentChannels());
 
 		if ($this->mpdf->compress) {
 			$this->writer->write('/Filter /FlateDecode ');
