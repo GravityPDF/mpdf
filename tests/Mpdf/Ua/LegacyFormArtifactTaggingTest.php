@@ -3,8 +3,8 @@
 namespace Mpdf\Ua;
 
 /**
- * With useActiveForms off, a form control is only drawn, with no field behind it, so what is
- * drawn is marked as an artifact.
+ * With useActiveForms off, a form control is only drawn, with no field behind it, so its box is
+ * marked as an artifact. StaticFormFieldValueTest covers the value drawn in it.
  *
  * @group pdfua
  */
@@ -47,7 +47,7 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 	}
 
 	/**
-	 * The control was drawn as an artifact, and nothing in the structure tree points at a
+	 * The control's box was drawn as an artifact, and nothing in the structure tree points at a
 	 * widget, since there is none.
 	 *
 	 * @param string $output PDF bytes
@@ -67,9 +67,9 @@ class LegacyFormArtifactTaggingTest extends PdfUaTestCase
 			$widget . ': /Artifact BMC must be closed with EMC'
 		);
 		$this->assertStringNotContainsString(
-			'/S /Form',
+			'/Subtype /Widget',
 			$output,
-			$widget . ': legacy path must not emit a Form struct kid'
+			$widget . ': legacy path must not emit a Widget annotation'
 		);
 		$this->assertStringNotContainsString(
 			'/S /Annot',

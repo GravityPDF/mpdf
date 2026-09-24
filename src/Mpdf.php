@@ -2023,6 +2023,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $this->ua->nextStructParents();
 	}
 
+	/**
+	 * For collaborators such as Form that mark content on the current page.
+	 *
+	 * @return int The current page's /StructParents
+	 */
+	public function getPdfUaStructParents()
+	{
+		return $this->pdfuaStructParents();
+	}
+
 	function SetSubject($subject)
 	{
 		// Subject of document
@@ -8631,6 +8641,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			/* -- FORMS -- */
+			// A drawn field's box is an artifact and its value a Form element of its own, neither of
+			// which may sit inside the block's tagged content, so that is ended here and begun again after
+			$pdfuaFieldClosedBlockBdc = false;
+			if ($this->PDFUA
+				&& !$this->useActiveForms
+				&& in_array($objattr['type'], ['input', 'textarea', 'select'], true)
+				&& !empty($this->flowingBlockAttr['pdfua_bdc_active'])
+			) {
+				$this->closeBlockBdcIfOpen();
+				$pdfuaFieldClosedBlockBdc = true;
+			}
+
 			// TEXT/PASSWORD INPUT
 			if ($objattr['type'] == 'input' && ($objattr['subtype'] == 'TEXT' || $objattr['subtype'] == 'PASSWORD')) {
 				$this->form->print_ob_text($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir);
@@ -8664,6 +8686,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// RADIO
 			if ($objattr['type'] == 'input' && ($objattr['subtype'] == 'RADIO')) {
 				$this->form->print_ob_radio($objattr, $w, $h, $texto, $rtlalign, $k, $blockdir, $x, $y);
+			}
+
+			if ($pdfuaFieldClosedBlockBdc) {
+				$this->ensureBlockBdcOpen();
 			}
 			/* -- END FORMS -- */
 		}
