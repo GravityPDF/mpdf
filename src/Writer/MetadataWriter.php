@@ -688,8 +688,8 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 							$this->writer->write(' /Border [0 0 0]', false);
 						}
 
-						// Every link annotation is tagged; one made outside an <a> (Link(), a TOC entry, an
-						// imported page's link) gets a Link element of its own
+						// Every link annotation is tagged; one made outside an <a> (Link(), a TOC entry, a link
+						// its imported source did not tag) gets a Link element of its own
 						if ($this->mpdf->PDFUA) {
 							$tree = $this->ua->getStructureTree();
 							$linkStructElem = isset($pl['structElem']) ? $pl['structElem'] : null;

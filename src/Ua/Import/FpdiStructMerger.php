@@ -114,6 +114,21 @@ class FpdiStructMerger
 	private $mergedMcrs = [];
 
 	/**
+	 * The element holding the OBJR of each link annotation FPDI imported with a page, by the
+	 * annotation's object number in the source
+	 *
+	 * @var array<string, array<int, StructureElement>>
+	 */
+	private $importedLinkElements = [];
+
+	/**
+	 * The source object numbers of the links imported with the page being merged
+	 *
+	 * @var array<int, true>
+	 */
+	private $importedLinkObjects = [];
+
+	/**
 	 * It is built before UaState, so it collects warnings for FpdiTrait to pass on instead
 	 * of holding UaState.
 	 *
@@ -199,8 +214,10 @@ class FpdiStructMerger
 			return;
 		}
 
-		$this->mergedSubtrees[$pageId] = [];
-		$this->mergedMcrs[$pageId]     = [];
+		$this->mergedSubtrees[$pageId]       = [];
+		$this->mergedMcrs[$pageId]           = [];
+		$this->importedLinkElements[$pageId] = [];
+		$this->importedLinkObjects           = [];
 
 		$this->cloneVisited    = [];
 		$this->cloneNodeCount  = 0;
@@ -212,6 +229,12 @@ class FpdiStructMerger
 		}
 
 		$readerId = $importedPages[$pageId]['readerId'];
+
+		foreach ($importedPages[$pageId]['externalLinks'] as $link) {
+			if (isset($link['sourceObjectNumber'])) {
+				$this->importedLinkObjects[$link['sourceObjectNumber']] = true;
+			}
+		}
 
 		try {
 			$reader  = $this->mpdf->getSourcePdfReader($readerId);
@@ -256,6 +279,78 @@ class FpdiStructMerger
 		} catch (\Exception $e) {
 			// A source that cannot be parsed brings no structure across
 		}
+	}
+
+	/**
+	 * Give each link FPDI imported from a source page the object number of its annotation,
+	 * so the annotation can be matched to the OBJR of the element that tags it. FPDI keeps
+	 * a page's links to a URI in the order of its /Annots, without their /StructParent.
+	 *
+	 * @param  string $readerId
+	 * @param  int    $pageNumber
+	 * @param  array  $externalLinks The links as FPDI imported them
+	 * @return array The links, with 'sourceObjectNumber' where the annotation was found
+	 */
+	public function identifyImportedLinks($readerId, $pageNumber, array $externalLinks)
+	{
+		if ($externalLinks === []) {
+			return $externalLinks;
+		}
+
+		try {
+			$reader = $this->mpdf->getSourcePdfReader($readerId);
+			$parser = $reader->getParser();
+			$page   = $reader->getPage($pageNumber);
+			$annots = PdfType::resolve(PdfDictionary::get($page->getPageDictionary(), 'Annots'), $parser);
+		} catch (\Exception $e) {
+			return $externalLinks;
+		}
+
+		if (!($annots instanceof PdfArray)) {
+			return $externalLinks;
+		}
+
+		$i = 0;
+		foreach ($annots->value as $entry) {
+			if (!isset($externalLinks[$i])) {
+				break;
+			}
+			// Only an annotation that is an object of its own can be the target of an OBJR
+			if (!($entry instanceof PdfIndirectObjectReference)) {
+				continue;
+			}
+			try {
+				$action = PdfType::resolve(PdfDictionary::get(PdfType::resolve($entry, $parser), 'A'), $parser);
+				$uri    = $action instanceof PdfDictionary ? PdfType::resolve(PdfDictionary::get($action, 'URI'), $parser) : null;
+			} catch (\Exception $e) {
+				continue;
+			}
+			if ($uri instanceof PdfString) {
+				$uri = PdfString::unescape($uri->value);
+			} elseif ($uri instanceof PdfHexString) {
+				$uri = hex2bin($uri->value);
+			} else {
+				continue;
+			}
+			if ($uri === $externalLinks[$i]['uri']) {
+				$externalLinks[$i]['sourceObjectNumber'] = (int) $entry->value;
+				$i++;
+			}
+		}
+
+		return $externalLinks;
+	}
+
+	/**
+	 * @param  string $pageId
+	 * @param  int    $sourceObjectNumber The object number of a link annotation in the page's source
+	 * @return StructureElement|null The element brought across that tags the annotation
+	 */
+	public function getImportedLinkElement($pageId, $sourceObjectNumber)
+	{
+		return isset($this->importedLinkElements[$pageId][$sourceObjectNumber])
+			? $this->importedLinkElements[$pageId][$sourceObjectNumber]
+			: null;
 	}
 
 	/**
@@ -941,6 +1036,7 @@ class FpdiStructMerger
 
 		$this->copyStructureAttributes($resolved, $parser, $hostElem);
 
+		$tagsImportedLink = false;
 		$kRef = PdfDictionary::get($resolved, 'K');
 		if (!($kRef instanceof PdfNull)) {
 			try {
@@ -991,7 +1087,14 @@ class FpdiStructMerger
 								}
 							} catch (\Exception $e) {
 							}
-						} elseif ($kidType !== 'OBJR') {
+						} elseif ($kidType === 'OBJR') {
+							// The annotation of an imported link is tagged by the element that tagged it in the source
+							$obj = PdfDictionary::get($kidResolved, 'Obj');
+							if ($pageId !== '' && $obj instanceof PdfIndirectObjectReference && isset($this->importedLinkObjects[(int) $obj->value])) {
+								$this->importedLinkElements[$pageId][(int) $obj->value] = $hostElem;
+								$tagsImportedLink = true;
+							}
+						} else {
 							$this->cloneElement($kid, $parser, $hostElem, $structParents, $foXObjectObjNum, $hostPageObjNum, $pageId, $depth + 1);
 						}
 					}
@@ -1001,9 +1104,13 @@ class FpdiStructMerger
 			}
 		}
 
-		// The annotation of a Form or Link is not brought across with it: a widget is not imported at
-		// all, and an imported link is given an element of its own. One with nothing else is dropped.
-		if (($hostType === 'Form' || $hostType === 'Link') && $hostElem->getMcids() === [] && $hostElem->getChildren() === []) {
+		// A widget is never imported and FPDI imports only links to a URI, so a Form or Link element
+		// whose annotation was not brought across and which holds nothing else is dropped
+		if (($hostType === 'Form' || $hostType === 'Link')
+			&& $hostElem->getMcids() === []
+			&& $hostElem->getChildren() === []
+			&& !$tagsImportedLink
+		) {
 			$hostParent->removeChild($hostElem);
 			return null;
 		}

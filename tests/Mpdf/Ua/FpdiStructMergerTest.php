@@ -509,14 +509,98 @@ class FpdiStructMergerTest extends PdfUaTestCase
 	}
 
 	/**
+	 * An imported link annotation is tagged by the Link element it had in its source, which keeps
+	 * its place in the reading order, rather than by a new one at the end of the document.
+	 */
+	public function testImportedLinkIsTaggedByItsSourceLinkElement()
+	{
+		$output = $this->importTagged('<p>Before <a href="https://example.com/a">Example</a> after.</p><p>Last</p>');
+
+		$links = $this->linkElements($output);
+		$this->assertCount(1, $links);
+		$this->assertStringContainsString('/Type /MCR', $links[0]['body']);
+
+		$this->assertSame(1, preg_match('#(\d+) 0 obj\s*<</Type /Annot /Subtype /Link [^\n]*?/StructParent (\d+)#', $output, $annot));
+		$this->assertSame([$annot[1]], $links[0]['objrs']);
+		$this->assertMatchesRegularExpression('#\n' . $annot[2] . ' ' . $links[0]['num'] . ' 0 R\n#', $output);
+	}
+
+	/**
+	 * Each of a page's imported links is tagged by its own source Link element.
+	 */
+	public function testEachImportedLinkKeepsItsOwnLinkElement()
+	{
+		$output = $this->importTagged('<p><a href="https://example.com/a">A</a> and <a href="https://example.com/b">B</a></p>');
+
+		$links = $this->linkElements($output);
+		$this->assertCount(2, $links);
+		foreach ($links as $link) {
+			$this->assertCount(1, $link['objrs']);
+		}
+		$this->assertNotSame($links[0]['objrs'], $links[1]['objrs']);
+	}
+
+	/**
+	 * A page placed twice has one Link element for its link, holding the annotation of each placement.
+	 */
+	public function testImportedLinkPlacedTwiceSharesItsLinkElement()
+	{
+		$output = $this->importTagged('<p><a href="https://example.com/a">Example</a></p>', [], 2);
+
+		$links = $this->linkElements($output);
+		$this->assertCount(1, $links);
+		$this->assertCount(2, $links[0]['objrs']);
+		$this->assertSame(2, substr_count($output, '/Subtype /Link'));
+	}
+
+	/**
+	 * importPage() gives each imported link the object number of its annotation in the source.
+	 */
+	public function testImportedLinksKnowTheirSourceAnnotation()
+	{
+		$this->importTagged('<p><a href="https://example.com/a">A</a> and <a href="https://example.com/b">B</a></p>');
+		preg_match_all('#(\d+) 0 obj\s*<</Type /Annot /Subtype /Link [^\n]*?/URI \((https://example\.com/[ab])\)#', file_get_contents($this->taggedPdf), $annots);
+
+		$mpdf = $this->makeMpdf();
+		$mpdf->setSourceFile($this->taggedPdf);
+		$pageId = $mpdf->importPage(1);
+		$pages  = $mpdf->getImportedPages();
+		$links  = $pages[$pageId]['externalLinks'];
+
+		$this->assertSame(array_map('intval', $annots[1]), [$links[0]['sourceObjectNumber'], $links[1]['sourceObjectNumber']]);
+		$this->assertSame($annots[2], [$links[0]['uri'], $links[1]['uri']]);
+	}
+
+	/**
+	 * The Link structure elements of a document
+	 *
+	 * @param string $output An uncompressed document
+	 *
+	 * @return array Each ['num' => object number, 'body' => the object, 'objrs' => the object numbers its OBJRs refer to]
+	 */
+	private function linkElements($output)
+	{
+		preg_match_all('#(\d+) 0 obj\s*(<</Type /StructElem\s+/S /Link\s.*?)endobj#s', $output, $matches, PREG_SET_ORDER);
+
+		$links = [];
+		foreach ($matches as $match) {
+			preg_match_all('#/Type /OBJR /Obj (\d+) 0 R#', $match[2], $objrs);
+			$links[] = ['num' => $match[1], 'body' => $match[2], 'objrs' => $objrs[1]];
+		}
+
+		return $links;
+	}
+
+	/**
 	 * Imports page 1 of a tagged document written from the HTML into a new PDF/UA document.
 	 *
 	 * @param string $html
-	 * @param array  $config For the source document
+	 * @param array  $config     For the source document
+	 * @param int    $placements How many pages the imported page is placed on
 	 *
 	 * @return string The new document, uncompressed
 	 */
-	private function importTagged($html, $config = [])
+	private function importTagged($html, $config = [], $placements = 1)
 	{
 		$source = $this->makeMpdf($config);
 		$source->WriteHTML($html);
@@ -526,8 +610,10 @@ class FpdiStructMergerTest extends PdfUaTestCase
 		$mpdf = $this->makeMpdf();
 		$mpdf->setSourceFile($this->taggedPdf);
 		$pageId = $mpdf->importPage(1);
-		$mpdf->AddPage();
-		$mpdf->useImportedPage($pageId);
+		for ($i = 0; $i < $placements; $i++) {
+			$mpdf->AddPage();
+			$mpdf->useImportedPage($pageId);
+		}
 
 		return $mpdf->Output(null, 'S');
 	}
