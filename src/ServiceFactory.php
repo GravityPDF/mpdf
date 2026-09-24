@@ -31,6 +31,7 @@ use Mpdf\Writer\FormWriter;
 use Mpdf\Writer\ImageWriter;
 use Mpdf\Writer\JavaScriptWriter;
 use Mpdf\Writer\MetadataWriter;
+use Mpdf\Xmp\XmpExtensions;
 use Mpdf\Writer\OptionalContentWriter;
 use Mpdf\Writer\PageWriter;
 use Mpdf\Writer\ResourceWriter;
@@ -162,7 +163,8 @@ class ServiceFactory
 		);
 
 		$fontWriter = new FontWriter($mpdf, $writer, $fontCache, $fontDescriptor, $logger);
-		$metadataWriter = new MetadataWriter($mpdf, $writer, $form, $protection, $assetFetcher, $logger);
+		$xmpExtensions = new XmpExtensions();
+		$metadataWriter = new MetadataWriter($mpdf, $writer, $form, $protection, $assetFetcher, $xmpExtensions, $logger);
 		$imageWriter = new ImageWriter($mpdf, $writer);
 		$pageWriter = new PageWriter($mpdf, $writer, $metadataWriter);
 		$bookmarkWriter = new BookmarkWriter($mpdf, $writer);
@@ -217,6 +219,7 @@ class ServiceFactory
 			'writer' => $writer,
 			'fontWriter' => $fontWriter,
 			'metadataWriter' => $metadataWriter,
+			'xmpExtensions' => $xmpExtensions,
 			'imageWriter' => $imageWriter,
 			'formWriter' => $formWriter,
 			'pageWriter' => $pageWriter,
@@ -260,6 +263,7 @@ class ServiceFactory
 			'writer',
 			'fontWriter',
 			'metadataWriter',
+			'xmpExtensions',
 			'imageWriter',
 			'formWriter',
 			'pageWriter',

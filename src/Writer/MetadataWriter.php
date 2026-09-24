@@ -9,10 +9,13 @@ use Mpdf\Form;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Mpdf;
 use Mpdf\MpdfAnnotationException;
+use Mpdf\MpdfException;
 use Mpdf\Pdf\Protection;
+use Mpdf\Pdf\DocumentProfile;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
 use Mpdf\Utils\PdfDate;
 use Mpdf\Utils\Path;
+use Mpdf\Xmp\XmpExtensions;
 
 use Psr\Log\LoggerInterface;
 
@@ -21,6 +24,24 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 	use Strict;
 	use PsrLogAwareTrait;
+
+	/**
+	 * The namespace of each prefix the packet writes itself, which no XMP extension may take
+	 */
+	const PACKET_NAMESPACES = [
+		'x' => 'adobe:ns:meta/',
+		'rdf' => 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+		'xml' => 'http://www.w3.org/XML/1998/namespace',
+		'pdf' => 'http://ns.adobe.com/pdf/1.3/',
+		'xmp' => 'http://ns.adobe.com/xap/1.0/',
+		'dc' => 'http://purl.org/dc/elements/1.1/',
+		'pdfx' => 'http://ns.adobe.com/pdfx/1.3/',
+		'pdfaid' => 'http://www.aiim.org/pdfa/ns/id/',
+		'xmpMM' => 'http://ns.adobe.com/xap/1.0/mm/',
+		'pdfaExtension' => 'http://www.aiim.org/pdfa/ns/extension/',
+		'pdfaSchema' => 'http://www.aiim.org/pdfa/ns/schema#',
+		'pdfaProperty' => 'http://www.aiim.org/pdfa/ns/property#',
+	];
 
 	/**
 	 * @var \Mpdf\Mpdf
@@ -56,18 +77,34 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	private $assetFetcher;
 
 	/**
+	 * @var \Mpdf\Xmp\XmpExtensions
+	 */
+	private $xmpExtensions;
+
+	/**
 	 * @var int[][] The object number of each link, by page and then by its key in PageLinks
 	 */
 	private $linkIds = [];
 
-	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, AssetFetcherInterface $assetFetcher, LoggerInterface $logger)
+	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, AssetFetcherInterface $assetFetcher, XmpExtensions $xmpExtensions, LoggerInterface $logger)
 	{
 		$this->mpdf = $mpdf;
 		$this->writer = $writer;
 		$this->form = $form;
 		$this->protection = $protection;
 		$this->assetFetcher = $assetFetcher;
+		$this->xmpExtensions = $xmpExtensions;
 		$this->logger = $logger;
+	}
+
+	/**
+	 * Whether the document carries XMP metadata, which mPDF writes for PDF/A and PDF/X alone
+	 *
+	 * @return bool
+	 */
+	public function writesMetadata()
+	{
+		return $this->mpdf->PDFA || $this->mpdf->PDFX;
 	}
 
 	public function writeMetadata() // _putmetadata
@@ -84,16 +121,16 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$uuid = preg_replace('/^(.{8})(.{4})(.{4})(.{4})/', '$1-$2-$3-$4-', $uuid);
 
 		$m = '<?xpacket begin="' . chr(239) . chr(187) . chr(191) . '" id="W5M0MpCehiHzreSzNTczkc9d"?>' . "\n"; // begin = FEFF BOM
-		$m .= ' <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="3.1-701">' . "\n";
-		$m .= '  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">' . "\n";
-		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdf="http://ns.adobe.com/pdf/1.3/">' . "\n";
+		$m .= ' <x:xmpmeta ' . $this->xmlns('x') . ' x:xmptk="3.1-701">' . "\n";
+		$m .= '  <rdf:RDF ' . $this->xmlns('rdf') . '>' . "\n";
+		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('pdf') . '>' . "\n";
 		$m .= '    <pdf:Producer>' . htmlspecialchars($this->getProducerString(), ENT_QUOTES | ENT_XML1) . '</pdf:Producer>' . "\n";
 		if (!empty($this->mpdf->keywords)) {
 			$m .= '    <pdf:Keywords>' . htmlspecialchars($this->mpdf->keywords, ENT_QUOTES | ENT_XML1) . '</pdf:Keywords>' . "\n";
 		}
 		$m .= '   </rdf:Description>' . "\n";
 
-		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:xmp="http://ns.adobe.com/xap/1.0/">' . "\n";
+		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('xmp') . '>' . "\n";
 		$m .= '    <xmp:CreateDate>' . $CreationDate . '</xmp:CreateDate>' . "\n";
 		$m .= '    <xmp:ModifyDate>' . $CreationDate . '</xmp:ModifyDate>' . "\n";
 		$m .= '    <xmp:MetadataDate>' . $CreationDate . '</xmp:MetadataDate>' . "\n";
@@ -103,7 +140,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$m .= '   </rdf:Description>' . "\n";
 
 		// DC elements
-		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:dc="http://purl.org/dc/elements/1.1/">' . "\n";
+		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('dc') . '>' . "\n";
 		$m .= '    <dc:format>application/pdf</dc:format>' . "\n";
 		if (!empty($this->mpdf->title)) {
 			$m .= '    <dc:title>
@@ -139,12 +176,25 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$m .= $this->mpdf->additionalXmpRdf;
 		}
 
+		// Written here rather than into additionalXmpRdf, which belongs to the user
+		$extensions = $this->xmpExtensions->all();
+		if ($extensions) {
+			$this->checkAdditionalXmpRdf($extensions);
+			$about = 'uuid:' . $uuid;
+			if ($this->mpdf->PDFA) {
+				$m .= $this->extensionSchemasRdf($about, $extensions);
+			}
+			foreach ($extensions as $extension) {
+				$m .= $this->propertiesRdf($about, $extension['schema'], $extension['extension']->getXmpProperties());
+			}
+		}
+
 		// This bit is specific to PDFX-1a
 		if ($this->mpdf->PDFX) {
-			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdfx="http://ns.adobe.com/pdfx/1.3/" pdfx:Apag_PDFX_Checkup="1.3" pdfx:GTS_PDFXConformance="PDF/X-1a:2003" pdfx:GTS_PDFXVersion="PDF/X-1:2003"/>' . "\n";
+			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('pdfx') . ' pdfx:Apag_PDFX_Checkup="1.3" pdfx:GTS_PDFXConformance="PDF/X-1a:2003" pdfx:GTS_PDFXVersion="PDF/X-1:2003"/>' . "\n";
 		} elseif ($this->mpdf->PDFA) {
 			list($part, $conformance) = $this->mpdf->pdfaConformance();
-			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/" >' . "\n";
+			$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('pdfaid') . ' >' . "\n";
 			$m .= '    <pdfaid:part>' . $part . '</pdfaid:part>' . "\n";
 			$m .= '    <pdfaid:conformance>' . $conformance . '</pdfaid:conformance>' . "\n";
 			if ($part === '1' && $conformance === 'B') {
@@ -153,7 +203,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$m .= '   </rdf:Description>' . "\n";
 		}
 
-		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/">' . "\n";
+		$m .= '   <rdf:Description rdf:about="uuid:' . $uuid . '" ' . $this->xmlns('xmpMM') . '>' . "\n";
 		$m .= '    <xmpMM:DocumentID>uuid:' . $uuid . '</xmpMM:DocumentID>' . "\n";
 		$m .= '   </rdf:Description>' . "\n";
 		$m .= '  </rdf:RDF>' . "\n";
@@ -163,6 +213,106 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('<</Type/Metadata/Subtype/XML/Length ' . $this->writer->streamLength($m) . '>>');
 		$this->writer->stream($m);
 		$this->writer->write('endobj');
+	}
+
+	/**
+	 * Refuse additionalXmpRdf that would clash with the XMP extensions mPDF writes
+	 *
+	 * An XMP packet holds only one pdfaExtension:schemas, and each property only once, so either clash leaves XMP that does not parse.
+	 *
+	 * @param mixed[] $extensions As XmpExtensions::all() gives them
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	private function checkAdditionalXmpRdf($extensions)
+	{
+		$rdf = (string) $this->mpdf->additionalXmpRdf;
+
+		foreach ($extensions as $extension) {
+			$schema = $extension['schema'];
+			if (strpos($rdf, $schema['namespaceURI']) !== false) {
+				throw new MpdfException(sprintf('The RDF set with SetAdditionalXmpRdf() has %s properties (%s), which mPDF already writes for %s. Remove them from that RDF.', $schema['prefix'], $schema['namespaceURI'], $extension['registeredBy']));
+			}
+		}
+
+		if ($this->mpdf->PDFA && strpos($rdf, self::PACKET_NAMESPACES['pdfaExtension']) !== false) {
+			throw new MpdfException('The RDF set with SetAdditionalXmpRdf() declares PDF/A extension schemas. A PDF can hold only one list of them, and mPDF writes it. Register each schema and its properties with AddXmpExtension() instead.');
+		}
+	}
+
+	/**
+	 * The packet's one pdfaExtension:schemas, declaring the schema of each extension
+	 *
+	 * @see https://pdfa.org/resource/technical-note-tn-0009-xmp-extension-schemas-in-pdfa-1/
+	 *
+	 * @param string $about The rdf:about every other description in the packet uses
+	 * @param mixed[] $extensions As XmpExtensions::all() gives them
+	 *
+	 * @return string
+	 */
+	private function extensionSchemasRdf($about, $extensions)
+	{
+		$m = '   <rdf:Description rdf:about="' . $about . '" ' . $this->xmlns('pdfaExtension') . ' ' . $this->xmlns('pdfaSchema') . ' ' . $this->xmlns('pdfaProperty') . '>' . "\n";
+		$m .= '    <pdfaExtension:schemas>' . "\n";
+		$m .= '     <rdf:Bag>' . "\n";
+		foreach ($extensions as $extension) {
+			$schema = $extension['schema'];
+			$m .= '      <rdf:li rdf:parseType="Resource">' . "\n";
+			$m .= '       <pdfaSchema:schema>' . htmlspecialchars($schema['schema'], ENT_QUOTES | ENT_XML1) . '</pdfaSchema:schema>' . "\n";
+			$m .= '       <pdfaSchema:namespaceURI>' . htmlspecialchars($schema['namespaceURI'], ENT_QUOTES | ENT_XML1) . '</pdfaSchema:namespaceURI>' . "\n";
+			$m .= '       <pdfaSchema:prefix>' . $schema['prefix'] . '</pdfaSchema:prefix>' . "\n";
+			$m .= '       <pdfaSchema:property>' . "\n";
+			$m .= '        <rdf:Seq>' . "\n";
+			foreach ($schema['properties'] as $name => $description) {
+				$m .= '         <rdf:li rdf:parseType="Resource">' . "\n";
+				$m .= '          <pdfaProperty:name>' . $name . '</pdfaProperty:name>' . "\n";
+				$m .= '          <pdfaProperty:valueType>Text</pdfaProperty:valueType>' . "\n";
+				$m .= '          <pdfaProperty:category>external</pdfaProperty:category>' . "\n";
+				$m .= '          <pdfaProperty:description>' . htmlspecialchars($description, ENT_QUOTES | ENT_XML1) . '</pdfaProperty:description>' . "\n";
+				$m .= '         </rdf:li>' . "\n";
+			}
+			$m .= '        </rdf:Seq>' . "\n";
+			$m .= '       </pdfaSchema:property>' . "\n";
+			$m .= '      </rdf:li>' . "\n";
+		}
+		$m .= '     </rdf:Bag>' . "\n";
+		$m .= '    </pdfaExtension:schemas>' . "\n";
+		$m .= '   </rdf:Description>' . "\n";
+
+		return $m;
+	}
+
+	/**
+	 * A description holding property values in an extension schema's namespace
+	 *
+	 * @param string $about The rdf:about every other description in the packet uses
+	 * @param mixed[] $schema The extension schema that declares the properties
+	 * @param string[] $values Each property's value by its name
+	 *
+	 * @return string
+	 */
+	private function propertiesRdf($about, $schema, $values)
+	{
+		$prefix = $schema['prefix'];
+		$m = '   <rdf:Description rdf:about="' . $about . '" xmlns:' . $prefix . '="' . htmlspecialchars($schema['namespaceURI'], ENT_QUOTES | ENT_XML1) . '">' . "\n";
+		foreach ($values as $name => $value) {
+			$m .= '    <' . $prefix . ':' . $name . '>' . htmlspecialchars($value, ENT_QUOTES | ENT_XML1) . '</' . $prefix . ':' . $name . '>' . "\n";
+		}
+		$m .= '   </rdf:Description>' . "\n";
+
+		return $m;
+	}
+
+	/**
+	 * The declaration of a prefix the packet writes, from the table that keeps XMP extensions off it
+	 *
+	 * @param string $prefix
+	 *
+	 * @return string
+	 */
+	private function xmlns($prefix)
+	{
+		return 'xmlns:' . $prefix . '="' . self::PACKET_NAMESPACES[$prefix] . '"';
 	}
 
 	public function writeInfo() // _putinfo
@@ -361,20 +511,14 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->writer->write('/Type /Catalog');
 
-		// PDF/A-2 and PDF/A-3 are based on PDF 1.7 (ISO 32000-1).
-		// The /Version entry in the catalog overrides the header version.
-		if ($this->mpdf->PDFA) {
-			list($part) = $this->mpdf->pdfaConformance();
-			if ($part !== '1') {
-				$this->writer->write('/Version /1.7');
-			}
+		// The /Version entry in the catalog overrides the header version
+		$version = DocumentProfile::fromMpdf($this->mpdf)->getPdfVersion();
+		if ($version !== $this->mpdf->pdf_version) {
+			$this->writer->write('/Version /' . $version);
 		}
 
 		// AES-256 encryption is PDF 2.0, or PDF 1.7 with Adobe's extension level 8
 		if ($this->mpdf->encrypted) {
-			if (version_compare($this->mpdf->pdf_version, '1.7', '<')) {
-				$this->writer->write('/Version /1.7');
-			}
 			$this->writer->write('/Extensions <</ADBE <</BaseVersion /1.7 /ExtensionLevel 8>>>>');
 		}
 
@@ -427,7 +571,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		// Metadata
-		if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
+		if ($this->writesMetadata()) {
 			$this->writer->write('/Metadata ' . $this->mpdf->MetadataRoot . ' 0 R');
 		}
 

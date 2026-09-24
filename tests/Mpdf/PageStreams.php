@@ -25,6 +25,42 @@ trait PageStreams
 		return $mpdf;
 	}
 
+	/**
+	 * A PDF/A document of the given version, in a mode that embeds its fonts as PDF/A needs
+	 *
+	 * @param string $version
+	 *
+	 * @return \Mpdf\Mpdf
+	 */
+	private function pdfA($version)
+	{
+		return $this->mpdf(['mode' => '', 'PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => $version]);
+	}
+
+	/**
+	 * The EN 16931 Cross Industry Invoice fixture, naming the given guideline in place of its own
+	 *
+	 * @param string|null $guideline
+	 *
+	 * @return string
+	 */
+	private function invoice($guideline = null)
+	{
+		$xml = file_get_contents(__DIR__ . '/../data/invoice/en16931.xml');
+
+		return $guideline === null ? $xml : str_replace('<ram:ID>urn:cen.eu:en16931:2017</ram:ID>', '<ram:ID>' . $guideline . '</ram:ID>', $xml);
+	}
+
+	/**
+	 * A PDF/A-3 document, the kind that can carry a Factur-X invoice
+	 *
+	 * @return \Mpdf\Mpdf
+	 */
+	private function pdfA3()
+	{
+		return $this->pdfA('3-B');
+	}
+
 	private function render($html, $config = [])
 	{
 		$mpdf = $this->mpdf($config);
