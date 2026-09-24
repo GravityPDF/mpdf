@@ -109,14 +109,14 @@ class StaticListBoxTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A drop-down still draws only its selected option beside an arrow
+	 * A drop-down still draws only its selected option beside an arrow, which is drawn as a triangle
 	 */
 	public function testADropDownKeepsItsSelectedOptionAndArrow()
 	{
 		$mpdf = $this->draw('<select name="fruit">' . $this->options(['Elderberry and apple', 'Fig'], [1]) . '</select>');
 
-		$this->assertSame(['Fig', chr(116)], $mpdf->drawnText);
-		$this->assertSame('czapfdingbats', $mpdf->drawnFontFamily[1]);
+		$this->assertSame(['Fig'], $mpdf->drawnText);
+		$this->assertMatchesRegularExpression('/0\.745 g\n[\d. -]+ re B \nq 0\.000 g [\d. ]+ m [\d. ]+ l [\d. ]+ l f Q/', $this->page('<select name="fruit"><option>Fig</option></select>'));
 	}
 
 	/**
