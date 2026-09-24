@@ -10387,7 +10387,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				if ($last_x != ($this->lMargin + $this->blk[$blvl]['outer_left_margin']) || ($last_w != $this->blk[$blvl]['width']) || $last_fc != $this->FillColor || (isset($this->blk[$blvl]['border_top']['s']) && $this->blk[$blvl]['border_top']['s']) || (isset($this->blk[$blvl]['border_bottom']['s']) && $this->blk[$blvl]['border_bottom']['s']) || (isset($this->blk[$blvl]['border_left']['s']) && $this->blk[$blvl]['border_left']['s']) || (isset($this->blk[$blvl]['border_right']['s']) && $this->blk[$blvl]['border_right']['s'])) {
 					$x = $this->x;
-					$this->Cell(($this->blk[$blvl]['width']), $h, '', '', 0, '', 1);
+					$alpha = $this->blk[$blvl]['bgcolor'] ? Color\ColorConverter::alpha($this->blk[$blvl]['bgcolorarray']) : null;
+					if ($alpha === null || $alpha == 1) {
+						$this->Cell(($this->blk[$blvl]['width']), $h, '', '', 0, '', 1);
+					} elseif ($blvl == $firstblockfill || $this->blk[$blvl]['bgcolorarray'] !== $this->blk[$blvl - 1]['bgcolorarray']) {
+						// In columns a block inherits its parent's background, which the parent has already painted
+						// here: painting it again would double its opacity
+						$this->translucentDivLnFill($blvl, $h, $alpha);
+					}
 					$this->x = $x;
 					if (!$this->writingHTMLheader && !$this->writingHTMLfooter) {
 						// $state = 0 normal; 1 top; 2 bottom; 3 top and bottom
@@ -10412,6 +10419,62 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if ($move_y) {
 			$this->y += $h;
+		}
+	}
+
+	/**
+	 * Fills a line of a block's translucent background. In columns each fill is marked, so that printcolumnbuffer() can
+	 * paint the fills of a block's column as one shape: separate fills would darken where their edges meet
+	 *
+	 * @param int $blvl
+	 * @param float $h
+	 * @param float $alpha
+	 */
+	private function translucentDivLnFill($blvl, $h, $alpha)
+	{
+		$w = $this->blk[$blvl]['width'];
+		$this->Cell($w, $h); // moves to a new column or page as a filled Cell() would
+		$this->writer->write(sprintf(
+			'q %s %s %.3F %.3F %.3F %.3F re f Q',
+			$this->SetAlpha($alpha, 'Normal', true, 'F'),
+			$this->FillColor,
+			($this->x - $w) * Mpdf::SCALE,
+			($this->h - $this->y) * Mpdf::SCALE,
+			$w * Mpdf::SCALE,
+			-$h * Mpdf::SCALE
+		));
+
+		if ($this->ColActive) {
+			end($this->columnbuffer);
+			$this->columnbuffer[key($this->columnbuffer)]['background'] = $blvl . ' ' . $this->blk[$blvl]['bgcolorarray'];
+		}
+	}
+
+	/**
+	 * Paints the translucent background fills printcolumnbuffer() finds in the same column of the same block as one
+	 * shape, where the first of them was painted, so that no part of the background is painted twice
+	 *
+	 * @param string $column the column buffer key holding the column each entry is printed in
+	 */
+	private function mergeColumnBackgrounds($column)
+	{
+		$groups = [];
+		foreach ($this->columnbuffer as $key => $s) {
+			if (!isset($s['background'])) {
+				continue;
+			}
+			$group = $s['background'] . ' ' . $s[$column];
+			preg_match('/^(q .*? )([\-\d.]+ [\-\d.]+ [\-\d.]+ [\-\d.]+ re) f Q$/', $s['s'], $m);
+			if (!isset($groups[$group])) {
+				$groups[$group] = ['key' => $key, 'start' => $m[1], 'rects' => []];
+			} else {
+				$this->columnbuffer[$key]['s'] = '';
+			}
+			$groups[$group]['rects'][] = $m[2];
+		}
+
+		foreach ($groups as $group) {
+			$this->columnbuffer[$group['key']]['s'] = $group['start'] . implode(' ', $group['rects']) . ' f Q';
 		}
 	}
 
@@ -25623,6 +25686,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- END ANNOTATIONS -- */
 				}
 			}
+			$this->mergeColumnBackgrounds('newcol');
 
 			/* -- BOOKMARKS -- */
 			// Adjust Bookmarks
@@ -25732,6 +25796,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		} // Columns not ended but new page -> align columns (can leave the columns alone - just tidy up the height)
 		elseif ($this->colvAlign == 'J' && $this->ColumnAdjust && !$this->keepColumns) {
+			$this->mergeColumnBackgrounds('col');
 			// calculate the lowest bottom margin
 			$lowest_bottom_y = 0;
 			foreach ($this->columnbuffer as $key => $s) {
@@ -25848,6 +25913,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 		} else { // Just reproduce the page as it was
+
+			$this->mergeColumnBackgrounds('col');
 
 			// If page has not ended but height adjustment was disabled by custom column-break - adjust y
 			$lowest_bottom_y = 0;
