@@ -2386,39 +2386,12 @@ class Svg
 				$stroke_width = $current_style['stroke-width'];
 				$stroke_width /= $scale;
 
-				$opacitystr = '';
-				$fopacity = 1;
-
-				if (isset($current_style['fill-opacity'])) {
-					if ($current_style['fill-opacity'] == 0) {
-						$fopacity = 0;
-					} elseif ($current_style['fill-opacity'] > 1) {
-						$fopacity = 1;
-					} elseif ($current_style['fill-opacity'] > 0) {
-						$fopacity = $current_style['fill-opacity'];
-					} elseif ($current_style['fill-opacity'] < 0) {
-						$fopacity = 0;
-					}
-				}
-
-				$sopacity = 1;
-				if (isset($current_style['stroke-opacity'])) {
-					if ($current_style['stroke-opacity'] == 0) {
-						$sopacity = 0;
-					} elseif ($current_style['stroke-opacity'] > 1) {
-						$sopacity = 1;
-					} elseif ($current_style['stroke-opacity'] > 0) {
-						$sopacity = $current_style['stroke-opacity'];
-					} elseif ($current_style['stroke-opacity'] < 0) {
-						$sopacity = 0;
-					}
-				}
-
-				$opacitystr = $this->opacityState(['ca' => $fopacity, 'CA' => $sopacity]);
-
 				$fillstr = '';
 				if (isset($current_style['fill']) && $current_style['fill'] != 'none') {
 					$col = $this->colorConverter->convert($current_style['fill'], $this->mpdf->PDFAXwarnings);
+					if ($col) {
+						$current_style['fill-opacity'] = $this->withColorAlpha($col, $current_style['fill-opacity']);
+					}
 					$fillstr = $this->mpdf->SetFColor($col, true);
 					$render = "0"; // Fill (only)
 					$op = 'f';
@@ -2428,6 +2401,7 @@ class Svg
 				if ($stroke_width > 0 && $current_style['stroke'] != 'none') {
 					$scol = $this->colorConverter->convert($current_style['stroke'], $this->mpdf->PDFAXwarnings);
 					if ($scol) {
+						$current_style['stroke-opacity'] = $this->withColorAlpha($scol, $current_style['stroke-opacity']);
 						$strokestr .= $this->mpdf->SetDColor($scol, true) . ' ';
 					}
 					$linewidth = $this->ConvertSVGSizePixels($stroke_width);
@@ -2446,6 +2420,8 @@ class Svg
 				if ($render == -1) {
 					return '';
 				}
+
+				$opacitystr = $this->textOpacityState($current_style);
 
 				if ($op == 'fS') {
 					$op = 'B';
@@ -2558,42 +2534,13 @@ class Svg
 			$current_style['font-family'] = $this->mpdf->SetFont($current_style['font-family'], $style, $size, false);
 			$this->mpdf->CurrentFont['fo'] = true;
 
-			$opacitystr = '';
-			// mPDF 6
-			$fopacity = 1;
-
-			if (isset($current_style['fill-opacity'])) {
-				if ($current_style['fill-opacity'] == 0) {
-					$fopacity = 0;
-				} elseif ($current_style['fill-opacity'] > 1) {
-					$fopacity = 1;
-				} elseif ($current_style['fill-opacity'] > 0) {
-					$fopacity = $current_style['fill-opacity'];
-				} elseif ($current_style['fill-opacity'] < 0) {
-					$fopacity = 0;
-				}
-			}
-
-			$sopacity = 1;
-
-			if (isset($current_style['stroke-opacity'])) {
-				if ($current_style['stroke-opacity'] == 0) {
-					$sopacity = 0;
-				} elseif ($current_style['stroke-opacity'] > 1) {
-					$sopacity = 1;
-				} elseif ($current_style['stroke-opacity'] > 0) {
-					$sopacity = $current_style['stroke-opacity'];
-				} elseif ($current_style['stroke-opacity'] < 0) {
-					$sopacity = 0;
-				}
-			}
-
-			$opacitystr = $this->opacityState(['ca' => $fopacity, 'CA' => $sopacity]);
-
 			$fillstr = '';
 
 			if (isset($current_style['fill']) && $current_style['fill'] != 'none') {
 				$col = $this->colorConverter->convert($current_style['fill'], $this->mpdf->PDFAXwarnings);
+				if ($col) {
+					$current_style['fill-opacity'] = $this->withColorAlpha($col, $current_style['fill-opacity']);
+				}
 				$fillstr = $this->mpdf->SetFColor($col, true);
 				$render = "0"; // Fill (only)
 			}
@@ -2604,6 +2551,7 @@ class Svg
 				$scol = $this->colorConverter->convert($current_style['stroke'], $this->mpdf->PDFAXwarnings);
 
 				if ($scol) {
+					$current_style['stroke-opacity'] = $this->withColorAlpha($scol, $current_style['stroke-opacity']);
 					$strokestr .= $this->mpdf->SetDColor($scol, true) . ' ';
 				}
 
@@ -2623,6 +2571,8 @@ class Svg
 			if ($render == -1) {
 				return '';
 			}
+
+			$opacitystr = $this->textOpacityState($current_style);
 
 			$x = $this->txt_data[0]; // mPDF 5.7.4
 			$y = $this->txt_data[1]; // mPDF 5.7.4
@@ -2703,6 +2653,34 @@ class Svg
 		$this->mpdf->SetFont($prev_style['font-family'], $style, $size, false);
 
 		return $path_cmd;
+	}
+
+	/**
+	 * The operator that sets the fill and stroke opacities of a text run, each held between 0 and 1
+	 *
+	 * @param array $style the text style, its opacities already multiplied by the alpha of its colours
+	 *
+	 * @return string
+	 */
+	private function textOpacityState(array $style)
+	{
+		$alphas = [];
+		foreach (['ca' => 'fill-opacity', 'CA' => 'stroke-opacity'] as $key => $property) {
+			$alphas[$key] = 1;
+			if (isset($style[$property])) {
+				if ($style[$property] == 0) {
+					$alphas[$key] = 0;
+				} elseif ($style[$property] > 1) {
+					$alphas[$key] = 1;
+				} elseif ($style[$property] > 0) {
+					$alphas[$key] = $style[$property];
+				} elseif ($style[$property] < 0) {
+					$alphas[$key] = 0;
+				}
+			}
+		}
+
+		return $this->opacityState($alphas);
 	}
 
 	function svgDefineTxtStyle($critere_style)
