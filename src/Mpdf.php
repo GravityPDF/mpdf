@@ -7577,7 +7577,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			/* -- OTL -- */
 			// mPDF 6
 			if ($blockdir == 'rtl' || $this->biDirectional) {
-				Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir);
+				Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir, $this->PDFUA);
 				// From this point on, $content and $cOTLdata may contain more elements (and re-ordered) compared to
 				// $this->objectbuffer and $font ($chunkorder contains the mapping)
 			}
@@ -9399,7 +9399,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- OTL -- */
 					// mPDF 6
 					if ($blockdir == 'rtl' || $this->biDirectional) {
-						Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir);
+						Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir, $this->PDFUA);
 						// From this point on, $content and $cOTLdata may contain more elements (and re-ordered) compared to
 						// $this->objectbuffer and $font ($chunkorder contains the mapping)
 					}
@@ -26809,7 +26809,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$useGPOS = isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0x80);
 
 			// NB Returned $chunk may be a shorter string (with adjusted $cOTLdata) by removal of LRE, RLE etc embedding codes.
-			list($chunk, $rtl_content) = Bidi::sort($unicode, $chunk, $dir, $chunkOTLdata, $useGPOS);
+			list($chunk, $rtl_content) = Bidi::sort($unicode, $chunk, $dir, $chunkOTLdata, $useGPOS, $this->PDFUA);
 
 			return $rtl_content;
 		}

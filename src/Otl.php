@@ -704,12 +704,14 @@ class Otl
 			$usetags = $this->_applyTagSettings($tags, $GSUBFeatures, $omittags, true);
 		}
 
-		$unshaped = $this->mpdf->PDFUA ? $this->OTLdata : [];
+		$unshaped = $this->OTLdata;
 		$multiple = Arabic::shape($this->OTLdata, $this->GSUBdata[$this->GSUBfont]['rtlSUB'], $usetags);
 		// The shaper puts a letter into its form without GSUBsubstitute(), so the letter is kept here
-		foreach ($unshaped as $i => $glyph) {
-			if ($this->OTLdata[$i]['uni'] != $glyph['uni'] && !isset($glyph['GPOSinfo']['source_chars'])) {
-				$this->OTLdata[$i]['GPOSinfo']['source_chars'] = [$glyph['uni']];
+		if ($this->mpdf->PDFUA) {
+			foreach ($unshaped as $i => $glyph) {
+				if ($this->OTLdata[$i]['uni'] != $glyph['uni'] && !isset($glyph['GPOSinfo']['source_chars'])) {
+					$this->OTLdata[$i]['GPOSinfo']['source_chars'] = [$glyph['uni']];
+				}
 			}
 		}
 

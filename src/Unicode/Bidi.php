@@ -47,7 +47,20 @@ use Mpdf\Utils\UtfString;
 class Bidi
 {
 
-	public static function sort($ta, $str, $dir, &$chunkOTLdata, $useGPOS)
+	/**
+	 * Put one chunk into the order it is drawn in.
+	 *
+	 * @param int[]  $ta
+	 * @param string $str
+	 * @param string $dir
+	 * @param array  $chunkOTLdata
+	 * @param bool   $useGPOS
+	 * @param bool   $withActualText Whether a chunk reordering changed is given 'actualText': its
+	 *                               characters in the order they were written
+	 *
+	 * @return array The chunk as drawn, and which directions it holds
+	 */
+	public static function sort($ta, $str, $dir, &$chunkOTLdata, $useGPOS, $withActualText = false)
 	{
 
 		$pel = 0; // paragraph embedding level
@@ -438,7 +451,7 @@ class Bidi
 		if ($useGPOS) {
 			$chunkOTLdata['GPOSinfo'] = $GPOS;
 		}
-		$logicalText = self::logicalText($chardata, 'char');
+		$logicalText = $withActualText ? self::logicalText($chardata, 'char') : null;
 		if ($logicalText !== null) {
 			$chunkOTLdata['actualText'] = $logicalText;
 		}
@@ -1036,8 +1049,15 @@ class Bidi
 
 	/**
 	 * Reorder, once divided into lines
+	 *
+	 * @param int[]    $chunkorder
+	 * @param string[] $content
+	 * @param array    $cOTLdata
+	 * @param string   $blockdir
+	 * @param bool     $withActualText Whether a chunk reordering changed is given 'actualText': its
+	 *                                 characters in the order they were written
 	 */
-	public static function reorder(&$chunkorder, &$content, &$cOTLdata, $blockdir)
+	public static function reorder(&$chunkorder, &$content, &$cOTLdata, $blockdir, $withActualText = false)
 	{
 		$bidiData = [];
 
@@ -1164,7 +1184,9 @@ class Bidi
 				$drawn[$nc] = [];
 			}
 			if ($carac['uni'] != 0xFFFC) {   // Object replacement character (65532)
-				$drawn[$nc][] = $carac;
+				if ($withActualText) {
+					$drawn[$nc][] = $carac;
+				}
 				$content[$nc] .= UtfString::code2utf($carac['uni']);
 				$cOTLdata[$nc]['group'] .= $carac['group'];
 				if (!empty($carac['GPOSinfo'])) {
@@ -1203,21 +1225,32 @@ class Bidi
 	{
 		$reordered = false;
 		$lastIndex = -1;
-		$byIndex = [];
 		foreach ($chars as $char) {
 			if ($char['lidx'] < $lastIndex || $char[$drawnKey] != $char['src']) {
 				$reordered = true;
+				break;
 			}
 			$lastIndex = $char['lidx'];
-			$byIndex[$char['lidx']] = isset($char['GPOSinfo']['source_chars'])
-				? $char['GPOSinfo']['source_chars']
-				: [$char['src']];
 		}
 		if (!$reordered) {
 			return null;
 		}
+
+		$byIndex = [];
+		foreach ($chars as $char) {
+			$byIndex[$char['lidx']] = isset($char['GPOSinfo']['source_chars'])
+				? $char['GPOSinfo']['source_chars']
+				: [$char['src']];
+		}
 		ksort($byIndex);
 
-		return call_user_func_array('array_merge', array_values($byIndex));
+		$text = [];
+		foreach ($byIndex as $sourceChars) {
+			foreach ($sourceChars as $sourceChar) {
+				$text[] = $sourceChar;
+			}
+		}
+
+		return $text;
 	}
 }
