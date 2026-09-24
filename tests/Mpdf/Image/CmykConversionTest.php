@@ -41,7 +41,7 @@ class CmykConversionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function colours()
 	{
 		return [
-			'black' => [[0, 0, 0], 'ffffffff'],
+			'black' => [[0, 0, 0], '000000ff'],
 			'red' => [[255, 0, 0], '00ffff00'],
 			'white' => [[255, 255, 255], '00000000'],
 		];
