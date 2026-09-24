@@ -7444,11 +7444,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$content[$k] = $chunk = str_replace(chr(194) . chr(160), chr(32), $chunk);
 					} // *OTL*
 				} else {
-					$content[$k] = $chunk = str_replace(self::CORE_ZERO_WIDTH_SPACE, '', $chunk);
-					if ($this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
-						$content[$k] = $chunk = str_replace(chr(173), '', $chunk);
-						$content[$k] = $chunk = str_replace(chr(160), chr(32), $chunk);
-					}
+					$content[$k] = $chunk = $this->coreChunkForDrawing($chunk);
 				}
 				$widthChunk = $this->aliasReplaceForWidth($chunk);
 				$contentWidth += $this->chunkWidth($widthChunk, $chunkCodePoints, (isset($cOTLdata[$k]) ? $cOTLdata[$k] : false), $this->textvar, false) * Mpdf::SCALE;
@@ -8609,6 +8605,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('Q');
 	}
 
+	/**
+	 * A line's core-font chunk as it is drawn: without the zero-width space marker and, outside the symbol fonts,
+	 * without soft hyphens and with no-break spaces as plain spaces
+	 *
+	 * @param string $chunk
+	 *
+	 * @return string
+	 */
+	private function coreChunkForDrawing($chunk)
+	{
+		$chunk = str_replace(self::CORE_ZERO_WIDTH_SPACE, '', $chunk);
+		if ($this->FontFamily == 'csymbol' || $this->FontFamily == 'czapfdingbats') {
+			return $chunk;
+		}
+
+		return str_replace(chr(160), chr(32), str_replace(chr(173), '', $chunk));
+	}
+
 	// mPDF 6
 	// Get previous character and move pointers
 	function _moveToPrevChar(&$contentctr, &$charctr, $content)
@@ -9256,11 +9270,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$content[$k] = $chunk = str_replace(chr(194) . chr(160), chr(32), $chunk);
 							} // *OTL*
 						} else {
-							$content[$k] = $chunk = str_replace(self::CORE_ZERO_WIDTH_SPACE, '', $chunk);
-							if ($this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
-								$content[$k] = $chunk = str_replace(chr(173), '', $chunk);
-								$content[$k] = $chunk = str_replace(chr(160), chr(32), $chunk);
-							}
+							$content[$k] = $chunk = $this->coreChunkForDrawing($chunk);
 						}
 
 						// mPDF 5.7.1
@@ -14582,9 +14592,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->subPos < $i && !$this->specialcontent) {
 						$cnt += $this->SubstituteCharsNonCore($a, $i, $e);
 					}
+					// Only U+200B may encode to the marker byte, so a U+001F in the source is dropped
+					$e = str_replace(self::CORE_ZERO_WIDTH_SPACE, '', $e);
 					// Form field text becomes the field's value, which must not carry the marker
-					$zeroWidthSpace = $this->specialcontent ? '' : self::CORE_ZERO_WIDTH_SPACE;
-					$e = str_replace([self::CORE_ZERO_WIDTH_SPACE, "\xe2\x80\x8b"], ['', $zeroWidthSpace], $e);
+					$e = str_replace("\xe2\x80\x8b", $this->specialcontent ? '' : self::CORE_ZERO_WIDTH_SPACE, $e);
 					// CONVERT ENCODING
 					$e = mb_convert_encoding($e, $this->mb_enc, 'UTF-8');
 					if ($this->textvar & TextVars::FT_UPPERCASE) {
