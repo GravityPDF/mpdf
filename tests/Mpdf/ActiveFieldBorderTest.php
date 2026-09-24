@@ -162,7 +162,7 @@ class ActiveFieldBorderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$pdf = $this->render(
 			'<form><input type="text" name="s" value="Styled" style="' . self::STYLE . '" /></form>',
-			['mode' => 'utf-8', 'useActiveForms' => true, 'PDFA' => true, 'PDFAauto' => true, 'restrictColorSpace' => 3]
+			['mode' => 'utf-8', 'useActiveForms' => true, 'PDFA' => true, 'PDFAauto' => true, 'restrictColorSpace' => 3, 'ICCProfile' => __DIR__ . '/../../data/iccprofiles/SWOP2006_Coated3v2.icc']
 		);
 
 		$this->assertStringContainsString('/BC [ 1.000 1.000 0.000 0.000 ]', $this->widget($pdf, 's'));
