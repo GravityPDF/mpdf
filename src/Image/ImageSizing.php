@@ -80,6 +80,34 @@ class ImageSizing
 	}
 
 	/**
+	 * Corner radii with their percentages resolved against the image's border box, horizontal ones of its width and
+	 * vertical ones of its height. A corner left with no curve on either axis is square, and dropped.
+	 *
+	 * @param array $objattr The image, sized
+	 * @param array $radii Keyed TL/TR/BR/BL, each [horizontal, vertical] in millimetres
+	 * @param array $percent The same keys and axes, for those given as a percentage
+	 *
+	 * @return array
+	 */
+	public static function radii(array $objattr, array $radii, array $percent)
+	{
+		$box = [
+			$objattr['width'] - $objattr['margin_left'] - $objattr['margin_right'],
+			$objattr['height'] - $objattr['margin_top'] - $objattr['margin_bottom'],
+		];
+
+		foreach ($percent as $corner => $shares) {
+			foreach ($shares as $axis => $share) {
+				$radii[$corner][$axis] = $share / 100 * $box[$axis];
+			}
+		}
+
+		return array_filter($radii, function ($radius) {
+			return $radius[0] > 0 && $radius[1] > 0;
+		});
+	}
+
+	/**
 	 * The narrowest a table column can make the image, padding, border and margin included. A percentage width or
 	 * max-width lets the cell narrow it down to its min-width, as a browser does, unless it is to keep its width;
 	 * otherwise it needs the width it has without the percentages.

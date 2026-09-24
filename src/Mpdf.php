@@ -21347,15 +21347,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$objattr['image_width'] = $w;
 			$objattr['image_height'] = $h;
 
-			$boxw = $objattr['width'] - $objattr['margin_left'] - $objattr['margin_right'];
-			$boxh = $objattr['height'] - $objattr['margin_top'] - $objattr['margin_bottom'];
-			foreach ($sizing['radius_percent'] as $corner => $percent) {
-				if (isset($percent[0])) {
-					$objattr['border_radius'][$corner][0] = $percent[0] / 100 * $boxw;
-				}
-				if (isset($percent[1])) {
-					$objattr['border_radius'][$corner][1] = $percent[1] / 100 * $boxh;
-				}
+			if (isset($objattr['border_radius'])) {
+				$objattr['border_radius'] = ImageSizing::radii($objattr, $objattr['border_radius'], $sizing['radius_percent']);
 			}
 
 			$textbuffer[$n][0] = Mpdf::OBJECT_IDENTIFIER . 'type=image,objattr=' . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
