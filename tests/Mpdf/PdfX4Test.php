@@ -245,6 +245,197 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * @param array  $config The source document's configuration
+	 * @param string $html
+	 *
+	 * @return string A document mPDF wrote, to import a page of
+	 */
+	private function source(array $config, $html = null)
+	{
+		$source = $this->mpdf($config);
+		$source->SetTitle('Source');
+		$source->WriteHTML($html === null
+			? '<p style="color: #cc0000">Red</p><p>Black</p><img src="' . __DIR__ . '/../data/img/tiger.jpg" width="30" />'
+				. '<div style="background: linear-gradient(#ff0000, #0000ff); height: 5mm">Gradient</div>'
+			: $html);
+
+		return $source->OutputBinaryData();
+	}
+
+	/**
+	 * @param array  $config Merged over PDF/X in the strict mode
+	 * @param string $source A document to import the first page of
+	 *
+	 * @return Mpdf A document with that page placed on it, not yet written
+	 */
+	private function importing(array $config, $source)
+	{
+		$mpdf = $this->mpdf($config + ['PDFX' => true, 'PDFXauto' => false]);
+		$mpdf->WriteHTML('<p>Imported below</p>');
+		$mpdf->setSourceFile(StreamReader::createByString($source));
+		$mpdf->useTemplate($mpdf->importPage(1), 20, 40, 100);
+
+		return $mpdf;
+	}
+
+	/**
+	 * A PDF/X-4 document mPDF wrote imports into a new PDF/X-4 document printing to the same intent, in
+	 * the strict mode, with nothing to warn of: its RGB is already ICC-based, and its grey DeviceGray only
+	 * where the intent permits it
+	 *
+	 * @dataProvider sameIntents
+	 *
+	 * @param string|null $intent The property naming the output intent's profile, or null for the default
+	 */
+	public function testAPdfx4DocumentImportsIntoAPdfx4Document($intent)
+	{
+		$config = $this->x4($intent);
+
+		$mpdf = $this->importing($config, $this->source($config));
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertSame([], $mpdf->PDFAXwarnings);
+		$this->assertSame(1, substr_count($pdf, '/S /GTS_PDFX'), 'the imported page brings no output intent of its own');
+		$this->assertStringNotContainsString('/DefaultRGB', $pdf);
+		$this->assertStringNotContainsString('/DefaultGray', $pdf);
+	}
+
+	/**
+	 * @return array[] The CMYK default and an RGB intent
+	 */
+	public function sameIntents()
+	{
+		return ['CMYK, the default' => [null], 'RGB' => ['rgbProfile']];
+	}
+
+	/**
+	 * An imported page's DeviceRGB or DeviceGray, which the intent does not permit, is painted in the ICC-
+	 * based space mPDF paints its own RGB or grey in, named as the default colour space of the imported
+	 * page's resources
+	 *
+	 * @dataProvider remappedImports
+	 *
+	 * @param string|null $intent  The property naming the output intent's profile, or null for the default
+	 * @param string      $default The default colour space named
+	 */
+	public function testAnImportedPagesDeviceColourIsGivenAnIccBasedDefault($intent, $default)
+	{
+		$config = $this->x4($intent);
+
+		$mpdf = $this->importing($config, $this->source([]));
+		$pdf = $mpdf->OutputBinaryData();
+
+		$this->assertSame([], $mpdf->PDFAXwarnings);
+		$this->assertSame(1, preg_match('/\/' . $default . ' (\d+) 0 R/', $pdf, $match));
+		$this->assertStringStartsWith('[/ICCBased ', $this->object($pdf, $match[1]));
+	}
+
+	/**
+	 * @return array[] Each intent a plain document's device colour is remapped for, and the default named
+	 */
+	public function remappedImports()
+	{
+		return ['DeviceRGB under CMYK' => [null, 'DefaultRGB'], 'DeviceGray under RGB' => ['rgbProfile', 'DefaultGray']];
+	}
+
+	/**
+	 * An imported page is drawn in a transparency group of its own, except in PDF/X-1a, which permits none
+	 *
+	 * @dataProvider pdfxVersions
+	 *
+	 * @param array $pdfx The configuration of the PDF/X version
+	 */
+	public function testAnImportedPageIsGroupedOnlyWhereTransparencyIsPermitted(array $pdfx)
+	{
+		$pdf = $this->importing($pdfx + ['PDFXauto' => true], $this->source($pdfx, '<p>Text</p>'))->OutputBinaryData();
+
+		if (isset($pdfx['PDFXversion'])) {
+			$this->assertStringNotContainsString('/S /Transparency', $pdf);
+		} else {
+			$this->assertStringContainsString('/Group <</Type /Group /S /Transparency', $pdf);
+		}
+	}
+
+	/**
+	 * An imported page's DeviceCMYK under an RGB or grey intent is painted in the ICC-based CMYK space of the
+	 * bundled SWOP profile, named as its default colour space. That guesses at the press the CMYK was made
+	 * for, so it is made under PDFXauto alone, and the strict mode refuses the document.
+	 *
+	 * @dataProvider cmykImports
+	 *
+	 * @param string $intent The property naming the output intent's profile
+	 * @param string $named  The intent, as the warning names it
+	 */
+	public function testAnImportedPagesDeviceCmykIsPaintedAsSwop($intent, $named)
+	{
+		$config = $this->x4($intent);
+		$source = $this->source([], '<p style="color: cmyk(0, 100, 0, 0)">Magenta</p>');
+
+		$pdf = $this->importing($config + ['PDFXauto' => true], $source)->OutputBinaryData();
+		$this->assertSame(1, preg_match('/\/DefaultCMYK (\d+) 0 R/', $pdf, $match));
+		$this->assertSame(1, preg_match('/^\[\/ICCBased (\d+) 0 R\]/', $this->object($pdf, $match[1]), $profile));
+		$this->assertStringContainsString("\n" . $profile[1] . " 0 obj\n<</N 4 /Length " . filesize(Mpdf::PDFX4_OUTPUT_PROFILE) . ">>", $pdf);
+
+		$mpdf = $this->importing($config, $source);
+		try {
+			$mpdf->OutputBinaryData();
+			$this->fail('the document is refused');
+		} catch (MpdfException $e) {
+			$this->assertSame([sprintf('An imported page paints in DeviceCMYK, which PDF/X-4 files printing to %s do not permit. (Painted as the CMYK of the bundled SWOP profile)', $named)], $mpdf->PDFAXwarnings);
+		}
+	}
+
+	/**
+	 * @return array[] The intents that permit no DeviceCMYK
+	 */
+	public function cmykImports()
+	{
+		return ['RGB' => ['rgbProfile', 'RGB'], 'grey' => ['grayProfile', 'grey']];
+	}
+
+	/**
+	 * DeviceRGB in PDF/X-1a, which permits no ICC-based colour, cannot be remapped: the strict mode refuses
+	 * the document, and PDFXauto writes it as it is
+	 *
+	 * @dataProvider unremappableImports
+	 *
+	 * @param array  $config
+	 * @param string $html    The imported page
+	 * @param string $warning
+	 */
+	public function testImportedDeviceColourThatCannotBeRemappedIsRefused(array $config, $html, $warning)
+	{
+		$config = array_map(function ($value) {
+			return $value === 'rgbProfile' ? $this->rgbProfile : $value;
+		}, $config);
+		$source = $this->source(['pdf_version' => '1.4'], $html);
+
+		$this->importing($config + ['PDFXauto' => true], $source)->OutputBinaryData();
+
+		$mpdf = $this->importing($config, $source);
+		try {
+			$mpdf->OutputBinaryData();
+			$this->fail('the document is refused');
+		} catch (MpdfException $e) {
+			$this->assertSame([$warning], $mpdf->PDFAXwarnings);
+		}
+	}
+
+	/**
+	 * @return array[] Each device colour an intent cannot take and mPDF cannot remap, with the warning it gives
+	 */
+	public function unremappableImports()
+	{
+		return [
+			'DeviceRGB under PDF/X-1a' => [
+				self::PDFX1A,
+				'<p style="color: #cc0000">Red</p>',
+				'An imported page paints in DeviceRGB, which PDF/X-1a:2003 files printing to CMYK do not permit, and mPDF cannot convert what it imports. (Left as it is)',
+			],
+		];
+	}
+
+	/**
 	 * PDF/X-4 asks for a printer profile as its output intent, so a document that names none prints to
 	 * the bundled SWOP profile, identified by the CGATS TR 003 characterisation it is built on
 	 */

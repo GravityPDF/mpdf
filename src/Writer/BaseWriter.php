@@ -353,6 +353,20 @@ final class BaseWriter
 	}
 
 	/**
+	 * The colour space DeviceCMYK an imported page paints in is taken to be where PDF/X-4 does not permit
+	 * it: under an RGB or grey output intent, where mPDF converts its own CMYK, but cannot convert what it
+	 * imports. DeviceCMYK says nothing of the press it was made for, so it is taken as the bundled SWOP
+	 * profile, the one mPDF prints to by default. Written the first time it is asked for, so asked for
+	 * between objects.
+	 *
+	 * @return int|null The object number of the ICC-based colour space, or null where CMYK is DeviceCMYK
+	 */
+	public function calibratedCmyk()
+	{
+		return $this->mpdf->pdfxConvertsCmyk() ? $this->calibrated(Mpdf::PDFX4_OUTPUT_PROFILE, 4) : null;
+	}
+
+	/**
 	 * @return string The colour space grey is written in, for a dictionary to name: /DeviceGray, or a
 	 *                reference to the ICC-based grey colour space - see calibratedGray()
 	 */
