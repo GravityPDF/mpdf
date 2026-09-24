@@ -2119,6 +2119,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function ResetMargins()
 	{
 		// ReSet left, top margins
+		list($this->lMargin, $this->rMargin) = $this->pageSideMargins();
+
 		if (($this->forcePortraitHeaders || $this->forcePortraitMargins) && $this->DefOrientation == 'P' && $this->CurOrientation == 'L') {
 			if (($this->mirrorMargins) && (($this->page) % 2 == 0)) { // EVEN
 				$this->tMargin = $this->orig_rMargin;
@@ -2127,22 +2129,30 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->tMargin = $this->orig_lMargin;
 				$this->bMargin = $this->orig_rMargin;
 			}
-			$this->lMargin = $this->DeflMargin;
-			$this->rMargin = $this->DefrMargin;
 			$this->MarginCorrection = 0;
 			$this->PageBreakTrigger = $this->h - $this->bMargin;
 		} elseif (($this->mirrorMargins) && (($this->page) % 2 == 0)) { // EVEN
-			$this->lMargin = $this->DefrMargin;
-			$this->rMargin = $this->DeflMargin;
 			$this->MarginCorrection = $this->DefrMargin - $this->DeflMargin;
-		} else { // ODD	// OR NOT MIRRORING MARGINS/FOOTERS
-			$this->lMargin = $this->DeflMargin;
-			$this->rMargin = $this->DefrMargin;
-			if ($this->mirrorMargins) {
-				$this->MarginCorrection = $this->DeflMargin - $this->DefrMargin;
-			}
+		} elseif ($this->mirrorMargins) { // ODD
+			$this->MarginCorrection = $this->DeflMargin - $this->DefrMargin;
 		}
 		$this->x = $this->lMargin;
+	}
+
+	/**
+	 * The left and right margins of the current page: mirrored on an even page
+	 *
+	 * @return float[]
+	 */
+	function pageSideMargins()
+	{
+		$forcedPortrait = ($this->forcePortraitHeaders || $this->forcePortraitMargins) && $this->DefOrientation == 'P' && $this->CurOrientation == 'L';
+
+		if (!$forcedPortrait && $this->mirrorMargins && $this->page % 2 == 0) {
+			return [$this->DefrMargin, $this->DeflMargin];
+		}
+
+		return [$this->DeflMargin, $this->DefrMargin];
 	}
 
 	function SetLeftMargin($margin)
@@ -3591,10 +3601,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$this->printfloatbuffer();
 
+			$previousFrame = $this->textFrame(true);
+
 			// Move to next page
 			$this->page++;
 
 			$this->ResetMargins();
+			$this->moveIntoFrame($previousFrame);
 			$this->SetAutoPageBreak($this->autoPageBreak, $this->bMargin);
 			$this->x = $this->lMargin;
 			$this->y = $this->tMargin;
@@ -3776,6 +3789,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$save_cols = false;
 
+		// The frame text leaves this page from, to move it into the frame of the next
+		$previousFrame = $this->page > 0 ? $this->textFrame(true) : null;
+
 		/* -- COLUMNS -- */
 		if ($this->ColActive) {
 			$save_cols = true;
@@ -3912,6 +3928,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		/* -- END COLUMNS -- */
 
+		$widthGained = $previousFrame ? $this->moveIntoFrame($previousFrame) : 0;
 
 		// RESET BLOCK BORDER TOP
 		if (!$this->ColActive) {
@@ -3935,7 +3952,162 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->cMarginR = $bak_cmr;
 		$this->divwidth = $bak_dw;
 
+		// The block being written takes the width it has in the new frame for the lines still to come
+		if ($widthGained && $this->divwidth && !$this->flowingBlockAttr['is_table']) {
+			$this->divwidth += $widthGained;
+			$this->flowingBlockAttr['width'] += $widthGained * Mpdf::SCALE;
+		}
+
 		$this->lineheight = $bak_lh;
+	}
+
+	/**
+	 * Turn the page before a line that cannot fit on this one is measured, when the next page may give it a different
+	 * frame. Otherwise the break waits until the line is set, measured against the frame of the page it leaves.
+	 *
+	 * @param float $lineHeight The least height the line takes, with the top margin, border and padding of a block it opens
+	 *
+	 * @return float|false How far text carrying on moves across to the new page, or false if the page was not turned
+	 */
+	function turnPageAheadOfLine($lineHeight)
+	{
+		// Moving to the next column of this page keeps the width
+		if ($this->InFooter || $this->y + $lineHeight <= $this->PageBreakTrigger || ($this->ColActive && $this->CurrCol < $this->NbCol - 1)) {
+			return false;
+		}
+
+		if (!$this->pageFramesVary() || !$this->AcceptPageBreak()) {
+			return false;
+		}
+
+		$shift = $this->turnPageKeepingPlace();
+		if ($this->ColActive) {
+			$shift += $this->ChangeColumn * ($this->ColWidth + $this->ColGap);
+			$this->x += $this->ChangeColumn * ($this->ColWidth + $this->ColGap);
+		}
+
+		return $shift;
+	}
+
+	/**
+	 * Turn to the next page, carrying on from where x stands, with the word and character spacing in use
+	 *
+	 * @return float How far x moved across to the frame of the new page
+	 */
+	function turnPageKeepingPlace()
+	{
+		$x = $this->x;
+		$ws = $this->ws;
+		$charspacing = $this->charspacing;
+		$this->ResetSpacing();
+
+		$this->AddPage($this->CurOrientation);
+
+		$this->x = $x + $this->MarginCorrection;
+		$this->SetSpacing($charspacing, $ws);
+
+		return $this->MarginCorrection;
+	}
+
+	/**
+	 * Whether a :first, :left or :right rule for the current page sets a side margin
+	 *
+	 * @return bool
+	 */
+	function pageFramesVary()
+	{
+		if (!$this->page_box['using']) {
+			return false;
+		}
+
+		$prefixes = ['@PAGE>>'];
+		if ($this->page_box['current']) {
+			$prefixes[] = '@PAGE>>NAMED>>' . strtoupper($this->page_box['current']) . '>>';
+		}
+
+		foreach ($prefixes as $prefix) {
+			foreach (['FIRST', 'LEFT', 'RIGHT'] as $pseudo) {
+				$rule = $prefix . 'PSEUDO>>' . $pseudo;
+				if (isset($this->cssManager->CSS[$rule]['MARGIN-LEFT']) || isset($this->cssManager->CSS[$rule]['MARGIN-RIGHT'])) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The left edge and width of the frame text is set in on the current page: the page between its side margins,
+	 * or a column of it
+	 *
+	 * @param bool $lastColumn The last column, which text leaves the page from, rather than the first it arrives in
+	 *
+	 * @return float[]
+	 */
+	function textFrame($lastColumn)
+	{
+		if ($this->ColActive) {
+			return [$this->ColL[$lastColumn ? $this->NbCol - 1 : 0], $this->ColWidth];
+		}
+
+		list($left, $right) = $this->pageSideMargins();
+
+		return [$left, $this->w - $left - $right];
+	}
+
+	/**
+	 * Move what carries on from the last page into the frame of the new one
+	 *
+	 * MarginCorrection becomes how far text moves across. In columns the caller also steps back from the last column to
+	 * the first (ChangeColumn), so that step is added back here. Open blocks are widened or narrowed with the frame.
+	 *
+	 * @param float[] $previousFrame The frame text left the last page from, as textFrame() gave it
+	 *
+	 * @return float The width the block being written gained, or 0
+	 */
+	function moveIntoFrame($previousFrame)
+	{
+		list($left, $width) = $this->textFrame(false);
+
+		$shift = $left - $previousFrame[0];
+		if ($this->ColActive) {
+			$across = ($this->NbCol - 1) * ($this->ColWidth + $this->ColGap);
+			$shift += $this->directionality == 'rtl' ? -$across : $across;
+		}
+
+		// Keep ResetMargins()'s figure where the frame has not moved, so an unchanged layout writes the same bytes
+		$unmoved = $this->mirrorMargins ? $this->MarginCorrection : 0;
+		$this->MarginCorrection = abs($shift - $unmoved) < 0.0001 ? $unmoved : $shift;
+
+		$growth = $width - $previousFrame[1];
+		if (abs($growth) < 0.0001) {
+			return 0;
+		}
+
+		$gained = 0;
+		$taken = 0; // What a block with a set width, and so every block inside it, takes in its right margin
+		for ($bl = 1; $bl <= $this->blklvl; $bl++) {
+			if (!isset($this->blk[$bl]['width'])) {
+				continue;
+			}
+
+			$blk = &$this->blk[$bl];
+			$blk['outer_right_margin'] += $taken;
+
+			if (!empty($blk['css_set_width']) && $taken != $growth) {
+				$blk['margin_right'] += $growth - $taken;
+				$blk['outer_right_margin'] += $growth - $taken;
+				$taken = $growth;
+			}
+
+			$gained = $growth - $taken;
+			$blk['width'] += $gained;
+			$blk['inner_width'] += $gained;
+			unset($blk);
+		}
+
+		return $gained;
 	}
 
 	/**
@@ -5659,23 +5831,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			&& $this->AcceptPageBreak()
 		) { // mPDF 5.7.2
 
-			$x = $this->x; // Current X position
-
-			// WORD SPACING
-			$ws = $this->ws; // Word Spacing
-			$charspacing = $this->charspacing; // Character Spacing
-			$this->ResetSpacing();
-
-			$this->AddPage($this->CurOrientation);
-
-			// Added to correct for OddEven Margins
-			$x += $this->MarginCorrection;
+			$shift = $this->turnPageKeepingPlace();
 			if ($currentx) {
-				$currentx += $this->MarginCorrection;
+				$currentx += $shift;
 			}
-			$this->x = $x;
-			// WORD SPACING
-			$this->SetSpacing($charspacing, $ws);
 		}
 
 		// Test: to put line through centre of cell: $this->Line($this->x,$this->y+($h/2),$this->x+50,$this->y+($h/2));
@@ -7503,21 +7662,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// PAGEBREAK
 		if (!$is_table && ($this->y + $check_h) > ($this->PageBreakTrigger + $buff) and ! $this->InFooter and $this->AcceptPageBreak()) {
-			$bak_x = $this->x; // Current X position
-			// WORD SPACING
-			$ws = $this->ws; // Word Spacing
-			$charspacing = $this->charspacing; // Character Spacing
-			$this->ResetSpacing();
-
-			$this->AddPage($this->CurOrientation);
-
-			$this->x = $bak_x;
-			// Added to correct for OddEven Margins
-			$currentx += $this->MarginCorrection;
-			$this->x += $this->MarginCorrection;
-
-			// WORD SPACING
-			$this->SetSpacing($charspacing, $ws);
+			$currentx += $this->turnPageKeepingPlace();
 		}
 
 
@@ -8672,6 +8817,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$newblock = $this->flowingBlockAttr['newblock'];
 		$blockdir = $this->flowingBlockAttr['blockdir'];
 
+		// A line that can only start on the next page is measured against the frame it will be set in there
+		if (!$is_table && !$table_draft && !count($content)) {
+			$lineTop = 0;
+			if ($newblock && ($blockstate == 1 || $blockstate == 3) && $lineCount == 0 && $this->blklvl > 0) {
+				$blk = $this->blk[$this->blklvl];
+				$lineTop = $blk['margin_top'] + $blk['padding_top'] + $blk['border_top']['w'];
+			}
+			$shift = $this->turnPageAheadOfLine($this->divheight + $lineTop);
+			if ($shift !== false) {
+				$currentx += $shift;
+			}
+		}
+
 		// *********** BLOCK BACKGROUND COLOR ***************** //
 		if ($this->blk[$this->blklvl]['bgcolor'] && !$is_table) {
 			$fill = 0;
@@ -9371,21 +9529,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// PAGEBREAK
 					// 'If' below used in order to fix "first-line of other page with justify on" bug
 					if (!$is_table && ($this->y + $check_h) > $this->PageBreakTrigger and ! $this->InFooter and $this->AcceptPageBreak()) {
-						$bak_x = $this->x; // Current X position
-						// WORD SPACING
-						$ws = $this->ws; // Word Spacing
-						$charspacing = $this->charspacing; // Character Spacing
-						$this->ResetSpacing();
-
-						$this->AddPage($this->CurOrientation);
-
-						$this->x = $bak_x;
-						// Added to correct for OddEven Margins
-						$currentx += $this->MarginCorrection;
-						$this->x += $this->MarginCorrection;
-
-						// WORD SPACING
-						$this->SetSpacing($charspacing, $ws);
+						$currentx += $this->turnPageKeepingPlace();
 					}
 
 					if ($this->kwt && !$is_table) { // mPDF 5.7+
@@ -9596,6 +9740,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->_advanceFloatMargins();
 				}
 				/* -- END CSS-IMAGE-FLOAT -- */
+
+				// The next line is measured against the frame of the page it will be set on
+				if (!$is_table && !$table_draft) {
+					$shift = $this->turnPageAheadOfLine($this->divheight);
+					if ($shift !== false) {
+						$currentx += $shift;
+						$oldcolumn = $this->CurrCol;
+					}
+				}
 
 				// Reset lineheight
 				$stackHeight = $this->divheight;
@@ -16089,71 +16242,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// If right/Odd page
 		if (isset($this->cssManager->CSS['@PAGE>>PSEUDO>>RIGHT']) && $side == 'R') {
-			$zp = $this->cssManager->CSS['@PAGE>>PSEUDO>>RIGHT'];
-		} else {
-			$zp = [];
-		}
-		if (isset($zp['SIZE'])) {
-			unset($zp['SIZE']);
-		}
-		if (isset($zp['SHEET-SIZE'])) {
-			unset($zp['SHEET-SIZE']);
-		}
-		// Disallow margin-left or -right on :LEFT or :RIGHT
-		if (isset($zp['MARGIN-LEFT'])) {
-			unset($zp['MARGIN-LEFT']);
-		}
-		if (isset($zp['MARGIN-RIGHT'])) {
-			unset($zp['MARGIN-RIGHT']);
-		}
-		if (is_array($zp) && !empty($zp)) {
-			$p = array_merge($p, $zp);
+			$p = array_merge($p, $this->pseudoPageProperties($this->cssManager->CSS['@PAGE>>PSEUDO>>RIGHT'], $oddEven));
 		}
 
 		// If left/Even page
 		if (isset($this->cssManager->CSS['@PAGE>>PSEUDO>>LEFT']) && $side == 'L') {
-			$zp = $this->cssManager->CSS['@PAGE>>PSEUDO>>LEFT'];
-		} else {
-			$zp = [];
-		}
-		if (isset($zp['SIZE'])) {
-			unset($zp['SIZE']);
-		}
-		if (isset($zp['SHEET-SIZE'])) {
-			unset($zp['SHEET-SIZE']);
-		}
-		// Disallow margin-left or -right on :LEFT or :RIGHT
-		if (isset($zp['MARGIN-LEFT'])) {
-			unset($zp['MARGIN-LEFT']);
-		}
-		if (isset($zp['MARGIN-RIGHT'])) {
-			unset($zp['MARGIN-RIGHT']);
-		}
-		if (is_array($zp) && !empty($zp)) {
-			$p = array_merge($p, $zp);
+			$p = array_merge($p, $this->pseudoPageProperties($this->cssManager->CSS['@PAGE>>PSEUDO>>LEFT'], $oddEven));
 		}
 
 		// If first page
 		if (isset($this->cssManager->CSS['@PAGE>>PSEUDO>>FIRST']) && $first) {
-			$zp = $this->cssManager->CSS['@PAGE>>PSEUDO>>FIRST'];
-		} else {
-			$zp = [];
-		}
-		if (isset($zp['SIZE'])) {
-			unset($zp['SIZE']);
-		}
-		if (isset($zp['SHEET-SIZE'])) {
-			unset($zp['SHEET-SIZE']);
-		}
-		// Disallow margin-left or -right on :FIRST	// mPDF 5.7.3
-		if (isset($zp['MARGIN-LEFT'])) {
-			unset($zp['MARGIN-LEFT']);
-		}
-		if (isset($zp['MARGIN-RIGHT'])) {
-			unset($zp['MARGIN-RIGHT']);
-		}
-		if (is_array($zp) && !empty($zp)) {
-			$p = array_merge($p, $zp);
+			$p = array_merge($p, $this->pseudoPageProperties($this->cssManager->CSS['@PAGE>>PSEUDO>>FIRST'], $oddEven));
 		}
 
 		// If named page
@@ -16186,71 +16285,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// If named right/Odd page
 			if (isset($this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>RIGHT']) && $side == 'R') {
-				$zp = $this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>RIGHT'];
-			} else {
-				$zp = [];
-			}
-			if (isset($zp['SIZE'])) {
-				unset($zp['SIZE']);
-			}
-			if (isset($zp['SHEET-SIZE'])) {
-				unset($zp['SHEET-SIZE']);
-			}
-			// Disallow margin-left or -right on :LEFT or :RIGHT
-			if (isset($zp['MARGIN-LEFT'])) {
-				unset($zp['MARGIN-LEFT']);
-			}
-			if (isset($zp['MARGIN-RIGHT'])) {
-				unset($zp['MARGIN-RIGHT']);
-			}
-			if (is_array($zp) && !empty($zp)) {
-				$p = array_merge($p, $zp);
+				$p = array_merge($p, $this->pseudoPageProperties($this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>RIGHT'], $oddEven));
 			}
 
 			// If named left/Even page
 			if (isset($this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>LEFT']) && $side == 'L') {
-				$zp = $this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>LEFT'];
-			} else {
-				$zp = [];
-			}
-			if (isset($zp['SIZE'])) {
-				unset($zp['SIZE']);
-			}
-			if (isset($zp['SHEET-SIZE'])) {
-				unset($zp['SHEET-SIZE']);
-			}
-			// Disallow margin-left or -right on :LEFT or :RIGHT
-			if (isset($zp['MARGIN-LEFT'])) {
-				unset($zp['MARGIN-LEFT']);
-			}
-			if (isset($zp['MARGIN-RIGHT'])) {
-				unset($zp['MARGIN-RIGHT']);
-			}
-			if (is_array($zp) && !empty($zp)) {
-				$p = array_merge($p, $zp);
+				$p = array_merge($p, $this->pseudoPageProperties($this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>LEFT'], $oddEven));
 			}
 
 			// If named first page
 			if (isset($this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>FIRST']) && $first) {
-				$zp = $this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>FIRST'];
-			} else {
-				$zp = [];
-			}
-			if (isset($zp['SIZE'])) {
-				unset($zp['SIZE']);
-			}
-			if (isset($zp['SHEET-SIZE'])) {
-				unset($zp['SHEET-SIZE']);
-			}
-			// Disallow margin-left or -right on :FIRST	// mPDF 5.7.3
-			if (isset($zp['MARGIN-LEFT'])) {
-				unset($zp['MARGIN-LEFT']);
-			}
-			if (isset($zp['MARGIN-RIGHT'])) {
-				unset($zp['MARGIN-RIGHT']);
-			}
-			if (is_array($zp) && !empty($zp)) {
-				$p = array_merge($p, $zp);
+				$p = array_merge($p, $this->pseudoPageProperties($this->cssManager->CSS['@PAGE>>NAMED>>' . $name . '>>PSEUDO>>FIRST'], $oddEven));
 			}
 		}
 
@@ -16394,6 +16439,38 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->page_box['outer_width_TB'] = $outer_width_TB;
 
 		return [$orientation, $mgl, $mgr, $mgt, $mgb, $mgh, $mgf, $header, $footer, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat];
+	}
+
+	/**
+	 * The properties a :first, :left or :right page rule adds to its page, less the sheet size
+	 *
+	 * Its side margins are physical, not inner and outer, so on an even page they are handed over swapped for
+	 * ResetMargins() to swap back.
+	 *
+	 * @param array $properties The declarations of the pseudo page rule
+	 * @param string $oddEven 'E' for an even page when margins are mirrored, else 'O'
+	 *
+	 * @return array
+	 */
+	function pseudoPageProperties($properties, $oddEven)
+	{
+		unset($properties['SIZE'], $properties['SHEET-SIZE']);
+
+		if ($oddEven === 'E') {
+			$left = isset($properties['MARGIN-LEFT']) ? $properties['MARGIN-LEFT'] : null;
+			$right = isset($properties['MARGIN-RIGHT']) ? $properties['MARGIN-RIGHT'] : null;
+			unset($properties['MARGIN-LEFT'], $properties['MARGIN-RIGHT']);
+
+			if ($left !== null) {
+				$properties['MARGIN-RIGHT'] = $left;
+			}
+
+			if ($right !== null) {
+				$properties['MARGIN-LEFT'] = $right;
+			}
+		}
+
+		return $properties;
 	}
 
 	/* -- END CSS-PAGE -- */
@@ -25379,8 +25456,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			$this->colvAlign = $vAlign;
 			// Save the ordinate
-			$absL = $this->DeflMargin - ($gap / 2);
-			$absR = $this->DefrMargin - ($gap / 2);
+			list($frameL, $frameR) = $this->pageSideMargins();
+			$absL = $frameL - ($gap / 2);
+			$absR = $frameR - ($gap / 2);
 			$PageWidth = $this->w - $absL - $absR; // virtual pagewidth for calculation only
 			$ColWidth = (($PageWidth - ($gap * ($NbCol))) / $NbCol);
 			$this->ColWidth = $ColWidth;
@@ -25410,12 +25488,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Used internally to set column by number: 0 is 1st column
 		// Set position on a column
 		$this->CurrCol = $CurrCol;
-		$x = $this->ColL[$CurrCol];
+		$x = $this->ColL[$CurrCol]; // Already on the side of the page the margins put it (SetColumns)
 		$xR = $this->ColR[$CurrCol]; // NB This is not R margin -> R pos
-		if (($this->mirrorMargins) && (($this->page) % 2 == 0)) { // EVEN
-			$x += $this->MarginCorrection;
-			$xR += $this->MarginCorrection;
-		}
 		$this->SetMargins($x, ($this->w - $xR), $this->tMargin);
 	}
 
