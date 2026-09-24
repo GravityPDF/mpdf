@@ -122,6 +122,46 @@ class FormAppearanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Past the minimum size an active field's value is trimmed to the longest start that fits once shaped, cut
+	 * between whole clusters, and its appearance draws what the page draws for that start
+	 *
+	 * @dataProvider trimmedShapedValues
+	 *
+	 * @param string $value
+	 * @param string $font
+	 * @param string $width the field's CSS width
+	 * @param int $length how many of the value's characters it draws
+	 */
+	public function testShapedValueIsTrimmedToTheLongestStartThatFits($value, $font, $width, $length)
+	{
+		$field = function ($text, $cssWidth) use ($font) {
+			return '<form><input type="text" name="t" value="' . $text . '" style="font-family: ' . $font . '; font-size: 10pt; width: ' . $cssWidth . '" /></form>';
+		};
+
+		$pdf = $this->render($field($value, $width), ['mode' => 'utf-8', 'useActiveForms' => true]);
+		$this->assertMatchesRegularExpression('/BT \/F\d+ 6\.000 Tf ET/', $pdf);
+
+		$page = $this->render($field(mb_substr($value, 0, $length, 'UTF-8'), '100mm'), ['mode' => 'utf-8']);
+		$this->assertSame($this->textShown($page), $this->textShown($pdf));
+	}
+
+	/**
+	 * The Arabic value's first 8 characters fit, though its first 7 do not, as they end on a letter drawn wider in its
+	 * final form. The Telugu value's first 3 characters fit, but they end on the virama of the conjunct "త్య", so it is
+	 * cut before the conjunct. Devanagari is left to FormFieldShrinkTest, as its one bundled font, FreeSerif, has
+	 * characters past the BMP, which an active field refuses.
+	 *
+	 * @return mixed[][]
+	 */
+	public function trimmedShapedValues()
+	{
+		return [
+			'Arabic, whose longer start is narrower' => ['مرحبا بالعالم', 'dejavusans', '7mm', 8],
+			'Telugu, cut between clusters' => ['సత్యమేవ జయతే', 'pothana2000', '2.7mm', 1],
+		];
+	}
+
+	/**
 	 * A text area with an auto font size is drawn at 12pt when its text fits, and smaller when it would otherwise run
 	 * past the bottom, as a viewer sizes it
 	 */
