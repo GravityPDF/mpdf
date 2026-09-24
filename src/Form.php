@@ -1584,7 +1584,7 @@ class Form
 		};
 
 		$size = $this->mpdf->FontSizePt;
-		list($fit, $length) = $this->fitLine($size, $w - 2 * $padding, mb_strlen($text, $this->mpdf->mb_enc), function ($length) use ($cut) {
+		list($fit, $length) = $this->fitLine($size, $w - 2 * $padding, $text, function ($length) use ($cut) {
 			list($shaped, $OTLdata) = $cut($length);
 
 			return $this->mpdf->GetStringWidth($shaped, true, $OTLdata);
@@ -1624,17 +1624,19 @@ class Form
 	/**
 	 * Fits a line of a field's text to the room it has. Text too wide is drawn smaller in proportion, rounded down to the
 	 * precision Tf is written at, but not below half the field's size or 6pt, whichever is larger. Past that it loses
-	 * the characters at its end that still do not fit.
+	 * the characters at its end that still do not fit, cut where cutPoints() allows.
 	 *
 	 * @param float $size the field's font size, in points
 	 * @param float $room
-	 * @param int $length the text's length in characters
+	 * @param string $text in the document's encoding
 	 * @param callable $measure the width, in $room's units, of the text's first so many characters at $size
 	 *
 	 * @return mixed[] the font size, and how many of the characters are drawn
 	 */
-	private function fitLine($size, $room, $length, $measure)
+	private function fitLine($size, $room, $text, $measure)
 	{
+		$cuts = $this->cutPoints($text);
+		$length = end($cuts);
 		$width = $measure($length);
 		// A button or select is as wide as its text, and taking its padding back off that can leave a rounding error
 		if ($width <= $room + 1e-6) {
@@ -1646,20 +1648,64 @@ class Form
 		$room *= $size / $fit;
 
 		if ($width > $room) {
-			// The longest start of the text that fits, found by halving so that long text is measured O(log n) times
-			$longest = $length;
-			$length = 0;
-			while ($longest - $length > 1) {
-				$middle = (int) (($length + $longest) / 2);
-				if ($measure($middle) > $room) {
-					$longest = $middle;
+			// The longest start that fits, found by halving so that long text is measured O(log n) times. The last cut
+			// is the whole text, which does not fit.
+			$fits = -1;
+			$fails = count($cuts) - 1;
+			while ($fails - $fits > 1) {
+				$middle = (int) (($fits + $fails) / 2);
+				if ($measure($cuts[$middle]) > $room) {
+					$fails = $middle;
 				} else {
-					$length = $middle;
+					$fits = $middle;
+				}
+			}
+
+			// Halving takes a longer start to be no narrower, but a cut reshapes the letters just before it: an Arabic
+			// letter in its final form can be wider than the joined one it becomes. A cut reaches back no further than
+			// a letter or two, so of the starts past the one that failed, the next three are tried, longest first.
+			$length = $fits < 0 ? 0 : $cuts[$fits];
+			for ($i = min($fails + 3, count($cuts) - 2); $i > $fails; $i--) {
+				if ($measure($cuts[$i]) <= $room) {
+					$length = $cuts[$i];
+					break;
 				}
 			}
 		}
 
 		return [$fit, $length];
+	}
+
+	/**
+	 * The lengths, in characters, that fitLine() can cut a field's text to: whole grapheme clusters, as a mark cut
+	 * from its letter or half a conjunct is not what the text says
+	 *
+	 * @param string $text in the document's encoding
+	 *
+	 * @return int[] in order, the last the whole text's
+	 */
+	private function cutPoints($text)
+	{
+		if ($this->mpdf->mb_enc !== 'UTF-8' || !preg_match_all('/\X/u', $text, $clusters)) {
+			$length = mb_strlen($text, $this->mpdf->mb_enc);
+
+			return $length ? range(1, $length) : [0];
+		}
+
+		$cuts = [];
+		$length = 0;
+		foreach ($clusters[0] as $i => $cluster) {
+			$length += mb_strlen($cluster, 'UTF-8');
+			// In the scripts that write conjuncts a virama joins the consonants either side of it into one cluster, as
+			// Unicode 15.1 has it (GB9c), which PCRE's \X does not follow
+			if (isset($clusters[0][$i + 1]) && preg_match('/[\x{094D}\x{09CD}\x{0ACD}\x{0B4D}\x{0C4D}\x{0D4D}]\x{200D}?$/u', $cluster) && preg_match('/^\p{L}/u', $clusters[0][$i + 1])) {
+				continue;
+			}
+
+			$cuts[] = $length;
+		}
+
+		return $cuts;
 	}
 
 	/**
@@ -1709,7 +1755,7 @@ class Form
 			}
 		} elseif ($fit && $flow === 'line') {
 			$line = $lines[0];
-			list($size, $length) = $this->fitLine($size, $room, mb_strlen($line, $this->mpdf->mb_enc), function ($length) use ($line, $size) {
+			list($size, $length) = $this->fitLine($size, $room, $line, function ($length) use ($line, $size) {
 				return $this->emWidth(mb_substr($line, 0, $length, $this->mpdf->mb_enc)) * $size;
 			});
 			$lines = [mb_substr($line, 0, $length, $this->mpdf->mb_enc)];

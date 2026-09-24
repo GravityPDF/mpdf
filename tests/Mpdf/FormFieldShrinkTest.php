@@ -78,6 +78,49 @@ class FormFieldShrinkTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Past the minimum size a shaped value is trimmed to the longest start that fits once shaped, cut between whole
+	 * clusters, and drawn as the page draws that start
+	 *
+	 * @dataProvider trimmedShapedValues
+	 *
+	 * @param string $value
+	 * @param string $font
+	 * @param string $width the field's CSS width
+	 * @param int $length how many of the value's characters it draws
+	 */
+	public function testShapedValueIsTrimmedToTheLongestStartThatFits($value, $font, $width, $length)
+	{
+		$field = function ($text, $cssWidth) use ($font) {
+			return '<form><input type="text" name="t" value="' . $text . '" style="font-family: ' . $font . '; font-size: 10pt; width: ' . $cssWidth . '" /></form>';
+		};
+
+		$trimmed = new TextRecordingMpdf(['mode' => 'utf-8']);
+		$trimmed->WriteHTML($field($value, $width));
+
+		$start = new TextRecordingMpdf(['mode' => 'utf-8']);
+		$start->WriteHTML($field(mb_substr($value, 0, $length, 'UTF-8'), '100mm'));
+
+		$this->assertSame($start->drawnText, $trimmed->drawnText);
+		$this->assertEqualsWithDelta(6, $trimmed->drawnFontSize[0], 0.001);
+	}
+
+	/**
+	 * The Arabic value's first 8 characters fit, though its first 7 do not, as they end on a letter drawn wider in its
+	 * final form. The Devanagari value's first 4 characters fit, but they end on the virama of the conjunct "स्त", and
+	 * the Telugu value's first 3 on that of "త్య", so each is cut before its conjunct.
+	 *
+	 * @return mixed[][]
+	 */
+	public function trimmedShapedValues()
+	{
+		return [
+			'Arabic, whose longer start is narrower' => ['مرحبا بالعالم', 'dejavusans', '7mm', 8],
+			'Devanagari, cut between clusters' => ['नमस्ते दुनिया', 'freeserif', '5mm', 2],
+			'Telugu, cut between clusters' => ['సత్యమేవ జయతే', 'pothana2000', '3mm', 1],
+		];
+	}
+
+	/**
 	 * A select drawn into the page shows its choice by the same rule. Its choice has the field's width less the
 	 * drop-down arrow, 1.4em wide, and 1.2mm of spacing on each side.
 	 *
