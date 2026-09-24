@@ -538,6 +538,26 @@ class VeraPdfConformanceTest extends PdfUaTestCase
 	}
 
 	/**
+	 * Drawn form fields pass, their values in Form elements and their boxes artifacts.
+	 *
+	 * @return void
+	 */
+	public function testDocumentWithDrawnFormFieldsPassesUa1()
+	{
+		$html = '<h1>Form test</h1>'
+			. '<p>Name: <input type="text" name="fname" value="Jane" title="Full name"> end</p>'
+			. '<p><input type="checkbox" name="agree" checked> I agree <input type="radio" name="r" value="a"> A</p>'
+			. '<p>Pick: <select name="choice"><option>Option A</option><option selected>Option B</option></select>'
+			. ' <input type="submit" value="Send"></p>'
+			. '<textarea name="notes" rows="2" cols="20">Some notes</textarea>'
+			. '<table><tr><td>Code</td><td><input type="text" name="code" value="X1"></td></tr></table>';
+
+		$mpdf = $this->makeMpdf(['useActiveForms' => false]);
+		$pdf  = $this->getOutput($mpdf, $html);
+		$this->assertVeraPdfCompliant($pdf, 'document with drawn form fields');
+	}
+
+	/**
 	 * A document of nested headings over several pages passes.
 	 *
 	 * @return void

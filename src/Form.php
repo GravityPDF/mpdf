@@ -267,11 +267,12 @@ class Form
 				$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 			}
 
-			$this->mpdf->Cell($w, $h, $texto, 1, 0, $rtlalign, 1, '', 0, $this->form_element_spacing['input']['inner']['h'] / $k, $this->form_element_spacing['input']['inner']['h'] / $k, 'M', 0, false, $OTLdata);
+			$boxed = $this->drawBoxAsArtifact($wrapArtifact, $w, $h);
+			$value = $this->beginFieldValue('tv', $objattr);
+			$this->mpdf->Cell($w, $h, $texto, $boxed, 0, $rtlalign, $boxed, '', 0, $this->form_element_spacing['input']['inner']['h'] / $k, $this->form_element_spacing['input']['inner']['h'] / $k, 'M', 0, false, $OTLdata);
+			$this->endFieldValue($value);
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
-
-			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -366,6 +367,8 @@ class Form
 			}
 
 			$this->mpdf->Rect($this->mpdf->x, $this->mpdf->y, $w, $h, 'DF');
+			$this->endChromeArtifact($wrapArtifact);
+
 			$ClipPath = sprintf('q %.3F %.3F %.3F %.3F re W n ', $this->mpdf->x * Mpdf::SCALE, ($this->mpdf->h - $this->mpdf->y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE);
 			$this->writer->write($ClipPath);
 
@@ -373,15 +376,15 @@ class Form
 			$this->mpdf->x += $this->form_element_spacing['textarea']['inner']['h'] / $k;
 			$this->mpdf->y += $this->form_element_spacing['textarea']['inner']['v'] / $k;
 
+			$value = $this->beginFieldValue('tv', $objattr);
 			if ($texto != '') {
 				$this->mpdf->MultiCell($w, $this->mpdf->FontSize * $this->textarea_lineheight, $texto, 0, '', 0, '', $blockdir, true, $objattr['OTLdata'], $objattr['rows']);
 			}
+			$this->endFieldValue($value);
 
 			$this->writer->write('Q');
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
-
-			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -471,7 +474,12 @@ class Form
 
 			$this->mpdf->magic_reverse_dir($texto, $this->mpdf->directionality, $objattr['OTLdata']);
 
-			$this->mpdf->Cell($w - ($this->mpdf->FontSize * 1.4), $h, $texto, 1, 0, $rtlalign, 1, '', 0, $this->form_element_spacing['select']['inner']['h'] / $k, $this->form_element_spacing['select']['inner']['h'] / $k, 'M', 0, false, $objattr['OTLdata']);
+			$boxW = $w - ($this->mpdf->FontSize * 1.4);
+			$boxed = $this->drawBoxAsArtifact($wrapArtifact, $boxW, $h);
+			$value = $this->beginFieldValue('tv', $objattr);
+			$this->mpdf->Cell($boxW, $h, $texto, $boxed, 0, $rtlalign, $boxed, '', 0, $this->form_element_spacing['select']['inner']['h'] / $k, $this->form_element_spacing['select']['inner']['h'] / $k, 'M', 0, false, $objattr['OTLdata']);
+			$this->endFieldValue($value);
+			$wrapArtifact = $this->beginChromeArtifact();
 			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
 			$save_font = $this->mpdf->FontFamily;
 			$save_currentfont = $this->mpdf->currentfontfamily;
@@ -578,6 +586,7 @@ class Form
 			$this->mpdf->x += $this->form_element_spacing['button']['outer']['h'] / $k;
 			$this->mpdf->y += $this->form_element_spacing['button']['outer']['v'] / $k;
 			$this->mpdf->RoundedRect($this->mpdf->x, $this->mpdf->y, $w, $h, 0.5 / $k, 'DF');
+			$this->endChromeArtifact($wrapArtifact);
 
 			$w -= $this->form_element_spacing['button']['inner']['h'] * 2 / $k;
 			$h -= $this->form_element_spacing['button']['inner']['v'] * 2 / $k;
@@ -598,10 +607,10 @@ class Form
 
 			$this->mpdf->magic_reverse_dir($texto, $this->mpdf->directionality, $OTLdata);
 
+			$value = $this->beginFieldValue('pb', $objattr);
 			$this->mpdf->Cell($w, $h, $texto, '', 0, 'C', 0, '', 0, 0, 0, 'M', 0, false, $OTLdata);
+			$this->endFieldValue($value);
 			$this->mpdf->SetFColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
-
-			$this->endChromeArtifact($wrapArtifact);
 		}
 	}
 
@@ -629,7 +638,7 @@ class Form
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
 		} else {
-			$wrapArtifact = $this->beginChromeArtifact();
+			$value = $this->beginFieldValue('cb', $objattr);
 
 			$iw = $w * 0.7;
 			$ih = $h * 0.7;
@@ -657,7 +666,7 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			$this->endChromeArtifact($wrapArtifact);
+			$this->endFieldValue($value);
 		}
 	}
 
@@ -685,7 +694,7 @@ class Form
 				$this->mpdf->currentfontfamily = $save_currentfont;
 			}
 		} else {
-			$wrapArtifact = $this->beginChromeArtifact();
+			$value = $this->beginFieldValue('rb', $objattr);
 
 			$this->mpdf->SetLineWidth(0.2 / $k);
 			$radius = $this->mpdf->FontSize * 0.35;
@@ -709,7 +718,7 @@ class Form
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetDColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 
-			$this->endChromeArtifact($wrapArtifact);
+			$this->endFieldValue($value);
 		}
 	}
 
@@ -1940,8 +1949,8 @@ class Form
 	}
 
 	/**
-	 * Under PDF/UA, marks the drawing of an inactive form field as an artifact: it is decoration, not
-	 * content. Not inside marked content already open, where an artifact may not nest.
+	 * Under PDF/UA, marks the box and border of an inactive form field as an artifact: they are
+	 * decoration, not content. Not inside marked content already open, where an artifact may not nest.
 	 *
 	 * @return bool Whether the artifact was opened
 	 */
@@ -1979,6 +1988,75 @@ class Form
 		if ($opened) {
 			$this->mpdf->getPdfUaMarkedContentHelper()->end();
 			$this->mpdf->getPdfUaStructureTree()->closeArtifact();
+		}
+	}
+
+	/**
+	 * Draw an inactive field's box at the current position, and close the artifact it is drawn in.
+	 * With no artifact open, the box is left to the Cell() that draws the field's text.
+	 *
+	 * @param bool  $opened What beginChromeArtifact() returned
+	 * @param float $w
+	 * @param float $h
+	 *
+	 * @return int The border and fill flags for that Cell()
+	 */
+	private function drawBoxAsArtifact($opened, $w, $h)
+	{
+		if (!$opened) {
+			return 1;
+		}
+		$this->mpdf->Rect($this->mpdf->x, $this->mpdf->y, $w, $h, 'DF');
+		$this->endChromeArtifact($opened);
+
+		return 0;
+	}
+
+	/**
+	 * Under PDF/UA, marks what is drawn next as the value of an inactive form field: the content of a
+	 * Form element whose PrintField attributes say what kind of field it is (ISO 32000-1 §14.8.5.6).
+	 * Not inside marked content already open, where the value is already read as part of it.
+	 *
+	 * @param string $role    tv (text or choice), cb, rb or pb
+	 * @param array  $objattr The field
+	 *
+	 * @return bool Whether the value was marked
+	 */
+	private function beginFieldValue($role, array $objattr)
+	{
+		if (!$this->mpdf->PDFUA || $this->mpdf->getPdfUaMarkedContentHelper()->getDepth() !== 0) {
+			return false;
+		}
+
+		$attributes = ['Role' => $role];
+		if (isset($objattr['title']) && $objattr['title'] !== '') {
+			$attributes['Desc'] = $objattr['title'];
+		}
+		if ($role === 'cb' || $role === 'rb') {
+			$checked = !empty($objattr['checked']);
+			$attributes['checked'] = $checked ? 'on' : 'off';
+			// The state is drawn with lines, not text, so it is given as the character it looks like:
+			// ☐ ☒ or ○ ◉. Characters rather than words, which would have to be in the document's language.
+			$symbols = $role === 'cb' ? ["\xe2\x98\x90", "\xe2\x98\x92"] : ["\xe2\x97\x8b", "\xe2\x97\x89"];
+			$attributes['ActualText'] = $symbols[(int) $checked];
+		}
+
+		$tree = $this->mpdf->getPdfUaStructureTree();
+		$tree->open('Form', $attributes);
+		$mcid = $tree->addContent($this->mpdf->getPdfUaStructParents());
+		$this->mpdf->getPdfUaMarkedContentHelper()->begin('Form', $mcid);
+
+		return true;
+	}
+
+	/**
+	 * @param bool $opened What beginFieldValue() returned
+	 */
+	private function endFieldValue($opened)
+	{
+		if ($opened) {
+			$this->mpdf->getPdfUaMarkedContentHelper()->end();
+			$this->mpdf->getPdfUaStructureTree()->close();
 		}
 	}
 }

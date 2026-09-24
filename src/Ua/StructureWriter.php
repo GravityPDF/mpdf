@@ -188,10 +188,12 @@ class StructureWriter
 		$tableKeys  = ['Scope', 'ColSpan', 'RowSpan', 'Headers', 'Summary'];
 		$listKeys   = ['ListNumbering'];
 		$layoutKeys = ['Placement', 'BBox', 'WritingMode'];
+		$printFieldKeys = ['Role', 'checked', 'Desc'];
 
 		$tableAttrs  = [];
 		$listAttrs   = [];
 		$layoutAttrs = [];
+		$printFieldAttrs = [];
 
 		foreach ($tableKeys as $key) {
 			if (isset($attrs[$key])) {
@@ -208,6 +210,11 @@ class StructureWriter
 				$layoutAttrs[$key] = $attrs[$key];
 			}
 		}
+		foreach ($printFieldKeys as $key) {
+			if (isset($attrs[$key])) {
+				$printFieldAttrs[$key] = $attrs[$key];
+			}
+		}
 
 		$attrObjects = [];
 		if (!empty($tableAttrs)) {
@@ -218,6 +225,9 @@ class StructureWriter
 		}
 		if (!empty($layoutAttrs)) {
 			$attrObjects[] = $this->buildAttrObject('/Layout', $layoutAttrs);
+		}
+		if (!empty($printFieldAttrs)) {
+			$attrObjects[] = $this->buildAttrObject('/PrintField', $printFieldAttrs);
 		}
 
 		if (!empty($attrObjects)) {
@@ -417,7 +427,7 @@ class StructureWriter
 	}
 
 	/**
-	 * @param string $owner Such as '/Table', '/List' or '/Layout'
+	 * @param string $owner Such as '/Table', '/List', '/Layout' or '/PrintField'
 	 * @param array  $attrs
 	 *
 	 * @return string An attribute object of that owner, written inline, with strings as names
@@ -439,6 +449,8 @@ class StructureWriter
 					$idList[] = $this->writer->string($id);
 				}
 				$parts[] = '/' . $key . ' [' . implode(' ', $idList) . ']';
+			} elseif ($key === 'Desc') {
+				$parts[] = '/Desc ' . $this->writer->utf16BigEndianTextString($value);
 			} elseif (is_int($value) || is_float($value)) {
 				$parts[] = '/' . $key . ' ' . $this->formatNumber($value);
 			} else {

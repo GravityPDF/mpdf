@@ -40,8 +40,8 @@ class StructureElement
 
 	/**
 	 * Entries such as Alt, ActualText, Lang, E, T and ID go straight into the dictionary;
-	 * the Layout, Table and List ones (Placement, Scope, ColSpan, ListNumbering…) StructureWriter
-	 * gathers into /A attribute objects.
+	 * the Layout, Table, List and PrintField ones (Placement, Scope, ColSpan, ListNumbering, Role…)
+	 * StructureWriter gathers into /A attribute objects.
 	 *
 	 * @var array<string, mixed>
 	 */
