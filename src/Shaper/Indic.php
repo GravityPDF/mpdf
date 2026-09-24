@@ -1355,6 +1355,27 @@ class Indic
 		84 => [false, 0xA9C0, 1, 10, 0, self::BLWF_MODE_PRE_AND_POST], /* Javanese */
 	];
 
+	/**
+	 * The virama of each Indic script, Devanagari to Sinhala, as hex: the glyph a substitution pairs a
+	 * consonant with to state its class. TTFontFile reads the class off the pair, and Otl swaps a
+	 * post-base pair stated Consonant + Halant (_OTL_OLD_SPEC_COMPAT_1), so both read this one list.
+	 * Khmer's coeng and Javanese's pangkon are not in it: neither script's classes are read this way.
+	 *
+	 * @var true[]
+	 */
+	public static $viramas = [
+		'0094D' => true,
+		'009CD' => true,
+		'00A4D' => true,
+		'00ACD' => true,
+		'00B4D' => true,
+		'00BCD' => true,
+		'00C4D' => true,
+		'00CCD' => true,
+		'00D4D' => true,
+		'00DCA' => true,
+	];
+
 
 
 	/*
