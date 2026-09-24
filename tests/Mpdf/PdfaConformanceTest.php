@@ -157,6 +157,25 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A form drawn into the page conforms without mPDF fixing anything: a drop-down's arrow is a path, not a glyph in
+	 * ZapfDingbats (#454)
+	 *
+	 * @dataProvider documents
+	 */
+	public function testStaticFormConforms($version, $config)
+	{
+		$mpdf = $this->pdfa($version, $config + ['PDFAauto' => false, 'useActiveForms' => false]);
+		$mpdf->WriteHTML(
+			'<form><p><select name="s"><option value="1">One</option><option value="2" selected="selected">Two</option></select>'
+			. ' <select name="d" disabled="disabled"><option value="1">One</option></select>'
+			. ' <select name="m" size="3" multiple="multiple"><option value="1">One</option><option value="2" selected="selected">Two</option></select></p></form>'
+		);
+
+		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
+		$this->assertSame([], $mpdf->PDFAXwarnings);
+	}
+
+	/**
 	 * PDF/A-1b, which allows no optional content, and PDF/A-2b and PDF/A-2u, which allow it for hidden content only
 	 *
 	 * @return string[][]

@@ -435,29 +435,39 @@ class Form
 
 			$this->fittedCell($w - ($this->mpdf->FontSize * 1.4), $h, $texto, $border, $rtlalign, 1, $this->form_element_spacing['select']['inner']['h'] / $k, $objattr['OTLdata']);
 			$this->mpdf->SetFColor($this->colorConverter->convert(190, $this->mpdf->PDFAXwarnings));
-			$save_font = $this->mpdf->FontFamily;
-			$save_currentfont = $this->mpdf->currentfontfamily;
-			if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
-				if (($this->mpdf->PDFA && !$this->mpdf->PDFAauto) || ($this->mpdf->PDFX && !$this->mpdf->PDFXauto)) {
-					$this->mpdf->PDFAXwarnings[] = 'Core Adobe font Zapfdingbats cannot be embedded in mPDF - used in Form element: Select - which is required for PDFA1-b or ' . $this->mpdf->pdfxVersionLabel() . '. (Different character/font will be substituted.)';
-				}
-				$this->mpdf->SetFont('sans');
-				if ($this->mpdf->_charDefined($this->mpdf->CurrentFont['cw'], 9660)) {
-					$down = "\xe2\x96\xbc";
-				} else {
-					$down = '=';
-				}
-				$this->mpdf->Cell($this->mpdf->FontSize * 1.4, $h, $down, $border, 0, 'C', 1);
-			} else {
-				$this->mpdf->SetFont('czapfdingbats');
-				$this->mpdf->Cell($this->mpdf->FontSize * 1.4, $h, chr(116), $border, 0, 'C', 1);
-			}
-			$this->mpdf->SetFont($save_font);
-			$this->mpdf->currentfontfamily = $save_currentfont;
+			$this->printDropDownButton($this->mpdf->FontSize * 1.4, $h, $border);
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 			$this->resetStaticBorder($objattr);
 		}
+	}
+
+	/**
+	 * Draws a static combo box's grey drop-down button with a triangle in the text colour. A path rather than a glyph
+	 * needs no font, so PDF/A and PDF/X documents draw it the same way.
+	 *
+	 * @param float $w the button's width, in mm
+	 * @param float $h its height, in mm
+	 * @param int $border whether it is outlined
+	 */
+	private function printDropDownButton($w, $h, $border)
+	{
+		$this->mpdf->Cell($w, $h, '', $border, 0, 'C', 1);
+
+		// Half an em wide and 0.4em tall, centred on the button, in points
+		$half = $this->mpdf->FontSize / 4 * Mpdf::SCALE;
+		$cx = ($this->mpdf->x - $w / 2) * Mpdf::SCALE;
+		$cy = ($this->mpdf->h - $this->mpdf->y - $h / 2) * Mpdf::SCALE;
+		$this->writer->write(sprintf(
+			'q %s %.3F %.3F m %.3F %.3F l %.3F %.3F l f Q',
+			$this->mpdf->TextColor,
+			$cx - $half,
+			$cy + 0.8 * $half,
+			$cx + $half,
+			$cy + 0.8 * $half,
+			$cx,
+			$cy - 0.8 * $half
+		));
 	}
 
 	/**
