@@ -297,27 +297,24 @@ class Img extends Tag
 			// A percentage is of the border box, horizontal radii of its width and vertical of its height, resolved now as a
 			// block's are: a picture later narrowed to what is left of its line keeps the radius it was given. One still to
 			// be sized against its cell has them resolved again then.
-			$boxw = $objattr['width'] - $objattr['margin_left'] - $objattr['margin_right'];
-			$boxh = $objattr['height'] - $objattr['margin_top'] - $objattr['margin_bottom'];
 			$radii = [];
-			$sizing['radius_percent'] = [];
+			$radiusPercent = [];
 			foreach (['TL' => 'TOP-LEFT', 'TR' => 'TOP-RIGHT', 'BR' => 'BOTTOM-RIGHT', 'BL' => 'BOTTOM-LEFT'] as $corner => $name) {
 				if (!isset($properties['BORDER-' . $name . '-RADIUS-H'], $properties['BORDER-' . $name . '-RADIUS-V'])) {
 					continue;
 				}
-				$rh = $this->sizeConverter->convert($properties['BORDER-' . $name . '-RADIUS-H'], $boxw, $this->mpdf->FontSize, false);
-				$rv = $this->sizeConverter->convert($properties['BORDER-' . $name . '-RADIUS-V'], $boxh, $this->mpdf->FontSize, false);
-				if ($rh > 0 && $rv > 0) {
-					$radii[$corner] = [$rh, $rv];
-					$radiusPercent = array_filter([
-						$this->percentage($properties['BORDER-' . $name . '-RADIUS-H']),
-						$this->percentage($properties['BORDER-' . $name . '-RADIUS-V']),
-					], 'is_float');
-					if ($radiusPercent) {
-						$sizing['radius_percent'][$corner] = $radiusPercent;
+				foreach ([$properties['BORDER-' . $name . '-RADIUS-H'], $properties['BORDER-' . $name . '-RADIUS-V']] as $axis => $value) {
+					$share = $this->percentage($value);
+					if ($share === null) {
+						$radii[$corner][$axis] = $this->sizeConverter->convert($value, 0, $this->mpdf->FontSize, false);
+					} else {
+						$radii[$corner][$axis] = 0;
+						$radiusPercent[$corner][$axis] = $share;
 					}
 				}
 			}
+			$radii = ImageSizing::radii($objattr, $radii, $radiusPercent);
+			$sizing['radius_percent'] = array_intersect_key($radiusPercent, $radii);
 			if ($radii) {
 				$objattr['border_radius'] = $radii;
 			}
