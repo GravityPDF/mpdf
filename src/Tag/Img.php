@@ -2,7 +2,9 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Image\ImageSizing;
 use Mpdf\Mpdf;
+use Mpdf\Utils\NumericString;
 
 class Img extends Tag
 {
@@ -130,99 +132,14 @@ class Img extends Tag
 			if (isset($properties['VERTICAL-ALIGN'])) {
 				$objattr['vertical-align'] = $this->getAlign($properties['VERTICAL-ALIGN']);
 			}
-			$w = 0;
-			$h = 0;
-			if (isset($properties['WIDTH'])) {
-				$w = $this->sizeConverter->convert(
-					$properties['WIDTH'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			} elseif (isset($attr['WIDTH'])) {
-				$w = $this->sizeConverter->convert(
-					$attr['WIDTH'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			}
-			if (isset($properties['HEIGHT'])) {
-				$h = $this->sizeConverter->convert(
-					$properties['HEIGHT'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			} elseif (isset($attr['HEIGHT'])) {
-				$h = $this->sizeConverter->convert(
-					$attr['HEIGHT'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			}
-			$maxw = $maxh = $minw = $minh = false;
-			if (isset($properties['MAX-WIDTH'])) {
-				$maxw = $this->sizeConverter->convert(
-					$properties['MAX-WIDTH'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			} elseif (isset($attr['MAX-WIDTH'])) {
-				$maxw = $this->sizeConverter->convert(
-					$attr['MAX-WIDTH'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			}
-			if (isset($properties['MAX-HEIGHT'])) {
-				$maxh = $this->sizeConverter->convert(
-					$properties['MAX-HEIGHT'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			} elseif (isset($attr['MAX-HEIGHT'])) {
-				$maxh = $this->sizeConverter->convert(
-					$attr['MAX-HEIGHT'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			}
-			if (isset($properties['MIN-WIDTH'])) {
-				$minw = $this->sizeConverter->convert(
-					$properties['MIN-WIDTH'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			} elseif (isset($attr['MIN-WIDTH'])) {
-				$minw = $this->sizeConverter->convert(
-					$attr['MIN-WIDTH'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			}
-			if (isset($properties['MIN-HEIGHT'])) {
-				$minh = $this->sizeConverter->convert(
-					$properties['MIN-HEIGHT'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			} elseif (isset($attr['MIN-HEIGHT'])) {
-				$minh = $this->sizeConverter->convert(
-					$attr['MIN-HEIGHT'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			}
+			// In a cell a percentage width is of the cell's content width, which is only known once the table is laid out
+			$percent = [];
+			$w = $this->length($properties, $attr, 'WIDTH', 0, $percent, 'w');
+			$h = $this->length($properties, $attr, 'HEIGHT', 0);
+			$maxw = $this->length($properties, $attr, 'MAX-WIDTH', false, $percent, 'maxw');
+			$maxh = $this->length($properties, $attr, 'MAX-HEIGHT', false);
+			$minw = $this->length($properties, $attr, 'MIN-WIDTH', false, $percent, 'minw');
+			$minh = $this->length($properties, $attr, 'MIN-HEIGHT', false);
 
 			if (isset($properties['OPACITY']) && $properties['OPACITY'] > 0 && $properties['OPACITY'] <= 1) {
 				$objattr['opacity'] = $properties['OPACITY'];
@@ -302,80 +219,60 @@ class Img extends Tag
 			}
 
 			$objattr['file'] = $srcpath;
-			//Default width and height calculation if needed
-			if ($w == 0 && $h == 0) {
-				/* -- IMAGES-WMF -- */
-				if ($info['type'] === 'wmf') {
-					// WMF units are twips (1/20pt)
-					// divide by 20 to get points
-					// divide by k to get user units
-					$w = abs($info['w']) / (20 * Mpdf::SCALE);
-					$h = abs($info['h']) / (20 * Mpdf::SCALE);
-				} else { 							/* -- END IMAGES-WMF -- */
-					if ($info['type'] === 'svg') {
-						// SVG units are pixels
-						$w = abs($info['w']) / Mpdf::SCALE;
-						$h = abs($info['h']) / Mpdf::SCALE;
-					} else {
-						//Put image at default image dpi
-						$w = ($info['w'] / Mpdf::SCALE) * (72 / $this->mpdf->img_dpi);
-						$h = ($info['h'] / Mpdf::SCALE) * (72 / $this->mpdf->img_dpi);
-					}
-				}
-				if (isset($properties['IMAGE-RESOLUTION'])) {
-					if (preg_match('/from-image/i', $properties['IMAGE-RESOLUTION']) && isset($info['set-dpi']) && $info['set-dpi'] > 0) {
-						$w *= $this->mpdf->img_dpi / $info['set-dpi'];
-						$h *= $this->mpdf->img_dpi / $info['set-dpi'];
-					} elseif (preg_match('/(\d+)dpi/i', $properties['IMAGE-RESOLUTION'], $m)) {
-						$dpi = $m[1];
-						if ($dpi > 0) {
-							$w *= $this->mpdf->img_dpi / $dpi;
-							$h *= $this->mpdf->img_dpi / $dpi;
-						}
-					}
+			// The size it takes when given neither width nor height
+			/* -- IMAGES-WMF -- */
+			if ($info['type'] === 'wmf') {
+				// WMF units are twips (1/20pt)
+				// divide by 20 to get points
+				// divide by k to get user units
+				$naturalW = abs($info['w']) / (20 * Mpdf::SCALE);
+				$naturalH = abs($info['h']) / (20 * Mpdf::SCALE);
+			} else { 							/* -- END IMAGES-WMF -- */
+				if ($info['type'] === 'svg') {
+					// SVG units are pixels
+					$naturalW = abs($info['w']) / Mpdf::SCALE;
+					$naturalH = abs($info['h']) / Mpdf::SCALE;
+				} else {
+					//Put image at default image dpi
+					$naturalW = ($info['w'] / Mpdf::SCALE) * (72 / $this->mpdf->img_dpi);
+					$naturalH = ($info['h'] / Mpdf::SCALE) * (72 / $this->mpdf->img_dpi);
 				}
 			}
-			// IF WIDTH OR HEIGHT SPECIFIED
-			if ($w == 0) {
-				$w = $info['h'] ? abs($h * $info['w'] / $info['h']) : INF;
+			if (isset($properties['IMAGE-RESOLUTION'])) {
+				if (preg_match('/from-image/i', $properties['IMAGE-RESOLUTION']) && isset($info['set-dpi']) && $info['set-dpi'] > 0) {
+					$naturalW *= $this->mpdf->img_dpi / $info['set-dpi'];
+					$naturalH *= $this->mpdf->img_dpi / $info['set-dpi'];
+				} elseif (preg_match('/(\d+)dpi/i', $properties['IMAGE-RESOLUTION'], $m)) {
+					$dpi = $m[1];
+					if ($dpi > 0) {
+						$naturalW *= $this->mpdf->img_dpi / $dpi;
+						$naturalH *= $this->mpdf->img_dpi / $dpi;
+					}
+				}
 			}
 
-			if ($h == 0) {
-				$h = $info['w'] ? abs($w * $info['h'] / $info['w']) : INF;
-			}
-
-			if ($minw && $w < $minw) {
-				$w = $minw;
-				$h = $info['w'] ? abs($w * $info['h'] / $info['w']) : INF;
-			}
-			if ($maxw && $w > $maxw) {
-				$w = $maxw;
-				$h = $info['w'] ? abs($w * $info['h'] / $info['w']) : INF;
-			}
-			if ($minh && $h < $minh) {
-				$h = $minh;
-				$w = $info['h'] ? abs($h * $info['w'] / $info['h']) : INF;
-			}
-			if ($maxh && $h > $maxh) {
-				$h = $maxh;
-				$w = $info['h'] ? abs($h * $info['w'] / $info['h']) : INF;
-			}
-
-			// Resize to maximum dimensions of page
-			$maxWidth = $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'];
 			$maxHeight = $this->mpdf->h - ($this->mpdf->tMargin + $this->mpdf->bMargin + 1);
 			if ($this->mpdf->fullImageHeight) {
 				$maxHeight = $this->mpdf->fullImageHeight;
 			}
-			if (($w + $extrawidth) > ($maxWidth + 0.0001)) { // mPDF 5.7.4  0.0001 to allow for rounding errors when w==maxWidth
-				$w = $maxWidth - $extrawidth;
-				$h = abs($w * $info['h'] / $info['w']);
-			}
 
-			if ($h + $extraheight > $maxHeight) {
-				$h = $maxHeight - $extraheight;
-				$w = abs($h * $info['w'] / $info['h']);
-			}
+			$sizing = [
+				'w' => $w,
+				'h' => $h,
+				'minw' => $minw,
+				'maxw' => $maxw,
+				'minh' => $minh,
+				'maxh' => $maxh,
+				'natural_w' => $naturalW,
+				'natural_h' => $naturalH,
+				'extrawidth' => $extrawidth,
+				'extraheight' => $extraheight,
+				// The page's room, which it is resized to fit
+				'fit_w' => $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
+				'fit_h' => $maxHeight,
+				'percent' => $percent,
+			];
+			list($w, $h) = ImageSizing::fit($sizing, $info['w'], $info['h']);
 			$objattr['type'] = 'image';
 			$objattr['itype'] = $info['type'];
 
@@ -398,10 +295,12 @@ class Img extends Tag
 
 			/* -- BORDER-RADIUS -- */
 			// A percentage is of the border box, horizontal radii of its width and vertical of its height, resolved now as a
-			// block's are: a picture later narrowed to what is left of its line keeps the radius it was given
+			// block's are: a picture later narrowed to what is left of its line keeps the radius it was given. One still to
+			// be sized against its cell has them resolved again then.
 			$boxw = $objattr['width'] - $objattr['margin_left'] - $objattr['margin_right'];
 			$boxh = $objattr['height'] - $objattr['margin_top'] - $objattr['margin_bottom'];
 			$radii = [];
+			$sizing['radius_percent'] = [];
 			foreach (['TL' => 'TOP-LEFT', 'TR' => 'TOP-RIGHT', 'BR' => 'BOTTOM-RIGHT', 'BL' => 'BOTTOM-LEFT'] as $corner => $name) {
 				if (!isset($properties['BORDER-' . $name . '-RADIUS-H'], $properties['BORDER-' . $name . '-RADIUS-V'])) {
 					continue;
@@ -410,12 +309,25 @@ class Img extends Tag
 				$rv = $this->sizeConverter->convert($properties['BORDER-' . $name . '-RADIUS-V'], $boxh, $this->mpdf->FontSize, false);
 				if ($rh > 0 && $rv > 0) {
 					$radii[$corner] = [$rh, $rv];
+					$radiusPercent = array_filter([
+						$this->percentage($properties['BORDER-' . $name . '-RADIUS-H']),
+						$this->percentage($properties['BORDER-' . $name . '-RADIUS-V']),
+					], 'is_float');
+					if ($radiusPercent) {
+						$sizing['radius_percent'][$corner] = $radiusPercent;
+					}
 				}
 			}
 			if ($radii) {
 				$objattr['border_radius'] = $radii;
 			}
 			/* -- END BORDER-RADIUS -- */
+			if ($percent) {
+				$objattr['cell_sizing'] = $sizing;
+				for ($level = 1; $level <= $this->mpdf->tableLevel; $level++) {
+					$this->mpdf->table[$level][$this->mpdf->tbctr[$level]]['cell_sized_images'] = true;
+				}
+			}
 			/* -- CSS-IMAGE-FLOAT -- */
 			if (!$this->mpdf->ColActive && !$this->mpdf->tableLevel && !$this->mpdf->listlvl && !$this->mpdf->kwt) {
 				if (isset($properties['FLOAT']) && (strtoupper($properties['FLOAT']) === 'RIGHT' || strtoupper($properties['FLOAT']) === 'LEFT')) {
@@ -471,6 +383,50 @@ class Img extends Tag
 			}
 			/* -- END ANNOTATIONS -- */
 		}
+	}
+
+	/**
+	 * A length the image is given in CSS, or else in its HTML attribute, in millimetres. Inside a table a percentage
+	 * of the width goes into $percent under $key instead, to be resolved against the cell, and $default stands in.
+	 *
+	 * @param array $properties
+	 * @param array $attr
+	 * @param string $name The property and attribute, e.g. MAX-WIDTH
+	 * @param int|false $default What an image not given the length has
+	 * @param array $percent
+	 * @param string|null $key Where a percentage of the width is put in $percent
+	 *
+	 * @return float|int|false
+	 */
+	private function length(array $properties, array $attr, $name, $default, array &$percent = [], $key = null)
+	{
+		if (isset($properties[$name])) {
+			$value = $properties[$name];
+		} elseif (isset($attr[$name])) {
+			$value = $attr[$name];
+		} else {
+			return $default;
+		}
+
+		if ($key !== null && $this->mpdf->tableLevel && NumericString::containsPercentChar($value)) {
+			$percent[$key] = (float) $value;
+
+			return $default;
+		}
+
+		return $this->sizeConverter->convert($value, $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
+	}
+
+	/**
+	 * The number of a percentage, or null for any other length
+	 *
+	 * @param string $value
+	 *
+	 * @return float|null
+	 */
+	private function percentage($value)
+	{
+		return NumericString::containsPercentChar($value) ? (float) $value : null;
 	}
 
 	public function close(&$ahtml, &$ihtml)
