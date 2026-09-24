@@ -421,7 +421,9 @@ trait FpdiTrait
 			$resolvedWidth  = ($width !== null) ? $width : $this->pgwidth;
 			$resolvedHeight = ($height !== null) ? $height : ($this->h - $this->tMargin - $this->bMargin);
 
+			// Opened in the structure tree too, so the caption drawn with Text() is not tagged
 			$this->writer->write('/Artifact <</Type /Layout>> BDC');
+			$this->ua->getStructureTree()->openArtifact();
 			$this->drawEncryptedSourcePlaceholder(
 				$x,
 				$y,
@@ -429,6 +431,7 @@ trait FpdiTrait
 				$resolvedHeight,
 				$this->encryptedPlaceholderCaption($pageId)
 			);
+			$this->ua->getStructureTree()->closeArtifact();
 			$this->writer->write('EMC');
 
 			$pdfuaMerger->addUntaggedWarning(
