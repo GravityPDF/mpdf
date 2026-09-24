@@ -108,30 +108,4 @@ class RightToLeftActualTextTest extends PdfUaTestCase
 
 		$this->assertSame([], $this->actualTexts($this->getOutput($mpdf, '<p dir="rtl" lang="he">שלום עולם</p>')));
 	}
-
-	/**
-	 * Every /ActualText in the document, in hex.
-	 *
-	 * @param string $pdf
-	 *
-	 * @return string[]
-	 */
-	private function actualTexts($pdf)
-	{
-		preg_match_all('/\/ActualText <(FEFF[0-9A-F]*)>/', $pdf, $m);
-
-		return $m[1];
-	}
-
-	/**
-	 * The /ActualText hex that stands for a string.
-	 *
-	 * @param string $text
-	 *
-	 * @return string
-	 */
-	private function actualTextOf($text)
-	{
-		return 'FEFF' . strtoupper(bin2hex(mb_convert_encoding($text, 'UTF-16BE', 'UTF-8')));
-	}
 }

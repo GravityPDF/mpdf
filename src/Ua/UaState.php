@@ -57,8 +57,8 @@ class UaState
 	/** @var AriaIdResolver */
 	protected $ariaIdResolver;
 
-	/** @var LigatureActualTextWriter */
-	protected $ligatureActualTextWriter;
+	/** @var ActualTextWriter */
+	protected $actualTextWriter;
 
 	/** @var Import\FpdiStructMerger */
 	protected $fpdiStructMerger;
@@ -77,7 +77,7 @@ class UaState
 	 * @param MarkedContentHelper       $markedContentHelper
 	 * @param StructureWriter           $structureWriter
 	 * @param AriaIdResolver            $ariaIdResolver
-	 * @param LigatureActualTextWriter  $ligatureActualTextWriter
+	 * @param ActualTextWriter          $actualTextWriter
 	 * @param Import\FpdiStructMerger   $fpdiStructMerger
 	 * @param InlineStructStack         $inlineStructStack
 	 * @param AnchorState               $anchorState
@@ -88,7 +88,7 @@ class UaState
 		MarkedContentHelper $markedContentHelper,
 		StructureWriter $structureWriter,
 		AriaIdResolver $ariaIdResolver,
-		LigatureActualTextWriter $ligatureActualTextWriter,
+		ActualTextWriter $actualTextWriter,
 		Import\FpdiStructMerger $fpdiStructMerger,
 		InlineStructStack $inlineStructStack,
 		AnchorState $anchorState,
@@ -98,7 +98,7 @@ class UaState
 		$this->markedContentHelper      = $markedContentHelper;
 		$this->structureWriter          = $structureWriter;
 		$this->ariaIdResolver           = $ariaIdResolver;
-		$this->ligatureActualTextWriter = $ligatureActualTextWriter;
+		$this->actualTextWriter         = $actualTextWriter;
 		$this->fpdiStructMerger         = $fpdiStructMerger;
 		$this->inlineStructStack        = $inlineStructStack;
 		$this->anchorState              = $anchorState;
@@ -177,10 +177,10 @@ class UaState
 		return $this->ariaIdResolver;
 	}
 
-	/** @return LigatureActualTextWriter */
-	public function getLigatureActualTextWriter()
+	/** @return ActualTextWriter */
+	public function getActualTextWriter()
 	{
-		return $this->ligatureActualTextWriter;
+		return $this->actualTextWriter;
 	}
 
 	/** @return Import\FpdiStructMerger */

@@ -5915,7 +5915,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (!$this->PDFUA || empty($OTLdata['actualText'])) {
 			return $sub;
 		}
-		$actualTextWriter = $this->ua->getLigatureActualTextWriter();
+		$actualTextWriter = $this->ua->getActualTextWriter();
 
 		return $actualTextWriter->buildBdcBytes($actualTextWriter->getActualTextEncoding($OTLdata['actualText']))
 			. ' ' . $sub . ' ' . $actualTextWriter->buildEmcBytes();
@@ -5946,8 +5946,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$wordspacing = $this->FontSizePt ? ($this->ws * 1000 / $this->FontSizePt) : 0;
 
 		// A ligature the font's ToUnicode cannot map back is given its characters as /ActualText
-		$ligActualTextWriter = $this->PDFUA
-			? $this->ua->getLigatureActualTextWriter()
+		$actualTextWriter = $this->PDFUA
+			? $this->ua->getActualTextWriter()
 			: null;
 
 		$XshiftBefore = 0;
@@ -5969,14 +5969,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$isLigHere = false;
 			$ligActualTextHex = '';
-			if ($ligActualTextWriter !== null
+			if ($actualTextWriter !== null
 				&& isset($GPOSinfo[$i]['source_chars'])
 				&& count($GPOSinfo[$i]['source_chars']) > 1
 			) {
 				$srcCp = $GPOSinfo[$i]['source_chars'];
-				if (!$ligActualTextWriter->toUnicodeCovers($c, $srcCp, $this->CurrentFont)) {
+				if (!$actualTextWriter->toUnicodeCovers($c, $srcCp, $this->CurrentFont)) {
 					$isLigHere = true;
-					$ligActualTextHex = $ligActualTextWriter->getActualTextEncoding($srcCp);
+					$ligActualTextHex = $actualTextWriter->getActualTextEncoding($srcCp);
 					// End the TJ here: the BDC has to come before the ligature's glyph
 					$groupBreak = true;
 				}
@@ -6121,7 +6121,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				// Marked content may begin between two TJs inside BT/ET
 				if ($isLigHere) {
-					$tj .= $ligActualTextWriter->buildBdcBytes($ligActualTextHex) . ' ';
+					$tj .= $actualTextWriter->buildBdcBytes($ligActualTextHex) . ' ';
 				}
 
 				$tj .= $sipset
@@ -6137,7 +6137,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$tj .= $sipset
 					? '>] TJ '
 					: ')] TJ ';
-				$tj .= $ligActualTextWriter->buildEmcBytes() . ' ';
+				$tj .= $actualTextWriter->buildEmcBytes() . ' ';
 				$tj .= $sipset
 					? '[<'
 					: '[(';

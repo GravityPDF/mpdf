@@ -38,4 +38,30 @@ abstract class PdfUaTestCase extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->WriteHTML($html);
 		return $mpdf->Output(null, 'S');
 	}
+
+	/**
+	 * The /ActualText of every /Span wrapper in the content streams, in hex.
+	 *
+	 * @param string $pdf
+	 *
+	 * @return string[]
+	 */
+	protected function actualTexts($pdf)
+	{
+		preg_match_all('/\/Span <<\/ActualText <(FEFF[0-9A-F]*)>>>/', $pdf, $m);
+
+		return $m[1];
+	}
+
+	/**
+	 * The /ActualText hex that stands for a string: UTF-16BE behind a byte order mark.
+	 *
+	 * @param string $text
+	 *
+	 * @return string
+	 */
+	protected function actualTextOf($text)
+	{
+		return 'FEFF' . strtoupper(bin2hex(mb_convert_encoding($text, 'UTF-16BE', 'UTF-8')));
+	}
 }

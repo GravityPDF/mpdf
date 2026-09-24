@@ -181,8 +181,7 @@ class LigatureActualTextTest extends PdfUaTestCase
 		$mpdf = $this->makeMpdf(['fontdata' => $this->dejavuSerifWithOtl()]);
 		$pdf  = $this->getOutput($mpdf, '<p style="font-family: dejavuserif;">fine office difficulty</p>');
 
-		preg_match_all('/\/Span <<\/ActualText <(FEFF[0-9A-F]+)>>>/', $pdf, $m);
-		$wrappers = $m[1];
+		$wrappers = $this->actualTexts($pdf);
 
 		$this->assertContains(
 			'FEFF00660069',
