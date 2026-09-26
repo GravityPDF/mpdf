@@ -51,7 +51,7 @@ class XmpExtensionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$mpdf = $this->pdfA3();
 		$mpdf->AddXmpExtension(FixedXmpExtension::orderReference());
-		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
+		$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
 		$output = $this->output($mpdf);
 
 		$this->assertMatchesRegularExpression('/<pdfaSchema:prefix>fx<\/pdfaSchema:prefix>.*<pdfaSchema:prefix>ex<\/pdfaSchema:prefix>/s', $this->extensionSchemas($output));
@@ -180,7 +180,7 @@ class XmpExtensionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$mpdf = $this->pdfA3();
 		if ($invoiceFirst) {
-			$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
+			$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
 		} else {
 			$mpdf->AddXmpExtension(FixedXmpExtension::orderReference('fx'));
 		}
@@ -191,7 +191,7 @@ class XmpExtensionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		if ($invoiceFirst) {
 			$mpdf->AddXmpExtension(FixedXmpExtension::orderReference('fx'));
 		} else {
-			$mpdf->SetEmbeddedInvoice(new FacturX($this->invoice()));
+			$mpdf->SetEmbeddedInvoice(new FacturX($this->invoiceXml()));
 		}
 	}
 

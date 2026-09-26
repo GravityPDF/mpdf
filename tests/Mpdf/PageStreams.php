@@ -44,7 +44,7 @@ trait PageStreams
 	 *
 	 * @return string
 	 */
-	private function invoice($guideline = null)
+	private function invoiceXml($guideline = null)
 	{
 		$xml = file_get_contents(__DIR__ . '/../data/invoice/en16931.xml');
 

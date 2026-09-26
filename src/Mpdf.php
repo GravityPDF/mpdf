@@ -2281,6 +2281,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 *     $mpdf->SetEmbeddedInvoice(new FacturX($xml));
 	 *
 	 * Extend FacturX for a later version of Factur-X, or implement EmbeddedInvoiceInterface for a specification that differs further.
+	 * To write the XML from an invoice built with Mpdf\Invoice, and print or attach it in the same call, use
+	 * Mpdf\Invoice\DocumentComposer.
 	 *
 	 * @see https://fnfe-mpe.org/factur-x/factur-x_en/ Factur-X, the specification shared with ZUGFeRD
 	 *
