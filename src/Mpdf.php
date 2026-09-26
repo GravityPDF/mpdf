@@ -11,6 +11,7 @@ use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
+use Mpdf\Image\ImageSizing;
 use Mpdf\Output\Destination;
 use Mpdf\Pdf\DocumentProfile;
 use Mpdf\Invoice\EmbeddedInvoiceInterface;
@@ -20053,7 +20054,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/* -- TABLES -- */
 
-	function TableCheckMinWidth($maxwidth, $forcewrap = 0, $textbuffer = [], $checkletter = false)
+	/**
+	 * Whether a cell's content fits $maxwidth: the width of its widest unbreakable part, negated, if not, else 1
+	 *
+	 * @param bool $keepImageWidths Whether an image sized by a percentage of its cell needs the width it would have
+	 *                              without the percentage, rather than letting the cell narrow it
+	 */
+	function TableCheckMinWidth($maxwidth, $forcewrap = 0, $textbuffer = [], $checkletter = false, $keepImageWidths = false)
 	{
 	// mPDF 6
 		$acclength = 0; // mPDF 6 (accumulated length across > 1 chunk)
@@ -20076,10 +20083,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// IMAGES & FORM ELEMENTS
 			if (substr($line, 0, 3) == Mpdf::OBJECT_IDENTIFIER) { // inline object - FORM element or IMAGE!
 				$objattr = $this->_getObjAttr($line);
-				if ($objattr['type'] != 'hr' && isset($objattr['width']) && ($objattr['width'] / $this->shrin_k) > ($maxwidth + 0.0001)) {
-					if (($objattr['width'] / $this->shrin_k) > $biggestword) {
-						$biggestword = ($objattr['width'] / $this->shrin_k);
-					}
+				if ($objattr['type'] == 'hr' || !isset($objattr['width'])) {
+					continue;
+				}
+				$objwidth = $objattr['width'];
+				if (isset($objattr['cell_sizing'])) {
+					$objwidth = ImageSizing::minimumWidth($objattr['cell_sizing'], $objattr['orig_w'], $objattr['orig_h'], $keepImageWidths);
+				}
+				$objwidth /= $this->shrin_k;
+				if ($objwidth > ($maxwidth + 0.0001)) {
+					$biggestword = max($biggestword, $objwidth);
 					$toonarrow = true;
 				}
 				continue;
@@ -20416,6 +20429,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					$c['nestedmaw'] = isset($c['nestedmaw']) ? $c['nestedmaw'] /= $k : null;
 					$c['nestedmiw'] = isset($c['nestedmiw']) ? $c['nestedmiw'] /= $k : null;
+					if (isset($c['nestedmiw_kept'])) {
+						$c['nestedmiw_kept'] /= $k;
+					}
 
 					if (isset($c['textbuffer'])) {
 						foreach ($c['textbuffer'] as $n => $tb) {
@@ -20531,6 +20547,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$cs = &$table['cells'];
 
+		// Set on a table measured for shrinking to fit, and on the tables nested in it
+		$keepImageWidths = !empty($table['keep_image_widths']) || !empty($this->table[1][1]['keep_image_widths']);
+
 		$nc = $table['nc'];
 		$nr = $table['nr'];
 		$listspan = [];
@@ -20620,6 +20639,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if (isset($c['nestedmiw'])) {
 							$c['nestedmiw'] += $extrcw;
 						}
+						if (isset($c['nestedmiw_kept'])) {
+							$c['nestedmiw_kept'] += $extrcw;
+						}
 						if (isset($c['nestedmaw'])) {
 							$c['nestedmaw'] += $extrcw;
 						}
@@ -20628,7 +20650,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					// If minimum width has already been set by a nested table or inline object (image/form), use it
 					if (isset($c['nestedmiw']) && (!isset($this->table[1][1]['overflow']) || $this->table[1][1]['overflow'] != 'visible')) {
-						$miw = $c['nestedmiw'];
+						$miw = $keepImageWidths && isset($c['nestedmiw_kept']) ? $c['nestedmiw_kept'] : $c['nestedmiw'];
 					} else {
 						$miw = $mw;
 					}
@@ -20726,7 +20748,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						else {
 							$letter = false;
 						}
-						$minwidth = $this->TableCheckMinWidth($wc['miw'] - $extrcw, 0, $c['textbuffer'], $letter);
+						$minwidth = $this->TableCheckMinWidth($wc['miw'] - $extrcw, 0, $c['textbuffer'], $letter, $keepImageWidths);
 					} else {
 						$minwidth = 0;
 					}
@@ -21299,6 +21321,40 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
+	/**
+	 * Size the images in a cell that were given a percentage width, min-width or max-width, which is of the cell's
+	 * content width. They are sized afresh from what they were given each time, as a table can be laid out again.
+	 *
+	 * @param array $textbuffer The cell's content
+	 * @param float $contentWidth The cell's content width, as drawn
+	 */
+	function sizeCellImages(array &$textbuffer, $contentWidth)
+	{
+		foreach ($textbuffer as $n => $chunk) {
+			if (substr($chunk[0], 0, 3) !== Mpdf::OBJECT_IDENTIFIER || strpos($chunk[0], 'cell_sizing') === false) {
+				continue;
+			}
+
+			$objattr = $this->_getObjAttr($chunk[0]);
+
+			$sizing = $objattr['cell_sizing'];
+
+			// An image's lengths are kept as they were before the table was shrunk to fit, and divided by shrin_k to draw
+			list($w, $h) = ImageSizing::fit($sizing, $objattr['orig_w'], $objattr['orig_h'], $contentWidth * $this->shrin_k);
+
+			$objattr['width'] = $w + $sizing['extrawidth'];
+			$objattr['height'] = $h + $sizing['extraheight'];
+			$objattr['image_width'] = $w;
+			$objattr['image_height'] = $h;
+
+			if (isset($objattr['border_radius'])) {
+				$objattr['border_radius'] = ImageSizing::radii($objattr, $objattr['border_radius'], $sizing['radius_percent']);
+			}
+
+			$textbuffer[$n][0] = Mpdf::OBJECT_IDENTIFIER . 'type=image,objattr=' . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
+		}
+	}
+
 	function _tableHeight(&$table)
 	{
 		$level = $table['level'];
@@ -21406,6 +21462,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->cellLineStackingStrategy = $c['cellLineStackingStrategy'];
 							$this->cellLineStackingShift = $c['cellLineStackingShift'];
 							$this->divwidth = $cw - $extraWLR;
+							if (!empty($table['cell_sized_images'])) {
+								$this->sizeCellImages($c['textbuffer'], $this->divwidth);
+							}
 							$tempch = $this->printbuffer($c['textbuffer'], '', true, true);
 						} else {
 							$tempch = 0;
