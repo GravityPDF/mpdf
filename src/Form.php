@@ -328,8 +328,7 @@ class Form
 			$this->setStaticColors($objattr, !empty($objattr['disabled']) || !empty($objattr['readonly']));
 
 			$this->mpdf->Rect($this->mpdf->x, $this->mpdf->y, $w, $h, $border ? 'DF' : 'F');
-			$ClipPath = sprintf('q %.3F %.3F %.3F %.3F re W n ', $this->mpdf->x * Mpdf::SCALE, ($this->mpdf->h - $this->mpdf->y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE);
-			$this->writer->write($ClipPath);
+			$this->mpdf->saveGraphicsState(sprintf('%.3F %.3F %.3F %.3F re W n', $this->mpdf->x * Mpdf::SCALE, ($this->mpdf->h - $this->mpdf->y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE));
 
 			$w -= $this->form_element_spacing['textarea']['inner']['h'] * 2 / $k;
 			$this->mpdf->x += $this->form_element_spacing['textarea']['inner']['h'] / $k;
@@ -339,7 +338,7 @@ class Form
 				$this->mpdf->MultiCell($w, $this->mpdf->FontSize * $this->textarea_lineheight, $texto, 0, '', 0, '', $blockdir, true, $objattr['OTLdata'], $objattr['rows']);
 			}
 
-			$this->writer->write('Q');
+			$this->mpdf->restoreGraphicsState();
 			$this->mpdf->SetFColor($this->colorConverter->convert(255, $this->mpdf->PDFAXwarnings));
 			$this->mpdf->SetTColor($this->colorConverter->convert(0, $this->mpdf->PDFAXwarnings));
 			$this->resetStaticBorder($objattr);
@@ -490,7 +489,7 @@ class Form
 		}
 
 		$this->mpdf->Rect($x, $y, $w, $h, 'F');
-		$this->writer->write(sprintf('q %.3F %.3F %.3F %.3F re W n', $x * Mpdf::SCALE, ($this->mpdf->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE));
+		$this->mpdf->saveGraphicsState(sprintf('%.3F %.3F %.3F %.3F re W n', $x * Mpdf::SCALE, ($this->mpdf->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE));
 
 		$items = array_slice($items, $top, $rows);
 		$rowsTop = $y + ($h - $rows * $rowHeight) / 2;
@@ -521,7 +520,7 @@ class Form
 		}
 
 		$this->mpdf->divheight = $divheight;
-		$this->writer->write('Q');
+		$this->mpdf->restoreGraphicsState();
 		$this->mpdf->Rect($x, $y, $w, $h, 'D');
 		$this->mpdf->x = $x + $w;
 		$this->mpdf->y = $y;

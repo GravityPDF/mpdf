@@ -362,6 +362,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $subPos;
 	var $subArrMB;
 	var $ReqFontStyle;
+	/**
+	 * The clip a table hiding its overflow is drawn inside, without its "q"
+	 */
 	var $tableClipPath;
 
 	var $fullImageHeight;
@@ -11615,7 +11618,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$y = $this->y;
 		}
 		if ($this->angle != 0) {
-			$this->writer->write('Q');
+			$this->restoreGraphicsState();
 		}
 		$this->angle = $angle;
 		if ($angle != 0) {
@@ -11624,7 +11627,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$s = sin($angle);
 			$cx = $x * Mpdf::SCALE;
 			$cy = ($this->h - $y) * Mpdf::SCALE;
-			$this->writer->write(sprintf('q %.5F %.5F %.5F %.5F %.3F %.3F cm 1 0 0 1 %.3F %.3F cm', $c, $s, -$s, $c, $cx, $cy, -$cx, -$cy));
+			$this->saveGraphicsState(sprintf('%.5F %.5F %.5F %.5F %.3F %.3F cm 1 0 0 1 %.3F %.3F cm', $c, $s, -$s, $c, $cx, $cy, -$cx, -$cy));
 		}
 	}
 
@@ -15751,11 +15754,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			// $op = 'W* n';	// Clipping
 			$op = 'W n'; // Clipping alternative mode
-			$this->writer->write("q");
 			$ch = $clip_y1 - $y;
-			$this->writer->write(sprintf('%.3F %.3F %.3F %.3F re %s', $x * Mpdf::SCALE, ($this->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$ch * Mpdf::SCALE, $op));
+			$clip = sprintf('%.3F %.3F %.3F %.3F re %s', $x * Mpdf::SCALE, ($this->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$ch * Mpdf::SCALE, $op);
+			$this->saveGraphicsState($clip);
 			if (!empty($block_s)) {
-				$tmp = "q\n" . sprintf('%.3F %.3F %.3F %.3F re %s', $x * Mpdf::SCALE, ($this->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$ch * Mpdf::SCALE, $op);
+				$tmp = "q\n" . $clip;
 				$tmp .= "\n" . $block_s . "\nQ";
 				$block_s = $tmp;
 			}
@@ -15786,7 +15789,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($overflow == 'hidden') {
 			// End clipping
-			$this->writer->write("Q");
+			$this->restoreGraphicsState();
 		}
 
 		$this->writer->write($rot_end);
@@ -17967,7 +17970,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			if (isset($tbd['s']) && $tbd['s']) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('q');
+					$this->saveGraphicsState();
 					$this->SetLineWidth(0);
 					$this->writer->write(sprintf('%.3F %.3F m ', ($x0) * Mpdf::SCALE, ($this->h - ($y0)) * Mpdf::SCALE));
 					$this->writer->write(sprintf('%.3F %.3F l ', ($x0 + $border_left) * Mpdf::SCALE, ($this->h - ($y0 + $border_top)) * Mpdf::SCALE));
@@ -18046,7 +18049,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->writer->write($s);
 				}
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('Q');
+					$this->restoreGraphicsState();
 				}
 
 				// Reset Corners and Dash off
@@ -18064,7 +18067,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$tbd = $this->blk[$blvl]['border_bottom'];
 			if (isset($tbd['s']) && $tbd['s']) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('q');
+					$this->saveGraphicsState();
 					$this->SetLineWidth(0);
 					$this->writer->write(sprintf('%.3F %.3F m ', ($x0) * Mpdf::SCALE, ($this->h - ($y0 + $h)) * Mpdf::SCALE));
 					$this->writer->write(sprintf('%.3F %.3F l ', ($x0 + $border_left) * Mpdf::SCALE, ($this->h - ($y0 + $h - $border_bottom)) * Mpdf::SCALE));
@@ -18110,7 +18113,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->writer->write($s);
 				}
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('Q');
+					$this->restoreGraphicsState();
 				}
 
 				// Reset Corners and Dash off
@@ -18128,7 +18131,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$tbd = $this->blk[$blvl]['border_left'];
 			if (isset($tbd['s']) && $tbd['s']) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('q');
+					$this->saveGraphicsState();
 					$this->SetLineWidth(0);
 					$this->writer->write(sprintf('%.3F %.3F m ', ($x0) * Mpdf::SCALE, ($this->h - ($y0)) * Mpdf::SCALE));
 					$this->writer->write(sprintf('%.3F %.3F l ', ($x0 + $border_left) * Mpdf::SCALE, ($this->h - ($y0 + $border_top)) * Mpdf::SCALE));
@@ -18174,7 +18177,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->writer->write($s);
 				}
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('Q');
+					$this->restoreGraphicsState();
 				}
 
 				// Reset Corners and Dash off
@@ -18189,7 +18192,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$tbd = $this->blk[$blvl]['border_right'];
 			if (isset($tbd['s']) && $tbd['s']) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('q');
+					$this->saveGraphicsState();
 					$this->SetLineWidth(0);
 					$this->writer->write(sprintf('%.3F %.3F m ', ($x0 + $w) * Mpdf::SCALE, ($this->h - ($y0)) * Mpdf::SCALE));
 					$this->writer->write(sprintf('%.3F %.3F l ', ($x0 + $w - $border_right) * Mpdf::SCALE, ($this->h - ($y0 + $border_top)) * Mpdf::SCALE));
@@ -18235,7 +18238,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->writer->write($s);
 				}
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
-					$this->writer->write('Q');
+					$this->restoreGraphicsState();
 				}
 
 				// Reset Corners and Dash off
@@ -22968,8 +22971,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if ($table['overflow'] == 'hidden' && $level == 1 && !$this->table_rotate && !$this->ColActive) {
 			// Bounding rectangle to clip
-			$this->tableClipPath = sprintf('q %.3F %.3F %.3F %.3F re W n', $x0 * Mpdf::SCALE, $this->h * Mpdf::SCALE, $this->blk[$this->blklvl]['inner_width'] * Mpdf::SCALE, -$this->h * Mpdf::SCALE);
-			$this->writer->write($this->tableClipPath);
+			$this->tableClipPath = sprintf('%.3F %.3F %.3F %.3F re W n', $x0 * Mpdf::SCALE, $this->h * Mpdf::SCALE, $this->blk[$this->blklvl]['inner_width'] * Mpdf::SCALE, -$this->h * Mpdf::SCALE);
+			$this->saveGraphicsState($this->tableClipPath);
 		} else {
 			$this->tableClipPath = '';
 		}
@@ -23253,7 +23256,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								}
 
 								if ($this->tableClipPath) {
-									$this->writer->write("Q");
+									$this->restoreGraphicsState();
 								}
 
 								$bx = $x0;
@@ -23390,7 +23393,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 
 								if ($this->tableClipPath) {
-									$this->writer->write($this->tableClipPath);
+									$this->saveGraphicsState($this->tableClipPath);
 								}
 
 								// Added to correct for OddEven Margins
@@ -24164,7 +24167,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 
 		if ($this->tableClipPath) {
-			$this->writer->write("Q");
+			$this->restoreGraphicsState();
 		}
 		$this->tableClipPath = '';
 
@@ -26355,7 +26358,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->kwt_buffer = [];
 
 		$this->y += $this->kwt_height;
-		$this->pageoutput[$this->page] = []; // mPDF 6
 	}
 	/* -- END TABLES -- */
 
@@ -27709,8 +27711,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * A returned "q" is held by its caller and written later, out of the order these were called in, so
 	 * there is no point in the document at which to save the page against it. Only the written form keeps
-	 * the setters' record, so what a returned pair leaves behind is its caller's to deal with - as
-	 * printkwtbuffer() does, by clearing the record outright once it has placed the wrapper.
+	 * the setters' record.
 	 */
 	function StartTransform($returnstring = false)
 	{
@@ -27721,9 +27722,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->saveGraphicsState();
 	}
 
+	/**
+	 * A returned "Q" restores a state the setters' record was never saved against, so the record is cleared
+	 * and they write everything again rather than trust it. Its caller places it on the current page.
+	 */
 	function StopTransform($returnstring = false)
 	{
 		if ($returnstring) {
+			$this->pageoutput[$this->page] = [];
 			return('Q');
 		}
 
