@@ -1333,6 +1333,25 @@ class Form
 		return $kind . '_' . ($this->formCount + 1);
 	}
 
+	/**
+	 * A push button's /MK captions: normal, rollover and down. A caption set by SetFormButtonText() is written even
+	 * when empty, as a browser leaves a button with an empty value blank. A button given none, such as an image
+	 * button, is captioned with its field name.
+	 *
+	 * @param array $form
+	 *
+	 * @return string
+	 */
+	private function buttonCaptions($form)
+	{
+		$captions = '';
+		foreach (['CA', 'RC', 'AC'] as $key) {
+			$captions .= '/' . $key . ' ' . $this->writer->string($form[$key] === null ? $form['T'] : $form[$key]) . ' ';
+		}
+
+		return $captions;
+	}
+
 	function SetFormButtonText($ca, $rc = '', $ac = '')
 	{
 		if ($this->mpdf->onlyCoreFonts) {
@@ -1375,8 +1394,9 @@ class Form
 		$border += ['W' => $this->form_button_border_width, 'S' => $this->form_button_border_style];
 		$appearance = null;
 		if ($type !== 'radio' && $type !== 'checkbox') {
-			// A button showing an icon draws no caption to fit
-			$appearance = $this->appearanceText($bb, $hh, $border['W'], [$value === '' ? $name : $value], '1', 'line', [], !isset($this->form_button_icon[$this->formCount]));
+			// Matches the caption buttonCaptions() writes. A button showing an icon draws no caption to fit
+			$caption = $value === '' && $this->form_button_text === null ? $name : $value;
+			$appearance = $this->appearanceText($bb, $hh, $border['W'], [$caption], '1', 'line', [], !isset($this->form_button_icon[$this->formCount]));
 		}
 		if (!$this->mpdf->onlyCoreFonts) {
 			if (isset($this->mpdf->CurrentFont['subset'])) {
@@ -2189,9 +2209,7 @@ class Form
 		}
 
 		if ($form['subtype'] === 'reset') {
-			$temp .= $form['CA'] ? '/CA ' . $this->writer->string($form['CA']) . ' ' : '/CA ' . $this->writer->string($form['T']) . ' ';
-			$temp .= $form['RC'] ? '/RC ' . $this->writer->string($form['RC']) . ' ' : '/RC ' . $this->writer->string($form['T']) . ' ';
-			$temp .= $form['AC'] ? '/AC ' . $this->writer->string($form['AC']) . ' ' : '/AC ' . $this->writer->string($form['T']) . ' ';
+			$temp .= $this->buttonCaptions($form);
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write('/MK << ' . $temp . ' >>');
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
@@ -2204,9 +2222,7 @@ class Form
 
 		if ($form['subtype'] === 'submit') {
 
-			$temp .= $form['CA'] ? '/CA ' . $this->writer->string($form['CA']) . ' ' : '/CA ' . $this->writer->string($form['T']) . ' ';
-			$temp .= $form['RC'] ? '/RC ' . $this->writer->string($form['RC']) . ' ' : '/RC ' . $this->writer->string($form['T']) . ' ';
-			$temp .= $form['AC'] ? '/AC ' . $this->writer->string($form['AC']) . ' ' : '/AC ' . $this->writer->string($form['T']) . ' ';
+			$temp .= $this->buttonCaptions($form);
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write("/MK << $temp >>");
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
@@ -2248,9 +2264,7 @@ class Form
 				}
 				$put_icon = 1;
 			}
-			$temp .= $form['CA'] ? '/CA ' . $this->writer->string($form['CA']) . ' ' : '/CA ' . $this->writer->string($form['T']) . ' ';
-			$temp .= $form['RC'] ? '/RC ' . $this->writer->string($form['RC']) . ' ' : '/RC ' . $this->writer->string($form['T']) . ' ';
-			$temp .= $form['AC'] ? '/AC ' . $this->writer->string($form['AC']) . ' ' : '/AC ' . $this->writer->string($form['T']) . ' ';
+			$temp .= $this->buttonCaptions($form);
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write("/MK << $temp >>");
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
