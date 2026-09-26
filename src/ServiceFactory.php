@@ -39,7 +39,7 @@ use Mpdf\Ua\StructureTree;
 use Mpdf\Ua\MarkedContentHelper;
 use Mpdf\Ua\StructureWriter;
 use Mpdf\Ua\AriaIdResolver;
-use Mpdf\Ua\LigatureActualTextWriter;
+use Mpdf\Ua\ActualTextWriter;
 use Mpdf\Ua\AnchorState;
 use Mpdf\Ua\InlineStructStack;
 use Mpdf\Ua\ImageMap\ImageMapRegistry;
@@ -162,7 +162,7 @@ class ServiceFactory
 		$markedContentHelper      = new MarkedContentHelper($writer);
 		$structureWriter          = new StructureWriter($mpdf, $writer, $structureTree);
 		$ariaIdResolver           = new AriaIdResolver($structureTree);
-		$ligatureActualTextWriter = new LigatureActualTextWriter();
+		$actualTextWriter         = new ActualTextWriter();
 		$fpdiStructMerger         = new FpdiStructMerger($mpdf, $structureTree);
 		$inlineStructStack        = new InlineStructStack();
 		$anchorState              = new AnchorState();
@@ -173,7 +173,7 @@ class ServiceFactory
 			$markedContentHelper,
 			$structureWriter,
 			$ariaIdResolver,
-			$ligatureActualTextWriter,
+			$actualTextWriter,
 			$fpdiStructMerger,
 			$inlineStructStack,
 			$anchorState,

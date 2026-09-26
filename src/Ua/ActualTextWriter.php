@@ -3,10 +3,11 @@
 namespace Mpdf\Ua;
 
 /**
- * Wraps a ligature in a /Span with /ActualText, so the characters it was formed from can be
- * read back when the font's ToUnicode map has no entry for it (Matterhorn 24-001).
+ * Wraps drawn text in a /Span with /ActualText, for text whose glyphs do not read back as the
+ * characters written: a ligature the font's ToUnicode map has no entry for (Matterhorn 24-001),
+ * and text drawn right to left, to be read back in the order it was written (Matterhorn 09-001).
  */
-class LigatureActualTextWriter
+class ActualTextWriter
 {
 
 	/**

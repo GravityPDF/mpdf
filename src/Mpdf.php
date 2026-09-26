@@ -4874,29 +4874,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Just output text
 		if ($this->usingCoreFont && !($textvar & TextVars::FC_SMALLCAPS) && !($textvar & TextVars::FC_KERNING)) {
 			$txt2 = $this->writer->escape($txt2);
-			$s .= sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
+			$sub = sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
 		} // IF NOT corefonts [AND NO wordspacing] AND NOT SIP/SMP AND NOT SmCaps AND NOT Kerning AND NOT OTL
 		// Just output text
 		elseif (!$this->usingCoreFont && !($textvar & TextVars::FC_SMALLCAPS) && !($textvar & TextVars::FC_KERNING) && !(isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0xFF) && !empty($OTLdata['GPOSinfo']))) {
 			// IF SIP/SMP
 			if ($this->CurrentFont['sip'] || $this->CurrentFont['smp']) {
 				$txt2 = $this->UTF8toSubset($txt2);
-				$s .=sprintf('BT ' . $aix . ' %s Tj ET', $px, $py, $txt2);
+				$sub = sprintf('BT ' . $aix . ' %s Tj ET', $px, $py, $txt2);
 			} // NOT SIP/SMP
 			else {
 				$txt2 = $this->writer->utf8ToUtf16BigEndian($txt2, false);
 				$txt2 = $this->writer->escape($txt2);
-				$s .=sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
+				$sub = sprintf('BT ' . $aix . ' (%s) Tj ET', $px, $py, $txt2);
 			}
 		} // IF NOT corefonts [AND IS wordspacing] AND NOT SIP AND NOT SmCaps AND NOT Kerning AND NOT OTL
 		// Not required here (cf. Cell() )
 		// ELSE (IF SmCaps || Kerning || OTL) [corefonts or not corefonts; SIP or SMP or BMP]
 		else {
-			$s .= $this->applyGPOSpdf($txt2, $aix, $px, $py, $OTLdata, $textvar);
+			$sub = $this->applyGPOSpdf($txt2, $aix, $px, $py, $OTLdata, $textvar);
 		}
 		/*         * ************** END ************************ */
 
-		$s .= ' ';
+		$s .= $this->withLogicalActualText($sub, $OTLdata) . ' ';
 
 		if (($textvar & TextVars::FD_UNDERLINE) && $txt != '') { // mPDF 5.7.1
 			$c = strtoupper($this->TextColor); // change 0 0 0 rg to 0 0 0 RG
@@ -5717,6 +5717,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			/** ************** END SIMILAR TO Text() ************************ */
 
+			$sub = $this->withLogicalActualText($sub, $OTLdata);
+
 			if ($this->shrin_k > 1) {
 				$shrin_k = $this->shrin_k;
 			} else {
@@ -5908,6 +5910,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
+	/**
+	 * Wrap text drawn right to left in marked content whose /ActualText gives its characters in
+	 * the order they were written, which is the order assistive technology has to read them in
+	 * (Matterhorn 09-001).
+	 *
+	 * @param string      $sub     The text-showing operators
+	 * @param array|false $OTLdata The run's OTL data, carrying 'actualText' once Bidi has reordered it
+	 *
+	 * @return string
+	 */
+	private function withLogicalActualText($sub, $OTLdata)
+	{
+		if (!$this->PDFUA || empty($OTLdata['actualText'])) {
+			return $sub;
+		}
+		$actualTextWriter = $this->ua->getActualTextWriter();
+
+		return $actualTextWriter->buildBdcBytes($actualTextWriter->getActualTextEncoding($OTLdata['actualText']))
+			. ' ' . $sub . ' ' . $actualTextWriter->buildEmcBytes();
+	}
+
 	function applyGPOSpdf($txt, $aix, $x, $y, $OTLdata, $textvar = 0)
 	{
 		$sipset = (isset($this->CurrentFont['sip']) && $this->CurrentFont['sip'])
@@ -5933,8 +5956,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$wordspacing = $this->FontSizePt ? ($this->ws * 1000 / $this->FontSizePt) : 0;
 
 		// A ligature the font's ToUnicode cannot map back is given its characters as /ActualText
-		$ligActualTextWriter = $this->PDFUA
-			? $this->ua->getLigatureActualTextWriter()
+		$actualTextWriter = $this->PDFUA
+			? $this->ua->getActualTextWriter()
 			: null;
 
 		$XshiftBefore = 0;
@@ -5956,14 +5979,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$isLigHere = false;
 			$ligActualTextHex = '';
-			if ($ligActualTextWriter !== null
-				&& isset($GPOSinfo[$i]['ligature_source'])
-				&& count($GPOSinfo[$i]['ligature_source']) > 1
+			if ($actualTextWriter !== null
+				&& isset($GPOSinfo[$i]['source_chars'])
+				&& count($GPOSinfo[$i]['source_chars']) > 1
 			) {
-				$srcCp = $GPOSinfo[$i]['ligature_source'];
-				if (!$ligActualTextWriter->toUnicodeCovers($c, $srcCp, $this->CurrentFont)) {
+				$srcCp = $GPOSinfo[$i]['source_chars'];
+				if (!$actualTextWriter->toUnicodeCovers($c, $srcCp, $this->CurrentFont)) {
 					$isLigHere = true;
-					$ligActualTextHex = $ligActualTextWriter->getActualTextEncoding($srcCp);
+					$ligActualTextHex = $actualTextWriter->getActualTextEncoding($srcCp);
 					// End the TJ here: the BDC has to come before the ligature's glyph
 					$groupBreak = true;
 				}
@@ -6108,7 +6131,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				// Marked content may begin between two TJs inside BT/ET
 				if ($isLigHere) {
-					$tj .= $ligActualTextWriter->buildBdcBytes($ligActualTextHex) . ' ';
+					$tj .= $actualTextWriter->buildBdcBytes($ligActualTextHex) . ' ';
 				}
 
 				$tj .= $sipset
@@ -6124,7 +6147,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$tj .= $sipset
 					? '>] TJ '
 					: ')] TJ ';
-				$tj .= $ligActualTextWriter->buildEmcBytes() . ' ';
+				$tj .= $actualTextWriter->buildEmcBytes() . ' ';
 				$tj .= $sipset
 					? '[<'
 					: '[(';
@@ -7564,7 +7587,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			/* -- OTL -- */
 			// mPDF 6
 			if ($blockdir == 'rtl' || $this->biDirectional) {
-				Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir);
+				Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir, $this->PDFUA);
 				// From this point on, $content and $cOTLdata may contain more elements (and re-ordered) compared to
 				// $this->objectbuffer and $font ($chunkorder contains the mapping)
 			}
@@ -9402,7 +9425,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- OTL -- */
 					// mPDF 6
 					if ($blockdir == 'rtl' || $this->biDirectional) {
-						Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir);
+						Bidi::reorder($chunkorder, $content, $cOTLdata, $blockdir, $this->PDFUA);
 						// From this point on, $content and $cOTLdata may contain more elements (and re-ordered) compared to
 						// $this->objectbuffer and $font ($chunkorder contains the mapping)
 					}
@@ -26812,7 +26835,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$useGPOS = isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0x80);
 
 			// NB Returned $chunk may be a shorter string (with adjusted $cOTLdata) by removal of LRE, RLE etc embedding codes.
-			list($chunk, $rtl_content) = Bidi::sort($unicode, $chunk, $dir, $chunkOTLdata, $useGPOS);
+			list($chunk, $rtl_content) = Bidi::sort($unicode, $chunk, $dir, $chunkOTLdata, $useGPOS, $this->PDFUA);
 
 			return $rtl_content;
 		}
