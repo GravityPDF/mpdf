@@ -371,6 +371,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $fixedPosBlockDepth;
 	var $fixedPosBlockBBox;
 	var $fixedPosBlockSave;
+	var $fixedPosBlockCascadeCSS; // Descendant rules of the positioned block being written, for its content to match
 	var $maxPosL;
 	var $maxPosR;
 	var $loaded;
@@ -15111,6 +15112,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->blk[1]['attr'] = $attr;
 			$this->Reset();
 			$p = $this->cssManager->MergeCSS('BLOCK', $tag, $attr);
+			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];
 			if (isset($p['ROTATE']) && ($p['ROTATE'] == 90 || $p['ROTATE'] == -90 || $p['ROTATE'] == 180)) {
 				$rotate = $p['ROTATE'];
 			} // mPDF 6
@@ -15196,9 +15198,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (isset($p['Z-INDEX'])) {
 				$css .= 'z-index: ' . $p['Z-INDEX'] . '; ';
 			}
-			if ($css) {
-				$html = '<div style="' . $css . '">' . $html . '</div>';
-			}
+			// The inner HTML is written as a document of its own, in which this <div> stands in for the positioned block
+			$html = '<div style="' . $css . '">' . $html . '</div>';
 			// Copy over (only) the properties to set for border and background
 			$pb = [];
 			$pb['MARGIN-TOP'] = (isset($p['MARGIN-TOP']) ? $p['MARGIN-TOP'] : '');
@@ -15877,6 +15878,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->HTMLheaderPageAnnots = [];
 		$this->HTMLheaderPageForms = [];
 		$this->pageBackgrounds = $save_bgs;
+		$this->fixedPosBlockCascadeCSS = null;
 		$this->writingHTMLheader = false;
 
 		$this->writingHTMLfooter = false;
