@@ -5,7 +5,8 @@ namespace Mpdf\Gif;
 /**
  * The GIF decoder mPDF falls back on without GD, against ImageMagick, over one 7 x 5 picture saved
  * three ways: with a global colour table and a transparent colour, interlaced, and with only a local
- * colour table. Each .rgb beside a fixture is `magick <gif> -alpha off -depth 8 RGB:<rgb>`.
+ * colour table, and over a three-frame animation. Each .rgb beside a fixture is
+ * `magick <gif> -alpha off -depth 8 RGB:<rgb>`, with `<gif>[n]` for frame n of the animation.
  */
 class GifTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -47,15 +48,7 @@ class GifTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$this->assertSame($transparent, $gif->m_img->m_nTrans);
 		}
 
-		$table = $local ? $gif->m_img->m_gih->m_colorTable : $gif->m_gfh->m_colorTable;
-		$palette = $table->toString();
-
-		$actual = '';
-		foreach (str_split($gif->m_img->m_data) as $index) {
-			$actual .= substr($palette, ord($index) * 3, 3);
-		}
-
-		$this->assertSame(bin2hex(file_get_contents(self::DIR . $name . '.rgb')), bin2hex($actual));
+		$this->assertSame(bin2hex(file_get_contents(self::DIR . $name . '.rgb')), bin2hex($this->rgb($gif)));
 	}
 
 	/**
@@ -69,6 +62,70 @@ class GifTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'interlaced' => ['interlaced', true, false, null],
 			'local colour table' => ['local', false, true, false],
 		];
+	}
+
+	/**
+	 * Any frame of an animation loads, not only the first. The fixture is three 5 x 3 frames, the second and
+	 * third with a local colour table, made by
+	 * `magick -size 5x3 gradient:red-blue \( -size 3x5 gradient:white-black -rotate 90 \) \( -size 5x3 gradient:lime-yellow \) -set delay 10 -loop 0 animated.gif`.
+	 * The decoder has already read the block terminator when it meets the End code of the first and
+	 * third frames, but not of the second.
+	 *
+	 * @dataProvider frames
+	 *
+	 * @param int  $frame The frame to load
+	 * @param bool $local Whether the frame carries its own colour table
+	 */
+	public function testEveryFrameOfAnAnimationIsWhatImageMagickReads($frame, $local)
+	{
+		$data = file_get_contents(self::DIR . 'animated.gif');
+
+		$gif = new Gif();
+		$this->assertTrue($gif->loadFile($data, $frame));
+		$this->assertSame($local, $gif->m_img->m_gih->m_bLocalClr);
+
+		$this->assertSame(bin2hex(file_get_contents(self::DIR . 'animated-' . $frame . '.rgb')), bin2hex($this->rgb($gif)));
+	}
+
+	/**
+	 * @return array[] Each frame of the animation, and whether it has a local colour table
+	 */
+	public function frames()
+	{
+		return [
+			'first frame' => [0, false],
+			'second frame' => [1, true],
+			'third frame' => [2, true],
+		];
+	}
+
+	/**
+	 * Asking for a frame past the last one reaches the trailer and fails
+	 */
+	public function testThereIsNoFrameAfterTheLast()
+	{
+		$data = file_get_contents(self::DIR . 'animated.gif');
+
+		$gif = new Gif();
+		$this->assertFalse($gif->loadFile($data, 3));
+	}
+
+	/**
+	 * @param Gif $gif A loaded GIF
+	 *
+	 * @return string The loaded frame's pixels as RGB, each index looked up in the colour table it is drawn from
+	 */
+	private function rgb(Gif $gif)
+	{
+		$table = $gif->m_img->m_gih->m_bLocalClr ? $gif->m_img->m_gih->m_colorTable : $gif->m_gfh->m_colorTable;
+		$palette = $table->toString();
+
+		$rgb = '';
+		foreach (str_split($gif->m_img->m_data) as $index) {
+			$rgb .= substr($palette, ord($index) * 3, 3);
+		}
+
+		return $rgb;
 	}
 
 }
