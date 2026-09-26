@@ -946,20 +946,16 @@ class Form
 		}
 	}
 
-	// In _putannots
-	function _putRadioItems($n)
+	/**
+	 * Writes each radio group as the field holding the name, flags and value, with the radio buttons as its kids. It is
+	 * not an annotation, so no page lists it.
+	 */
+	function _putRadioItems()
 	{
-		// Output Radio Groups
-		$key = 1;
 		foreach ($this->form_radio_groups as $name => $frg) {
 			$this->writer->object();
 			$this->pdf_acro_array .= $this->mpdf->n . ' 0 R ';
 			$this->writer->write('<<');
-			$this->writer->write('/Type /Annot ');
-			$this->writer->write('/Subtype /Widget');
-			$this->writer->write('/NM ' . $this->writer->string(sprintf('%04u-%04u', $n, 3000 + $key++)));
-			$this->writer->write('/M ' . $this->writer->dateString());
-			$this->writer->write('/Rect [0 0 0 0] ');
 			$this->writer->write('/FT /Btn ');
 			if (!empty($frg['disabled'])) {
 				$flags = [self::FLAG_READONLY, self::FLAG_NO_EXPORT, self::FLAG_RADIO, self::FLAG_NOTOGGLEOFF];
@@ -2175,16 +2171,10 @@ class Form
 
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 
-			$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
-
-			if ($form['activ']) {
-				$this->writer->write('/V /' . $this->writer->escape($form['V']) . ' ');
-				$this->writer->write('/DV /' . $this->writer->escape($form['V']) . ' ');
-				$this->writer->write('/AS /' . $this->writer->escape($form['V']) . ' ');
-			} else {
-				$this->writer->write('/AS /Off ');
-			}
-			$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
+			// The group's field carries the value; a kid only shows whether it is the one switched on
+			$state = '/' . $this->writer->escape($form['V']);
+			$this->writer->write('/AS ' . ($form['activ'] ? $state : '/Off') . ' ');
+			$this->writer->write('/AP << /N << ' . $state . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
 			// $this->writer->write('/Opt [ '.$this->writer->string($form['OPT']).' '.$this->writer->string($form['OPT']).' ]');
 		}
 
