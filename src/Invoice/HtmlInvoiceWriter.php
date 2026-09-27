@@ -90,8 +90,16 @@ class HtmlInvoiceWriter
 		'account' => 'Account: %s',
 		'directDebit' => 'Direct debit from %1$s under mandate %2$s, creditor ID %3$s',
 		'card' => 'Card ending %s',
-		'earlyPaymentDiscount' => '%1$s discount if paid within %2$s days',
-		'earlyPaymentDiscountOn' => '%1$s discount on %3$s if paid within %2$s days',
+		'earlyPaymentDiscount' => '%1$s discount if paid within %2$s',
+		'earlyPaymentDiscountOn' => '%1$s discount on %3$s if paid within %2$s',
+		'latePaymentPenalty' => '%1$s penalty if paid after %2$s',
+		'latePaymentPenaltyOn' => '%1$s penalty on %3$s if paid after %2$s',
+		'day' => '%s day',
+		'days' => '%s days',
+		'week' => '%s week',
+		'weeks' => '%s weeks',
+		'month' => '%s month',
+		'months' => '%s months',
 		'vatDueOnInvoice' => 'VAT is due on the invoice date',
 		'vatDueOnDelivery' => 'VAT is due on delivery',
 		'vatDueOnPayment' => 'VAT is due on payment',
@@ -103,6 +111,14 @@ class HtmlInvoiceWriter
 	 * @var string[]
 	 */
 	private static $vatDueDateLabels = ['5' => 'vatDueOnInvoice', '29' => 'vatDueOnDelivery', '72' => 'vatDueOnPayment'];
+
+	/**
+	 * The singular and plural labels for each unit a payment period is measured in, by its UN/ECE Recommendation 20
+	 * code
+	 *
+	 * @var string[][]
+	 */
+	private static $periodLabels = ['DAY' => ['day', 'days'], 'WEE' => ['week', 'weeks'], 'MON' => ['month', 'months']];
 
 	/**
 	 * @var string[]
@@ -448,8 +464,8 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The payment terms, each early payment discount put into words, the payment reference, each way to pay, and when
-	 * VAT falls due, when there are any
+	 * The payment terms, with each early payment discount and late payment penalty put into words, the payment
+	 * reference, each way to pay, and when VAT falls due, when there are any
 	 *
 	 * @param mixed[] $invoice
 	 *
@@ -462,6 +478,12 @@ class HtmlInvoiceWriter
 			foreach (explode("\n", $invoice['paymentTerms']) as $term) {
 				$lines[] = $this->paymentTerm($term, $invoice['currency']);
 			}
+		}
+		foreach ($invoice['paymentDiscounts'] as $discount) {
+			$lines[] = $this->paymentAdjustment('earlyPaymentDiscount', $discount, $invoice['currency']);
+		}
+		foreach ($invoice['paymentPenalties'] as $penalty) {
+			$lines[] = $this->paymentAdjustment('latePaymentPenalty', $penalty, $invoice['currency']);
 		}
 		if ($invoice['paymentReference'] !== null) {
 			$lines[] = $this->labelled('paymentReference', $invoice['paymentReference']);
@@ -503,14 +525,63 @@ class HtmlInvoiceWriter
 			return $term;
 		}
 
-		$percent = $this->formatter->percent((float) $match[2]);
-		$days = $this->formatter->number((int) $match[1]);
+		return $this->paymentAdjustment('earlyPaymentDiscount', [
+			'percent' => (float) $match[2],
+			'amount' => null,
+			'basisAmount' => isset($match[3]) ? (float) $match[3] : null,
+			'period' => (float) $match[1],
+			'periodUnit' => 'DAY',
+		], $currency);
+	}
 
-		if (isset($match[3])) {
-			return $this->labelled('earlyPaymentDiscountOn', $percent, $days, $this->money((float) $match[3], $currency));
+	/**
+	 * An early payment discount or late payment penalty put into words by its label: the rate, or the amount when it
+	 * gives no rate, the period, and, by the label ending On, the amount it is worked out on
+	 *
+	 * @param string $label earlyPaymentDiscount or latePaymentPenalty
+	 * @param mixed[] $adjustment As CiiInvoiceReader reads paymentDiscounts and paymentPenalties
+	 * @param string|null $currency
+	 *
+	 * @return string|null Null when it gives no period, or neither a rate nor an amount
+	 */
+	private function paymentAdjustment($label, array $adjustment, $currency)
+	{
+		if ($adjustment['percent'] !== null) {
+			$size = $this->formatter->percent($adjustment['percent']);
+		} elseif ($adjustment['amount'] !== null) {
+			$size = $this->money($adjustment['amount'], $currency);
+		} else {
+			return null;
 		}
 
-		return $this->labelled('earlyPaymentDiscount', $percent, $days);
+		if ($adjustment['period'] === null) {
+			return null;
+		}
+		$period = $this->period($adjustment['period'], $adjustment['periodUnit']);
+
+		if ($adjustment['basisAmount'] !== null) {
+			return $this->labelled($label . 'On', $size, $period, $this->money($adjustment['basisAmount'], $currency));
+		}
+
+		return $this->labelled($label, $size, $period);
+	}
+
+	/**
+	 * A period by its unit's label, singular for exactly one; a unit without a label is written by its code
+	 *
+	 * @param float $length
+	 * @param string|null $unit UN/ECE Recommendation 20 code, e.g. DAY
+	 *
+	 * @return string
+	 */
+	private function period($length, $unit)
+	{
+		$number = $this->formatter->number($length);
+		if (!isset(self::$periodLabels[(string) $unit])) {
+			return trim($number . ' ' . $unit);
+		}
+
+		return $this->labelled(self::$periodLabels[$unit][$length == 1 ? 0 : 1], $number);
 	}
 
 	/**

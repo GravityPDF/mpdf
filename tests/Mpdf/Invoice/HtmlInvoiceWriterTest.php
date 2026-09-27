@@ -188,20 +188,53 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Each Skonto line is written by its label, translated and formatted, with the amount it applies to when it gives
-	 * one; a line that only looks like one is written as it is
+	 * Each Skonto line is written by its label, translated and formatted, its period singular for one day, with the
+	 * amount it applies to when it gives one; a line that only looks like one is written as it is
 	 */
 	public function testTranslatesEarlyPaymentDiscounts()
 	{
-		$terms = "Zahlbar innerhalb 30 Tagen\n#SKONTO#TAGE=7#PROZENT=3.00#\n#SKONTO#TAGE=14#PROZENT=2.00#BASISBETRAG=900.00#\n#SKONTO#TAGE=14#\n";
+		$terms = "Zahlbar innerhalb 30 Tagen\n#SKONTO#TAGE=1#PROZENT=3.00#\n#SKONTO#TAGE=14#PROZENT=2.00#BASISBETRAG=900.00#\n#SKONTO#TAGE=14#\n";
 		$xml = str_replace("30 days net\n#SKONTO#TAGE=14#PROZENT=2.00#\n", $terms, $this->xml('xrechnung.xml'));
 		$writer = new HtmlInvoiceWriter(new Formatter(new GermanyPreset()), [
-			'earlyPaymentDiscount' => '%2$s Tage %1$s Skonto',
-			'earlyPaymentDiscountOn' => '%2$s Tage %1$s Skonto auf %3$s',
+			'earlyPaymentDiscount' => '%1$s Skonto bei Zahlung innerhalb von %2$s',
+			'earlyPaymentDiscountOn' => '%1$s Skonto auf %3$s bei Zahlung innerhalb von %2$s',
+			'day' => '%s Tag',
+			'days' => '%s Tagen',
 		]);
 		$html = $writer->write($xml);
 
-		$this->assertStringContainsString('<p>Zahlbar innerhalb 30 Tagen<br>7 Tage 3' . AbstractPreset::NBSP . '% Skonto<br>14 Tage 2' . AbstractPreset::NBSP . '% Skonto auf 900,00' . AbstractPreset::NBSP . '€<br>#SKONTO#TAGE=14#<br>', $html);
+		$nbsp = AbstractPreset::NBSP;
+		$this->assertStringContainsString('<p>Zahlbar innerhalb 30 Tagen<br>3' . $nbsp . '% Skonto bei Zahlung innerhalb von 1 Tag<br>2' . $nbsp . '% Skonto auf 900,00' . $nbsp . '€ bei Zahlung innerhalb von 14 Tagen<br>#SKONTO#TAGE=14#<br>', $html);
+	}
+
+	/**
+	 * A period of exactly one is written by the singular label, and any other by the plural
+	 */
+	public function testWritesOneDayInTheSingular()
+	{
+		$xml = str_replace('#SKONTO#TAGE=14#', '#SKONTO#TAGE=1#', $this->xml('xrechnung.xml'));
+
+		$this->assertStringContainsString('<br>2% discount if paid within 1 day<br>', $this->htmlWriter()->write($xml));
+	}
+
+	/**
+	 * EXTENDED's structured discount and penalty terms are put into words by the same labels as a Skonto line: by
+	 * rate or amount, over days, weeks, months or a unit without a label, and on the amount they are worked out on
+	 */
+	public function testWritesExtendedDiscountAndPenaltyTerms()
+	{
+		// EXTENDED gives each payment terms at most one discount, so each is in terms of its own, as XML valid against its schema is
+		$terms = '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentPenaltyTerms><ram:BasisPeriodMeasure unitCode="MON">1</ram:BasisPeriodMeasure><ram:CalculationPercent>1.5</ram:CalculationPercent></ram:ApplicableTradePaymentPenaltyTerms>'
+			. '<ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="DAY">10</ram:BasisPeriodMeasure><ram:BasisAmount>900.00</ram:BasisAmount><ram:CalculationPercent>2</ram:CalculationPercent></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>'
+			. '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="WEE">2</ram:BasisPeriodMeasure><ram:ActualDiscountAmount>10.00</ram:ActualDiscountAmount></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>'
+			. '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="HUR">48</ram:BasisPeriodMeasure><ram:CalculationPercent>1</ram:CalculationPercent></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>';
+		$xml = str_replace('</ram:SpecifiedTradePaymentTerms>', '</ram:SpecifiedTradePaymentTerms>' . $terms, $this->xml('en16931.xml'));
+		$html = $this->htmlWriter()->write($xml);
+
+		$this->assertStringContainsString('<p>30 days net<br>2% discount on 900.00 EUR if paid within 10 days<br>10.00 EUR discount if paid within 2 weeks<br>1% discount if paid within 48 HUR<br>1.5% penalty if paid after 1 month<br>', $html);
+
+		$translated = $this->htmlWriter(['latePaymentPenalty' => '%1$s de pénalité après %2$s', 'month' => '%s mois'])->write($xml);
+		$this->assertStringContainsString('<br>1.5% de pénalité après 1 mois<br>', $translated);
 	}
 
 	/**

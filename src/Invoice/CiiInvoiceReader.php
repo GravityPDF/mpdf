@@ -27,6 +27,8 @@ use Mpdf\Strict;
  * - totals: lineTotal, chargeTotal, allowanceTotal, taxBasisTotal, taxTotal, roundingAmount, grandTotal, prepaidAmount
  *   and duePayableAmount, each a float or null
  * - paymentTerms: string or null
+ * - paymentDiscounts, paymentPenalties: EXTENDED's early payment discounts and late payment penalties, each percent,
+ *   amount, basisAmount and period (floats or null), periodUnit (UN/ECE Recommendation 20, e.g. DAY) and basisDate
  * - paymentMeans: typeCode, information, account, iban (bool), bic, accountName, debitedAccount, mandate, creditorId,
  *   card and cardholder
  *
@@ -70,10 +72,18 @@ class CiiInvoiceReader
 		$currency = $this->text('ram:InvoiceCurrencyCode', $settlement);
 
 		$terms = [];
+		$discounts = [];
+		$penalties = [];
 		$dueDate = null;
 		$mandate = null;
 		foreach ($this->nodes('ram:SpecifiedTradePaymentTerms', $settlement) as $term) {
 			$terms[] = $this->text('ram:Description', $term);
+			foreach ($this->nodes('ram:ApplicableTradePaymentDiscountTerms', $term) as $discount) {
+				$discounts[] = $this->paymentAdjustment($discount, 'ram:ActualDiscountAmount');
+			}
+			foreach ($this->nodes('ram:ApplicableTradePaymentPenaltyTerms', $term) as $penalty) {
+				$penalties[] = $this->paymentAdjustment($penalty, 'ram:ActualPenaltyAmount');
+			}
 			$dueDate = $dueDate !== null ? $dueDate : $this->date('ram:DueDateDateTime', $term);
 			$mandate = $mandate !== null ? $mandate : $this->text('ram:DirectDebitMandateID', $term);
 		}
@@ -98,6 +108,8 @@ class CiiInvoiceReader
 			'vatBreakdown' => $this->vatBreakdown($settlement),
 			'totals' => $this->totals($this->node('ram:SpecifiedTradeSettlementHeaderMonetarySummation', $settlement), $currency),
 			'paymentTerms' => $terms ? implode("\n", $terms) : null,
+			'paymentDiscounts' => $discounts,
+			'paymentPenalties' => $penalties,
 			'paymentReference' => $this->text('ram:PaymentReference', $settlement),
 			'paymentMeans' => $this->paymentMeans($settlement, $mandate),
 		];
@@ -342,6 +354,28 @@ class CiiInvoiceReader
 		}
 
 		return $means;
+	}
+
+	/**
+	 * An early payment discount or late payment penalty, as EXTENDED gives them in the payment terms
+	 *
+	 * @param \DOMNode $terms
+	 * @param string $amountPath To the amount of the discount or penalty itself
+	 *
+	 * @return mixed[]
+	 */
+	private function paymentAdjustment(\DOMNode $terms, $amountPath)
+	{
+		$period = $this->node('ram:BasisPeriodMeasure', $terms);
+
+		return [
+			'percent' => $this->amount('ram:CalculationPercent', $terms),
+			'amount' => $this->amount($amountPath, $terms),
+			'basisAmount' => $this->amount('ram:BasisAmount', $terms),
+			'period' => $this->amount('.', $period),
+			'periodUnit' => $period instanceof \DOMElement && $period->hasAttribute('unitCode') ? $period->getAttribute('unitCode') : null,
+			'basisDate' => $this->date('ram:BasisDateTime', $terms),
+		];
 	}
 
 	/**

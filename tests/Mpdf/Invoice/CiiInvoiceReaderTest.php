@@ -64,6 +64,22 @@ class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * EXTENDED's early payment discounts and late payment penalties are read from the payment terms
+	 */
+	public function testReadsExtendedDiscountAndPenaltyTerms()
+	{
+		$terms = '<ram:ApplicableTradePaymentPenaltyTerms><ram:BasisDateTime><udt:DateTimeString format="102">20261023</udt:DateTimeString></ram:BasisDateTime><ram:BasisPeriodMeasure unitCode="MON">1</ram:BasisPeriodMeasure><ram:CalculationPercent>1.5</ram:CalculationPercent></ram:ApplicableTradePaymentPenaltyTerms>'
+			. '<ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="DAY">10</ram:BasisPeriodMeasure><ram:BasisAmount>900.00</ram:BasisAmount><ram:ActualDiscountAmount>18.00</ram:ActualDiscountAmount></ram:ApplicableTradePaymentDiscountTerms>';
+		$invoice = (new CiiInvoiceReader())->read(str_replace('</ram:SpecifiedTradePaymentTerms>', '</ram:SpecifiedTradePaymentTerms><ram:SpecifiedTradePaymentTerms>' . $terms . '</ram:SpecifiedTradePaymentTerms>', $this->xml('en16931.xml')));
+
+		$this->assertSame([['percent' => null, 'amount' => 18.0, 'basisAmount' => 900.0, 'period' => 10.0, 'periodUnit' => 'DAY', 'basisDate' => null]], $invoice['paymentDiscounts']);
+		$this->assertSame('MON', $invoice['paymentPenalties'][0]['periodUnit']);
+		$this->assertSame(1.5, $invoice['paymentPenalties'][0]['percent']);
+		$this->assertSame('2026-10-23', $invoice['paymentPenalties'][0]['basisDate']->format('Y-m-d'));
+		$this->assertSame([], $this->read('en16931.xml')['paymentDiscounts']);
+	}
+
+	/**
 	 * A direct debit takes its mandate from the payment terms and its creditor from the settlement
 	 */
 	public function testReadsTheDirectDebit()
