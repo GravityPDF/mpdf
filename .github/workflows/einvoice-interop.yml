@@ -1,0 +1,61 @@
+# https://help.github.com/en/categories/automating-your-workflow-with-github-actions
+
+name: "E-invoice interop"
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "master"
+      - "development"
+      - "test"
+      - "gravitypdf"
+
+jobs:
+
+  interop:
+
+    name: "E-invoice interop"
+
+    runs-on: ${{ matrix.operating-system }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # horstoeko/zugferd needs PHP 7.3, so it is installed here rather than in require-dev
+        php-version:
+          - "7.3"
+          - "8.5"
+
+        operating-system: [ubuntu-latest]
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v7"
+
+      - name: "Install PHP"
+        uses: "shivammathur/setup-php@v2"
+        with:
+          coverage: "none"
+          php-version: "${{ matrix.php-version }}"
+          extensions: "mbstring, gd, fileinfo, zip"
+          tools: composer:v2
+          ini-values: error_reporting=-1
+
+      - name: "Locate Composer cache"
+        id: composer-cache
+        shell: bash
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: "Cache Composer downloads"
+        uses: "actions/cache@v6"
+        with:
+          path: "${{ steps.composer-cache.outputs.dir }}"
+          key: "composer-${{ runner.os }}-php${{ matrix.php-version }}-einvoice-${{ hashFiles('composer.json') }}"
+          restore-keys: "composer-${{ runner.os }}-php${{ matrix.php-version }}-einvoice-"
+
+      - name: "Install dependencies"
+        run: "composer install --no-interaction --no-progress && composer require --dev horstoeko/zugferd --no-interaction --no-progress"
+
+      - name: "Tests"
+        run: composer test -- --group=interop
