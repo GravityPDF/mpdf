@@ -90,6 +90,8 @@ class HtmlInvoiceWriter
 		'account' => 'Account: %s',
 		'directDebit' => 'Direct debit from %1$s under mandate %2$s, creditor ID %3$s',
 		'card' => 'Card ending %s',
+		'earlyPaymentDiscount' => '%1$s discount if paid within %2$s days',
+		'earlyPaymentDiscountOn' => '%1$s discount on %3$s if paid within %2$s days',
 		'vatDueOnInvoice' => 'VAT is due on the invoice date',
 		'vatDueOnDelivery' => 'VAT is due on delivery',
 		'vatDueOnPayment' => 'VAT is due on payment',
@@ -446,7 +448,8 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The payment terms and reference, each way to pay, and when VAT falls due, when there are any
+	 * The payment terms, each early payment discount put into words, the payment reference, each way to pay, and when
+	 * VAT falls due, when there are any
 	 *
 	 * @param mixed[] $invoice
 	 *
@@ -454,7 +457,12 @@ class HtmlInvoiceWriter
 	 */
 	private function payment(array $invoice)
 	{
-		$lines = $invoice['paymentTerms'] !== null ? explode("\n", $invoice['paymentTerms']) : [];
+		$lines = [];
+		if ($invoice['paymentTerms'] !== null) {
+			foreach (explode("\n", $invoice['paymentTerms']) as $term) {
+				$lines[] = $this->paymentTerm($term, $invoice['currency']);
+			}
+		}
 		if ($invoice['paymentReference'] !== null) {
 			$lines[] = $this->labelled('paymentReference', $invoice['paymentReference']);
 		}
@@ -475,6 +483,34 @@ class HtmlInvoiceWriter
 		}, $lines));
 
 		return $lines ? '<p>' . implode('<br>', array_map([$this, 'escape'], $lines)) . '</p>' . "\n" : '';
+	}
+
+	/**
+	 * A line of the payment terms as it is written, or, for an early payment discount in XRechnung's Skonto form
+	 * (#SKONTO#TAGE=14#PROZENT=2.00#, with BASISBETRAG=... when it applies to part of the amount), the discount put
+	 * into words by its label
+	 *
+	 * @see https://xeinkauf.de/xrechnung/ XRechnung, which defines the Skonto form
+	 *
+	 * @param string $term
+	 * @param string|null $currency
+	 *
+	 * @return string
+	 */
+	private function paymentTerm($term, $currency)
+	{
+		if (!preg_match('/^#SKONTO#TAGE=(\d+)#PROZENT=(\d+(?:\.\d+)?)#(?:BASISBETRAG=(-?\d+(?:\.\d+)?)#)?$/', trim($term), $match)) {
+			return $term;
+		}
+
+		$percent = $this->formatter->percent((float) $match[2]);
+		$days = $this->formatter->number((int) $match[1]);
+
+		if (isset($match[3])) {
+			return $this->labelled('earlyPaymentDiscountOn', $percent, $days, $this->money((float) $match[3], $currency));
+		}
+
+		return $this->labelled('earlyPaymentDiscount', $percent, $days);
 	}
 
 	/**

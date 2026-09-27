@@ -2,6 +2,7 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\Invoice\Preset\AbstractPreset;
 use Mpdf\Invoice\Preset\GermanyPreset;
 use Mpdf\Invoice\Preset\UnitedKingdomPreset;
 use Mpdf\MpdfException;
@@ -174,15 +175,33 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * XRechnung CII is printed as any EN 16931 invoice is, the buyer's Leitweg-ID as its reference and each line of the
-	 * payment terms on a line of its own
+	 * XRechnung CII is printed as any EN 16931 invoice is, the buyer's Leitweg-ID as its reference, and an early
+	 * payment discount in the Skonto form put into words
 	 */
 	public function testWritesAnXRechnung()
 	{
 		$html = $this->write('xrechnung.xml');
 
 		$this->assertStringContainsString('<td>Your reference</td><td>04011000-12345-34</td>', $html);
-		$this->assertStringContainsString('<p>30 days net<br>#SKONTO#TAGE=14#PROZENT=2.00#<br>', $html);
+		$this->assertStringContainsString('<p>30 days net<br>2% discount if paid within 14 days<br>', $html);
+		$this->assertStringNotContainsString('#SKONTO#', $html);
+	}
+
+	/**
+	 * Each Skonto line is written by its label, translated and formatted, with the amount it applies to when it gives
+	 * one; a line that only looks like one is written as it is
+	 */
+	public function testTranslatesEarlyPaymentDiscounts()
+	{
+		$terms = "Zahlbar innerhalb 30 Tagen\n#SKONTO#TAGE=7#PROZENT=3.00#\n#SKONTO#TAGE=14#PROZENT=2.00#BASISBETRAG=900.00#\n#SKONTO#TAGE=14#\n";
+		$xml = str_replace("30 days net\n#SKONTO#TAGE=14#PROZENT=2.00#\n", $terms, $this->xml('xrechnung.xml'));
+		$writer = new HtmlInvoiceWriter(new Formatter(new GermanyPreset()), [
+			'earlyPaymentDiscount' => '%2$s Tage %1$s Skonto',
+			'earlyPaymentDiscountOn' => '%2$s Tage %1$s Skonto auf %3$s',
+		]);
+		$html = $writer->write($xml);
+
+		$this->assertStringContainsString('<p>Zahlbar innerhalb 30 Tagen<br>7 Tage 3' . AbstractPreset::NBSP . '% Skonto<br>14 Tage 2' . AbstractPreset::NBSP . '% Skonto auf 900,00' . AbstractPreset::NBSP . '€<br>#SKONTO#TAGE=14#<br>', $html);
 	}
 
 	/**
