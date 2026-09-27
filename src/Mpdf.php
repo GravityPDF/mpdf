@@ -2280,9 +2280,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 *
 	 *     $mpdf->SetEmbeddedInvoice(new FacturX($xml));
 	 *
+	 * mPDF neither writes nor validates the XML. A package such as horstoeko/zugferd writes it:
+	 *
+	 *     $xml = ZugferdDocumentBuilder::createNew(ZugferdProfiles::PROFILE_EN16931)->...->getContent();
+	 *
 	 * Extend FacturX for a later version of Factur-X, or implement EmbeddedInvoiceInterface for a specification that differs further.
 	 *
 	 * @see https://fnfe-mpe.org/factur-x/factur-x_en/ Factur-X, the specification shared with ZUGFeRD
+	 * @see https://github.com/horstoeko/zugferd horstoeko/zugferd
 	 *
 	 * @param \Mpdf\Invoice\EmbeddedInvoiceInterface $invoice
 	 *
