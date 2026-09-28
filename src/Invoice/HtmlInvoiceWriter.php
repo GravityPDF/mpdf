@@ -60,6 +60,16 @@ class HtmlInvoiceWriter
 		'386' => 'Prepayment invoice',
 		'389' => 'Self-billed invoice',
 		'383' => 'Debit note',
+		'81' => 'Credit note for goods or services',
+		'83' => 'Credit note for financial adjustments',
+		'261' => 'Self-billed credit note',
+		'262' => 'Consolidated credit note',
+		'296' => 'Credit note for price variation',
+		'308' => 'Del credere credit note',
+		'396' => 'Factored credit note',
+		'420' => 'OCR payment credit note',
+		'458' => 'Reversal of debit',
+		'532' => 'Forwarder’s credit note',
 		'issueDate' => 'Issue date',
 		'deliveryDate' => 'Delivery date',
 		'dueDate' => 'Due date',
@@ -174,7 +184,7 @@ class HtmlInvoiceWriter
 	];
 
 	/**
-	 * The UNTDID 1001 type codes EN 16931 counts as credit notes, titled as 381 unless given a title of their own
+	 * The UNTDID 1001 type codes EN 16931 counts as credit notes, whose title falls back to 381's rather than 380's
 	 *
 	 * @var string[]
 	 */
@@ -184,6 +194,13 @@ class HtmlInvoiceWriter
 	 * @var string[]
 	 */
 	private $labels;
+
+	/**
+	 * The labels passed to the constructor, before the defaults fill in the rest
+	 *
+	 * @var string[]
+	 */
+	private $ownLabels;
 
 	/**
 	 * @var \Mpdf\Invoice\Formatter
@@ -213,6 +230,7 @@ class HtmlInvoiceWriter
 		}
 
 		$this->formatter = $formatter;
+		$this->ownLabels = $labels;
 		$this->labels = $labels + self::$defaultLabels;
 		$this->styles = (bool) $styles;
 	}
@@ -711,7 +729,8 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The title for a type of invoice: its own, the credit note's for any credit note without one, or the invoice's
+	 * The title for a type of invoice: the one given for it, else the one given for 381 (a credit note) or 380 (any
+	 * other), so a translated invoice is not titled in English, else its default, else 381's or 380's default
 	 *
 	 * @param string|null $typeCode UNTDID 1001 code
 	 *
@@ -719,11 +738,18 @@ class HtmlInvoiceWriter
 	 */
 	private function title($typeCode)
 	{
-		if (isset($this->labels[(string) $typeCode])) {
-			return $this->labels[$typeCode];
+		$typeCode = (string) $typeCode;
+		$family = in_array($typeCode, self::$creditNoteTypes, true) ? '381' : '380';
+
+		if (isset($this->ownLabels[$typeCode])) {
+			return $this->ownLabels[$typeCode];
 		}
 
-		return $this->labels[in_array((string) $typeCode, self::$creditNoteTypes, true) ? '381' : '380'];
+		if (isset($this->ownLabels[$family])) {
+			return $this->ownLabels[$family];
+		}
+
+		return isset(self::$defaultLabels[$typeCode]) ? self::$defaultLabels[$typeCode] : self::$defaultLabels[$family];
 	}
 
 	/**

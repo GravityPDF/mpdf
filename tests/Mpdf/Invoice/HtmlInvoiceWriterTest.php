@@ -87,11 +87,12 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Any credit note without a title of its own takes the credit note's, and a debit note has its own
+	 * Each type of credit note, and a debit note, has a title of its own, and any other type is an invoice. A title given
+	 * for 381 or 380 is used for the types without one given, rather than their English default.
 	 */
 	public function testTitlesCreditNotesByTheirType()
 	{
-		foreach (['261' => 'Credit note', '396' => 'Credit note', '383' => 'Debit note', '326' => 'Invoice'] as $code => $title) {
+		foreach (['261' => 'Self-billed credit note', '396' => 'Factored credit note', '381' => 'Credit note', '383' => 'Debit note', '326' => 'Invoice'] as $code => $title) {
 			$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>' . $code . '</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
 
 			$this->assertStringContainsString('<h1>' . $title . ' INV-2026-0001</h1>', $this->htmlWriter()->write($xml), $code);
@@ -100,6 +101,25 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>261</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
 		$this->assertStringContainsString('<h1>Avoir INV-2026-0001</h1>', $this->htmlWriter(['381' => 'Avoir'])->write($xml));
 		$this->assertStringContainsString('<h1>Autofacture d’avoir INV-2026-0001</h1>', $this->htmlWriter(['381' => 'Avoir', '261' => 'Autofacture d’avoir'])->write($xml));
+
+		$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>384</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
+		$this->assertStringContainsString('<h1>Facture INV-2026-0001</h1>', $this->htmlWriter(['380' => 'Facture'])->write($xml));
+	}
+
+	/**
+	 * Every type of credit note EN 16931 has is titled differently from the others
+	 */
+	public function testGivesEachCreditNoteATitle()
+	{
+		$titles = [];
+		foreach (['81', '83', '261', '262', '296', '308', '381', '396', '420', '458', '532'] as $code) {
+			$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>' . $code . '</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
+			preg_match('/<h1>(.*) INV-2026-0001<\/h1>/', $this->htmlWriter()->write($xml), $title);
+			$titles[$code] = $title[1];
+		}
+
+		$this->assertCount(11, array_unique($titles));
+		$this->assertNotContains('Invoice', $titles);
 	}
 
 	/**
