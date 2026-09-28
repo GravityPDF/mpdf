@@ -9,6 +9,8 @@ namespace Mpdf;
 trait PageStreams
 {
 
+	use InvoiceFixtures;
+
 	/**
 	 * An uncompressed document
 	 *
@@ -46,7 +48,7 @@ trait PageStreams
 	 */
 	private function invoice($guideline = null)
 	{
-		$xml = file_get_contents(__DIR__ . '/../data/invoice/en16931.xml');
+		$xml = $this->invoiceXml();
 
 		return $guideline === null ? $xml : str_replace('<ram:ID>urn:cen.eu:en16931:2017</ram:ID>', '<ram:ID>' . $guideline . '</ram:ID>', $xml);
 	}
