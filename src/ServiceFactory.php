@@ -40,6 +40,7 @@ use Mpdf\Ua\MarkedContentHelper;
 use Mpdf\Ua\StructureWriter;
 use Mpdf\Ua\AriaIdResolver;
 use Mpdf\Ua\ActualTextWriter;
+use Mpdf\Ua\FlowingBlockMarker;
 use Mpdf\Ua\AnchorState;
 use Mpdf\Ua\InlineStructStack;
 use Mpdf\Ua\ImageMap\ImageMapRegistry;
@@ -185,6 +186,8 @@ class ServiceFactory
 		$structureTree->setUaState($uaState);
 		$imageMapRegistry->setUaState($uaState);
 
+		$flowingBlockMarker = new FlowingBlockMarker($mpdf, $uaState);
+
 		$tag = new Tag(
 			$mpdf,
 			$cache,
@@ -227,6 +230,7 @@ class ServiceFactory
 
 		return [
 			'uaState' => $uaState,
+			'flowingBlockMarker' => $flowingBlockMarker,
 			'otl' => $otl,
 			'bmp' => $bmp,
 			'cache' => $cache,
@@ -272,6 +276,7 @@ class ServiceFactory
 	{
 		return [
 			'uaState',
+			'flowingBlockMarker',
 			'otl',
 			'bmp',
 			'cache',

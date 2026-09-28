@@ -64,4 +64,30 @@ abstract class PdfUaTestCase extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return 'FEFF' . strtoupper(bin2hex(mb_convert_encoding($text, 'UTF-16BE', 'UTF-8')));
 	}
+
+	/**
+	 * Marked content with an MCID may be inside no other marked content (ISO 32000-1 §14.7.4.2).
+	 *
+	 * @param string $pdf
+	 *
+	 * @return void
+	 */
+	protected function assertNoNestedMarkedContent($pdf)
+	{
+		preg_match_all('@stream\r?\n(.*?)endstream@s', $pdf, $streams);
+		foreach ($streams[1] as $stream) {
+			preg_match_all('@/(\w+) <</MCID \d+>> BDC|\bBDC\b|\bBMC\b|\bEMC\b@', $stream, $ops, PREG_SET_ORDER);
+			$depth = 0;
+			foreach ($ops as $op) {
+				if ($op[0] === 'EMC') {
+					$depth--;
+					continue;
+				}
+				if ($op[0] !== 'BMC' && $op[0] !== 'BDC') {
+					$this->assertSame(0, $depth, '/' . $op[1] . ' opened inside other marked content');
+				}
+				$depth++;
+			}
+		}
+	}
 }

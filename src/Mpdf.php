@@ -102,6 +102,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $ua;
 
+	/**
+	 * @var \Mpdf\Ua\FlowingBlockMarker
+	 */
+	private $flowingBlockMarker;
+
 	var $printers_info;
 	var $iterationCounter;
 	var $smCapsScale;
@@ -5415,7 +5420,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->ResetSpacing();
 
 			// A marked-content sequence ends on the page it began
-			$this->closeBlockBdcIfOpen();
+			$this->flowingBlockMarker->closeBlockBdcIfOpen();
 
 			$this->AddPage($this->CurOrientation);
 
@@ -7139,102 +7144,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->flowingBlockAttr['blockdir'] = $blockdir;
 		$this->flowingBlockAttr['cOTLdata'] = []; // mPDF 5.7.1
 		$this->flowingBlockAttr['lastBidiText'] = ''; // mPDF 5.7.1
-		// The block's marked content is opened as its text is drawn, not when its tag opens, as a
-		// block across pages needs an MCID on each. A <br> starts a new flowing block inside the
-		// same one, so whatever the last line opened is closed first.
 		if ($this->PDFUA) {
-			$this->closeBlockBdcIfOpen();
-			$this->flowingBlockAttr['pdfua_struct_open'] = false;
-			$this->flowingBlockAttr['pdfua_type'] = 'P';
-			$this->flowingBlockAttr['pdfua_artifact_open'] = false;
-			// Whether a BDC is open on this page that owes an EMC before the page or block ends
-			$this->flowingBlockAttr['pdfua_bdc_active']  = false;
-			// The block's own element, which the top of the structure stack may not be when an
-			// inline element is open inside it
-			$this->flowingBlockAttr['pdfua_struct_elem'] = null;
-			// The inline element the open BDC belongs to, or null when it is the block's
-			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
+			$this->flowingBlockMarker->reset();
 		}
-	}
-
-	/**
-	 * Open the block's marked content on this page, if it is not open already.
-	 *
-	 * The MCID is given to the block's own element rather than the top of the structure stack,
-	 * which may be an inline element inside the block.
-	 *
-	 * @return void
-	 */
-	private function ensureBlockBdcOpen()
-	{
-		if (!$this->PDFUA) {
-			return;
-		}
-		// Text after an inline element goes back into the block's own marked content
-		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])
-			&& !empty($this->flowingBlockAttr['pdfua_bdc_elem'])) {
-			$this->closeBlockBdcIfOpen();
-		}
-		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
-			return;
-		}
-		if (!empty($this->flowingBlockAttr['pdfua_artifact_open'])) {
-			$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
-			$this->flowingBlockAttr['pdfua_bdc_active'] = true;
-			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
-			return;
-		}
-		if (empty($this->flowingBlockAttr['pdfua_struct_open'])) {
-			return;
-		}
-		$elem = isset($this->flowingBlockAttr['pdfua_struct_elem'])
-			? $this->flowingBlockAttr['pdfua_struct_elem']
-			: null;
-		if ($elem === null) {
-			return;
-		}
-		$structParents = $this->pdfuaStructParents();
-		$mcid = $this->ua->getStructureTree()->addContentForElement($elem, $structParents);
-		$this->ua->getMarkedContentHelper()->begin($this->flowingBlockAttr['pdfua_type'], $mcid);
-		$this->flowingBlockAttr['pdfua_bdc_active'] = true;
-		$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
-	}
-
-	/**
-	 * Open marked content for text inside an inline element (a Link, a Span with its own
-	 * language, an Abbr, ruby), closing whatever the block had open.
-	 *
-	 * An MCID belongs to one element, so the text needs its own for the Link to have content and
-	 * for the Span's /Lang or the Abbr's /E to apply to anything.
-	 *
-	 * @param \Mpdf\Ua\StructureElement $elem The inline element the chunk is in
-	 * @return void
-	 */
-	private function ensureInlineBdcOpen($elem)
-	{
-		if (!$this->PDFUA || $elem === null) {
-			return;
-		}
-		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])
-			&& isset($this->flowingBlockAttr['pdfua_bdc_elem'])
-			&& $this->flowingBlockAttr['pdfua_bdc_elem'] === $elem) {
-			return;
-		}
-		if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
-			$this->closeBlockBdcIfOpen();
-		}
-		// Inside an artifact block no inline element was made, so the text is artifact too
-		if (!empty($this->flowingBlockAttr['pdfua_artifact_open'])) {
-			$this->ua->getMarkedContentHelper()->begin('Artifact', -1);
-			$this->flowingBlockAttr['pdfua_bdc_active'] = true;
-			$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
-			return;
-		}
-		$structParents = $this->pdfuaStructParents();
-		$mcid = $this->ua->getStructureTree()->addContentForElement($elem, $structParents);
-		$this->ua->getMarkedContentHelper()->begin($elem->getType(), $mcid);
-		$this->flowingBlockAttr['pdfua_bdc_active'] = true;
-		$this->flowingBlockAttr['pdfua_bdc_elem'] = $elem;
 	}
 
 	/**
@@ -7271,24 +7183,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$text .= $chunk;
 		}
 		$elem->appendText($text);
-	}
-
-	/**
-	 * End the marked content the flowing block has open, if any.
-	 *
-	 * @return void
-	 */
-	private function closeBlockBdcIfOpen()
-	{
-		if (!$this->PDFUA) {
-			return;
-		}
-		if (empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
-			return;
-		}
-		$this->ua->getMarkedContentHelper()->end();
-		$this->flowingBlockAttr['pdfua_bdc_active'] = false;
-		$this->flowingBlockAttr['pdfua_bdc_elem'] = null;
 	}
 
 	/**
@@ -7617,7 +7511,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->ResetSpacing();
 
 			// A marked-content sequence ends on the page it began; the next page opens its own
-			$this->closeBlockBdcIfOpen();
+			$this->flowingBlockMarker->closeBlockBdcIfOpen();
 
 			$this->AddPage($this->CurOrientation);
 
@@ -7905,19 +7799,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->restoreFont($font[$k]);  // mPDF 5.7
 
 
-				// Mark the chunk against the element restoreFont() says it is in. Table cell text
-				// always has one (the cell, or an element inside it); a cell chunk without one is
-				// an image or widget, which printobjectbuffer() marks itself.
-				if ($this->PDFUA) {
-					$pdfuaInlineElem = (!isset($this->objectbuffer[$k]) || !$this->objectbuffer[$k])
-						? $this->ua->getAnchorState()->getInlineContentElem()
-						: null;
-					if ($pdfuaInlineElem !== null) {
-						$this->ensureInlineBdcOpen($pdfuaInlineElem);
-					} elseif (!$is_table) {
-						$this->ensureBlockBdcOpen();
-					}
-				}
+				$pdfuaLineObject = $this->PDFUA && $this->flowingBlockMarker->markLineChunk($k, $is_table);
 
 				if ($is_table && substr($align, 0, 1) == 'D' && $aord == 0) {
 					$dp = $this->decimal_align[substr($align, 0, 2)];
@@ -7997,6 +7879,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				} else {
 					$this->Cell($stringWidth, $stackHeight, $chunk, '', 0, '', $fill, $this->HREF, 0, 0, 0, 'M', $fill, true, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, (isset($lineBox[$k]) ? $lineBox[$k] : false)); // first or middle part	// mPDF 5.7.1
 				}
+				if ($pdfuaLineObject) {
+					$this->flowingBlockMarker->printLineObject($k, $is_table, $blockdir);
+				}
 
 
 				if (!empty($this->spanborddet)) {
@@ -8023,7 +7908,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // END IF CONTENT
 
 		if ($endofblock) {
-			$this->closeBlockBdcIfOpen();
+			$this->flowingBlockMarker->closeBlockBdcIfOpen();
 		}
 
 		/* -- CSS-IMAGE-FLOAT -- */
@@ -8098,8 +7983,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$stackHeight = $this->divheight;
 	}
 
-	function printobjectbuffer($is_table = false, $blockdir = false)
+	/**
+	 * Draw a line's images, form fields, list markers and other objects.
+	 *
+	 * @param bool        $is_table
+	 * @param string|bool $blockdir
+	 * @param array|null  $objects  Those to draw, by chunk; $objectbuffer when null
+	 * @return void
+	 */
+	function printobjectbuffer($is_table = false, $blockdir = false, $objects = null)
 	{
+		if ($objects === null) {
+			$objects = $this->objectbuffer;
+		}
+
 		if (!$blockdir) {
 			$blockdir = $this->directionality;
 		}
@@ -8123,7 +8020,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$rtlalign = 'L';
 		}
 
-		foreach ($this->objectbuffer as $ib => $objattr) {
+		foreach ($objects as $ib => $objattr) {
 
 			if ($objattr['type'] == 'bookmark' || $objattr['type'] == 'indexentry' || $objattr['type'] == 'toc') {
 				$x = $objattr['OUTER-X'];
@@ -8419,10 +8316,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if (($pdfuaImageAlt === '' || $pdfuaImageAlt === null) && !$pdfuaImageDeferredName) {
 						// An artifact may not sit inside the block's tagged content, so the block's
 						// marked content is ended here and begun again after the image
-						if (!empty($this->flowingBlockAttr['pdfua_bdc_active'])) {
-							$this->closeBlockBdcIfOpen();
-							$pdfuaImageClosedBlockBdc = true;
-						}
+						$pdfuaImageClosedBlockBdc = $this->flowingBlockMarker->closeBlockBdcIfOpen();
 					}
 					if ($pdfuaImageAlt === '') {
 						$pdfuaImageMcid = $this->ua->getStructureTree()->addArtifact();
@@ -8469,7 +8363,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 				if ($pdfuaImageClosedBlockBdc) {
-					$this->ensureBlockBdcOpen();
+					$this->flowingBlockMarker->ensureBlockBdcOpen();
 				}
 
 				// LINK
@@ -8738,9 +8632,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				// on the structure stack
 				$pdfuaLblMcid = null;
 				if ($this->PDFUA
-					&& !$this->ColActive
 					&& !$this->ua->getStructureTree()->isInArtifact()
-					&& isset($this->blk[$this->blklvl]['pdfua_li_lbl_elem'])
+					&& $this->flowingBlockMarker->listMarkerHasLbl()
 				) {
 					$structParents = $this->pdfuaStructParents();
 					$pdfuaLblMcid = $this->ua->getStructureTree()->addContentForElement(
@@ -8837,15 +8730,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			/* -- FORMS -- */
 			// A drawn field's box is an artifact and its value a Form element of its own, neither of
 			// which may sit inside the block's tagged content, so that is ended here and begun again after
-			$pdfuaFieldClosedBlockBdc = false;
-			if ($this->PDFUA
+			$pdfuaFieldClosedBlockBdc = $this->PDFUA
 				&& !$this->useActiveForms
 				&& in_array($objattr['type'], ['input', 'textarea', 'select'], true)
-				&& !empty($this->flowingBlockAttr['pdfua_bdc_active'])
-			) {
-				$this->closeBlockBdcIfOpen();
-				$pdfuaFieldClosedBlockBdc = true;
-			}
+				&& $this->flowingBlockMarker->closeBlockBdcIfOpen();
 
 			// TEXT/PASSWORD INPUT
 			if ($objattr['type'] == 'input' && ($objattr['subtype'] == 'TEXT' || $objattr['subtype'] == 'PASSWORD')) {
@@ -8883,7 +8771,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($pdfuaFieldClosedBlockBdc) {
-				$this->ensureBlockBdcOpen();
+				$this->flowingBlockMarker->ensureBlockBdcOpen();
 			}
 			/* -- END FORMS -- */
 		}
@@ -9692,7 +9580,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->ResetSpacing();
 
 						// A marked-content sequence ends on the page it began; the next page opens its own
-						$this->closeBlockBdcIfOpen();
+						$this->flowingBlockMarker->closeBlockBdcIfOpen();
 
 						$this->AddPage($this->CurOrientation);
 
@@ -9805,17 +9693,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->restoreFont($font[$k]);  // mPDF 5.7
 
 
-						// As in finishFlowingBlock()
-						if ($this->PDFUA) {
-							$pdfuaInlineElem = (!isset($this->objectbuffer[$k]) || !$this->objectbuffer[$k])
-								? $this->ua->getAnchorState()->getInlineContentElem()
-								: null;
-							if ($pdfuaInlineElem !== null) {
-								$this->ensureInlineBdcOpen($pdfuaInlineElem);
-							} elseif (!$is_table) {
-								$this->ensureBlockBdcOpen();
-							}
-						}
+						$pdfuaLineObject = $this->PDFUA && $this->flowingBlockMarker->markLineChunk($k, $is_table);
 
 						$this->SetSpacing(($this->fixedlSpacing * Mpdf::SCALE) + $jcharspacing, ($this->fixedlSpacing + $this->minwSpacing) * Mpdf::SCALE + $jws);
 						// Now unset these values so they don't influence GetStringwidth below or in fn. Cell
@@ -9885,6 +9763,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							}
 						} else {
 							$this->Cell($stringWidth, $stackHeight, $chunk, '', 0, '', $fill, $this->HREF, 0, 0, 0, 'M', $fill, true, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, (isset($lineBox[$k]) ? $lineBox[$k] : false)); // first or middle part
+						}
+						if ($pdfuaLineObject) {
+							$this->flowingBlockMarker->printLineObject($k, $is_table, $blockdir);
 						}
 
 
