@@ -25,7 +25,7 @@ class PositionedBlockSelectorTest extends TestCase
 	 */
 	public function testClassDescendantRulesReachTheContentOfAnAbsoluteBlock()
 	{
-		$colours = $this->colours('<style>
+		$colours = $this->textColours('<style>
 			.box td { color: #ff0000; }
 			.box p { color: #00aa00; }
 			.box { color: #0000ff; }
@@ -45,7 +45,7 @@ class PositionedBlockSelectorTest extends TestCase
 	 */
 	public function testIdDescendantRulesReachTheContentOfAFixedBlock()
 	{
-		$colours = $this->colours('<style>#side p { color: #ff0000; }</style>
+		$colours = $this->textColours('<style>#side p { color: #ff0000; }</style>
 			<div id="side" style="position: fixed; top: 10mm; left: 20mm; width: 100mm;"><p>fixed p</p></div>');
 
 		$this->assertSame(self::RED, $colours['fixed p']);
@@ -56,7 +56,7 @@ class PositionedBlockSelectorTest extends TestCase
 	 */
 	public function testTheContentIsAChildOfTheBlockItself()
 	{
-		$colours = $this->colours('<style>.box div p { color: #ff0000; }</style>
+		$colours = $this->textColours('<style>.box div p { color: #ff0000; }</style>
 			<div class="box" style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>direct p</p><div><p>nested p</p></div></div>');
 
 		$this->assertSame(self::BLACK, $colours['direct p']);
@@ -68,32 +68,12 @@ class PositionedBlockSelectorTest extends TestCase
 	 */
 	public function testTheRulesOfOneBlockDoNotReachTheNext()
 	{
-		$colours = $this->colours('<style>.box p { color: #00aa00; }</style>
+		$colours = $this->textColours('<style>.box p { color: #00aa00; }</style>
 			<div class="box" style="position: absolute; top: 20mm; left: 20mm; width: 100mm;"><p>boxed p</p></div>
 			<div style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>plain p</p></div>');
 
 		$this->assertSame(self::GREEN, $colours['boxed p']);
 		$this->assertSame(self::BLACK, $colours['plain p']);
-	}
-
-	/**
-	 * The fill colour each piece of text on the first page is drawn in, keyed by that text
-	 *
-	 * @param string $html
-	 *
-	 * @return string[]
-	 */
-	private function colours($html)
-	{
-		$pages = $this->pages($this->render($html));
-		preg_match_all('/q ([\d. ]+ (?:rg|g)) .*?\((.*?)\) Tj/', $pages[0], $drawn, PREG_SET_ORDER);
-
-		$colours = [];
-		foreach ($drawn as $text) {
-			$colours[$text[2]] = $text[1];
-		}
-
-		return $colours;
 	}
 
 }
