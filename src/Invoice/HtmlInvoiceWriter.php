@@ -6,8 +6,8 @@ use Mpdf\MpdfException;
 use Mpdf\Strict;
 
 /**
- * Writes Cross Industry Invoice XML as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how
- * to pay
+ * Writes Cross Industry Invoice or UBL invoice XML as HTML for the page: the parties, the lines, the VAT breakdown, the
+ * totals and how to pay
  *
  * It prints what the XML states, totals included, so the printed invoice and the embedded one agree. A Formatter sets
  * how numbers, amounts and dates are written, and labels translate it:
@@ -19,7 +19,10 @@ use Mpdf\Strict;
  * Its elements carry invoice-* classes, which a <style> block ahead of the invoice draws. Pass false as $styles to
  * leave that block out, for a document that styles them itself.
  *
- * It reads the XML with CiiInvoiceReader, which neither validates it nor checks its totals.
+ * A UBL invoice prints the same way, but Factur-X embeds CII only, so a PDF printed from UBL is only a readable copy of
+ * the invoice.
+ *
+ * It reads the XML with InvoiceReader, which neither validates it nor checks its totals.
  */
 class HtmlInvoiceWriter
 {
@@ -57,6 +60,16 @@ class HtmlInvoiceWriter
 		'386' => 'Prepayment invoice',
 		'389' => 'Self-billed invoice',
 		'383' => 'Debit note',
+		'81' => 'Credit note for goods or services',
+		'83' => 'Credit note for financial adjustments',
+		'261' => 'Self-billed credit note',
+		'262' => 'Consolidated credit note',
+		'296' => 'Credit note for price variation',
+		'308' => 'Del credere credit note',
+		'396' => 'Factored credit note',
+		'420' => 'OCR payment credit note',
+		'458' => 'Reversal of debit',
+		'532' => 'Forwarder’s credit note',
 		'issueDate' => 'Issue date',
 		'deliveryDate' => 'Delivery date',
 		'dueDate' => 'Due date',
@@ -127,7 +140,7 @@ class HtmlInvoiceWriter
 	];
 
 	/**
-	 * The label for each UNTDID 2475 code saying when VAT falls due (BT-8), as CII writes them
+	 * The label for each UNTDID 2475 code saying when VAT falls due (BT-8), as the reader gives them
 	 *
 	 * @var string[]
 	 */
@@ -171,7 +184,7 @@ class HtmlInvoiceWriter
 	];
 
 	/**
-	 * The UNTDID 1001 type codes EN 16931 counts as credit notes, titled as 381 unless given a title of their own
+	 * The UNTDID 1001 type codes EN 16931 counts as credit notes, whose title falls back to 381's rather than 380's
 	 *
 	 * @var string[]
 	 */
@@ -181,6 +194,13 @@ class HtmlInvoiceWriter
 	 * @var string[]
 	 */
 	private $labels;
+
+	/**
+	 * The labels passed to the constructor, before the defaults fill in the rest
+	 *
+	 * @var string[]
+	 */
+	private $ownLabels;
 
 	/**
 	 * @var \Mpdf\Invoice\Formatter
@@ -210,6 +230,7 @@ class HtmlInvoiceWriter
 		}
 
 		$this->formatter = $formatter;
+		$this->ownLabels = $labels;
 		$this->labels = $labels + self::$defaultLabels;
 		$this->styles = (bool) $styles;
 	}
@@ -217,15 +238,16 @@ class HtmlInvoiceWriter
 	/**
 	 * The invoice as HTML, headed by its type and number, after its <style> block unless $styles was false
 	 *
-	 * @param string $xml Cross Industry Invoice XML, at any Factur-X / ZUGFeRD profile or as XRechnung CII
+	 * @param string $xml Cross Industry Invoice XML, at any Factur-X / ZUGFeRD profile or as XRechnung CII, or a UBL
+	 *                    Invoice or CreditNote
 	 *
 	 * @return string
 	 *
-	 * @throws \Mpdf\MpdfException When the XML is not a Cross Industry Invoice
+	 * @throws \Mpdf\MpdfException When the XML is neither a Cross Industry Invoice nor a UBL Invoice or CreditNote
 	 */
 	public function write($xml)
 	{
-		$invoice = (new CiiInvoiceReader())->read($xml);
+		$invoice = (new InvoiceReader())->read($xml);
 
 		$title = $this->title($invoice['typeCode']);
 
@@ -571,7 +593,7 @@ class HtmlInvoiceWriter
 	 * worked out on when it names one, which switches to the label ending in On
 	 *
 	 * @param string $label earlyPaymentDiscount or latePaymentPenalty
-	 * @param mixed[] $adjustment As CiiInvoiceReader reads paymentDiscounts and paymentPenalties
+	 * @param mixed[] $adjustment As InvoiceReader reads paymentDiscounts and paymentPenalties
 	 * @param string|null $currency
 	 *
 	 * @return string|null Null when it gives no period, or neither a rate nor an amount
@@ -707,7 +729,8 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The title for a type of invoice: its own, the credit note's for any credit note without one, or the invoice's
+	 * The title for a type of invoice: the one given for it, else the one given for 381 (a credit note) or 380 (any
+	 * other), so a translated invoice is not titled in English, else its default, else 381's or 380's default
 	 *
 	 * @param string|null $typeCode UNTDID 1001 code
 	 *
@@ -715,11 +738,18 @@ class HtmlInvoiceWriter
 	 */
 	private function title($typeCode)
 	{
-		if (isset($this->labels[(string) $typeCode])) {
-			return $this->labels[$typeCode];
+		$typeCode = (string) $typeCode;
+		$family = in_array($typeCode, self::$creditNoteTypes, true) ? '381' : '380';
+
+		if (isset($this->ownLabels[$typeCode])) {
+			return $this->ownLabels[$typeCode];
 		}
 
-		return $this->labels[in_array((string) $typeCode, self::$creditNoteTypes, true) ? '381' : '380'];
+		if (isset($this->ownLabels[$family])) {
+			return $this->ownLabels[$family];
+		}
+
+		return isset(self::$defaultLabels[$typeCode]) ? self::$defaultLabels[$typeCode] : self::$defaultLabels[$family];
 	}
 
 	/**

@@ -2,20 +2,22 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\InteropPackage;
 use Mpdf\PageStreams;
 
 /**
  * Invoice XML written by horstoeko/zugferd, the package the documentation points to, embeds as it was written and
  * reads back through that package's own PDF reader
  *
- * The package needs PHP 7.3, so it is not in require-dev; the einvoice-interop workflow installs it before running
- * this group, and elsewhere the tests are skipped.
+ * The package needs PHP 7.3, so it is not in require-dev; the einvoice-interop workflow installs it and runs this
+ * group.
  *
  * @group interop
  */
 class HorstoekoZugferdTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
+	use InteropPackage;
 	use PageStreams;
 
 	/**
@@ -25,9 +27,7 @@ class HorstoekoZugferdTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		parent::set_up();
 
-		if (!class_exists('horstoeko\zugferd\ZugferdDocumentBuilder')) {
-			$this->markTestSkipped('horstoeko/zugferd is not installed; run composer require --dev horstoeko/zugferd');
-		}
+		$this->requirePackage('horstoeko\zugferd\ZugferdDocumentBuilder', 'horstoeko/zugferd');
 	}
 
 	/**

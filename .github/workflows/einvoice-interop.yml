@@ -17,17 +17,18 @@ jobs:
 
     name: "E-invoice interop"
 
-    runs-on: ${{ matrix.operating-system }}
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        # horstoeko/zugferd needs PHP 7.3, so it is installed here rather than in require-dev
-        php-version:
-          - "7.3"
-          - "8.5"
-
-        operating-system: [ubuntu-latest]
+        # The packages need PHP 7.3 (horstoeko/zugferd) and 8.3 (easybill/e-invoicing), so they are installed here rather
+        # than in require-dev, each on the versions it supports
+        include:
+          - php-version: "7.3"
+            packages: "horstoeko/zugferd"
+          - php-version: "8.5"
+            packages: "horstoeko/zugferd easybill/e-invoicing"
 
     steps:
       - name: "Checkout"
@@ -55,7 +56,10 @@ jobs:
           restore-keys: "composer-${{ runner.os }}-php${{ matrix.php-version }}-einvoice-"
 
       - name: "Install dependencies"
-        run: "composer install --no-interaction --no-progress && composer require --dev horstoeko/zugferd --no-interaction --no-progress"
+        run: "composer install --no-interaction --no-progress && composer require --dev ${{ matrix.packages }} --no-interaction --no-progress"
 
       - name: "Tests"
         run: composer test -- --group=interop
+        env:
+          # A test whose package is named here fails, rather than skips, when the package is missing
+          EINVOICE_INTEROP: "${{ matrix.packages }}"

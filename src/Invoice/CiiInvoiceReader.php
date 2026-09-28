@@ -2,42 +2,14 @@
 
 namespace Mpdf\Invoice;
 
-use Mpdf\MpdfException;
-use Mpdf\Strict;
-
 /**
  * Reads what a printed invoice shows from Cross Industry Invoice (CII) XML, the syntax Factur-X, ZUGFeRD and XRechnung
- * CII share
- *
- * It returns what the XML states, totals included, and recalculates nothing. It neither validates the XML nor checks
- * that its totals add up. Anything the XML leaves out, as MINIMUM leaves out the lines, is null or an empty list.
- *
- * read() gives an array:
- * - id, typeCode (UNTDID 1001), currency, buyerReference, orderReference, paymentReference: strings or null
- * - issueDate, deliveryDate, dueDate: a DateTime, the text of a date in a format other than 102, or null
- * - notes: string[]
- * - precedingInvoices: [id, issueDate][]
- * - seller, buyer: a party; deliverTo: a party or null. A party is name, address (as Formatter::address() takes it),
- *   vatId, taxNumber, contact (name, phone, email), electronicAddress and electronicAddressScheme
- * - lines: name, description, quantity, unitCode, unitPrice, basisQuantity, basisQuantityUnit, vatCategory, vatRate,
- *   netAmount and allowanceCharges
- * - allowanceCharges, on the invoice or a line: charge (bool), amount, reason and reasonCode
- * - vatBreakdown: category, rate, basis, amount, exemptionReason and dueDateCode (UNTDID 2475)
- * - totals: lineTotal, chargeTotal, allowanceTotal, taxBasisTotal, taxTotal, roundingAmount, grandTotal, prepaidAmount
- *   and duePayableAmount, each a float or null
- * - paymentTerms: string[], a line each
- * - paymentDiscounts, paymentPenalties: early payment discounts and late payment penalties, from EXTENDED's structured
- *   terms and, for discounts, XRechnung's Skonto lines. Each is percent, amount, basisAmount and period (floats or
- *   null), periodUnit (UN/ECE Recommendation 20, e.g. DAY) and basisDate
- * - paymentMeans: typeCode, information, account, iban (bool), bic, accountName, debitedAccount, mandate, creditorId,
- *   card and cardholder
+ * CII share, into the array AbstractInvoiceReader describes
  *
  * @see https://fnfe-mpe.org/factur-x/factur-x_en/ Factur-X, whose CII this reads
  */
-class CiiInvoiceReader
+class CiiInvoiceReader extends AbstractInvoiceReader
 {
-
-	use Strict;
 
 	const NS_RSM = 'urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100';
 
@@ -46,41 +18,27 @@ class CiiInvoiceReader
 	const NS_UDT = 'urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100';
 
 	/**
-	 * @var \DOMXPath
+	 * The invoice a parsed document states
+	 *
+	 * @param \DOMDocument $document
+	 *
+	 * @return mixed[] As AbstractInvoiceReader describes
+	 *
+	 * @throws \Mpdf\MpdfException When the document is not a Cross Industry Invoice
 	 */
-	private $xpath;
-
-	/**
-	 * The invoice the XML states
-	 *
-	 * @param string $xml
-	 *
-	 * @return mixed[] As the class describes
-	 *
-	 * @throws \Mpdf\MpdfException When the XML does not parse, has a document type declaration, or is not a Cross
-	 *                             Industry Invoice
-	 */
-	public function read($xml)
+	protected function readDocument(\DOMDocument $document)
 	{
-		$root = $this->load($xml);
+		$root = $this->root($document, 'Cross Industry Invoice XML', ['{' . self::NS_RSM . '}CrossIndustryInvoice'], [
+			'rsm' => self::NS_RSM,
+			'ram' => self::NS_RAM,
+			'udt' => self::NS_UDT,
+		]);
 
 		$agreement = $this->node('rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement', $root);
 		$delivery = $this->node('rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeDelivery', $root);
 		$settlement = $this->node('rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement', $root);
-		$currency = $this->text('ram:InvoiceCurrencyCode', $settlement);
 
-		$terms = [];
-		$discounts = [];
-		foreach ($this->texts('ram:SpecifiedTradePaymentTerms/ram:Description', $settlement) as $description) {
-			foreach (explode("\n", $description) as $term) {
-				$skonto = $this->skonto($term);
-				if ($skonto !== null) {
-					$discounts[] = $skonto;
-				} elseif (trim($term) !== '') {
-					$terms[] = trim($term);
-				}
-			}
-		}
+		list($terms, $discounts) = $this->paymentTerms($this->texts('ram:SpecifiedTradePaymentTerms/ram:Description', $settlement));
 		foreach ($this->nodes('ram:SpecifiedTradePaymentTerms/ram:ApplicableTradePaymentDiscountTerms', $settlement) as $discount) {
 			$discounts[] = $this->paymentAdjustment($discount, 'ram:ActualDiscountAmount');
 		}
@@ -93,7 +51,7 @@ class CiiInvoiceReader
 			'id' => $this->text('rsm:ExchangedDocument/ram:ID', $root),
 			'typeCode' => $this->text('rsm:ExchangedDocument/ram:TypeCode', $root),
 			'issueDate' => $this->date('rsm:ExchangedDocument/ram:IssueDateTime', $root),
-			'currency' => $currency,
+			'currency' => $this->text('ram:InvoiceCurrencyCode', $settlement),
 			'notes' => $this->texts('rsm:ExchangedDocument/ram:IncludedNote/ram:Content', $root),
 			'buyerReference' => $this->text('ram:BuyerReference', $agreement),
 			'orderReference' => $this->text('ram:BuyerOrderReferencedDocument/ram:IssuerAssignedID', $agreement),
@@ -106,57 +64,13 @@ class CiiInvoiceReader
 			'lines' => $this->lines($root),
 			'allowanceCharges' => $this->allowanceCharges($settlement),
 			'vatBreakdown' => $this->vatBreakdown($settlement),
-			'totals' => $this->totals($this->node('ram:SpecifiedTradeSettlementHeaderMonetarySummation', $settlement), $currency),
+			'totals' => $this->totals($this->node('ram:SpecifiedTradeSettlementHeaderMonetarySummation', $settlement)),
 			'paymentTerms' => $terms,
 			'paymentDiscounts' => $discounts,
 			'paymentPenalties' => $penalties,
 			'paymentReference' => $this->text('ram:PaymentReference', $settlement),
 			'paymentMeans' => $this->paymentMeans($settlement),
 		];
-	}
-
-	/**
-	 * Parse the XML without reaching the network or taking a DTD, and check it is a Cross Industry Invoice
-	 *
-	 * @param string $xml
-	 *
-	 * @return \DOMElement
-	 *
-	 * @throws \Mpdf\MpdfException
-	 */
-	private function load($xml)
-	{
-		if (!is_string($xml) || trim($xml) === '') {
-			throw new MpdfException('The invoice XML must be a non-empty string.');
-		}
-
-		$document = new \DOMDocument();
-		$useErrors = libxml_use_internal_errors(true);
-		$loaded = $document->loadXML($xml, LIBXML_NONET);
-		$error = libxml_get_last_error();
-		libxml_clear_errors();
-		libxml_use_internal_errors($useErrors);
-
-		if (!$loaded) {
-			throw new MpdfException(sprintf('The invoice XML does not parse: %s', $error ? trim($error->message) : 'unknown error'));
-		}
-
-		// Cross Industry Invoice XML has no document type declaration, and one could only bring in entities
-		if ($document->doctype !== null) {
-			throw new MpdfException('The invoice XML has a document type declaration, which Cross Industry Invoice XML never has.');
-		}
-
-		$root = $document->documentElement;
-		if ($root->namespaceURI !== self::NS_RSM || $root->localName !== 'CrossIndustryInvoice') {
-			throw new MpdfException(sprintf('%s reads Cross Industry Invoice XML, not a {%s}%s document.', __CLASS__, $root->namespaceURI, $root->localName));
-		}
-
-		$this->xpath = new \DOMXPath($document);
-		$this->xpath->registerNamespace('rsm', self::NS_RSM);
-		$this->xpath->registerNamespace('ram', self::NS_RAM);
-		$this->xpath->registerNamespace('udt', self::NS_UDT);
-
-		return $root;
 	}
 
 	/**
@@ -280,13 +194,12 @@ class CiiInvoiceReader
 	 * The invoice's totals, with its VAT in the invoice's own currency where the XML also gives it in another
 	 *
 	 * @param \DOMNode|null $summation
-	 * @param string|null $currency
 	 *
 	 * @return mixed[]
 	 */
-	private function totals($summation, $currency)
+	private function totals($summation)
 	{
-		$taxTotal = preg_match('/^[A-Z]{3}$/', (string) $currency) ? $this->amount('ram:TaxTotalAmount[@currencyID="' . $currency . '"]', $summation) : null;
+		$taxTotal = $this->amount('ram:TaxTotalAmount[@currencyID = ../../ram:InvoiceCurrencyCode]', $summation);
 
 		return [
 			'lineTotal' => $this->amount('ram:LineTotalAmount', $summation),
@@ -378,32 +291,6 @@ class CiiInvoiceReader
 	}
 
 	/**
-	 * An early payment discount written into the payment terms in XRechnung's Skonto form, #SKONTO#TAGE=14#PROZENT=2.00#
-	 * with BASISBETRAG=...# when it applies to part of the amount, or null for any other line
-	 *
-	 * @see https://xeinkauf.de/xrechnung/ XRechnung, which defines the Skonto form
-	 *
-	 * @param string $term
-	 *
-	 * @return mixed[]|null As paymentAdjustment() gives a discount
-	 */
-	private function skonto($term)
-	{
-		if (!preg_match('/^#SKONTO#TAGE=(\d+)#PROZENT=(\d+(?:\.\d+)?)#(?:BASISBETRAG=(-?\d+(?:\.\d+)?)#)?$/', trim($term), $match)) {
-			return null;
-		}
-
-		return [
-			'percent' => (float) $match[2],
-			'amount' => null,
-			'basisAmount' => isset($match[3]) ? (float) $match[3] : null,
-			'period' => (float) $match[1],
-			'periodUnit' => 'DAY',
-			'basisDate' => null,
-		];
-	}
-
-	/**
 	 * A date in format 102 (CCYYMMDD) as a DateTime, a date in any other format as its text, or null when there is none
 	 *
 	 * @param string $path To the element holding the date string
@@ -427,103 +314,6 @@ class CiiInvoiceReader
 		}
 
 		return $text;
-	}
-
-	/**
-	 * A number, or null when there is none
-	 *
-	 * @param string $path
-	 * @param \DOMNode|null $context
-	 *
-	 * @return float|null
-	 */
-	private function amount($path, $context)
-	{
-		$text = $this->text($path, $context);
-
-		return $text !== null && is_numeric($text) ? (float) $text : null;
-	}
-
-	/**
-	 * The trimmed text of the first node the path finds, or null when it finds none or only whitespace
-	 *
-	 * @param string $path
-	 * @param \DOMNode|null $context
-	 *
-	 * @return string|null
-	 */
-	private function text($path, $context)
-	{
-		$node = $this->node($path, $context);
-		$text = $node !== null ? trim($node->textContent) : '';
-
-		return $text !== '' ? $text : null;
-	}
-
-	/**
-	 * The trimmed text of every node the path finds, leaving out those with none
-	 *
-	 * @param string $path
-	 * @param \DOMNode|null $context
-	 *
-	 * @return string[]
-	 */
-	private function texts($path, $context)
-	{
-		$texts = [];
-		foreach ($this->nodes($path, $context) as $node) {
-			$text = trim($node->textContent);
-			if ($text !== '') {
-				$texts[] = $text;
-			}
-		}
-
-		return $texts;
-	}
-
-	/**
-	 * Lines of text joined by a comma, leaving out those that are not set, or null when none are
-	 *
-	 * @param mixed[] $parts
-	 *
-	 * @return string|null
-	 */
-	private function joined(array $parts)
-	{
-		// text() gives null for text that is not there, never ''
-		$parts = array_filter($parts, 'is_string');
-
-		return $parts ? implode(', ', $parts) : null;
-	}
-
-	/**
-	 * The first node the path finds, or null
-	 *
-	 * @param string $path
-	 * @param \DOMNode|null $context
-	 *
-	 * @return \DOMNode|null
-	 */
-	private function node($path, $context)
-	{
-		$nodes = $this->nodes($path, $context);
-
-		return $nodes instanceof \DOMNodeList && $nodes->length ? $nodes->item(0) : null;
-	}
-
-	/**
-	 * Every node the path finds, none when there is no context to search in
-	 *
-	 * @param string $path
-	 * @param \DOMNode|null $context
-	 *
-	 * @return \DOMNodeList|\DOMNode[]
-	 */
-	private function nodes($path, $context)
-	{
-		$nodes = $context !== null ? $this->xpath->query($path, $context) : false;
-
-		return $nodes !== false ? $nodes : [];
 	}
 
 }
