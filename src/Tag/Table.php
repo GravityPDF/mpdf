@@ -161,6 +161,10 @@ class Table extends Tag
 		} elseif (!empty($attr['WIDTH'])) {
 			$w = $attr['WIDTH'];
 		}
+		// auto is the initial width, which leaves the table as wide as its content
+		if (strtolower($w) === 'auto') {
+			$w = '';
+		}
 
 		if (isset($attr['ALIGN']) && array_key_exists(strtolower($attr['ALIGN']), self::ALIGN)) {
 			$table['a'] = $this->getAlign($attr['ALIGN']);

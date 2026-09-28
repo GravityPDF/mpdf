@@ -167,6 +167,19 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
+	 * A table of width: auto is sized by its content, as one given no width is, so a picture's column is as wide as
+	 * the picture rather than squeezing it to nothing
+	 */
+	public function testATableOfAutoWidthIsSizedByItsContent()
+	{
+		foreach (['max-width: 100%', 'width: 50%'] as $style) {
+			$cells = '<tr><td>one</td><td>' . $this->image($style) . '</td></tr></table>';
+
+			$this->assertEqualsWithDelta($this->drawnWidth('<table>' . $cells), $this->drawnWidth('<table style="width: auto">' . $cells), 0.05, $style);
+		}
+	}
+
+	/**
 	 * Tables too wide for the page, with long unbreakable words in five columns and the image in a sixth, either
 	 * directly or in a nested table
 	 *
