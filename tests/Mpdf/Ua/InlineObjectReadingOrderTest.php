@@ -120,7 +120,7 @@ class InlineObjectReadingOrderTest extends PdfUaTestCase
 			}
 		}
 		$this->assertNotNull($body, 'no /' . $type . ' element');
-		$this->assertSame(1, preg_match('@/K (\[.*\]|<<[^>]*>>|\d+ 0 R|\d+)\s*>>\s*$@s', $body, $k));
+		$this->assertSame(1, preg_match('@/K (\[.*\])\s*>>\s*$@s', $body, $k));
 
 		preg_match_all('@<</Type /MCR[^>]*/MCID (\d+)>>|<</Type /OBJR[^>]*>>|(\d+) 0 R|\d+@', $k[1], $refs, PREG_SET_ORDER);
 		$kids = [];
