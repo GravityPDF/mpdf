@@ -3,11 +3,11 @@
 namespace Snapshots;
 
 /**
- * A MINIMUM invoice, which has no lines or VAT breakdown: its totals alone, with the VAT as one sum
+ * A BASIC Factur-X invoice, embedded as Alternative: its lines without descriptions, and its account without a BIC or name
  *
  * @group snapshot
  */
-class InvoiceMinimumSnapshotTest extends InvoiceSnapshot
+class FacturXBasicSnapshotTest extends FacturXSnapshot
 {
 
 	/**
@@ -15,7 +15,7 @@ class InvoiceMinimumSnapshotTest extends InvoiceSnapshot
 	 */
 	public function getId()
 	{
-		return 'invoice-minimum';
+		return 'facturx-basic';
 	}
 
 	/**
@@ -23,7 +23,7 @@ class InvoiceMinimumSnapshotTest extends InvoiceSnapshot
 	 */
 	protected function getFixture()
 	{
-		return 'minimum.xml';
+		return 'basic.xml';
 	}
 
 }
