@@ -6,7 +6,7 @@ use Mpdf\Mpdf;
 use Mpdf\PageStreams;
 
 /**
- * The alpha of an rgba() or cmyka() fill, stroke or stop-color in an SVG (#395)
+ * The alpha of an rgba() or cmyka() fill, stroke or stop-color in an SVG, on shapes and text alike (#395, #427)
  */
 class SvgColorAlphaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -45,6 +45,42 @@ class SvgColorAlphaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'currentColor' => ['color="rgba(0,128,0,0.4)" fill="currentColor" stroke="currentColor"', 0.4, 0.4],
 			'with opacity' => ['fill="rgba(255,0,0,0.5)" fill-opacity="0.5" stroke="cmyka(0,0,100,0,0.8)" stroke-opacity="0.5"', 0.25, 0.4],
 			'restricted to grayscale' => ['fill="rgba(255,0,0,0.3)" stroke="cmyka(0,100,0,0,0.6)"', 0.3, 0.6, ['restrictColorSpace' => 1]],
+		];
+	}
+
+	/**
+	 * Text takes the alpha of its fill and stroke colours, multiplied by any fill-opacity or stroke-opacity, whether
+	 * it is drawn in a document font or an SVG font
+	 *
+	 * @dataProvider textProvider
+	 *
+	 * @param string $attributes
+	 * @param float $fill
+	 * @param float $stroke
+	 * @param string $font
+	 */
+	public function testTextTakesTheColourAlpha($attributes, $fill, $stroke, $font = '')
+	{
+		$states = $this->states($this->draw($font . '<text x="10" y="30" font-size="20" ' . $attributes . '>Alpha</text>'));
+
+		$this->assertContains(['ca' => $fill, 'CA' => $stroke, 'BM' => '/Normal'], $states);
+	}
+
+	/**
+	 * Text attributes, the fill and stroke alphas they draw with, and any SVG font the text is set in
+	 *
+	 * @return array
+	 */
+	public function textProvider()
+	{
+		$font = '<defs><font horiz-adv-x="500"><font-face font-family="Boxes" units-per-em="1000" />'
+			. '<missing-glyph horiz-adv-x="500" d="M0 0 L400 0 L400 700 L0 700 Z" /></font></defs>';
+
+		return [
+			'rgba fill' => ['fill="rgba(255,0,0,0.3)"', 0.3, 1],
+			'cmyka fill, rgba stroke' => ['fill="cmyka(100,0,0,0,0.45)" stroke="rgba(0,0,255,0.7)" stroke-width="1"', 0.45, 0.7],
+			'with opacity' => ['fill="rgba(255,0,0,0.5)" fill-opacity="0.5" stroke="cmyka(0,0,100,0,0.8)" stroke-opacity="0.5" stroke-width="1"', 0.25, 0.4],
+			'SVG font' => ['font-family="Boxes" fill="rgba(255,0,0,0.3)" stroke="cmyka(0,100,0,0,0.6)" stroke-width="1"', 0.3, 0.6, $font],
 		];
 	}
 
@@ -106,7 +142,7 @@ class SvgColorAlphaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A fill, a stroke and a gradient stop at half opacity. An alpha of 0.5 is stored as the byte "2", a digit, which
+	 * A fill, a stroke, a gradient stop and text at half opacity. An alpha of 0.5 is stored as the byte "2", a digit, which
 	 * the old reading divided and passed to ord() as a longer string
 	 *
 	 * @return string
@@ -115,7 +151,8 @@ class SvgColorAlphaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return '<rect width="80" height="40" fill="rgba(255,0,0,0.5)" stroke="cmyka(0,100,0,0,0.5)" />'
 			. '<linearGradient id="g"><stop offset="0" stop-color="rgba(255,0,0,0.5)" /><stop offset="1" stop-color="blue" /></linearGradient>'
-			. '<rect width="80" height="40" fill="url(#g)" />';
+			. '<rect width="80" height="40" fill="url(#g)" />'
+			. '<text x="10" y="30" fill="rgba(255,0,0,0.5)" stroke="cmyka(0,100,0,0,0.5)" stroke-width="1">Alpha</text>';
 	}
 
 	/**
