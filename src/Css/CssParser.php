@@ -250,9 +250,10 @@ class CssParser
 			}
 		}
 
-		if (preg_match('/NTH-CHILD\((\s*(([\-+]?\d*)N(\s*[\-+]\s*\d+)?|[\-+]?\d+|ODD|EVEN)\s*)\)/', $selector, $m)) {
-			$selector = preg_replace('/NTH-CHILD\(.*\)/', 'NTH-CHILD(' . str_replace(' ', '', $m[1]) . ')', $selector);
-		}
+		// Close up each nth-child argument, e.g. (2N + 1), so the selector still splits into its parts on whitespace
+		$selector = preg_replace_callback('/NTH-CHILD\(([^)]*)\)/', function ($m) {
+			return 'NTH-CHILD(' . preg_replace('/\s+/', '', $m[1]) . ')';
+		}, $selector);
 
 		$tags = preg_split('/\s+/', trim($selector));
 		$level = count($tags);

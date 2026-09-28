@@ -107,55 +107,25 @@ class SelectorParser
 	/**
 	 * Parse cascaded selector (depth > 1).
 	 *
+	 * A selector with a part that cannot be parsed matches nothing, so it gives no levels at all rather than
+	 * the ones before that part, which would name a different element.
+	 *
 	 * @param array $tags Selector tags array
-	 * @return array Array of tag levels for cascade
+	 * @return array Array of tag levels for cascade, empty if any part cannot be parsed
 	 */
 	public function parseCascadedSelector($tags)
 	{
-		$tmp = [];
-		$level = count($tags);
-
-		for ($n = 0; $n < $level; $n++) {
-			$tag = '';
-			$t = isset($tags[$n]) ? trim($tags[$n]) : '';
-			if (empty($t)) {
-				continue;
+		$levels = [];
+		foreach ($tags as $t) {
+			$tag = $this->parseSimpleSelector([$t]);
+			if ($tag === null) {
+				return [];
 			}
 
-			if (preg_match('/^[.](.*)$/', $t, $m)) {
-				$classes = explode('.', $m[1]);
-				sort($classes);
-				$tag = 'CLASS>>' . join('.', $classes);
-			} elseif (preg_match('/^[#](.*)$/', $t, $m)) {
-				$tag = 'ID>>' . $m[1];
-			} elseif (preg_match('/^\[LANG=[\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\]$/', $t, $m)) {
-				$tag = 'LANG>>' . strtolower($m[1]);
-			} elseif (preg_match('/^:LANG\([\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\)$/', $t, $m)) { // mPDF 6  Special case for lang as attribute selector
-				$tag = 'LANG>>' . strtolower($m[1]);
-			} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')[.](.*)$/', $t, $m)) { // mPDF 6  Special case for lang as attribute selector
-				$classes = explode('.', $m[2]);
-				sort($classes);
-				$tag = $m[1] . '>>CLASS>>' . join('.', $classes);
-			} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\s*:NTH-CHILD\((.*)\)$/', $t, $m)) {
-				$tag = $m[1] . '>>SELECTORNTHCHILD>>' . $m[2];
-			} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')[#](.*)$/', $t, $m)) {
-				$tag = $m[1] . '>>ID>>' . $m[2];
-			} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\[LANG=[\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\]$/', $t, $m)) {
-				$tag = $m[1] . '>>LANG>>' . strtolower($m[2]);
-			} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . '):LANG\([\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\)$/', $t, $m)) { // mPDF 6  Special case for lang as attribute selector
-				$tag = $m[1] . '>>LANG>>' . strtolower($m[2]);
-			} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')$/', $t)) { // mPDF 6  Special case for lang as attribute selector
-				$tag = $t;
-			}
-
-			if (!$tag) {
-				break;
-			}
-
-			$tmp[] = $tag;
+			$levels[] = $tag;
 		}
 
-		return $tmp;
+		return $levels;
 	}
 
 	/**

@@ -90,4 +90,17 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals('blue', $properties['COLOR']);
 		$this->assertEquals(2, $properties['depth']);
 	}
+
+	/**
+	 * Each nth-child in a selector keeps its own argument, closed up so the selector splits into its parts on whitespace
+	 */
+	public function testEachNthChildInASelectorKeepsItsOwnArgument()
+	{
+		$this->parser->parse('<style>table tr:nth-child(2n + 1) td:nth-child(odd) { color: blue; }</style>');
+
+		$cascade = $this->parser->getCascadeCss();
+		$properties = $cascade['TABLE']['TR>>SELECTORNTHCHILD>>2N+1']['TD>>SELECTORNTHCHILD>>ODD'];
+		$this->assertEquals('blue', $properties['COLOR']);
+		$this->assertEquals(3, $properties['depth']);
+	}
 }

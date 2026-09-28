@@ -62,6 +62,33 @@ class SelectorParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals($expected, $this->parser->parseCascadedSelector($tags));
 	}
 
+	/**
+	 * A selector with a part that cannot be parsed gives no levels, wherever that part is, rather than the ones before it
+	 *
+	 * @dataProvider unparseableCascadedSelectors
+	 *
+	 * @param string[] $tags
+	 */
+	public function testParseCascadedSelectorGivesNothingForAPartItCannotParse($tags)
+	{
+		$this->assertSame([], $this->parser->parseCascadedSelector($tags));
+	}
+
+	/**
+	 * Descendant selectors, split on whitespace as CssParser splits them, with a part mPDF cannot match
+	 *
+	 * @return array[]
+	 */
+	public function unparseableCascadedSelectors()
+	{
+		return [
+			'first' => [['[HREF]', 'DIV', 'P']],
+			'in the middle' => [['DIV', '*', 'P']],
+			'last, after two parts' => [['DIV', 'P', '>', 'SPAN']],
+			'last, after one part' => [['TABLE', 'TR:LAST-CHILD']],
+		];
+	}
+
 	public function testNthchild_WithOdd()
 	{
 		$this->assertTrue($this->parser->matchesNthChild(['ODD'], 0)); // row 1
