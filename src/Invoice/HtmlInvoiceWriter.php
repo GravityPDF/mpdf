@@ -4,7 +4,6 @@ namespace Mpdf\Invoice;
 
 use Mpdf\MpdfException;
 use Mpdf\Strict;
-use Mpdf\Utils\Arrays;
 
 /**
  * Writes Cross Industry Invoice XML as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how
@@ -57,6 +56,7 @@ class HtmlInvoiceWriter
 		'384' => 'Corrected invoice',
 		'386' => 'Prepayment invoice',
 		'389' => 'Self-billed invoice',
+		'383' => 'Debit note',
 		'issueDate' => 'Issue date',
 		'deliveryDate' => 'Delivery date',
 		'dueDate' => 'Due date',
@@ -75,7 +75,12 @@ class HtmlInvoiceWriter
 		'pricePer' => '%1$s per %2$s',
 		'vat' => 'VAT',
 		'notSubjectToVat' => 'Not subject to VAT',
+		'exempt' => 'Exempt from VAT',
+		'reverseCharge' => 'Reverse charge',
+		'intraCommunitySupply' => 'Intra-community supply',
+		'export' => 'Export outside the EU',
 		'vatGroup' => 'VAT %1$s on %2$s',
+		'vatCategoryGroup' => '%1$s on %2$s',
 		'amount' => 'Amount',
 		'allowance' => 'Discount',
 		'charge' => 'Charge',
@@ -96,12 +101,26 @@ class HtmlInvoiceWriter
 		'earlyPaymentDiscountOn' => '%1$s discount on %3$s if paid within %2$s',
 		'latePaymentPenalty' => '%1$s penalty if paid after %2$s',
 		'latePaymentPenaltyOn' => '%1$s penalty on %3$s if paid after %2$s',
+		'minute' => '%s minute',
+		'minutes' => '%s minutes',
+		'hour' => '%s hour',
+		'hours' => '%s hours',
 		'day' => '%s day',
 		'days' => '%s days',
 		'week' => '%s week',
 		'weeks' => '%s weeks',
 		'month' => '%s month',
 		'months' => '%s months',
+		'year' => '%s year',
+		'years' => '%s years',
+		'kilogram' => '%s kg',
+		'tonne' => '%s t',
+		'metre' => '%s m',
+		'kilometre' => '%s km',
+		'squareMetre' => '%s m²',
+		'cubicMetre' => '%s m³',
+		'litre' => '%s l',
+		'kilowattHour' => '%s kWh',
 		'vatDueOnInvoice' => 'VAT is due on the invoice date',
 		'vatDueOnDelivery' => 'VAT is due on delivery',
 		'vatDueOnPayment' => 'VAT is due on payment',
@@ -115,12 +134,48 @@ class HtmlInvoiceWriter
 	private static $vatDueDateLabels = ['5' => 'vatDueOnInvoice', '29' => 'vatDueOnDelivery', '72' => 'vatDueOnPayment'];
 
 	/**
-	 * The singular and plural labels for each unit a payment period is measured in, by its UN/ECE Recommendation 20
-	 * code
+	 * The singular and plural labels of the units quantities and payment periods are given in, by UN/ECE Recommendation
+	 * 20 code. A unit written as a symbol has one label for both. A count of pieces has none, so it prints as the
+	 * number alone.
 	 *
 	 * @var string[][]
 	 */
-	private static $periodLabels = ['DAY' => ['day', 'days'], 'WEE' => ['week', 'weeks'], 'MON' => ['month', 'months']];
+	private static $unitLabels = [
+		'MIN' => ['minute', 'minutes'],
+		'HUR' => ['hour', 'hours'],
+		'DAY' => ['day', 'days'],
+		'WEE' => ['week', 'weeks'],
+		'MON' => ['month', 'months'],
+		'ANN' => ['year', 'years'],
+		'KGM' => ['kilogram', 'kilogram'],
+		'TNE' => ['tonne', 'tonne'],
+		'MTR' => ['metre', 'metre'],
+		'KMT' => ['kilometre', 'kilometre'],
+		'MTK' => ['squareMetre', 'squareMetre'],
+		'MTQ' => ['cubicMetre', 'cubicMetre'],
+		'LTR' => ['litre', 'litre'],
+		'KWH' => ['kilowattHour', 'kilowattHour'],
+	];
+
+	/**
+	 * The label for each UNTDID 5305 VAT category that has no rate to print in its place
+	 *
+	 * @var string[]
+	 */
+	private static $vatCategoryLabels = [
+		'O' => 'notSubjectToVat',
+		'E' => 'exempt',
+		'AE' => 'reverseCharge',
+		'K' => 'intraCommunitySupply',
+		'G' => 'export',
+	];
+
+	/**
+	 * The UNTDID 1001 type codes EN 16931 counts as credit notes, titled as 381 unless given a title of their own
+	 *
+	 * @var string[]
+	 */
+	private static $creditNoteTypes = ['81', '83', '261', '262', '296', '308', '381', '396', '420', '458', '532'];
 
 	/**
 	 * @var string[]
@@ -172,7 +227,7 @@ class HtmlInvoiceWriter
 	{
 		$invoice = (new CiiInvoiceReader())->read($xml);
 
-		$title = Arrays::get($this->labels, $invoice['typeCode'], $this->labels['380']);
+		$title = $this->title($invoice['typeCode']);
 
 		$html = $this->styles ? self::$css . "\n" : '';
 		$html .= '<h1>' . $this->escape($title . ' ' . $invoice['id']) . '</h1>' . "\n";
@@ -294,7 +349,7 @@ class HtmlInvoiceWriter
 
 			foreach ($invoice['lines'] as $line) {
 				$html .= $this->row('td', $this->item($line, $currency), [
-					$this->number($line['quantity']),
+					$line['quantity'] !== null ? $this->quantity($line['quantity'], $line['unitCode']) : '',
 					$this->unitPrice($line, $currency),
 					$this->rate($line['vatCategory'], $line['vatRate']),
 					$this->money($line['netAmount'], $currency),
@@ -345,7 +400,7 @@ class HtmlInvoiceWriter
 			return $price;
 		}
 
-		return $this->labelled('pricePer', $price, $this->formatter->number($line['basisQuantity']));
+		return $this->labelled('pricePer', $price, $this->quantity($line['basisQuantity'], $line['basisQuantityUnit']));
 	}
 
 	/**
@@ -423,8 +478,11 @@ class HtmlInvoiceWriter
 		$totals[] = [$this->labels['taxBasisTotal'], $sums['taxBasisTotal']];
 
 		foreach ($invoice['vatBreakdown'] as $group) {
-			$label = $group['category'] === 'O' ? $this->labels['notSubjectToVat'] : $this->labelled('vatGroup', $this->rate($group['category'], $group['rate']), $this->money($group['basis'], $currency));
-			if ($group['exemptionReason'] !== null) {
+			$category = $this->vatCategory($group['category']);
+			$basis = $this->money($group['basis'], $currency);
+			$label = $category !== null ? $this->labelled('vatCategoryGroup', $category, $basis) : $this->labelled('vatGroup', $this->rate($group['category'], $group['rate']), $basis);
+			// The reason is often the category's own name, which the label already gives
+			if ($group['exemptionReason'] !== null && strcasecmp($group['exemptionReason'], (string) $category) !== 0) {
 				$label .= ' (' . $group['exemptionReason'] . ')';
 			}
 			$totals[] = [$label, $group['amount']];
@@ -541,7 +599,7 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * A period by its unit's label, singular for exactly one; a unit without a label is written by its code
+	 * A payment period by its unit's label; a unit without one is written by its code, as a bare number would say nothing
 	 *
 	 * @param float $length
 	 * @param string|null $unit UN/ECE Recommendation 20 code, e.g. DAY
@@ -550,12 +608,41 @@ class HtmlInvoiceWriter
 	 */
 	private function period($length, $unit)
 	{
-		$number = $this->formatter->number($length);
-		if (!isset(self::$periodLabels[(string) $unit])) {
-			return trim($number . ' ' . $unit);
+		$measure = $this->measure($length, $unit);
+
+		return $measure !== null ? $measure : trim($this->formatter->number($length) . ' ' . $unit);
+	}
+
+	/**
+	 * A quantity by its unit's label, or the number alone for a count of pieces or a unit without a label
+	 *
+	 * @param float $quantity
+	 * @param string|null $unit UN/ECE Recommendation 20 code, e.g. HUR
+	 *
+	 * @return string
+	 */
+	private function quantity($quantity, $unit)
+	{
+		$measure = $this->measure($quantity, $unit);
+
+		return $measure !== null ? $measure : $this->formatter->number($quantity);
+	}
+
+	/**
+	 * A number by its unit's label, singular for exactly one, or null for a unit without a label
+	 *
+	 * @param float $number
+	 * @param string|null $unit UN/ECE Recommendation 20 code
+	 *
+	 * @return string|null
+	 */
+	private function measure($number, $unit)
+	{
+		if (!isset(self::$unitLabels[(string) $unit])) {
+			return null;
 		}
 
-		return $this->labelled(self::$periodLabels[$unit][$length == 1 ? 0 : 1], $number);
+		return $this->labelled(self::$unitLabels[$unit][$number == 1 ? 0 : 1], $this->formatter->number($number));
 	}
 
 	/**
@@ -590,7 +677,7 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * A line's or group's VAT: the rate, or that it is not subject to VAT (category O), which has none
+	 * A line's or group's VAT: its category's label for a category without a rate to print, or the rate
 	 *
 	 * @param string|null $category
 	 * @param float|null $rate
@@ -599,23 +686,40 @@ class HtmlInvoiceWriter
 	 */
 	private function rate($category, $rate)
 	{
-		if ($category === 'O') {
-			return $this->labels['notSubjectToVat'];
+		$label = $this->vatCategory($category);
+		if ($label !== null) {
+			return $label;
 		}
 
 		return $rate !== null ? $this->formatter->percent($rate) : '';
 	}
 
 	/**
-	 * A quantity as the formatter writes it, or nothing when there is none
+	 * The label of a VAT category without a rate to print, such as the reverse charge, or null for any other
 	 *
-	 * @param float|null $number
+	 * @param string|null $category UNTDID 5305 code
+	 *
+	 * @return string|null
+	 */
+	private function vatCategory($category)
+	{
+		return isset(self::$vatCategoryLabels[(string) $category]) ? $this->labels[self::$vatCategoryLabels[$category]] : null;
+	}
+
+	/**
+	 * The title for a type of invoice: its own, the credit note's for any credit note without one, or the invoice's
+	 *
+	 * @param string|null $typeCode UNTDID 1001 code
 	 *
 	 * @return string
 	 */
-	private function number($number)
+	private function title($typeCode)
 	{
-		return $number !== null ? $this->formatter->number($number) : '';
+		if (isset($this->labels[(string) $typeCode])) {
+			return $this->labels[$typeCode];
+		}
+
+		return $this->labels[in_array((string) $typeCode, self::$creditNoteTypes, true) ? '381' : '380'];
 	}
 
 	/**

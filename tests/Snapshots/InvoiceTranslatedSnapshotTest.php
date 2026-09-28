@@ -7,8 +7,8 @@ use Mpdf\Invoice\HtmlInvoiceWriter;
 use Mpdf\Invoice\Preset\FrancePreset;
 
 /**
- * A credit note in French: its labels translated, with a space before each colon, a decimal comma, no-break spaces
- * between thousands and before the euro and percent signs, and dates written day first
+ * A credit note in French: its labels and units translated, with a space before each colon, a decimal comma, no-break
+ * spaces between thousands and before the euro and percent signs, and dates written day first
  *
  * @group snapshot
  */
@@ -70,6 +70,8 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 			'iban' => 'IBAN : %s',
 			'bic' => 'BIC : %s',
 			'accountName' => 'Titulaire du compte : %s',
+			'hour' => '%s heure',
+			'hours' => '%s heures',
 		]);
 	}
 

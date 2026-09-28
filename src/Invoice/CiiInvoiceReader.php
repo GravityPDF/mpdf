@@ -19,8 +19,8 @@ use Mpdf\Strict;
  * - precedingInvoices: [id, issueDate][]
  * - seller, buyer: a party; deliverTo: a party or null. A party is name, address (as Formatter::address() takes it),
  *   vatId, taxNumber, contact (name, phone, email), electronicAddress and electronicAddressScheme
- * - lines: name, description, quantity, unitCode, unitPrice, basisQuantity, vatCategory, vatRate, netAmount and
- *   allowanceCharges
+ * - lines: name, description, quantity, unitCode, unitPrice, basisQuantity, basisQuantityUnit, vatCategory, vatRate,
+ *   netAmount and allowanceCharges
  * - allowanceCharges, on the invoice or a line: charge (bool), amount, reason and reasonCode
  * - vatBreakdown: category, rate, basis, amount, exemptionReason and dueDateCode (UNTDID 2475)
  * - totals: lineTotal, chargeTotal, allowanceTotal, taxBasisTotal, taxTotal, roundingAmount, grandTotal, prepaidAmount
@@ -219,6 +219,7 @@ class CiiInvoiceReader
 				'unitCode' => $this->text('@unitCode', $quantity),
 				'unitPrice' => $this->amount('ram:ChargeAmount', $price),
 				'basisQuantity' => $this->amount('ram:BasisQuantity', $price),
+				'basisQuantityUnit' => $this->text('ram:BasisQuantity/@unitCode', $price),
 				'vatCategory' => $this->text('ram:ApplicableTradeTax/ram:CategoryCode', $settlement),
 				'vatRate' => $this->amount('ram:ApplicableTradeTax/ram:RateApplicablePercent', $settlement),
 				'netAmount' => $this->amount('ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount', $settlement),

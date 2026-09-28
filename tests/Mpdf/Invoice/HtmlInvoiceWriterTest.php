@@ -22,13 +22,15 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Without a prepayment the grand total is what is due, and an exemption reason follows its VAT group
+	 * A reverse charge line and group are labelled as one, without repeating an exemption reason that says the same,
+	 * and without a prepayment the grand total is what is due
 	 */
 	public function testWritesTheReverseCharge()
 	{
 		$html = $this->write('en16931-reverse-charge.xml');
 
-		$this->assertStringContainsString('VAT 0% on 900.00 EUR (Reverse charge)', $html);
+		$this->assertStringContainsString('<td class="invoice-number">Reverse charge</td>', $html);
+		$this->assertStringContainsString('>Reverse charge on 900.00 EUR</td>', $html);
 		$this->assertStringContainsString('<strong>900.00 EUR</strong>', $html);
 		$this->assertStringNotContainsString('Amount due', $html);
 	}
@@ -46,6 +48,58 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringStartsWith('<h1>Invoice INV-2026-0001</h1>', $unstyled);
 		$this->assertStringContainsString('<table class="invoice-lines" width="100%">', $unstyled);
 		$this->assertStringEndsWith($unstyled, $styled);
+	}
+
+	/**
+	 * A quantity is written with its unit's label, singular for one and translatable, and a count of pieces or a unit
+	 * without a label as the number alone
+	 */
+	public function testWritesQuantitiesWithTheirUnits()
+	{
+		$xml = str_replace(
+			['<ram:BilledQuantity unitCode="HUR">7.5</ram:BilledQuantity>', '<ram:BilledQuantity unitCode="C62">3</ram:BilledQuantity>'],
+			['<ram:BilledQuantity unitCode="HUR">1</ram:BilledQuantity>', '<ram:BilledQuantity unitCode="KGM">3</ram:BilledQuantity>'],
+			$this->invoiceXml('en16931.xml')
+		);
+
+		$this->assertStringContainsString('<td class="invoice-number">1 hour</td>', $this->htmlWriter()->write($xml));
+		$this->assertStringContainsString('<td class="invoice-number">3 kg</td>', $this->htmlWriter()->write($xml));
+		$this->assertStringContainsString('<td class="invoice-number">1 Stunde</td>', $this->htmlWriter(['hour' => '%s Stunde'])->write($xml));
+		$this->assertStringContainsString('<td class="invoice-number">3</td>', $this->write('en16931.xml'));
+		$this->assertStringContainsString('<td class="invoice-number">10</td>', $this->write('en16931-intra-community.xml'));
+	}
+
+	/**
+	 * Each VAT category without a rate to print is labelled by name, translatably, and an exemption reason that says
+	 * more than the name still follows it
+	 */
+	public function testLabelsVatCategoriesWithoutARate()
+	{
+		$usd = $this->write('en16931-usd.xml');
+		$this->assertStringContainsString('<td class="invoice-number">Export outside the EU</td>', $usd);
+		$this->assertStringContainsString('>Export outside the EU on 6,062.47 USD</td>', $usd);
+
+		$intraCommunity = $this->htmlWriter(['intraCommunitySupply' => 'Livraison intracommunautaire'])->write($this->invoiceXml('en16931-intra-community.xml'));
+		$this->assertStringContainsString('>Livraison intracommunautaire on 1,890.00 EUR (Intra-community supply)</td>', $intraCommunity);
+
+		$exempt = str_replace(['<ram:CategoryCode>AE</ram:CategoryCode>', 'Reverse charge'], ['<ram:CategoryCode>E</ram:CategoryCode>', 'Article 132 of Directive 2006/112/EC'], $this->invoiceXml('en16931-reverse-charge.xml'));
+		$this->assertStringContainsString('>Exempt from VAT on 900.00 EUR (Article 132 of Directive 2006/112/EC)</td>', $this->htmlWriter()->write($exempt));
+	}
+
+	/**
+	 * Any credit note without a title of its own takes the credit note's, and a debit note has its own
+	 */
+	public function testTitlesCreditNotesByTheirType()
+	{
+		foreach (['261' => 'Credit note', '396' => 'Credit note', '383' => 'Debit note', '326' => 'Invoice'] as $code => $title) {
+			$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>' . $code . '</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
+
+			$this->assertStringContainsString('<h1>' . $title . ' INV-2026-0001</h1>', $this->htmlWriter()->write($xml), $code);
+		}
+
+		$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>261</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
+		$this->assertStringContainsString('<h1>Avoir INV-2026-0001</h1>', $this->htmlWriter(['381' => 'Avoir'])->write($xml));
+		$this->assertStringContainsString('<h1>Autofacture d’avoir INV-2026-0001</h1>', $this->htmlWriter(['381' => 'Avoir', '261' => 'Autofacture d’avoir'])->write($xml));
 	}
 
 	/**
@@ -97,7 +151,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$html = $this->write('en16931-not-subject.xml');
 
 		$this->assertStringContainsString('<td class="invoice-number">Not subject to VAT</td>', $html);
-		$this->assertStringContainsString('>Not subject to VAT (Outside the scope of VAT)</td>', $html);
+		$this->assertStringContainsString('>Not subject to VAT on 10.00 EUR (Outside the scope of VAT)</td>', $html);
 	}
 
 	/**
@@ -108,7 +162,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$formatter = (new Formatter(new GermanyPreset()))->withCurrencyFormat('EUR', '€%s')->withPercentFormat('%s pc');
 		$html = (new HtmlInvoiceWriter($formatter))->write($this->invoiceXml('en16931.xml'));
 
-		$this->assertStringContainsString('>7,5<', $html);
+		$this->assertStringContainsString('>7,5 hours<', $html);
 		$this->assertStringContainsString('>€12,99<', $html);
 		$this->assertStringContainsString('>5,5 pc<', $html);
 		$this->assertStringContainsString('<strong>€1.021,11</strong>', $html);
@@ -236,11 +290,11 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$terms = '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentPenaltyTerms><ram:BasisPeriodMeasure unitCode="MON">1</ram:BasisPeriodMeasure><ram:CalculationPercent>1.5</ram:CalculationPercent></ram:ApplicableTradePaymentPenaltyTerms>'
 			. '<ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="DAY">10</ram:BasisPeriodMeasure><ram:BasisAmount>900.00</ram:BasisAmount><ram:CalculationPercent>2</ram:CalculationPercent></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>'
 			. '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="WEE">2</ram:BasisPeriodMeasure><ram:ActualDiscountAmount>10.00</ram:ActualDiscountAmount></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>'
-			. '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="HUR">48</ram:BasisPeriodMeasure><ram:CalculationPercent>1</ram:CalculationPercent></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>';
+			. '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="XYZ">48</ram:BasisPeriodMeasure><ram:CalculationPercent>1</ram:CalculationPercent></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>';
 		$xml = str_replace('</ram:SpecifiedTradePaymentTerms>', '</ram:SpecifiedTradePaymentTerms>' . $terms, $this->invoiceXml('en16931.xml'));
 		$html = $this->htmlWriter()->write($xml);
 
-		$this->assertStringContainsString('<p>30 days net<br>2% discount on 900.00 EUR if paid within 10 days<br>10.00 EUR discount if paid within 2 weeks<br>1% discount if paid within 48 HUR<br>1.5% penalty if paid after 1 month<br>', $html);
+		$this->assertStringContainsString('<p>30 days net<br>2% discount on 900.00 EUR if paid within 10 days<br>10.00 EUR discount if paid within 2 weeks<br>1% discount if paid within 48 XYZ<br>1.5% penalty if paid after 1 month<br>', $html);
 
 		$translated = $this->htmlWriter(['latePaymentPenalty' => '%1$s de pénalité après %2$s', 'month' => '%s mois'])->write($xml);
 		$this->assertStringContainsString('<br>1.5% de pénalité après 1 mois<br>', $translated);
@@ -253,12 +307,12 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$xml = str_replace(
 			['<ram:ChargeAmount>12.99</ram:ChargeAmount>', '<ram:TotalPrepaidAmount>100.00</ram:TotalPrepaidAmount>', '<ram:DuePayableAmount>1021.11</ram:DuePayableAmount>'],
-			['<ram:ChargeAmount>12.99</ram:ChargeAmount><ram:BasisQuantity unitCode="C62">10</ram:BasisQuantity>', '<ram:TotalPrepaidAmount>100.00</ram:TotalPrepaidAmount><ram:RoundingAmount>-0.11</ram:RoundingAmount>', '<ram:DuePayableAmount>1021.00</ram:DuePayableAmount>'],
+			['<ram:ChargeAmount>12.99</ram:ChargeAmount><ram:BasisQuantity unitCode="KGM">10</ram:BasisQuantity>', '<ram:TotalPrepaidAmount>100.00</ram:TotalPrepaidAmount><ram:RoundingAmount>-0.11</ram:RoundingAmount>', '<ram:DuePayableAmount>1021.00</ram:DuePayableAmount>'],
 			$this->invoiceXml('en16931.xml')
 		);
 		$html = $this->htmlWriter()->write($xml);
 
-		$this->assertStringContainsString('>12.99 EUR per 10<', $html);
+		$this->assertStringContainsString('>12.99 EUR per 10 kg<', $html);
 		$this->assertStringContainsString('>Rounding</td><td class="invoice-number">-0.11 EUR<', $html);
 		$this->assertStringContainsString('>Amount due</td><td class="invoice-number"><strong>1,021.00 EUR</strong><', $html);
 	}
