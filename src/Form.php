@@ -1734,7 +1734,7 @@ class Form
 			$top = min($selected);
 		}
 
-		$layout = ['size' => $size, 'lines' => [], 'highlights' => []];
+		$layout = ['size' => $size, 'lines' => [], 'highlights' => [], 'scale' => 1];
 		foreach (array_slice($lines, $top, $flow === 'list' ? $rows : null, true) as $i => $line) {
 			if ($flow === 'list') {
 				$rowBottom = $height - $border - ($i - $top + 1) * $rowHeight;
@@ -1888,9 +1888,12 @@ class Form
 			return;
 		}
 
-		$width = $form['w'] * Mpdf::SCALE;
-		$height = $form['h'] * Mpdf::SCALE;
-		$border = (float) $form['BS_W'];
+		// A widget scaled after it was laid out, as WriteFixedPosHTML() shrinks a block to fit, is drawn at its layout's
+		// size and scaled to the widget
+		$scale = $form['AP']['scale'];
+		$width = $form['w'] * Mpdf::SCALE / $scale;
+		$height = $form['h'] * Mpdf::SCALE / $scale;
+		$border = (float) $form['BS_W'] / $scale;
 
 		$s = sprintf('%s 0 0 %.3F %.3F re f', $this->appearanceColor($form['BG_C'], 'rg'), $width, $height);
 		if ($border > 0) {
@@ -1915,7 +1918,11 @@ class Form
 			$s .= ' ' . implode(' ', $form['AP']['lines']) . ' Q EMC';
 		}
 
-		$this->writeAppearanceStream($s, [$width, $height]);
+		if ($scale != 1) {
+			$s = sprintf('q %.5F 0 0 %.5F 0 0 cm %s Q', $scale, $scale, $s);
+		}
+
+		$this->writeAppearanceStream($s, [$width * $scale, $height * $scale]);
 	}
 
 	/**
