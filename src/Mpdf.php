@@ -2280,13 +2280,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 *
 	 *     $mpdf->SetEmbeddedInvoice(new FacturX($xml));
 	 *
-	 * mPDF neither writes nor validates the XML. A package such as horstoeko/zugferd writes it:
+	 * mPDF neither writes nor validates the XML. A package such as easybill/e-invoicing writes it, or horstoeko/zugferd on
+	 * PHP older than 8.3:
 	 *
-	 *     $xml = ZugferdDocumentBuilder::createNew(ZugferdProfiles::PROFILE_EN16931)->...->getContent();
+	 *     $xml = Transformer::create()->transformToXml($crossIndustryInvoice); // easybill/e-invoicing
+	 *     $xml = ZugferdDocumentBuilder::createNew(ZugferdProfiles::PROFILE_EN16931)->...->getContent(); // horstoeko/zugferd
 	 *
 	 * Extend FacturX for a later version of Factur-X, or implement EmbeddedInvoiceInterface for a specification that differs further.
 	 *
 	 * @see https://fnfe-mpe.org/factur-x/factur-x_en/ Factur-X, the specification shared with ZUGFeRD
+	 * @see https://github.com/easybill/e-invoicing easybill/e-invoicing
 	 * @see https://github.com/horstoeko/zugferd horstoeko/zugferd
 	 *
 	 * @param \Mpdf\Invoice\EmbeddedInvoiceInterface $invoice

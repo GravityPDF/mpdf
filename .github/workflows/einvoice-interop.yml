@@ -22,12 +22,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # horstoeko/zugferd and horstoeko/zugferdublbridge need PHP 7.3, so they are installed here rather than in require-dev
-        php-version:
-          - "7.3"
-          - "8.5"
-
-        operating-system: [ubuntu-latest]
+        # The packages need PHP 7.3 (horstoeko/zugferd) and 8.3 (easybill/e-invoicing), so they are installed here rather
+        # than in require-dev, each on the versions it supports
+        include:
+          - php-version: "7.3"
+            operating-system: "ubuntu-latest"
+            packages: "horstoeko/zugferd"
+          - php-version: "8.5"
+            operating-system: "ubuntu-latest"
+            packages: "horstoeko/zugferd easybill/e-invoicing"
 
     steps:
       - name: "Checkout"
@@ -55,7 +58,7 @@ jobs:
           restore-keys: "composer-${{ runner.os }}-php${{ matrix.php-version }}-einvoice-"
 
       - name: "Install dependencies"
-        run: "composer install --no-interaction --no-progress && composer require --dev horstoeko/zugferd horstoeko/zugferdublbridge --no-interaction --no-progress"
+        run: "composer install --no-interaction --no-progress && composer require --dev ${{ matrix.packages }} --no-interaction --no-progress"
 
       - name: "Tests"
         run: composer test -- --group=interop

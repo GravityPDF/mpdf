@@ -13,8 +13,9 @@ use Mpdf\Strict;
  * protected method, so a later version or a close relative is a subclass that overrides the ones that changed. The
  * constructor calls them, so they must not rely on state a subclass sets after calling it.
  *
- * It embeds the XML as it is given, without writing or validating it. Write it with a package such as horstoeko/zugferd,
- * and check it with a validator such as Mustang or the one the receiving platform provides.
+ * It embeds the XML as it is given, without writing or validating it. Write it with a package such as easybill/e-invoicing
+ * (or horstoeko/zugferd on PHP older than 8.3), and check it with a validator such as Mustang or the one the receiving
+ * platform provides.
  *
  * @see https://fnfe-mpe.org/factur-x/factur-x_en/ Factur-X, the specification shared with ZUGFeRD
  * @see https://www.ferd-net.de/en/downloads/publications ZUGFeRD
