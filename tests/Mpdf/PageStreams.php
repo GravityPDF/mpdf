@@ -244,6 +244,17 @@ trait PageStreams
 	}
 
 	/**
+	 * The clip path cut before the first picture is placed, and the placement itself, keyed w/h/x/y in points.
+	 */
+	private function clipAndPlacement($stream)
+	{
+		preg_match('/([-\d. ]+ m (?:[-\d. ]+ [lc] )+)W n ([-\d. ]+) cm \/I1 Do Q/', $stream, $matches);
+		$cm = explode(' ', $matches[2]);
+
+		return [$matches[1], ['w' => $cm[0], 'h' => $cm[3], 'x' => $cm[4], 'y' => $cm[5]]];
+	}
+
+	/**
 	 * $needle appears $count times in the string for page $page and not at all in the others
 	 */
 	private function assertOnlyOnPage($page, $count, $needle, array $strings, $what)

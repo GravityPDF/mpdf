@@ -161,6 +161,10 @@ class Table extends Tag
 		} elseif (!empty($attr['WIDTH'])) {
 			$w = $attr['WIDTH'];
 		}
+		// auto is the initial width, which leaves the table as wide as its content
+		if (strtolower($w) === 'auto') {
+			$w = '';
+		}
 
 		if (isset($attr['ALIGN']) && array_key_exists(strtolower($attr['ALIGN']), self::ALIGN)) {
 			$table['a'] = $this->getAlign($attr['ALIGN']);
@@ -679,11 +683,19 @@ class Table extends Tag
 		if ($this->mpdf->tableLevel > 1) {
 			// deal with nested table
 
-			$this->mpdf->_tableColumnWidth($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]], true);
+			$table = &$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]];
+			$unmeasured = empty($table['compressible_images']) ? null : $table;
+			$this->mpdf->_tableColumnWidth($table, true);
 
-			$tmiw = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['miw'];
-			$tmaw = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['maw'];
-			$tl = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['tl'];
+			$tmiw = $table['miw'];
+			$tmiwKept = $tmiw;
+			if ($unmeasured !== null) {
+				$this->measureKeepingImageWidths($unmeasured);
+				$tmiwKept = $unmeasured['miw'];
+			}
+			$tmaw = $table['maw'];
+			$tl = $table['tl'];
+			unset($table, $unmeasured);
 
 			// Go down to lower table level
 			$this->mpdf->tableLevel--;
@@ -729,6 +741,12 @@ class Table extends Tag
 				|| !isset($this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['nestedmiw'])) {
 				$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['nestedmiw'] = $tmiw;
 			}
+			// The width the nested tables need if the table they are in is shrunk to fit its page
+			$cell = &$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col];
+			if ($tmiwKept > $tmiw || isset($cell['nestedmiw_kept'])) {
+				$cell['nestedmiw_kept'] = max(isset($cell['nestedmiw_kept']) ? $cell['nestedmiw_kept'] : $cell['nestedmiw'], $tmiwKept);
+			}
+			unset($cell);
 			$this->mpdf->tdbegin = true;
 			$this->mpdf->nestedtablejustfinished = true;
 			$this->mpdf->ignorefollowingspaces = true;
@@ -758,7 +776,8 @@ class Table extends Tag
 				$this->mpdf->kwt_height = 0;
 			}
 
-			list($check, $tablemiw) = $this->mpdf->_tableColumnWidth($this->mpdf->table[1][1], true);
+			$unmeasured = empty($this->mpdf->table[1][1]['compressible_images']) ? null : $this->mpdf->table[1][1];
+			$check = $this->measureTopLevelTable($unmeasured);
 			$save_table = $this->mpdf->table;
 			$reset_to_minimum_width = false;
 			$added_page = false;
@@ -773,6 +792,13 @@ class Table extends Tag
 					$this->mpdf->tbrot_maxw = $this->mpdf->h - ($this->mpdf->y + $this->mpdf->bMargin + 5) - $this->mpdf->kwt_height;
 					//$check = $tablemiw/$this->mpdf->tbrot_maxw; 	// undo any shrink
 					$check = 1;  // undo any shrink
+					// Rotated rather than shrunk, it is measured again for the room it has now, where its pictures need not
+					// keep the widths they kept for a shrink to fit what was left of the last page
+					if ($unmeasured !== null) {
+						$this->mpdf->table[1][1] = $unmeasured;
+						$this->measureTopLevelTable($unmeasured);
+						$save_table = $this->mpdf->table;
+					}
 				}
 				$reset_to_minimum_width = true;
 			}
@@ -1244,6 +1270,41 @@ class Table extends Tag
 			$this->mpdf->InlineBDFctr = $save_bflpc; // mPDF 6
 			$this->mpdf->restoreInlineProperties($save_silp);
 		}
+	}
+
+	/**
+	 * Measure the top-level table's columns against the room it has. One too wide for it is shrunk as a whole,
+	 * pictures and all, so it is measured again with the pictures keeping their widths rather than letting a picture
+	 * sized by a percentage of its cell narrow that cell to nothing.
+	 *
+	 * @param array|null $unmeasured The table before measuring, when it has pictures a column can narrow
+	 *
+	 * @return float How many times too wide for its room the table is
+	 */
+	private function measureTopLevelTable($unmeasured)
+	{
+		list($check) = $this->mpdf->_tableColumnWidth($this->mpdf->table[1][1], true);
+		if ($check > 1 && $unmeasured !== null) {
+			$this->mpdf->table[1][1] = $unmeasured;
+			list($check) = $this->measureKeepingImageWidths($this->mpdf->table[1][1]);
+		}
+
+		return $check;
+	}
+
+	/**
+	 * Measure a table's columns as though the pictures in its cells had not been given a percentage width or
+	 * max-width, the way a table shrunk to fit its page measures them
+	 *
+	 * @param array $table
+	 *
+	 * @return array What _tableColumnWidth() returns
+	 */
+	private function measureKeepingImageWidths(array &$table)
+	{
+		$table['keep_image_widths'] = true;
+
+		return $this->mpdf->_tableColumnWidth($table, true);
 	}
 
 	/**

@@ -1,0 +1,244 @@
+<?php
+
+namespace Mpdf;
+
+/**
+ * A percentage width, min-width or max-width on an image in a table cell is of the cell's content width, which is only
+ * known once the table's columns are laid out.
+ *
+ * The tables are 180mm wide, the whole of an A4 page inside its default margins, with no cell padding or borders, so a
+ * column's width is its content width.
+ */
+class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
+{
+
+	use PageStreams;
+
+	/**
+	 * An image, by default 400px wide, 105.8mm at 96dpi
+	 *
+	 * @param string $style
+	 * @param string $width Its width attribute
+	 *
+	 * @return string
+	 */
+	private function image($style, $width = '400')
+	{
+		return '<img src="' . __DIR__ . '/../data/img/bayeux2.jpg" width="' . $width . '" style="' . $style . '">';
+	}
+
+	/**
+	 * A 180mm table of one row, its cells given as their width attribute and content
+	 *
+	 * @param array $cells
+	 *
+	 * @return string
+	 */
+	private function table(array $cells)
+	{
+		$html = '<style>table { width: 100%; border-collapse: collapse; } td { padding: 0; }</style><table><tr>';
+		foreach ($cells as $cell) {
+			$html .= '<td' . ($cell[0] !== '' ? ' width="' . $cell[0] . '"' : '') . '>' . $cell[1] . '</td>';
+		}
+
+		return $html . '</tr></table>';
+	}
+
+	/**
+	 * Three 60mm columns with $content in the middle one
+	 *
+	 * @param string $content
+	 *
+	 * @return string
+	 */
+	private function middleOfThree($content)
+	{
+		return $this->table([['33.3333%', 'one'], ['33.3333%', $content], ['', 'three']]);
+	}
+
+	/**
+	 * Where each image on a page is placed, keyed w/h/x in millimetres
+	 *
+	 * @param string $html
+	 * @param int $page Counted from 0
+	 *
+	 * @return array[]
+	 */
+	private function placements($html, $page = 0)
+	{
+		$pages = $this->pages($this->render($html));
+		$this->assertArrayHasKey($page, $pages);
+		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $pages[$page], $matches, PREG_SET_ORDER);
+
+		return array_map(function ($match) {
+			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $match[2] / Mpdf::SCALE, 'x' => $match[3] / Mpdf::SCALE];
+		}, $matches);
+	}
+
+	/**
+	 * The width of the only image on the first page, in millimetres
+	 *
+	 * @param string $html
+	 *
+	 * @return float
+	 */
+	private function drawnWidth($html)
+	{
+		$placements = $this->placements($html);
+		$this->assertCount(1, $placements);
+
+		return $placements[0]['w'];
+	}
+
+	/**
+	 * Lengths given as percentages, each in the middle of three 60mm columns, and an absolute length that means the
+	 * same in a cell as anywhere else
+	 *
+	 * @return array[]
+	 */
+	public static function percentages()
+	{
+		return [
+			'an absolute max-width is unchanged' => ['max-width: 20mm', 20],
+			'max-width caps a wider picture' => ['max-width: 20%', 12],
+			'max-width: 100% keeps it inside its cell' => ['max-width: 100%', 60],
+			'width in CSS' => ['width: 50%', 30],
+			'width as an attribute' => ['', 60, '100%'],
+			'min-width widens a narrower picture' => ['width: 10mm; min-width: 50%', 30],
+		];
+	}
+
+	/**
+	 * A percentage width, min-width or max-width is of the cell the image is in
+	 *
+	 * @dataProvider percentages
+	 *
+	 * @param string $style
+	 * @param float $expected
+	 * @param string $width
+	 */
+	public function testAPercentageIsOfTheCell($style, $expected, $width = '400')
+	{
+		$this->assertEqualsWithDelta($expected, $this->drawnWidth($this->middleOfThree($this->image($style, $width))), 0.05);
+	}
+
+	/**
+	 * Outside a table a percentage is still of the block the image is in
+	 */
+	public function testOutsideATableAPercentageIsOfTheBlock()
+	{
+		$this->assertEqualsWithDelta(12, $this->drawnWidth('<div style="width: 60mm">' . $this->image('max-width: 20%') . '</div>'), 0.05);
+	}
+
+	/**
+	 * A picture narrowed by a percentage does not widen its column: the columns keep the 20%, 20% and 60% they were
+	 * given, so the picture sits 36mm in from the left margin and is 36mm wide
+	 */
+	public function testThePictureLeavesTheColumnWidthsAlone()
+	{
+		$html = $this->table([['20%', 'one'], ['20%', $this->image('max-width: 100%')], ['60%', 'three']]);
+
+		$placement = $this->placements($html)[0];
+		$this->assertEqualsWithDelta(36, $placement['w'], 0.05);
+		$this->assertEqualsWithDelta(15 + 36, $placement['x'], 0.05);
+	}
+
+	/**
+	 * In a table shrunk to fit its page a percentage is of the cell as it is drawn: a 300mm column and a 60mm one are
+	 * halved to fit 180mm, so a picture given min-width: 100% fills 30mm
+	 */
+	public function testInAShrunkTableAPercentageIsOfTheCellAsDrawn()
+	{
+		$html = '<style>table { border-collapse: collapse; } td { padding: 0; }</style><table><tr><td style="width: 300mm">one</td>'
+			. '<td style="width: 60mm">' . $this->image('width: 10mm; min-width: 100%') . '</td></tr></table>';
+
+		$this->assertEqualsWithDelta(30, $this->drawnWidth($html), 0.05);
+	}
+
+	/**
+	 * In a nested table a percentage is of the inner cell: a 90mm table in the second half of the page, split 50/50
+	 */
+	public function testInANestedTableAPercentageIsOfTheInnerCell()
+	{
+		$inner = '<table style="width: 100%; border-collapse: collapse"><tr><td width="50%">one</td><td width="50%">'
+			. $this->image('width: 100%') . '</td></tr></table>';
+		$html = $this->table([['50%', 'one'], ['50%', $inner]]);
+
+		$placement = $this->placements($html)[0];
+		$this->assertEqualsWithDelta(45, $placement['w'], 0.05);
+		$this->assertEqualsWithDelta(15 + 90 + 45, $placement['x'], 0.05);
+	}
+
+	/**
+	 * A table of width: auto is sized by its content, as one given no width is, so a picture's column is as wide as
+	 * the picture rather than squeezing it to nothing
+	 */
+	public function testATableOfAutoWidthIsSizedByItsContent()
+	{
+		foreach (['max-width: 100%', 'width: 50%'] as $style) {
+			$cells = '<tr><td>one</td><td>' . $this->image($style) . '</td></tr></table>';
+
+			$this->assertEqualsWithDelta($this->drawnWidth('<table>' . $cells), $this->drawnWidth('<table style="width: auto">' . $cells), 0.05, $style);
+		}
+	}
+
+	/**
+	 * Tables too wide for the page, with long unbreakable words in five columns and the image in a sixth, either
+	 * directly or in a nested table
+	 *
+	 * @return array[]
+	 */
+	public static function overflowingTables()
+	{
+		$words = str_repeat('<td>https://example.com/a-rather-long-unbreakable-url</td>', 5);
+
+		return [
+			'in the table' => ['<table><tr>' . $words . '<td>%s</td></tr></table>'],
+			'in a nested table' => ['<table><tr>' . $words . '<td><table><tr><td>x</td><td>%s</td></tr></table></td></tr></table>'],
+		];
+	}
+
+	/**
+	 * A table too wide for its page is shrunk as a whole: max-width: 100% does not let the cell narrow the picture
+	 * to nothing, and it is drawn as it would be without it
+	 *
+	 * @dataProvider overflowingTables
+	 *
+	 * @param string $table
+	 */
+	public function testAPictureKeepsItsWidthInATableShrunkToFit($table)
+	{
+		$without = $this->drawnWidth(sprintf($table, $this->image('')));
+
+		$this->assertGreaterThan(10, $without);
+		$this->assertEqualsWithDelta($without, $this->drawnWidth(sprintf($table, $this->image('max-width: 100%'))), 0.05);
+	}
+
+	/**
+	 * A rotated table with too little of its page left moves to the next, where its picture is sized against its 40mm
+	 * cell as at the top of a page, not kept at the 105.8mm it was measured with for what was left of the last one
+	 */
+	public function testARotatedTableMovedToANewPageSizesItsPictureAgainstTheCell()
+	{
+		$table = '<table rotate="90" style="border-collapse: collapse"><tr>'
+			. '<td style="width: 70mm; padding: 0">' . $this->image('width: 70mm') . '</td>'
+			. '<td style="width: 40mm; padding: 0">' . $this->image('max-width: 100%') . '</td></tr></table>';
+
+		$this->assertEqualsWithDelta(40, $this->placements($table)[1]['w'], 0.05, 'at the top of a page');
+		$this->assertEqualsWithDelta(40, $this->placements('<div style="height: 200mm"></div>' . $table, 1)[1]['w'], 0.05, 'moved to a new page');
+	}
+
+	/**
+	 * A percentage radius is of the picture's size in its cell, not of the size it had before the table was laid out
+	 */
+	public function testAPercentageRadiusIsOfTheSizedPicture()
+	{
+		$html = $this->middleOfThree($this->image('max-width: 100%; border-radius: 50%'));
+
+		list($clip, $placement) = $this->clipAndPlacement($this->pages($this->render($html))[0]);
+
+		// The clip starts at the top tangent point of the top-left corner, half the picture's width in
+		$this->assertEqualsWithDelta($placement['x'] + $placement['w'] / 2, (float) strtok($clip, ' '), 0.01);
+	}
+
+}
