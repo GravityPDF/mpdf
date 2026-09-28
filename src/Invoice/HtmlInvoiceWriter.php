@@ -17,6 +17,9 @@ use Mpdf\Utils\Arrays;
  *     $mpdf->WriteHTML($writer->write($xml));
  *     $mpdf->SetEmbeddedInvoice(new FacturX($xml));
  *
+ * Its elements carry invoice-* classes, which a <style> block ahead of the invoice draws. withoutStyles() leaves that
+ * block out, for a document that styles them itself.
+ *
  * It reads the XML with CiiInvoiceReader, which neither validates it nor checks its totals.
  */
 class HtmlInvoiceWriter
@@ -131,6 +134,11 @@ class HtmlInvoiceWriter
 	private $formatter;
 
 	/**
+	 * @var bool
+	 */
+	private $styled = true;
+
+	/**
 	 * @param \Mpdf\Invoice\Formatter $formatter
 	 * @param string[] $labels Replacements for any of the default labels, keyed as they are, and titles for any other
 	 *                         type of invoice, keyed by its UNTDID 1001 code
@@ -150,7 +158,21 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The invoice as HTML, headed by its type and number
+	 * A copy writing the invoice without its <style> block, leaving its invoice-* classes to styles of your own
+	 *
+	 * @return self
+	 */
+	public function withoutStyles()
+	{
+		$writer = clone $this;
+		$writer->styled = false;
+
+		return $writer;
+	}
+
+	/**
+	 * The invoice as HTML, headed by its type and number, after the styles its classes are drawn with unless
+	 * withoutStyles() left them out
 	 *
 	 * @param string $xml Cross Industry Invoice XML, at any Factur-X / ZUGFeRD profile or as XRechnung CII
 	 *
@@ -164,7 +186,7 @@ class HtmlInvoiceWriter
 
 		$title = Arrays::get($this->labels, $invoice['typeCode'], $this->labels['380']);
 
-		$html = self::$css . "\n";
+		$html = $this->styled ? self::$css . "\n" : '';
 		$html .= '<h1>' . $this->escape($title . ' ' . $invoice['id']) . '</h1>' . "\n";
 		$html .= $this->details($invoice);
 		$html .= $this->parties($invoice);

@@ -31,6 +31,23 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Without its styles the invoice is the same HTML, its classes left for the document's own, and the writer it was
+	 * copied from keeps them
+	 */
+	public function testLeavesOutItsStyles()
+	{
+		$writer = $this->htmlWriter();
+		$styled = $writer->write($this->xml('en16931.xml'));
+		$unstyled = $writer->withoutStyles()->write($this->xml('en16931.xml'));
+
+		$this->assertStringNotContainsString('<style>', $unstyled);
+		$this->assertStringStartsWith('<h1>Invoice INV-2026-0001</h1>', $unstyled);
+		$this->assertStringContainsString('<table class="invoice-lines" width="100%">', $unstyled);
+		$this->assertStringEndsWith($unstyled, $styled);
+		$this->assertStringStartsWith('<style>', $writer->write($this->xml('en16931.xml')));
+	}
+
+	/**
 	 * Labels given replace the defaults, including the title of each type of invoice
 	 */
 	public function testTakesLabels()
