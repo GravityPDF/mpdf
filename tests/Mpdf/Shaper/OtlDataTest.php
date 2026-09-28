@@ -241,6 +241,21 @@ class OtlDataTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame($this->laidOut([0x41, 0x42], [1 => 'b']), $run);
 	}
 
+	/**
+	 * Text written straight to the page without OpenType layout has no run, and removeChar() still takes the
+	 * character out of the text.
+	 */
+	public function testRemoveCharFromATextWithNoRunEditsTheTextOnly()
+	{
+		foreach ([false, []] as $run) {
+			$text = $this->text([0x41, self::SOFT_HYPHEN, 0x42, self::SOFT_HYPHEN]);
+
+			OtlData::removeChar($text, $run, "\xc2\xad", 'UTF-8');
+
+			$this->assertSame('AB', $text);
+		}
+	}
+
 	public function testNbspToSpaceTurnsEachNoBreakSpaceIntoASpaceInTheTextAndTheRun()
 	{
 		$text = $this->text([self::EMOJI, self::NBSP, 0x41, self::NBSP]);

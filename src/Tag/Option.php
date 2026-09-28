@@ -24,7 +24,7 @@ class Option extends Tag
 			$attr['VALUE'] = UtfString::strcode2utf($attr['VALUE']);
 			$attr['VALUE'] = $this->mpdf->lesser_entity_decode($attr['VALUE']);
 			if ($this->mpdf->onlyCoreFonts) {
-				$attr['VALUE'] = mb_convert_encoding($attr['VALUE'], $this->mpdf->mb_enc, 'UTF-8');
+				$attr['VALUE'] = $this->mpdf->utf8ToWin1252($attr['VALUE'], '');
 			}
 		}
 

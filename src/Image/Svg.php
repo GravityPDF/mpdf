@@ -2597,7 +2597,7 @@ class Svg
 			}
 
 			if ($this->mpdf->usingCoreFont) {
-				$txt = mb_convert_encoding($txt, $this->mpdf->mb_enc, 'UTF-8');
+				$txt = $this->mpdf->utf8ToWin1252($txt);
 			}
 
 			if (preg_match("/([" . $this->mpdf->pregRTLchars . "])/u", $txt)) {
