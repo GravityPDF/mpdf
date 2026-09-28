@@ -1,0 +1,1596 @@
+%PDF-1.4
+%âãÏÓ
+3 0 obj
+<</Type /Page
+/Parent 1 0 R
+/MediaBox [0 0 595.280 841.890]
+/TrimBox [0.000 0.000 595.280 841.890]
+/Resources 2 0 R
+/Group << /Type /Group /S /Transparency /CS /DeviceRGB >> 
+/Contents 4 0 R>>
+endobj
+4 0 obj
+<</Length 9860>>
+stream
+ 2 J
+0.567 w
+BT /F1 11.000 Tf ET
+1.000 g
+0.000 G
+/GS1 gs
+0.567 w
+0 Tr
+[] 0 d
+/GS1 gs
+BT /F2 22.000 Tf ET
+q 0.000 g  0 Tr BT 42.520 774.190 Td  (mPDF) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+BT /F2 16.500 Tf ET
+q 0.000 g  0 Tr BT 42.520 736.119 Td  (A zero-width space in core fonts) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 708.078 Td  (This document is written with the PDF core fonts, whose windows-1252 encoding has no code for a zero-width) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 694.084 Td  (space \(U+200B\). Every sample holds at least one. None of them may draw a question mark or any gap of its own,) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 680.089 Td  (and where a line has to break, it breaks at the zero-width space rather than in the middle of a word.) Tj ET Q
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 651.439 Td  (Two long words) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 624.538 Td  (Two 60-letter words joined by a zero-width space, in a box 40mm wide. The first word fills three lines and the) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 610.543 Td  (second starts on a line of its own.) Tj ET Q
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 580.827 Td  (abcdefghijabcdefghijabc) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 566.832 Td  (defghijabcdefghijabcdefg) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 552.838 Td  (hijabcdefghij) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 538.843 Td  (abcdefghijabcdefghijabc) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 524.848 Td  (defghijabcdefghijabcdefg) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 510.854 Td  (hijabcdefghij) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 594.966 m 
+43.087 594.399 l 
+162.142 594.399 l 
+162.709 594.966 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+162.709 594.682 m 
+42.520 594.682 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 504.195 m 
+43.087 504.762 l 
+162.142 504.762 l 
+162.709 504.195 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 504.478 m 
+162.709 504.478 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 594.966 m 
+43.087 594.399 l 
+43.087 504.762 l 
+42.520 504.195 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 594.966 m 
+42.803 504.195 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+162.709 594.966 m 
+162.142 594.399 l 
+162.142 504.762 l 
+162.709 504.195 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+162.425 504.195 m 
+162.425 594.966 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 480.440 Td  (A path with a break after every slash) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 453.539 Td  (The same path twice, in boxes 45mm wide. The first has no zero-width spaces and is cut wherever the line runs out.) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 439.544 Td  (The second has one after every slash and breaks only there.) Tj ET Q
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 409.828 Td  (/usr/local/share/applications/) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 395.833 Td  (documentation/reference/ma) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 381.839 Td  (nual/index.html) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 423.967 m 
+43.087 423.400 l 
+176.315 423.400 l 
+176.882 423.967 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+176.882 423.683 m 
+42.520 423.683 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 375.180 m 
+43.087 375.747 l 
+176.315 375.747 l 
+176.882 375.180 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 375.463 m 
+176.882 375.463 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 423.967 m 
+43.087 423.400 l 
+43.087 375.747 l 
+42.520 375.180 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 423.967 m 
+42.803 375.180 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+176.882 423.967 m 
+176.315 423.400 l 
+176.315 375.747 l 
+176.882 375.180 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+176.598 375.180 m 
+176.598 423.967 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 355.372 Td  (/usr/local/share/applications/) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 341.377 Td  (documentation/reference/) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 327.382 Td  (manual/index.html) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 369.510 m 
+43.087 368.943 l 
+176.315 368.943 l 
+176.882 369.510 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+176.882 369.227 m 
+42.520 369.227 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 320.723 m 
+43.087 321.290 l 
+176.315 321.290 l 
+176.882 320.723 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 321.007 m 
+176.882 321.007 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 369.510 m 
+43.087 368.943 l 
+43.087 321.290 l 
+42.520 320.723 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 369.510 m 
+42.803 320.723 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+176.882 369.510 m 
+176.315 368.943 l 
+176.315 321.290 l 
+176.882 320.723 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+176.598 320.723 m 
+176.598 369.510 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 296.969 Td  (No width of its own) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 270.067 Td  (Each pair of lines is the same word, drawn without and then with zero-width spaces inside it. Both lines of a pair) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 256.073 Td  (have to be the same length and line up letter for letter.) Tj ET Q
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 226.356 Td  (Documentation) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 212.362 Td  (Documentation) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 240.495 m 
+43.087 239.928 l 
+275.528 239.928 l 
+276.094 240.495 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+276.094 240.212 m 
+42.520 240.212 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 205.703 m 
+43.087 206.270 l 
+275.528 206.270 l 
+276.094 205.703 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 205.986 m 
+276.094 205.986 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 240.495 m 
+43.087 239.928 l 
+43.087 206.270 l 
+42.520 205.703 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 240.495 m 
+42.803 205.703 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+276.094 240.495 m 
+275.528 239.928 l 
+275.528 206.270 l 
+276.094 205.703 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+275.811 205.703 m 
+275.811 240.495 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+BT /F2 11.000 Tf ET
+q 0.000 g  0 Tr BT 45.921 185.459 Td  (Bold) Tj ET Q
+BT /F3 11.000 Tf ET
+q 0.000 g  0 Tr BT 67.932 185.459 Td  (Italic) Tj ET Q
+BT /F1 11.000 Tf ET
+q 0.000 g  0 Tr BT 91.153 185.459 Td  (Underlined) Tj ET 0.000 G   0.550 w 0 j 0 J  91.153 184.084 m 140.642 184.084 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT /F2 11.000 Tf ET
+q 0.000 g  0 Tr BT 45.921 171.001 Td  (Bold) Tj ET Q
+BT /F1 11.000 Tf ET
+BT /F3 11.000 Tf ET
+q 0.000 g  0 Tr BT 67.932 171.001 Td  (Italic) Tj ET Q
+BT /F1 11.000 Tf ET
+q 0.000 g  0 Tr BT 91.153 171.001 Td  (Underlined) Tj ET 0.000 G   0.550 w 0 j 0 J  91.153 169.626 m 140.642 169.626 l S  0.567 w 2 j 2 J  1.000 g  Q
+/GS1 gs
+q
+0.000 w
+42.520 200.034 m 
+43.087 199.467 l 
+275.528 199.467 l 
+276.094 200.034 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+276.094 199.750 m 
+42.520 199.750 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 164.313 m 
+43.087 164.880 l 
+275.528 164.880 l 
+276.094 164.313 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 164.597 m 
+276.094 164.597 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 200.034 m 
+43.087 199.467 l 
+43.087 164.880 l 
+42.520 164.313 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 200.034 m 
+42.803 164.313 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+276.094 200.034 m 
+275.528 199.467 l 
+275.528 164.880 l 
+276.094 164.313 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+275.811 164.313 m 
+275.811 200.034 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 144.505 Td  (UPPERCASE) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 130.510 Td  (UPPERCASE) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 158.644 m 
+43.087 158.077 l 
+275.528 158.077 l 
+276.094 158.644 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+276.094 158.360 m 
+42.520 158.360 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 123.852 m 
+43.087 124.418 l 
+275.528 124.418 l 
+276.094 123.852 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 124.135 m 
+276.094 124.135 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 158.644 m 
+43.087 158.077 l 
+43.087 124.418 l 
+42.520 123.852 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 158.644 m 
+42.803 123.852 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+276.094 158.644 m 
+275.528 158.077 l 
+275.528 124.418 l 
+276.094 123.852 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+275.811 123.852 m 
+275.811 158.644 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+q 0.000 g  0 Tr  BT 45.921 104.043 Td  0 Tc 0 Tw [(S)] TJ  /F1 8.250 Tf 110 Tz [(MALL)] TJ  /F1 11.000 Tf 100 Tz [( C)] TJ  /F1 8.250 Tf 110 Tz [(APITALS)] TJ ET  Q
+q 0.000 g  0 Tr  BT 45.921 90.049 Td  0 Tc 0 Tw [(S)] TJ  /F1 8.250 Tf 110 Tz [(MALL)] TJ  /F1 11.000 Tf 100 Tz [( C)] TJ  /F1 8.250 Tf 110 Tz [(APITALS)] TJ ET  Q
+/GS1 gs
+q
+0.000 w
+42.520 118.182 m 
+43.087 117.615 l 
+275.528 117.615 l 
+276.094 118.182 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+276.094 117.899 m 
+42.520 117.899 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 83.390 m 
+43.087 83.957 l 
+275.528 83.957 l 
+276.094 83.390 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 83.673 m 
+276.094 83.673 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 118.182 m 
+43.087 117.615 l 
+43.087 83.957 l 
+42.520 83.390 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 118.182 m 
+42.803 83.390 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+276.094 118.182 m 
+275.528 117.615 l 
+275.528 83.957 l 
+276.094 83.390 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+275.811 83.390 m 
+275.811 118.182 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+
+endstream
+endobj
+5 0 obj
+<</Type /Page
+/Parent 1 0 R
+/MediaBox [0 0 595.280 841.890]
+/TrimBox [0.000 0.000 595.280 841.890]
+/Resources 2 0 R
+/Group << /Type /Group /S /Transparency /CS /DeviceRGB >> 
+/Contents 6 0 R>>
+endobj
+6 0 obj
+<</Length 8330>>
+stream
+ 2 J
+0.567 w
+BT /F2 12.870 Tf ET
+BT /F1 11.000 Tf ET
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 783.463 Td  (Justified text) Tj ET Q
+0.000 G
+1.000 g
+0.567 w
+0 Tr
+[] 0 d
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 756.562 Td  (A justified paragraph whose long compound words are joined by zero-width spaces. The spaces between words) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 742.567 Td  (stretch, but a zero-width space never does, and the lines break at the zero-width spaces where a word would not fit.) Tj ET Q
+/GS1 gs
+BT 0.034 Tc ET
+BT 0.463 Tw ET
+q 0.000 g  0 Tr BT 45.921 712.851 Td  (The Donaudampfschifffahrtsgesellschaft ran) Tj ET Q
+BT 0.256 Tc ET
+BT 1.110 Tw ET
+q 0.000 g  0 Tr BT 45.921 698.856 Td  (steamers on the Danube, and its Kapitäns) Tj ET Q
+BT 0.076 Tc ET
+BT 0.676 Tw ET
+q 0.000 g  0 Tr BT 45.921 684.862 Td  (mützenabzeichenhersteller made the badges) Tj ET Q
+BT 0.119 Tc ET
+BT 0.570 Tw ET
+q 0.000 g  0 Tr BT 45.921 670.867 Td  (on the captains' caps, while the Rindfleisch) Tj ET Q
+BT 1.051 Tc ET
+BT 0 Tw ET
+q 0.000 g  0 Tr BT 45.921 656.872 Td  (etikettierungsüberwachungsaufgaben) Tj ET Q
+BT 0.007 Tc ET
+BT 0.047 Tw ET
+q 0.000 g  0 Tr BT 45.921 642.878 Td  (übertragungsgesetz governed the labelling of) Tj ET Q
+BT 0 Tc ET
+BT 0 Tw ET
+q 0.000 g  0 Tr BT 45.921 628.883 Td  (beef.) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 726.990 m 
+43.087 726.423 l 
+247.181 726.423 l 
+247.748 726.990 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+247.748 726.706 m 
+42.520 726.706 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 622.224 m 
+43.087 622.791 l 
+247.181 622.791 l 
+247.748 622.224 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 622.508 m 
+247.748 622.508 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 726.990 m 
+43.087 726.423 l 
+43.087 622.791 l 
+42.520 622.224 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 726.990 m 
+42.803 622.224 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+247.748 726.990 m 
+247.181 726.423 l 
+247.181 622.791 l 
+247.748 622.224 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+247.465 622.224 m 
+247.465 726.990 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 598.470 Td  (Beside a soft hyphen and a no-break space) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 571.568 Td  (A soft hyphen draws a hyphen only where it breaks the line and a no-break space draws as a space that never) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 557.574 Td  (breaks. Neither may be disturbed by a zero-width space next to it.) Tj ET Q
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 527.857 Td  (extraordinary) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 513.863 Td  (circumstances) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 541.996 m 
+43.087 541.429 l 
+133.795 541.429 l 
+134.362 541.996 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+134.362 541.713 m 
+42.520 541.713 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 507.204 m 
+43.087 507.771 l 
+133.795 507.771 l 
+134.362 507.204 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 507.487 m 
+134.362 507.487 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 541.996 m 
+43.087 541.429 l 
+43.087 507.771 l 
+42.520 507.204 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 541.996 m 
+42.803 507.204 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+134.362 541.996 m 
+133.795 541.429 l 
+133.795 507.771 l 
+134.362 507.204 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+134.079 507.204 m 
+134.079 541.996 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 487.396 Td  (keep together) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 473.401 Td  (keep together) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 459.406 Td  (keep together) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 501.534 m 
+43.087 500.968 l 
+133.795 500.968 l 
+134.362 501.534 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+134.362 501.251 m 
+42.520 501.251 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 452.747 m 
+43.087 453.314 l 
+133.795 453.314 l 
+134.362 452.747 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 453.031 m 
+134.362 453.031 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 501.534 m 
+43.087 500.968 l 
+43.087 453.314 l 
+42.520 452.747 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 501.534 m 
+42.803 452.747 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+134.362 501.534 m 
+133.795 500.968 l 
+133.795 453.314 l 
+134.362 452.747 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+134.079 452.747 m 
+134.079 501.534 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 428.993 Td  (In a table) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 402.091 Td  (The column is as wide as the widest of the words either side of each zero-width space. Measured as one run the text) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 388.097 Td  (would be wider than the page, and the table would shrink it to fit.) Tj ET Q
+/GS1 gs
+ 
+0.502 0.502 0.502 RG
+44.303 370.736 m 44.303 338.100 l S
+44.303 370.736 m 479.392 370.736 l S
+479.392 370.736 m 479.392 338.100 l S
+44.303 338.100 m 479.392 338.100 l S
+0.000 G
+q 0.000 g  0 Tr BT 47.421 357.278 Td  (abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij) Tj ET Q
+q 0.000 g  0 Tr BT 47.421 344.078 Td  (abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij) Tj ET Q
+/GS1 gs
+0.502 0.502 0.502 RG
+481.459 370.736 m 481.459 338.100 l S
+481.459 370.736 m 550.977 370.736 l S
+550.977 370.736 m 550.977 338.100 l S
+481.459 338.100 m 550.977 338.100 l S
+0.000 G
+q 0.000 g  0 Tr BT 484.577 357.278 Td  (Eleven point) Tj ET Q
+q 0.000 g  0 Tr BT 484.577 344.078 Td  (text beside it) Tj ET Q
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 312.562 Td  (In a list) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.000 g  0 Tr BT 72.520 287.298 Td  (alphabetagammadelta) Tj ET Q
+BT /F1 3.881 Tf ET
+BT /F1 11.000 Tf ET
+q 0.000 G 0.000 g
+0 j 0 J [] 0 d
+67.020 290.392 m 67.020 291.386 66.214 292.192 65.220 292.192 c
+64.226 292.192 63.420 291.386 63.420 290.392 c
+63.420 289.398 64.226 288.592 65.220 288.592 c
+66.214 288.592 67.020 289.398 67.020 290.392 c f
+Q
+q 0.000 g  0 Tr BT 72.520 273.304 Td  (epsilonzetaetatheta) Tj ET Q
+/GS1 gs
+q 0.000 g  0 Tr BT 72.520 259.309 Td  (iotakappalambdamunuxi) Tj ET Q
+BT /F1 3.881 Tf ET
+BT /F1 11.000 Tf ET
+q 0.000 G 0.000 g
+0 j 0 J [] 0 d
+67.020 262.403 m 67.020 263.397 66.214 264.203 65.220 264.203 c
+64.226 264.203 63.420 263.397 63.420 262.403 c
+63.420 261.409 64.226 260.603 65.220 260.603 c
+66.214 260.603 67.020 261.409 67.020 262.403 c f
+Q
+q 0.000 g  0 Tr BT 72.520 245.314 Td  (omicronpi) Tj ET Q
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 218.303 Td  (Heading) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 191.401 Td  (The heading above holds a zero-width space. Its bookmark reads "Heading", with nothing between the two halves.) Tj ET Q
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 162.751 Td  (A unit separator in the source) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 135.850 Td  (A U+001F is not the zero-width space that core-font text carries in its place: it is dropped, so it neither draws nor) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 121.855 Td  (gives the line somewhere to break. The box is too narrow for the word, which is cut where the line runs out.) Tj ET Q
+/GS1 gs
+q 0.000 g  0 Tr BT 45.921 92.139 Td  (aaaabb) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 78.144 Td  (bb) Tj ET Q
+/GS1 gs
+q
+0.000 w
+42.520 106.278 m 
+43.087 105.711 l 
+82.772 105.711 l 
+83.339 106.278 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+83.339 105.994 m 
+42.520 105.994 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 71.485 m 
+43.087 72.052 l 
+82.772 72.052 l 
+83.339 71.485 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.520 71.769 m 
+83.339 71.769 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+42.520 106.278 m 
+43.087 105.711 l 
+43.087 72.052 l 
+42.520 71.485 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+42.803 106.278 m 
+42.803 71.485 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+q
+0.000 w
+83.339 106.278 m 
+82.772 105.711 l 
+82.772 72.052 l 
+83.339 71.485 l 
+ h W n 
+0.567 w
+0.690 0.690 0.690 RG
+0 j
+0 J
+83.055 71.485 m 
+83.055 106.278 l 
+S
+
+Q
+0.283 w
+0.000 G
+2 j
+2 J
+/GS1 gs
+0.567 w
+/GS1 gs
+
+endstream
+endobj
+7 0 obj
+<</Type /Page
+/Parent 1 0 R
+/MediaBox [0 0 595.280 841.890]
+/TrimBox [0.000 0.000 595.280 841.890]
+/Resources 2 0 R
+/Group << /Type /Group /S /Transparency /CS /DeviceRGB >> 
+/Contents 8 0 R>>
+endobj
+8 0 obj
+<</Length 932>>
+stream
+ 2 J
+0.567 w
+BT /F2 12.870 Tf ET
+BT /F1 11.000 Tf ET
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 783.463 Td  (In form fields) Tj ET Q
+0.000 G
+1.000 g
+0.567 w
+0 Tr
+[] 0 d
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 756.562 Td  (Field text becomes the field's value, so a zero-width space is left out of it.) Tj ET Q
+/GS1 gs
+BT /F4 9.900 Tf ET
+BT /F1 11.000 Tf ET
+q 0.000 g  0 Tr BT 125.365 712.963 Td  ( ) Tj ET Q
+BT /F5 9.900 Tf ET
+BT /F1 11.000 Tf ET
+BT /F4 9.900 Tf ET
+0.980 g
+43.937 723.637 66.150 -13.869 re B q 0.000 g  0 Tr BT 45.921 713.238 Td  (Secondchoice) Tj ET Q
+0.745 g
+110.087 723.637 13.860 -13.869 re B 
+q 0.000 g 114.542 718.683 m 119.492 718.683 l 117.017 714.723 l f Q
+1.000 g
+BT /F5 9.900 Tf ET
+0.980 g
+129.532 739.567 124.469 -27.585 re B
+q 129.532 739.567 124.469 -27.585 re W n 
+q 0.000 g  0 Tr BT 132.367 728.497 Td  (Zerowidth) Tj ET Q
+Q
+1.000 g
+BT /F1 11.000 Tf ET
+/GS1 gs
+
+endstream
+endobj
+9 0 obj
+<</Type /Page
+/Parent 1 0 R
+/MediaBox [0 0 595.280 841.890]
+/TrimBox [0.000 0.000 595.280 841.890]
+/Resources 2 0 R
+/Group << /Type /Group /S /Transparency /CS /DeviceRGB >> 
+/Contents 10 0 R>>
+endobj
+10 0 obj
+<</Length 4441>>
+stream
+ 2 J
+0.567 w
+BT /F1 11.000 Tf ET
+1.000 g
+0.000 G
+/GS1 gs
+0.567 w
+0 Tr
+[] 0 d
+/GS1 gs
+BT /F2 12.870 Tf ET
+q 0.000 g  0 Tr BT 42.520 783.463 Td  (Written directly) Tj ET Q
+/GS1 gs
+BT /F1 11.000 Tf ET
+/GS1 gs
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 756.562 Td  (Each line below is written straight to the page rather than through WriteHTML\(\). The watermark, WriteText\(\),) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 742.567 Td  (WriteCell\(\), AutosizeText\(\) and the shaded box draw no question mark; MultiCell\(\) breaks at the zero-width spaces) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 728.572 Td  (in a box 40mm wide; the SVG text and the text around the circle draw nothing between their halves.) Tj ET Q
+/GS1 gs
+BT /F4 11.000 Tf ET
+q 0.000 g BT 42.520 698.822 Td (WriteText) Tj ET Q
+42.520 684.649 226.772 -22.677 re S q 0.000 g  0 Tr BT 112.203 669.460 Td  (WriteCell, centred) Tj ET Q
+42.520 661.972 m 42.520 647.798 l S 42.520 661.972 m 155.906 661.972 l S 155.906 661.972 m 155.906 647.798 l S q 0.000 g  0 Tr BT 42.520 651.035 Td  (MultiCellbreaksatevery) Tj ET Q
+42.520 647.798 m 42.520 633.625 l S 155.906 647.798 m 155.906 633.625 l S 42.520 633.625 m 155.906 633.625 l S q 0.000 g  0 Tr BT 42.520 636.862 Td  (zerowidthspace) Tj ET Q
+BT /F4 24.000 Tf ET
+q 0.000 g  0 Tr BT 79.874 608.217 Td  ( AutosizeText ) Tj ET Q
+BT /F4 14.000 Tf ET
+0.283 w
+1.000 1.000 1.000 rg
+191.341 582.601 m
+403.939 582.601 l
+407.853 582.601 411.026 579.429 411.026 575.515 c 
+411.026 564.349 l
+411.026 560.436 407.853 557.263 403.939 557.263 c 
+191.341 557.263 l
+187.427 557.263 184.254 560.436 184.254 564.349 c 
+184.254 575.515 l
+184.254 579.429 187.427 582.601 191.341 582.601 c 
+B
+q 0.000 0.000 0.000 rg  0 Tr BT 258.335 565.032 Td  ( Shadedbox ) Tj ET Q
+1.000 g
+/GS1 gs
+0.567 w
+BT /F1 11.000 Tf ET
+q 1.000 0 0 1.000 42.520 534.586 cm /FO1 Do Q
+/GS1 gs
+BT /F1 14.000 Tf ET
+/GS1 gs
+q
+0.7268 0.6868 -0.6868 0.7268 331.9689 53.1171 cm
+0.9951 -0.0987 0.0987 0.9951 -43.3106 11.9548 cm
+q 0.000 g  0 Tr BT 94.544 488.659 Td  (C) Tj ET Q
+0.9902 -0.1396 0.1396 0.9902 -60.9752 18.1900 cm
+q 0.000 g  0 Tr BT 97.267 488.659 Td  (i) Tj ET Q
+0.9959 -0.0904 0.0904 0.9959 -39.7220 10.7871 cm
+q 0.000 g  0 Tr BT 96.882 488.659 Td  (r) Tj ET Q
+0.9934 -0.1149 0.1149 0.9934 -50.3308 14.3349 cm
+q 0.000 g  0 Tr BT 96.105 488.659 Td  (c) Tj ET Q
+0.9902 -0.1394 0.1394 0.9902 -60.9122 18.1663 cm
+q 0.000 g  0 Tr BT 95.713 488.659 Td  (u) Tj ET Q
+0.9934 -0.1150 0.1150 0.9934 -50.3944 14.3571 cm
+q 0.000 g  0 Tr BT 97.267 488.659 Td  (l) Tj ET Q
+0.9943 -0.1068 0.1068 0.9943 -46.8255 13.1305 cm
+q 0.000 g  0 Tr BT 96.105 488.659 Td  (a) Tj ET Q
+0.9934 -0.1149 0.1149 0.9934 -50.3308 14.3349 cm
+q 0.000 g  0 Tr BT 96.882 488.659 Td  (r) Tj ET Q
+0.9988 -0.0493 0.0493 0.9988 -21.7705 5.4333 cm
+0.9959 -0.0904 0.0904 0.9959 -39.7220 10.7871 cm
+q 0.000 g  0 Tr BT 94.936 488.659 Td  (T) Tj ET Q
+0.9878 -0.1557 0.1557 0.9878 -67.8915 20.8572 cm
+q 0.000 g  0 Tr BT 96.105 488.659 Td  (e) Tj ET Q
+0.9902 -0.1394 0.1394 0.9902 -60.9122 18.1663 cm
+q 0.000 g  0 Tr BT 95.713 488.659 Td  (x) Tj ET Q
+0.9934 -0.1150 0.1150 0.9934 -50.3944 14.3571 cm
+q 0.000 g  0 Tr BT 97.267 488.659 Td  (t) Tj ET Q
+Q
+q
+0.7543 -0.6566 0.6566 0.7543 -267.0427 174.2045 cm
+0.9951 0.0987 -0.0987 0.9951 44.2788 -7.6231 cm
+q 0.000 g  0 Tr BT 94.544 389.273 Td  (B) Tj ET Q
+0.9851 0.1721 -0.1721 0.9851 77.8467 -10.4507 cm
+q 0.000 g  0 Tr BT 95.713 389.273 Td  (o) Tj ET Q
+0.9934 0.1150 -0.1150 0.9934 51.7113 -8.4655 cm
+q 0.000 g  0 Tr BT 97.267 389.273 Td  (t) Tj ET Q
+0.9966 0.0823 -0.0823 0.9966 36.8611 -6.6586 cm
+q 0.000 g  0 Tr BT 97.267 389.273 Td  (t) Tj ET Q
+0.9934 0.1150 -0.1150 0.9934 51.7113 -8.4655 cm
+q 0.000 g  0 Tr BT 95.713 389.273 Td  (o) Tj ET Q
+0.9821 0.1882 -0.1882 0.9821 85.3212 -10.7406 cm
+q 0.000 g  0 Tr BT 93.767 389.273 Td  (m) Tj ET Q
+0.9934 0.1150 -0.1150 0.9934 51.7113 -8.4655 cm
+0.9959 0.0904 -0.0904 0.9959 40.5346 -7.1518 cm
+q 0.000 g  0 Tr BT 94.936 389.273 Td  (T) Tj ET Q
+0.9878 0.1557 -0.1557 0.9878 70.3108 -10.0336 cm
+q 0.000 g  0 Tr BT 96.105 389.273 Td  (e) Tj ET Q
+0.9902 0.1394 -0.1394 0.9902 62.8499 -9.4969 cm
+q 0.000 g  0 Tr BT 95.713 389.273 Td  (x) Tj ET Q
+0.9934 0.1150 -0.1150 0.9934 51.7113 -8.4655 cm
+q 0.000 g  0 Tr BT 97.267 389.273 Td  (t) Tj ET Q
+Q
+/GS1 gs
+/GS2 gs
+BT /F2 119.900 Tf ET
+q 0.70711 0.70711 -0.70711 0.70711 179.808 274.828 cm 1 0 0 1 -179.808 -274.828 cm
+q 0.000 g BT 179.808 274.828 Td (DRAFT) Tj ET Q
+Q
+/GS1 gs
+
+endstream
+endobj
+1 0 obj
+<</Type /Pages
+/Kids [3 0 R 5 0 R 7 0 R 9 0 R ]
+/Count 4
+/MediaBox [0 0 595.280 841.890]
+>>
+endobj
+11 0 obj
+<</Type /ExtGState
+/BM /Normal
+/ca 1
+/CA 1
+>>
+endobj
+12 0 obj
+<</Type /ExtGState
+/BM /Normal
+/ca 0.2
+/CA 0.2
+>>
+endobj
+13 0 obj
+<</Type /Font
+/BaseFont /Times-Roman
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+>>
+endobj
+14 0 obj
+<</Type /Font
+/BaseFont /Times-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+>>
+endobj
+15 0 obj
+<</Type /Font
+/BaseFont /Times-Italic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+>>
+endobj
+16 0 obj
+<</Type /Font
+/BaseFont /Helvetica
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+>>
+endobj
+17 0 obj
+<</Type /Font
+/BaseFont /Courier
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+>>
+endobj
+18 0 obj
+<</Type /XObject
+/Subtype /Form
+/Group 19 0 R
+/BBox [0 0 226.84310018904 -34.026465028355]
+/Resources 2 0 R
+/Length 124>>
+stream
+q 1 0 0 1 0.00 0 cm q 0.000 g BT  /F4 21.172 Tf  /GS1 gs  0 Tr 0.000 0.000 0.000 rg  0.000 -22.684 Td (SVGtext) Tj ET Q 
+ Q
+
+endstream
+endobj
+19 0 obj
+<</Type /Group
+/S /Transparency
+>>
+endobj
+2 0 obj
+<</ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
+/Font <<
+/F1 13 0 R
+/F2 14 0 R
+/F3 15 0 R
+/F4 16 0 R
+/F5 17 0 R
+>>
+/ExtGState <<
+/GS1 11 0 R
+/GS2 12 0 R
+>>
+/XObject <<
+/FO1 18 0 R
+>>
+>>
+endobj
+20 0 obj
+<</Title (þÿ m P D F)
+/Parent 33 0 R
+/First 21 0 R
+/Last 21 0 R
+/Dest [3 0 R /XYZ 0 796.190 null]
+/Count 0>>
+endobj
+21 0 obj
+<</Title (þÿ A   z e r o - w i d t h   s p a c e   i n   c o r e   f o n t s)
+/Parent 20 0 R
+/First 22 0 R
+/Last 32 0 R
+/Dest [3 0 R /XYZ 0 752.619 null]
+/Count 0>>
+endobj
+22 0 obj
+<</Title (þÿ T w o   l o n g   w o r d s)
+/Parent 21 0 R
+/Next 23 0 R
+/Dest [3 0 R /XYZ 0 664.309 null]
+/Count 0>>
+endobj
+23 0 obj
+<</Title (þÿ A   p a t h   w i t h   a   b r e a k   a f t e r   e v e r y   s l a s h)
+/Parent 21 0 R
+/Prev 22 0 R
+/Next 24 0 R
+/Dest [3 0 R /XYZ 0 493.310 null]
+/Count 0>>
+endobj
+24 0 obj
+<</Title (þÿ N o   w i d t h   o f   i t s   o w n)
+/Parent 21 0 R
+/Prev 23 0 R
+/Next 25 0 R
+/Dest [3 0 R /XYZ 0 309.839 null]
+/Count 0>>
+endobj
+25 0 obj
+<</Title (þÿ J u s t i f i e d   t e x t)
+/Parent 21 0 R
+/Prev 24 0 R
+/Next 26 0 R
+/Dest [5 0 R /XYZ 0 796.334 null]
+/Count 0>>
+endobj
+26 0 obj
+<</Title (þÿ B e s i d e   a   s o f t   h y p h e n   a n d   a   n o - b r e a k   s p a c e)
+/Parent 21 0 R
+/Prev 25 0 R
+/Next 27 0 R
+/Dest [5 0 R /XYZ 0 611.340 null]
+/Count 0>>
+endobj
+27 0 obj
+<</Title (þÿ I n   a   t a b l e)
+/Parent 21 0 R
+/Prev 26 0 R
+/Next 28 0 R
+/Dest [5 0 R /XYZ 0 441.863 null]
+/Count 0>>
+endobj
+28 0 obj
+<</Title (þÿ I n   a   l i s t)
+/Parent 21 0 R
+/Prev 27 0 R
+/Next 29 0 R
+/Dest [5 0 R /XYZ 0 325.432 null]
+/Count 0>>
+endobj
+29 0 obj
+<</Title (þÿ H e a d i n g)
+/Parent 21 0 R
+/Prev 28 0 R
+/Next 30 0 R
+/Dest [5 0 R /XYZ 0 231.173 null]
+/Count 0>>
+endobj
+30 0 obj
+<</Title (þÿ A   u n i t   s e p a r a t o r   i n   t h e   s o u r c e)
+/Parent 21 0 R
+/Prev 29 0 R
+/Next 31 0 R
+/Dest [5 0 R /XYZ 0 175.621 null]
+/Count 0>>
+endobj
+31 0 obj
+<</Title (þÿ I n   f o r m   f i e l d s)
+/Parent 21 0 R
+/Prev 30 0 R
+/Next 32 0 R
+/Dest [7 0 R /XYZ 0 796.334 null]
+/Count 0>>
+endobj
+32 0 obj
+<</Title (þÿ W r i t t e n   d i r e c t l y)
+/Parent 21 0 R
+/Prev 31 0 R
+/Dest [9 0 R /XYZ 0 796.334 null]
+/Count 0>>
+endobj
+33 0 obj
+<</Type /BMoutlines /First 20 0 R
+/Last 20 0 R>>
+endobj
+34 0 obj
+<<
+/Producer (þÿ m P D F)
+/CreationDate (D:20000101000000+00'00')
+/ModDate (D:20000101000000+00'00')
+>>
+endobj
+35 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/OpenAction [3 0 R /XYZ null null 1]
+/PageLayout /OneColumn
+/Outlines 33 0 R
+/PageMode /UseOutlines
+>>
+endobj
+xref
+0 36
+0000000000 65535 f 
+0000024611 00000 n 
+0000025666 00000 n 
+0000000015 00000 n 
+0000000223 00000 n 
+0000010133 00000 n 
+0000010341 00000 n 
+0000018721 00000 n 
+0000018929 00000 n 
+0000019910 00000 n 
+0000020119 00000 n 
+0000024718 00000 n 
+0000024780 00000 n 
+0000024846 00000 n 
+0000024945 00000 n 
+0000025043 00000 n 
+0000025143 00000 n 
+0000025240 00000 n 
+0000025335 00000 n 
+0000025615 00000 n 
+0000025867 00000 n 
+0000025992 00000 n 
+0000026173 00000 n 
+0000026304 00000 n 
+0000026494 00000 n 
+0000026648 00000 n 
+0000026792 00000 n 
+0000026990 00000 n 
+0000027126 00000 n 
+0000027260 00000 n 
+0000027390 00000 n 
+0000027566 00000 n 
+0000027710 00000 n 
+0000027845 00000 n 
+0000027910 00000 n 
+0000028030 00000 n 
+trailer
+<<
+/Size 36
+/Root 35 0 R
+/Info 34 0 R
+/ID [<97ca16c183abe582b350e3f0f236585e> <97ca16c183abe582b350e3f0f236585e>]
+>>
+startxref
+28180
+%%EOF

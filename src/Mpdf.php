@@ -56,6 +56,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const OBJECT_IDENTIFIER = "\xbb\xa4\xac";
 
 	/**
+	 * A zero-width space (U+200B) in UTF-8, as Unicode-font text carries it
+	 */
+	const ZERO_WIDTH_SPACE_UTF8 = "\xe2\x80\x8b";
+
+	/**
+	 * The marker byte a zero-width space (U+200B) is carried as in core-font text, which is windows-1252 and has no
+	 * code for it. Only a U+001F in the source could otherwise encode to this byte, and utf8ToWin1252() drops those first.
+	 */
+	const ZERO_WIDTH_SPACE_WIN1252 = "\x1f";
+
+	/**
 	 * The name a document is sent under where Output() is given none
 	 */
 	const DEFAULT_OUTPUT_NAME = 'mpdf.pdf';
@@ -4160,7 +4171,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$c = (string) $c;
 		$w = 0;
 		// Soft Hyphens chr(173)
-		if ($c == chr(173) && $this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
+		if ($c === self::ZERO_WIDTH_SPACE_WIN1252 || ($c == chr(173) && $this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats')) {
 			return 0;
 		} elseif (($this->textvar & TextVars::FC_SMALLCAPS) && isset($this->upperCase[ord($c)])) {  // mPDF 5.7.1
 			$charw = $this->CurrentFont['cw'][chr($this->upperCase[ord($c)])];
@@ -4207,9 +4218,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$w = 0;
 		/* -- CJK-FONTS -- */
 		if ($this->CurrentFont['type'] == 'Type0') { // CJK Adobe fonts
-			if ($char == 173) {
+			if ($char == 173 || $char == 0x200B) {
 				return 0;
-			} // Soft Hyphens
+			} // Soft Hyphens, and zero-width spaces, which are never drawn
 			elseif (isset($this->CurrentFont['cw'][$char])) {
 				$w+=$this->CurrentFont['cw'][$char];
 			} elseif (isset($this->CurrentFont['MissingWidth'])) {
@@ -4219,9 +4230,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		} else {
 			/* -- END CJK-FONTS -- */
-			if ($char == 173) {
+			if ($char == 173 || $char == 0x200B) {
 				return 0;
-			} // Soft Hyphens
+			} // Soft Hyphens, and zero-width spaces, which are never drawn
 			elseif (($this->textvar & TextVars::FC_SMALLCAPS) && isset($this->upperCase[$char])) { // mPDF 5.7.1
 				$charw = $this->_getCharWidth($this->CurrentFont['cw'], $this->upperCase[$char]);
 				if ($charw !== false) {
@@ -4313,6 +4324,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
 			$s = str_replace(chr(173), '', $s);
 		}
+		$s = str_replace(self::ZERO_WIDTH_SPACE_WIN1252, '', $s);
 		$nb_carac = $l = strlen($s);
 		if ($this->minwSpacing || $this->fixedlSpacing) {
 			$nb_spaces = substr_count($s, ' ');
@@ -4399,10 +4411,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$missingWidth = isset($this->CurrentFont['MissingWidth']) ? $this->CurrentFont['MissingWidth'] : 500;
 
 			foreach ($unicode as $char) {
-				if ($char == 0x00AD) {
+				if ($char == 0x00AD || $char == 0x200B) {
 					$discards++;
 					continue;
-				} // mPDF 6 soft hyphens [U+00AD]
+				} // mPDF 6 soft hyphens [U+00AD], and zero-width spaces, which are never drawn
 				$w += isset($cw[$char]) ? $cw[$char] : $missingWidth;
 			}
 		} else {
@@ -4435,10 +4447,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$lastchar = 0;
 
 			foreach ($unicode as $i => $char) {
-				if ($char == 0x00AD) {
+				if ($char == 0x00AD || $char == 0x200B) {
 					$discards++;
 					continue;
-				} // mPDF 6 soft hyphens [U+00AD]
+				} // mPDF 6 soft hyphens [U+00AD], and zero-width spaces, which are never drawn
 
 				if ($smallCaps && isset($this->upperCase[$char])) {
 					$charw = $this->_getCharWidth($cw, $this->upperCase[$char]);
@@ -5268,11 +5280,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->CurrentFont['used'] = true;
 
-		if ($this->usingCoreFont) {
-			$txt2 = str_replace(chr(160), chr(32), $txt);
-		} else {
-			$txt2 = str_replace(chr(194) . chr(160), chr(32), $txt);
-		}
+		$txt2 = $this->textAsDrawn($txt, $OTLdata);
 
 		$px = $x;
 		$py = $y;
@@ -5405,7 +5413,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$txt = $this->all_entities_to_utf8($txt);
 		}
 		if ($this->usingCoreFont) {
-			$txt = mb_convert_encoding($txt, $this->mb_enc, 'UTF-8');
+			$txt = $this->utf8ToWin1252($txt);
 		}
 
 		// DIRECTIONALITY
@@ -5438,7 +5446,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$txt = $this->all_entities_to_utf8($txt);
 		}
 		if ($this->usingCoreFont) {
-			$txt = mb_convert_encoding($txt, $this->mb_enc, 'UTF-8');
+			$txt = $this->utf8ToWin1252($txt);
 		}
 		// DIRECTIONALITY
 		if (preg_match("/([" . $this->pregRTLchars . "])/u", $txt)) {
@@ -5634,12 +5642,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	function Cell($w, $h = 0, $txt = '', $border = 0, $ln = 0, $align = '', $fill = 0, $link = '', $currentx = 0, $lcpaddingL = 0, $lcpaddingR = 0, $valign = 'M', $spanfill = 0, $exactWidth = false, $OTLdata = false, $textvar = 0, $lineBox = false)
 	{
-		// NON_BREAKING SPACE
-		if ($this->usingCoreFont) {
-			$txt = str_replace(chr(160), chr(32), $txt);
-		} else {
-			$txt = str_replace(chr(194) . chr(160), chr(32), $txt);
-		}
+		$txt = $this->textAsDrawn($txt, $OTLdata);
 
 		$oldcolumn = $this->CurrCol;
 
@@ -6733,7 +6736,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if ($this->usingCoreFont) {
-				$txt = mb_convert_encoding($txt, $this->mb_enc, 'UTF-8');
+				$txt = $this->utf8ToWin1252($txt);
 			}
 
 			if (preg_match("/([" . $this->pregRTLchars . "])/u", $txt)) {
@@ -6870,6 +6873,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$sep = $i;
 					$ls = $l;
 					$ns++;
+				} elseif ($c === self::ZERO_WIDTH_SPACE_UTF8) {
+					$sep = $i;
+					$ls = $l;
 				}
 
 				$l += $this->GetCharWidthNonCore($c);
@@ -6914,9 +6920,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 							// JUSTIFY J using Unicode fonts (Word spacing doesn't work)
 							// WORD SPACING UNICODE
-							// Change NON_BREAKING SPACE to spaces so they are 'spaced' properly
+							// Change NON_BREAKING SPACE to spaces so they are 'spaced' properly, and count only what is drawn
 
-							$tmp = str_replace(chr(194) . chr(160), chr(32), $tmp);
+							$tmp = $this->textAsDrawn($tmp, $tmpOTLdata);
 							$len_ligne = $this->GetStringWidth($tmp, false, $tmpOTLdata);
 							$nb_carac = mb_strlen($tmp, $this->mb_enc);
 							$nb_spaces = mb_substr_count($tmp, ' ', $this->mb_enc);
@@ -7003,6 +7009,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$sep = $i;
 					$ls = $l;
 					$ns++;
+				} elseif ($c === self::ZERO_WIDTH_SPACE_WIN1252) {
+					$sep = $i;
+					$ls = $l;
 				}
 
 				$l += $this->GetCharWidthCore($c);
@@ -7030,11 +7039,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							// WORD SPACING NON_UNICODE/CJK
 							// Change NON_BREAKING SPACE to spaces so they are 'spaced' properly
 
-							$tmp = str_replace(chr(160), chr(32), $tmp);
+							$tmpOTLdata = [];
+							$tmp = $this->textAsDrawn($tmp, $tmpOTLdata);
 							$len_ligne = $this->GetStringWidth($tmp);
 							$nb_carac = strlen($tmp);
 							$nb_spaces = substr_count($tmp, ' ');
-							$tmpOTLdata = [];
 
 							list($charspacing, $ws, $kashida) = $this->GetJspacing($nb_carac, $nb_spaces, ((($wmax) - $len_ligne) * Mpdf::SCALE), false, $tmpOTLdata);
 							$this->SetSpacing($charspacing, $ws);
@@ -7436,17 +7445,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// mPDF 5.7.1
 					if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
 						OtlData::removeChar($chunk, $cOTLdata[$k], "\xc2\xad", $this->mb_enc);
-						OtlData::removeChar($chunk, $cOTLdata[$k], "\xe2\x80\x8b", $this->mb_enc);
+						OtlData::removeChar($chunk, $cOTLdata[$k], self::ZERO_WIDTH_SPACE_UTF8, $this->mb_enc);
 						OtlData::nbspToSpace($chunk, $cOTLdata[$k], $this->mb_enc);
 						$content[$k] = $chunk;
 					} /* -- END OTL -- */ else {  // *OTL*
 						$content[$k] = $chunk = str_replace("\xc2\xad", '', $chunk);
-						$content[$k] = $chunk = str_replace("\xe2\x80\x8b", '', $chunk);
+						$content[$k] = $chunk = str_replace(self::ZERO_WIDTH_SPACE_UTF8, '', $chunk);
 						$content[$k] = $chunk = str_replace(chr(194) . chr(160), chr(32), $chunk);
 					} // *OTL*
-				} elseif ($this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
-					$content[$k] = $chunk = str_replace(chr(173), '', $chunk);
-					$content[$k] = $chunk = str_replace(chr(160), chr(32), $chunk);
+				} else {
+					$content[$k] = $chunk = $this->coreChunkAsDrawn($chunk);
 				}
 				$widthChunk = $this->aliasReplaceForWidth($chunk);
 				$contentWidth += $this->chunkWidth($widthChunk, $chunkCodePoints, (isset($cOTLdata[$k]) ? $cOTLdata[$k] : false), $this->textvar, false) * Mpdf::SCALE;
@@ -8607,6 +8615,70 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('Q');
 	}
 
+	/**
+	 * UTF-8 text in windows-1252, the core fonts' encoding. Windows-1252 has no code for a zero-width space (U+200B),
+	 * so it is carried as $zeroWidthSpace; a U+001F in the text is dropped first, so the marker byte can only mean
+	 * U+200B.
+	 *
+	 * @param string $text
+	 * @param string $zeroWidthSpace Mpdf::ZERO_WIDTH_SPACE_WIN1252, or '' where the text becomes a value rather than
+	 * drawn text, such as a form field's
+	 *
+	 * @return string
+	 */
+	public function utf8ToWin1252($text, $zeroWidthSpace = self::ZERO_WIDTH_SPACE_WIN1252)
+	{
+		$text = str_replace([self::ZERO_WIDTH_SPACE_WIN1252, self::ZERO_WIDTH_SPACE_UTF8], ['', $zeroWidthSpace], $text);
+
+		return mb_convert_encoding($text, 'windows-1252', 'UTF-8');
+	}
+
+	/**
+	 * @return string A zero-width space (U+200B) as the current font's text carries it
+	 */
+	public function zeroWidthSpace()
+	{
+		return $this->usingCoreFont ? self::ZERO_WIDTH_SPACE_WIN1252 : self::ZERO_WIDTH_SPACE_UTF8;
+	}
+
+	/**
+	 * Text as Cell() and Text() draw it: no-break spaces as plain spaces, and no zero-width spaces. They only mark
+	 * where a line may break, and a font with no glyph for one would draw it as a box.
+	 *
+	 * @param string $txt
+	 * @param array|false $OTLdata The run laid out from $txt, which loses the same characters
+	 *
+	 * @return string
+	 */
+	private function textAsDrawn($txt, &$OTLdata)
+	{
+		if ($this->usingCoreFont) {
+			return str_replace([chr(160), self::ZERO_WIDTH_SPACE_WIN1252], [chr(32), ''], $txt);
+		}
+
+		$txt = str_replace(chr(194) . chr(160), chr(32), $txt);
+		OtlData::removeChar($txt, $OTLdata, self::ZERO_WIDTH_SPACE_UTF8, $this->mb_enc);
+
+		return $txt;
+	}
+
+	/**
+	 * A line's core-font chunk as it is drawn: without the zero-width space marker and, outside the symbol fonts,
+	 * without soft hyphens and with no-break spaces as plain spaces
+	 *
+	 * @param string $chunk
+	 *
+	 * @return string
+	 */
+	private function coreChunkAsDrawn($chunk)
+	{
+		if ($this->FontFamily == 'csymbol' || $this->FontFamily == 'czapfdingbats') {
+			return str_replace(self::ZERO_WIDTH_SPACE_WIN1252, '', $chunk);
+		}
+
+		return str_replace([self::ZERO_WIDTH_SPACE_WIN1252, chr(173), chr(160)], ['', '', chr(32)], $chunk);
+	}
+
 	// mPDF 6
 	// Get previous character and move pointers
 	function _moveToPrevChar(&$contentctr, &$charctr, $content)
@@ -9003,6 +9075,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				/* -- END HYPHENATION -- */
 
 				// Search backwards to find first line-break opportunity
+				$zeroWidthSpace = $this->zeroWidthSpace();
 				while ($breakfound == false && $prevchar !== false) {
 					$cutcontentctr = $contentctr;
 					$cutcharctr = $charctr;
@@ -9015,7 +9088,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					} /////////////////////
 					// 4) Break at U+200B in current word (Khmer, Lao & Thai Invisible word boundary, and Tibetan)
 					/////////////////////
-					elseif ($prevchar == "\xe2\x80\x8b") { // U+200B Zero-width Word Break
+					elseif ($prevchar === $zeroWidthSpace) { // U+200B Zero-width Word Break
 						$breakfound = [$contentctr, $charctr, $cutcontentctr, $cutcharctr, 'discard'];
 					} /////////////////////
 					// 5) Break at Hard HYPHEN '-' or U+2010
@@ -9242,7 +9315,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							/* -- OTL -- */
 							if ((isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) || !empty($sOTLdata)) {
 								OtlData::removeChar($chunk, $cOTLdata[$k], "\xc2\xad", $this->mb_enc);
-								OtlData::removeChar($chunk, $cOTLdata[$k], "\xe2\x80\x8b", $this->mb_enc);
+								OtlData::removeChar($chunk, $cOTLdata[$k], self::ZERO_WIDTH_SPACE_UTF8, $this->mb_enc);
 								OtlData::nbspToSpace($chunk, $cOTLdata[$k], $this->mb_enc);
 								if (preg_match("/([" . $this->pregCURSchars . "])/u", $chunk)) {
 									$inclCursive = true;
@@ -9250,12 +9323,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$content[$k] = $chunk;
 							} /* -- END OTL -- */ else {  // *OTL*
 								$content[$k] = $chunk = str_replace("\xc2\xad", '', $chunk);
-								$content[$k] = $chunk = str_replace("\xe2\x80\x8b", '', $chunk);
+								$content[$k] = $chunk = str_replace(self::ZERO_WIDTH_SPACE_UTF8, '', $chunk);
 								$content[$k] = $chunk = str_replace(chr(194) . chr(160), chr(32), $chunk);
 							} // *OTL*
-						} elseif ($this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
-							$content[$k] = $chunk = str_replace(chr(173), '', $chunk);
-							$content[$k] = $chunk = str_replace(chr(160), chr(32), $chunk);
+						} else {
+							$content[$k] = $chunk = $this->coreChunkAsDrawn($chunk);
 						}
 
 						// mPDF 5.7.1
@@ -11595,7 +11667,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if ($this->usingCoreFont) {
-			$texte = mb_convert_encoding($texte, $this->mb_enc, 'UTF-8');
+			$texte = $this->utf8ToWin1252($texte);
 		}
 
 		// DIRECTIONALITY
@@ -14640,8 +14712,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->subPos < $i && !$this->specialcontent) {
 						$cnt += $this->SubstituteCharsNonCore($a, $i, $e);
 					}
-					// CONVERT ENCODING
-					$e = mb_convert_encoding($e, $this->mb_enc, 'UTF-8');
+					// An active form field's text becomes its value, which must not carry the marker; a static one's is drawn
+					$e = $this->utf8ToWin1252($e, $this->specialcontent && $this->activeForms() ? '' : self::ZERO_WIDTH_SPACE_WIN1252);
 					if ($this->textvar & TextVars::FT_UPPERCASE) {
 						$e = mb_strtoupper($e, $this->mb_enc);
 					} // mPDF 5.7.1
@@ -20212,7 +20284,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// mPDF 6
 			// If overflow==wrap ($checkletter) OR (No word breaks and contains CJK)
-			if ($checkletter || (!preg_match('/(\xe2\x80\x8b| )/', trim($line)) && preg_match("/([" . $this->pregCJKchars . "])/u", $line) )) {
+			if ($checkletter || (!preg_match('/(' . self::ZERO_WIDTH_SPACE_UTF8 . '| )/', trim($line)) && preg_match("/([" . $this->pregCJKchars . "])/u", $line) )) {
 				if (preg_match("/([" . $this->pregCJKchars . "])/u", $line)) {
 					$checkCJK = true;
 				} else {
@@ -20257,7 +20329,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				// Need to account for any XAdvance in GPOSinfo (OTLdata = $chunk[18])
 				$wordXAdvance = [];
 				if (isset($chunk[18]) && $chunk[18]) {
-					preg_match_all('/(\xe2\x80\x8b| )/', $line, $spaces, PREG_OFFSET_CAPTURE); // U+200B Zero Width word boundary, or space
+					preg_match_all('/(' . self::ZERO_WIDTH_SPACE_UTF8 . '| )/', $line, $spaces, PREG_OFFSET_CAPTURE); // U+200B Zero Width word boundary, or space
 					$lastoffset = 0;
 					$k = -1; // Added so that if no spaces found, "last word" later is calculated for the one and only word
 					foreach ($spaces[0] as $k => $m) {
@@ -20288,7 +20360,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				$words = preg_split('/(\xe2\x80\x8b| )/', $line); // U+200B Zero Width word boundary, or space
+				$words = preg_split('/(' . $this->zeroWidthSpace() . '| )/', $line); // U+200B Zero Width word boundary, or space
 				$lastWord = count($words) - 1;
 				$startsWithSpace = substr($chunk[0], 0, 1) == ' ';
 				$endsWithSpace = substr($chunk[0], -1, 1) == ' ';
@@ -26491,7 +26563,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$text = $this->all_entities_to_utf8($text);
 		}
 		if ($this->usingCoreFont) {
-			$text = mb_convert_encoding($text, $this->mb_enc, 'UTF-8');
+			$text = $this->utf8ToWin1252($text);
 		}
 
 		// DIRECTIONALITY
@@ -26561,6 +26633,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (!preg_match("/[" . $pregRTLchars . "]/u", $chunk) && $dir != 'rtl') {
 				return 0;
 			}   // Chunk doesn't contain RTL characters
+
+			// A zero-width space is a boundary neutral, which reordering ignores (UAX #9, X9), and it is never drawn
+			OtlData::removeChar($chunk, $chunkOTLdata, self::ZERO_WIDTH_SPACE_UTF8, $this->mb_enc);
+			if ($chunk === '') {
+				return 0;
+			}
 
 			$unicode = $this->UTF8StringToArray($chunk, false);
 
@@ -28410,9 +28488,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		} else {
 			foreach ($search as $k => $val) {
-				$search[$k] = mb_convert_encoding($search[$k], $this->mb_enc, 'utf-8');
+				$search[$k] = $this->utf8ToWin1252($search[$k], '');
 				$search[$k] = $this->writer->escape($search[$k]);
-				$replacement[$k] = mb_convert_encoding($replacement[$k], $this->mb_enc, 'utf-8');
+				$replacement[$k] = $this->utf8ToWin1252($replacement[$k], '');
 				$replacement[$k] = $this->writer->escape($replacement[$k]);
 			}
 		}

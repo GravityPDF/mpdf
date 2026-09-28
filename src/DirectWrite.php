@@ -97,7 +97,7 @@ class DirectWrite
 					$nl++;
 					continue;
 				}
-				if ($c === ' ') {
+				if ($c === ' ' || $c === Mpdf::ZERO_WIDTH_SPACE_UTF8) {
 					$sep = $i;
 				}
 				$l += $this->mpdf->GetCharWidthNonCore($c); // mPDF 5.3.04
@@ -446,7 +446,7 @@ class DirectWrite
 		}
 
 		if ($this->mpdf->usingCoreFont) {
-			$text = mb_convert_encoding($text, $this->mpdf->mb_enc, 'UTF-8');
+			$text = $this->mpdf->utf8ToWin1252($text);
 		}
 
 

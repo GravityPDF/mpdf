@@ -49,14 +49,14 @@ class TextCircle extends Tag
 			$objattr['top-text'] = UtfString::strcode2utf($attr['TOP-TEXT']);
 			$objattr['top-text'] = $this->mpdf->lesser_entity_decode($objattr['top-text']);
 			if ($this->mpdf->onlyCoreFonts) {
-				$objattr['top-text'] = mb_convert_encoding($objattr['top-text'], $this->mpdf->mb_enc, 'UTF-8');
+				$objattr['top-text'] = $this->mpdf->utf8ToWin1252($objattr['top-text']);
 			}
 		}
 		if (isset($attr['BOTTOM-TEXT'])) {
 			$objattr['bottom-text'] = UtfString::strcode2utf($attr['BOTTOM-TEXT']);
 			$objattr['bottom-text'] = $this->mpdf->lesser_entity_decode($objattr['bottom-text']);
 			if ($this->mpdf->onlyCoreFonts) {
-				$objattr['bottom-text'] = mb_convert_encoding($objattr['bottom-text'], $this->mpdf->mb_enc, 'UTF-8');
+				$objattr['bottom-text'] = $this->mpdf->utf8ToWin1252($objattr['bottom-text']);
 			}
 		}
 		if (!empty($attr['SPACE-WIDTH'])) {
@@ -91,7 +91,7 @@ class TextCircle extends Tag
 			$objattr['divider'] = UtfString::strcode2utf($attr['DIVIDER']);
 			$objattr['divider'] = $this->mpdf->lesser_entity_decode($objattr['divider']);
 			if ($this->mpdf->onlyCoreFonts) {
-				$objattr['divider'] = mb_convert_encoding($objattr['divider'], $this->mpdf->mb_enc, 'UTF-8');
+				$objattr['divider'] = $this->mpdf->utf8ToWin1252($objattr['divider']);
 			}
 		}
 

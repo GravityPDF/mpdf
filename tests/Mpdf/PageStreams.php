@@ -265,6 +265,42 @@ trait PageStreams
 	}
 
 	/**
+	 * @param \Mpdf\Mpdf $mpdf
+	 *
+	 * @return string The content streams of the document's pages, one after another
+	 */
+	private function joinedPageContents(Mpdf $mpdf)
+	{
+		return implode("\n", $this->pageContents($this->output($mpdf)));
+	}
+
+	/**
+	 * The bytes each Tj and TJ in $stream shows, unescaped, one string per operator: a TJ's pieces are joined and its
+	 * adjustments left out
+	 *
+	 * @param string $stream
+	 *
+	 * @return string[]
+	 */
+	private function shownBytes($stream)
+	{
+		$literal = '\(((?:\\\\.|[^\\\\)])*)\)';
+		preg_match_all('/' . $literal . '\s*Tj|\[((?:\\\\.|[^\\\\\]])*)\]\s*TJ/s', $stream, $operators, PREG_SET_ORDER);
+
+		$shown = [];
+		foreach ($operators as $operator) {
+			$pieces = [$operator[1]];
+			if (isset($operator[2]) && $operator[2] !== '') {
+				preg_match_all('/' . $literal . '/s', $operator[2], $matches);
+				$pieces = $matches[1];
+			}
+			$shown[] = implode('', array_map('setasign\Fpdi\PdfParser\Type\PdfString::unescape', $pieces));
+		}
+
+		return $shown;
+	}
+
+	/**
 	 * The index in $stream lists $term once, against $pages: a page number, or a list such as "1-3, 5"
 	 */
 	private function assertIndexLists($pages, $term, $stream)

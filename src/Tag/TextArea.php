@@ -35,7 +35,7 @@ class TextArea extends Tag
 		if (isset($attr['TITLE'])) {
 			$objattr['title'] = $attr['TITLE'];
 			if ($this->mpdf->onlyCoreFonts) {
-				$objattr['title'] = mb_convert_encoding($objattr['title'], $this->mpdf->mb_enc, 'UTF-8');
+				$objattr['title'] = $this->mpdf->utf8ToWin1252($objattr['title'], '');
 			}
 		}
 		if ($this->mpdf->activeForms()) {

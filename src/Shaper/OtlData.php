@@ -125,14 +125,25 @@ class OtlData
 	/**
 	 * Take every occurrence of a character out of a text and out of the run laid out from it.
 	 *
-	 * @param string $txt      The text, edited in place
-	 * @param array  $cOTLdata Its run, edited in place
-	 * @param string $char     One character, as the text encodes it. Not a regex metacharacter: it is
-	 *                         put into a pattern as it is.
-	 * @param string $encoding The text's encoding, Mpdf::$mb_enc
+	 * @param string      $txt      The text, edited in place
+	 * @param array|false $cOTLdata Its run, edited in place. A text that was never laid out has none, and only the
+	 *                              text is edited.
+	 * @param string      $char     One character, as the text encodes it. Not a regex metacharacter: it is
+	 *                              put into a pattern as it is.
+	 * @param string      $encoding The text's encoding, Mpdf::$mb_enc
 	 */
 	public static function removeChar(&$txt, &$cOTLdata, $char, $encoding)
 	{
+		if (strpos($txt, $char) === false) {
+			return;
+		}
+
+		if (!is_array($cOTLdata) || !isset($cOTLdata['group'])) {
+			$txt = str_replace($char, '', $txt);
+
+			return;
+		}
+
 		while (mb_strpos($txt, $char, 0, $encoding) !== false) {
 			$pos = mb_strpos($txt, $char, 0, $encoding);
 			$newGPOSinfo = [];

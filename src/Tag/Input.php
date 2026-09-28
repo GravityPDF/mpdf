@@ -49,7 +49,7 @@ class Input extends Tag
 		$objattr['title'] = UtfString::strcode2utf($objattr['title']);
 		$objattr['title'] = $this->mpdf->lesser_entity_decode($objattr['title']);
 		if ($this->mpdf->onlyCoreFonts) {
-			$objattr['title'] = mb_convert_encoding($objattr['title'], $this->mpdf->mb_enc, 'UTF-8');
+			$objattr['title'] = $this->mpdf->utf8ToWin1252($objattr['title'], '');
 		}
 		if ($this->mpdf->activeForms() && isset($attr['NAME'])) {
 			$objattr['fieldname'] = $attr['NAME'];
@@ -58,7 +58,7 @@ class Input extends Tag
 			$attr['VALUE'] = UtfString::strcode2utf($attr['VALUE']);
 			$attr['VALUE'] = $this->mpdf->lesser_entity_decode($attr['VALUE']);
 			if ($this->mpdf->onlyCoreFonts) {
-				$attr['VALUE'] = mb_convert_encoding($attr['VALUE'], $this->mpdf->mb_enc, 'UTF-8');
+				$attr['VALUE'] = $this->mpdf->utf8ToWin1252($attr['VALUE'], '');
 			}
 			$objattr['value'] = $attr['VALUE'];
 		}

@@ -58,8 +58,8 @@ class StringWidthDecodingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Letter spacing is charged on every character but the soft hyphens, word spacing on every space, and a
-	 * four-byte character counts once. The counts come from the decoded run rather than from byte counts of
+	 * Letter spacing is charged on every character but the soft hyphens and zero-width spaces, which are never drawn,
+	 * word spacing on every space, and a four-byte character counts once. The counts come from the decoded run rather than from byte counts of
 	 * the string, so this pins what each of those characters contributes.
 	 *
 	 * @dataProvider spacedStrings
@@ -93,7 +93,7 @@ class StringWidthDecodingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'plain' => ['one two three', 13, 2],
 			'soft hyphens do not count' => ['ex' . self::SHY . 'tra' . self::SHY . 'or', 7, 0],
 			'an astral character counts once' => ['a ' . self::CLEF . ' b', 5, 2],
-			'a zero width space counts' => ['one' . self::ZWSP . 'two', 7, 0],
+			'a zero width space does not count' => ['one' . self::ZWSP . 'two', 6, 0],
 		];
 	}
 
