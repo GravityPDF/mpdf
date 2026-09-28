@@ -17,7 +17,7 @@ jobs:
 
     name: "E-invoice interop"
 
-    runs-on: ${{ matrix.operating-system }}
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -26,10 +26,8 @@ jobs:
         # than in require-dev, each on the versions it supports
         include:
           - php-version: "7.3"
-            operating-system: "ubuntu-latest"
             packages: "horstoeko/zugferd"
           - php-version: "8.5"
-            operating-system: "ubuntu-latest"
             packages: "horstoeko/zugferd easybill/e-invoicing"
 
     steps:
@@ -63,5 +61,5 @@ jobs:
       - name: "Tests"
         run: composer test -- --group=interop
         env:
-          # Fails the tests rather than skipping them if the packages did not install
-          EINVOICE_INTEROP: "1"
+          # A test whose package is named here fails, rather than skips, when the package is missing
+          EINVOICE_INTEROP: "${{ matrix.packages }}"

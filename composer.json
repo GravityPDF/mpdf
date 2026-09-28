@@ -54,7 +54,7 @@
 		"ext-openssl": "Needed to encrypt documents with SetProtection()",
 		"ext-fileinfo": "Needed to check the type of the files annotations embed",
 		"ext-imagick": "Needed if developing the Mpdf library",
-		"easybill/e-invoicing": "Writes the Factur-X / ZUGFeRD / XRechnung XML that SetEmbeddedInvoice() embeds, and UBL, both of which HtmlInvoiceWriter prints (PHP 8.3+)",
+		"easybill/e-invoicing": "Writes the Factur-X / ZUGFeRD / XRechnung XML that SetEmbeddedInvoice() embeds, and UBL; HtmlInvoiceWriter prints both (PHP 8.3+)",
 		"horstoeko/zugferd": "Writes the Factur-X / ZUGFeRD / XRechnung XML that SetEmbeddedInvoice() embeds, on PHP older than 8.3",
 		"mpdf/font-bundle-all": "All official mPDF fonts that offers coverage for common and uncommon scripts worldwide. Uses 110MB of disk space.",
 		"mpdf/font-bundle-lite": "A subset of official mPDF fonts that offers coverage for most common scripts. Uses 30MB of disk space.",

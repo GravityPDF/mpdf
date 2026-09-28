@@ -92,10 +92,7 @@ class FacturX implements EmbeddedInvoiceInterface
 			throw new MpdfException(sprintf('The %s invoice XML must be a non-empty string.', $this->getSpecification()));
 		}
 
-		// The root element, after any BOM, XML declaration, processing instructions and comments
-		if (preg_match('/^(?:\xEF\xBB\xBF)?(?:\s|<\?.*?\?>|<!--.*?-->)*<(?:[\w.-]+:)?(?:Invoice|CreditNote)[\s\/>]/s', $xml)) {
-			throw new MpdfException(sprintf('%s embeds Cross Industry Invoice XML, not a UBL Invoice or CreditNote.', $this->getSpecification()));
-		}
+		$this->checkSyntax($xml);
 
 		$conformanceLevel = strtoupper($conformanceLevel === null ? $this->readLevel($xml) : $conformanceLevel);
 		if (!in_array($conformanceLevel, $this->getGuidelines(), true)) {
@@ -104,6 +101,24 @@ class FacturX implements EmbeddedInvoiceInterface
 
 		$this->xml = $xml;
 		$this->conformanceLevel = $conformanceLevel;
+	}
+
+	/**
+	 * Refuse a UBL Invoice or CreditNote, as Factur-X embeds Cross Industry Invoice XML only
+	 *
+	 * Called by the constructor, before any state of a subclass's own is set.
+	 *
+	 * @param string $xml
+	 *
+	 * @throws \Mpdf\MpdfException
+	 */
+	protected function checkSyntax($xml)
+	{
+		// The root element, after any BOM, XML declaration, processing instructions and comments. Each of those ends at
+		// its first closing delimiter, so the group is atomic and never backtracks.
+		if (preg_match('/^(?:\xEF\xBB\xBF)?(?>\s|<\?.*?\?>|<!--.*?-->)*<(?:[\w.-]+:)?(?:Invoice|CreditNote)[\s\/>]/s', $xml)) {
+			throw new MpdfException(sprintf('%s embeds Cross Industry Invoice XML, not a UBL Invoice or CreditNote.', $this->getSpecification()));
+		}
 	}
 
 	/**

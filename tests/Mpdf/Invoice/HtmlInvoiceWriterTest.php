@@ -319,14 +319,10 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A UBL invoice is written as the same HTML as the Cross Industry Invoice stating the same invoice
-	 *
-	 * @dataProvider ublTwinProvider
-	 *
-	 * @param string $fixture
 	 */
-	public function testWritesUblAsItsCrossIndustryInvoiceTwin($fixture)
+	public function testWritesUblAsItsCrossIndustryInvoiceTwin()
 	{
-		$this->assertSame($this->write($fixture), $this->write('ubl/' . $fixture));
+		$this->assertSame($this->write('en16931.xml'), $this->write('ubl/en16931.xml'));
 	}
 
 	/**

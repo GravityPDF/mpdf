@@ -2,6 +2,7 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\InteropPackage;
 use Mpdf\InvoiceFixtures;
 
 /**
@@ -9,33 +10,24 @@ use Mpdf\InvoiceFixtures;
  * was read from
  *
  * The package needs PHP 8.3, so it is not in require-dev; the einvoice-interop workflow installs it and runs this group
- * on PHP 8.5, where a missing package fails the tests; elsewhere they are skipped.
+ * on PHP 8.5.
  *
  * @group interop
  */
 class EasybillEInvoicingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
+	use InteropPackage;
 	use InvoiceFixtures;
 
 	/**
-	 * Skip below PHP 8.3 or unless easybill/e-invoicing is installed, or fail in the einvoice-interop workflow
+	 * Skip unless easybill/e-invoicing is installed
 	 */
 	protected function set_up()
 	{
 		parent::set_up();
 
-		if (PHP_VERSION_ID < 80300) {
-			$this->markTestSkipped('easybill/e-invoicing needs PHP 8.3');
-		}
-
-		if (!class_exists('easybill\eInvoicing\Transformer')) {
-			if (getenv('EINVOICE_INTEROP')) {
-				$this->fail('easybill/e-invoicing is not installed, but the einvoice-interop workflow needs it');
-			}
-
-			$this->markTestSkipped('easybill/e-invoicing is not installed; run composer require --dev easybill/e-invoicing');
-		}
+		$this->requirePackage('easybill\eInvoicing\Transformer', 'easybill/e-invoicing');
 	}
 
 	/**
@@ -49,10 +41,12 @@ class EasybillEInvoicingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function fixtureProvider()
 	{
 		$fixtures = [];
-		foreach (array_merge(glob(__DIR__ . '/../../data/invoice/*.xml'), glob(__DIR__ . '/../../data/invoice/ubl/*.xml')) as $path) {
-			$fixture = basename(dirname($path)) === 'ubl' ? 'ubl/' . basename($path) : basename($path);
-			if (!in_array($fixture, ['extended.xml', 'ubl/en16931-shop.xml'], true)) {
-				$fixtures[$fixture] = [$fixture];
+		foreach (['', 'ubl/'] as $directory) {
+			foreach (glob(__DIR__ . '/../../data/invoice/' . $directory . '*.xml') as $path) {
+				$fixture = $directory . basename($path);
+				if (!in_array($fixture, ['extended.xml', 'ubl/en16931-shop.xml'], true)) {
+					$fixtures[$fixture] = [$fixture];
+				}
 			}
 		}
 

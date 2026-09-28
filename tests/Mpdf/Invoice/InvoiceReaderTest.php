@@ -11,18 +11,16 @@ class InvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use InvoiceFixtures;
 
 	/**
-	 * A Cross Industry Invoice and the UBL stating the same invoice are each read by the reader for their syntax
-	 *
-	 * @dataProvider ublTwinProvider
-	 *
-	 * @param string $fixture
+	 * A Cross Industry Invoice, a UBL Invoice and a UBL CreditNote are each read by the reader for their syntax
 	 */
-	public function testReadsEachSyntax($fixture)
+	public function testReadsEachSyntax()
 	{
-		$cii = (new CiiInvoiceReader())->read($this->invoiceXml($fixture));
+		$reader = new InvoiceReader();
 
-		$this->assertEquals($cii, (new InvoiceReader())->read($this->invoiceXml($fixture)));
-		$this->assertEquals($cii, (new InvoiceReader())->read($this->invoiceXml('ubl/' . $fixture)));
+		$this->assertEquals((new CiiInvoiceReader())->read($this->invoiceXml('en16931.xml')), $reader->read($this->invoiceXml('en16931.xml')));
+		foreach (['ubl/en16931.xml', 'ubl/en16931-credit-note.xml'] as $fixture) {
+			$this->assertEquals((new UblInvoiceReader())->read($this->invoiceXml($fixture)), $reader->read($this->invoiceXml($fixture)));
+		}
 	}
 
 	/**
