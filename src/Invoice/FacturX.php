@@ -91,6 +91,10 @@ class FacturX implements EmbeddedInvoiceInterface
 			throw new MpdfException(sprintf('The %s invoice XML must be a non-empty string.', $this->getSpecification()));
 		}
 
+		if (preg_match('/urn:oasis:names:specification:ubl:schema:xsd:(?:Invoice|CreditNote)-2/', $xml)) {
+			throw new MpdfException(sprintf('%s embeds Cross Industry Invoice XML, not a UBL Invoice or CreditNote.', $this->getSpecification()));
+		}
+
 		$conformanceLevel = strtoupper($conformanceLevel === null ? $this->readLevel($xml) : $conformanceLevel);
 		if (!in_array($conformanceLevel, $this->getGuidelines(), true)) {
 			throw new MpdfException(sprintf('%s conformance level "%s" is not valid. %s', $this->getSpecification(), $conformanceLevel, $this->passTheLevel()));

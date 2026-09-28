@@ -6,8 +6,8 @@ use Mpdf\MpdfException;
 use Mpdf\Strict;
 
 /**
- * Writes Cross Industry Invoice XML as HTML for the page: the parties, the lines, the VAT breakdown, the totals and how
- * to pay
+ * Writes Cross Industry Invoice or UBL invoice XML as HTML for the page: the parties, the lines, the VAT breakdown, the
+ * totals and how to pay
  *
  * It prints what the XML states, totals included, so the printed invoice and the embedded one agree. A Formatter sets
  * how numbers, amounts and dates are written, and labels translate it:
@@ -19,7 +19,10 @@ use Mpdf\Strict;
  * Its elements carry invoice-* classes, which a <style> block ahead of the invoice draws. Pass false as $styles to
  * leave that block out, for a document that styles them itself.
  *
- * It reads the XML with CiiInvoiceReader, which neither validates it nor checks its totals.
+ * A UBL invoice prints the same way, but Factur-X embeds CII only, so a PDF printed from UBL is only a readable copy of
+ * the invoice.
+ *
+ * It reads the XML with InvoiceReader, which neither validates it nor checks its totals.
  */
 class HtmlInvoiceWriter
 {
@@ -127,7 +130,7 @@ class HtmlInvoiceWriter
 	];
 
 	/**
-	 * The label for each UNTDID 2475 code saying when VAT falls due (BT-8), as CII writes them
+	 * The label for each UNTDID 2475 code saying when VAT falls due (BT-8), as the reader gives them
 	 *
 	 * @var string[]
 	 */
@@ -217,15 +220,16 @@ class HtmlInvoiceWriter
 	/**
 	 * The invoice as HTML, headed by its type and number, after its <style> block unless $styles was false
 	 *
-	 * @param string $xml Cross Industry Invoice XML, at any Factur-X / ZUGFeRD profile or as XRechnung CII
+	 * @param string $xml Cross Industry Invoice XML, at any Factur-X / ZUGFeRD profile or as XRechnung CII, or a UBL
+	 *                    Invoice or CreditNote
 	 *
 	 * @return string
 	 *
-	 * @throws \Mpdf\MpdfException When the XML is not a Cross Industry Invoice
+	 * @throws \Mpdf\MpdfException When the XML is neither a Cross Industry Invoice nor a UBL Invoice or CreditNote
 	 */
 	public function write($xml)
 	{
-		$invoice = (new CiiInvoiceReader())->read($xml);
+		$invoice = (new InvoiceReader())->read($xml);
 
 		$title = $this->title($invoice['typeCode']);
 
@@ -571,7 +575,7 @@ class HtmlInvoiceWriter
 	 * worked out on when it names one, which switches to the label ending in On
 	 *
 	 * @param string $label earlyPaymentDiscount or latePaymentPenalty
-	 * @param mixed[] $adjustment As CiiInvoiceReader reads paymentDiscounts and paymentPenalties
+	 * @param mixed[] $adjustment As InvoiceReader reads paymentDiscounts and paymentPenalties
 	 * @param string|null $currency
 	 *
 	 * @return string|null Null when it gives no period, or neither a rate nor an amount

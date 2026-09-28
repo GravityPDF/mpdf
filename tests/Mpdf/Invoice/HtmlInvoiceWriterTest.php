@@ -318,14 +318,26 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * XML that is not a Cross Industry Invoice is refused, as a UBL invoice is
+	 * A UBL invoice is written as the same HTML as the Cross Industry Invoice stating the same invoice
+	 *
+	 * @dataProvider ublTwinProvider
+	 *
+	 * @param string $fixture
 	 */
-	public function testRefusesXmlThatIsNotACrossIndustryInvoice()
+	public function testWritesUblAsItsCrossIndustryInvoiceTwin($fixture)
+	{
+		$this->assertSame($this->write($fixture), $this->write('ubl/' . $fixture));
+	}
+
+	/**
+	 * XML that is neither a Cross Industry Invoice nor a UBL invoice is refused, as a UBL order is
+	 */
+	public function testRefusesXmlThatIsNotAnInvoice()
 	{
 		$this->expectException(MpdfException::class);
-		$this->expectExceptionMessage('reads Cross Industry Invoice XML, not a {urn:oasis:names:specification:ubl:schema:xsd:Invoice-2}Invoice document');
+		$this->expectExceptionMessage('reads Cross Industry Invoice or UBL invoice XML, not a {urn:oasis:names:specification:ubl:schema:xsd:Order-2}Order document');
 
-		$this->htmlWriter()->write('<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"/>');
+		$this->htmlWriter()->write('<Order xmlns="urn:oasis:names:specification:ubl:schema:xsd:Order-2"/>');
 	}
 
 	/**
