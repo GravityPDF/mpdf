@@ -5,6 +5,7 @@ namespace Mpdf;
 use Mpdf\Color\ColorConverter;
 use Mpdf\Color\ColorModeConverter;
 use Mpdf\Color\ColorSpaceRestrictor;
+use Mpdf\Color\OutputIntent;
 use Mpdf\Css\BorderMerger;
 use Mpdf\Css\CssMerger;
 use Mpdf\Css\CssParser;
@@ -164,7 +165,7 @@ class ServiceFactory
 
 		$fontWriter = new FontWriter($mpdf, $writer, $fontCache, $fontDescriptor, $logger);
 		$xmpExtensions = new XmpExtensions();
-		$metadataWriter = new MetadataWriter($mpdf, $writer, $form, $protection, $assetFetcher, $xmpExtensions, $logger);
+		$metadataWriter = new MetadataWriter($mpdf, $writer, $form, $protection, $assetFetcher, $xmpExtensions, new OutputIntent($mpdf), $logger);
 		$imageWriter = new ImageWriter($mpdf, $writer);
 		$pageWriter = new PageWriter($mpdf, $form, $writer, $metadataWriter);
 		$bookmarkWriter = new BookmarkWriter($mpdf, $writer);

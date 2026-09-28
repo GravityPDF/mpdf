@@ -6,6 +6,7 @@ use Mpdf\Config\ConfigVariables;
 use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
+use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextVars;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
@@ -1776,19 +1777,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if (!isset($this->iccChannels[$profile])) {
-			$header = is_readable($profile) ? (string) file_get_contents($profile, false, null, 0, 20) : '';
-			list($channels, $permitted) = $this->isPdfx4()
-				? [['GRAY' => 1, 'RGB ' => 3, 'CMYK' => 4], 'grey, RGB or CMYK']
-				: [['CMYK' => 4], 'CMYK'];
-			$space = substr($header, 16, 4);
-			if (!isset($channels[$space])) {
-				throw new \Mpdf\MpdfException(sprintf('The %s output intent must print to %s, and ICCProfile "%s" does not.', $this->isPdfx4() ? 'PDF/X-4' : 'PDF/X-1a', $permitted, $profile));
+			$icc = new IccProfile($profile);
+			list($permitted, $spaces) = $this->isPdfx4()
+				? [$icc->isGreyRgbOrCmyk(), 'grey, RGB or CMYK']
+				: [$icc->colorSpace() === 'CMYK', 'CMYK'];
+			if (!$permitted) {
+				throw new \Mpdf\MpdfException(sprintf('The %s output intent must print to %s, and ICCProfile "%s" does not.', $this->isPdfx4() ? 'PDF/X-4' : 'PDF/X-1a', $spaces, $profile));
 			}
-			$class = substr($header, 12, 4);
-			if ($class !== 'prtr') {
-				throw new \Mpdf\MpdfException(sprintf('The %s output intent must be a printer (prtr) profile, and ICCProfile "%s" is of the %s class.', $this->pdfxVersionLabel(), $profile, trim($class)));
+			if ($icc->deviceClass() !== 'prtr') {
+				throw new \Mpdf\MpdfException(sprintf('The %s output intent must be a printer (prtr) profile, and ICCProfile "%s" is of the %s class.', $this->pdfxVersionLabel(), $profile, trim($icc->deviceClass())));
 			}
-			$this->iccChannels[$profile] = $channels[$space];
+			$this->iccChannels[$profile] = $icc->channels();
 		}
 
 		return $this->iccChannels[$profile];

@@ -176,6 +176,41 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The output intent conforms when PDFAauto embeds the bundled SWOP profile, and when a greyscale document names a
+	 * CMYK or grey profile (#449)
+	 *
+	 * @dataProvider outputIntents
+	 *
+	 * @param string  $version
+	 * @param mixed[] $config
+	 */
+	public function testOutputIntentConforms($version, $config)
+	{
+		$mpdf = $this->pdfa($version, $config);
+		$mpdf->WriteHTML('<p style="color: red">Red</p><div style="background: #336699; height: 10mm"></div>');
+
+		$this->assertConforms($this->write($mpdf), $this->flavour($mpdf));
+	}
+
+	/**
+	 * PDF/A-1b and PDF/A-2b, which veraPDF holds to different device colour clauses, each with a CMYK document under
+	 * PDFAauto and a greyscale document under a CMYK and a grey profile
+	 *
+	 * @return mixed[][]
+	 */
+	public function outputIntents()
+	{
+		$intents = [];
+		foreach (['1-B', '2-B'] as $version) {
+			$intents[$version . ' CMYK, bundled SWOP'] = [$version, ['restrictColorSpace' => 3]];
+			$intents[$version . ' greyscale, CMYK profile'] = [$version, ['restrictColorSpace' => 1, 'ICCProfile' => Mpdf::PDFX4_OUTPUT_PROFILE]];
+			$intents[$version . ' greyscale, grey profile'] = [$version, ['restrictColorSpace' => 1, 'ICCProfile' => \Mpdf\Writer\BaseWriter::GRAY_PROFILE]];
+		}
+
+		return $intents;
+	}
+
+	/**
 	 * PDF/A-1b, which allows no optional content, and PDF/A-2b and PDF/A-2u, which allow it for hidden content only
 	 *
 	 * @return string[][]
