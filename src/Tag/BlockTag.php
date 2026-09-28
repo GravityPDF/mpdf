@@ -488,6 +488,10 @@ abstract class BlockTag extends Tag
 		$currblk['attr'] = $attr;
 
 		$properties = $this->cssManager->MergeCSS('BLOCK', $tag, $attr); // mPDF 6 - moved to after page-break-before
+		// The <div> standing in for a positioned block passes that block's descendant rules on to its content
+		if ($this->mpdf->fixedPosBlockCascadeCSS !== null && $this->mpdf->blklvl == 1) {
+			$currblk['cascadeCSS'] = $this->mpdf->fixedPosBlockCascadeCSS;
+		}
 		if ($snapshot !== null) {
 			$currblk['keep_block_together'] = 1;
 			$currblk['array_i'] = $ihtml;
