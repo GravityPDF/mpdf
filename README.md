@@ -20,6 +20,12 @@ How this fork tracks upstream
   `Keep a top caption with its table under use_kwt (mpdf/mpdf#1666)`.
 - `origin` is `GravityPDF/mpdf`. Upstream is configured as the `upstream` remote.
 
+Changelog
+---------
+
+[CHANGELOG-GRAVITYPDF.md](CHANGELOG-GRAVITYPDF.md) lists the changes made on `gravitypdf` since it branched from
+upstream. [CHANGELOG.md](CHANGELOG.md) is kept identical to upstream's and lists upstream's releases.
+
 Requirements
 ------------
 
