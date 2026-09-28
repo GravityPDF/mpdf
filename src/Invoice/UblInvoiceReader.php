@@ -3,8 +3,8 @@
 namespace Mpdf\Invoice;
 
 /**
- * Reads what a printed invoice shows from a UBL 2.1 Invoice or CreditNote, as EN 16931 binds them and Peppol BIS
- * Billing and XRechnung use them, as AbstractInvoiceReader describes
+ * Reads what a printed invoice shows from a UBL 2.1 Invoice or CreditNote, as Peppol BIS Billing and XRechnung use
+ * them, into the array AbstractInvoiceReader describes
  *
  * UBL has no structured payment terms in EN 16931, so its only discounts are XRechnung's Skonto lines, and it has no
  * penalties.
@@ -45,22 +45,20 @@ class UblInvoiceReader extends AbstractInvoiceReader
 			'cbc' => self::NS_CBC,
 		]);
 
-		$currency = $this->text('cbc:DocumentCurrencyCode', $root);
 		$delivery = $this->node('cac:Delivery', $root);
-		$dueDate = $this->date('cbc:DueDate', $root);
 		list($terms, $discounts) = $this->paymentTerms($this->texts('cac:PaymentTerms/cbc:Note', $root));
 
 		return [
 			'id' => $this->text('cbc:ID', $root),
 			'typeCode' => $this->text('cbc:InvoiceTypeCode | cbc:CreditNoteTypeCode', $root),
 			'issueDate' => $this->date('cbc:IssueDate', $root),
-			'currency' => $currency,
+			'currency' => $this->text('cbc:DocumentCurrencyCode', $root),
 			'notes' => $this->notes($root),
 			'buyerReference' => $this->text('cbc:BuyerReference', $root),
 			'orderReference' => $this->text('cac:OrderReference/cbc:ID', $root),
 			'deliveryDate' => $this->date('cbc:ActualDeliveryDate', $delivery),
 			// A CreditNote has no DueDate, and gives its due date with the payment means
-			'dueDate' => $dueDate !== null ? $dueDate : $this->date('cac:PaymentMeans/cbc:PaymentDueDate', $root),
+			'dueDate' => $this->date('cbc:DueDate | cac:PaymentMeans/cbc:PaymentDueDate', $root),
 			'precedingInvoices' => $this->precedingInvoices($root),
 			'seller' => $this->party($this->node('cac:AccountingSupplierParty/cac:Party', $root)),
 			'buyer' => $this->party($this->node('cac:AccountingCustomerParty/cac:Party', $root)),
@@ -68,7 +66,7 @@ class UblInvoiceReader extends AbstractInvoiceReader
 			'lines' => $this->lines($root),
 			'allowanceCharges' => $this->allowanceCharges($root),
 			'vatBreakdown' => $this->vatBreakdown($root),
-			'totals' => $this->totals($root, $currency),
+			'totals' => $this->totals($root),
 			'paymentTerms' => $terms,
 			'paymentDiscounts' => $discounts,
 			'paymentPenalties' => [],
@@ -86,9 +84,15 @@ class UblInvoiceReader extends AbstractInvoiceReader
 	 */
 	private function notes(\DOMElement $root)
 	{
-		return array_values(array_filter(array_map(function ($note) {
-			return trim(preg_replace('/^#[A-Z]{3}#/', '', $note));
-		}, $this->texts('cbc:Note', $root)), 'strlen'));
+		$notes = [];
+		foreach ($this->texts('cbc:Note', $root) as $note) {
+			$note = trim(preg_replace('/^#[A-Z]{3}#/', '', $note));
+			if ($note !== '') {
+				$notes[] = $note;
+			}
+		}
+
+		return $notes;
 	}
 
 	/**
@@ -255,14 +259,13 @@ class UblInvoiceReader extends AbstractInvoiceReader
 	 * The invoice's totals, with its VAT in the invoice's own currency where the XML also gives it in another
 	 *
 	 * @param \DOMElement $root
-	 * @param string|null $currency
 	 *
 	 * @return mixed[]
 	 */
-	private function totals(\DOMElement $root, $currency)
+	private function totals(\DOMElement $root)
 	{
 		$summation = $this->node('cac:LegalMonetaryTotal', $root);
-		$taxTotal = preg_match('/^[A-Z]{3}$/', (string) $currency) ? $this->amount('cac:TaxTotal/cbc:TaxAmount[@currencyID="' . $currency . '"]', $root) : null;
+		$taxTotal = $this->amount('cac:TaxTotal/cbc:TaxAmount[@currencyID = /*/cbc:DocumentCurrencyCode]', $root);
 
 		return [
 			'lineTotal' => $this->amount('cbc:LineExtensionAmount', $summation),

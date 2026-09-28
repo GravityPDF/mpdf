@@ -3,7 +3,7 @@
 namespace Mpdf\Invoice;
 
 /**
- * Reads what a printed invoice shows from Cross Industry Invoice or UBL XML, whichever the XML is, as
+ * Reads what a printed invoice shows from Cross Industry Invoice or UBL XML, whichever the XML is, into the array
  * AbstractInvoiceReader describes
  *
  *     $invoice = (new InvoiceReader())->read($xml);
@@ -12,7 +12,18 @@ class InvoiceReader extends AbstractInvoiceReader
 {
 
 	/**
-	 * The invoice a parsed document states, read by CiiInvoiceReader or UblInvoiceReader by its root element
+	 * The reader for each namespace a root element can be in
+	 *
+	 * @var string[]
+	 */
+	private static $readers = [
+		CiiInvoiceReader::NS_RSM => CiiInvoiceReader::class,
+		UblInvoiceReader::NS_INVOICE => UblInvoiceReader::class,
+		UblInvoiceReader::NS_CREDIT_NOTE => UblInvoiceReader::class,
+	];
+
+	/**
+	 * The invoice a parsed document states, read by the reader for its root element's namespace
 	 *
 	 * @param \DOMDocument $document
 	 *
@@ -22,25 +33,24 @@ class InvoiceReader extends AbstractInvoiceReader
 	 */
 	protected function readDocument(\DOMDocument $document)
 	{
-		$root = $this->root($document, 'Cross Industry Invoice or UBL invoice XML', [
-			'{' . CiiInvoiceReader::NS_RSM . '}CrossIndustryInvoice',
-			'{' . UblInvoiceReader::NS_INVOICE . '}Invoice',
-			'{' . UblInvoiceReader::NS_CREDIT_NOTE . '}CreditNote',
-		], []);
+		$root = $document->documentElement;
+		if ($root->namespaceURI === null || !isset(self::$readers[$root->namespaceURI])) {
+			throw $this->unreadable($root, 'Cross Industry Invoice or UBL invoice XML');
+		}
 
-		return $this->reader($root)->readDocument($document);
+		return $this->reader(self::$readers[$root->namespaceURI])->readDocument($document);
 	}
 
 	/**
-	 * The reader for the syntax of a root element readDocument() has checked
+	 * A reader of the class named
 	 *
-	 * @param \DOMElement $root
+	 * @param string $class
 	 *
 	 * @return \Mpdf\Invoice\AbstractInvoiceReader
 	 */
-	private function reader(\DOMElement $root)
+	private function reader($class)
 	{
-		return $root->namespaceURI === CiiInvoiceReader::NS_RSM ? new CiiInvoiceReader() : new UblInvoiceReader();
+		return new $class();
 	}
 
 }

@@ -118,9 +118,8 @@ abstract class AbstractInvoiceReader
 	protected function root(\DOMDocument $document, $syntax, array $roots, array $namespaces)
 	{
 		$root = $document->documentElement;
-		$name = sprintf('{%s}%s', $root->namespaceURI, $root->localName);
-		if (!in_array($name, $roots, true)) {
-			throw new MpdfException(sprintf('%s reads %s, not a %s document.', get_class($this), $syntax, $name));
+		if (!in_array(sprintf('{%s}%s', $root->namespaceURI, $root->localName), $roots, true)) {
+			throw $this->unreadable($root, $syntax);
 		}
 
 		$this->xpath = new \DOMXPath($document);
@@ -129,6 +128,19 @@ abstract class AbstractInvoiceReader
 		}
 
 		return $root;
+	}
+
+	/**
+	 * The exception for a root element the reader does not read
+	 *
+	 * @param \DOMElement $root
+	 * @param string $syntax The syntax the reader does read, e.g. "UBL invoice XML"
+	 *
+	 * @return \Mpdf\MpdfException
+	 */
+	protected function unreadable(\DOMElement $root, $syntax)
+	{
+		return new MpdfException(sprintf('%s reads %s, not a {%s}%s document.', get_class($this), $syntax, $root->namespaceURI, $root->localName));
 	}
 
 	/**

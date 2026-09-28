@@ -330,17 +330,6 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * XML that is neither a Cross Industry Invoice nor a UBL invoice is refused, as a UBL order is
-	 */
-	public function testRefusesXmlThatIsNotAnInvoice()
-	{
-		$this->expectException(MpdfException::class);
-		$this->expectExceptionMessage('reads Cross Industry Invoice or UBL invoice XML, not a {urn:oasis:names:specification:ubl:schema:xsd:Order-2}Order document');
-
-		$this->htmlWriter()->write('<Order xmlns="urn:oasis:names:specification:ubl:schema:xsd:Order-2"/>');
-	}
-
-	/**
 	 * A fixture in tests/data/invoice written by the British writer
 	 *
 	 * @param string $fixture

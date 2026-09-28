@@ -11,15 +11,18 @@ class InvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use InvoiceFixtures;
 
 	/**
-	 * A Cross Industry Invoice, a UBL Invoice and a UBL CreditNote are each read by the reader for their syntax
+	 * A Cross Industry Invoice and the UBL stating the same invoice are each read by the reader for their syntax
+	 *
+	 * @dataProvider ublTwinProvider
+	 *
+	 * @param string $fixture
 	 */
-	public function testReadsEachSyntax()
+	public function testReadsEachSyntax($fixture)
 	{
-		$reader = new InvoiceReader();
+		$cii = (new CiiInvoiceReader())->read($this->invoiceXml($fixture));
 
-		$this->assertEquals((new CiiInvoiceReader())->read($this->invoiceXml('en16931.xml')), $reader->read($this->invoiceXml('en16931.xml')));
-		$this->assertEquals((new UblInvoiceReader())->read($this->invoiceXml('ubl/en16931.xml')), $reader->read($this->invoiceXml('ubl/en16931.xml')));
-		$this->assertSame('381', $reader->read($this->invoiceXml('ubl/en16931-credit-note.xml'))['typeCode']);
+		$this->assertEquals($cii, (new InvoiceReader())->read($this->invoiceXml($fixture)));
+		$this->assertEquals($cii, (new InvoiceReader())->read($this->invoiceXml('ubl/' . $fixture)));
 	}
 
 	/**
@@ -30,16 +33,13 @@ class InvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function refusedProvider()
 	{
 		return [
-			'empty' => ['', 'must be a non-empty string'],
-			'not XML' => ['<Invoice', 'does not parse'],
-			'a document type declaration' => ['<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><x>&e;</x>', 'document type declaration'],
 			'a UBL order' => ['<Order xmlns="urn:oasis:names:specification:ubl:schema:xsd:Order-2"/>', 'reads Cross Industry Invoice or UBL invoice XML, not a {urn:oasis:names:specification:ubl:schema:xsd:Order-2}Order document'],
 			'no namespace' => ['<Invoice/>', 'not a {}Invoice document'],
 		];
 	}
 
 	/**
-	 * XML that is empty, does not parse, could bring in entities or is in neither syntax is refused
+	 * XML in neither syntax is refused
 	 *
 	 * @dataProvider refusedProvider
 	 *

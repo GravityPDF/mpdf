@@ -4,7 +4,7 @@ namespace Mpdf\Invoice;
 
 /**
  * Reads what a printed invoice shows from Cross Industry Invoice (CII) XML, the syntax Factur-X, ZUGFeRD and XRechnung
- * CII share, as AbstractInvoiceReader describes
+ * CII share, into the array AbstractInvoiceReader describes
  *
  * @see https://fnfe-mpe.org/factur-x/factur-x_en/ Factur-X, whose CII this reads
  */
@@ -37,7 +37,6 @@ class CiiInvoiceReader extends AbstractInvoiceReader
 		$agreement = $this->node('rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement', $root);
 		$delivery = $this->node('rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeDelivery', $root);
 		$settlement = $this->node('rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement', $root);
-		$currency = $this->text('ram:InvoiceCurrencyCode', $settlement);
 
 		list($terms, $discounts) = $this->paymentTerms($this->texts('ram:SpecifiedTradePaymentTerms/ram:Description', $settlement));
 		foreach ($this->nodes('ram:SpecifiedTradePaymentTerms/ram:ApplicableTradePaymentDiscountTerms', $settlement) as $discount) {
@@ -52,7 +51,7 @@ class CiiInvoiceReader extends AbstractInvoiceReader
 			'id' => $this->text('rsm:ExchangedDocument/ram:ID', $root),
 			'typeCode' => $this->text('rsm:ExchangedDocument/ram:TypeCode', $root),
 			'issueDate' => $this->date('rsm:ExchangedDocument/ram:IssueDateTime', $root),
-			'currency' => $currency,
+			'currency' => $this->text('ram:InvoiceCurrencyCode', $settlement),
 			'notes' => $this->texts('rsm:ExchangedDocument/ram:IncludedNote/ram:Content', $root),
 			'buyerReference' => $this->text('ram:BuyerReference', $agreement),
 			'orderReference' => $this->text('ram:BuyerOrderReferencedDocument/ram:IssuerAssignedID', $agreement),
@@ -65,7 +64,7 @@ class CiiInvoiceReader extends AbstractInvoiceReader
 			'lines' => $this->lines($root),
 			'allowanceCharges' => $this->allowanceCharges($settlement),
 			'vatBreakdown' => $this->vatBreakdown($settlement),
-			'totals' => $this->totals($this->node('ram:SpecifiedTradeSettlementHeaderMonetarySummation', $settlement), $currency),
+			'totals' => $this->totals($this->node('ram:SpecifiedTradeSettlementHeaderMonetarySummation', $settlement)),
 			'paymentTerms' => $terms,
 			'paymentDiscounts' => $discounts,
 			'paymentPenalties' => $penalties,
@@ -195,13 +194,12 @@ class CiiInvoiceReader extends AbstractInvoiceReader
 	 * The invoice's totals, with its VAT in the invoice's own currency where the XML also gives it in another
 	 *
 	 * @param \DOMNode|null $summation
-	 * @param string|null $currency
 	 *
 	 * @return mixed[]
 	 */
-	private function totals($summation, $currency)
+	private function totals($summation)
 	{
-		$taxTotal = preg_match('/^[A-Z]{3}$/', (string) $currency) ? $this->amount('ram:TaxTotalAmount[@currencyID="' . $currency . '"]', $summation) : null;
+		$taxTotal = $this->amount('ram:TaxTotalAmount[@currencyID = ../../ram:InvoiceCurrencyCode]', $summation);
 
 		return [
 			'lineTotal' => $this->amount('ram:LineTotalAmount', $summation),

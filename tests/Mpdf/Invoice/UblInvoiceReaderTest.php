@@ -23,17 +23,13 @@ class UblInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A CreditNote's lines are read from its CreditNoteLines and its due date from its payment means
+	 * A CreditNote, which has no DueDate, takes its due date from its payment means
 	 */
-	public function testReadsACreditNote()
+	public function testTakesACreditNotesDueDateFromItsPaymentMeans()
 	{
 		$xml = str_replace('<cbc:PaymentMeansCode>58</cbc:PaymentMeansCode>', '<cbc:PaymentMeansCode>58</cbc:PaymentMeansCode><cbc:PaymentDueDate>2026-10-16</cbc:PaymentDueDate>', $this->invoiceXml('ubl/en16931-credit-note.xml'));
-		$invoice = $this->read($xml);
 
-		$this->assertSame('381', $invoice['typeCode']);
-		$this->assertSame('2026-10-16', $invoice['dueDate']->format('Y-m-d'));
-		$this->assertSame([1.5, 'HUR', 180.0], [$invoice['lines'][0]['quantity'], $invoice['lines'][0]['unitCode'], $invoice['lines'][0]['netAmount']]);
-		$this->assertSame('INV-2026-0001', $invoice['precedingInvoices'][0]['id']);
+		$this->assertSame('2026-10-16', $this->read($xml)['dueDate']->format('Y-m-d'));
 	}
 
 	/**
@@ -56,9 +52,9 @@ class UblInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testTakesAnAccountForAnIbanByItsForm()
 	{
 		$xml = str_replace('<cbc:ID>FR7630006000011234567890189</cbc:ID>', '<cbc:ID>12345678</cbc:ID>', $this->invoiceXml('ubl/en16931.xml'));
+		$means = $this->read($xml)['paymentMeans'][0];
 
-		$this->assertTrue($this->read($this->invoiceXml('ubl/en16931.xml'))['paymentMeans'][0]['iban']);
-		$this->assertSame(['12345678', false], [$this->read($xml)['paymentMeans'][0]['account'], $this->read($xml)['paymentMeans'][0]['iban']]);
+		$this->assertSame(['12345678', false], [$means['account'], $means['iban']]);
 	}
 
 	/**

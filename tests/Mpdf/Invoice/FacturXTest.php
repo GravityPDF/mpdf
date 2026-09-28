@@ -85,6 +85,7 @@ class FacturXTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'no XML' => ['', null, 'The Factur-X invoice XML must be a non-empty string.'],
 			'unknown guideline' => ['<ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:peppol:bis</ram:ID>', null, 'Guideline "urn:peppol:bis" is not a Factur-X guideline, so the conformance level is unknown. Pass one of MINIMUM, BASIC WL, BASIC, EN 16931, EXTENDED, XRECHNUNG as the second argument to the Mpdf\Invoice\FacturX constructor.'],
 			'no guideline' => ['<rsm:CrossIndustryInvoice/>', null, 'The invoice XML does not name a guideline (the ID in GuidelineSpecifiedDocumentContextParameter)'],
+			'a UBL credit note' => ['<?xml version="1.0"?>' . "\n" . '<!-- received -->' . "\n" . '<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"/>', 'EN 16931', 'Factur-X embeds Cross Industry Invoice XML, not a UBL Invoice or CreditNote.'],
 			'UBL' => ['<?xml version="1.0"?>' . "\n" . '<ubl:Invoice xmlns:ubl="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"/>', 'EN 16931', 'Factur-X embeds Cross Industry Invoice XML, not a UBL Invoice or CreditNote.'],
 			'unknown level' => ['<rsm:CrossIndustryInvoice/>', 'COMFORT', 'Factur-X conformance level "COMFORT" is not valid. Pass one of MINIMUM, BASIC WL, BASIC, EN 16931, EXTENDED, XRECHNUNG as the second argument to the Mpdf\Invoice\FacturX constructor.'],
 		];
