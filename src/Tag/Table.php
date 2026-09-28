@@ -777,13 +777,7 @@ class Table extends Tag
 			}
 
 			$unmeasured = empty($this->mpdf->table[1][1]['compressible_images']) ? null : $this->mpdf->table[1][1];
-			list($check, $tablemiw) = $this->mpdf->_tableColumnWidth($this->mpdf->table[1][1], true);
-			// A table too wide for its page is shrunk as a whole, pictures and all, rather than letting a picture sized
-			// by a percentage of its cell narrow that cell to nothing
-			if ($check > 1 && $unmeasured !== null) {
-				$this->mpdf->table[1][1] = $unmeasured;
-				list($check, $tablemiw) = $this->measureKeepingImageWidths($this->mpdf->table[1][1]);
-			}
+			$check = $this->measureTopLevelTable($unmeasured);
 			$save_table = $this->mpdf->table;
 			$reset_to_minimum_width = false;
 			$added_page = false;
@@ -798,6 +792,13 @@ class Table extends Tag
 					$this->mpdf->tbrot_maxw = $this->mpdf->h - ($this->mpdf->y + $this->mpdf->bMargin + 5) - $this->mpdf->kwt_height;
 					//$check = $tablemiw/$this->mpdf->tbrot_maxw; 	// undo any shrink
 					$check = 1;  // undo any shrink
+					// Rotated rather than shrunk, it is measured again for the room it has now, where its pictures need not
+					// keep the widths they kept for a shrink to fit what was left of the last page
+					if ($unmeasured !== null) {
+						$this->mpdf->table[1][1] = $unmeasured;
+						$this->measureTopLevelTable($unmeasured);
+						$save_table = $this->mpdf->table;
+					}
 				}
 				$reset_to_minimum_width = true;
 			}
@@ -1269,6 +1270,26 @@ class Table extends Tag
 			$this->mpdf->InlineBDFctr = $save_bflpc; // mPDF 6
 			$this->mpdf->restoreInlineProperties($save_silp);
 		}
+	}
+
+	/**
+	 * Measure the top-level table's columns against the room it has. One too wide for it is shrunk as a whole,
+	 * pictures and all, so it is measured again with the pictures keeping their widths rather than letting a picture
+	 * sized by a percentage of its cell narrow that cell to nothing.
+	 *
+	 * @param array|null $unmeasured The table before measuring, when it has pictures a column can narrow
+	 *
+	 * @return float How many times too wide for its room the table is
+	 */
+	private function measureTopLevelTable($unmeasured)
+	{
+		list($check) = $this->mpdf->_tableColumnWidth($this->mpdf->table[1][1], true);
+		if ($check > 1 && $unmeasured !== null) {
+			$this->mpdf->table[1][1] = $unmeasured;
+			list($check) = $this->measureKeepingImageWidths($this->mpdf->table[1][1]);
+		}
+
+		return $check;
 	}
 
 	/**

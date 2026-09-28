@@ -57,15 +57,18 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
-	 * Where each image on the first page is placed, keyed w/h/x in millimetres
+	 * Where each image on a page is placed, keyed w/h/x in millimetres
 	 *
 	 * @param string $html
+	 * @param int $page Counted from 0
 	 *
 	 * @return array[]
 	 */
-	private function placements($html)
+	private function placements($html, $page = 0)
 	{
-		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $this->pages($this->render($html))[0], $matches, PREG_SET_ORDER);
+		$pages = $this->pages($this->render($html));
+		$this->assertArrayHasKey($page, $pages);
+		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $pages[$page], $matches, PREG_SET_ORDER);
 
 		return array_map(function ($match) {
 			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $match[2] / Mpdf::SCALE, 'x' => $match[3] / Mpdf::SCALE];
@@ -209,6 +212,20 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 
 		$this->assertGreaterThan(10, $without);
 		$this->assertEqualsWithDelta($without, $this->drawnWidth(sprintf($table, $this->image('max-width: 100%'))), 0.05);
+	}
+
+	/**
+	 * A rotated table with too little of its page left moves to the next, where its picture is sized against its 40mm
+	 * cell as at the top of a page, not kept at the 105.8mm it was measured with for what was left of the last one
+	 */
+	public function testARotatedTableMovedToANewPageSizesItsPictureAgainstTheCell()
+	{
+		$table = '<table rotate="90" style="border-collapse: collapse"><tr>'
+			. '<td style="width: 70mm; padding: 0">' . $this->image('width: 70mm') . '</td>'
+			. '<td style="width: 40mm; padding: 0">' . $this->image('max-width: 100%') . '</td></tr></table>';
+
+		$this->assertEqualsWithDelta(40, $this->placements($table)[1]['w'], 0.05, 'at the top of a page');
+		$this->assertEqualsWithDelta(40, $this->placements('<div style="height: 200mm"></div>' . $table, 1)[1]['w'], 0.05, 'moved to a new page');
 	}
 
 	/**
