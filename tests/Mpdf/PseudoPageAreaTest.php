@@ -10,6 +10,9 @@ namespace Mpdf;
 class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
+	/** A page area 150mm wide on a right page and 170mm on a left page, for a float to run over. */
+	const WIDER_LEFT_PAGES = '@page { margin-left: 30mm; margin-right: 30mm; } @page :left { margin-left: 20mm; margin-right: 20mm; }';
+
 	/**
 	 * A story on a named page starts beside a photograph and carries on over the full width
 	 */
@@ -118,6 +121,111 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Text beside a float that runs over pages of different widths is set in the page area of each page, including the
+	 * pages the float made before the text reached them
+	 *
+	 * @dataProvider floatProvider
+	 *
+	 * @param string $body
+	 * @param array[] $oddPage The float and the text beside it on pages 1 and 3, left to right
+	 * @param array[] $evenPage The same on page 2
+	 */
+	public function testTextBesideAFloatTakesThePageAreaOfEachPage($body, $oddPage, $evenPage)
+	{
+		$mpdf = $this->write(self::WIDER_LEFT_PAGES, $body);
+
+		$this->assertColumns($mpdf, 1, $oddPage);
+		$this->assertColumns($mpdf, 2, $evenPage);
+		$this->assertColumns($mpdf, 3, $oddPage);
+	}
+
+	/**
+	 * Left and right floats, each followed by a block of text or inside the same block as the text, in a document left
+	 * to right and one right to left. A float is 40% of the page area of the first page. That is a right page 150mm
+	 * wide left to right, so the float is 60mm wide, and a left page 170mm wide right to left, so it is 68mm wide.
+	 *
+	 * @return array[]
+	 */
+	public function floatProvider()
+	{
+		$directions = [
+			'' => [
+				'left' => [[[30.0, 90.0], [90.0, 180.0]], [[20.0, 80.0], [80.0, 190.0]]],
+				'right' => [[[30.0, 120.0], [120.0, 180.0]], [[20.0, 130.0], [130.0, 190.0]]],
+			],
+			'rtl' => [
+				'left' => [[[20.0, 88.0], [88.0, 190.0]], [[30.0, 98.0], [98.0, 180.0]]],
+				'right' => [[[20.0, 122.0], [122.0, 190.0]], [[30.0, 112.0], [112.0, 180.0]]],
+			],
+		];
+
+		$cases = [];
+		foreach ($directions as $direction => $floats) {
+			$html = $direction ? '<html dir="' . $direction . '">' : '';
+			$suffix = $direction ? ', right to left' : '';
+			foreach ($floats as $float => $areas) {
+				$floated = '<div style="float: ' . $float . '; width: 40%">' . $this->story(14) . '</div>';
+				$cases[$float . $suffix] = array_merge([$html . $floated . '<div>' . $this->story(20) . '</div>'], $areas);
+				$cases[$float . ' in a block' . $suffix] = array_merge([$html . '<div>' . $floated . $this->story(20) . '</div>'], $areas);
+			}
+		}
+
+		return $cases;
+	}
+
+	/**
+	 * A float and the block around it are painted in the page area of each page, as text goes back to the page the
+	 * float started on and on to the page it ends on
+	 *
+	 * @dataProvider paintedFloatProvider
+	 *
+	 * @param string|string[] $body
+	 * @param array[] $painted The left and right edges of what is painted on each page
+	 */
+	public function testAFloatAndTheBlockAroundItArePaintedInThePageAreaOfEachPage($body, $painted)
+	{
+		$mpdf = $this->write(self::WIDER_LEFT_PAGES, $body);
+
+		$this->assertSame($painted, $this->painted($mpdf));
+	}
+
+	/**
+	 * A right float, with the background on the block around it (which runs on past the float, or ends beside it), on
+	 * the float, left to right and right to left, or on a block that follows it (cleared of it, or written by a later
+	 * WriteHTML() call). Right to left, the first page is a left page, and the float 40% of its 170mm page area.
+	 *
+	 * @return array[]
+	 */
+	public function paintedFloatProvider()
+	{
+		$float = '<div style="float: right; width: 40%">' . $this->story(12) . '</div>';
+		$paintedFloat = '<div style="float: right; width: 40%; background: #0f0">' . $this->story(12) . '</div>';
+		$areas = [1 => [30.0, 180.0], 2 => [20.0, 190.0], 3 => [30.0, 180.0], 4 => [20.0, 190.0]];
+		$afterFloat = [4 => [20.0, 190.0], 5 => [30.0, 180.0]];
+
+		return [
+			'block running past the float' => ['<div style="background: #0f0">' . $float . $this->story(20) . '</div>', $areas],
+			'block ending beside the float' => ['<div style="background: #0f0">' . $float . $this->story(2) . '</div>' . $this->story(10), $areas],
+			'float' => [
+				'<div>' . $paintedFloat . $this->story(20) . '</div>',
+				[1 => [120.0, 180.0], 2 => [130.0, 190.0], 3 => [120.0, 180.0], 4 => [130.0, 190.0]],
+			],
+			'float, right to left' => [
+				'<html dir="rtl"><div>' . $paintedFloat . $this->story(20) . '</div>',
+				[1 => [122.0, 190.0], 2 => [112.0, 180.0], 3 => [122.0, 190.0]],
+			],
+			'block cleared of the float' => [
+				$float . $this->story(2) . '<div style="clear: both; background: #0f0">' . $this->story(10) . '</div>',
+				$afterFloat,
+			],
+			'block written after the float' => [
+				[$float . $this->story(2), '<div style="background: #0f0">' . $this->story(10) . '</div>'],
+				$afterFloat,
+			],
+		];
+	}
+
+	/**
 	 * The narrowest left edge and widest right edge of the lines drawn on each of the first pages, in millimetres
 	 *
 	 * @param string $css
@@ -128,33 +236,34 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function areas($css, $body, $pages)
 	{
-		$areas = [];
-		foreach ($this->write($css, $body)->drawnBoxes as $box) {
-			$areas[$box[0]] = $this->widen(isset($areas[$box[0]]) ? $areas[$box[0]] : null, $box);
-		}
-
-		return array_slice($this->rounded($areas), 0, $pages, true);
+		return array_slice($this->spans($this->write($css, $body)->drawnBoxes), 0, $pages, true);
 	}
 
 	/**
 	 * A document with the style sheet and body, whose lines have been recorded as they were drawn
 	 *
 	 * @param string $css
-	 * @param string $body
+	 * @param string|string[] $body Or its parts, each written by a call of its own; the style sheet goes with the first
 	 *
 	 * @return \Mpdf\TextRecordingMpdf
 	 */
 	private function write($css, $body)
 	{
+		$parts = (array) $body;
+		$parts[0] = '<style>p { text-align: justify; } ' . $css . '</style>' . $parts[0];
+
 		$mpdf = new TextRecordingMpdf(['mode' => 'c']);
-		$mpdf->WriteHTML('<style>p { text-align: justify; } ' . $css . '</style>' . $body);
+		foreach ($parts as $part) {
+			$mpdf->WriteHTML($part);
+		}
 		$mpdf->Output('', 'S');
 
 		return $mpdf;
 	}
 
 	/**
-	 * Every line drawn on the page lies in one of the columns, and the lines of each column fill it
+	 * Every line drawn on the page lies in one of the columns, and the lines of each column fill it: together they span
+	 * it, and most of them end at its right edge, as every line of justified text does but the last of a paragraph
 	 *
 	 * @param \Mpdf\TextRecordingMpdf $mpdf
 	 * @param int $page
@@ -163,6 +272,7 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function assertColumns(TextRecordingMpdf $mpdf, $page, $columns)
 	{
 		$filled = [];
+		$rightEdges = [];
 		foreach ($mpdf->drawnBoxes as $box) {
 			if ($box[0] !== $page) {
 				continue;
@@ -177,35 +287,56 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			}
 			$this->assertNotNull($in, sprintf('A line on page %d runs from %.1f to %.1f', $page, $box[1], $box[2]));
 
-			$filled[$in] = $this->widen(isset($filled[$in]) ? $filled[$in] : null, $box);
+			$filled[] = [$in, $box[1], $box[2]];
+			$rightEdges[$in][] = sprintf('%.1f', $box[2]);
 		}
 
+		$filled = $this->spans($filled);
 		ksort($filled);
-		$this->assertSame($columns, $this->rounded($filled));
+		$this->assertSame($columns, $filled);
+
+		foreach ($rightEdges as $i => $edges) {
+			$atEdge = count(array_keys($edges, sprintf('%.1f', $columns[$i][1])));
+			$this->assertGreaterThan(count($edges) / 2, $atEdge, sprintf('Most lines of column %d on page %d end short of it', $i, $page));
+		}
 	}
 
 	/**
-	 * A span widened to take in a drawn line
+	 * The narrowest left edge and widest right edge of the rectangles painted on each page, in millimetres
 	 *
-	 * @param float[]|null $span The left and right edges found so far, or null for none
-	 * @param array $box The page, left and right edge of the line
+	 * @param \Mpdf\TextRecordingMpdf $mpdf
 	 *
-	 * @return float[]
+	 * @return array[] By page number
 	 */
-	private function widen($span, $box)
+	private function painted(TextRecordingMpdf $mpdf)
 	{
-		return $span ? [min($span[0], $box[1]), max($span[1], $box[2])] : [$box[1], $box[2]];
+		$boxes = [];
+		foreach ($mpdf->pages as $page => $stream) {
+			preg_match_all('/(-?[\d.]+) -?[\d.]+ (-?[\d.]+) -?[\d.]+ re\b/', $stream, $rects, PREG_SET_ORDER);
+			foreach ($rects as $rect) {
+				$x = $rect[1] / Mpdf::SCALE;
+				$boxes[] = [$page, $x, $x + $rect[2] / Mpdf::SCALE];
+			}
+		}
+
+		return $this->spans($boxes);
 	}
 
 	/**
-	 * Spans rounded to a tenth of a millimetre
+	 * The narrowest left edge and widest right edge of the boxes under each key, rounded to a tenth of a millimetre
 	 *
-	 * @param array[] $spans
+	 * @param array[] $boxes Each a key, such as the page, then a left and right edge
 	 *
-	 * @return array[]
+	 * @return array[] By key, in the order the keys first appear
 	 */
-	private function rounded($spans)
+	private function spans($boxes)
 	{
+		$spans = [];
+		foreach ($boxes as $box) {
+			list($key, $left, $right) = $box;
+			$spans[$key] = isset($spans[$key]) ? [min($spans[$key][0], $left), max($spans[$key][1], $right)] : [$left, $right];
+		}
+
 		return array_map(static function ($span) {
 			return [round($span[0], 1), round($span[1], 1)];
 		}, $spans);

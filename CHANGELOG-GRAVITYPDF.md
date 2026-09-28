@@ -88,6 +88,7 @@ New features
 ### Paged media
 
 * **Side margins on `:first`, `:left` and `:right` pages.** The `:first`, `:left` and `:right` pages of an `@page` rule, named or not, can set `margin-left` and `margin-right`. Text flowing from page to page is set in the page area of each page, and columns are laid out across it. A side margin on a pseudo page belongs to that side of the physical page, so it is not mirrored. [#476] [#510]
+  * Text beside a float, and the blocks around it, keep to the page area of each page the float runs over. [#549]
 
 Performance
 -----------
@@ -695,3 +696,4 @@ These changes do not change output.
 [#514]: https://github.com/GravityPDF/mpdf/pull/514
 [#515]: https://github.com/GravityPDF/mpdf/pull/515
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
+[#549]: https://github.com/GravityPDF/mpdf/pull/549

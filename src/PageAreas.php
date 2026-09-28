@@ -83,13 +83,27 @@ trait PageAreas
 		$ws = $this->ws;
 		$charspacing = $this->charspacing;
 		$this->ResetSpacing();
+		$outerLeft = $this->outerLeftMargin();
 
 		$this->AddPage($this->CurOrientation);
 
-		$this->x = $x + $this->MarginCorrection;
+		$shift = $this->MarginCorrection + $this->outerLeftMargin() - $outerLeft;
+		$this->x = $x + $shift;
 		$this->SetSpacing($charspacing, $ws);
 
-		return $this->MarginCorrection;
+		return $shift;
+	}
+
+	/**
+	 * How far the block being written sits in from the left of the page area. It changes over a page turn only for a
+	 * right float, which keeps to the right as the page area changes width under it, and the line carried over the
+	 * turn moves with it.
+	 *
+	 * @return float
+	 */
+	public function outerLeftMargin()
+	{
+		return isset($this->blk[$this->blklvl]['outer_left_margin']) ? $this->blk[$this->blklvl]['outer_left_margin'] : 0;
 	}
 
 	/**
@@ -118,7 +132,7 @@ trait PageAreas
 	 *
 	 * @param float[] $previousArea The page area of the last page, as pageArea() gave it
 	 *
-	 * @return float The width the block being written gained, or 0
+	 * @return float How much wider the block being written became, less than 0 where it narrowed
 	 */
 	public function moveIntoPageArea($previousArea)
 	{
@@ -134,29 +148,75 @@ trait PageAreas
 			return 0;
 		}
 
-		$gained = 0;
-		$taken = 0; // The growth a block with a set width, and every block inside it, puts in its right margin
+		// A block with a set width keeps it. The growth goes into its margin on the side it is not anchored to, the left
+		// of a right float and the right of anything else, and every block inside it moves with it.
+		$outerMargin = null;
 		for ($bl = 1; $bl <= $this->blklvl; $bl++) {
 			if (!isset($this->blk[$bl]['width'])) {
 				continue;
 			}
 
 			$blk = &$this->blk[$bl];
-			$blk['outer_right_margin'] += $taken;
 
-			if (!empty($blk['css_set_width']) && $taken != $growth) {
-				$blk['margin_right'] += $growth - $taken;
-				$blk['outer_right_margin'] += $growth - $taken;
-				$taken = $growth;
+			if (!$outerMargin && !empty($blk['css_set_width'])) {
+				$rightFloat = isset($blk['float']) && $blk['float'] === 'R';
+				$blk[$rightFloat ? 'margin_left' : 'margin_right'] += $growth;
+				$outerMargin = $rightFloat ? 'outer_left_margin' : 'outer_right_margin';
 			}
 
-			$gained = $growth - $taken;
-			$blk['width'] += $gained;
-			$blk['inner_width'] += $gained;
+			if (!$outerMargin) {
+				$blk['width'] += $growth;
+				$blk['inner_width'] += $growth;
+			} else {
+				$blk[$outerMargin] += $growth;
+				if ($outerMargin === 'outer_left_margin' && isset($blk['x0'])) {
+					$blk['x0'] += $growth;
+				}
+			}
 			unset($blk);
 		}
 
-		return $gained;
+		return $outerMargin ? 0 : $growth;
+	}
+
+	/**
+	 * Turn to a page that already exists, forwards or back, into the page area it was made with. Text beside a float
+	 * needs this: it goes back to the page the float started on, and on over the pages the float made.
+	 *
+	 * @param int $page
+	 *
+	 * @return float How much wider the block being written became, less than 0 where it narrowed
+	 */
+	public function turnToPage($page)
+	{
+		$previousArea = $this->pageArea();
+
+		$this->page = $page;
+		if (isset($this->pageDim[$page]['sideMargins'])) {
+			list($this->DeflMargin, $this->DefrMargin) = $this->pageDim[$page]['sideMargins'];
+		}
+		$this->ResetMargins();
+
+		if ($this->pageArea() == $previousArea) {
+			return 0;
+		}
+
+		$this->pgwidth = $this->w - $this->lMargin - $this->rMargin;
+
+		return $this->moveIntoPageArea($previousArea);
+	}
+
+	/**
+	 * Widen or narrow the rest of the flowing block with the block being written on the new page
+	 *
+	 * @param float $growth How much wider the block became, as moveIntoPageArea() gave it
+	 */
+	public function resizeFlowingBlock($growth)
+	{
+		if ($growth && $this->divwidth && !$this->flowingBlockAttr['is_table']) {
+			$this->divwidth += $growth;
+			$this->flowingBlockAttr['width'] += $growth * Mpdf::SCALE;
+		}
 	}
 
 }
