@@ -132,7 +132,6 @@ class Img extends Tag
 			if (isset($properties['VERTICAL-ALIGN'])) {
 				$objattr['vertical-align'] = $this->getAlign($properties['VERTICAL-ALIGN']);
 			}
-			// In a cell a percentage width is of the cell's content width, which is only known once the table is laid out
 			$percent = [];
 			$w = $this->length($properties, $attr, 'WIDTH', 0, $percent, 'w');
 			$h = $this->length($properties, $attr, 'HEIGHT', 0);
@@ -295,8 +294,8 @@ class Img extends Tag
 
 			/* -- BORDER-RADIUS -- */
 			// A percentage is of the border box, horizontal radii of its width and vertical of its height, resolved now as a
-			// block's are: a picture later narrowed to what is left of its line keeps the radius it was given. One still to
-			// be sized against its cell has them resolved again then.
+			// block's are: a picture later narrowed to what is left of its line keeps the radius it was given.
+			// Mpdf::sizeCellImages() resolves them again for a picture sized against its cell.
 			$radii = [];
 			$radiusPercent = [];
 			foreach (['TL' => 'TOP-LEFT', 'TR' => 'TOP-RIGHT', 'BR' => 'BOTTOM-RIGHT', 'BL' => 'BOTTOM-LEFT'] as $corner => $name) {
@@ -321,8 +320,11 @@ class Img extends Tag
 			/* -- END BORDER-RADIUS -- */
 			if ($percent) {
 				$objattr['cell_sizing'] = $sizing;
-				for ($level = 1; $level <= $this->mpdf->tableLevel; $level++) {
-					$this->mpdf->table[$level][$this->mpdf->tbctr[$level]]['cell_sized_images'] = true;
+				$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['sized_images'] = true;
+				if (ImageSizing::isCompressible($sizing)) {
+					for ($level = 1; $level <= $this->mpdf->tableLevel; $level++) {
+						$this->mpdf->table[$level][$this->mpdf->tbctr[$level]]['compressible_images'] = true;
+					}
 				}
 			}
 			/* -- CSS-IMAGE-FLOAT -- */
@@ -405,8 +407,9 @@ class Img extends Tag
 			return $default;
 		}
 
-		if ($key !== null && $this->mpdf->tableLevel && NumericString::containsPercentChar($value)) {
-			$percent[$key] = (float) $value;
+		$share = $key !== null && $this->mpdf->tableLevel ? $this->percentage($value) : null;
+		if ($share !== null) {
+			$percent[$key] = $share;
 
 			return $default;
 		}

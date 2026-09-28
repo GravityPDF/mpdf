@@ -21488,7 +21488,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$sizing = $objattr['cell_sizing'];
 
-			// An image's lengths are kept as they were before the table was shrunk to fit, and divided by shrin_k to draw
+			// The sizing is in unshrunk lengths, which are divided by shrin_k to draw
 			list($w, $h) = ImageSizing::fit($sizing, $objattr['orig_w'], $objattr['orig_h'], $contentWidth * $this->shrin_k);
 
 			$objattr['width'] = $w + $sizing['extrawidth'];
@@ -21611,7 +21611,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->cellLineStackingStrategy = $c['cellLineStackingStrategy'];
 							$this->cellLineStackingShift = $c['cellLineStackingShift'];
 							$this->divwidth = $cw - $extraWLR;
-							if (!empty($table['cell_sized_images'])) {
+							if (!empty($c['sized_images'])) {
 								$this->sizeCellImages($c['textbuffer'], $this->divwidth);
 							}
 							$tempch = $this->printbuffer($c['textbuffer'], '', true, true);

@@ -20,17 +20,6 @@ class ImageBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return $this->pages($this->render('<style>img { ' . $css . ' }</style>' . $html))[0];
 	}
 
-	/**
-	 * The clip path cut before the picture is placed, and the placement itself, keyed w/h/x/y in points.
-	 */
-	private function clipAndPlacement($page)
-	{
-		preg_match('/([-\d. ]+ m (?:[-\d. ]+ [lc] )+)W n ([-\d. ]+) cm \/I1 Do Q/', $page, $matches);
-		$cm = explode(' ', $matches[2]);
-
-		return [$matches[1], ['w' => $cm[0], 'h' => $cm[3], 'x' => $cm[4], 'y' => $cm[5]]];
-	}
-
 	public function testARadiusClipsThePictureToTheCurve()
 	{
 		list($clip) = $this->clipAndPlacement($this->page('border-radius: 5mm'));

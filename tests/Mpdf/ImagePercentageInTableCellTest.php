@@ -31,18 +31,29 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	 * A 180mm table of one row, its cells given as their width attribute and content
 	 *
 	 * @param array $cells
-	 * @param string $css
 	 *
 	 * @return string
 	 */
-	private function table(array $cells, $css = '')
+	private function table(array $cells)
 	{
-		$html = '<style>table { width: 100%; border-collapse: collapse; } td { padding: 0; }' . $css . '</style><table><tr>';
+		$html = '<style>table { width: 100%; border-collapse: collapse; } td { padding: 0; }</style><table><tr>';
 		foreach ($cells as $cell) {
 			$html .= '<td' . ($cell[0] !== '' ? ' width="' . $cell[0] . '"' : '') . '>' . $cell[1] . '</td>';
 		}
 
 		return $html . '</tr></table>';
+	}
+
+	/**
+	 * Three 60mm columns with $content in the middle one
+	 *
+	 * @param string $content
+	 *
+	 * @return string
+	 */
+	private function middleOfThree($content)
+	{
+		return $this->table([['33.3333%', 'one'], ['33.3333%', $content], ['', 'three']]);
 	}
 
 	/**
@@ -77,13 +88,15 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
-	 * Lengths given as percentages, each in the middle of three 60mm columns
+	 * Lengths given as percentages, each in the middle of three 60mm columns, and an absolute length that means the
+	 * same in a cell as anywhere else
 	 *
 	 * @return array[]
 	 */
 	public static function percentages()
 	{
 		return [
+			'an absolute max-width is unchanged' => ['max-width: 20mm', 20],
 			'max-width caps a wider picture' => ['max-width: 20%', 12],
 			'max-width: 100% keeps it inside its cell' => ['max-width: 100%', 60],
 			'width in CSS' => ['width: 50%', 30],
@@ -93,6 +106,8 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
+	 * A percentage width, min-width or max-width is of the cell the image is in
+	 *
 	 * @dataProvider percentages
 	 *
 	 * @param string $style
@@ -101,9 +116,7 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	 */
 	public function testAPercentageIsOfTheCell($style, $expected, $width = '400')
 	{
-		$html = $this->table([['33.3333%', 'one'], ['33.3333%', $this->image($style, $width)], ['', 'three']]);
-
-		$this->assertEqualsWithDelta($expected, $this->drawnWidth($html), 0.05);
+		$this->assertEqualsWithDelta($expected, $this->drawnWidth($this->middleOfThree($this->image($style, $width))), 0.05);
 	}
 
 	/**
@@ -115,17 +128,7 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
-	 * An absolute max-width means the same in a cell as anywhere else
-	 */
-	public function testAnAbsoluteLengthIsUnchanged()
-	{
-		$html = $this->table([['33.3333%', 'one'], ['33.3333%', $this->image('max-width: 20mm')], ['', 'three']]);
-
-		$this->assertEqualsWithDelta(20, $this->drawnWidth($html), 0.05);
-	}
-
-	/**
-	 * A picture narrowed by a percentage no longer widens its column: the columns keep the 20%, 20% and 60% they were
+	 * A picture narrowed by a percentage does not widen its column: the columns keep the 20%, 20% and 60% they were
 	 * given, so the picture sits 36mm in from the left margin and is 36mm wide
 	 */
 	public function testThePictureLeavesTheColumnWidthsAlone()
@@ -180,7 +183,7 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	}
 
 	/**
-	 * A table too wide for its page is shrunk as a whole: max-width: 100% no longer lets the cell narrow the picture
+	 * A table too wide for its page is shrunk as a whole: max-width: 100% does not let the cell narrow the picture
 	 * to nothing, and it is drawn as it would be without it
 	 *
 	 * @dataProvider overflowingTables
@@ -200,13 +203,12 @@ class ImagePercentageInTableCellTest extends \Yoast\PHPUnitPolyfills\TestCases\T
 	 */
 	public function testAPercentageRadiusIsOfTheSizedPicture()
 	{
-		$html = $this->table([['33.3333%', 'one'], ['33.3333%', $this->image('max-width: 100%; border-radius: 50%')], ['', 'three']]);
+		$html = $this->middleOfThree($this->image('max-width: 100%; border-radius: 50%'));
 
-		preg_match('/([-\d.]+) [-\d.]+ m (?:[-\d. ]+ [lc] )+W n ([-\d. ]+) cm \/I1 Do Q/', $this->pages($this->render($html))[0], $matches);
-		$cm = explode(' ', $matches[2]);
+		list($clip, $placement) = $this->clipAndPlacement($this->pages($this->render($html))[0]);
 
-		/* The clip starts at the top tangent point of the top-left corner, half the picture's width in */
-		$this->assertEqualsWithDelta((float) $cm[4] + (float) $cm[0] / 2, (float) $matches[1], 0.01);
+		// The clip starts at the top tangent point of the top-left corner, half the picture's width in
+		$this->assertEqualsWithDelta($placement['x'] + $placement['w'] / 2, (float) strtok($clip, ' '), 0.01);
 	}
 
 }

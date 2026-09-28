@@ -7,11 +7,8 @@ namespace Mpdf\Image;
  *
  * A sizing is an array of the lengths an image was given, in millimetres: w and h (0 when not given), minw, maxw, minh
  * and maxh (false when not given), natural_w and natural_h (the size it takes when given neither w nor h), extrawidth
- * and extraheight (its padding, border and margin), fit_w and fit_h (the most room it may take up) and percent.
- *
- * In a table cell a percentage width, min-width or max-width is of the cell's content width, which is only known once
- * the table's columns are laid out. Until then the percentage waits in percent, keyed as the length it stands for, and
- * the image is sized as though it had not been given.
+ * and extraheight (its padding, border and margin), fit_w and fit_h (the most room it may take up), and percent: the
+ * percentages of a table cell's width still to resolve, keyed as the length they stand for.
  */
 class ImageSizing
 {
@@ -108,9 +105,20 @@ class ImageSizing
 	}
 
 	/**
-	 * The narrowest a table column can make the image, padding, border and margin included. A percentage width or
-	 * max-width lets the cell narrow it down to its min-width, as a browser does, unless it is to keep its width;
-	 * otherwise it needs the width it has without the percentages.
+	 * Whether a table column can narrow the image, which a percentage width or max-width lets it do
+	 *
+	 * @param array $sizing
+	 *
+	 * @return bool
+	 */
+	public static function isCompressible(array $sizing)
+	{
+		return isset($sizing['percent']['w']) || isset($sizing['percent']['maxw']);
+	}
+
+	/**
+	 * The narrowest a table column can make the image, padding, border and margin included: its min-width if the
+	 * column may narrow it, as a browser does, else the width it has without the percentages.
 	 *
 	 * @param array $sizing
 	 * @param float $ratioW The picture's own width, for its proportions
@@ -121,7 +129,7 @@ class ImageSizing
 	 */
 	public static function minimumWidth(array $sizing, $ratioW, $ratioH, $keepWidth)
 	{
-		if ($keepWidth || (!isset($sizing['percent']['w']) && !isset($sizing['percent']['maxw']))) {
+		if ($keepWidth || !self::isCompressible($sizing)) {
 			list($w) = self::fit($sizing, $ratioW, $ratioH);
 
 			return $w + $sizing['extrawidth'];

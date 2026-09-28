@@ -679,19 +679,19 @@ class Table extends Tag
 		if ($this->mpdf->tableLevel > 1) {
 			// deal with nested table
 
-			$nested = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]];
-			$nested = empty($nested['cell_sized_images']) ? null : $nested;
-			$this->mpdf->_tableColumnWidth($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]], true);
+			$table = &$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]];
+			$unmeasured = empty($table['compressible_images']) ? null : $table;
+			$this->mpdf->_tableColumnWidth($table, true);
 
-			$tmiw = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['miw'];
+			$tmiw = $table['miw'];
 			$tmiwKept = $tmiw;
-			if ($nested !== null) {
-				$this->measureKeepingImageWidths($nested);
-				$tmiwKept = $nested['miw'];
+			if ($unmeasured !== null) {
+				$this->measureKeepingImageWidths($unmeasured);
+				$tmiwKept = $unmeasured['miw'];
 			}
-			unset($nested);
-			$tmaw = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['maw'];
-			$tl = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['tl'];
+			$tmaw = $table['maw'];
+			$tl = $table['tl'];
+			unset($table, $unmeasured);
 
 			// Go down to lower table level
 			$this->mpdf->tableLevel--;
@@ -737,7 +737,7 @@ class Table extends Tag
 				|| !isset($this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['nestedmiw'])) {
 				$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['nestedmiw'] = $tmiw;
 			}
-			// What the nested tables need should the table they are in be shrunk to fit its page
+			// The width the nested tables need if the table they are in is shrunk to fit its page
 			$cell = &$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col];
 			if ($tmiwKept > $tmiw || isset($cell['nestedmiw_kept'])) {
 				$cell['nestedmiw_kept'] = max(isset($cell['nestedmiw_kept']) ? $cell['nestedmiw_kept'] : $cell['nestedmiw'], $tmiwKept);
@@ -772,7 +772,7 @@ class Table extends Tag
 				$this->mpdf->kwt_height = 0;
 			}
 
-			$unmeasured = empty($this->mpdf->table[1][1]['cell_sized_images']) ? null : $this->mpdf->table[1][1];
+			$unmeasured = empty($this->mpdf->table[1][1]['compressible_images']) ? null : $this->mpdf->table[1][1];
 			list($check, $tablemiw) = $this->mpdf->_tableColumnWidth($this->mpdf->table[1][1], true);
 			// A table too wide for its page is shrunk as a whole, pictures and all, rather than letting a picture sized
 			// by a percentage of its cell narrow that cell to nothing
