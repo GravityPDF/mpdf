@@ -17,8 +17,8 @@ use Mpdf\Utils\Arrays;
  *     $mpdf->WriteHTML($writer->write($xml));
  *     $mpdf->SetEmbeddedInvoice(new FacturX($xml));
  *
- * Its elements carry invoice-* classes, which a <style> block ahead of the invoice draws. withoutStyles() leaves that
- * block out, for a document that styles them itself.
+ * Its elements carry invoice-* classes, which a <style> block ahead of the invoice draws. Pass false as $styles to
+ * leave that block out, for a document that styles them itself.
  *
  * It reads the XML with CiiInvoiceReader, which neither validates it nor checks its totals.
  */
@@ -136,16 +136,18 @@ class HtmlInvoiceWriter
 	/**
 	 * @var bool
 	 */
-	private $styled = true;
+	private $styles;
 
 	/**
 	 * @param \Mpdf\Invoice\Formatter $formatter
 	 * @param string[] $labels Replacements for any of the default labels, keyed as they are, and titles for any other
 	 *                         type of invoice, keyed by its UNTDID 1001 code
+	 * @param bool $styles Whether to write the <style> block the invoice-* classes are drawn with; false leaves them to
+	 *                     styles of your own
 	 *
 	 * @throws \Mpdf\MpdfException When a label's key is neither a default label's nor a type code
 	 */
-	public function __construct(Formatter $formatter, array $labels = [])
+	public function __construct(Formatter $formatter, array $labels = [], $styles = true)
 	{
 		foreach (array_keys(array_diff_key($labels, self::$defaultLabels)) as $key) {
 			if (!is_int($key)) {
@@ -155,24 +157,12 @@ class HtmlInvoiceWriter
 
 		$this->formatter = $formatter;
 		$this->labels = $labels + self::$defaultLabels;
+		$this->styles = (bool) $styles;
 	}
 
 	/**
-	 * A copy writing the invoice without its <style> block, leaving its invoice-* classes to styles of your own
-	 *
-	 * @return self
-	 */
-	public function withoutStyles()
-	{
-		$writer = clone $this;
-		$writer->styled = false;
-
-		return $writer;
-	}
-
-	/**
-	 * The invoice as HTML, headed by its type and number, after the styles its classes are drawn with unless
-	 * withoutStyles() left them out
+	 * The invoice as HTML, headed by its type and number, after the styles its classes are drawn with unless the
+	 * constructor was told to leave them out
 	 *
 	 * @param string $xml Cross Industry Invoice XML, at any Factur-X / ZUGFeRD profile or as XRechnung CII
 	 *
@@ -186,7 +176,7 @@ class HtmlInvoiceWriter
 
 		$title = Arrays::get($this->labels, $invoice['typeCode'], $this->labels['380']);
 
-		$html = $this->styled ? self::$css . "\n" : '';
+		$html = $this->styles ? self::$css . "\n" : '';
 		$html .= '<h1>' . $this->escape($title . ' ' . $invoice['id']) . '</h1>' . "\n";
 		$html .= $this->details($invoice);
 		$html .= $this->parties($invoice);
