@@ -5,10 +5,13 @@ namespace Mpdf\Invoice;
 use Mpdf\Invoice\Preset\AbstractPreset;
 use Mpdf\Invoice\Preset\GermanyPreset;
 use Mpdf\Invoice\Preset\UnitedKingdomPreset;
+use Mpdf\InvoiceFixtures;
 use Mpdf\MpdfException;
 
 class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
+
+	use InvoiceFixtures;
 
 	/**
 	 * The invoice is written with its details, parties, lines, totals and payment, its text escaped
@@ -35,8 +38,8 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testLeavesOutItsStyles()
 	{
-		$styled = $this->htmlWriter()->write($this->xml('en16931.xml'));
-		$unstyled = (new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()), [], false))->write($this->xml('en16931.xml'));
+		$styled = $this->htmlWriter()->write($this->invoiceXml('en16931.xml'));
+		$unstyled = $this->htmlWriter([], false)->write($this->invoiceXml('en16931.xml'));
 
 		$this->assertStringStartsWith('<style>', $styled);
 		$this->assertStringNotContainsString('<style>', $unstyled);
@@ -50,7 +53,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTakesLabels()
 	{
-		$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>381</ram:TypeCode>', $this->xml('en16931.xml'));
+		$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>381</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
 		$html = $this->htmlWriter(['381' => 'Avoir', 'issueDate' => 'Date', 'vatGroup' => 'TVA %1$s sur %2$s'])->write($xml);
 
 		$this->assertStringContainsString('<h1>Avoir INV-2026-0001</h1>', $html);
@@ -64,7 +67,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTakesLabelPatterns()
 	{
-		$html = $this->htmlWriter(['paymentReference' => 'Référence de paiement : %s', 'vatId' => 'N° TVA : %s'])->write($this->xml('en16931.xml'));
+		$html = $this->htmlWriter(['paymentReference' => 'Référence de paiement : %s', 'vatId' => 'N° TVA : %s'])->write($this->invoiceXml('en16931.xml'));
 
 		$this->assertStringContainsString('Référence de paiement : INV-2026-0001', $html);
 		$this->assertStringContainsString('N° TVA : FR32123456789', $html);
@@ -76,7 +79,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testRefusesAnUnknownLabel()
 	{
-		$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>326</ram:TypeCode>', $this->xml('en16931.xml'));
+		$xml = str_replace('<ram:TypeCode>380</ram:TypeCode>', '<ram:TypeCode>326</ram:TypeCode>', $this->invoiceXml('en16931.xml'));
 		$this->assertStringContainsString('<h1>Partial invoice INV-2026-0001</h1>', $this->htmlWriter(['326' => 'Partial invoice'])->write($xml));
 		$this->assertStringContainsString('<h1>Invoice INV-2026-0001</h1>', $this->htmlWriter()->write($xml));
 
@@ -103,7 +106,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testWritesWithTheFormatter()
 	{
 		$formatter = (new Formatter(new GermanyPreset()))->withCurrencyFormat('EUR', '€%s')->withPercentFormat('%s pc');
-		$html = (new HtmlInvoiceWriter($formatter))->write($this->xml('en16931.xml'));
+		$html = (new HtmlInvoiceWriter($formatter))->write($this->invoiceXml('en16931.xml'));
 
 		$this->assertStringContainsString('>7,5<', $html);
 		$this->assertStringContainsString('>€12,99<', $html);
@@ -159,7 +162,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testMentionsWhenVatFallsDue()
 	{
-		$html = $this->htmlWriter(['vatDueOnInvoice' => 'Option pour le paiement de la taxe d’après les débits'])->write($this->xml('en16931-france.xml'));
+		$html = $this->htmlWriter(['vatDueOnInvoice' => 'Option pour le paiement de la taxe d’après les débits'])->write($this->invoiceXml('en16931-france.xml'));
 
 		$this->assertStringContainsString('<br>Option pour le paiement de la taxe d’après les débits</p>', $html);
 		$this->assertStringNotContainsString('VAT is due', $this->write('en16931.xml'));
@@ -203,13 +206,14 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Each Skonto line is written by its label, translated and formatted, its period singular for one day, with the
-	 * amount it applies to when it gives one; a line that only looks like one is written as it is
+	 * Each Skonto line is written by its label after the rest of the terms, translated and formatted, its period
+	 * singular for one day, with the amount it applies to when it gives one; a line that only looks like one is written
+	 * as it is
 	 */
 	public function testTranslatesEarlyPaymentDiscounts()
 	{
 		$terms = "Zahlbar innerhalb 30 Tagen\n#SKONTO#TAGE=1#PROZENT=3.00#\n#SKONTO#TAGE=14#PROZENT=2.00#BASISBETRAG=900.00#\n#SKONTO#TAGE=14#\n";
-		$xml = str_replace("30 days net\n#SKONTO#TAGE=14#PROZENT=2.00#\n", $terms, $this->xml('xrechnung.xml'));
+		$xml = str_replace("30 days net\n#SKONTO#TAGE=14#PROZENT=2.00#\n", $terms, $this->invoiceXml('xrechnung.xml'));
 		$writer = new HtmlInvoiceWriter(new Formatter(new GermanyPreset()), [
 			'earlyPaymentDiscount' => '%1$s Skonto bei Zahlung innerhalb von %2$s',
 			'earlyPaymentDiscountOn' => '%1$s Skonto auf %3$s bei Zahlung innerhalb von %2$s',
@@ -219,17 +223,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$html = $writer->write($xml);
 
 		$nbsp = AbstractPreset::NBSP;
-		$this->assertStringContainsString('<p>Zahlbar innerhalb 30 Tagen<br>3' . $nbsp . '% Skonto bei Zahlung innerhalb von 1 Tag<br>2' . $nbsp . '% Skonto auf 900,00' . $nbsp . '€ bei Zahlung innerhalb von 14 Tagen<br>#SKONTO#TAGE=14#<br>', $html);
-	}
-
-	/**
-	 * A period of exactly one is written by the singular label, and any other by the plural
-	 */
-	public function testWritesOneDayInTheSingular()
-	{
-		$xml = str_replace('#SKONTO#TAGE=14#', '#SKONTO#TAGE=1#', $this->xml('xrechnung.xml'));
-
-		$this->assertStringContainsString('<br>2% discount if paid within 1 day<br>', $this->htmlWriter()->write($xml));
+		$this->assertStringContainsString('<p>Zahlbar innerhalb 30 Tagen<br>#SKONTO#TAGE=14#<br>3' . $nbsp . '% Skonto bei Zahlung innerhalb von 1 Tag<br>2' . $nbsp . '% Skonto auf 900,00' . $nbsp . '€ bei Zahlung innerhalb von 14 Tagen<br>', $html);
 	}
 
 	/**
@@ -243,7 +237,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			. '<ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="DAY">10</ram:BasisPeriodMeasure><ram:BasisAmount>900.00</ram:BasisAmount><ram:CalculationPercent>2</ram:CalculationPercent></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>'
 			. '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="WEE">2</ram:BasisPeriodMeasure><ram:ActualDiscountAmount>10.00</ram:ActualDiscountAmount></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>'
 			. '<ram:SpecifiedTradePaymentTerms><ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="HUR">48</ram:BasisPeriodMeasure><ram:CalculationPercent>1</ram:CalculationPercent></ram:ApplicableTradePaymentDiscountTerms></ram:SpecifiedTradePaymentTerms>';
-		$xml = str_replace('</ram:SpecifiedTradePaymentTerms>', '</ram:SpecifiedTradePaymentTerms>' . $terms, $this->xml('en16931.xml'));
+		$xml = str_replace('</ram:SpecifiedTradePaymentTerms>', '</ram:SpecifiedTradePaymentTerms>' . $terms, $this->invoiceXml('en16931.xml'));
 		$html = $this->htmlWriter()->write($xml);
 
 		$this->assertStringContainsString('<p>30 days net<br>2% discount on 900.00 EUR if paid within 10 days<br>10.00 EUR discount if paid within 2 weeks<br>1% discount if paid within 48 HUR<br>1.5% penalty if paid after 1 month<br>', $html);
@@ -260,7 +254,7 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$xml = str_replace(
 			['<ram:ChargeAmount>12.99</ram:ChargeAmount>', '<ram:TotalPrepaidAmount>100.00</ram:TotalPrepaidAmount>', '<ram:DuePayableAmount>1021.11</ram:DuePayableAmount>'],
 			['<ram:ChargeAmount>12.99</ram:ChargeAmount><ram:BasisQuantity unitCode="C62">10</ram:BasisQuantity>', '<ram:TotalPrepaidAmount>100.00</ram:TotalPrepaidAmount><ram:RoundingAmount>-0.11</ram:RoundingAmount>', '<ram:DuePayableAmount>1021.00</ram:DuePayableAmount>'],
-			$this->xml('en16931.xml')
+			$this->invoiceXml('en16931.xml')
 		);
 		$html = $this->htmlWriter()->write($xml);
 
@@ -289,31 +283,20 @@ class HtmlInvoiceWriterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function write($fixture)
 	{
-		return $this->htmlWriter()->write($this->xml($fixture));
+		return $this->htmlWriter()->write($this->invoiceXml($fixture));
 	}
 
 	/**
-	 * The XML of a fixture in tests/data/invoice
-	 *
-	 * @param string $fixture
-	 *
-	 * @return string
-	 */
-	private function xml($fixture)
-	{
-		return file_get_contents(__DIR__ . '/../../data/invoice/' . $fixture);
-	}
-
-	/**
-	 * The writer in the British convention, with any labels given
+	 * The writer in the British convention, with any labels given, and its styles unless told otherwise
 	 *
 	 * @param string[] $labels
+	 * @param bool $styles
 	 *
 	 * @return \Mpdf\Invoice\HtmlInvoiceWriter
 	 */
-	private function htmlWriter(array $labels = [])
+	private function htmlWriter(array $labels = [], $styles = true)
 	{
-		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()), $labels);
+		return new HtmlInvoiceWriter(new Formatter(new UnitedKingdomPreset()), $labels, $styles);
 	}
 
 }

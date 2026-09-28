@@ -9,7 +9,7 @@ use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 
 /**
- * How a printed trade document writes its numbers, amounts, rates, dates and addresses
+ * How a printed invoice writes its numbers, amounts, rates, dates and addresses
  *
  * It follows the preset of a country, one of those in Mpdf\Invoice\Preset or a PresetInterface of your own, including
  * its month names. withDateFormat() and the other with methods return a copy adjusted further:

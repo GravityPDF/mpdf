@@ -5,6 +5,7 @@ namespace Snapshots;
 use Mpdf\Invoice\Formatter;
 use Mpdf\Invoice\HtmlInvoiceWriter;
 use Mpdf\Invoice\Preset\UnitedKingdomPreset;
+use Mpdf\InvoiceFixtures;
 
 /**
  * Invoice XML from tests/data/invoice printed by HtmlInvoiceWriter, in the British convention unless a snapshot says
@@ -14,6 +15,8 @@ use Mpdf\Invoice\Preset\UnitedKingdomPreset;
  */
 abstract class InvoiceSnapshot extends Snapshot
 {
+
+	use InvoiceFixtures;
 
 	/**
 	 * The file in tests/data/invoice holding the XML to print
@@ -29,7 +32,7 @@ abstract class InvoiceSnapshot extends Snapshot
 	 */
 	protected function getXml()
 	{
-		return file_get_contents(__DIR__ . '/../data/invoice/' . $this->getFixture());
+		return $this->invoiceXml($this->getFixture());
 	}
 
 	/**

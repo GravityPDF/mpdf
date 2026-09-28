@@ -62,7 +62,7 @@ class InvoiceTranslatedSnapshotTest extends InvoiceSnapshot
 			'vat' => 'TVA',
 			'vatGroup' => 'TVA %1$s sur %2$s',
 			'amount' => 'Montant',
-			'lineTotal' => 'Total HT',
+			'taxBasisTotal' => 'Total HT',
 			'grandTotal' => 'Total TTC',
 			'prepaid' => 'Acompte versé',
 			'due' => 'Net à payer',

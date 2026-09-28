@@ -80,8 +80,7 @@ class HtmlInvoiceWriter
 		'allowance' => 'Discount',
 		'charge' => 'Charge',
 		'linesTotal' => 'Total of the lines',
-		'lineTotal' => 'Total excluding VAT',
-		'vatTotal' => 'VAT',
+		'taxBasisTotal' => 'Total excluding VAT',
 		'grandTotal' => 'Total including VAT',
 		'prepaid' => 'Paid in advance',
 		'rounding' => 'Rounding',
@@ -161,8 +160,7 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The invoice as HTML, headed by its type and number, after the styles its classes are drawn with unless the
-	 * constructor was told to leave them out
+	 * The invoice as HTML, headed by its type and number, after its <style> block unless $styles was false
 	 *
 	 * @param string $xml Cross Industry Invoice XML, at any Factur-X / ZUGFeRD profile or as XRechnung CII
 	 *
@@ -386,7 +384,7 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * An allowance's amount taken off, or a charge's added
+	 * An allowance's amount as a negative number, or a charge's as a positive one
 	 *
 	 * @param mixed[] $allowanceCharge
 	 *
@@ -402,9 +400,9 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The total of the lines and the invoice's allowances and charges, the total excluding VAT, the VAT of each
-	 * category and rate (or all of it, when the XML gives no breakdown), and the total, less any prepayment and with any
-	 * rounding; the last in bold
+	 * The totals below the lines, the last in bold: the lines' total and the invoice's allowances and charges when it
+	 * has any, the total excluding VAT, the VAT by category and rate (or as one sum without a breakdown), the total
+	 * including VAT, and any prepayment and rounding with the amount due
 	 *
 	 * @param mixed[] $invoice
 	 *
@@ -422,7 +420,7 @@ class HtmlInvoiceWriter
 				$totals[] = [$this->allowanceChargeLabel($allowanceCharge), $this->signed($allowanceCharge)];
 			}
 		}
-		$totals[] = [$this->labels['lineTotal'], $sums['taxBasisTotal']];
+		$totals[] = [$this->labels['taxBasisTotal'], $sums['taxBasisTotal']];
 
 		foreach ($invoice['vatBreakdown'] as $group) {
 			$label = $group['category'] === 'O' ? $this->labels['notSubjectToVat'] : $this->labelled('vatGroup', $this->rate($group['category'], $group['rate']), $this->money($group['basis'], $currency));
@@ -432,27 +430,24 @@ class HtmlInvoiceWriter
 			$totals[] = [$label, $group['amount']];
 		}
 		if (!$invoice['vatBreakdown']) {
-			$totals[] = [$this->labels['vatTotal'], $sums['taxTotal']];
+			$totals[] = [$this->labels['vat'], $sums['taxTotal']];
 		}
 
 		$totals[] = [$this->labels['grandTotal'], $sums['grandTotal']];
 		if ($sums['prepaidAmount'] || $sums['roundingAmount']) {
-			if ($sums['prepaidAmount']) {
-				$totals[] = [$this->labels['prepaid'], -$sums['prepaidAmount']];
-			}
-			if ($sums['roundingAmount']) {
-				$totals[] = [$this->labels['rounding'], $sums['roundingAmount']];
-			}
+			$totals[] = [$this->labels['prepaid'], $sums['prepaidAmount'] ? -$sums['prepaidAmount'] : null];
+			$totals[] = [$this->labels['rounding'], $sums['roundingAmount'] ?: null];
 			$totals[] = [$this->labels['due'], $sums['duePayableAmount']];
 		}
 
 		$totals = array_values(array_filter($totals, function ($total) {
 			return $total[1] !== null;
 		}));
+		$last = count($totals) - 1;
 
 		$html = '<tfoot>';
 		foreach ($totals as $i => $total) {
-			$html .= $this->total($total[0], $this->money($total[1], $currency), $i === count($totals) - 1);
+			$html .= $this->total($total[0], $this->money($total[1], $currency), $i === $last);
 		}
 
 		return $html . '</tfoot>';
@@ -476,8 +471,7 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * The payment terms, with each early payment discount and late payment penalty put into words, the payment
-	 * reference, each way to pay, and when VAT falls due, when there are any
+	 * The payment terms, discounts and penalties, the payment reference, each way to pay, and when VAT falls due
 	 *
 	 * @param mixed[] $invoice
 	 *
@@ -485,12 +479,7 @@ class HtmlInvoiceWriter
 	 */
 	private function payment(array $invoice)
 	{
-		$lines = [];
-		if ($invoice['paymentTerms'] !== null) {
-			foreach (explode("\n", $invoice['paymentTerms']) as $term) {
-				$lines[] = $this->paymentTerm($term, $invoice['currency']);
-			}
-		}
+		$lines = $invoice['paymentTerms'];
 		foreach ($invoice['paymentDiscounts'] as $discount) {
 			$lines[] = $this->paymentAdjustment('earlyPaymentDiscount', $discount, $invoice['currency']);
 		}
@@ -506,7 +495,7 @@ class HtmlInvoiceWriter
 		}
 
 		foreach ($invoice['vatBreakdown'] as $group) {
-			if ($group['dueDateCode'] !== null && isset(self::$vatDueDateLabels[$group['dueDateCode']])) {
+			if (isset(self::$vatDueDateLabels[(string) $group['dueDateCode']])) {
 				$lines[] = $this->labels[self::$vatDueDateLabels[$group['dueDateCode']]];
 				break;
 			}
@@ -520,35 +509,8 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * A line of the payment terms as it is written, or, for an early payment discount in XRechnung's Skonto form
-	 * (#SKONTO#TAGE=14#PROZENT=2.00#, with BASISBETRAG=... when it applies to part of the amount), the discount put
-	 * into words by its label
-	 *
-	 * @see https://xeinkauf.de/xrechnung/ XRechnung, which defines the Skonto form
-	 *
-	 * @param string $term
-	 * @param string|null $currency
-	 *
-	 * @return string
-	 */
-	private function paymentTerm($term, $currency)
-	{
-		if (!preg_match('/^#SKONTO#TAGE=(\d+)#PROZENT=(\d+(?:\.\d+)?)#(?:BASISBETRAG=(-?\d+(?:\.\d+)?)#)?$/', trim($term), $match)) {
-			return $term;
-		}
-
-		return $this->paymentAdjustment('earlyPaymentDiscount', [
-			'percent' => (float) $match[2],
-			'amount' => null,
-			'basisAmount' => isset($match[3]) ? (float) $match[3] : null,
-			'period' => (float) $match[1],
-			'periodUnit' => 'DAY',
-		], $currency);
-	}
-
-	/**
-	 * An early payment discount or late payment penalty put into words by its label: the rate, or the amount when it
-	 * gives no rate, the period, and, by the label ending On, the amount it is worked out on
+	 * An early payment discount or late payment penalty in words: its rate (or amount), its period, and the amount it is
+	 * worked out on when it names one, which switches to the label ending in On
 	 *
 	 * @param string $label earlyPaymentDiscount or latePaymentPenalty
 	 * @param mixed[] $adjustment As CiiInvoiceReader reads paymentDiscounts and paymentPenalties
@@ -683,8 +645,7 @@ class HtmlInvoiceWriter
 	}
 
 	/**
-	 * A date as the formatter writes it, a date in a format the reader does not parse as it is, or null when there is
-	 * none
+	 * A date as the formatter writes it, a date the reader kept as text unchanged, or null
 	 *
 	 * @param \DateTimeInterface|string|null $date
 	 *

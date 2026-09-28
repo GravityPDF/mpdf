@@ -2,17 +2,20 @@
 
 namespace Mpdf\Invoice;
 
+use Mpdf\InvoiceFixtures;
 use Mpdf\MpdfException;
 
 class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
+
+	use InvoiceFixtures;
 
 	/**
 	 * The invoice's details, parties, lines, VAT and totals come from the XML as it states them
 	 */
 	public function testReadsTheInvoice()
 	{
-		$invoice = $this->read('en16931.xml');
+		$invoice = $this->read($this->invoiceXml('en16931.xml'));
 
 		$this->assertSame('INV-2026-0001', $invoice['id']);
 		$this->assertSame('380', $invoice['typeCode']);
@@ -52,7 +55,7 @@ class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testReadsWhatMinimumCarries()
 	{
-		$invoice = $this->read('minimum.xml');
+		$invoice = $this->read($this->invoiceXml('minimum.xml'));
 
 		$this->assertSame([], $invoice['lines']);
 		$this->assertSame([], $invoice['vatBreakdown']);
@@ -70,13 +73,28 @@ class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$terms = '<ram:ApplicableTradePaymentPenaltyTerms><ram:BasisDateTime><udt:DateTimeString format="102">20261023</udt:DateTimeString></ram:BasisDateTime><ram:BasisPeriodMeasure unitCode="MON">1</ram:BasisPeriodMeasure><ram:CalculationPercent>1.5</ram:CalculationPercent></ram:ApplicableTradePaymentPenaltyTerms>'
 			. '<ram:ApplicableTradePaymentDiscountTerms><ram:BasisPeriodMeasure unitCode="DAY">10</ram:BasisPeriodMeasure><ram:BasisAmount>900.00</ram:BasisAmount><ram:ActualDiscountAmount>18.00</ram:ActualDiscountAmount></ram:ApplicableTradePaymentDiscountTerms>';
-		$invoice = (new CiiInvoiceReader())->read(str_replace('</ram:SpecifiedTradePaymentTerms>', '</ram:SpecifiedTradePaymentTerms><ram:SpecifiedTradePaymentTerms>' . $terms . '</ram:SpecifiedTradePaymentTerms>', $this->xml('en16931.xml')));
+		$invoice = $this->read(str_replace('</ram:SpecifiedTradePaymentTerms>', '</ram:SpecifiedTradePaymentTerms><ram:SpecifiedTradePaymentTerms>' . $terms . '</ram:SpecifiedTradePaymentTerms>', $this->invoiceXml('en16931.xml')));
 
 		$this->assertSame([['percent' => null, 'amount' => 18.0, 'basisAmount' => 900.0, 'period' => 10.0, 'periodUnit' => 'DAY', 'basisDate' => null]], $invoice['paymentDiscounts']);
 		$this->assertSame('MON', $invoice['paymentPenalties'][0]['periodUnit']);
 		$this->assertSame(1.5, $invoice['paymentPenalties'][0]['percent']);
 		$this->assertSame('2026-10-23', $invoice['paymentPenalties'][0]['basisDate']->format('Y-m-d'));
-		$this->assertSame([], $this->read('en16931.xml')['paymentDiscounts']);
+		$this->assertSame([], $this->read($this->invoiceXml('en16931.xml'))['paymentDiscounts']);
+	}
+
+	/**
+	 * XRechnung's Skonto lines are read as early payment discounts, and the rest of the terms as lines of text
+	 */
+	public function testReadsSkontoLinesAsDiscounts()
+	{
+		$terms = "30 days net\n#SKONTO#TAGE=14#PROZENT=2.00#\n#SKONTO#TAGE=7#PROZENT=3.00#BASISBETRAG=900.00#\n";
+		$invoice = $this->read(str_replace("30 days net\n#SKONTO#TAGE=14#PROZENT=2.00#\n", $terms, $this->invoiceXml('xrechnung.xml')));
+
+		$this->assertSame(['30 days net'], $invoice['paymentTerms']);
+		$this->assertSame([
+			['percent' => 2.0, 'amount' => null, 'basisAmount' => null, 'period' => 14.0, 'periodUnit' => 'DAY', 'basisDate' => null],
+			['percent' => 3.0, 'amount' => null, 'basisAmount' => 900.0, 'period' => 7.0, 'periodUnit' => 'DAY', 'basisDate' => null],
+		], $invoice['paymentDiscounts']);
 	}
 
 	/**
@@ -84,7 +102,7 @@ class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testReadsTheDirectDebit()
 	{
-		$means = $this->read('en16931-intra-community.xml')['paymentMeans'][0];
+		$means = $this->read($this->invoiceXml('en16931-intra-community.xml'))['paymentMeans'][0];
 
 		$this->assertSame('59', $means['typeCode']);
 		$this->assertSame('DE02120300000000202051', $means['debitedAccount']);
@@ -100,10 +118,10 @@ class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$xml = str_replace(
 			'<ram:TaxTotalAmount currencyID="EUR">182.14</ram:TaxTotalAmount>',
 			'<ram:TaxTotalAmount currencyID="SEK">2003.54</ram:TaxTotalAmount><ram:TaxTotalAmount currencyID="EUR">182.14</ram:TaxTotalAmount>',
-			$this->xml('en16931.xml')
+			$this->invoiceXml('en16931.xml')
 		);
 
-		$this->assertSame(182.14, (new CiiInvoiceReader())->read($xml)['totals']['taxTotal']);
+		$this->assertSame(182.14, $this->read($xml)['totals']['taxTotal']);
 	}
 
 	/**
@@ -111,9 +129,9 @@ class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testKeepsADateInAnotherFormatAsText()
 	{
-		$xml = str_replace('<udt:DateTimeString format="102">20260923</udt:DateTimeString>', '<udt:DateTimeString format="610">202609</udt:DateTimeString>', $this->xml('en16931.xml'));
+		$xml = str_replace('<udt:DateTimeString format="102">20260923</udt:DateTimeString>', '<udt:DateTimeString format="610">202609</udt:DateTimeString>', $this->invoiceXml('en16931.xml'));
 
-		$this->assertSame('202609', (new CiiInvoiceReader())->read($xml)['issueDate']);
+		$this->assertSame('202609', $this->read($xml)['issueDate']);
 	}
 
 	/**
@@ -145,31 +163,19 @@ class CiiInvoiceReaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->expectException(MpdfException::class);
 		$this->expectExceptionMessage($message);
 
-		(new CiiInvoiceReader())->read($xml);
+		$this->read($xml);
 	}
 
 	/**
-	 * A fixture in tests/data/invoice, read
+	 * XML read
 	 *
-	 * @param string $fixture
+	 * @param string $xml
 	 *
 	 * @return mixed[]
 	 */
-	private function read($fixture)
+	private function read($xml)
 	{
-		return (new CiiInvoiceReader())->read($this->xml($fixture));
-	}
-
-	/**
-	 * The XML of a fixture in tests/data/invoice
-	 *
-	 * @param string $fixture
-	 *
-	 * @return string
-	 */
-	private function xml($fixture)
-	{
-		return file_get_contents(__DIR__ . '/../../data/invoice/' . $fixture);
+		return (new CiiInvoiceReader())->read($xml);
 	}
 
 }

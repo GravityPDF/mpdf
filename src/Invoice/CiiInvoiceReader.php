@@ -9,9 +9,8 @@ use Mpdf\Strict;
  * Reads what a printed invoice shows from Cross Industry Invoice (CII) XML, the syntax Factur-X, ZUGFeRD and XRechnung
  * CII share
  *
- * It reads what the XML states, totals included, and works nothing out: the XML is the invoice, and the page shows it.
- * It neither validates the XML nor checks that its totals add up. Anything the XML leaves out, as MINIMUM leaves out
- * the lines, is null or an empty list.
+ * It returns what the XML states, totals included, and recalculates nothing. It neither validates the XML nor checks
+ * that its totals add up. Anything the XML leaves out, as MINIMUM leaves out the lines, is null or an empty list.
  *
  * read() gives an array:
  * - id, typeCode (UNTDID 1001), currency, buyerReference, orderReference, paymentReference: strings or null
@@ -26,9 +25,10 @@ use Mpdf\Strict;
  * - vatBreakdown: category, rate, basis, amount, exemptionReason and dueDateCode (UNTDID 2475)
  * - totals: lineTotal, chargeTotal, allowanceTotal, taxBasisTotal, taxTotal, roundingAmount, grandTotal, prepaidAmount
  *   and duePayableAmount, each a float or null
- * - paymentTerms: string or null
- * - paymentDiscounts, paymentPenalties: EXTENDED's early payment discounts and late payment penalties, each percent,
- *   amount, basisAmount and period (floats or null), periodUnit (UN/ECE Recommendation 20, e.g. DAY) and basisDate
+ * - paymentTerms: string[], a line each
+ * - paymentDiscounts, paymentPenalties: early payment discounts and late payment penalties, from EXTENDED's structured
+ *   terms and, for discounts, XRechnung's Skonto lines. Each is percent, amount, basisAmount and period (floats or
+ *   null), periodUnit (UN/ECE Recommendation 20, e.g. DAY) and basisDate
  * - paymentMeans: typeCode, information, account, iban (bool), bic, accountName, debitedAccount, mandate, creditorId,
  *   card and cardholder
  *
@@ -44,8 +44,6 @@ class CiiInvoiceReader
 	const NS_RAM = 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100';
 
 	const NS_UDT = 'urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100';
-
-	const NS_QDT = 'urn:un:unece:uncefact:data:standard:QualifiedDataType:100';
 
 	/**
 	 * @var \DOMXPath
@@ -73,21 +71,23 @@ class CiiInvoiceReader
 
 		$terms = [];
 		$discounts = [];
-		$penalties = [];
-		$dueDate = null;
-		$mandate = null;
-		foreach ($this->nodes('ram:SpecifiedTradePaymentTerms', $settlement) as $term) {
-			$terms[] = $this->text('ram:Description', $term);
-			foreach ($this->nodes('ram:ApplicableTradePaymentDiscountTerms', $term) as $discount) {
-				$discounts[] = $this->paymentAdjustment($discount, 'ram:ActualDiscountAmount');
+		foreach ($this->texts('ram:SpecifiedTradePaymentTerms/ram:Description', $settlement) as $description) {
+			foreach (explode("\n", $description) as $term) {
+				$skonto = $this->skonto($term);
+				if ($skonto !== null) {
+					$discounts[] = $skonto;
+				} elseif (trim($term) !== '') {
+					$terms[] = trim($term);
+				}
 			}
-			foreach ($this->nodes('ram:ApplicableTradePaymentPenaltyTerms', $term) as $penalty) {
-				$penalties[] = $this->paymentAdjustment($penalty, 'ram:ActualPenaltyAmount');
-			}
-			$dueDate = $dueDate !== null ? $dueDate : $this->date('ram:DueDateDateTime', $term);
-			$mandate = $mandate !== null ? $mandate : $this->text('ram:DirectDebitMandateID', $term);
 		}
-		$terms = array_values(array_filter($terms, [$this, 'isFilled']));
+		foreach ($this->nodes('ram:SpecifiedTradePaymentTerms/ram:ApplicableTradePaymentDiscountTerms', $settlement) as $discount) {
+			$discounts[] = $this->paymentAdjustment($discount, 'ram:ActualDiscountAmount');
+		}
+		$penalties = [];
+		foreach ($this->nodes('ram:SpecifiedTradePaymentTerms/ram:ApplicableTradePaymentPenaltyTerms', $settlement) as $penalty) {
+			$penalties[] = $this->paymentAdjustment($penalty, 'ram:ActualPenaltyAmount');
+		}
 
 		return [
 			'id' => $this->text('rsm:ExchangedDocument/ram:ID', $root),
@@ -98,7 +98,7 @@ class CiiInvoiceReader
 			'buyerReference' => $this->text('ram:BuyerReference', $agreement),
 			'orderReference' => $this->text('ram:BuyerOrderReferencedDocument/ram:IssuerAssignedID', $agreement),
 			'deliveryDate' => $this->date('ram:ActualDeliverySupplyChainEvent/ram:OccurrenceDateTime', $delivery),
-			'dueDate' => $dueDate,
+			'dueDate' => $this->date('ram:SpecifiedTradePaymentTerms/ram:DueDateDateTime', $settlement),
 			'precedingInvoices' => $this->precedingInvoices($settlement),
 			'seller' => $this->party($this->node('ram:SellerTradeParty', $agreement)),
 			'buyer' => $this->party($this->node('ram:BuyerTradeParty', $agreement)),
@@ -107,11 +107,11 @@ class CiiInvoiceReader
 			'allowanceCharges' => $this->allowanceCharges($settlement),
 			'vatBreakdown' => $this->vatBreakdown($settlement),
 			'totals' => $this->totals($this->node('ram:SpecifiedTradeSettlementHeaderMonetarySummation', $settlement), $currency),
-			'paymentTerms' => $terms ? implode("\n", $terms) : null,
+			'paymentTerms' => $terms,
 			'paymentDiscounts' => $discounts,
 			'paymentPenalties' => $penalties,
 			'paymentReference' => $this->text('ram:PaymentReference', $settlement),
-			'paymentMeans' => $this->paymentMeans($settlement, $mandate),
+			'paymentMeans' => $this->paymentMeans($settlement),
 		];
 	}
 
@@ -155,7 +155,6 @@ class CiiInvoiceReader
 		$this->xpath->registerNamespace('rsm', self::NS_RSM);
 		$this->xpath->registerNamespace('ram', self::NS_RAM);
 		$this->xpath->registerNamespace('udt', self::NS_UDT);
-		$this->xpath->registerNamespace('qdt', self::NS_QDT);
 
 		return $root;
 	}
@@ -175,7 +174,6 @@ class CiiInvoiceReader
 
 		$address = $this->node('ram:PostalTradeAddress', $party);
 		$contact = $this->node('ram:DefinedTradeContact', $party);
-		$electronicAddress = $this->node('ram:URIUniversalCommunication/ram:URIID', $party);
 
 		return [
 			'name' => $this->text('ram:Name', $party),
@@ -194,8 +192,8 @@ class CiiInvoiceReader
 				'phone' => $this->text('ram:TelephoneUniversalCommunication/ram:CompleteNumber', $contact),
 				'email' => $this->text('ram:EmailURIUniversalCommunication/ram:URIID', $contact),
 			],
-			'electronicAddress' => $electronicAddress !== null ? trim($electronicAddress->textContent) : null,
-			'electronicAddressScheme' => $electronicAddress instanceof \DOMElement && $electronicAddress->hasAttribute('schemeID') ? $electronicAddress->getAttribute('schemeID') : null,
+			'electronicAddress' => $this->text('ram:URIUniversalCommunication/ram:URIID', $party),
+			'electronicAddressScheme' => $this->text('ram:URIUniversalCommunication/ram:URIID/@schemeID', $party),
 		];
 	}
 
@@ -218,7 +216,7 @@ class CiiInvoiceReader
 				'name' => $this->text('ram:SpecifiedTradeProduct/ram:Name', $item),
 				'description' => $this->text('ram:SpecifiedTradeProduct/ram:Description', $item),
 				'quantity' => $this->amount('.', $quantity),
-				'unitCode' => $quantity instanceof \DOMElement && $quantity->hasAttribute('unitCode') ? $quantity->getAttribute('unitCode') : null,
+				'unitCode' => $this->text('@unitCode', $quantity),
 				'unitPrice' => $this->amount('ram:ChargeAmount', $price),
 				'basisQuantity' => $this->amount('ram:BasisQuantity', $price),
 				'vatCategory' => $this->text('ram:ApplicableTradeTax/ram:CategoryCode', $settlement),
@@ -326,12 +324,14 @@ class CiiInvoiceReader
 	 * Each way to pay; a direct debit takes its mandate from the payment terms and its creditor from the settlement
 	 *
 	 * @param \DOMNode|null $settlement
-	 * @param string|null $mandate
 	 *
 	 * @return mixed[]
 	 */
-	private function paymentMeans($settlement, $mandate)
+	private function paymentMeans($settlement)
 	{
+		$mandate = $this->text('ram:SpecifiedTradePaymentTerms/ram:DirectDebitMandateID', $settlement);
+		$creditorId = $this->text('ram:CreditorReferenceID', $settlement);
+
 		$means = [];
 		foreach ($this->nodes('ram:SpecifiedTradeSettlementPaymentMeans', $settlement) as $paymentMeans) {
 			$payee = $this->node('ram:PayeePartyCreditorFinancialAccount', $paymentMeans);
@@ -347,7 +347,7 @@ class CiiInvoiceReader
 				'accountName' => $this->text('ram:AccountName', $payee),
 				'debitedAccount' => $debitedAccount,
 				'mandate' => $debitedAccount !== null ? $mandate : null,
-				'creditorId' => $debitedAccount !== null ? $this->text('ram:CreditorReferenceID', $settlement) : null,
+				'creditorId' => $debitedAccount !== null ? $creditorId : null,
 				'card' => $this->text('ram:ApplicableTradeSettlementFinancialCard/ram:ID', $paymentMeans),
 				'cardholder' => $this->text('ram:ApplicableTradeSettlementFinancialCard/ram:CardholderName', $paymentMeans),
 			];
@@ -366,15 +366,39 @@ class CiiInvoiceReader
 	 */
 	private function paymentAdjustment(\DOMNode $terms, $amountPath)
 	{
-		$period = $this->node('ram:BasisPeriodMeasure', $terms);
-
 		return [
 			'percent' => $this->amount('ram:CalculationPercent', $terms),
 			'amount' => $this->amount($amountPath, $terms),
 			'basisAmount' => $this->amount('ram:BasisAmount', $terms),
-			'period' => $this->amount('.', $period),
-			'periodUnit' => $period instanceof \DOMElement && $period->hasAttribute('unitCode') ? $period->getAttribute('unitCode') : null,
+			'period' => $this->amount('ram:BasisPeriodMeasure', $terms),
+			'periodUnit' => $this->text('ram:BasisPeriodMeasure/@unitCode', $terms),
 			'basisDate' => $this->date('ram:BasisDateTime', $terms),
+		];
+	}
+
+	/**
+	 * An early payment discount written into the payment terms in XRechnung's Skonto form, #SKONTO#TAGE=14#PROZENT=2.00#
+	 * with BASISBETRAG=...# when it applies to part of the amount, or null for any other line
+	 *
+	 * @see https://xeinkauf.de/xrechnung/ XRechnung, which defines the Skonto form
+	 *
+	 * @param string $term
+	 *
+	 * @return mixed[]|null As paymentAdjustment() gives a discount
+	 */
+	private function skonto($term)
+	{
+		if (!preg_match('/^#SKONTO#TAGE=(\d+)#PROZENT=(\d+(?:\.\d+)?)#(?:BASISBETRAG=(-?\d+(?:\.\d+)?)#)?$/', trim($term), $match)) {
+			return null;
+		}
+
+		return [
+			'percent' => (float) $match[2],
+			'amount' => null,
+			'basisAmount' => isset($match[3]) ? (float) $match[3] : null,
+			'period' => (float) $match[1],
+			'periodUnit' => 'DAY',
+			'basisDate' => null,
 		];
 	}
 
@@ -465,21 +489,10 @@ class CiiInvoiceReader
 	 */
 	private function joined(array $parts)
 	{
-		$parts = array_filter($parts, [$this, 'isFilled']);
+		// text() gives null for text that is not there, never ''
+		$parts = array_filter($parts, 'is_string');
 
 		return $parts ? implode(', ', $parts) : null;
-	}
-
-	/**
-	 * Whether a text is there
-	 *
-	 * @param string|null $text
-	 *
-	 * @return bool
-	 */
-	private function isFilled($text)
-	{
-		return $text !== null && $text !== '';
 	}
 
 	/**
@@ -494,7 +507,7 @@ class CiiInvoiceReader
 	{
 		$nodes = $this->nodes($path, $context);
 
-		return $nodes ? $nodes[0] : null;
+		return $nodes instanceof \DOMNodeList && $nodes->length ? $nodes->item(0) : null;
 	}
 
 	/**
@@ -503,17 +516,13 @@ class CiiInvoiceReader
 	 * @param string $path
 	 * @param \DOMNode|null $context
 	 *
-	 * @return \DOMNode[]
+	 * @return \DOMNodeList|\DOMNode[]
 	 */
 	private function nodes($path, $context)
 	{
-		if ($context === null) {
-			return [];
-		}
+		$nodes = $context !== null ? $this->xpath->query($path, $context) : false;
 
-		$nodes = $this->xpath->query($path, $context);
-
-		return $nodes !== false ? iterator_to_array($nodes) : [];
+		return $nodes !== false ? $nodes : [];
 	}
 
 }
