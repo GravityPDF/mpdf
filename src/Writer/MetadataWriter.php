@@ -371,11 +371,15 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$ICCProfile = str_replace('_', ' ', basename($this->mpdf->ICCProfile, '.icc'));
 
 		if ($this->mpdf->PDFA) {
+			// Under PDFAauto a profile PDF/A refuses gives way to a bundled one, named as when ICCProfile is blank
+			$profile = $this->mpdf->outputIntentProfile();
 			$this->writer->write('/S /GTS_PDFA1');
-			if ($this->mpdf->ICCProfile) {
+			if ($this->mpdf->ICCProfile && $profile === $this->mpdf->ICCProfile) {
 				$this->writer->write('/Info (' . $ICCProfile . ')');
 				$this->writer->write('/OutputConditionIdentifier (Custom)');
 				$this->writer->write('/OutputCondition ()');
+			} elseif ($profile === Mpdf::PDFX4_OUTPUT_PROFILE) {
+				$this->writeSwopCondition();
 			} else {
 				$this->writer->write('/Info (sRGB IEC61966-2.1)');
 				$this->writer->write('/OutputConditionIdentifier (sRGB IEC61966-2.1)');
@@ -390,11 +394,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 				$this->writer->write('/OutputCondition ()');
 				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
 			} elseif ($this->mpdf->isPdfx4()) {
-				// Where the document names none, the bundled SWOP profile, characterised by CGATS TR 003
-				$this->writer->write('/Info (U.S. Web Coated \\(SWOP\\) grade 3)');
-				$this->writer->write('/OutputConditionIdentifier (CGATS TR 003)');
-				$this->writer->write('/OutputCondition (SWOP 2006 Coated #3)');
-				$this->writer->write('/RegistryName (http://www.color.org)');
+				$this->writeSwopCondition();
 				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
 			} else {
 				$this->writer->write('/Info (CGATS TR 001)');
@@ -434,6 +434,18 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write('/Length ' . $this->writer->streamLength($s) . '>>');
 		$this->writer->stream($s);
 		$this->writer->write('endobj');
+	}
+
+	/**
+	 * Names the printing condition of the bundled SWOP profile, which CGATS TR 003 characterises, for an output
+	 * intent that embeds it where the document names none
+	 */
+	private function writeSwopCondition()
+	{
+		$this->writer->write('/Info (U.S. Web Coated \\(SWOP\\) grade 3)');
+		$this->writer->write('/OutputConditionIdentifier (CGATS TR 003)');
+		$this->writer->write('/OutputCondition (SWOP 2006 Coated #3)');
+		$this->writer->write('/RegistryName (http://www.color.org)');
 	}
 
 	public function writeAssociatedFiles() // _putAssociatedFiles

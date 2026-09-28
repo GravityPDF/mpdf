@@ -1791,15 +1791,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * The number of colour components of the output intent's profile, which the profile stream's /N gives.
 	 *
-	 * PDF/A permits DeviceCMYK only under a CMYK output intent and DeviceRGB only under an RGB one. Restricted to
-	 * CMYK, a PDF/A document writes its colour in DeviceCMYK, and otherwise in DeviceRGB, so its profile must be
-	 * CMYK or RGB to match. The bundled sRGB profile stands in where ICCProfile names none, but no CMYK printing
-	 * condition is assumed: a CMYK document names its own.
+	 * ISO 32000-1 Table 68 permits a grey, RGB, CMYK or Lab profile, and Table 66 has /N match it: 3 for Lab as for
+	 * RGB. What PDF/A further asks of the profile is checked by pdfaOutputIntentProblem().
 	 *
-	 * @throws \Mpdf\MpdfException Where the profile cannot be read, or is of a colour space the document does not
-	 *                              write in
+	 * @throws \Mpdf\MpdfException Where the profile is of another colour space
 	 *
-	 * @return int 1 for grey, 3 for RGB, 4 for CMYK
+	 * @return int 1 for grey, 3 for RGB or Lab, 4 for CMYK
 	 */
 	public function outputIntentChannels()
 	{
@@ -1809,14 +1806,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$profile = $this->outputIntentProfile();
 		$channels = $this->iccChannels($profile);
+		if ($channels === null && substr($this->iccHeader($profile), 16, 4) === 'Lab ') {
+			return 3;
+		}
 		if ($channels === null) {
-			throw new \Mpdf\MpdfException(sprintf('The output intent must be a grey, RGB or CMYK profile, and ICCProfile "%s" is not.', $profile));
-		}
-		if ($this->PDFA && $this->restrictColorSpace == 3 && $channels !== 4) {
-			throw new \Mpdf\MpdfException('A PDF/A document restricted to CMYK (restrictColorSpace 3) needs a CMYK output intent. Set ICCProfile to a CMYK profile, such as the data/iccprofiles/SWOP2006_Coated3v2.icc mPDF bundles.');
-		}
-		if ($this->PDFA && $this->restrictColorSpace != 3 && $channels !== 3) {
-			throw new \Mpdf\MpdfException(sprintf('A PDF/A document writes RGB colour unless restricted to CMYK, and ICCProfile "%s" is not an RGB profile. Leave ICCProfile blank for sRGB, or set restrictColorSpace to 3 for a CMYK profile.', $profile));
+			throw new \Mpdf\MpdfException(sprintf('The output intent must be a grey, RGB, CMYK or Lab profile, and ICCProfile "%s" is not.', $profile));
 		}
 
 		return $channels;
@@ -1824,7 +1818,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/**
 	 * @return string|null The ICC profile the output intent embeds: for PDF/X see pdfxOutputProfile(), otherwise
-	 *                     ICCProfile, or the bundled sRGB profile where it names none
+	 *                     ICCProfile, or the bundled sRGB profile where it names none. Under PDFAauto a profile
+	 *                     PDF/A refuses gives way to pdfaDefaultOutputProfile().
 	 */
 	public function outputIntentProfile()
 	{
@@ -1832,7 +1827,76 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return $this->pdfxOutputProfile();
 		}
 
-		return $this->ICCProfile ?: BaseWriter::SRGB_PROFILE;
+		$profile = $this->ICCProfile ?: BaseWriter::SRGB_PROFILE;
+		if ($this->PDFA && $this->PDFAauto && $this->pdfaOutputIntentProblem($profile) !== null) {
+			return $this->pdfaDefaultOutputProfile();
+		}
+
+		return $profile;
+	}
+
+	/**
+	 * Records, for the document to be refused, a PDF/A output intent profile that PDF/A does not permit. Under
+	 * PDFAauto outputIntentProfile() has put the bundled profile in its place already.
+	 */
+	private function checkPdfaOutputIntent()
+	{
+		if (!$this->PDFA || $this->PDFX) {
+			return;
+		}
+
+		$problem = $this->pdfaOutputIntentProblem($this->outputIntentProfile());
+		if ($problem !== null) {
+			$this->pdfaxWarning($problem);
+		}
+	}
+
+	/**
+	 * @return string The bundled profile a PDF/A document falls back on: the SWOP (CMYK) profile restricted to CMYK,
+	 *                and sRGB otherwise
+	 */
+	private function pdfaDefaultOutputProfile()
+	{
+		return $this->restrictColorSpace == 3 ? self::PDFX4_OUTPUT_PROFILE : BaseWriter::SRGB_PROFILE;
+	}
+
+	/**
+	 * ISO 19005-2 6.2.3 (19005-1 6.2.2) asks of the output intent a printer or monitor profile, of grey, RGB or CMYK.
+	 * 19005-2 6.2.4.3 (19005-1 6.2.3.3) permits DeviceCMYK only under a CMYK output intent and DeviceRGB only under an
+	 * RGB one, and DeviceGray under any. Restricted to CMYK a document writes DeviceCMYK, restricted to greyscale
+	 * DeviceGray, and otherwise DeviceRGB.
+	 *
+	 * @param string $profile The path to an ICC profile
+	 *
+	 * @return string|null Why PDF/A refuses the profile as this document's output intent, and null where it permits
+	 *                     it or the profile cannot be read, which the writer refuses in any case
+	 */
+	private function pdfaOutputIntentProblem($profile)
+	{
+		$header = $this->iccHeader($profile);
+		if ($header === '') {
+			return null;
+		}
+
+		$fallback = $this->restrictColorSpace == 3 ? 'SWOP2006_Coated3v2 (CMYK)' : 'sRGB';
+		$name = $this->ICCProfile ? sprintf('ICCProfile "%s"', $profile) : 'the sRGB profile used where ICCProfile is blank';
+		$class = (string) substr($header, 12, 4);
+		if ($class !== 'prtr' && $class !== 'mntr') {
+			return sprintf('The PDF/A output intent must be a printer (prtr) or monitor (mntr) profile, and %s is of the %s class. (The bundled %s profile will be used instead.)', $name, trim($class), $fallback);
+		}
+
+		$channels = $this->iccChannels($profile);
+		if ($channels === null) {
+			return sprintf('The PDF/A output intent must be a grey, RGB or CMYK profile, and %s is not. (The bundled %s profile will be used instead.)', $name, $fallback);
+		}
+		if ($this->restrictColorSpace == 3 && $channels !== 4) {
+			return sprintf('A PDF/A document restricted to CMYK (restrictColorSpace 3) writes DeviceCMYK, which needs a CMYK output intent, and %s is not a CMYK profile. (The bundled %s profile will be used instead.)', $name, $fallback);
+		}
+		if ($this->restrictColorSpace != 3 && $this->restrictColorSpace != 1 && $channels !== 3) {
+			return sprintf('A PDF/A document writes DeviceRGB unless restricted to CMYK or greyscale, which needs an RGB output intent, and %s is not an RGB profile. (The bundled %s profile will be used instead.)', $name, $fallback);
+		}
+
+		return null;
 	}
 
 	/**
@@ -11190,6 +11254,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// OUTPUTINTENT
 		if ($this->PDFA || $this->PDFX || $this->ICCProfile) {
+			$this->checkPdfaOutputIntent();
 			$this->metadataWriter->writeOutputIntent();
 		}
 
