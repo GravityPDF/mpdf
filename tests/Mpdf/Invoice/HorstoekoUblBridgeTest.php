@@ -9,8 +9,8 @@ use Mpdf\InvoiceFixtures;
  * UBL converted from Cross Industry Invoice XML by horstoeko/zugferdublbridge, the package the documentation points to
  * for UBL, reads and prints as the XML it was converted from
  *
- * The package needs PHP 7.3, so it is not in require-dev; the einvoice-interop workflow installs it before running
- * this group, and elsewhere the tests are skipped.
+ * The package needs PHP 7.3, so it is not in require-dev; the einvoice-interop workflow installs it and runs
+ * this group, where a missing package fails the tests; elsewhere they are skipped.
  *
  * @group interop
  */
@@ -20,13 +20,17 @@ class HorstoekoUblBridgeTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use InvoiceFixtures;
 
 	/**
-	 * Skip unless horstoeko/zugferdublbridge is installed
+	 * Skip unless horstoeko/zugferdublbridge is installed, or fail in the einvoice-interop workflow
 	 */
 	protected function set_up()
 	{
 		parent::set_up();
 
 		if (!class_exists('horstoeko\zugferdublbridge\XmlConverterCiiToUbl')) {
+			if (getenv('EINVOICE_INTEROP')) {
+				$this->fail('horstoeko/zugferdublbridge is not installed, but the einvoice-interop workflow needs it');
+			}
+
 			$this->markTestSkipped('horstoeko/zugferdublbridge is not installed; run composer require --dev horstoeko/zugferdublbridge');
 		}
 	}

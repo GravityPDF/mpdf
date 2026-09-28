@@ -59,3 +59,6 @@ jobs:
 
       - name: "Tests"
         run: composer test -- --group=interop
+        env:
+          # Fails the tests rather than skipping them if the packages did not install
+          EINVOICE_INTEROP: "1"
