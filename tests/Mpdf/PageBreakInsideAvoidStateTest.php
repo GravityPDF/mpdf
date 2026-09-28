@@ -119,7 +119,7 @@ class PageBreakInsideAvoidStateTest extends \Yoast\PHPUnitPolyfills\TestCases\Te
 		list($pdf) = $this->document($filler, $page, $inner, '', '', ['useActiveForms' => true]);
 
 		$this->assertOnlyOnPage($page, 3, '/Subtype /Widget', $this->annotations($pdf), 'a widget');
-		$this->assertSame(1, preg_match_all('/\/Ff \d+\s*\/Kids \[([^\]]*)\]/', $pdf, $groups), 'The radio group should be written once');
+		$this->assertSame(1, preg_match_all('/\/T \(choice\) \/Kids \[([^\]]*)\]/', $pdf, $groups), 'The radio group should be written once');
 		preg_match_all('/(\d+) 0 R/', $groups[1][0], $kids);
 		$this->assertCount(2, $kids[1]);
 		foreach ($kids[1] as $kid) {

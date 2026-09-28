@@ -202,6 +202,22 @@ trait PageStreams
 	}
 
 	/**
+	 * The objects an array of references lists, the first in $pdf under the key given
+	 *
+	 * @param string $key 'Fields' or 'Kids'
+	 * @param string $pdf a document or one of its objects
+	 *
+	 * @return string[]
+	 */
+	private function refs($key, $pdf)
+	{
+		$this->assertSame(1, preg_match('/\/' . $key . ' \[([^\]]*)\]/', $pdf, $list));
+		preg_match_all('/(\d+) 0 R/', $list[1], $refs);
+
+		return $refs[1];
+	}
+
+	/**
 	 * The annotation objects listed by each page, as one string per page
 	 */
 	private function annotations($pdf)
