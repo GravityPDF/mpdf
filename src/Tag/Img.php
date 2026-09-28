@@ -295,7 +295,7 @@ class Img extends Tag
 			/* -- BORDER-RADIUS -- */
 			// A percentage is of the border box, horizontal radii of its width and vertical of its height, resolved now as a
 			// block's are: a picture later narrowed to what is left of its line keeps the radius it was given.
-			// Mpdf::sizeCellImages() resolves them again for a picture sized against its cell.
+			// ImageSizing::sizeInCell() resolves them again for a picture sized against its cell.
 			$radii = [];
 			$radiusPercent = [];
 			foreach (['TL' => 'TOP-LEFT', 'TR' => 'TOP-RIGHT', 'BR' => 'BOTTOM-RIGHT', 'BL' => 'BOTTOM-LEFT'] as $corner => $name) {

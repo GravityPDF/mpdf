@@ -21470,40 +21470,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
-	/**
-	 * Size the images in a cell that were given a percentage width, min-width or max-width, which is of the cell's
-	 * content width. They are sized afresh from what they were given each time, as a table can be laid out again.
-	 *
-	 * @param array $textbuffer The cell's content
-	 * @param float $contentWidth The cell's content width, as drawn
-	 */
-	function sizeCellImages(array &$textbuffer, $contentWidth)
-	{
-		foreach ($textbuffer as $n => $chunk) {
-			if (substr($chunk[0], 0, 3) !== Mpdf::OBJECT_IDENTIFIER || strpos($chunk[0], 'cell_sizing') === false) {
-				continue;
-			}
-
-			$objattr = $this->_getObjAttr($chunk[0]);
-
-			$sizing = $objattr['cell_sizing'];
-
-			// The sizing is in unshrunk lengths, which are divided by shrin_k to draw
-			list($w, $h) = ImageSizing::fit($sizing, $objattr['orig_w'], $objattr['orig_h'], $contentWidth * $this->shrin_k);
-
-			$objattr['width'] = $w + $sizing['extrawidth'];
-			$objattr['height'] = $h + $sizing['extraheight'];
-			$objattr['image_width'] = $w;
-			$objattr['image_height'] = $h;
-
-			if (isset($objattr['border_radius'])) {
-				$objattr['border_radius'] = ImageSizing::radii($objattr, $objattr['border_radius'], $sizing['radius_percent']);
-			}
-
-			$textbuffer[$n][0] = Mpdf::OBJECT_IDENTIFIER . 'type=image,objattr=' . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
-		}
-	}
-
 	function _tableHeight(&$table)
 	{
 		$level = $table['level'];
@@ -21611,8 +21577,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->cellLineStackingStrategy = $c['cellLineStackingStrategy'];
 							$this->cellLineStackingShift = $c['cellLineStackingShift'];
 							$this->divwidth = $cw - $extraWLR;
+							// Size the images given a percentage of the cell's width, afresh each time the table is laid out.
+							// Their sizing is in unshrunk lengths, which are divided by shrin_k to draw.
 							if (!empty($c['sized_images'])) {
-								$this->sizeCellImages($c['textbuffer'], $this->divwidth);
+								foreach ($c['textbuffer'] as $n => $chunk) {
+									if (substr($chunk[0], 0, 3) === Mpdf::OBJECT_IDENTIFIER && strpos($chunk[0], 'cell_sizing') !== false) {
+										$objattr = ImageSizing::sizeInCell($this->_getObjAttr($chunk[0]), $this->divwidth * $this->shrin_k);
+										$c['textbuffer'][$n][0] = Mpdf::OBJECT_IDENTIFIER . 'type=image,objattr=' . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
+									}
+								}
 							}
 							$tempch = $this->printbuffer($c['textbuffer'], '', true, true);
 						} else {

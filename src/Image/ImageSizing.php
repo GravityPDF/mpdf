@@ -105,6 +105,32 @@ class ImageSizing
 	}
 
 	/**
+	 * An image given a percentage of its cell's width, sized against the cell
+	 *
+	 * @param array $objattr The image, with its cell_sizing
+	 * @param float $basis The cell's content width, in the image's unshrunk lengths
+	 *
+	 * @return array The image, sized
+	 */
+	public static function sizeInCell(array $objattr, $basis)
+	{
+		$sizing = $objattr['cell_sizing'];
+
+		list($w, $h) = self::fit($sizing, $objattr['orig_w'], $objattr['orig_h'], $basis);
+
+		$objattr['width'] = $w + $sizing['extrawidth'];
+		$objattr['height'] = $h + $sizing['extraheight'];
+		$objattr['image_width'] = $w;
+		$objattr['image_height'] = $h;
+
+		if (isset($objattr['border_radius'])) {
+			$objattr['border_radius'] = self::radii($objattr, $objattr['border_radius'], $sizing['radius_percent']);
+		}
+
+		return $objattr;
+	}
+
+	/**
 	 * Whether a table column can narrow the image, which a percentage width or max-width lets it do
 	 *
 	 * @param array $sizing
