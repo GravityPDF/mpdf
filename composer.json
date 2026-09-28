@@ -55,6 +55,7 @@
 		"ext-fileinfo": "Needed to check the type of the files annotations embed",
 		"ext-imagick": "Needed if developing the Mpdf library",
 		"horstoeko/zugferd": "Writes the Factur-X / ZUGFeRD / XRechnung XML that SetEmbeddedInvoice() embeds",
+		"horstoeko/zugferdublbridge": "Converts that XML to UBL, which HtmlInvoiceWriter also prints",
 		"mpdf/font-bundle-all": "All official mPDF fonts that offers coverage for common and uncommon scripts worldwide. Uses 110MB of disk space.",
 		"mpdf/font-bundle-lite": "A subset of official mPDF fonts that offers coverage for most common scripts. Uses 30MB of disk space.",
 		"mpdf/font-dejavu-family": "A unicode font family with reasonable coverage of common scripts. Uses 10MB of disk space."

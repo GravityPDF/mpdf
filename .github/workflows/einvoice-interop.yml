@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # horstoeko/zugferd needs PHP 7.3, so it is installed here rather than in require-dev
+        # horstoeko/zugferd and horstoeko/zugferdublbridge need PHP 7.3, so they are installed here rather than in require-dev
         php-version:
           - "7.3"
           - "8.5"
@@ -55,7 +55,7 @@ jobs:
           restore-keys: "composer-${{ runner.os }}-php${{ matrix.php-version }}-einvoice-"
 
       - name: "Install dependencies"
-        run: "composer install --no-interaction --no-progress && composer require --dev horstoeko/zugferd --no-interaction --no-progress"
+        run: "composer install --no-interaction --no-progress && composer require --dev horstoeko/zugferd horstoeko/zugferdublbridge --no-interaction --no-progress"
 
       - name: "Tests"
         run: composer test -- --group=interop
