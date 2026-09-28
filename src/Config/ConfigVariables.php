@@ -170,9 +170,8 @@ class ConfigVariables
 
 			// PDF/A Compliant files
 			// true=Forces compliance with the PDF/A part and level PDFAversion names
-			// Can use with 'restrictColorSpace'=3 (for a CMYK file), which needs a CMYK 'ICCProfile'
-			// or 'PDFAauto' to embed the bundled SWOP profile. 'restrictColorSpace'=1 takes a grey, RGB or CMYK
-			// profile; any other settings, an RGB profile
+			// Can use with 'restrictColorSpace'=3 (for a CMYK file), which needs a CMYK 'ICCProfile' or 'PDFAauto'
+			// Any other settings, uses an RGB profile ('restrictColorSpace'=1 also takes grey or CMYK)
 			'PDFA' => false,
 			// Overrides warnings making changes when possible to force PDF/A compliance
 			'PDFAauto' => false,
@@ -191,9 +190,8 @@ class ConfigVariables
 
 			// Colour profile OutputIntent
 			// sRGB_IEC61966-2-1 (=default if blank and PDFA), or other added .icc profile
-			// Must be CMYK for PDF/X-1a, or appropriate type for PDF/X-4. PDFA takes a printer or monitor profile:
-			// RGB, CMYK with 'restrictColorSpace'=3 (e.g. data/iccprofiles/SWOP2006_Coated3v2.icc), or any of grey,
-			// RGB or CMYK with 'restrictColorSpace'=1. PDFAauto puts the bundled sRGB or SWOP profile in place of another
+			// Must be CMYK for PDF/X-1a, or appropriate type for PDF/X-4. PDFA takes an RGB profile, or a CMYK one
+			// with 'restrictColorSpace'=3 (e.g. data/iccprofiles/SWOP2006_Coated3v2.icc); PDFAauto swaps in one of these
 			// PDF/X-4 embeds SWOP2006_Coated3v2 (CMYK) where blank. PDF/X takes a printer (prtr) profile only
 			'ICCProfile' => '',
 

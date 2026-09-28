@@ -4,6 +4,7 @@ namespace Mpdf\Writer;
 
 use Mpdf\AssetFetcherInterface;
 use Mpdf\Color\ColorModeConverter;
+use Mpdf\Color\OutputIntent;
 use Mpdf\File\FileTypeAllowList;
 use Mpdf\Strict;
 use Mpdf\Form;
@@ -84,11 +85,16 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	private $xmpExtensions;
 
 	/**
+	 * @var \Mpdf\Color\OutputIntent
+	 */
+	private $outputIntent;
+
+	/**
 	 * @var int[][] The object number of each link, by page and then by its key in PageLinks
 	 */
 	private $linkIds = [];
 
-	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, AssetFetcherInterface $assetFetcher, XmpExtensions $xmpExtensions, LoggerInterface $logger)
+	public function __construct(Mpdf $mpdf, BaseWriter $writer, Form $form, Protection $protection, AssetFetcherInterface $assetFetcher, XmpExtensions $xmpExtensions, OutputIntent $outputIntent, LoggerInterface $logger)
 	{
 		$this->mpdf = $mpdf;
 		$this->writer = $writer;
@@ -96,6 +102,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->protection = $protection;
 		$this->assetFetcher = $assetFetcher;
 		$this->xmpExtensions = $xmpExtensions;
+		$this->outputIntent = $outputIntent;
 		$this->logger = $logger;
 	}
 
@@ -368,46 +375,20 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		$this->mpdf->OutputIntentRoot = $this->mpdf->n;
 		$this->writer->write('<</Type /OutputIntent');
 
-		$ICCProfile = str_replace('_', ' ', basename($this->mpdf->ICCProfile, '.icc'));
+		$this->outputIntent->checkPdfa();
+		$profile = $this->outputIntent->profile();
 
-		if ($this->mpdf->PDFA) {
-			// Under PDFAauto a profile PDF/A refuses gives way to a bundled one, named as when ICCProfile is blank
-			$profile = $this->mpdf->outputIntentProfile();
-			$this->writer->write('/S /GTS_PDFA1');
-			if ($this->mpdf->ICCProfile && $profile === $this->mpdf->ICCProfile) {
-				$this->writer->write('/Info (' . $ICCProfile . ')');
-				$this->writer->write('/OutputConditionIdentifier (Custom)');
-				$this->writer->write('/OutputCondition ()');
-			} elseif ($profile === Mpdf::PDFX4_OUTPUT_PROFILE) {
-				$this->writeSwopCondition();
-			} else {
-				$this->writer->write('/Info (sRGB IEC61966-2.1)');
-				$this->writer->write('/OutputConditionIdentifier (sRGB IEC61966-2.1)');
-				$this->writer->write('/OutputCondition ()');
-			}
-			$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
-		} elseif ($this->mpdf->PDFX) { // a CMYK condition, except where PDF/X-4 embeds another profile
-			$this->writer->write('/S /GTS_PDFX');
-			if ($this->mpdf->ICCProfile) {
-				$this->writer->write('/Info (' . $ICCProfile . ')');
-				$this->writer->write('/OutputConditionIdentifier (Custom)');
-				$this->writer->write('/OutputCondition ()');
+		if ($this->mpdf->PDFA || $this->mpdf->PDFX) {
+			$this->writer->write($this->mpdf->PDFA ? '/S /GTS_PDFA1' : '/S /GTS_PDFX');
+			$this->writeOutputCondition($profile);
+			if ($profile !== null) {
 				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
-			} elseif ($this->mpdf->isPdfx4()) {
-				$this->writeSwopCondition();
-				$this->writer->write('/DestOutputProfile ' . ($this->mpdf->n + 1) . ' 0 R');
-			} else {
-				$this->writer->write('/Info (CGATS TR 001)');
-				$this->writer->write('/OutputConditionIdentifier (CGATS TR 001)');
-				$this->writer->write('/OutputCondition (CGATS TR 001 (SWOP))');
-				$this->writer->write('/RegistryName (http://www.color.org)');
 			}
 		}
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
-		// PDF/X-1a naming no ICCProfile names its condition alone; PDF/A falls back to sRGB
-		$profile = $this->mpdf->outputIntentProfile();
+		// PDF/X-1a naming no ICCProfile names its condition alone
 		if ($profile === null) {
 			return;
 		}
@@ -425,7 +406,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write('<<');
 
-		$this->writer->write('/N ' . $this->mpdf->outputIntentChannels());
+		$this->writer->write('/N ' . $this->outputIntent->channels());
 
 		if ($this->mpdf->compress) {
 			$this->writer->write('/Filter /FlateDecode ');
@@ -437,15 +418,32 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Names the printing condition of the bundled SWOP profile, which CGATS TR 003 characterises, for an output
-	 * intent that embeds it where the document names none
+	 * Names the output intent's condition: Custom for the profile ICCProfile names, and otherwise the registered
+	 * condition of the bundled profile embedded in its place, or of PDF/X-1a where it embeds none
+	 *
+	 * @param string|null $profile The profile the output intent embeds, see OutputIntent::profile()
 	 */
-	private function writeSwopCondition()
+	private function writeOutputCondition($profile)
 	{
-		$this->writer->write('/Info (U.S. Web Coated \\(SWOP\\) grade 3)');
-		$this->writer->write('/OutputConditionIdentifier (CGATS TR 003)');
-		$this->writer->write('/OutputCondition (SWOP 2006 Coated #3)');
-		$this->writer->write('/RegistryName (http://www.color.org)');
+		if ($profile === $this->mpdf->ICCProfile) {
+			$this->writer->write('/Info (' . str_replace('_', ' ', basename($profile, '.icc')) . ')');
+			$this->writer->write('/OutputConditionIdentifier (Custom)');
+			$this->writer->write('/OutputCondition ()');
+		} elseif ($profile === Mpdf::PDFX4_OUTPUT_PROFILE) {
+			$this->writer->write('/Info (U.S. Web Coated \\(SWOP\\) grade 3)');
+			$this->writer->write('/OutputConditionIdentifier (CGATS TR 003)');
+			$this->writer->write('/OutputCondition (SWOP 2006 Coated #3)');
+			$this->writer->write('/RegistryName (http://www.color.org)');
+		} elseif ($profile === null) {
+			$this->writer->write('/Info (CGATS TR 001)');
+			$this->writer->write('/OutputConditionIdentifier (CGATS TR 001)');
+			$this->writer->write('/OutputCondition (CGATS TR 001 (SWOP))');
+			$this->writer->write('/RegistryName (http://www.color.org)');
+		} else {
+			$this->writer->write('/Info (sRGB IEC61966-2.1)');
+			$this->writer->write('/OutputConditionIdentifier (sRGB IEC61966-2.1)');
+			$this->writer->write('/OutputCondition ()');
+		}
 	}
 
 	public function writeAssociatedFiles() // _putAssociatedFiles

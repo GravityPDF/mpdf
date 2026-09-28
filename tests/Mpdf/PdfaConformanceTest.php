@@ -176,9 +176,8 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The output intent conforms where PDFAauto gives a CMYK document naming no profile the bundled SWOP profile, and
-	 * where a greyscale document, whose DeviceGray PDF/A permits under any output intent, names a CMYK or grey one
-	 * (#449)
+	 * The output intent conforms when PDFAauto embeds the bundled SWOP profile, and when a greyscale document names a
+	 * CMYK or grey profile (#449)
 	 *
 	 * @dataProvider outputIntents
 	 *
@@ -194,20 +193,18 @@ class PdfaConformanceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * PDF/A-1b and PDF/A-2b, whose rules on device colour veraPDF checks in clauses of their own, each with the
-	 * bundled SWOP profile PDFAauto embeds, and a greyscale document under a CMYK and under a grey profile
+	 * PDF/A-1b and PDF/A-2b, which veraPDF holds to different device colour clauses, each with a CMYK document under
+	 * PDFAauto and a greyscale document under a CMYK and a grey profile
 	 *
 	 * @return mixed[][]
 	 */
 	public function outputIntents()
 	{
-		$profiles = __DIR__ . '/../../data/iccprofiles/';
-
 		$intents = [];
 		foreach (['1-B', '2-B'] as $version) {
 			$intents[$version . ' CMYK, bundled SWOP'] = [$version, ['restrictColorSpace' => 3]];
-			$intents[$version . ' greyscale, CMYK profile'] = [$version, ['restrictColorSpace' => 1, 'ICCProfile' => $profiles . 'SWOP2006_Coated3v2.icc']];
-			$intents[$version . ' greyscale, grey profile'] = [$version, ['restrictColorSpace' => 1, 'ICCProfile' => $profiles . 'Gray_sRGB_TRC.icc']];
+			$intents[$version . ' greyscale, CMYK profile'] = [$version, ['restrictColorSpace' => 1, 'ICCProfile' => Mpdf::PDFX4_OUTPUT_PROFILE]];
+			$intents[$version . ' greyscale, grey profile'] = [$version, ['restrictColorSpace' => 1, 'ICCProfile' => \Mpdf\Writer\BaseWriter::GRAY_PROFILE]];
 		}
 
 		return $intents;

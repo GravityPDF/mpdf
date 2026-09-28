@@ -13,6 +13,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	use PageStreams;
+	use IccProfiles;
 
 	/**
 	 * The bundled sRGB profile, a display profile, which ICC-based RGB is written in
@@ -25,11 +26,6 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * The configuration of a PDF/X-1a document
 	 */
 	const PDFX1A = ['PDFX' => true, 'PDFXversion' => '1a'];
-
-	/**
-	 * @var string A directory of this test's own, so that runs side by side cannot remove each other's files
-	 */
-	private $dir;
 
 	/**
 	 * @var string The path a CMYK profile is written to, for a CMYK output intent
@@ -55,8 +51,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function set_up()
 	{
-		$this->dir = sys_get_temp_dir() . '/mpdf-pdfx4-' . uniqid('', true);
-		mkdir($this->dir);
+		$this->makeProfileDir('mpdf-pdfx4');
 
 		$this->cmykProfile = $this->writeProfile('cmyk', 'CMYK');
 		$this->grayProfile = $this->writeProfile('gray', 'GRAY');
@@ -68,36 +63,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function tear_down()
 	{
-		foreach (glob($this->dir . '/*') as $file) {
-			unlink($file);
-		}
-		rmdir($this->dir);
-	}
-
-	/**
-	 * @param string $name  Names the file
-	 * @param string $space The data colour space the profile prints to, e.g. 'CMYK' or 'Lab '
-	 * @param string $class The device class, 'prtr' for a printer or 'mntr' for a display
-	 *
-	 * @return string The path of an ICC version 2.1 profile of that class and space that is a header alone, carrying no tags
-	 */
-	private function writeProfile($name, $space, $class = 'prtr')
-	{
-		$path = $this->dir . '/mpdf-test-' . $name . '.icc';
-
-		$header = str_repeat("\0", 128);
-		$header = substr_replace($header, pack('N', 0x02100000), 8, 4); // ICC version 2.1
-		$header = substr_replace($header, $class, 12, 4); // device class
-		$header = substr_replace($header, $space, 16, 4); // data colour space
-		$header = substr_replace($header, 'Lab ', 20, 4); // profile connection space
-		$header = substr_replace($header, 'acsp', 36, 4); // the file signature every profile carries
-
-		$profile = $header . pack('N', 0); // a tag table of no tags
-		$profile = substr_replace($profile, pack('N', strlen($profile)), 0, 4);
-
-		file_put_contents($path, $profile);
-
-		return $path;
+		$this->removeProfileDir();
 	}
 
 	/**

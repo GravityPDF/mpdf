@@ -6,6 +6,7 @@ use Mpdf\Config\ConfigVariables;
 use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
+use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextVars;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
@@ -22,7 +23,6 @@ use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 use Mpdf\Utils\Path;
-use Mpdf\Writer\BaseWriter;
 use Mpdf\Writer\OptionalContentWriter;
 use Psr\Log\NullLogger;
 use Mpdf\Unicode\Ucdn;
@@ -110,9 +110,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $PDFXversion;
 
 	/**
-	 * @var string[] The start of each ICC profile read, as far as its colour space, by path
+	 * @var int[] The number of colour components of each ICC profile read, by path
 	 */
-	private $iccHeaders = [];
+	private $iccChannels = [];
 
 	/**
 	 * @var bool Whether the content sets colour in the ICC-based sRGB colour space, which the page's
@@ -1776,157 +1776,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return 4;
 		}
 
-		$channels = $this->iccChannels($profile);
-		if ($channels === null || ($channels !== 4 && !$this->isPdfx4())) {
-			throw new \Mpdf\MpdfException(sprintf('The %s output intent must print to %s, and ICCProfile "%s" does not.', $this->isPdfx4() ? 'PDF/X-4' : 'PDF/X-1a', $this->isPdfx4() ? 'grey, RGB or CMYK' : 'CMYK', $profile));
-		}
-		$class = (string) substr($this->iccHeader($profile), 12, 4);
-		if ($class !== 'prtr') {
-			throw new \Mpdf\MpdfException(sprintf('The %s output intent must be a printer (prtr) profile, and ICCProfile "%s" is of the %s class.', $this->pdfxVersionLabel(), $profile, trim($class)));
-		}
-
-		return $channels;
-	}
-
-	/**
-	 * The number of colour components of the output intent's profile, which the profile stream's /N gives.
-	 *
-	 * ISO 32000-1 Table 68 permits a grey, RGB, CMYK or Lab profile, and Table 66 has /N match it: 3 for Lab as for
-	 * RGB. What PDF/A further asks of the profile is checked by pdfaOutputIntentProblem().
-	 *
-	 * @throws \Mpdf\MpdfException Where the profile is of another colour space
-	 *
-	 * @return int 1 for grey, 3 for RGB or Lab, 4 for CMYK
-	 */
-	public function outputIntentChannels()
-	{
-		if ($this->PDFX) {
-			return $this->pdfxOutputChannels();
+		if (!isset($this->iccChannels[$profile])) {
+			$icc = new IccProfile($profile);
+			list($permitted, $spaces) = $this->isPdfx4()
+				? [$icc->isGreyRgbOrCmyk(), 'grey, RGB or CMYK']
+				: [$icc->colorSpace() === 'CMYK', 'CMYK'];
+			if (!$permitted) {
+				throw new \Mpdf\MpdfException(sprintf('The %s output intent must print to %s, and ICCProfile "%s" does not.', $this->isPdfx4() ? 'PDF/X-4' : 'PDF/X-1a', $spaces, $profile));
+			}
+			if ($icc->deviceClass() !== 'prtr') {
+				throw new \Mpdf\MpdfException(sprintf('The %s output intent must be a printer (prtr) profile, and ICCProfile "%s" is of the %s class.', $this->pdfxVersionLabel(), $profile, trim($icc->deviceClass())));
+			}
+			$this->iccChannels[$profile] = $icc->channels();
 		}
 
-		$profile = $this->outputIntentProfile();
-		$channels = $this->iccChannels($profile);
-		if ($channels === null && substr($this->iccHeader($profile), 16, 4) === 'Lab ') {
-			return 3;
-		}
-		if ($channels === null) {
-			throw new \Mpdf\MpdfException(sprintf('The output intent must be a grey, RGB, CMYK or Lab profile, and ICCProfile "%s" is not.', $profile));
-		}
-
-		return $channels;
-	}
-
-	/**
-	 * @return string|null The ICC profile the output intent embeds: for PDF/X see pdfxOutputProfile(), otherwise
-	 *                     ICCProfile, or the bundled sRGB profile where it names none. Under PDFAauto a profile
-	 *                     PDF/A refuses gives way to pdfaDefaultOutputProfile().
-	 */
-	public function outputIntentProfile()
-	{
-		if ($this->PDFX) {
-			return $this->pdfxOutputProfile();
-		}
-
-		$profile = $this->ICCProfile ?: BaseWriter::SRGB_PROFILE;
-		if ($this->PDFA && $this->PDFAauto && $this->pdfaOutputIntentProblem($profile) !== null) {
-			return $this->pdfaDefaultOutputProfile();
-		}
-
-		return $profile;
-	}
-
-	/**
-	 * Records, for the document to be refused, a PDF/A output intent profile that PDF/A does not permit. Under
-	 * PDFAauto outputIntentProfile() has put the bundled profile in its place already.
-	 */
-	private function checkPdfaOutputIntent()
-	{
-		if (!$this->PDFA || $this->PDFX) {
-			return;
-		}
-
-		$problem = $this->pdfaOutputIntentProblem($this->outputIntentProfile());
-		if ($problem !== null) {
-			$this->pdfaxWarning($problem);
-		}
-	}
-
-	/**
-	 * @return string The bundled profile a PDF/A document falls back on: the SWOP (CMYK) profile restricted to CMYK,
-	 *                and sRGB otherwise
-	 */
-	private function pdfaDefaultOutputProfile()
-	{
-		return $this->restrictColorSpace == 3 ? self::PDFX4_OUTPUT_PROFILE : BaseWriter::SRGB_PROFILE;
-	}
-
-	/**
-	 * ISO 19005-2 6.2.3 (19005-1 6.2.2) asks of the output intent a printer or monitor profile, of grey, RGB or CMYK.
-	 * 19005-2 6.2.4.3 (19005-1 6.2.3.3) permits DeviceCMYK only under a CMYK output intent and DeviceRGB only under an
-	 * RGB one, and DeviceGray under any. Restricted to CMYK a document writes DeviceCMYK, restricted to greyscale
-	 * DeviceGray, and otherwise DeviceRGB.
-	 *
-	 * @param string $profile The path to an ICC profile
-	 *
-	 * @return string|null Why PDF/A refuses the profile as this document's output intent, and null where it permits
-	 *                     it or the profile cannot be read, which the writer refuses in any case
-	 */
-	private function pdfaOutputIntentProblem($profile)
-	{
-		$header = $this->iccHeader($profile);
-		if ($header === '') {
-			return null;
-		}
-
-		$fallback = $this->restrictColorSpace == 3 ? 'SWOP2006_Coated3v2 (CMYK)' : 'sRGB';
-		$name = $this->ICCProfile ? sprintf('ICCProfile "%s"', $profile) : 'the sRGB profile used where ICCProfile is blank';
-		$class = (string) substr($header, 12, 4);
-		if ($class !== 'prtr' && $class !== 'mntr') {
-			return sprintf('The PDF/A output intent must be a printer (prtr) or monitor (mntr) profile, and %s is of the %s class. (The bundled %s profile will be used instead.)', $name, trim($class), $fallback);
-		}
-
-		$channels = $this->iccChannels($profile);
-		if ($channels === null) {
-			return sprintf('The PDF/A output intent must be a grey, RGB or CMYK profile, and %s is not. (The bundled %s profile will be used instead.)', $name, $fallback);
-		}
-		if ($this->restrictColorSpace == 3 && $channels !== 4) {
-			return sprintf('A PDF/A document restricted to CMYK (restrictColorSpace 3) writes DeviceCMYK, which needs a CMYK output intent, and %s is not a CMYK profile. (The bundled %s profile will be used instead.)', $name, $fallback);
-		}
-		if ($this->restrictColorSpace != 3 && $this->restrictColorSpace != 1 && $channels !== 3) {
-			return sprintf('A PDF/A document writes DeviceRGB unless restricted to CMYK or greyscale, which needs an RGB output intent, and %s is not an RGB profile. (The bundled %s profile will be used instead.)', $name, $fallback);
-		}
-
-		return null;
-	}
-
-	/**
-	 * ICC.1 7.2 puts a profile's device class at byte 12 and its colour space at byte 16
-	 *
-	 * @param string $profile The path to an ICC profile
-	 *
-	 * @return string The first 20 bytes of the profile, or nothing where it cannot be read
-	 */
-	private function iccHeader($profile)
-	{
-		if (!isset($this->iccHeaders[$profile])) {
-			$this->iccHeaders[$profile] = is_readable($profile) ? (string) file_get_contents($profile, false, null, 0, 20) : '';
-		}
-
-		return $this->iccHeaders[$profile];
-	}
-
-	/**
-	 * @param string $profile The path to an ICC profile
-	 *
-	 * @return int|null 1, 3 or 4 for a grey, RGB or CMYK profile, and null for any other colour space or where the
-	 *                  profile cannot be read
-	 */
-	private function iccChannels($profile)
-	{
-		$channels = ['GRAY' => 1, 'RGB ' => 3, 'CMYK' => 4];
-		$space = (string) substr($this->iccHeader($profile), 16, 4);
-
-		return isset($channels[$space]) ? $channels[$space] : null;
+		return $this->iccChannels[$profile];
 	}
 
 	/**
@@ -11254,7 +11118,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// OUTPUTINTENT
 		if ($this->PDFA || $this->PDFX || $this->ICCProfile) {
-			$this->checkPdfaOutputIntent();
 			$this->metadataWriter->writeOutputIntent();
 		}
 

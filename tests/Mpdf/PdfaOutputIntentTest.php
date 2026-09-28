@@ -2,35 +2,24 @@
 
 namespace Mpdf;
 
+use Mpdf\Writer\BaseWriter;
+
 /**
- * The profile a PDF/A output intent embeds is one PDF/A permits for the colour the document writes, and its stream's
- * /N counts that profile's components. Without PDFAauto another profile has the document refused; under PDFAauto
- * the bundled sRGB or SWOP profile takes its place.
+ * A PDF/A output intent embeds a profile PDF/A permits for the colour the document writes, with /N counting its
+ * components. Any other profile has the document refused, or under PDFAauto is replaced by the bundled sRGB or SWOP.
  */
 class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	use PageStreams;
-
-	/**
-	 * The bundled profiles: sRGB, SWOP (CMYK) and a grey one
-	 */
-	const SRGB = __DIR__ . '/../../data/iccprofiles/sRGB_IEC61966-2-1.icc';
-	const CMYK = __DIR__ . '/../../data/iccprofiles/SWOP2006_Coated3v2.icc';
-	const GRAY = __DIR__ . '/../../data/iccprofiles/Gray_sRGB_TRC.icc';
-
-	/**
-	 * @var string The directory the profiles each test writes go to
-	 */
-	private $dir;
+	use IccProfiles;
 
 	/**
 	 * Makes a directory of the test's own for the profiles it writes
 	 */
 	public function set_up()
 	{
-		$this->dir = sys_get_temp_dir() . '/mpdf-pdfa-intent-' . uniqid('', true);
-		mkdir($this->dir);
+		$this->makeProfileDir('mpdf-pdfa-intent');
 	}
 
 	/**
@@ -38,15 +27,12 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function tear_down()
 	{
-		foreach (glob($this->dir . '/*') as $file) {
-			unlink($file);
-		}
-		rmdir($this->dir);
+		$this->removeProfileDir();
 	}
 
 	/**
-	 * Without PDFAauto, a profile PDF/A does not permit for the document has it refused, with the reason among the
-	 * PDF/A warnings: a CMYK document needs a CMYK profile, and an RGB document an RGB one
+	 * Without PDFAauto a CMYK document needs a CMYK profile and an RGB document an RGB one, or it is refused with
+	 * a PDF/A warning saying why
 	 *
 	 * @dataProvider refusedProfiles
 	 *
@@ -66,54 +52,54 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return [
 			'CMYK document, no profile' => [
 				['restrictColorSpace' => 3],
-				'writes DeviceCMYK, which needs a CMYK output intent, and the sRGB profile used where ICCProfile is blank is not a CMYK profile. (The bundled SWOP2006_Coated3v2 (CMYK) profile will be used instead.)',
+				'This PDF/A document writes DeviceCMYK, which needs a CMYK output intent, and the sRGB profile used where ICCProfile is blank is not a CMYK profile. (The bundled SWOP2006_Coated3v2 profile will be used instead.)',
 			],
 			'CMYK document, RGB profile' => [
-				['restrictColorSpace' => 3, 'ICCProfile' => self::SRGB],
-				'writes DeviceCMYK, which needs a CMYK output intent, and ICCProfile "' . self::SRGB . '" is not a CMYK profile.',
+				['restrictColorSpace' => 3, 'ICCProfile' => BaseWriter::SRGB_PROFILE],
+				'which needs a CMYK output intent, and ICCProfile "' . BaseWriter::SRGB_PROFILE . '" is not a CMYK profile.',
 			],
 			'RGB document, CMYK profile' => [
-				['ICCProfile' => self::CMYK],
-				'which needs an RGB output intent, and ICCProfile "' . self::CMYK . '" is not an RGB profile. (The bundled sRGB profile will be used instead.)',
+				['ICCProfile' => Mpdf::PDFX4_OUTPUT_PROFILE],
+				'This PDF/A document writes DeviceRGB, which needs an RGB output intent, and ICCProfile "' . Mpdf::PDFX4_OUTPUT_PROFILE . '" is not an RGB profile. (The bundled sRGB_IEC61966-2-1 profile will be used instead.)',
 			],
 			'RGB document, grey profile' => [
-				['ICCProfile' => self::GRAY],
-				'which needs an RGB output intent, and ICCProfile "' . self::GRAY . '" is not an RGB profile.',
+				['ICCProfile' => BaseWriter::GRAY_PROFILE],
+				'which needs an RGB output intent, and ICCProfile "' . BaseWriter::GRAY_PROFILE . '" is not an RGB profile.',
 			],
 		];
 	}
 
 	/**
-	 * PDF/A takes as the output intent a grey, RGB or CMYK profile alone, so a Lab profile is refused even where
-	 * the document writes no device colour it would describe
+	 * PDF/A takes only a printer or monitor profile of grey, RGB or CMYK as the output intent, so a Lab profile and
+	 * an RGB input (scanner) profile are refused
+	 *
+	 * @dataProvider profilesOfAnotherKind
+	 *
+	 * @param string $space
+	 * @param string $class
+	 * @param string $warning With %s for the profile's path
 	 */
-	public function testALabProfileIsRefused()
+	public function testAProfileOfAnotherKindIsRefused($space, $class, $warning)
 	{
-		$profile = $this->writeProfile('lab', 'Lab ', 'mntr');
+		$profile = $this->writeProfile('refused', $space, $class);
 
-		$this->assertStringContainsString(
-			'The PDF/A output intent must be a grey, RGB or CMYK profile, and ICCProfile "' . $profile . '" is not.',
-			implode("\n", $this->warnings(['ICCProfile' => $profile]))
-		);
+		$this->assertStringContainsString(sprintf($warning, $profile), implode("\n", $this->warnings(['ICCProfile' => $profile])));
 	}
 
 	/**
-	 * PDF/A takes as the output intent a printer or monitor profile alone, so an RGB input (scanner) profile is
-	 * refused for an RGB document
+	 * @return string[][] The colour space and class of a Lab and an input profile, with the warning each is refused with
 	 */
-	public function testAnInputProfileIsRefused()
+	public function profilesOfAnotherKind()
 	{
-		$profile = $this->writeProfile('scanner', 'RGB ', 'scnr');
-
-		$this->assertStringContainsString(
-			'The PDF/A output intent must be a printer (prtr) or monitor (mntr) profile, and ICCProfile "' . $profile . '" is of the scnr class.',
-			implode("\n", $this->warnings(['ICCProfile' => $profile]))
-		);
+		return [
+			'Lab' => ['Lab ', 'mntr', 'The PDF/A output intent must be a grey, RGB or CMYK profile, and ICCProfile "%s" is not.'],
+			'scanner' => ['RGB ', 'scnr', 'The PDF/A output intent must be a printer (prtr) or monitor (mntr) profile, and ICCProfile "%s" is of the scnr class.'],
+		];
 	}
 
 	/**
-	 * A document restricted to greyscale writes DeviceGray, which PDF/A permits under any output intent, so a grey,
-	 * RGB or CMYK profile is embedded as named, without PDFAauto
+	 * A greyscale document writes DeviceGray, which PDF/A permits under any output intent, so it embeds a grey, RGB
+	 * or CMYK profile as named
 	 *
 	 * @dataProvider greyDocumentProfiles
 	 *
@@ -125,7 +111,7 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$pdf = $this->write(['PDFA' => true, 'restrictColorSpace' => 1, 'ICCProfile' => $profile]);
 
 		$this->assertStringContainsString('/OutputConditionIdentifier (Custom)', $pdf);
-		$this->assertStringContainsString("<<\n/N " . $channels . "\n/Length " . filesize($profile) . '>>', $pdf);
+		$this->assertProfileStream($pdf, $channels, $profile);
 	}
 
 	/**
@@ -133,12 +119,15 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function greyDocumentProfiles()
 	{
-		return ['grey' => [self::GRAY, 1], 'RGB' => [self::SRGB, 3], 'CMYK' => [self::CMYK, 4]];
+		return [
+			'grey' => [BaseWriter::GRAY_PROFILE, 1],
+			'RGB' => [BaseWriter::SRGB_PROFILE, 3],
+			'CMYK' => [Mpdf::PDFX4_OUTPUT_PROFILE, 4],
+		];
 	}
 
 	/**
-	 * Under PDFAauto a CMYK document naming no CMYK profile embeds the bundled SWOP profile, with the printing
-	 * condition CGATS TR 003 that characterises it, as a PDF/X-4 document naming none does
+	 * Under PDFAauto a CMYK document naming no CMYK profile embeds the bundled SWOP profile as CGATS TR 003
 	 *
 	 * @dataProvider cmykDocumentsWithoutACmykProfile
 	 *
@@ -149,7 +138,7 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$pdf = $this->write($config + ['PDFA' => true, 'PDFAauto' => true, 'restrictColorSpace' => 3]);
 
 		$this->assertStringContainsString('/OutputConditionIdentifier (CGATS TR 003)', $pdf);
-		$this->assertStringContainsString("<<\n/N 4\n/Length " . filesize(self::CMYK) . '>>', $pdf);
+		$this->assertProfileStream($pdf, 4, Mpdf::PDFX4_OUTPUT_PROFILE);
 	}
 
 	/**
@@ -157,38 +146,35 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function cmykDocumentsWithoutACmykProfile()
 	{
-		return ['no profile' => [[]], 'RGB profile' => [['ICCProfile' => self::SRGB]]];
+		return ['no profile' => [[]], 'RGB profile' => [['ICCProfile' => BaseWriter::SRGB_PROFILE]]];
 	}
 
 	/**
-	 * Under PDFAauto an RGB document naming a profile PDF/A does not permit for it embeds the bundled sRGB profile,
-	 * named as where ICCProfile is blank
+	 * Under PDFAauto an RGB document naming a profile PDF/A refuses embeds the bundled sRGB profile instead
 	 *
 	 * @dataProvider profilesAnRgbDocumentRefuses
 	 *
-	 * @param string|null $class The device class of the profile named, or null for the bundled CMYK profile
-	 * @param string      $space The colour space of the profile named
+	 * @param string $space
+	 * @param string $class
 	 */
-	public function testPdfaAutoGivesAnRgbDocumentTheBundledSrgbProfile($class, $space)
+	public function testPdfaAutoGivesAnRgbDocumentTheBundledSrgbProfile($space, $class)
 	{
-		$profile = $class === null ? self::CMYK : $this->writeProfile('refused', $space, $class);
-
-		$pdf = $this->write(['PDFA' => true, 'PDFAauto' => true, 'ICCProfile' => $profile]);
+		$pdf = $this->write(['PDFA' => true, 'PDFAauto' => true, 'ICCProfile' => $this->writeProfile('refused', $space, $class)]);
 
 		$this->assertStringContainsString('/OutputConditionIdentifier (sRGB IEC61966-2.1)', $pdf);
-		$this->assertStringContainsString("<<\n/N 3\n/Length " . filesize(self::SRGB) . '>>', $pdf);
+		$this->assertProfileStream($pdf, 3, BaseWriter::SRGB_PROFILE);
 	}
 
 	/**
-	 * @return mixed[][] A CMYK profile, a Lab profile and an RGB input profile
+	 * @return string[][] The colour space and class of a CMYK, a Lab and an RGB input profile
 	 */
 	public function profilesAnRgbDocumentRefuses()
 	{
-		return ['CMYK' => [null, 'CMYK'], 'Lab' => ['mntr', 'Lab '], 'scanner' => ['scnr', 'RGB ']];
+		return ['CMYK' => ['CMYK', 'prtr'], 'Lab' => ['Lab ', 'mntr'], 'scanner' => ['RGB ', 'scnr']];
 	}
 
 	/**
-	 * PDFAauto puts no bundled profile in place of one that cannot be found, which is refused as without PDF/A
+	 * PDFAauto does not replace a profile that cannot be found, so a mistyped path is still an error
 	 */
 	public function testPdfaAutoRefusesAProfileThatCannotBeFound()
 	{
@@ -199,9 +185,7 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The profile stream's /N is the number of components of the profile embedded: three for the default sRGB and
-	 * for an RGB profile named, four for a CMYK profile, one for a grey profile named outside PDF/A, and three for a
-	 * Lab profile, which ISO 32000-1 permits outside PDF/A
+	 * The profile stream's /N is the number of components of the profile embedded
 	 *
 	 * @dataProvider profiles
 	 *
@@ -210,9 +194,9 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheProfileStreamCountsTheProfilesComponents(array $config, $channels)
 	{
-		$profile = isset($config['ICCProfile']) ? $config['ICCProfile'] : self::SRGB;
+		$profile = isset($config['ICCProfile']) ? $config['ICCProfile'] : BaseWriter::SRGB_PROFILE;
 
-		$this->assertStringContainsString("<<\n/N " . $channels . "\n/Length " . filesize($profile) . '>>', $this->write($config));
+		$this->assertProfileStream($this->write($config), $channels, $profile);
 	}
 
 	/**
@@ -222,20 +206,30 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'PDF/A, sRGB by default' => [['PDFA' => true], 3],
-			'PDF/A, RGB named' => [['PDFA' => true, 'ICCProfile' => self::SRGB], 3],
-			'PDF/A, CMYK' => [['PDFA' => true, 'restrictColorSpace' => 3, 'ICCProfile' => self::CMYK], 4],
-			'grey, outside PDF/A' => [['ICCProfile' => self::GRAY], 1],
+			'PDF/A, RGB named' => [['PDFA' => true, 'ICCProfile' => BaseWriter::SRGB_PROFILE], 3],
+			'PDF/A, CMYK' => [['PDFA' => true, 'restrictColorSpace' => 3, 'ICCProfile' => Mpdf::PDFX4_OUTPUT_PROFILE], 4],
+			'grey, outside PDF/A' => [['ICCProfile' => BaseWriter::GRAY_PROFILE], 1],
 		];
 	}
 
 	/**
-	 * A Lab profile named outside PDF/A is embedded with /N 3
+	 * ISO 32000-1 permits a Lab profile outside PDF/A, embedded with /N 3
 	 */
 	public function testALabProfileOutsidePdfaCountsThreeComponents()
 	{
 		$profile = $this->writeProfile('lab', 'Lab ', 'mntr');
 
-		$this->assertStringContainsString("<<\n/N 3\n/Length " . filesize($profile) . '>>', $this->write(['ICCProfile' => $profile]));
+		$this->assertProfileStream($this->write(['ICCProfile' => $profile]), 3, $profile);
+	}
+
+	/**
+	 * @param string $pdf
+	 * @param int    $channels The /N the profile stream should have
+	 * @param string $profile  The profile it should embed, found by its length
+	 */
+	private function assertProfileStream($pdf, $channels, $profile)
+	{
+		$this->assertStringContainsString("<<\n/N " . $channels . "\n/Length " . filesize($profile) . '>>', $pdf);
 	}
 
 	/**
@@ -267,30 +261,6 @@ class PdfaOutputIntentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function write(array $config)
 	{
 		return $this->render('<p>Text</p>', $config + ['mode' => '']);
-	}
-
-	/**
-	 * @param string $name  Names the file
-	 * @param string $space The data colour space of the profile, e.g. 'RGB ' or 'Lab '
-	 * @param string $class The device class, e.g. 'mntr' for a display or 'scnr' for an input device
-	 *
-	 * @return string The path of an ICC version 2.1 profile of that class and space that is a header alone
-	 */
-	private function writeProfile($name, $space, $class)
-	{
-		$path = $this->dir . '/' . $name . '.icc';
-
-		$header = str_repeat("\0", 128);
-		$header = substr_replace($header, pack('N', 0x02100000), 8, 4); // ICC version 2.1
-		$header = substr_replace($header, $class, 12, 4); // device class
-		$header = substr_replace($header, $space, 16, 4); // data colour space
-		$header = substr_replace($header, 'Lab ', 20, 4); // profile connection space
-		$header = substr_replace($header, 'acsp', 36, 4); // the file signature every profile carries
-
-		$profile = $header . pack('N', 0); // a tag table of no tags
-		file_put_contents($path, substr_replace($profile, pack('N', strlen($profile)), 0, 4));
-
-		return $path;
 	}
 
 }
