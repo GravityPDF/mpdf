@@ -23,6 +23,7 @@ class Form
 	const FLAG_PASSWORD = 14;
 	const FLAG_RADIO = 15;
 	const FLAG_NOTOGGLEOFF = 16;
+	const FLAG_PUSHBUTTON = 17;
 	const FLAG_COMBOBOX = 18;
 	const FLAG_EDITABLE = 19;
 	const FLAG_MULTISELECT = 22;
@@ -94,9 +95,9 @@ class Form
 	var $form_radio_groups;
 
 	/**
-	 * @var array[] by name, the push buttons that share it, which are written as one field with the widgets as kids
+	 * @var array[] by name, the radio or push buttons written as one field with the widgets as kids
 	 */
-	private $buttonGroups = [];
+	private $groups = [];
 
 	var $pdf_acro_array;
 	var $pdf_array_co;
@@ -884,25 +885,37 @@ class Form
 	}
 
 	/**
-	 * Gathers the push buttons that share a name and numbers the field each group is written as, from $id. A button
-	 * with a name of its own stays a single field and widget.
+	 * Gathers radio and push buttons by name, numbers from $id the field each group is written as, and notes it on
+	 * each widget as its parent. A push button with a name of its own stays a single field.
 	 *
 	 * @param int $id the first group's object number, left at the next free one
 	 */
-	function addButtonGroupIds(&$id)
+	public function addGroupIds(&$id)
 	{
 		$names = [];
 		foreach ($this->forms as $form) {
-			if ($this->isPushButton($form)) {
-				$names[$form['T']][] = $form['n'];
+			if ($form['typ'] === 'Bt' && $form['subtype'] !== 'checkbox') {
+				$names[$form['T']][] = $form;
 			}
 		}
 
-		$this->buttonGroups = [];
-		foreach ($names as $name => $kids) {
-			if (count($kids) > 1) {
-				$this->buttonGroups[$name] = ['obj_id' => $id++, 'kids' => $kids];
+		$this->groups = [];
+		foreach ($names as $name => $forms) {
+			if (count($forms) === 1 && $forms[0]['subtype'] !== 'radio') {
+				continue;
 			}
+
+			$group = ['obj_id' => $id++, 'kids' => [], 'flags' => [], 'state' => null];
+			foreach ($forms as $form) {
+				$this->forms[$form['n']]['parent'] = $group['obj_id'];
+				$group['kids'][] = $form['n'];
+				$group['flags'] = array_merge($group['flags'], $this->buttonFlags($form));
+				if ($form['subtype'] === 'radio' && ($form['activ'] || $group['state'] === null)) {
+					$group['state'] = $form['activ'] ? $form['V'] : 'Off';
+				}
+			}
+
+			$this->groups[$name] = $group;
 		}
 	}
 
@@ -919,12 +932,34 @@ class Form
 	}
 
 	/**
-	 * Writes each group of same-named push buttons as a field holding the name and the push-button flag, with the
-	 * widgets as its kids. It is not an annotation, so no page lists it.
+	 * The /Ff flags of a checkbox, radio button or push button. A disabled radio button makes its whole group read-only,
+	 * because PDF readers treat a partly disabled group inconsistently.
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return int[]
 	 */
-	function putButtonGroups()
+	private function buttonFlags($form)
 	{
-		foreach ($this->buttonGroups as $name => $group) {
+		if ($form['subtype'] === 'radio') {
+			$flags = [self::FLAG_RADIO, self::FLAG_NOTOGGLEOFF];
+			if ($form['disabled']) {
+				$flags = array_merge($flags, [self::FLAG_READONLY, self::FLAG_NO_EXPORT]);
+			}
+
+			return array_merge($form['FF'], $flags);
+		}
+
+		return $this->isPushButton($form) ? array_merge($form['FF'], [self::FLAG_PUSHBUTTON]) : $form['FF'];
+	}
+
+	/**
+	 * Writes each group as a field holding the type, flags, name and, for radio buttons, the value, with the widgets
+	 * as its kids. The kids inherit those entries, and no page lists the group.
+	 */
+	public function putGroups()
+	{
+		foreach ($this->groups as $name => $group) {
 			$this->writer->object();
 			$this->pdf_acro_array .= $this->mpdf->n . ' 0 R ';
 
@@ -933,7 +968,13 @@ class Form
 				$kids .= $this->forms[$kid]['obj'] . ' 0 R ';
 			}
 
-			$this->writer->write('<< /FT /Btn /Ff ' . $this->_setflag([17]) . ' /T ' . $this->writer->string($name) . ' /Kids [ ' . $kids . '] >>');
+			$value = '';
+			if ($group['state'] !== null) {
+				$state = '/' . $this->writer->escape($group['state']);
+				$value = ' /V ' . $state . ' /DV ' . $state;
+			}
+
+			$this->writer->write('<< /FT /Btn /Ff ' . $this->_setflag(array_unique($group['flags'])) . ' /T ' . $this->writer->string($name) . ' /Kids [ ' . $kids . ']' . $value . ' >>');
 			$this->writer->write('endobj');
 		}
 	}
@@ -953,50 +994,6 @@ class Form
 					$this->_putform_bt($val, $hPt);
 				}
 			}
-		}
-	}
-
-	// In _putannots
-	function _putRadioItems($n)
-	{
-		// Output Radio Groups
-		$key = 1;
-		foreach ($this->form_radio_groups as $name => $frg) {
-			$this->writer->object();
-			$this->pdf_acro_array .= $this->mpdf->n . ' 0 R ';
-			$this->writer->write('<<');
-			$this->writer->write('/Type /Annot ');
-			$this->writer->write('/Subtype /Widget');
-			$this->writer->write('/NM ' . $this->writer->string(sprintf('%04u-%04u', $n, 3000 + $key++)));
-			$this->writer->write('/M ' . $this->writer->dateString());
-			$this->writer->write('/Rect [0 0 0 0] ');
-			$this->writer->write('/FT /Btn ');
-			if (!empty($frg['disabled'])) {
-				$flags = [self::FLAG_READONLY, self::FLAG_NO_EXPORT, self::FLAG_RADIO, self::FLAG_NOTOGGLEOFF];
-			} else {
-				$flags = [self::FLAG_RADIO, self::FLAG_NOTOGGLEOFF];
-			}
-			$this->writer->write('/Ff ' . $this->_setflag($flags));
-			$kstr = '';
-			// $optstr = '';
-			foreach ($frg['kids'] as $kid) {
-				$kstr .= $this->forms[$kid['n']]['obj'] . ' 0 R ';
-				//		$optstr .= ' '.$this->writer->string($kid['OPT']).' ';
-			}
-			$this->writer->write('/Kids [ ' . $kstr . ' ] '); // 11 0 R 12 0 R etc.
-			//	$this->writer->write('/Opt [ '.$optstr.' ] ');
-			//V entry holds index corresponding to the appearance state of
-			//whichever child field is currently in the on state = or Off
-			if (isset($frg['on'])) {
-				$state = $frg['on'];
-			} else {
-				$state = 'Off';
-			}
-			$this->writer->write('/V /' . $state . ' ');
-			$this->writer->write('/DV /' . $state . ' ');
-			$this->writer->write('/T ' . $this->writer->string($name) . ' ');
-			$this->writer->write('>>');
-			$this->writer->write('endobj');
 		}
 	}
 
@@ -2158,8 +2155,8 @@ class Form
 		$n = $this->mpdf->n;
 
 		// A radio button or a button that shares its name is listed through the field it is a kid of
-		$group = $this->isPushButton($form) && isset($this->buttonGroups[$form['T']]);
-		if ($form['subtype'] !== 'radio' && !$group) {
+		$parent = isset($form['parent']) ? $form['parent'] : null;
+		if ($parent === null) {
 			$this->pdf_acro_array .= $n . ' 0 R '; // Add to /Field element
 		}
 
@@ -2176,13 +2173,12 @@ class Form
 		}
 		$this->writer->write($form['noprint'] && !$this->mpdf->PDFA ? '/F 0 ' : '/F 4 ');
 
-		$this->writer->write('/FT /Btn ');
 		$this->writer->write('/H /P ');
 
-		if ($group) {
-			$this->writer->write('/Parent ' . $this->buttonGroups[$form['T']]['obj_id'] . ' 0 R ');
-		} elseif ($form['subtype'] !== 'radio') {  // mPDF 5.3.23
-			$this->writer->write('/T ' . $this->writer->string($form['T']));
+		if ($parent === null) {
+			$this->writer->write('/FT /Btn /Ff ' . $this->_setflag($this->buttonFlags($form)) . ' /T ' . $this->writer->string($form['T']));
+		} else {
+			$this->writer->write('/Parent ' . $parent . ' 0 R ');
 		}
 
 		$this->writer->write('/TU ' . $this->writer->string($form['TU']));
@@ -2217,7 +2213,6 @@ class Form
 			$temp .= '/BG [ ' . $radio_background_color . ' ] ';
 			$this->writer->write('/BS << /W 1 /S /S >>');
 			$this->writer->write("/MK << $temp >>");
-			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 
 			if ($form['activ']) {
 				$this->writer->write('/V /' . $this->writer->escape($form['V']) . ' ');
@@ -2243,8 +2238,6 @@ class Form
 				$radio_background_color = $this->form_radio_background_color;
 			}
 
-			$this->writer->write('/Parent ' . $this->form_radio_groups[$form['T']]['obj_id'] . ' 0 R ');
-
 			$temp = '';
 			$temp .= '/BC [ ' . $radio_color . ' ] ';
 			$temp .= '/BG [ ' . $radio_background_color . ' ] ';
@@ -2252,23 +2245,12 @@ class Form
 			$this->writer->write('/BS << /W 1 /S /S >>');
 			$this->writer->write('/MK << ' . $temp . ' >> ');
 
-			$form['FF'][] = self::FLAG_NOTOGGLEOFF;
-			$form['FF'][] = self::FLAG_RADIO; // must be same as radio button group setting?
-			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
-
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 
-			$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
-
-			if ($form['activ']) {
-				$this->writer->write('/V /' . $this->writer->escape($form['V']) . ' ');
-				$this->writer->write('/DV /' . $this->writer->escape($form['V']) . ' ');
-				$this->writer->write('/AS /' . $this->writer->escape($form['V']) . ' ');
-			} else {
-				$this->writer->write('/AS /Off ');
-			}
-			$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
-			// $this->writer->write('/Opt [ '.$this->writer->string($form['OPT']).' '.$this->writer->string($form['OPT']).' ]');
+			// The group carries the value. A kid's /AS only says whether it is the button switched on
+			$state = '/' . $this->writer->escape($form['V']);
+			$this->writer->write('/AS ' . ($form['activ'] ? $state : '/Off') . ' ');
+			$this->writer->write('/AP << /N << ' . $state . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
 		}
 
 		if ($form['subtype'] === 'reset') {
@@ -2279,8 +2261,6 @@ class Form
 			if ($this->actionAllowed()) {
 				$this->writer->write('/AA << /D << /S /ResetForm /Flags 1 >> >>');
 			}
-			$form['FF'][] = 17;
-			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 		}
 
 		if ($form['subtype'] === 'submit') {
@@ -2309,8 +2289,6 @@ class Form
 			if ($this->actionAllowed()) {
 				$this->writer->write('/AA << /D << /S /SubmitForm /F ' . $this->writer->string($form['URL']) . ' /Flags ' . $flag . ' >> >>');
 			}
-			$form['FF'][] = 17;
-			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 		}
 
 		if ($form['subtype'] === 'js_button') {
@@ -2331,8 +2309,6 @@ class Form
 			$this->writer->write("/BS << $bstemp >>");
 			$this->writer->write("/MK << $temp >>");
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
-			$form['FF'][] = 17;
-			$this->writer->write('/Ff ' . $this->_setflag($form['FF']));
 			// Javascript
 			if (isset($this->array_form_button_js[$form['n']])) {
 				$cc++;

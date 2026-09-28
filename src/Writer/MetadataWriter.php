@@ -1180,13 +1180,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		// Active Forms - Radio Button Group entries
-		// Output Radio Button Group form entries (radio_on_obj_id already determined)
-		if (count($this->form->form_radio_groups)) {
-			$this->form->_putRadioItems($n);
-		}
-
-		$this->form->putButtonGroups();
+		$this->form->putGroups();
 
 		$this->annotationFiles = [];
 	}
@@ -1243,11 +1237,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 			$this->form->addFormIds($n, $annots[$n], $id);
 		}
 
-		foreach ($this->form->form_radio_groups as $name => $frg) {
-			$this->form->form_radio_groups[$name]['obj_id'] = $id++;
-		}
-
-		$this->form->addButtonGroupIds($id);
+		$this->form->addGroupIds($id);
 
 		return $annots;
 	}

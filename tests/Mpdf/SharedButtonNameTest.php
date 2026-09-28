@@ -38,10 +38,31 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$widget = $this->object($pdf, array_shift($kids));
 			$this->assertStringContainsString('/Parent ' . $fields[0] . ' 0 R', $widget);
 			$this->assertStringNotContainsString('/T (', $widget);
+			$this->assertStringNotContainsString('/FT ', $widget);
+			$this->assertStringNotContainsString('/Ff ', $widget);
 			$this->assertStringContainsString('/CA (' . $caption . ')', $widget);
 
 			$this->assertSame(1, preg_match('/\/AA << \/D (\d+) 0 R >>/', $widget, $action));
 			$this->assertStringContainsString("/JS (app.alert\\('" . $script . "'\\))", $this->object($pdf, $action[1]));
+		}
+	}
+
+	/**
+	 * A disabled button makes the field it shares read-only and not exported, and the widgets carry no flags of their
+	 * own
+	 */
+	public function testDisabledButtonMakesTheFieldReadOnly()
+	{
+		$pdf = $this->render('<form>'
+			. '<input type="button" name="go" value="First" />'
+			. '<input type="button" name="go" value="Second" disabled="disabled" />'
+			. '</form>', ['mode' => 'c', 'useActiveForms' => true]);
+
+		$field = $this->object($pdf, $this->refs('Fields', $pdf)[0]);
+		$this->assertStringContainsString('/FT /Btn /Ff 65541 /T (go)', $field);
+
+		foreach ($this->refs('Kids', $field) as $kid) {
+			$this->assertStringNotContainsString('/Ff ', $this->object($pdf, $kid));
 		}
 	}
 
@@ -65,9 +86,9 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('/T (lone)', $lone);
 		$this->assertStringNotContainsString('/Parent', $lone);
 
-		$this->assertStringContainsString('/T (r)', $this->object($pdf, $fields[1]));
+		$this->assertStringContainsString('/T (r)', $this->object($pdf, $fields[2]));
 
-		$field = $this->object($pdf, $fields[2]);
+		$field = $this->object($pdf, $fields[1]);
 		$this->assertStringContainsString('/T (act)', $field);
 		$this->assertCount(4, $this->refs('Kids', $field));
 		$this->assertCount(6, $this->annotationRefs($pdf)[0]);
@@ -164,22 +185,6 @@ class SharedButtonNameTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->useTemplate($mpdf->importPage(1));
 
 		$this->assertStringStartsWith('%PDF-', $this->output($mpdf));
-	}
-
-	/**
-	 * The objects an array of references lists, the first in $pdf under the key given
-	 *
-	 * @param string $key 'Fields' or 'Kids'
-	 * @param string $pdf a document or one of its objects
-	 *
-	 * @return string[]
-	 */
-	private function refs($key, $pdf)
-	{
-		$this->assertSame(1, preg_match('/\/' . $key . ' \[([^\]]*)\]/', $pdf, $list));
-		preg_match_all('/(\d+) 0 R/', $list[1], $refs);
-
-		return $refs[1];
 	}
 
 	/**
