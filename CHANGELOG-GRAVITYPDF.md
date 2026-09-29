@@ -154,6 +154,7 @@ Bugfixes
   * A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
   * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
 * A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#623]
+* `font: small-caps 14pt serif` drew the text in full-size capitals, as `text-transform: uppercase` does. It is now drawn in small capitals, as `font-variant: small-caps` draws it. The `font` shorthand also kept a `line-height` and a `font-variant` it inherited; like the style and weight, they are now reset to `normal` when the shorthand does not name them, as in a browser. To keep a line height, give it in the shorthand, as in `font: 14pt/1.5 serif`, or declare `line-height` after it. A `font` shorthand with a negative line height, such as `font: 12pt/-1 serif`, is dropped whole. `font-variant: normal` now resets `font-variant-position` as well. [#552] [#581]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -778,6 +779,7 @@ These changes do not change output.
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#578]: https://github.com/GravityPDF/mpdf/pull/578
 [#580]: https://github.com/GravityPDF/mpdf/pull/580
+[#581]: https://github.com/GravityPDF/mpdf/pull/581
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623

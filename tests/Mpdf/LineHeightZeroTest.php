@@ -112,7 +112,7 @@ class LineHeightZeroTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			],
 			'font shorthand' => [
 				'<div style="line-height: 2"><p style="font: 10pt/-1 serif">' . $lines . '</p></div>',
-				'<div style="line-height: 2"><p style="font: 10pt serif">' . $lines . '</p></div>',
+				'<div style="line-height: 2"><p>' . $lines . '</p></div>',
 			],
 			'table cell' => [
 				'<table><tr><td style="line-height: -1">' . $lines . '</td></tr></table>',
