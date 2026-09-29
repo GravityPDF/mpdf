@@ -128,10 +128,11 @@ Bugfixes
 * An inline `style` with `!important` drew no border for a `border` shorthand, dropped the bottom padding of a two-value `padding`, drew text at 0pt for a `font-size`, and ignored an image's `height` with a warning. The flag is now removed, as it is from a stylesheet. [mpdf/mpdf#1010] [mpdf/mpdf#1707] [#523] [#561]
 * Text styled with the `font` shorthand or `<font face>` came out as empty boxes when the family was not installed or had a space in its name, such as `font: 12pt Roboto` or `font: 16px "DejaVu Sans Mono"`. It was drawn in the first registered font, which is the emoji font in a full install. The family is now read as `font-family` reads it: a name is kept whole, the list is tried in order, and when mPDF knows none of it the text keeps the family it inherits. `font-family` itself also reads an unquoted name with spaces whole. [#552] [#560]
 * A descendant rule ending in `:lang()` or `[lang]`, such as `div :lang(fr)`, `div p:lang(fr)` or `table [lang=fr]`, never applied. It now applies in block content and in tables, and a regional language such as `fr-CA` falls back to the rule for `fr`, as the simple lang rules do. [#525] [#559]
+* A rule such as `td:nth-child(2):not(.x)` or `td:nth-child(2 of .x)` was applied to the second cell of every row, as if it were `td:nth-child(2)`. A rule with anything after an nth-child argument, or with an argument that is not a formula, is now dropped. [mpdf/mpdf#83] [#522] [#564]
 * `rgb()` and `hsl()` written with spaces, such as `color: rgb(255 0 0)`, threw a `TypeError` out of `WriteHTML()`, or drew the wrong colour with warnings. They are now read, with a slash before the alpha (`rgb(255 0 0 / 50%)`) and with the hue in `deg`, `grad`, `rad` or `turn`. [#552] [#563]
-  * A percentage alpha, as in `rgba(255, 0, 0, 50%)`, gave an opacity above 1, which viewers draw opaque.
-  * A fourth argument to `rgb()` or `hsl()` is read as the alpha instead of being dropped.
-  * `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
+* A percentage alpha, as in `rgba(255, 0, 0, 50%)`, gave an opacity above 1, which viewers draw opaque.
+* A fourth argument to `rgb()` or `hsl()` is read as the alpha instead of being dropped.
+* `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -328,6 +329,7 @@ These changes do not change output.
 * **PHPStan.** Fixes for newer PHP versions and PHPStan 2.2.15. [#6] [#295] [#319] [#451]
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
 
+[mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
 [mpdf/mpdf#747]: https://github.com/mpdf/mpdf/issues/747
 [mpdf/mpdf#833]: https://github.com/mpdf/mpdf/issues/833
 [mpdf/mpdf#1010]: https://github.com/mpdf/mpdf/issues/1010
@@ -711,6 +713,7 @@ These changes do not change output.
 [#514]: https://github.com/GravityPDF/mpdf/pull/514
 [#515]: https://github.com/GravityPDF/mpdf/pull/515
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
+[#522]: https://github.com/GravityPDF/mpdf/issues/522
 [#523]: https://github.com/GravityPDF/mpdf/issues/523
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
@@ -727,4 +730,5 @@ These changes do not change output.
 [#556]: https://github.com/GravityPDF/mpdf/pull/556
 [#558]: https://github.com/GravityPDF/mpdf/pull/558
 [#562]: https://github.com/GravityPDF/mpdf/pull/562
+[#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
