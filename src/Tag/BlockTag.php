@@ -838,6 +838,7 @@ abstract class BlockTag extends Tag
 				} else {
 					$currblk['margin_left'] = $currblk['margin_right'] = 0;
 				}
+				$currblk['slack_margin'] = 'both';
 			} elseif (isset($properties['MARGIN-LEFT']) && strtolower($properties['MARGIN-LEFT']) === 'auto') {
 				// Try to reduce margin-left to accomodate - if still too wide, set margin-left=0 (reduces width)
 				$currblk['margin_left'] = $prevblk['inner_width'] - ($currblk['css_set_width']
@@ -846,6 +847,7 @@ abstract class BlockTag extends Tag
 				if ($currblk['margin_left'] < 0) {
 					$currblk['margin_left'] = 0;
 				}
+				$currblk['slack_margin'] = 'left';
 			} elseif (isset($properties['MARGIN-RIGHT']) && strtolower($properties['MARGIN-RIGHT']) === 'auto') {
 				// Try to reduce margin-right to accomodate - if still too wide, set margin-right=0 (reduces width)
 				$currblk['margin_right'] = $prevblk['inner_width'] - ($currblk['css_set_width']
@@ -854,6 +856,7 @@ abstract class BlockTag extends Tag
 				if ($currblk['margin_right'] < 0) {
 					$currblk['margin_right'] = 0;
 				}
+				$currblk['slack_margin'] = 'right';
 			} else {
 				if ($currblk['direction'] === 'rtl') { // *OTL*
 					// Try to reduce margin-left to accomodate - if still too wide, set margin-left=0 (reduces width)
@@ -863,6 +866,7 @@ abstract class BlockTag extends Tag
 					if ($currblk['margin_left'] < 0) { // *OTL*
 						$currblk['margin_left'] = 0; // *OTL*
 					} // *OTL*
+					$currblk['slack_margin'] = 'left'; // *OTL*
 				} // *OTL*
 				else { // *OTL*
 					// Try to reduce margin-right to accomodate - if still too wide, set margin-right=0 (reduces width)
@@ -872,7 +876,13 @@ abstract class BlockTag extends Tag
 					if ($currblk['margin_right'] < 0) {
 						$currblk['margin_right'] = 0;
 					}
+					$currblk['slack_margin'] = 'right';
 				} // *OTL*
+			}
+
+			// A float keeps to the side it floats to
+			if ($currblk['float']) {
+				$currblk['slack_margin'] = $currblk['float'] === 'R' ? 'left' : 'right';
 			}
 		}
 
