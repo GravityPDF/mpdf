@@ -186,10 +186,22 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		// Verify link tag is preserved in result
 		$this->assertStringContainsString('link', $result);
 
-		// Verify CSS parsed from both files
+		// Verify CSS parsed from both files, including the rule after the @import
 		$this->assertArrayHasKey('BODY', $this->cssManager->CSS);
 
-		$this->assertEquals('dejavuserifcondensed', $this->cssManager->CSS['BODY']['FONT-FAMILY']);
+		$this->assertEquals('arial', $this->cssManager->CSS['BODY']['FONT-FAMILY']);
+	}
+
+	/**
+	 * The rule after @charset and @namespace in a stylesheet loaded with <link> is read
+	 */
+	public function testReadCSS_RuleAfterStatementAtRulesInLinkedStylesheet()
+	{
+		$this->createCssFile('style.css', "@charset \"UTF-8\";\n@namespace svg url(http://www.w3.org/2000/svg);\np { color: #00ff00; }");
+
+		$this->cssManager->ReadCSS('<link rel="stylesheet" href="style.css">');
+
+		$this->assertSame('#00ff00', $this->cssManager->CSS['P']['COLOR']);
 	}
 
 	public function testReadCSS_WithBackgroundUrlRewriting()

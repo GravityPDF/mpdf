@@ -135,6 +135,7 @@ Bugfixes
 * `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
 * A declaration mPDF cannot read replaced the value before it. A `calc()`, `min()`, `max()`, `clamp()` or `var()` length became 0, so `margin: calc(…)` removed the default margins, and a colour mPDF does not know, or one written with `var()`, drew the text black. Such a declaration is now dropped, as a browser drops it, so the earlier declaration, the default or the inherited value applies. [#552] [#565]
 * `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552] [#565]
+* The rule after an `@supports`, `@layer`, `@keyframes`, `@container` or other block at-rule was lost, and so were the rules inside `@supports` and `@layer`. The rule after `@charset`, `@namespace` or `@import` was lost too. `@supports` and `@layer` blocks are now unwrapped as `@media` blocks are, except `@supports not`, and other at-rules are removed whole. [#524] [#566]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -720,6 +721,7 @@ These changes do not change output.
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
 [#522]: https://github.com/GravityPDF/mpdf/issues/522
 [#523]: https://github.com/GravityPDF/mpdf/issues/523
+[#524]: https://github.com/GravityPDF/mpdf/issues/524
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
 [#525]: https://github.com/GravityPDF/mpdf/issues/525
@@ -738,4 +740,5 @@ These changes do not change output.
 [#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
+[#566]: https://github.com/GravityPDF/mpdf/pull/566
 [#615]: https://github.com/GravityPDF/mpdf/pull/615

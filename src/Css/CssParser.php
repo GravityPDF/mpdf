@@ -28,6 +28,11 @@ class CssParser
 	private $mediaQueryProcessor;
 
 	/**
+	 * @var AtRuleProcessor
+	 */
+	private $atRuleProcessor;
+
+	/**
 	 * @var CommentParser
 	 */
 	private $commentParser;
@@ -114,6 +119,7 @@ class CssParser
 		$this->normalizeProperties = new NormalizeProperties($mpdf, $sizeConverter, $colorConverter);
 		$this->cssLoader = new CssLoader($mpdf, $assetFetcher, $cache);
 		$this->mediaQueryProcessor = new MediaQueryProcessor($mpdf);
+		$this->atRuleProcessor = new AtRuleProcessor($this->mediaQueryProcessor);
 		$this->commentParser = new CommentParser();
 		$this->inlineStyleParser = new InlineStyleParser($this->normalizeProperties);
 		$this->selectorParser = new SelectorParser($mpdf);
@@ -164,10 +170,10 @@ class CssParser
 		}
 
 		$css = preg_replace('|/\*.*?\*/|s', ' ', $css);
-		$css = preg_replace('/[\s\n\r\t\f]/s', ' ', $css);
-		$css = $this->mediaQueryProcessor->processMediaQueries($css);
-		$css = $this->cssLoader->processDataUriImages($css);
 		$css = preg_replace('/(<\!\-\-|\-\->)/s', ' ', $css);
+		$css = $this->atRuleProcessor->process($css);
+		$css = preg_replace('/[\s\n\r\t\f]/s', ' ', $css);
+		$css = $this->cssLoader->processDataUriImages($css);
 		$css = $this->inlineStyleParser->processUrlsInCss($css);
 
 		$this->processCssString($css);
