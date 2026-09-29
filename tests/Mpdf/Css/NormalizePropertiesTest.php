@@ -67,7 +67,7 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'BACKGROUND-IMAGE' => 'bg.jpg',
 			'BACKGROUND-REPEAT' => 'no-repeat',
 			'BACKGROUND-POSITION' => '0% 0%',
-			'FONT-FAMILY' => 'arial,sans-serif',
+			'FONT-FAMILY' => 'arial',
 			'FONT-SIZE' => '12px',
 			'LINE-HEIGHT' => '1.5',
 			'FONT-STYLE' => 'normal',
@@ -263,6 +263,60 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$result = $this->normalizeProperties->normalize(['FONT-FAMILY' => 'abc']);
 		$this->assertArrayNotHasKey('FONT-FAMILY', $result);
+	}
+
+	/**
+	 * The font shorthand keeps a family name whole, falls back through the list to the first name mPDF knows, and
+	 * sets no family when it knows none of them
+	 *
+	 * @dataProvider providerFontShorthand
+	 *
+	 * @param string $value The shorthand's value
+	 * @param array $expected The properties it should give, null for one it should leave unset
+	 */
+	public function testFontShorthand($value, $expected)
+	{
+		$result = $this->normalizeProperties->normalize(['FONT' => $value]);
+
+		$actual = [];
+		foreach (array_keys($expected) as $k) {
+			$actual[$k] = isset($result[$k]) ? $result[$k] : null;
+		}
+
+		$this->assertSame($expected, $actual);
+	}
+
+	/**
+	 * @return array[] Shorthand values and the properties they should give
+	 */
+	public function providerFontShorthand()
+	{
+		return [
+			'unregistered family' => ['12pt Roboto', ['FONT-FAMILY' => null, 'FONT-SIZE' => '12pt']],
+			'double-quoted name with spaces' => ['16px "DejaVu Sans Mono"', ['FONT-FAMILY' => 'dejavusansmono', 'FONT-SIZE' => '16px']],
+			'single-quoted name with spaces' => ["16px 'DejaVu Sans Mono'", ['FONT-FAMILY' => 'dejavusansmono', 'FONT-SIZE' => '16px']],
+			'unquoted name with spaces' => ['12pt DejaVu Sans Mono', ['FONT-FAMILY' => 'dejavusansmono', 'FONT-SIZE' => '12pt']],
+			'mapped name with spaces' => ['12pt Times New Roman', ['FONT-FAMILY' => 'timesnewroman', 'FONT-SIZE' => '12pt']],
+			'list falls back to a registered name' => ['12pt Roboto, "DejaVu Serif", serif', ['FONT-FAMILY' => 'dejavuserif', 'FONT-SIZE' => '12pt']],
+			'list falls back to a generic family' => ['12pt Roboto, Lato, monospace', ['FONT-FAMILY' => 'monospace', 'FONT-SIZE' => '12pt']],
+			'list of unregistered names' => ['12pt Roboto, "Segoe UI"', ['FONT-FAMILY' => null, 'FONT-SIZE' => '12pt']],
+			'style, weight and line-height' => [
+				'italic bold 12pt/1.5 "DejaVu Sans Mono", monospace',
+				['FONT-FAMILY' => 'dejavusansmono', 'FONT-SIZE' => '12pt', 'LINE-HEIGHT' => '1.5', 'FONT-STYLE' => 'italic', 'FONT-WEIGHT' => 'bold'],
+			],
+			'spaces around the slash' => ['12pt / 2 serif', ['FONT-FAMILY' => 'serif', 'FONT-SIZE' => '12pt', 'LINE-HEIGHT' => '2']],
+			'numeric weight before the size' => ['italic 700 12pt serif', ['FONT-FAMILY' => 'serif', 'FONT-SIZE' => '12pt', 'FONT-STYLE' => 'italic']],
+			'keyword inside a family name' => ['12pt "Bold Italic Sans", serif', ['FONT-FAMILY' => 'serif', 'FONT-STYLE' => 'normal', 'FONT-WEIGHT' => 'normal']],
+		];
+	}
+
+	/**
+	 * An unquoted family name with spaces is read whole before its words are tried on their own
+	 */
+	public function testUnquotedFamilyNameWithSpaces()
+	{
+		$result = $this->normalizeProperties->normalize(['FONT-FAMILY' => 'DejaVu Sans Mono, serif']);
+		$this->assertSame('dejavusansmono', $result['FONT-FAMILY']);
 	}
 
 }

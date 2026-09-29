@@ -124,72 +124,40 @@ class NormalizeProperties
 	 */
 	protected function processFontProperty($value)
 	{
-		$value = $this->simplifyFontNames(trim($value));
-		$value = preg_replace('/\s*,\s*/', ',', $value);
-		$bits = preg_split('/\s+/', $value);
-		$numOfBits = count($bits);
-
-		if ($numOfBits < 2) {
+		// The size, with any /line-height, is the first word that is not a style, variant, weight or stretch keyword,
+		// and everything after it is the family list
+		$value = preg_replace('/\s*\/\s*/', '/', trim($value));
+		if (!preg_match('/^((?:(?:normal|italic|oblique|small-caps|bold|bolder|lighter|\d+|[a-z-]*condensed|[a-z-]*expanded)\s+)*)(\S+?)(?:\/(\S+))?\s+(\S.*)$/s', $value, $m)) {
 			return;
 		}
 
-		// Last item is font-family
-		$this->properties['FONT-FAMILY'] = $bits[($numOfBits - 1)];
+		list(, $keywords, $size, $lineHeight, $family) = $m;
 
-		// Second to last is font-size (possibly with /line-height)
-		$fs = $bits[($numOfBits - 2)];
-		if (preg_match('/(.*?)\/(.*)/', $fs, $fsp)) {
-			$this->properties['FONT-SIZE'] = $fsp[1];
-			$this->properties['LINE-HEIGHT'] = $fsp[2];
-		} else {
-			$this->properties['FONT-SIZE'] = $fs;
+		$this->processFontFamilyProperty('FONT-FAMILY', $family);
+
+		$this->properties['FONT-SIZE'] = $size;
+		if ($lineHeight !== '') {
+			$this->properties['LINE-HEIGHT'] = $lineHeight;
 		}
 
 		// Check for font-style
-		if (preg_match('/(italic|oblique)/i', $value)) {
+		if (preg_match('/(italic|oblique)/i', $keywords)) {
 			$this->properties['FONT-STYLE'] = 'italic';
 		} else {
 			$this->properties['FONT-STYLE'] = 'normal';
 		}
 
 		// Check for font-weight
-		if (stripos($value, 'bold') !== false) {
+		if (stripos($keywords, 'bold') !== false) {
 			$this->properties['FONT-WEIGHT'] = 'bold';
 		} else {
 			$this->properties['FONT-WEIGHT'] = 'normal';
 		}
 
 		// Check for small-caps
-		if (stripos($value, 'small-caps') !== false) {
+		if (stripos($keywords, 'small-caps') !== false) {
 			$this->properties['TEXT-TRANSFORM'] = 'uppercase';
 		}
-	}
-
-	/**
-	 * Simplify font names by removing quotes.
-	 *
-	 * Helper method for processFontProperty to remove quotes from font names
-	 * to simplify subsequent parsing.
-	 *
-	 * @param string $value Font property value
-	 * @return string Simplified font property value
-	 */
-	protected function simplifyFontNames($value)
-	{
-		// Remove quoted font names and simplify
-		preg_match_all('/"(.*?)"/', $value, $ff);
-		foreach ($ff[1] as $ffp) {
-			$w = preg_split('/\s+/', $ffp);
-			$value = preg_replace('/"' . $ffp . '"/', $w[0], $value);
-		}
-
-		preg_match_all("/'(.*?)'/", $value, $ff);
-		foreach ($ff[1] as $ffp) {
-			$w = preg_split('/\s+/', $ffp);
-			$value = preg_replace("/'" . $ffp . "'/", $w[0], $value);
-		}
-
-		return $value;
 	}
 
 	/**
@@ -249,8 +217,9 @@ class NormalizeProperties
 	{
 		foreach (explode(',', $value) as $entry) {
 
-			// Try to parse invalid properties
-			$candidates = [];
+			// The whole entry is one family name, even unquoted with spaces (`DejaVu Sans Mono`); failing that, try to
+			// parse invalid properties
+			$candidates = [str_replace(' ', '', trim($entry, " \t\n\r\0\x0B\"'"))];
 			if (preg_match_all('/"([^"]*)"|\'([^\']*)\'/', $entry, $matches)) { // `"DejaVu Sans" 'Helvetica Neue'` → ['DejaVu Sans', 'Helvetica Neue']
 				foreach ($matches[0] as $i => $_unused) {
 					$inner = $matches[1][$i] !== '' ? $matches[1][$i] : $matches[2][$i];
@@ -264,8 +233,6 @@ class NormalizeProperties
 					$candidates[] = $word;
 				}
 			}
-
-			$candidates[] = str_replace(' ', '', trim($entry, " \t\n\r\0\x0B\"'"));
 
 			foreach ($candidates as $candidate) {
 				$candidate = strtolower(trim($candidate, " \t\n\r\0\x0B\"'"));

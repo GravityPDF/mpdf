@@ -89,6 +89,7 @@ New features
 
 * **Side margins on `:first`, `:left` and `:right` pages.** The `:first`, `:left` and `:right` pages of an `@page` rule, named or not, can set `margin-left` and `margin-right`. Text flowing from page to page is set in the page area of each page, and columns are laid out across it. A side margin on a pseudo page belongs to that side of the physical page, so it is not mirrored. [#476] [#510]
   * Text beside a float, and the blocks around it, keep to the page area of each page the float runs over. [#549]
+  * A block with a set width keeps its place in each page area: a centred block stays centred, and a block pushed right by `margin-left: auto` or set right to left stays against the right margin. [#550] [#551] [#553]
 
 Performance
 -----------
@@ -123,7 +124,11 @@ Bugfixes
 * Descendant rules naming a table, row or cell, such as `td img` or `td span`, matched nothing inside the cell. [#223] [#507]
 * A descendant rule with a part mPDF cannot parse was cut short at that part and applied to the element before it. Such rules are now dropped. [#519]
 * An inline `style` with `!important` drew no border for a `border` shorthand, dropped the bottom padding of a two-value `padding`, drew text at 0pt for a `font-size`, and ignored an image's `height` with a warning. The flag is now removed, as it is from a stylesheet. [mpdf/mpdf#1010] [mpdf/mpdf#1707] [#523] [#561]
+* Text styled with the `font` shorthand or `<font face>` came out as empty boxes when the family was not installed or had a space in its name, such as `font: 12pt Roboto` or `font: 16px "DejaVu Sans Mono"`. It was drawn in the first registered font, which is the emoji font in a full install. The family is now read as `font-family` reads it: a name is kept whole, the list is tried in order, and when mPDF knows none of it the text keeps the family it inherits. `font-family` itself also reads an unquoted name with spaces whole. [#552] [#560]
+* A descendant rule ending in `:lang()` or `[lang]`, such as `div :lang(fr)`, `div p:lang(fr)` or `table [lang=fr]`, never applied. It now applies in block content and in tables, and a regional language such as `fr-CA` falls back to the rule for `fr`, as the simple lang rules do. [#525] [#559]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
+* An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
+* When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
 * Balancing columns raised a warning and drew a block's closing background past the last column. [#475] [#488]
 * Inside `<columns>`, a block with an `rgba()` or `cmyka()` background was painted fully opaque. [#482] [#498]
 * In a UTF-8 document, CSS naming `chelvetica`, `ctimes` or `ccourier` did not draw in the core font. [#467] [#468]
@@ -702,3 +707,15 @@ These changes do not change output.
 [#523]: https://github.com/GravityPDF/mpdf/issues/523
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
+[#525]: https://github.com/GravityPDF/mpdf/issues/525
+[#549]: https://github.com/GravityPDF/mpdf/pull/549
+[#552]: https://github.com/GravityPDF/mpdf/issues/552
+[#560]: https://github.com/GravityPDF/mpdf/pull/560
+[#559]: https://github.com/GravityPDF/mpdf/pull/559
+[#550]: https://github.com/GravityPDF/mpdf/issues/550
+[#551]: https://github.com/GravityPDF/mpdf/issues/551
+[#553]: https://github.com/GravityPDF/mpdf/pull/553
+[#554]: https://github.com/GravityPDF/mpdf/issues/554
+[#555]: https://github.com/GravityPDF/mpdf/issues/555
+[#556]: https://github.com/GravityPDF/mpdf/pull/556
+[#558]: https://github.com/GravityPDF/mpdf/pull/558
