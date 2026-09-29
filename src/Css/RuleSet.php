@@ -9,7 +9,8 @@ namespace Mpdf\Css;
  *
  * The descendant rules the legacy engine applies too are filed apart. They are only looked at for an element with an
  * ancestor that opened no level of the legacy descendant rules, such as an inline element, since the legacy engine
- * matches the rest.
+ * matches the rest. A rule naming :lang() is looked at for every element, as the legacy engine does not match an
+ * inherited language.
  */
 class RuleSet
 {
@@ -59,7 +60,7 @@ class RuleSet
 		$this->rules[] = [$selector, $declarations, self::requiredAncestors($selector), $legacy];
 
 		$subject = $selector['compounds'][count($selector['compounds']) - 1];
-		if ($legacy) {
+		if ($legacy && !self::namesLanguage($selector)) {
 			self::file($this->legacyIndex, $subject, $position);
 		} else {
 			self::file($this->index, $subject, $position);
@@ -268,6 +269,24 @@ class RuleSet
 		for ($depth = count($path) - 2; $depth > 0; $depth--) {
 			if (!$path[$depth]['level']) {
 				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param array $selector
+	 *
+	 * @return bool Whether a compiled selector names :lang()
+	 */
+	private static function namesLanguage(array $selector)
+	{
+		foreach ($selector['compounds'] as $compound) {
+			foreach ($compound['pseudos'] as $pseudo) {
+				if ($pseudo[0] === 'lang') {
+					return true;
+				}
 			}
 		}
 

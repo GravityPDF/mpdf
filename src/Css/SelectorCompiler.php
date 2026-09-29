@@ -17,11 +17,30 @@ use Mpdf\Utils\UtfString;
  * - specificity: [ids, classes and attributes and pseudo-classes, tags]
  * - universal: whether it names the universal selector *
  *
+ * Attribute selectors are held as [name, operator, value, case-insensitive]: the name uppercased, as the tokenizer
+ * names attributes, and the operator empty for [name]. Values are compared case-insensitively, and held lowercased,
+ * for the attributes HTML lists as such, for id and class, whose values the tokenizer uppercases, and with the i flag.
+ *
  * Pseudo-classes are held as [name, arguments...]: ['nth-child', a, b] and ['nth-of-type', a, b] for an+b, which
- * :first-child and :first-of-type are written as.
+ * :first-child and :first-of-type are written as, and ['lang', ranges] with each language range lowercased.
  */
 class SelectorCompiler
 {
+
+	/**
+	 * @var array<string, true> The attributes whose values HTML matches case-insensitively in selectors, and id and
+	 *                          class, whose values the tokenizer uppercases
+	 */
+	private static $caseInsensitiveAttributes = [
+		'ACCEPT' => true, 'ACCEPT-CHARSET' => true, 'ALIGN' => true, 'ALINK' => true, 'AXIS' => true, 'BGCOLOR' => true,
+		'CHARSET' => true, 'CHECKED' => true, 'CLASS' => true, 'CLEAR' => true, 'CODETYPE' => true, 'COLOR' => true,
+		'COMPACT' => true, 'DECLARE' => true, 'DEFER' => true, 'DIR' => true, 'DIRECTION' => true, 'DISABLED' => true,
+		'ENCTYPE' => true, 'FACE' => true, 'FRAME' => true, 'HREFLANG' => true, 'HTTP-EQUIV' => true, 'ID' => true,
+		'LANG' => true, 'LANGUAGE' => true, 'LINK' => true, 'MEDIA' => true, 'METHOD' => true, 'MULTIPLE' => true,
+		'NOHREF' => true, 'NORESIZE' => true, 'NOSHADE' => true, 'NOWRAP' => true, 'READONLY' => true, 'REL' => true,
+		'REV' => true, 'RULES' => true, 'SCOPE' => true, 'SCROLLING' => true, 'SELECTED' => true, 'SHAPE' => true,
+		'TARGET' => true, 'TEXT' => true, 'TYPE' => true, 'VALIGN' => true, 'VALUETYPE' => true, 'VLINK' => true,
+	];
 
 	/**
 	 * @var Mpdf
@@ -132,7 +151,8 @@ class SelectorCompiler
 	}
 
 	/**
-	 * Reads one compound selector: a tag or *, then any ids, classes and pseudo-classes, with nothing between them
+	 * Reads one compound selector: a tag or *, then any ids, classes, attribute selectors and pseudo-classes, with
+	 * nothing between them
 	 *
 	 * @param string $text
 	 * @param int $pos
@@ -175,6 +195,14 @@ class SelectorCompiler
 				}
 				$compound['classes'][] = strtoupper($this->readName($text, $pos));
 				$specificity[1]++;
+			} elseif ($c === '[') {
+				$pos++;
+				$attribute = $this->parseAttribute($text, $pos);
+				if ($attribute === null) {
+					return null;
+				}
+				$compound['attributes'][] = $attribute;
+				$specificity[1]++;
 			} elseif ($c === ':') {
 				$pos++;
 				$pseudo = $this->parsePseudoClass($text, $pos);
@@ -213,7 +241,7 @@ class SelectorCompiler
 			return ['nth-of-type', 0, 1];
 		}
 
-		if (($name !== 'nth-child' && $name !== 'nth-of-type') || $pos >= strlen($text) || $text[$pos] !== '(') {
+		if (!$this->isAt($text, $pos, '(')) {
 			return null;
 		}
 
@@ -223,9 +251,162 @@ class SelectorCompiler
 			return null;
 		}
 
+		if ($name === 'lang') {
+			$ranges = $this->parseLanguageRanges($argument);
+
+			return $ranges === null ? null : ['lang', $ranges];
+		}
+
+		if ($name !== 'nth-child' && $name !== 'nth-of-type') {
+			return null;
+		}
+
 		$formula = $this->parseNth($argument);
 
 		return $formula === null ? null : [$name, $formula[0], $formula[1]];
+	}
+
+	/**
+	 * Reads the language ranges :lang() takes: identifiers or strings, separated by commas
+	 *
+	 * @param string $argument
+	 *
+	 * @return string[]|null The ranges, lowercased, or null for a list that is not valid
+	 */
+	private function parseLanguageRanges($argument)
+	{
+		$ranges = [];
+		$pos = 0;
+		$length = strlen($argument);
+		while (true) {
+			$this->skipWhitespace($argument, $pos);
+			$range = $this->readValue($argument, $pos);
+			if ($range === null || $range === '') {
+				return null;
+			}
+			$ranges[] = strtolower($range);
+
+			$this->skipWhitespace($argument, $pos);
+			if ($pos >= $length) {
+				return $ranges;
+			}
+			if ($argument[$pos] !== ',') {
+				return null;
+			}
+			$pos++;
+		}
+	}
+
+	/**
+	 * Reads an attribute selector after its opening bracket
+	 *
+	 * @param string $text
+	 * @param int $pos Moved past the closing bracket
+	 *
+	 * @return array|null As the class describes, or null for one that is not valid
+	 */
+	private function parseAttribute($text, &$pos)
+	{
+		$this->skipWhitespace($text, $pos);
+		if (!$this->startsIdentifier($text, $pos)) {
+			return null;
+		}
+		$name = strtoupper($this->readName($text, $pos));
+		$this->skipWhitespace($text, $pos);
+
+		if ($this->isAt($text, $pos, ']')) {
+			$pos++;
+
+			return [$name, '', '', false];
+		}
+
+		if (!preg_match('/\G([~|^$*]?=)/', $text, $m, 0, $pos)) {
+			return null;
+		}
+		$operator = $m[1];
+		$pos += strlen($operator);
+
+		$this->skipWhitespace($text, $pos);
+		$value = $this->readValue($text, $pos);
+		if ($value === null) {
+			return null;
+		}
+
+		$this->skipWhitespace($text, $pos);
+		$caseInsensitive = isset(self::$caseInsensitiveAttributes[$name]);
+		if (preg_match('/\G([is])(?![\w-])/i', $text, $m, 0, $pos)) {
+			// The tokenizer uppercases id and class values, so those stay case-insensitive whatever the flag
+			$caseInsensitive = $name === 'ID' || $name === 'CLASS' || strtolower($m[1]) === 'i';
+			$pos++;
+			$this->skipWhitespace($text, $pos);
+		}
+
+		if (!$this->isAt($text, $pos, ']')) {
+			return null;
+		}
+		$pos++;
+
+		return [$name, $operator, $caseInsensitive ? strtolower($value) : $value, $caseInsensitive];
+	}
+
+	/**
+	 * Whether the selector text has a given character at a position, which may be past its end
+	 *
+	 * @param string $text
+	 * @param int $pos
+	 * @param string $character
+	 *
+	 * @return bool
+	 */
+	private function isAt($text, $pos, $character)
+	{
+		return $pos < strlen($text) && $text[$pos] === $character;
+	}
+
+	/**
+	 * Reads an identifier or a quoted string, as an attribute selector's value is written
+	 *
+	 * @param string $text
+	 * @param int $pos
+	 *
+	 * @return string|null The value, with its escapes read, or null for neither
+	 */
+	private function readValue($text, &$pos)
+	{
+		if ($pos >= strlen($text)) {
+			return null;
+		}
+
+		$quote = $text[$pos];
+		if ($quote !== '"' && $quote !== "'") {
+			return $this->startsIdentifier($text, $pos) ? $this->readName($text, $pos) : null;
+		}
+
+		$value = '';
+		$length = strlen($text);
+		for ($i = $pos + 1; $i < $length; $i++) {
+			$c = $text[$i];
+			if ($c === $quote) {
+				$pos = $i + 1;
+
+				return $value;
+			}
+			if ($c !== '\\') {
+				$value .= $c;
+				continue;
+			}
+
+			if (preg_match('/\G\\\\(?:([0-9A-Fa-f]{1,6})[ \t\n\r\f]?|(\r\n|[\n\r\f])|(.))/s', $text, $m, 0, $i)) {
+				if (isset($m[3])) {
+					$value .= $m[3];
+				} elseif ($m[1] !== '') {
+					$value .= $this->codePoint(hexdec($m[1]));
+				}
+				$i += strlen($m[0]) - 1;
+			}
+		}
+
+		return null;
 	}
 
 	/**

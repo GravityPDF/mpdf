@@ -104,6 +104,7 @@ New features
 * **An id written with classes.** Selectors such as `p#note.warning`, `p.warning#note`, `#note.warning` and `p.a.b#note` match, on their own and as parts of descendant rules, in any order of id and classes. They are applied after `p#note`. A selector with a class or id followed by something mPDF cannot match, such as `.a:hover` or `#note::before`, is dropped like any other selector mPDF cannot match. [#527] [#568]
 * **Child and sibling combinators, and structural pseudo-classes.** `div > p`, `h1 + p`, `h1 ~ p`, and `:first-child`, `:nth-child()`, `:first-of-type` and `:nth-of-type()` on any element, are matched against the elements open around the one being styled. Rules using them were dropped before, so a document that has them changes. They are applied with the descendant rules, after them, in order of specificity and then of source order. [mpdf/mpdf#7] [mpdf/mpdf#318] [#538] [#620]
 * **Descendant rules through inline elements.** A descendant rule whose ancestor is an inline element, a block inside a table cell, or the `tbody` a table leaves out, such as `span em`, or `.note b` for a `<span class="note">`, applies. [mpdf/mpdf#830] [#538] [#621]
+* **Attribute selectors and `:lang()`.** `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`, `[a^=v]`, `[a$=v]` and `[a*=v]`, with the `i` and `s` flags, match as in HTML: case-insensitively for the attributes HTML lists as such, and case-sensitively for the rest. `:lang()` matches the language an element inherits, from an ancestor or from the `<html>` or `<body>` tag. [mpdf/mpdf#134] [mpdf/mpdf#1838] [#538] [#627]
 
 Performance
 -----------
@@ -377,6 +378,7 @@ These changes do not change output.
 
 [mpdf/mpdf#7]: https://github.com/mpdf/mpdf/issues/7
 [mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
+[mpdf/mpdf#134]: https://github.com/mpdf/mpdf/issues/134
 [mpdf/mpdf#318]: https://github.com/mpdf/mpdf/issues/318
 [mpdf/mpdf#747]: https://github.com/mpdf/mpdf/issues/747
 [mpdf/mpdf#830]: https://github.com/mpdf/mpdf/issues/830
@@ -392,6 +394,7 @@ These changes do not change output.
 [mpdf/mpdf#1735]: https://github.com/mpdf/mpdf/issues/1735
 [mpdf/mpdf#1775]: https://github.com/mpdf/mpdf/issues/1775
 [mpdf/mpdf#1831]: https://github.com/mpdf/mpdf/issues/1831
+[mpdf/mpdf#1838]: https://github.com/mpdf/mpdf/issues/1838
 [mpdf/mpdf#1888]: https://github.com/mpdf/mpdf/issues/1888
 [mpdf/mpdf#1890]: https://github.com/mpdf/mpdf/issues/1890
 [mpdf/mpdf#1892]: https://github.com/mpdf/mpdf/issues/1892
@@ -812,3 +815,4 @@ These changes do not change output.
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
 [#625]: https://github.com/GravityPDF/mpdf/pull/625
+[#627]: https://github.com/GravityPDF/mpdf/pull/627

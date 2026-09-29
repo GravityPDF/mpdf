@@ -143,6 +143,130 @@ class SelectorMatcherTest extends TestCase
 	}
 
 	/**
+	 * Whether each attribute selector and :lang() matches the last element of the path below:
+	 *
+	 *   <body> (the document says lang="fr-CA")
+	 *     <p lang="de" data-x="a">                               (closed)
+	 *     <div class="Card Wide" id="Main">                      (open)
+	 *       <a href="https://example.com/docs/guide.PDF"
+	 *          data-role="Card link" type="Text" title="a &amp; b"
+	 *          rel="nofollow external" data-empty="">            (the element, href as written before the base path
+	 *                                                            was put in front of it)
+	 *
+	 * @dataProvider attributeSelectors
+	 *
+	 * @param string $selector
+	 * @param bool $expected
+	 */
+	public function testMatchesAttributesAndLanguages($selector, $expected)
+	{
+		$document = $this->frame('', 1, 1, [], [['P']]);
+		$document['lang'] = 'fr-CA';
+		$document['children'][0]['attr'] = ['LANG' => 'de', 'DATA-X' => 'a'];
+		$div = $this->frame('DIV', 2, 1, ['ID' => 'MAIN', 'CLASS' => 'CARD WIDE'], []);
+		$div['classes'] = ['CARD', 'WIDE'];
+		$div['lang'] = 'fr-CA';
+		$link = $this->frame('A', 1, 1, [
+			'HREF' => 'file:///base/https://example.com/docs/guide.PDF',
+			'ORIG_SRC' => 'https://example.com/docs/guide.PDF',
+			'DATA-ROLE' => 'Card link',
+			'TYPE' => 'Text',
+			'TITLE' => 'a &amp; b',
+			'REL' => 'nofollow external',
+			'DATA-EMPTY' => '',
+		], []);
+		$link['lang'] = 'fr-CA';
+
+		$this->assertSame($expected, $this->matcher->matches($this->compiler->compile($selector), [$document, $div, $link]));
+	}
+
+	/**
+	 * An attribute selector or :lang(), and whether it matches the link
+	 *
+	 * @return array[]
+	 */
+	public function attributeSelectors()
+	{
+		return [
+			'an attribute it has' => ['[data-role]', true],
+			'an attribute it has with an empty value' => ['[data-empty]', true],
+			'an attribute it does not have' => ['[data-missing]', false],
+			'equals' => ['[data-role="Card link"]', true],
+			'equals in another case' => ['[data-role="card link"]', false],
+			'equals in another case with the i flag' => ['[data-role="card link" i]', true],
+			'an attribute HTML compares case-insensitively' => ['[type=text]', true],
+			'the same attribute with the s flag' => ['[type=text s]', false],
+			'one word of a list' => ['[rel~=external]', true],
+			'part of a word of a list' => ['[rel~=extern]', false],
+			'a list word with a space in it' => ['[rel~="nofollow external"]', false],
+			'the whole value or its start before a hyphen' => ['[data-role|="Card link"]', true],
+			'a start not followed by a hyphen' => ['[data-role|=Card]', false],
+			'starts with' => ['[href^="https://"]', true],
+			'starts with the base path put in front of it' => ['[href^="file:"]', false],
+			'starts with nothing' => ['[href^=""]', false],
+			'ends with' => ['[href$=".PDF"]', true],
+			'ends with in another case' => ['[href$=".pdf"]', false],
+			'ends with in another case with the i flag' => ['[href$=".pdf" i]', true],
+			'contains' => ['[href*="/docs/"]', true],
+			'contains nothing' => ['[href*=""]', false],
+			'a value with an entity' => ['[title="a & b"]', true],
+			'an id in another case' => ['div[id=main] > a', true],
+			'a class word in another case' => ['[class~=wide] a', true],
+			'an attribute of a sibling of an ancestor' => ['p[data-x=a] + div > a', true],
+			'the wrong attribute value on a sibling of an ancestor' => ['p[data-x=b] + div > a', false],
+			'the language it inherits' => [':lang(fr)', true],
+			'the language with its region' => ['a:lang(fr-ca)', true],
+			'another region' => ['a:lang(fr-fr)', false],
+			'another language' => [':lang(de)', false],
+			'one of several languages' => [':lang(de, fr)', true],
+			'the start of a subtag that is not a whole one' => [':lang(f)', false],
+			'the language of the document' => ['body:lang(fr) a', true],
+			'the language of a sibling of an ancestor' => ['p:lang(de) + div a', true],
+			'a language a sibling of an ancestor does not have' => ['p:lang(fr) + div a', false],
+		];
+	}
+
+	/**
+	 * As the legacy engine reads it, :lang() only looks at an element's own lang attribute, and takes the language of
+	 * one such as fr-ca
+	 *
+	 * @dataProvider legacyLanguages
+	 *
+	 * @param string $selector
+	 * @param string|null $ownLang The element's lang attribute, if it has one
+	 * @param bool $expected Whether it matches as the legacy engine reads it
+	 */
+	public function testMatchesALanguageAsTheLegacyEngineReadsIt($selector, $ownLang, $expected)
+	{
+		$document = $this->frame('', 1, 1, [], []);
+		$document['lang'] = 'fr';
+		$document['level'] = true;
+		$paragraph = $this->frame('P', 1, 1, $ownLang === null ? [] : ['LANG' => $ownLang], []);
+		$paragraph['lang'] = $ownLang === null ? 'fr' : $ownLang;
+		$path = [$document, $paragraph];
+
+		$compiled = $this->compiler->compile($selector);
+		$this->assertTrue($this->matcher->matches($compiled, $path));
+		$this->assertSame($expected, $this->matcher->matches($compiled, $path, true));
+	}
+
+	/**
+	 * A :lang() selector a paragraph matches, its own lang attribute, and whether it matches as the legacy engine
+	 * reads it
+	 *
+	 * @return array[]
+	 */
+	public function legacyLanguages()
+	{
+		return [
+			'an inherited language' => ['p:lang(fr)', null, false],
+			'its own language' => ['p:lang(fr)', 'FR', true],
+			'its own language with a region' => ['p:lang(fr)', 'fr-CA', true],
+			'its own language with a script and region' => ['p:lang(fr)', 'fr-Latn-CA', false],
+		];
+	}
+
+	/**
 	 * The open elements the selectors are matched against: `<li class="x">`, the second item of a `<ul>` that follows
 	 * an `<h2>` and a `<p>` in `<div id="main" class="card">`, which follows an `<h1>`, a `<p class="a">` and a `<p>` in
 	 * the document

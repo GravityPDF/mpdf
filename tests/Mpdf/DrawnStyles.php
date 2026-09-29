@@ -3,7 +3,8 @@
 namespace Mpdf;
 
 /**
- * Writes a document through TextRecordingMpdf, to read the colour and style each piece of text is drawn in
+ * Writes a document through TextRecordingMpdf, to read the colour and style each piece of text is drawn in, or
+ * matches a selector against the elements a document leaves open
  */
 trait DrawnStyles
 {
@@ -51,5 +52,25 @@ trait DrawnStyles
 	private function keyedByText(TextRecordingMpdf $mpdf, array $values)
 	{
 		return array_combine(array_map('trim', $mpdf->drawnText), $values);
+	}
+
+	/**
+	 * Writes HTML without closing what it leaves open, and matches a selector against the element open last. This
+	 * reaches elements that are never drawn, such as those inside one hidden with display: none
+	 *
+	 * @param string $html
+	 * @param string $selector
+	 *
+	 * @return bool Whether the selector matches the innermost open element
+	 */
+	private function matchesLastOpenElement($html, $selector)
+	{
+		$mpdf = new Mpdf(['mode' => 'c']);
+		$mpdf->WriteHTML($html, HTMLParserMode::DEFAULT_MODE, true, false);
+
+		$compiler = new Css\SelectorCompiler($mpdf);
+		$matcher = new Css\SelectorMatcher();
+
+		return $matcher->matches($compiler->compile($selector), $mpdf->getOpenElements());
 	}
 }

@@ -14464,8 +14464,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			$html = $this->cssManager->ReadCSS($html);
 
-			if ($this->autoLangToFont && !$this->usingCoreFont && preg_match('/<html [^>]*lang=[\'\"](.*?)[\'\"]/ism', $html, $m)) {
-				$html_lang = $m[1];
+			if (preg_match('/<html\s[^>]*\blang=["\']([^"\']*)["\']/i', $html, $m)) {
+				$this->documentLang = $m[1];
+				if ($this->autoLangToFont && !$this->usingCoreFont) {
+					$html_lang = $m[1];
+				}
 			}
 
 			if (preg_match('/<html [^>]*dir=[\'\"]\s*rtl\s*[\'\"]/ism', $html)) {
@@ -14485,8 +14488,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (isset($html_lang) && $html_lang) {
 					$zproperties['LANG'] = $html_lang;
 				}
-				if ($this->autoLangToFont && !$this->onlyCoreFonts && preg_match('/lang=[\'\"](.*?)[\'\"]/ism', $m[1], $mm)) {
-					$zproperties['LANG'] = $mm[1];
+				if (preg_match('/\blang=["\']([^"\']*)["\']/i', $m[1], $mm)) {
+					$this->documentLang = $mm[1];
+					if ($this->autoLangToFont && !$this->onlyCoreFonts) {
+						$zproperties['LANG'] = $mm[1];
+					}
 				}
 			}
 		}
