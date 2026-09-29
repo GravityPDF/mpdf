@@ -806,4 +806,41 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertArrayHasKey('BORDER-TOP', $result); // Border expanded
 		$this->assertArrayHasKey('MARGIN-TOP', $result); // Margin expanded
 	}
+
+	/**
+	 * Only the pseudo pages that apply add to the page, without the sheet size, and on an even page their physical side
+	 * margins are handed over swapped
+	 */
+	public function testPseudoPageProperties()
+	{
+		$this->cssManager->readCss('<style>@page :left { margin-left: 5mm; margin-right: 9mm; size: A5; color: red; } @page :first { margin-top: 30mm; }</style>');
+
+		$this->assertEquals([], $this->cssManager->pseudoPageProperties('@PAGE>>', 'R', false, 'O'));
+		$this->assertEquals(['MARGIN-TOP' => '30mm'], $this->cssManager->pseudoPageProperties('@PAGE>>', 'R', true, 'O'));
+		$this->assertEquals(
+			['MARGIN-LEFT' => '5mm', 'MARGIN-RIGHT' => '9mm', 'COLOR' => 'red'],
+			$this->cssManager->pseudoPageProperties('@PAGE>>', 'L', false, 'O')
+		);
+		$this->assertEquals(
+			['MARGIN-LEFT' => '9mm', 'MARGIN-RIGHT' => '5mm', 'COLOR' => 'red'],
+			$this->cssManager->pseudoPageProperties('@PAGE>>', 'L', false, 'E')
+		);
+	}
+
+	/**
+	 * Only a side margin on a pseudo page of the plain @page rule, or of the named page asked about, counts
+	 */
+	public function testPseudoPagesSetSideMargins()
+	{
+		$this->cssManager->readCss('<style>@page { margin-left: 20mm; } @page :first { margin-top: 30mm; } @page story :right { margin-right: 7mm; }</style>');
+
+		$this->assertFalse($this->cssManager->pseudoPagesSetSideMargins(''));
+		$this->assertFalse($this->cssManager->pseudoPagesSetSideMargins(null));
+		$this->assertFalse($this->cssManager->pseudoPagesSetSideMargins('other'));
+		$this->assertTrue($this->cssManager->pseudoPagesSetSideMargins('story'));
+
+		$this->cssManager->readCss('<style>@page :left { margin-right: 5mm; }</style>');
+
+		$this->assertTrue($this->cssManager->pseudoPagesSetSideMargins(''));
+	}
 }

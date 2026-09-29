@@ -26,6 +26,9 @@ class TextRecordingMpdf extends Mpdf
 	/** The font size, in points, each of those lines was drawn at, in the same order. */
 	public $drawnFontSize = [];
 
+	/** The page each of those lines was drawn on, and the left and right edges of it, in the same order. */
+	public $drawnBoxes = [];
+
 	function Cell($w, $h = 0, $txt = '', $border = 0, $ln = 0, $align = '', $fill = 0, $link = '', $currentx = 0, $lcpaddingL = 0, $lcpaddingR = 0, $valign = 'M', $spanfill = 0, $exactWidth = false, $OTLdata = false, $textvar = 0, $lineBox = false)
 	{
 		if (is_string($txt) && trim($txt) !== '') {
@@ -33,6 +36,7 @@ class TextRecordingMpdf extends Mpdf
 			$this->drawnOTLdata[] = $OTLdata;
 			$this->drawnFontFamily[] = $this->FontFamily;
 			$this->drawnFontSize[] = $this->FontSizePt;
+			$this->drawnBoxes[] = [$this->page, $this->x, $this->x + $w];
 		}
 
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);
