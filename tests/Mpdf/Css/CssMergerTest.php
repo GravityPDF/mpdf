@@ -235,6 +235,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->mpdf->tableLevel = 0;
 		$this->mpdf->tbctr      = [0];
 
+		// The merger looks up the nth-child formulas the stylesheet uses
+		$this->cssManager->readCss('<style>tr:nth-child(odd) { color: red; }</style>');
+
 		$p = ['TR>>SELECTORNTHCHILD>>ODD' => ['background-color' => 'yellow']];
 		$t = [];
 
@@ -254,6 +257,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->mpdf->tableLevel = 0;
 		$this->mpdf->tbctr      = [0];
 
+		// The merger looks up the nth-child formulas the stylesheet uses
+		$this->cssManager->readCss('<style>tr:nth-child(even) { color: red; }</style>');
+
 		$p = ['TR>>SELECTORNTHCHILD>>EVEN' => ['background-color' => 'lightblue']];
 		$t = [];
 
@@ -271,6 +277,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->mpdf->table      = [];
 		$this->mpdf->tableLevel = 0;
 		$this->mpdf->tbctr      = [0];
+
+		// The merger looks up the nth-child formulas the stylesheet uses
+		$this->cssManager->readCss('<style>tr:nth-child(2n+1) { color: red; }</style>');
 
 		$p = ['TR>>SELECTORNTHCHILD>>2N+1' => ['border' => '1px solid red']];
 		$t = [];
