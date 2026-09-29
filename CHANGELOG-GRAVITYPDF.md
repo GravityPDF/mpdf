@@ -125,6 +125,7 @@ Bugfixes
 * A descendant rule with a part mPDF cannot parse was cut short at that part and applied to the element before it. Such rules are now dropped. [#519]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
+* When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
 * Balancing columns raised a warning and drew a block's closing background past the last column. [#475] [#488]
 * Inside `<columns>`, a block with an `rgba()` or `cmyka()` background was painted fully opaque. [#482] [#498]
 * In a UTF-8 document, CSS naming `chelvetica`, `ctimes` or `ccourier` did not draw in the core font. [#467] [#468]
@@ -702,5 +703,7 @@ These changes do not change output.
 [#550]: https://github.com/GravityPDF/mpdf/issues/550
 [#551]: https://github.com/GravityPDF/mpdf/issues/551
 [#553]: https://github.com/GravityPDF/mpdf/pull/553
+[#554]: https://github.com/GravityPDF/mpdf/issues/554
 [#555]: https://github.com/GravityPDF/mpdf/issues/555
 [#556]: https://github.com/GravityPDF/mpdf/pull/556
+[#558]: https://github.com/GravityPDF/mpdf/pull/558
