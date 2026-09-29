@@ -621,13 +621,13 @@ parameters:
 		-
 			message: '#^Variable \$preroth might not be defined\.$#'
 			identifier: variable.undefined
-			count: 6
+			count: 4
 			path: src/Mpdf.php
 
 		-
 			message: '#^Variable \$prerotw might not be defined\.$#'
 			identifier: variable.undefined
-			count: 6
+			count: 4
 			path: src/Mpdf.php
 
 		-
@@ -645,13 +645,13 @@ parameters:
 		-
 			message: '#^Variable \$rot_bpos might not be defined\.$#'
 			identifier: variable.undefined
-			count: 4
+			count: 2
 			path: src/Mpdf.php
 
 		-
 			message: '#^Variable \$rot_rpos might not be defined\.$#'
 			identifier: variable.undefined
-			count: 4
+			count: 2
 			path: src/Mpdf.php
 
 		-

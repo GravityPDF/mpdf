@@ -146,6 +146,7 @@ Bugfixes
 * When a hyphenation hyphen moved to the next line, its record stayed on the line before. In a bidi paragraph that drew a hyphen in the wrong place and dropped the one that moved. [mpdf/mpdf#1831] [#145]
 * A hyphen inserted at a line break had no bidi direction. It now takes the direction of the word it breaks. [#116] [#137]
 * `$extgstates` had no default, so `count()` on it threw a `TypeError` on PHP 8. [mpdf/mpdf#2135] [#20]
+* `rotate: 90deg` on a positioned block turned it on PHP 5.6 to 7.4 but not on PHP 8, where `"90deg" == 90` is false. The angle is now read as tables read it: whole degrees, with or without `deg`, so `270deg` turns the block as `-90` does. A positioned block also takes `180deg` as it takes `180`. [#579]
 
 ### Images and SVG
 
@@ -738,4 +739,5 @@ These changes do not change output.
 [#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
+[#579]: https://github.com/GravityPDF/mpdf/pull/579
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
