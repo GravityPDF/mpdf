@@ -11232,6 +11232,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->pages[$this->page] = '';
 		}
 
+		// The page takes its side margins from the defaults until they are recorded for it below, including a first page
+		// made again for a named page
+		unset($this->pageDim[$this->page]['sideMargins']);
+
 		$this->state = 2;
 		$resetHTMLHeadersrequired = false;
 
@@ -12207,7 +12211,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->orig_lMargin = $this->DeflMargin;
 				$this->orig_rMargin = $this->DefrMargin;
 
-				$this->SetMargins($this->DeflMargin, $this->DefrMargin, $this->tMargin);
+				// A page already made keeps its page area, and the swap starts with the next one
+				if (!$this->page) {
+					$this->SetMargins($this->DeflMargin, $this->DefrMargin, $this->tMargin);
+				}
 			}
 			$this->directionality = 'rtl';
 			$this->defaultAlign = 'R';

@@ -18,17 +18,28 @@ trait PageAreas
 {
 
 	/**
-	 * The left and right margins of the current page: mirrored on an even page
+	 * The left and right margins of the current page: those it was made with, or the defaults while it is being made,
+	 * mirrored on an even page
+	 *
+	 * A page keeps its margins when the defaults change after it is made, as they do when the document turns right to
+	 * left.
 	 *
 	 * @return float[]
 	 */
 	public function pageSideMargins()
 	{
-		if (!$this->marginsForcedPortrait() && $this->mirrorMargins && $this->page % 2 == 0) {
-			return [$this->DefrMargin, $this->DeflMargin];
+		if (isset($this->pageDim[$this->page]['sideMargins'])) {
+			list($left, $right) = $this->pageDim[$this->page]['sideMargins'];
+		} else {
+			$left = $this->DeflMargin;
+			$right = $this->DefrMargin;
 		}
 
-		return [$this->DeflMargin, $this->DefrMargin];
+		if (!$this->marginsForcedPortrait() && $this->mirrorMargins && $this->page % 2 == 0) {
+			return [$right, $left];
+		}
+
+		return [$left, $right];
 	}
 
 	/**
@@ -195,9 +206,6 @@ trait PageAreas
 		$previousArea = $this->pageArea();
 
 		$this->page = $page;
-		if (isset($this->pageDim[$page]['sideMargins'])) {
-			list($this->DeflMargin, $this->DefrMargin) = $this->pageDim[$page]['sideMargins'];
-		}
 		$this->ResetMargins();
 
 		if ($this->pageArea() == $previousArea) {

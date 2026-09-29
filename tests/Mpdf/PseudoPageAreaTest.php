@@ -123,6 +123,38 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A document that turns right to left after its first page is made keeps the page area of that page, and sets the
+	 * pages after it as a document right to left from the start would
+	 *
+	 * @dataProvider sideMarginSourcesProvider
+	 *
+	 * @param string $css
+	 * @param array $config
+	 */
+	public function testAPageKeepsItsPageAreaWhenTheDocumentTurnsRightToLeft($css, $config)
+	{
+		$leftToRight = $this->areas($css, '<p>x</p>' . $this->story(30), 1, $config);
+		$rightToLeft = $this->areas($css, '<html dir="rtl"><p>x</p>' . $this->story(30), 3, $config);
+		$turned = $this->areas($css, ['<p>x</p>', '<html dir="rtl">' . $this->story(30)], 3, $config);
+
+		$this->assertSame($leftToRight + array_slice($rightToLeft, 1, 2, true), $turned);
+	}
+
+	/**
+	 * Side margins from a plain @page rule, from the configuration, and from the configuration mirrored
+	 *
+	 * @return array[]
+	 */
+	public function sideMarginSourcesProvider()
+	{
+		return [
+			'@page rule' => ['@page { margin-left: 20mm; margin-right: 50mm; }', []],
+			'configuration' => ['', ['margin_left' => 20, 'margin_right' => 50]],
+			'mirrored configuration' => ['', ['margin_left' => 30, 'margin_right' => 10, 'mirrorMargins' => true]],
+		];
+	}
+
+	/**
 	 * :left and :right rules without a plain @page rule set the side margins of their pages
 	 */
 	public function testLeftAndRightPagesTakeTheirSideMarginsWithoutAPlainRule()
@@ -316,14 +348,15 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * The narrowest left edge and widest right edge of the lines drawn on each of the first pages, in millimetres
 	 *
 	 * @param string $css
-	 * @param string $body
+	 * @param string|string[] $body Or its parts, as write() takes them
 	 * @param int $pages How many pages to return
+	 * @param array $config
 	 *
 	 * @return array[] By page number
 	 */
-	private function areas($css, $body, $pages)
+	private function areas($css, $body, $pages, $config = [])
 	{
-		return array_slice($this->spans($this->write($css, $body)->drawnBoxes), 0, $pages, true);
+		return array_slice($this->spans($this->write($css, $body, $config)->drawnBoxes), 0, $pages, true);
 	}
 
 	/**
@@ -331,15 +364,16 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @param string $css
 	 * @param string|string[] $body Or its parts, each written by a call of its own; the style sheet goes with the first
+	 * @param array $config
 	 *
 	 * @return \Mpdf\TextRecordingMpdf
 	 */
-	private function write($css, $body)
+	private function write($css, $body, $config = [])
 	{
 		$parts = (array) $body;
 		$parts[0] = '<style>p { text-align: justify; } ' . $css . '</style>' . $parts[0];
 
-		$mpdf = new TextRecordingMpdf(['mode' => 'c']);
+		$mpdf = new TextRecordingMpdf($config + ['mode' => 'c']);
 		foreach ($parts as $part) {
 			$mpdf->WriteHTML($part);
 		}
