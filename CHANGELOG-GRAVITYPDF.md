@@ -146,6 +146,7 @@ Bugfixes
 * When a hyphenation hyphen moved to the next line, its record stayed on the line before. In a bidi paragraph that drew a hyphen in the wrong place and dropped the one that moved. [mpdf/mpdf#1831] [#145]
 * A hyphen inserted at a line break had no bidi direction. It now takes the direction of the word it breaks. [#116] [#137]
 * `$extgstates` had no default, so `count()` on it threw a `TypeError` on PHP 8. [mpdf/mpdf#2135] [#20]
+* `background-size` lengths such as `60mm` or `100px` drew the image 2.83 times too small, because they were used as points. [#574]
 
 ### Images and SVG
 
@@ -738,4 +739,5 @@ These changes do not change output.
 [#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
+[#574]: https://github.com/GravityPDF/mpdf/pull/574
 [#615]: https://github.com/GravityPDF/mpdf/pull/615

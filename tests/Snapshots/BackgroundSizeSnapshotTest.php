@@ -72,6 +72,8 @@ class BackgroundSizeSnapshotTest extends Snapshot
 		<div class="box portrait tall contain"></div>
 
 		<h3>Lengths and percentages</h3>
+		<p>100% 100% stretches the image to fill the first box. In the second box the image is 20mm wide, a
+			little over a quarter of the box, and in the third it is 10mm tall, under a quarter of the box.</p>
 
 		<div class="box landscape wide stretched"></div>
 		<div class="box landscape tall narrow"></div>
