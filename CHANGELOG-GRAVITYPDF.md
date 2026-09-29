@@ -141,6 +141,10 @@ Bugfixes
 * `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552] [#565]
 * `line-height: 0` gave lines a normal height. Lines now have no height, as in a browser. A line height well below the font size, such as `0.5` or `1mm`, was stretched down to the baseline; it is now kept. A negative `line-height`, which shrank lines to odd heights, is now ignored. [#552] [#567]
 * The rule after an `@supports`, `@layer`, `@keyframes`, `@container` or other block at-rule was lost, and so were the rules inside `@supports` and `@layer`. The rule after `@charset`, `@namespace` or `@import` was lost too. `@supports` and `@layer` blocks are now unwrapped as `@media` blocks are, except `@supports not`, and other at-rules are removed whole. [#524] [#566]
+* Some colour values were read wrongly. [#552] [#570]
+  * `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
+  * A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
+  * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -751,4 +755,5 @@ These changes do not change output.
 [#568]: https://github.com/GravityPDF/mpdf/pull/568
 [#567]: https://github.com/GravityPDF/mpdf/pull/567
 [#566]: https://github.com/GravityPDF/mpdf/pull/566
+[#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
