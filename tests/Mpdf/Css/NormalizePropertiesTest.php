@@ -392,4 +392,71 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals(['W' => 100, 'H' => 150], array_map('round', $result['SIZE']));
 	}
 
+	/**
+	 * @dataProvider declarationsProvider
+	 *
+	 * @param string $property
+	 * @param string $value
+	 * @param bool $canParse
+	 */
+	public function testCanParse($property, $value, $canParse)
+	{
+		$this->assertSame($canParse, $this->normalizeProperties->canParse($property, $value));
+	}
+
+	/**
+	 * A declaration, and whether mPDF can read its value
+	 *
+	 * @return array[]
+	 */
+	public function declarationsProvider()
+	{
+		return [
+			'lengths and keywords' => ['MARGIN', '0 auto 5mm -1.5em', true],
+			'a length with a sign and an exponent' => ['MARGIN-LEFT', '+1e+1mm', true],
+			'a unit mPDF resolves' => ['WIDTH', '50vw', true],
+			'a unitless line height' => ['LINE-HEIGHT', '1.5', true],
+			'a radius with two values per corner' => ['BORDER-RADIUS', '5mm / 2mm', true],
+			'an inline !important' => ['MARGIN-TOP', '5mm !important', true],
+			'calc()' => ['MARGIN', 'calc(5mm + 5mm)', false],
+			'calc() in one of several values' => ['PADDING', '1mm calc(2mm + 1mm)', false],
+			'var() among lengths' => ['MARGIN', '1mm 2mm var(--x) 4mm', false],
+			'min()' => ['WIDTH', 'min(50%, 80mm)', false],
+			'max()' => ['WIDTH', 'max(50%, 80mm)', false],
+			'clamp()' => ['FONT-SIZE', 'clamp(9pt, 2vw, 14pt)', false],
+			'a comma for a decimal point' => ['MARGIN-LEFT', '1,5mm', false],
+			'a unit mPDF does not know' => ['HEIGHT', '10dvh', false],
+			'a colour' => ['COLOR', '#00ff00', true],
+			'a named colour' => ['BACKGROUND-COLOR', 'LightGrey', true],
+			'transparent' => ['BACKGROUND-COLOR', 'transparent', true],
+			'currentColor' => ['BORDER-TOP-COLOR', 'currentColor', true],
+			'inherit' => ['COLOR', 'inherit', true],
+			'a colour with an inline !important' => ['COLOR', '#00f !important', true],
+			'a word that is not a colour' => ['COLOR', 'bogus', false],
+			'none as a background colour' => ['BACKGROUND-COLOR', 'none', false],
+			'a colour function mPDF does not know' => ['COLOR', 'oklch(0.7 0.1 120)', false],
+			'var() as a colour' => ['COLOR', 'var(--c)', false],
+			'var() in a shorthand' => ['BORDER', '1px solid var(--c)', false],
+			'var() in a font list' => ['FONT-FAMILY', 'var(--font), sans-serif', false],
+			'an invalid colour in a shorthand' => ['BORDER', '1px solid bogus', true],
+			'a function name in a url()' => ['BACKGROUND-IMAGE', 'url(images/var(1).png)', true],
+			'a function name in a string' => ['FONT-FAMILY', '"calc(x)", serif', true],
+			'a function whose name ends in one of them' => ['GRID-TEMPLATE-COLUMNS', 'minmax(10mm, 1fr)', true],
+			'a property with no checks' => ['TEXT-ALIGN', 'center', true],
+		];
+	}
+
+	/**
+	 * A plus sign on a length is dropped, so code that looks for a digit first still reads it as a number
+	 */
+	public function testNormalizeDropsThePlusSignOfALength()
+	{
+		$result = $this->normalizeProperties->normalize(['FONT-SIZE' => '+20pt', 'MARGIN' => '+1mm -2mm', 'LINE-HEIGHT' => '+1.5']);
+
+		$this->assertSame('20pt', $result['FONT-SIZE']);
+		$this->assertSame('1mm', $result['MARGIN-TOP']);
+		$this->assertSame('-2mm', $result['MARGIN-RIGHT']);
+		$this->assertSame('1.5', $result['LINE-HEIGHT']);
+	}
+
 }

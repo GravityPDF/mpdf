@@ -11,6 +11,13 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 
 	use PsrLogAwareTrait;
 
+	/**
+	 * The units convert() reads after a number
+	 *
+	 * @var string[]
+	 */
+	private static $units = ['mm', 'cm', 'q', 'in', 'pt', 'pc', 'px', 'em', 'ex', 'ch', 'rem', 'vw', 'vh', 'vmin', 'vmax', '%'];
+
 	private $dpi;
 
 	private $defaultFontSize;
@@ -43,7 +50,7 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 	public function convert($size = 5, $maxsize = 0, $fontsize = false, $usefontsize = true)
 	{
 		$size = trim(strtolower((string) $size));
-		$res = preg_match('/^(?P<size>[-0-9.,]+([eE]\-?[0-9]+)?)?(?P<unit>[%a-z-]+)?$/', $size, $parts);
+		$res = preg_match('/^(?P<size>[-+0-9.,]+([eE][-+]?[0-9]+)?)?(?P<unit>[%a-z-]+)?$/', $size, $parts);
 		if (!$res) {
 			// ignore definition
 			$this->logger->warning(sprintf('Invalid size representation "%s"', $size), ['context' => LogContext::CSS_SIZE_CONVERSION]);
@@ -59,6 +66,11 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 
 			case 'cm':
 				$size *= 10;
+				break;
+
+			case 'q':
+				// quarter-millimetres
+				$size *= 0.25;
 				break;
 
 			case 'pt':
@@ -89,12 +101,30 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 				break;
 
 			case 'ex':
-				// Approximates "ex" as half of font height
+			case 'ch':
+				// Approximates "ex" as half of font height, and "ch" as half an em wide, as CSS does where the "0"
+				// cannot be measured
 				$size *= $this->multiplyFontSize($fontsize, $maxsize, 0.5);
 				break;
 
 			case 'em':
 				$size *= $this->multiplyFontSize($fontsize, $maxsize, 1);
+				break;
+
+			case 'vw':
+				$size *= $this->mpdf->w / 100;
+				break;
+
+			case 'vh':
+				$size *= $this->mpdf->h / 100;
+				break;
+
+			case 'vmin':
+				$size *= min($this->mpdf->w, $this->mpdf->h) / 100;
+				break;
+
+			case 'vmax':
+				$size *= max($this->mpdf->w, $this->mpdf->h) / 100;
 				break;
 
 			case 'thin':
@@ -142,6 +172,19 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $size;
+	}
+
+	/**
+	 * Whether convert() reads the value as a number in a unit it knows, or as a number with no unit, which it reads
+	 * as pixels. The number may have a sign and an exponent. Keywords such as "auto" or "thin" are not lengths.
+	 *
+	 * @param string $value
+	 *
+	 * @return bool
+	 */
+	public function isLength($value)
+	{
+		return preg_match('/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?(' . implode('|', self::$units) . ')?$/', strtolower(trim($value))) === 1;
 	}
 
 	private function multiplyFontSize($fontsize, $maxsize, $ratio)

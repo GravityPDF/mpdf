@@ -75,6 +75,22 @@ class ColorConverter
 		return $this->cache[$color];
 	}
 
+	/**
+	 * Whether convert() knows the form of the colour: a named colour, a hex colour of 3, 4, 6 or 8 digits, an
+	 * integer (a grey), or one of the colour functions it reads. The arguments of a function are not checked.
+	 *
+	 * @param string $color
+	 *
+	 * @return bool
+	 */
+	public function isColor($color)
+	{
+		$color = strtolower(trim($color));
+
+		return isset(NamedColors::$colors[$color])
+			|| preg_match('/^(#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})|\d+|(rgba?|hsla?|(device-)?cmyka?|spot)\(.*\))$/', $color) === 1;
+	}
+
 	public function lighten($c)
 	{
 		$this->ensureBinaryColorFormat($c);

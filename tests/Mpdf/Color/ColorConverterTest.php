@@ -304,6 +304,49 @@ class ColorConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		];
 	}
 
+	/**
+	 * @dataProvider colorFormsProvider
+	 *
+	 * @param string $color
+	 * @param bool $isColor
+	 */
+	public function testIsColor($color, $isColor)
+	{
+		$this->assertSame($isColor, $this->converter->isColor($color));
+	}
+
+	/**
+	 * A value, and whether convert() knows its form
+	 *
+	 * @return array[]
+	 */
+	public function colorFormsProvider()
+	{
+		return [
+			['red', true],
+			[' ForestGreen ', true],
+			['#0f0', true],
+			['#0F08', true],
+			['#00ff00', true],
+			['#00ff0080', true],
+			['128', true],
+			['rgb(0, 255, 0)', true],
+			['RGBA(0, 255, 0, 0.5)', true],
+			['hsl(120, 100%, 50%)', true],
+			['cmyk(0, 0, 0, 100)', true],
+			['device-cmyka(0, 0, 0, 100, 0.5)', true],
+			['spot(PANTONE 185 C, 100%)', true],
+			['bogus', false],
+			['none', false],
+			['#00ff0', false],
+			['#ggg', false],
+			['lab(50% 40 59)', false],
+			['oklch(0.7 0.1 120)', false],
+			['rgb(0, 255, 0) extra', false],
+			['', false],
+		];
+	}
+
 	public function testRestrictColorSpace()
 	{
 		$mpdf = Mockery::mock(Mpdf::class);

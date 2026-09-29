@@ -54,6 +54,11 @@ class InlineStyleParser
 				continue;
 			}
 
+			// Dropped before it can replace an earlier declaration of the property in the same attribute
+			if (!$this->normalizeProperties->canParse(strtoupper($properties[$i]), $values[$i])) {
+				continue;
+			}
+
 			$values[$i] = str_replace('%ZZ', ';', $values[$i]); // mPDF 5.7.4 URLs
 			$classproperties[strtoupper($properties[$i])] = trim(preg_replace('/\s*!important/i', '', $values[$i]));
 		}

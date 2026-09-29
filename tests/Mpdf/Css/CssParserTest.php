@@ -65,6 +65,18 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals('14px', $result['FONT-SIZE']);
 	}
 
+	/**
+	 * A declaration mPDF cannot read is dropped, so an earlier one of the same property in the block still applies
+	 */
+	public function testParseCssPropertiesDropsADeclarationItCannotRead()
+	{
+		$result = $this->parser->parseCssProperties('width: 50%; width: calc(100% - 10mm); color: #00f; color: bogus; margin: 10vw 1,5mm');
+
+		$this->assertSame('50%', $result['WIDTH']);
+		$this->assertSame('#00f', $result['COLOR']);
+		$this->assertArrayNotHasKey('MARGIN-TOP', $result);
+	}
+
 	public function testParseSimpleSelector()
 	{
 		$html = '<style>p { color: red; }</style>';

@@ -150,4 +150,16 @@ class InlineStyleParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			],
 		];
 	}
+
+	/**
+	 * A declaration mPDF cannot read is dropped, so an earlier one of the same property in the attribute still applies
+	 */
+	public function testParseDropsADeclarationItCannotRead()
+	{
+		$result = $this->inlineStyleParser->parse('width: 50%; width: calc(100% - 10mm); color: #00f; color: var(--c); margin: 1,5mm');
+
+		$this->assertSame('50%', $result['WIDTH']);
+		$this->assertSame('#00f', $result['COLOR']);
+		$this->assertArrayNotHasKey('MARGIN-TOP', $result);
+	}
 }
