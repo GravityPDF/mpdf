@@ -387,7 +387,7 @@ class CssMerger
 
 		if ($tag === 'FONT') {
 			if (!empty($attr['FACE'])) {
-				$this->cssProperties['FONT-FAMILY'] = $attr['FACE'];
+				$this->cssProperties = array_merge($this->cssProperties, $this->normalizeProperties->normalize(['FONT-FAMILY' => $attr['FACE']]));
 			}
 
 			$size = isset($attr['SIZE']) ? $attr['SIZE'] : '';

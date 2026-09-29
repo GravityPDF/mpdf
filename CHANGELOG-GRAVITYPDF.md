@@ -122,6 +122,7 @@ Bugfixes
 * Descendant rules such as `.box p` did not reach the content of an absolutely or fixed positioned `.box`. [#474] [#493]
 * Descendant rules naming a table, row or cell, such as `td img` or `td span`, matched nothing inside the cell. [#223] [#507]
 * A descendant rule with a part mPDF cannot parse was cut short at that part and applied to the element before it. Such rules are now dropped. [#519]
+* Text styled with the `font` shorthand or `<font face>` came out as empty boxes when the family was not installed or had a space in its name, such as `font: 12pt Roboto` or `font: 16px "DejaVu Sans Mono"`. It was drawn in the first registered font, which is the emoji font in a full install. The family is now read as `font-family` reads it: a name is kept whole, the list is tried in order, and when mPDF knows none of it the text keeps the family it inherits. `font-family` itself also reads an unquoted name with spaces whole. [#552] [#560]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * Balancing columns raised a warning and drew a block's closing background past the last column. [#475] [#488]
 * Inside `<columns>`, a block with an `rgba()` or `cmyka()` background was painted fully opaque. [#482] [#498]
@@ -697,3 +698,5 @@ These changes do not change output.
 [#515]: https://github.com/GravityPDF/mpdf/pull/515
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
+[#552]: https://github.com/GravityPDF/mpdf/issues/552
+[#560]: https://github.com/GravityPDF/mpdf/pull/560
