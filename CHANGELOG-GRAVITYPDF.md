@@ -91,6 +91,10 @@ New features
   * Text beside a float, and the blocks around it, keep to the page area of each page the float runs over. [#549]
   * A block with a set width keeps its place in each page area: a centred block stays centred, and a block pushed right by `margin-left: auto` or set right to left stays against the right margin. [#550] [#551] [#553]
 
+### CSS
+
+* **An id written with classes.** Selectors such as `p#note.warning`, `p.warning#note`, `#note.warning` and `p.a.b#note` match, on their own and as parts of descendant rules, in any order of id and classes. They are applied after `p#note`. A selector with a class or id followed by something mPDF cannot match, such as `.a:hover` or `#note::before`, is dropped like any other selector mPDF cannot match. [#527] [#568]
+
 Performance
 -----------
 
@@ -726,6 +730,7 @@ These changes do not change output.
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
 [#525]: https://github.com/GravityPDF/mpdf/issues/525
+[#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
 [#560]: https://github.com/GravityPDF/mpdf/pull/560
@@ -741,6 +746,7 @@ These changes do not change output.
 [#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
+[#568]: https://github.com/GravityPDF/mpdf/pull/568
 [#567]: https://github.com/GravityPDF/mpdf/pull/567
 [#566]: https://github.com/GravityPDF/mpdf/pull/566
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
