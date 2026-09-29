@@ -87,19 +87,45 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A block with a set width keeps it as the page area moves under it
+	 * A block with a set width keeps it as the page area moves under it, and keeps to the side of the page area it was
+	 * set against: the left, the middle, or the right where its left margin is auto or it runs right to left
+	 *
+	 * @dataProvider setWidthProvider
+	 *
+	 * @param string $html Written ahead of the block, such as the root element of a right-to-left document
+	 * @param string $style
+	 * @param array[] $spans The left and right edges of the block on each of the first three pages
 	 */
-	public function testABlockWithASetWidthKeepsItAcrossPageAreas()
+	public function testABlockWithASetWidthKeepsItsPlaceInEachPageArea($html, $style, $spans)
 	{
-		$areas = $this->areas(
+		$mpdf = $this->write(
 			'@page { margin-top: 20mm; }
 			@page :right { margin-left: 20mm; margin-right: 50mm; }
 			@page :left { margin-left: 60mm; margin-right: 40mm; }',
-			'<div style="width: 60mm">' . $this->story(12) . '</div>',
-			3
+			$html . '<div style="width: 60mm; background: #0f0; ' . $style . '">' . $this->story(12) . '</div>'
 		);
 
-		$this->assertSame([1 => [20.0, 80.0], 2 => [60.0, 120.0], 3 => [20.0, 80.0]], $areas);
+		$this->assertSame($spans, array_slice($this->spans($mpdf->drawnBoxes), 0, 3, true));
+		$this->assertSame($spans, array_slice($this->painted($mpdf), 0, 3, true));
+	}
+
+	/**
+	 * Blocks 60mm wide in page areas from 20mm to 160mm on a right page and from 60mm to 170mm on a left page. The
+	 * first page of a right-to-left document is a left page.
+	 *
+	 * @return array[]
+	 */
+	public function setWidthProvider()
+	{
+		$againstRight = [1 => [100.0, 160.0], 2 => [110.0, 170.0], 3 => [100.0, 160.0]];
+
+		return [
+			'left' => ['', '', [1 => [20.0, 80.0], 2 => [60.0, 120.0], 3 => [20.0, 80.0]]],
+			'centred' => ['', 'margin: 0 auto', [1 => [60.0, 120.0], 2 => [85.0, 145.0], 3 => [60.0, 120.0]]],
+			'left margin auto' => ['', 'margin-left: auto', $againstRight],
+			'right to left' => ['', 'direction: rtl', $againstRight],
+			'in a right-to-left document' => ['<html dir="rtl">', '', [1 => [110.0, 170.0], 2 => [100.0, 160.0], 3 => [110.0, 170.0]]],
+		];
 	}
 
 	/**

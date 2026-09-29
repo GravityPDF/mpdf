@@ -89,6 +89,7 @@ New features
 
 * **Side margins on `:first`, `:left` and `:right` pages.** The `:first`, `:left` and `:right` pages of an `@page` rule, named or not, can set `margin-left` and `margin-right`. Text flowing from page to page is set in the page area of each page, and columns are laid out across it. A side margin on a pseudo page belongs to that side of the physical page, so it is not mirrored. [#476] [#510]
   * Text beside a float, and the blocks around it, keep to the page area of each page the float runs over. [#549]
+  * A block with a set width keeps its place in each page area: a centred block stays centred, and a block pushed right by `margin-left: auto` or set right to left stays against the right margin. [#550] [#551] [#553]
 
 Performance
 -----------
@@ -697,3 +698,6 @@ These changes do not change output.
 [#515]: https://github.com/GravityPDF/mpdf/pull/515
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
+[#550]: https://github.com/GravityPDF/mpdf/issues/550
+[#551]: https://github.com/GravityPDF/mpdf/issues/551
+[#553]: https://github.com/GravityPDF/mpdf/pull/553
