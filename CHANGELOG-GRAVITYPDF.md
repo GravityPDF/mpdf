@@ -123,6 +123,7 @@ Bugfixes
 * Descendant rules such as `.box p` did not reach the content of an absolutely or fixed positioned `.box`. [#474] [#493]
 * Descendant rules naming a table, row or cell, such as `td img` or `td span`, matched nothing inside the cell. [#223] [#507]
 * A descendant rule with a part mPDF cannot parse was cut short at that part and applied to the element before it. Such rules are now dropped. [#519]
+* A descendant rule ending in `:lang()` or `[lang]`, such as `div :lang(fr)`, `div p:lang(fr)` or `table [lang=fr]`, never applied. It now applies in block content and in tables, and a regional language such as `fr-CA` falls back to the rule for `fr`, as the simple lang rules do. [#525] [#559]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -699,7 +700,9 @@ These changes do not change output.
 [#514]: https://github.com/GravityPDF/mpdf/pull/514
 [#515]: https://github.com/GravityPDF/mpdf/pull/515
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
+[#525]: https://github.com/GravityPDF/mpdf/issues/525
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
+[#559]: https://github.com/GravityPDF/mpdf/pull/559
 [#550]: https://github.com/GravityPDF/mpdf/issues/550
 [#551]: https://github.com/GravityPDF/mpdf/issues/551
 [#553]: https://github.com/GravityPDF/mpdf/pull/553
