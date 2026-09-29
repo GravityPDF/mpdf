@@ -48,6 +48,11 @@ class CssParser
 	private $selectorParser;
 
 	/**
+	 * @var SelectorCompiler
+	 */
+	private $selectorCompiler;
+
+	/**
 	 * @var NormalizeProperties
 	 */
 	private $normalizeProperties;
@@ -115,6 +120,12 @@ class CssParser
 	 */
 	private $nthChildFormulas = ['TR' => [], 'TD' => [], 'TH' => []];
 
+	/**
+	 * @var array[] The rules of the last CSS parsed whose selector the legacy parser cannot read, each compiled:
+	 *              [compiled selector, declarations], in the order they were written
+	 */
+	private $compiledRules = [];
+
 	public function __construct(
 		Mpdf $mpdf,
 		Cache $cache,
@@ -130,6 +141,7 @@ class CssParser
 		$this->commentParser = new CommentParser();
 		$this->inlineStyleParser = new InlineStyleParser($this->normalizeProperties);
 		$this->selectorParser = new SelectorParser($mpdf);
+		$this->selectorCompiler = new SelectorCompiler($mpdf);
 		$this->shadowParser = new ShadowParser($mpdf, $sizeConverter, $colorConverter);
 	}
 
@@ -143,6 +155,7 @@ class CssParser
 	{
 		$this->css = [];
 		$this->cascadeCSS = [];
+		$this->compiledRules = [];
 
 		$ind = 0;
 		$css = '';
@@ -208,6 +221,16 @@ class CssParser
 	}
 
 	/**
+	 * The rules of the last CSS parsed whose selector the legacy parser cannot read, compiled for the matcher
+	 *
+	 * @return array[] Each [compiled selector, declarations], in the order they were written
+	 */
+	public function getCompiledRules()
+	{
+		return $this->compiledRules;
+	}
+
+	/**
 	 * @return array
 	 */
 	public function getUsedClassNames()
@@ -245,11 +268,9 @@ class CssParser
 		$count = count($styles[1]);
 		for ($i = 0; $i < $count; $i++) {
 			$classProperties = $this->parseCssProperties($styles[2][$i]);
-			$tagName = strtoupper(trim($styles[1][$i]));
 
-			$tags = explode(',', $tagName);
-			foreach ($tags as $tag) {
-				$this->processCssSelector($tag, $classProperties);
+			foreach ($this->selectorCompiler->splitList($styles[1][$i]) as $selector) {
+				$this->processCssSelector($selector, $classProperties);
 			}
 		}
 	}
@@ -257,12 +278,14 @@ class CssParser
 	/**
 	 * Process a CSS selector.
 	 *
-	 * @param string $selector Selector string
+	 * @param string $written Selector string, as written
 	 * @param array $classProperties CSS properties
 	 * @return void
 	 */
-	private function processCssSelector($selector, $classProperties)
+	private function processCssSelector($written, $classProperties)
 	{
+		$selector = strtoupper($written);
+
 		// store classes in an index for faster lookups
 		if (strpos($selector, '.') !== false && preg_match_all('/\.([a-zA-Z0-9_\-]+)/', $selector, $matches)) {
 			foreach ($matches[1] as $className) {
@@ -290,21 +313,25 @@ class CssParser
 
 		if ($level === 1) {
 			$tag = $this->selectorParser->parseSimpleSelector($tags);
-			if ($tag && isset($this->css[$tag])) {
+			if (!$this->isLegacySelector($tag === null ? [] : [$tag])) {
+				$this->compileRule($written, $classProperties);
+				return;
+			}
+
+			if (isset($this->css[$tag])) {
 				$this->css[$tag] = Arrays::uniqueRecursiveMerge($this->css[$tag], $classProperties);
-			} elseif ($tag) {
+			} else {
 				$this->css[$tag] = $classProperties;
 			}
 
-			if ($tag) {
-				$this->indexStoredKey($tag);
-			}
+			$this->indexStoredKey($tag);
 
 			return;
 		}
 
 		$cascade = $this->selectorParser->parseCascadedSelector($tags);
-		if (empty($cascade)) {
+		if (!$this->isLegacySelector($cascade)) {
+			$this->compileRule($written, $classProperties);
 			return;
 		}
 
@@ -335,6 +362,47 @@ class CssParser
 		if (preg_match('/^(TR|TD|TH)>>SELECTORNTHCHILD>>(.*)$/', $key, $m) && !isset($this->nthChildFormulas[$m[1]][$key])) {
 			preg_match('/^' . SelectorParser::NTH_CHILD_FORMULA . '$/', $m[2], $parts);
 			$this->nthChildFormulas[$m[1]][$key] = $parts;
+		}
+	}
+
+	/**
+	 * Whether the legacy parser reads a selector into levels the merger applies. It keeps an nth-child level for any
+	 * tag, but the merger only looks one up for a table row or cell
+	 *
+	 * @param string[] $levels The keys SelectorParser gave for the selector's parts, none if it could not read one
+	 * @return bool
+	 */
+	private function isLegacySelector(array $levels)
+	{
+		foreach ($levels as $level) {
+			$nthChild = strpos($level, '>>SELECTORNTHCHILD>>');
+			if ($nthChild !== false && !in_array(substr($level, 0, $nthChild), ['TR', 'TD', 'TH'], true)) {
+				return false;
+			}
+		}
+
+		return (bool) $levels;
+	}
+
+	/**
+	 * Compiles a rule for the matcher, if its selector is one it can match
+	 *
+	 * @param string $selector As written
+	 * @param array $classProperties
+	 * @return void
+	 */
+	private function compileRule($selector, array $classProperties)
+	{
+		if (!$classProperties) {
+			return;
+		}
+
+		$compiled = $this->selectorCompiler->compile($selector);
+
+		// The universal selector changes which elements existing documents style, so it waits for #530 and the
+		// standard cascade option
+		if ($compiled !== null && !$compiled['universal']) {
+			$this->compiledRules[] = [$compiled, $classProperties];
 		}
 	}
 

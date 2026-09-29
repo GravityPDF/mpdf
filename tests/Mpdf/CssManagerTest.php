@@ -885,4 +885,22 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertTrue($this->cssManager->hasUnnamedPageRules());
 	}
+
+	/**
+	 * The compiled rules of each stylesheet read are kept after those of the ones before, in the order written
+	 */
+	public function testKeepsTheCompiledRulesOfEveryStylesheetRead()
+	{
+		$rules = $this->cssManager->getRules();
+		$this->assertSame([], $rules->candidates('P', '', []));
+
+		$this->cssManager->readCss('<style>div > p { color: red; } p { color: blue; }</style>');
+		$this->cssManager->readCss('<style>h1 + p { color: green; }</style>');
+
+		$candidates = $rules->candidates('P', '', []);
+		sort($candidates);
+		$this->assertCount(2, $candidates);
+		$this->assertSame(['COLOR' => 'red'], $rules->rule($candidates[0])[1]);
+		$this->assertSame(['COLOR' => 'green'], $rules->rule($candidates[1])[1]);
+	}
 }
