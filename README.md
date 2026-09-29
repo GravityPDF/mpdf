@@ -104,3 +104,4 @@ Bugs in released mPDF should be reported [upstream](https://github.com/mpdf/mpdf
 [CONTRIBUTING.md](.github/CONTRIBUTING.md) for what a report needs. For general mPDF questions, use upstream
 [Discussions](https://github.com/mpdf/mpdf/discussions) or the
 [mpdf tag](https://stackoverflow.com/questions/tagged/mpdf) on Stack Overflow.
+
