@@ -64,6 +64,8 @@ class NormalizeProperties
 				$v = strtolower($v);
 			}
 
+			$v = $this->compactColorFunctions($v);
+
 			if ($k === 'FONT') {
 				$this->processFontProperty($v);
 			} elseif ($k === 'FONT-FAMILY') {
@@ -112,6 +114,26 @@ class NormalizeProperties
 		}
 
 		return $this->properties;
+	}
+
+	/**
+	 * Writes the arguments of each rgb(), hsl() and cmyk() with commas and no whitespace, so the parsers
+	 * that split a value on whitespace (border, border-color, shadows, gradients) keep the colour whole:
+	 * rgb(255 0 0 / 50%) becomes rgb(255,0,0,50%). A spot colour's name can contain spaces, so spot()
+	 * is left alone.
+	 *
+	 * @param string $value Property value
+	 * @return string
+	 */
+	private function compactColorFunctions($value)
+	{
+		if (stripos($value, 'rgb') === false && stripos($value, 'hsl') === false && stripos($value, 'cmyk') === false) {
+			return $value;
+		}
+
+		return preg_replace_callback('/\b(rgba?|hsla?|(?:device-)?cmyka?)\(([^()]*)\)/i', static function ($m) {
+			return $m[1] . '(' . preg_replace(ColorConverter::ARGUMENT_SEPARATOR, ',', trim($m[2])) . ')';
+		}, $value);
 	}
 
 	/**

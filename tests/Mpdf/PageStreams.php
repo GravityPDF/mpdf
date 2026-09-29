@@ -86,6 +86,8 @@ trait PageStreams
 	 *
 	 * @param callable $draw
 	 * @param array $config
+	 *
+	 * @return string The document
 	 */
 	private function assertDrawsSilently($draw, $config = [])
 	{
@@ -98,12 +100,14 @@ trait PageStreams
 		try {
 			$mpdf = $this->mpdf($config + ['useKerning' => true]);
 			call_user_func($draw, $mpdf);
-			$this->output($mpdf);
+			$pdf = $this->output($mpdf);
 		} finally {
 			restore_error_handler();
 		}
 
 		$this->assertSame([], $raised);
+
+		return $pdf;
 	}
 
 	/**

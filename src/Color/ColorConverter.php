@@ -19,6 +19,11 @@ class ColorConverter
 
 	const MODE_CMYKA = 6;
 
+	/**
+	 * What separates the arguments of a colour function: commas, whitespace, or the slash before an alpha
+	 */
+	const ARGUMENT_SEPARATOR = '/\s*[,\/]\s*|\s+/';
+
 	private $mpdf;
 
 	private $colorModeConverter;
@@ -275,11 +280,7 @@ class ColorConverter
 		} elseif (strpos($color, '#') === 0) { // case of #nnnnnn or #nnn
 			$c = $this->processHashColor($color);
 		} elseif (preg_match('/(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\((.*?)\)/', $color, $m)) {
-			// ignore colors containing CSS variables
-			if (str_starts_with(mb_strtolower($m[2]), 'var(--')) {
-				$m[2] = '0, 0, 0, 100';
-			}
-			$c = $this->processModeColor($m[1], explode(',', $m[2]));
+			$c = $this->processModeColor($m[1], $this->splitArguments($m[1], $m[2]));
 		}
 
 		if ($this->mpdf->PDFA || $this->mpdf->PDFX || $this->mpdf->restrictColorSpace) {
@@ -287,6 +288,30 @@ class ColorConverter
 		}
 
 		return $c;
+	}
+
+	/**
+	 * Splits the arguments of a colour function written with commas, rgb(255, 0, 0, 0.5), or with
+	 * spaces and a slash before the alpha, rgb(255 0 0 / 50%). A spot colour's name can contain
+	 * spaces, so only commas separate its arguments.
+	 *
+	 * @param string $mode      The function name
+	 * @param string $arguments Everything between its parentheses
+	 *
+	 * @return string[]
+	 */
+	private function splitArguments($mode, $arguments)
+	{
+		// ignore colors containing CSS variables, and draw them black
+		if (str_starts_with(mb_strtolower($arguments), 'var(--')) {
+			return strpos($mode, 'cmyk') !== false ? ['0', '0', '0', '100'] : ['0', '0', '0'];
+		}
+
+		if ($mode === 'spot') {
+			return explode(',', $arguments);
+		}
+
+		return preg_split(static::ARGUMENT_SEPARATOR, trim($arguments));
 	}
 
 	/**
@@ -323,11 +348,19 @@ class ColorConverter
 		$cores = $this->convertPercentCoreValues($mode, $cores);
 
 		switch ($mode) {
-			case 'rgb':
-				return [static::MODE_RGB, $cores[0], $cores[1], $cores[2]];
+			// rgb() and rgba() are the same function, as are hsl() and hsla(): a fourth argument is the alpha
+			case 'hsl':
+			case 'hsla':
+				list($cores[0], $cores[1], $cores[2]) = $this->colorModeConverter->hsl2rgb($this->hueTurns($cores[0]), $cores[1], $cores[2]);
+				// no break
 
+			case 'rgb':
 			case 'rgba':
-				return [static::MODE_RGBA, $cores[0], $cores[1], $cores[2], $cores[3] * 100];
+				if (isset($cores[3])) {
+					return [static::MODE_RGBA, $cores[0], $cores[1], $cores[2], $cores[3] * 100];
+				}
+
+				return [static::MODE_RGB, $cores[0], $cores[1], $cores[2]];
 
 			case 'cmyk':
 			case 'device-cmyk':
@@ -336,14 +369,6 @@ class ColorConverter
 			case 'cmyka':
 			case 'device-cmyka':
 				return [static::MODE_CMYKA, $cores[0], $cores[1], $cores[2], $cores[3], $cores[4] * 100];
-
-			case 'hsl':
-				$conv = $this->colorModeConverter->hsl2rgb($cores[0] / 360, $cores[1], $cores[2]);
-				return [static::MODE_RGB, $conv[0], $conv[1], $conv[2]];
-
-			case 'hsla':
-				$conv = $this->colorModeConverter->hsl2rgb($cores[0] / 360, $cores[1], $cores[2]);
-				return [static::MODE_RGBA, $conv[0], $conv[1], $conv[2], $cores[3] * 100];
 
 			case 'spot':
 				$name = strtoupper(trim($cores[0]));
@@ -371,39 +396,60 @@ class ColorConverter
 	private function convertPercentCoreValues($mode, array $cores)
 	{
 		$ncores = count($cores);
+		$isRgb = $mode === 'rgb' || $mode === 'rgba';
+		$isHsl = $mode === 'hsl' || $mode === 'hsla';
 
 		if (strpos($cores[0], '%') !== false) {
 			$cores[0] = (float) $cores[0];
-			if ($mode === 'rgb' || $mode === 'rgba') {
+			if ($isRgb) {
 				$cores[0] = (int) ($cores[0] * 255 / 100);
 			}
 		}
 
 		if ($ncores > 1 && strpos($cores[1], '%') !== false) {
 			$cores[1] = (float) $cores[1];
-			if ($mode === 'rgb' || $mode === 'rgba') {
+			if ($isRgb) {
 				$cores[1] = (int) ($cores[1] * 255 / 100);
 			}
-			if ($mode === 'hsl' || $mode === 'hsla') {
+			if ($isHsl) {
 				$cores[1] /= 100;
 			}
 		}
 
 		if ($ncores > 2 && strpos($cores[2], '%') !== false) {
 			$cores[2] = (float) $cores[2];
-			if ($mode === 'rgb' || $mode === 'rgba') {
+			if ($isRgb) {
 				$cores[2] = (int) ($cores[2] * 255 / 100);
 			}
-			if ($mode === 'hsl' || $mode === 'hsla') {
+			if ($isHsl) {
 				$cores[2] /= 100;
 			}
 		}
 
 		if ($ncores > 3 && strpos($cores[3], '%') !== false) {
 			$cores[3] = (float) $cores[3];
+			// the fourth argument of rgb() and hsl() is the alpha, a fraction; of cmyk() it is the black, a percentage
+			if ($isRgb || $isHsl) {
+				$cores[3] /= 100;
+			}
 		}
 
 		return $cores;
+	}
+
+	/**
+	 * @param string|float $hue A number of degrees, or an angle in deg, grad, rad or turn
+	 *
+	 * @return float The hue as a fraction of a full turn, from 0 up to 1
+	 */
+	private function hueTurns($hue)
+	{
+		$perTurn = ['deg' => 360, 'grad' => 400, 'rad' => 2 * M_PI, 'turn' => 1];
+
+		preg_match('/[a-z]*$/', (string) $hue, $unit);
+		$turns = fmod((float) $hue / (isset($perTurn[$unit[0]]) ? $perTurn[$unit[0]] : 360), 1);
+
+		return $turns < 0 ? $turns + 1 : $turns;
 	}
 
 	/**
