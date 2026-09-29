@@ -93,4 +93,61 @@ class InlineStyleParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertArrayHasKey('BACKGROUND-IMAGE', $result);
 		$this->assertEquals('http://example.com/image.jpg?param=value', $result['BACKGROUND-IMAGE']);
 	}
+
+	/**
+	 * A declaration parses to the same properties with or without !important, and those are the properties it
+	 * names
+	 *
+	 * @dataProvider importantDeclarations
+	 *
+	 * @param string $flagged
+	 * @param string $plain The same declaration without the flag
+	 * @param array $expected
+	 */
+	public function testParse_StripsImportant($flagged, $plain, $expected)
+	{
+		$this->assertSame($expected, $this->inlineStyleParser->parse($plain));
+		$this->assertSame($expected, $this->inlineStyleParser->parse($flagged));
+	}
+
+	/**
+	 * A declaration with !important, the same declaration without it, and the properties both give
+	 *
+	 * @return array[]
+	 */
+	public function importantDeclarations()
+	{
+		return [
+			'a border shorthand' => [
+				'border:1px solid #f00 !important',
+				'border:1px solid #f00',
+				[
+					'BORDER-TOP' => '1px solid #f00',
+					'BORDER-RIGHT' => '1px solid #f00',
+					'BORDER-BOTTOM' => '1px solid #f00',
+					'BORDER-LEFT' => '1px solid #f00',
+				],
+			],
+			'a two-value padding shorthand' => [
+				'padding:1px 2px !important',
+				'padding:1px 2px',
+				['PADDING-TOP' => '1px', 'PADDING-RIGHT' => '2px', 'PADDING-BOTTOM' => '1px', 'PADDING-LEFT' => '2px'],
+			],
+			'a font size' => [
+				'font-size:20pt !important',
+				'font-size:20pt',
+				['FONT-SIZE' => '20pt'],
+			],
+			'no space before the flag, in upper case' => [
+				'color:#0f0!IMPORTANT',
+				'color:#0f0',
+				['COLOR' => '#0f0'],
+			],
+			'spaces around the flag, then another declaration' => [
+				'color:#0f0  !important ; font-size:20pt',
+				'color:#0f0; font-size:20pt',
+				['COLOR' => '#0f0', 'FONT-SIZE' => '20pt'],
+			],
+		];
+	}
 }

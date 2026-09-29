@@ -55,7 +55,7 @@ class InlineStyleParser
 			}
 
 			$values[$i] = str_replace('%ZZ', ';', $values[$i]); // mPDF 5.7.4 URLs
-			$classproperties[strtoupper($properties[$i])] = trim($values[$i]);
+			$classproperties[strtoupper($properties[$i])] = trim(preg_replace('/\s*!important/i', '', $values[$i]));
 		}
 
 		return $this->normalizeProperties->normalize($classproperties);
