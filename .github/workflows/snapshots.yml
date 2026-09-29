@@ -10,6 +10,14 @@ on:
       - "development"
       - "test"
       - "gravitypdf"
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+# A push to a pull request cancels the run it replaces. Other events run in a group of their own
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"
+  cancel-in-progress: true
 
 jobs:
 
@@ -43,6 +51,7 @@ jobs:
         run: |
           # Older policies forbid the PDF coder. Snapshots only rasterise when they differ, so read one now to fail early
           sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-*/policy.xml
+          # shellcheck disable=SC2016
           php -r '$i = new Imagick(); $i->setResolution(120, 120); $i->readImage("tests/data/snapshots/fixed-position-html.pdf"); printf("%s read %d page of %dx%d px\n", Imagick::getVersion()["versionString"], $i->getNumberImages(), $i->getImageWidth(), $i->getImageHeight());'
 
       - name: "Locate Composer cache"

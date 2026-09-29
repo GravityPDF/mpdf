@@ -1,6 +1,6 @@
 # https://help.github.com/en/categories/automating-your-workflow-with-github-actions
 
-name: "Static Analysis check"
+name: "Lint"
 
 on:
   pull_request:
@@ -10,22 +10,30 @@ on:
       - "development"
       - "test"
       - "gravitypdf"
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+# A push to a pull request cancels the run it replaces. Other events run in a group of their own
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"
+  cancel-in-progress: true
 
 jobs:
 
-  stan:
+  lint:
 
-    name: "Static Analysis check"
+    name: "Lint"
 
-    runs-on: ${{ matrix.operating-system }}
+    runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
+        # PHPStan reports differ between PHP versions, so it runs on both
         php-version:
           - "8.2"
           - "8.5"
-
-        operating-system: [ubuntu-latest]
 
     steps:
       - name: "Checkout"
@@ -52,7 +60,13 @@ jobs:
           restore-keys: "composer-${{ runner.os }}-php${{ matrix.php-version }}-phpstan-"
 
       - name: "Install dependencies"
-        run: "composer install --no-interaction --no-progress && composer require \"phpstan/phpstan:^2.0\""
+        id: install
+        run: "composer require \"phpstan/phpstan:^2.0\" --no-update && composer install --no-interaction --no-progress"
 
-      - name: "Static Analysis check"
+      - name: "Coding standard"
+        if: matrix.php-version == '8.2'
+        run: composer cs
+
+      - name: "Static analysis"
+        if: "!cancelled() && steps.install.outcome == 'success'"
         run: vendor/bin/phpstan --no-progress
