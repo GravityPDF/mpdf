@@ -60,6 +60,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const OBJECT_IDENTIFIER = "\xbb\xa4\xac";
 
 	/**
+	 * The attribute, as the tokenizer names it, that marks a span markScriptToLang() wraps a run of another script in
+	 */
+	const SCRIPT_RUN_ATTRIBUTE = 'DATA-MPDF-SCRIPT-RUN';
+
+	/**
 	 * A zero-width space (U+200B) in UTF-8, as Unicode-font text carries it
 	 */
 	const ZERO_WIDTH_SPACE_UTF8 = "\xe2\x80\x8b";
@@ -3501,10 +3506,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->blk[0] = $save_blk[0];
 			// Re-open block tags
 			$this->blklvl = 0;
-			$arr = [];
-			$i = 0;
+			$depths = $this->openBlockDepths($save_blk, $save_blklvl);
 			for ($b = 1; $b <= $save_blklvl; $b++) {
-				$this->tag->OpenTag($save_blk[$b]['tag'], $save_blk[$b]['attr'], $arr, $i);
+				$this->reopenBlock($save_blk[$b], $depths[$b]);
 			}
 		} elseif ($pagebreaktype == 'clonebycss') {
 			$this->blk = [];
@@ -3526,13 +3530,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			// Re-open block tags for any that have box_decoration_break==clone
-			$arr = [];
-			$i = 0;
+			$depths = $this->openBlockDepths($save_blk, $save_blklvl);
 			for ($b = $this->blklvl + 1; $b <= $save_blklvl; $b++) {
 				if ($b < $this->blklvl) {
 					$this->lastblocklevelchange = -1;
 				}
-				$this->tag->OpenTag($save_blk[$b]['tag'], $save_blk[$b]['attr'], $arr, $i);
+				$this->reopenBlock($save_blk[$b], $depths[$b]);
 			}
 			if ($this->blk[$this->blklvl]['box_decoration_break'] != 'clone') {
 				$this->lastblocklevelchange = -1;
@@ -15107,6 +15110,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					$this->closeElementsImpliedBy($tag, $floor);
 					$token = $i;
+					// The <div> standing in for a positioned block has had the block's rules, through its style
+					$outerElement = $this->styledElement;
+					$this->styledElement = !$standIn && $this->isDocumentElement($tag, $attr) ? ['path' => $this->openElements, 'tag' => $tag, 'attr' => $attr] : null;
 					$this->tag->OpenTag($tag, $attr, $a, $i); // mPDF 6
 					// Unless it put back a page-break-inside: avoid block, which rewinds the parser to that block's start
 					// tag and the open elements to how they were there
@@ -15117,6 +15123,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->startElement($tag, $attr, $selfClosing);
 						}
 					}
+					// Held on to, the copy of the stack would make recording each closed child copy its parent's record
+					$this->styledElement = $outerElement;
 					/* -- CSS-POSITION -- */
 					if ($this->inFixedPosBlock) {
 						$this->fixedPosBlockBBox = [$tag, $attr, $this->x, $this->y];
@@ -15298,7 +15306,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->blk[1]['tag'] = $tag;
 			$this->blk[1]['attr'] = $attr;
 			$this->Reset();
+			$outerElement = $this->styledElement;
+			$this->styledElement = $this->fixedPosBlockElements === null ? null : ['path' => $this->fixedPosBlockElements, 'tag' => null, 'attr' => []];
 			$p = $this->cssManager->MergeCSS('BLOCK', $tag, $attr);
+			$this->styledElement = $outerElement;
 			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];
 			if (isset($p['ROTATE'])) {
 				$rotate = Rotation::angle($p['ROTATE'], [90, -90, 180]);
@@ -28035,25 +28046,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 						// Check Vietnamese if Latin script - even if Basescript
 						if ($scriptblocks[$sch] == Ucdn::SCRIPT_LATIN && $this->autoVietnamese && preg_match("/([" . $this->scriptToLanguage->getLanguageDelimiters('viet') . "])/u", $s)) {
-							$o .= '<span lang="vi" class="lang_vi">' . $s . '</span>';
+							$o .= '<span data-mpdf-script-run lang="vi" class="lang_vi">' . $s . '</span>';
 						} elseif ($scriptblocks[$sch] == Ucdn::SCRIPT_ARABIC && $this->autoArabic) { // Check Arabic for different languages if Arabic script - even if Basescript
 							if (preg_match("/[" . $this->scriptToLanguage->getLanguageDelimiters('sindhi') . "]/u", $s)) {
-								$o .= '<span lang="sd" class="lang_sd">' . $s . '</span>';
+								$o .= '<span data-mpdf-script-run lang="sd" class="lang_sd">' . $s . '</span>';
 							} elseif (preg_match("/[" . $this->scriptToLanguage->getLanguageDelimiters('urdu') . "]/u", $s)) {
-								$o .= '<span lang="ur" class="lang_ur">' . $s . '</span>';
+								$o .= '<span data-mpdf-script-run lang="ur" class="lang_ur">' . $s . '</span>';
 							} elseif (preg_match("/[" . $this->scriptToLanguage->getLanguageDelimiters('pashto') . "]/u", $s)) {
-								$o .= '<span lang="ps" class="lang_ps">' . $s . '</span>';
+								$o .= '<span data-mpdf-script-run lang="ps" class="lang_ps">' . $s . '</span>';
 							} elseif (preg_match("/[" . $this->scriptToLanguage->getLanguageDelimiters('persian') . "]/u", $s)) {
-								$o .= '<span lang="fa" class="lang_fa">' . $s . '</span>';
+								$o .= '<span data-mpdf-script-run lang="fa" class="lang_fa">' . $s . '</span>';
 							} elseif ($this->baseScript != Ucdn::SCRIPT_ARABIC && $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch])) {
-								$o .= '<span lang="' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '" class="lang_' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '">' . $s . '</span>';
+								$o .= '<span data-mpdf-script-run lang="' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '" class="lang_' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '">' . $s . '</span>';
 							} else {
 								// Just output chars
 								$o .= $s;
 							}
 						} elseif ($scriptblocks[$sch] > 0 && $scriptblocks[$sch] != $this->baseScript && $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch])) { // Identify Script block if not Basescript, and mark up as language
 							// Encase in <span>
-							$o .= '<span lang="' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '" class="lang_' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '">';
+							$o .= '<span data-mpdf-script-run lang="' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '" class="lang_' . $this->scriptToLanguage->getLanguageByScript($scriptblocks[$sch]) . '">';
 							$o .= $s;
 							$o .= '</span>';
 						} else {

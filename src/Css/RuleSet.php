@@ -11,7 +11,8 @@ class RuleSet
 {
 
 	/**
-	 * @var array[] Each rule, by its position in the stylesheets read: [compiled selector, declarations]
+	 * @var array[] Each rule, by its position in the stylesheets read: [compiled selector, declarations, the ancestors
+	 *              it requires as requiredAncestors() gives them]
 	 */
 	private $rules = [];
 
@@ -22,6 +23,19 @@ class RuleSet
 	private $index = ['id' => [], 'class' => [], 'tag' => [], 'any' => []];
 
 	/**
+	 * @var SelectorMatcher Matches each rule filed under an element against the open elements around it
+	 */
+	private $matcher;
+
+	/**
+	 * An empty rule set
+	 */
+	public function __construct()
+	{
+		$this->matcher = new SelectorMatcher();
+	}
+
+	/**
 	 * Adds a rule after those already read
 	 *
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
@@ -30,7 +44,7 @@ class RuleSet
 	public function add(array $selector, array $declarations)
 	{
 		$position = count($this->rules);
-		$this->rules[] = [$selector, $declarations];
+		$this->rules[] = [$selector, $declarations, self::requiredAncestors($selector)];
 
 		self::file($this->index, $selector['compounds'][count($selector['compounds']) - 1], $position);
 	}
@@ -51,9 +65,65 @@ class RuleSet
 	}
 
 	/**
+	 * The declarations of the rules an element matches, in the order they apply: by specificity, then by position
+	 *
+	 * @param string $tag Uppercased
+	 * @param string $id Uppercased, or empty for none
+	 * @param string[] $classes Uppercased
+	 * @param callable $path Gives the open elements from the document down to the element, or null for none. Only
+	 *                       called when a rule is filed under the element
+	 *
+	 * @return array[]
+	 */
+	public function matchingDeclarations($tag, $id, array $classes, callable $path)
+	{
+		$candidates = $this->candidates($tag, $id, $classes);
+		if (!$candidates) {
+			return [];
+		}
+
+		$path = call_user_func($path);
+		if ($path === null || $path[count($path) - 1]['tag'] !== $tag) {
+			return [];
+		}
+
+		$ancestors = self::ancestorsOf($path);
+		$matched = [];
+		foreach ($candidates as $position) {
+			list($selector, , $required) = $this->rules[$position];
+			foreach ($required as $key) {
+				if (!isset($ancestors[$key])) {
+					continue 2;
+				}
+			}
+
+			if ($this->matcher->matches($selector, $path)) {
+				$matched[] = $position;
+			}
+		}
+
+		$rules = $this->rules;
+		usort($matched, function ($a, $b) use ($rules) {
+			// Arrays of the same keys compare element by element: ids, then classes, then tags
+			if ($rules[$a][0]['specificity'] != $rules[$b][0]['specificity']) {
+				return $rules[$a][0]['specificity'] < $rules[$b][0]['specificity'] ? -1 : 1;
+			}
+
+			return $a - $b;
+		});
+
+		$declarations = [];
+		foreach ($matched as $position) {
+			$declarations[] = $this->rules[$position][1];
+		}
+
+		return $declarations;
+	}
+
+	/**
 	 * @param int $position
 	 *
-	 * @return array The rule at a position, as it is kept: [compiled selector, declarations]
+	 * @return array The rule at a position, as it is kept: [compiled selector, declarations, required ancestors]
 	 */
 	public function rule($position)
 	{
@@ -104,5 +174,60 @@ class RuleSet
 		}
 
 		return $positions;
+	}
+
+	/**
+	 * A key for each compound of a selector that an ancestor of the element has to match: the compound's first id,
+	 * else its first class, else its tag. A compound followed by a descendant or child combinator names an ancestor,
+	 * since an ancestor of a sibling is one too. A rule is only matched for an element whose ancestors give every key
+	 *
+	 * @param array $selector A selector SelectorCompiler::compile() compiled
+	 *
+	 * @return string[] Each key prefixed with I, C or T for an id, a class or a tag
+	 */
+	private static function requiredAncestors(array $selector)
+	{
+		$keys = [];
+		foreach ($selector['combinators'] as $i => $combinator) {
+			if ($combinator !== ' ' && $combinator !== '>') {
+				continue;
+			}
+
+			$compound = $selector['compounds'][$i];
+			if ($compound['ids']) {
+				$keys[] = 'I' . $compound['ids'][0];
+			} elseif ($compound['classes']) {
+				$keys[] = 'C' . $compound['classes'][0];
+			} elseif ($compound['tag'] !== null) {
+				$keys[] = 'T' . $compound['tag'];
+			}
+		}
+
+		return $keys;
+	}
+
+	/**
+	 * The other half of the pre-filter requiredAncestors() sets up: the keys an element's ancestors give, so that a
+	 * rule naming an ancestor the element does not have is passed over without running the matcher
+	 *
+	 * @param array[] $path The open elements from the document down to the element, with the element last
+	 *
+	 * @return array<string, true> The keys requiredAncestors() gives for the ids, classes and tags of the element's
+	 *                             ancestors, the document's frame being body
+	 */
+	private static function ancestorsOf(array $path)
+	{
+		$keys = ['T' . 'BODY' => true]; // the document's frame
+		for ($depth = count($path) - 2; $depth > 0; $depth--) {
+			$keys['T' . $path[$depth]['tag']] = true;
+			if ($path[$depth]['id'] !== '') {
+				$keys['I' . $path[$depth]['id']] = true;
+			}
+			foreach ($path[$depth]['classes'] as $class) {
+				$keys['C' . $class] = true;
+			}
+		}
+
+		return $keys;
 	}
 }

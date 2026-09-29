@@ -3,8 +3,9 @@
 namespace Snapshots;
 
 /**
- * Stylesheet rules with a descendant selector that has a part mPDF cannot match, dropped whole rather than cut short
- * and applied to whichever element the parts before it name, and rules with two nth-child parts keeping both.
+ * Stylesheet rules with a descendant selector that has a part the legacy parser cannot read, matched whole or dropped
+ * whole rather than cut short and applied to whichever element the parts before it name, and rules with two
+ * nth-child parts keeping both.
  *
  * @group snapshot
  */
@@ -56,10 +57,10 @@ class UnmatchableDescendantSelectorSnapshotTest extends Snapshot
 			table.absent tr:nth-child(2n) td:nth-child(5) { background-color: #ff0000; }
 		</style>
 
-		<h1>Descendant rules mPDF cannot match</h1>
+		<h1>Descendant rules the legacy parser cannot read</h1>
 
 		<h2>Child and sibling combinators</h2>
-		<p class="caption">Rules using &gt;, + and ~ are dropped. All three paragraphs are black at the normal size.</p>
+		<p class="caption">Rules using &gt;, + and ~ apply to the element their last part names and to nothing before it. The span, and the second and third paragraphs, are red at 16pt. The rest of the first paragraph is black at the normal size.</p>
 		<div class="case combinators">
 			<p>First paragraph, with <span>a span</span></p>
 			<p>Second paragraph</p>
@@ -82,8 +83,8 @@ class UnmatchableDescendantSelectorSnapshotTest extends Snapshot
 			<p>A paragraph with no generated content</p>
 		</div>
 
-		<h2>An unmatchable selector beside a valid one</h2>
-		<p class="caption">div.mixed p.keep still applies: the second paragraph is green and bold, the first is black.</p>
+		<h2>A selector the legacy parser cannot read beside one it can</h2>
+		<p class="caption">Both selectors apply: the span and the second paragraph are green and bold. The rest of the first paragraph is black.</p>
 		<div class="case mixed">
 			<p>First paragraph, with <span>a span</span></p>
 			<p class="keep">Second paragraph</p>

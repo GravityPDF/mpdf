@@ -146,6 +146,7 @@ class CssMerger
 		$this->mergeStylesheetSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeTagSpecificSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeDescendantSelectors($inherit, $tag, $attr, $classes, $languageCode);
+		$this->mergeCompiledRules($tag, $attr);
 		$this->mergeInlineStyle($tag, $attr);
 
 		return $this->cssProperties;
@@ -830,6 +831,27 @@ class CssMerger
 		}
 
 		return $keys;
+	}
+
+	/**
+	 * Apply the rules whose selector only the matcher reads, such as div > p, h1 + p and li:first-child, matched
+	 * against the element and the open elements around it. They go with the descendant rules, after them, in the
+	 * order of their specificity and then of their position in the stylesheets.
+	 *
+	 * @param string $tag HTML tag name, uppercased
+	 * @param array $attr HTML attributes, with ID and CLASS uppercased and ID empty for none
+	 * @return void
+	 */
+	protected function mergeCompiledRules($tag, $attr)
+	{
+		$classes = isset($attr['CLASS']) ? preg_split('/\s+/', $attr['CLASS'], -1, PREG_SPLIT_NO_EMPTY) : [];
+		$path = [$this->mpdf, 'getStyledElementPath'];
+
+		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
+
+		foreach ($this->cssManager->getRules()->matchingDeclarations($tag, $attr['ID'], $classes, $path) as $properties) {
+			$this->setMergedCss($properties, false, $dominance);
+		}
 	}
 
 	/**
