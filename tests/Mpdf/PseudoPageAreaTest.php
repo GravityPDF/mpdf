@@ -77,6 +77,99 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A :first, :left or :right rule applies to its own pages without a plain @page rule beside it, and only to them:
+	 * a :right rule is not the default of the left pages
+	 *
+	 * @dataProvider pseudoPageProvider
+	 *
+	 * @param string $html Written ahead of the text, such as the root element of a right-to-left document
+	 * @param string $css
+	 * @param float[] $tops The top of the first line on each of the first three pages
+	 */
+	public function testAPseudoPageRuleAppliesToItsOwnPages($html, $css, $tops)
+	{
+		$mpdf = $this->write($css, $html . $this->story(30));
+
+		$firstLines = [];
+		foreach ($mpdf->drawnBoxes as $box) {
+			if (!isset($firstLines[$box[0]])) {
+				$firstLines[$box[0]] = round($box[3], 1);
+			}
+		}
+
+		$this->assertSame($tops, array_slice($firstLines, 0, 3, true));
+	}
+
+	/**
+	 * Rules setting an 80mm top margin, with the plain rule's own 16mm elsewhere. The first page of a right-to-left
+	 * document is a left page.
+	 *
+	 * @return array[]
+	 */
+	public function pseudoPageProvider()
+	{
+		$leftPages = [1 => 16.0, 2 => 80.0, 3 => 16.0];
+		$rightPages = [1 => 80.0, 2 => 16.0, 3 => 80.0];
+
+		return [
+			':first' => ['', '@page :first { margin-top: 80mm; }', [1 => 80.0, 2 => 16.0, 3 => 16.0]],
+			':left' => ['', '@page :left { margin-top: 80mm; }', $leftPages],
+			':right' => ['', '@page :right { margin-top: 80mm; }', $rightPages],
+			':left beside an empty @page rule' => ['', '@page { } @page :left { margin-top: 80mm; }', $leftPages],
+			':left beside a plain rule' => ['', '@page { margin-bottom: 16mm; } @page :left { margin-top: 80mm; }', $leftPages],
+			':right beside a plain rule' => ['', '@page { margin-bottom: 16mm; } @page :right { margin-top: 80mm; }', $rightPages],
+			':right in a right-to-left document' => ['<html dir="rtl">', '@page :right { margin-top: 80mm; }', $leftPages],
+		];
+	}
+
+	/**
+	 * A document that turns right to left after its first page is made keeps the page area of that page, and sets the
+	 * pages after it as a document right to left from the start would
+	 *
+	 * @dataProvider sideMarginSourcesProvider
+	 *
+	 * @param string $css
+	 * @param array $config
+	 */
+	public function testAPageKeepsItsPageAreaWhenTheDocumentTurnsRightToLeft($css, $config)
+	{
+		$leftToRight = $this->areas($css, '<p>x</p>' . $this->story(30), 1, $config);
+		$rightToLeft = $this->areas($css, '<html dir="rtl"><p>x</p>' . $this->story(30), 3, $config);
+		$turned = $this->areas($css, ['<p>x</p>', '<html dir="rtl">' . $this->story(30)], 3, $config);
+
+		$this->assertSame($leftToRight + array_slice($rightToLeft, 1, 2, true), $turned);
+	}
+
+	/**
+	 * Side margins from a plain @page rule, from the configuration, and from the configuration mirrored
+	 *
+	 * @return array[]
+	 */
+	public function sideMarginSourcesProvider()
+	{
+		return [
+			'@page rule' => ['@page { margin-left: 20mm; margin-right: 50mm; }', []],
+			'configuration' => ['', ['margin_left' => 20, 'margin_right' => 50]],
+			'mirrored configuration' => ['', ['margin_left' => 30, 'margin_right' => 10, 'mirrorMargins' => true]],
+		];
+	}
+
+	/**
+	 * :left and :right rules without a plain @page rule set the side margins of their pages
+	 */
+	public function testLeftAndRightPagesTakeTheirSideMarginsWithoutAPlainRule()
+	{
+		$areas = $this->areas(
+			'@page :right { margin-left: 20mm; margin-right: 50mm; }
+			@page :left { margin-left: 60mm; margin-right: 40mm; }',
+			$this->story(30),
+			3
+		);
+
+		$this->assertSame([1 => [20.0, 160.0], 2 => [60.0, 170.0], 3 => [20.0, 160.0]], $areas);
+	}
+
+	/**
 	 * The :first page of the unnamed @page rule sets the side margins of the first page only
 	 */
 	public function testTheFirstPageOfTheDocumentTakesItsOwnSideMargins()
@@ -87,19 +180,45 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A block with a set width keeps it as the page area moves under it
+	 * A block with a set width keeps it as the page area moves under it, and keeps to the side of the page area it was
+	 * set against: the left, the middle, or the right where its left margin is auto or it runs right to left
+	 *
+	 * @dataProvider setWidthProvider
+	 *
+	 * @param string $html Written ahead of the block, such as the root element of a right-to-left document
+	 * @param string $style
+	 * @param array[] $spans The left and right edges of the block on each of the first three pages
 	 */
-	public function testABlockWithASetWidthKeepsItAcrossPageAreas()
+	public function testABlockWithASetWidthKeepsItsPlaceInEachPageArea($html, $style, $spans)
 	{
-		$areas = $this->areas(
+		$mpdf = $this->write(
 			'@page { margin-top: 20mm; }
 			@page :right { margin-left: 20mm; margin-right: 50mm; }
 			@page :left { margin-left: 60mm; margin-right: 40mm; }',
-			'<div style="width: 60mm">' . $this->story(12) . '</div>',
-			3
+			$html . '<div style="width: 60mm; background: #0f0; ' . $style . '">' . $this->story(12) . '</div>'
 		);
 
-		$this->assertSame([1 => [20.0, 80.0], 2 => [60.0, 120.0], 3 => [20.0, 80.0]], $areas);
+		$this->assertSame($spans, array_slice($this->spans($mpdf->drawnBoxes), 0, 3, true));
+		$this->assertSame($spans, array_slice($this->painted($mpdf), 0, 3, true));
+	}
+
+	/**
+	 * Blocks 60mm wide in page areas from 20mm to 160mm on a right page and from 60mm to 170mm on a left page. The
+	 * first page of a right-to-left document is a left page.
+	 *
+	 * @return array[]
+	 */
+	public function setWidthProvider()
+	{
+		$againstRight = [1 => [100.0, 160.0], 2 => [110.0, 170.0], 3 => [100.0, 160.0]];
+
+		return [
+			'left' => ['', '', [1 => [20.0, 80.0], 2 => [60.0, 120.0], 3 => [20.0, 80.0]]],
+			'centred' => ['', 'margin: 0 auto', [1 => [60.0, 120.0], 2 => [85.0, 145.0], 3 => [60.0, 120.0]]],
+			'left margin auto' => ['', 'margin-left: auto', $againstRight],
+			'right to left' => ['', 'direction: rtl', $againstRight],
+			'in a right-to-left document' => ['<html dir="rtl">', '', [1 => [110.0, 170.0], 2 => [100.0, 160.0], 3 => [110.0, 170.0]]],
+		];
 	}
 
 	/**
@@ -229,14 +348,15 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * The narrowest left edge and widest right edge of the lines drawn on each of the first pages, in millimetres
 	 *
 	 * @param string $css
-	 * @param string $body
+	 * @param string|string[] $body Or its parts, as write() takes them
 	 * @param int $pages How many pages to return
+	 * @param array $config
 	 *
 	 * @return array[] By page number
 	 */
-	private function areas($css, $body, $pages)
+	private function areas($css, $body, $pages, $config = [])
 	{
-		return array_slice($this->spans($this->write($css, $body)->drawnBoxes), 0, $pages, true);
+		return array_slice($this->spans($this->write($css, $body, $config)->drawnBoxes), 0, $pages, true);
 	}
 
 	/**
@@ -244,15 +364,16 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @param string $css
 	 * @param string|string[] $body Or its parts, each written by a call of its own; the style sheet goes with the first
+	 * @param array $config
 	 *
 	 * @return \Mpdf\TextRecordingMpdf
 	 */
-	private function write($css, $body)
+	private function write($css, $body, $config = [])
 	{
 		$parts = (array) $body;
 		$parts[0] = '<style>p { text-align: justify; } ' . $css . '</style>' . $parts[0];
 
-		$mpdf = new TextRecordingMpdf(['mode' => 'c']);
+		$mpdf = new TextRecordingMpdf($config + ['mode' => 'c']);
 		foreach ($parts as $part) {
 			$mpdf->WriteHTML($part);
 		}

@@ -18,17 +18,28 @@ trait PageAreas
 {
 
 	/**
-	 * The left and right margins of the current page: mirrored on an even page
+	 * The left and right margins of the current page: those it was made with, or the defaults while it is being made,
+	 * mirrored on an even page
+	 *
+	 * A page keeps its margins when the defaults change after it is made, as they do when the document turns right to
+	 * left.
 	 *
 	 * @return float[]
 	 */
 	public function pageSideMargins()
 	{
-		if (!$this->marginsForcedPortrait() && $this->mirrorMargins && $this->page % 2 == 0) {
-			return [$this->DefrMargin, $this->DeflMargin];
+		if (isset($this->pageDim[$this->page]['sideMargins'])) {
+			list($left, $right) = $this->pageDim[$this->page]['sideMargins'];
+		} else {
+			$left = $this->DeflMargin;
+			$right = $this->DefrMargin;
 		}
 
-		return [$this->DeflMargin, $this->DefrMargin];
+		if (!$this->marginsForcedPortrait() && $this->mirrorMargins && $this->page % 2 == 0) {
+			return [$right, $left];
+		}
+
+		return [$left, $right];
 	}
 
 	/**
@@ -95,9 +106,9 @@ trait PageAreas
 	}
 
 	/**
-	 * How far the block being written sits in from the left of the page area. It changes over a page turn only for a
-	 * right float, which keeps to the right as the page area changes width under it, and the line carried over the
-	 * turn moves with it.
+	 * How far the block being written sits in from the left of the page area. It changes over a page turn when the page
+	 * area changes width under a block with a set width whose left margin takes up slack: a centred or right-aligned
+	 * block, a right to left one, or a right float. The line carried over the turn moves with it.
 	 *
 	 * @return float
 	 */
@@ -148,9 +159,10 @@ trait PageAreas
 			return 0;
 		}
 
-		// A block with a set width keeps it. The growth goes into its margin on the side it is not anchored to, the left
-		// of a right float and the right of anything else, and every block inside it moves with it.
-		$outerMargin = null;
+		// A block with a set width keeps it. The growth goes into the margins that took up its slack when BlockTag opened
+		// it: the left, the right, or half to each. Every block inside it moves with it.
+		$slackMargin = null;
+		$leftShare = 0;
 		for ($bl = 1; $bl <= $this->blklvl; $bl++) {
 			if (!isset($this->blk[$bl]['width'])) {
 				continue;
@@ -158,25 +170,27 @@ trait PageAreas
 
 			$blk = &$this->blk[$bl];
 
-			if (!$outerMargin && !empty($blk['css_set_width'])) {
-				$rightFloat = isset($blk['float']) && $blk['float'] === 'R';
-				$blk[$rightFloat ? 'margin_left' : 'margin_right'] += $growth;
-				$outerMargin = $rightFloat ? 'outer_left_margin' : 'outer_right_margin';
+			if (!$slackMargin && !empty($blk['css_set_width'])) {
+				$slackMargin = isset($blk['slack_margin']) ? $blk['slack_margin'] : 'right';
+				$leftShare = $slackMargin === 'both' ? $growth / 2 : ($slackMargin === 'left' ? $growth : 0);
+				$blk['margin_left'] += $leftShare;
+				$blk['margin_right'] += $growth - $leftShare;
 			}
 
-			if (!$outerMargin) {
+			if (!$slackMargin) {
 				$blk['width'] += $growth;
 				$blk['inner_width'] += $growth;
 			} else {
-				$blk[$outerMargin] += $growth;
-				if ($outerMargin === 'outer_left_margin' && isset($blk['x0'])) {
-					$blk['x0'] += $growth;
+				$blk['outer_left_margin'] += $leftShare;
+				$blk['outer_right_margin'] += $growth - $leftShare;
+				if (isset($blk['x0'])) {
+					$blk['x0'] += $leftShare;
 				}
 			}
 			unset($blk);
 		}
 
-		return $outerMargin ? 0 : $growth;
+		return $slackMargin ? 0 : $growth;
 	}
 
 	/**
@@ -192,9 +206,6 @@ trait PageAreas
 		$previousArea = $this->pageArea();
 
 		$this->page = $page;
-		if (isset($this->pageDim[$page]['sideMargins'])) {
-			list($this->DeflMargin, $this->DefrMargin) = $this->pageDim[$page]['sideMargins'];
-		}
 		$this->ResetMargins();
 
 		if ($this->pageArea() == $previousArea) {
