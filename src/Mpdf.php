@@ -14525,6 +14525,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->orig_bMargin = $this->bMargin = $pbmgb;
 			$this->orig_hMargin = $this->margin_header = $pbmgh;
 			$this->orig_fMargin = $this->margin_footer = $pbmgf;
+			$this->page_box['orig_outer_width_LR'] = $this->page_box['outer_width_LR'];
+			$this->page_box['orig_outer_width_TB'] = $this->page_box['outer_width_TB'];
 			list($pborientation, $pbmgl, $pbmgr, $pbmgt, $pbmgb, $pbmgh, $pbmgf, $hname, $fname, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat) = $this->SetPagedMediaCSS('', true, 'O'); // first page
 			$this->show_marks = $marks;
 			if ($hname) {
@@ -16197,13 +16199,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$p = [];
 		$p['SIZE'] = 'AUTO';
 
-		// Uses mPDF original margins as default
-		$p['MARGIN-RIGHT'] = strval($this->orig_rMargin) . 'mm';
-		$p['MARGIN-LEFT'] = strval($this->orig_lMargin) . 'mm';
-		$p['MARGIN-TOP'] = strval($this->orig_tMargin) . 'mm';
-		$p['MARGIN-BOTTOM'] = strval($this->orig_bMargin) . 'mm';
-		$p['MARGIN-HEADER'] = strval($this->orig_hMargin) . 'mm';
-		$p['MARGIN-FOOTER'] = strval($this->orig_fMargin) . 'mm';
+		// Uses mPDF original margins as default, less the outer width they include, which is added below
+		$outerLR = $this->page_box['orig_outer_width_LR'];
+		$outerTB = $this->page_box['orig_outer_width_TB'];
+		$p['MARGIN-RIGHT'] = strval($this->orig_rMargin - $outerLR) . 'mm';
+		$p['MARGIN-LEFT'] = strval($this->orig_lMargin - $outerLR) . 'mm';
+		$p['MARGIN-TOP'] = strval($this->orig_tMargin - $outerTB) . 'mm';
+		$p['MARGIN-BOTTOM'] = strval($this->orig_bMargin - $outerTB) . 'mm';
+		$p['MARGIN-HEADER'] = strval($this->orig_hMargin - $outerTB) . 'mm';
+		$p['MARGIN-FOOTER'] = strval($this->orig_fMargin - $outerTB) . 'mm';
 
 		// Basic page + selector
 		if (isset($this->cssManager->CSS['@PAGE'])) {

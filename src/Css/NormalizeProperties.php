@@ -4,6 +4,7 @@ namespace Mpdf\Css;
 
 use Mpdf\Color\ColorConverter;
 use Mpdf\Mpdf;
+use Mpdf\MpdfException;
 use Mpdf\PageFormat;
 use Mpdf\SizeConverter;
 use Mpdf\Utils\Arrays;
@@ -864,8 +865,10 @@ class NormalizeProperties
 
 		switch ($property) {
 			case 'SIZE':
-				if (preg_match('/(auto|portrait|landscape)/', $value[0])) {
+				if (count($value) === 1 && in_array($value[0], ['auto', 'portrait', 'landscape'], true)) {
 					$this->properties['SIZE'] = strtoupper($value[0]);
+				} elseif (preg_grep('/^[a-z]/', $value)) {
+					$this->processPageSizeName($value);
 				} elseif (count($value) === 1) {
 					$this->properties['SIZE']['W'] = $this->sizeConverter->convert($value[0]);
 					$this->properties['SIZE']['H'] = $this->sizeConverter->convert($value[0]);
@@ -895,6 +898,36 @@ class NormalizeProperties
 				}
 				break;
 		}
+	}
+
+	/**
+	 * Set the sheet from a page-size name such as "a4", "letter" or "a5 landscape", as a browser sets the paper
+	 *
+	 * The sheet is portrait unless "landscape" is given. A value that is not one name, with at most one orientation,
+	 * is dropped.
+	 *
+	 * @param string[] $value The words of the size property
+	 * @return void
+	 */
+	private function processPageSizeName(array $value)
+	{
+		$orientation = array_values(array_intersect($value, ['portrait', 'landscape']));
+		$name = array_values(array_diff($value, $orientation));
+
+		if (count($name) !== 1 || count($orientation) > 1) {
+			return;
+		}
+
+		try {
+			$format = PageFormat::getSizeFromName($name[0]);
+		} catch (MpdfException $e) {
+			return;
+		}
+
+		$sheet = [min($format) / Mpdf::SCALE, max($format) / Mpdf::SCALE];
+
+		$this->properties['SHEET-SIZE'] = $orientation === ['landscape'] ? array_reverse($sheet) : $sheet;
+		$this->properties['SIZE'] = 'AUTO';
 	}
 
 	/**
