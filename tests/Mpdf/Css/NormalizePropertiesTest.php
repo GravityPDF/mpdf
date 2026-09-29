@@ -215,7 +215,7 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			['solid', 'medium solid #000000'],
-			['#ff0000', '#ff0000 none #000000'], // Note: internal logic might produce this weird output, verified from CssManagerTest
+			['#ff0000', 'medium none #ff0000'],
 			['2px', '2px none #000000'],
 			['2px solid', '2px solid #000000'],
 			['solid #ff0000', 'medium solid #ff0000'],
@@ -223,6 +223,49 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			['2px solid #ff0000', '2px solid #ff0000'],
 			['#ff0000 2px solid', '2px solid #ff0000'],
 			['none', 'medium none #000000'],
+			['solid #c00 2mm', '2mm solid #c00'],
+			['2mm #c00 solid', '2mm solid #c00'],
+			['red 2mm solid', '2mm solid red'],
+			['solid 2mm red', '2mm solid red'],
+			['#c00 solid', 'medium solid #c00'],
+			['dashed thick', 'thick dashed #000000'],
+			['solid rgb(204 0 0) 0.5mm', '0.5mm solid rgb(204,0,0)'],
+			['transparent 1px solid', '1px solid transparent'],
+			['SOLID 2MM #C00', '2mm solid #c00'],
+			['inherit', 'medium none #000000'],
+		];
+	}
+
+	/**
+	 * A border value with a part that is no width, style or colour, or with a part twice, is dropped
+	 *
+	 * @dataProvider providerInvalidBorder
+	 *
+	 * @param string $property
+	 * @param string $value
+	 */
+	public function testDropsInvalidBorder($property, $value)
+	{
+		$this->assertSame([], $this->normalizeProperties->normalize([$property => $value]));
+	}
+
+	/**
+	 * Border values that are not borders
+	 *
+	 * @return string[][]
+	 */
+	public function providerInvalidBorder()
+	{
+		return [
+			'unknown colour' => ['BORDER', '1px solid bogus'],
+			'unknown colour on one side' => ['BORDER-LEFT', 'bogus 1px solid'],
+			'two styles' => ['BORDER', 'solid dashed'],
+			'two widths' => ['BORDER-TOP', '1px 2px solid'],
+			'two colours' => ['BORDER', '1px solid red blue'],
+			'four parts' => ['BORDER', '1px solid red !important'],
+			'a slash' => ['BORDER', '1px / solid'],
+			'a negative width' => ['BORDER', '-1px solid red'],
+			'a keyword with a part' => ['BORDER', 'inherit solid'],
 		];
 	}
 
@@ -257,6 +300,119 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$gradient = 'linear-gradient(to bottom, #fff, #000)';
 		$res = $this->normalizeProperties->normalize(['BACKGROUND' => $gradient]);
 		$this->assertEquals($gradient, $res['BACKGROUND-IMAGE']);
+	}
+
+	/**
+	 * The parts of the background shorthand, in any order
+	 *
+	 * @dataProvider providerBackground
+	 *
+	 * @param string $value
+	 * @param array  $expected The properties it expands to
+	 */
+	public function testBackgroundPartsInAnyOrder($value, array $expected)
+	{
+		$this->assertSame($expected, $this->normalizeProperties->normalize(['BACKGROUND' => $value]));
+	}
+
+	/**
+	 * Background shorthands and what they expand to
+	 *
+	 * @return array[]
+	 */
+	public function providerBackground()
+	{
+		return [
+			'colour after the image' => [
+				'url(bg.png) no-repeat #0f0',
+				['BACKGROUND-COLOR' => '#0f0', 'BACKGROUND-IMAGE' => 'bg.png', 'BACKGROUND-REPEAT' => 'no-repeat'],
+			],
+			'position and size' => [
+				'url(bg.png) no-repeat center / cover',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => 'bg.png', 'BACKGROUND-REPEAT' => 'no-repeat', 'BACKGROUND-POSITION' => '50% 50%', 'BACKGROUND-SIZE' => 'cover'],
+			],
+			'two size values' => [
+				'left top/50% auto url(bg.png)',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => 'bg.png', 'BACKGROUND-POSITION' => '0% 0%', 'BACKGROUND-SIZE' => '50% auto'],
+			],
+			'quoted image and lengths' => [
+				'repeat-x URL("Sub Dir/A (1).png") #FFF 10mm 20mm',
+				['BACKGROUND-COLOR' => '#fff', 'BACKGROUND-IMAGE' => 'Sub Dir/A (1).png', 'BACKGROUND-REPEAT' => 'repeat-x', 'BACKGROUND-POSITION' => '10mm 20mm'],
+			],
+			'attachment' => [
+				'fixed url(bg.png) rgb(0 0 255)',
+				['BACKGROUND-COLOR' => 'rgb(0,0,255)', 'BACKGROUND-IMAGE' => 'bg.png'],
+			],
+			'origin and clip' => [
+				'content-box url(bg.png) padding-box',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => 'bg.png', 'BACKGROUND-ORIGIN' => 'content-box', 'BACKGROUND-CLIP' => 'padding-box'],
+			],
+			'one box for both' => [
+				'#eee border-box',
+				['BACKGROUND-COLOR' => '#eee', 'BACKGROUND-IMAGE' => '', 'BACKGROUND-ORIGIN' => 'border-box', 'BACKGROUND-CLIP' => 'border-box'],
+			],
+			'colour after a gradient' => [
+				'linear-gradient(to right, red, blue) #fff',
+				['BACKGROUND-COLOR' => '#fff', 'BACKGROUND-IMAGE' => 'linear-gradient(to right, red, blue)'],
+			],
+			'the colour of the last layer under the first' => [
+				'url(a.png) no-repeat, url(b.png) repeat-y #fff',
+				['BACKGROUND-COLOR' => '#fff', 'BACKGROUND-IMAGE' => 'a.png', 'BACKGROUND-REPEAT' => 'no-repeat'],
+			],
+			'none' => [
+				'none',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => ''],
+			],
+			'a keyword on its own' => [
+				'inherit',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => ''],
+			],
+			'a -webkit- gradient' => [
+				'-webkit-linear-gradient(left, red, blue)',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => 'linear-gradient(left, red, blue)'],
+			],
+			'a -moz- gradient' => [
+				'-moz-linear-gradient(left, red, blue)',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => '-moz-linear-gradient(left, red, blue)'],
+			],
+			'a four-value position mPDF cannot place' => [
+				'url(bg.png) right 5mm bottom 5mm #fff',
+				['BACKGROUND-COLOR' => '#fff', 'BACKGROUND-IMAGE' => 'bg.png'],
+			],
+		];
+	}
+
+	/**
+	 * A background value with a part that is none of its parts, or with a part twice, is dropped
+	 *
+	 * @dataProvider providerInvalidBackground
+	 *
+	 * @param string $value
+	 */
+	public function testDropsInvalidBackground($value)
+	{
+		$this->assertSame([], $this->normalizeProperties->normalize(['BACKGROUND' => $value]));
+	}
+
+	/**
+	 * Background values that are not backgrounds
+	 *
+	 * @return string[][]
+	 */
+	public function providerInvalidBackground()
+	{
+		return [
+			'unknown colour' => ['url(bg.png) bogus'],
+			'two colours' => ['#fff #000'],
+			'two images' => ['url(a.png) url(b.png)'],
+			'a colour in a layer before the last' => ['#fff url(a.png), url(b.png)'],
+			'an empty layer' => ['url(a.png),'],
+			'a slash with no size' => ['url(bg.png) center /'],
+			'a slash with no position' => ['url(bg.png) / cover'],
+			'a position split by another part' => ['url(bg.png) left no-repeat top'],
+			'an image mPDF cannot draw' => ['#fff conic-gradient(red, blue)'],
+			'an unclosed parenthesis' => ['#fff url(' . str_repeat('a b ', 5000)],
+		];
 	}
 
 	public function testNonExistentFontFamily()

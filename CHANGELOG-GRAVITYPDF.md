@@ -154,6 +154,11 @@ Bugfixes
   * A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
   * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
 * A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#623]
+* The `border` shorthand drew nothing when its parts came in some orders, such as `border: solid #c00 2mm`, `2mm #c00 solid` or `red 2mm solid`. The width, style and colour of `border` and of each side are now read in any order. [#552] [#583]
+  * A lone colour, as in `border-top: #f00`, was read as the width.
+* The `background` shorthand lost a colour written after `url()` and misplaced the image, and lost a size after the position (`center / cover`). Its colour, image, position and size, repeat, attachment, and origin and clip boxes are now read in any order. [#552] [#583]
+  * With several layers, mPDF still draws only the first, now over the colour given in the last.
+* A `border` or `background` shorthand with a part that is none of its parts, such as `border: 1px solid bogus`, is dropped, as a browser drops it, so the value it would have replaced still applies. `border: 1px solid bogus` used to draw a black border. [#552] [#583]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -778,6 +783,7 @@ These changes do not change output.
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#578]: https://github.com/GravityPDF/mpdf/pull/578
 [#580]: https://github.com/GravityPDF/mpdf/pull/580
+[#583]: https://github.com/GravityPDF/mpdf/pull/583
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
