@@ -843,4 +843,20 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertTrue($this->cssManager->pseudoPagesSetSideMargins(''));
 	}
+
+	/**
+	 * A plain @page rule counts, and so does a :first, :left or :right one on its own, but a named page does not
+	 */
+	public function testHasUnnamedPageRules()
+	{
+		$this->assertFalse($this->cssManager->hasUnnamedPageRules());
+
+		$this->cssManager->readCss('<style>@page story { margin: 10mm; }</style>');
+
+		$this->assertFalse($this->cssManager->hasUnnamedPageRules());
+
+		$this->cssManager->readCss('<style>@page :right { margin-top: 5mm; }</style>');
+
+		$this->assertTrue($this->cssManager->hasUnnamedPageRules());
+	}
 }

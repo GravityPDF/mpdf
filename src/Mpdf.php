@@ -14507,10 +14507,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		/* -- CSS-PAGE -- */
 		// If page-box is set
-		if ($this->state == 0 && ((isset($this->cssManager->CSS['@PAGE']) && $this->cssManager->CSS['@PAGE']) || (isset($this->cssManager->CSS['@PAGE>>PSEUDO>>FIRST']) && $this->cssManager->CSS['@PAGE>>PSEUDO>>FIRST']))) { // mPDF 5.7.3
+		if ($this->state == 0 && $this->cssManager->hasUnnamedPageRules()) {
 			$this->page_box['current'] = '';
 			$this->page_box['using'] = true;
-			list($pborientation, $pbmgl, $pbmgr, $pbmgt, $pbmgb, $pbmgh, $pbmgf, $hname, $fname, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat) = $this->SetPagedMediaCSS('', false, 'O');
+			list($pborientation, $pbmgl, $pbmgr, $pbmgt, $pbmgb, $pbmgh, $pbmgf, $hname, $fname, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat) = $this->SetPagedMediaCSS('', false, '');
 			$this->DefOrientation = $this->CurOrientation = $pborientation;
 			$this->orig_lMargin = $this->DeflMargin = $pbmgl;
 			$this->orig_rMargin = $this->DefrMargin = $pbmgr;
@@ -16159,9 +16159,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/* -- HTML-CSS -- */
 	/* -- CSS-PAGE -- */
 
+	/**
+	 * The page box the @page rules give a page
+	 *
+	 * @param string $name The named page, or '' for the plain @page rule
+	 * @param bool $first Whether it is the first page, which @page :first applies to
+	 * @param string $oddEven 'E' for an even page when margins are mirrored, 'O' for any other page, or '' for the
+	 *                        defaults of every page, which no :left or :right rule adds to
+	 *
+	 * @return array
+	 */
 	function SetPagedMediaCSS($name, $first, $oddEven)
 	{
-		if ($oddEven == 'E') {
+		if (!$oddEven) {
+			$side = '';
+		} elseif ($oddEven == 'E') {
 			if ($this->directionality == 'rtl') {
 				$side = 'R';
 			} else {

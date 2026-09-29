@@ -77,6 +77,67 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A :first, :left or :right rule applies to its own pages without a plain @page rule beside it, and only to them:
+	 * a :right rule is not the default of the left pages
+	 *
+	 * @dataProvider pseudoPageProvider
+	 *
+	 * @param string $html Written ahead of the text, such as the root element of a right-to-left document
+	 * @param string $css
+	 * @param float[] $tops The top of the first line on each of the first three pages
+	 */
+	public function testAPseudoPageRuleAppliesToItsOwnPages($html, $css, $tops)
+	{
+		$mpdf = $this->write($css, $html . $this->story(30));
+
+		$firstLines = [];
+		foreach ($mpdf->drawnBoxes as $box) {
+			if (!isset($firstLines[$box[0]])) {
+				$firstLines[$box[0]] = round($box[3], 1);
+			}
+		}
+
+		$this->assertSame($tops, array_slice($firstLines, 0, 3, true));
+	}
+
+	/**
+	 * Rules setting an 80mm top margin, with the plain rule's own 16mm elsewhere. The first page of a right-to-left
+	 * document is a left page.
+	 *
+	 * @return array[]
+	 */
+	public function pseudoPageProvider()
+	{
+		$leftPages = [1 => 16.0, 2 => 80.0, 3 => 16.0];
+		$rightPages = [1 => 80.0, 2 => 16.0, 3 => 80.0];
+
+		return [
+			':first' => ['', '@page :first { margin-top: 80mm; }', [1 => 80.0, 2 => 16.0, 3 => 16.0]],
+			':left' => ['', '@page :left { margin-top: 80mm; }', $leftPages],
+			':right' => ['', '@page :right { margin-top: 80mm; }', $rightPages],
+			':left beside an empty @page rule' => ['', '@page { } @page :left { margin-top: 80mm; }', $leftPages],
+			':left beside a plain rule' => ['', '@page { margin-bottom: 16mm; } @page :left { margin-top: 80mm; }', $leftPages],
+			':right beside a plain rule' => ['', '@page { margin-bottom: 16mm; } @page :right { margin-top: 80mm; }', $rightPages],
+			':right in a right-to-left document' => ['<html dir="rtl">', '@page :right { margin-top: 80mm; }', $leftPages],
+		];
+	}
+
+	/**
+	 * :left and :right rules without a plain @page rule set the side margins of their pages
+	 */
+	public function testLeftAndRightPagesTakeTheirSideMarginsWithoutAPlainRule()
+	{
+		$areas = $this->areas(
+			'@page :right { margin-left: 20mm; margin-right: 50mm; }
+			@page :left { margin-left: 60mm; margin-right: 40mm; }',
+			$this->story(30),
+			3
+		);
+
+		$this->assertSame([1 => [20.0, 160.0], 2 => [60.0, 170.0], 3 => [20.0, 160.0]], $areas);
+	}
+
+	/**
 	 * The :first page of the unnamed @page rule sets the side margins of the first page only
 	 */
 	public function testTheFirstPageOfTheDocumentTakesItsOwnSideMargins()
