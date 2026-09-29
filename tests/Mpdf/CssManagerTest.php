@@ -685,7 +685,7 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertArrayHasKey('FONT-FAMILY', $result);
 		$this->assertArrayHasKey('FONT-SIZE', $result);
-		$this->assertEquals('Arial', $result['FONT-FAMILY']);
+		$this->assertEquals('arial', $result['FONT-FAMILY']);
 		$this->assertEquals('MEDIUM', $result['FONT-SIZE']);
 	}
 
