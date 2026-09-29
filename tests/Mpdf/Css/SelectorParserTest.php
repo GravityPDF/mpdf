@@ -89,6 +89,45 @@ class SelectorParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		];
 	}
 
+	/**
+	 * An nth-child part keeps its argument as the key's formula. A part with anything after its argument, or with an
+	 * argument that is not a formula, is not parsed, so the rule is dropped rather than applied to every cell the formula
+	 * at its start names.
+	 *
+	 * @dataProvider nthChildSelectors
+	 *
+	 * @param string $part
+	 * @param string|null $expected
+	 */
+	public function testParseSimpleSelectorNthChild($part, $expected)
+	{
+		$this->assertSame($expected, $this->parser->parseSimpleSelector([$part]));
+	}
+
+	/**
+	 * nth-child parts as CssParser hands them over, upper-cased with the spaces taken out of the argument, and their keys,
+	 * or null for a part mPDF cannot match
+	 *
+	 * @return array[]
+	 */
+	public function nthChildSelectors()
+	{
+		return [
+			'a number' => ['TD:NTH-CHILD(2)', 'TD>>SELECTORNTHCHILD>>2'],
+			'a signed number' => ['TH:NTH-CHILD(+2)', 'TH>>SELECTORNTHCHILD>>+2'],
+			'odd' => ['TR:NTH-CHILD(ODD)', 'TR>>SELECTORNTHCHILD>>ODD'],
+			'even' => ['TR:NTH-CHILD(EVEN)', 'TR>>SELECTORNTHCHILD>>EVEN'],
+			'an+b' => ['TD:NTH-CHILD(2N+1)', 'TD>>SELECTORNTHCHILD>>2N+1'],
+			'-n+b' => ['TD:NTH-CHILD(-N+3)', 'TD>>SELECTORNTHCHILD>>-N+3'],
+			'n' => ['TD:NTH-CHILD(N)', 'TD>>SELECTORNTHCHILD>>N'],
+			'a pseudo-class after it' => ['TD:NTH-CHILD(2):NOT(.X)', null],
+			'a second nth-child after it' => ['TD:NTH-CHILD(2):NTH-CHILD(ODD)', null],
+			'an of selector' => ['TD:NTH-CHILD(2OF.X)', null],
+			'an unfinished formula' => ['TD:NTH-CHILD(2N+)', null],
+			'no argument' => ['TD:NTH-CHILD()', null],
+		];
+	}
+
 	public function testNthchild_WithOdd()
 	{
 		$this->assertTrue($this->parser->matchesNthChild(['ODD'], 0)); // row 1

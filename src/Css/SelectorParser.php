@@ -89,7 +89,7 @@ class SelectorParser
 			$classes = explode('.', $m[2]);
 			sort($classes);
 			$tag = $m[1] . '>>CLASS>>' . implode('.', $classes);
-		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\s*:NTH-CHILD\((.*)\)$/', $t, $m)) {
+		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\s*:NTH-CHILD\(([\-+]?\d*N(?:[\-+]\d+)?|[\-+]?\d+|ODD|EVEN)\)$/', $t, $m)) { // the whole argument is a formula, with nothing after it
 			$tag = $m[1] . '>>SELECTORNTHCHILD>>' . $m[2];
 		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')[#](.*)$/', $t, $m)) {
 			$tag = $m[1] . '>>ID>>' . $m[2];
