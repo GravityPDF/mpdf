@@ -61,7 +61,8 @@ jobs:
           php-version: "${{ matrix.php-version }}"
           extensions: "mbstring, gd, bcmath, bz2, fileinfo"
           tools: composer:v2
-          ini-values: error_reporting=-1, opcache.enable_cli=1
+          # setup-php turns the JIT on for PHP 8, and on 8.0, 8.4 and 8.5 it corrupts OpenType positioning in the snapshots
+          ini-values: error_reporting=-1, opcache.enable_cli=1, opcache.jit=disable
 
       - name: "Locate Composer cache"
         id: composer-cache
