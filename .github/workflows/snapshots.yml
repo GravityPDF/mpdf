@@ -10,6 +10,9 @@ on:
       - "development"
       - "test"
       - "gravitypdf"
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
 
 # A push to a pull request cancels the run it replaces. Other events run in a group of their own
 concurrency:

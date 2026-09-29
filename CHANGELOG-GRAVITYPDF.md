@@ -329,6 +329,7 @@ These changes do not change output.
   * It checks PDF/A and PDF/X-4 output with veraPDF, and tests e-invoices against the XML packages `composer.json` suggests.
   * The test suite runs under a 512M memory limit.
   * Pull requests run 6 of the 24 PHP and OS test jobs unless labelled `full-ci`. Pushes to `gravitypdf`, a nightly run and a manual run get all 24. A newer push to a pull request cancels the run it replaces.
+  * Every workflow, code coverage included, also runs nightly on `gravitypdf` and can be run by hand.
   * The coding standard and PHPStan run as one Lint workflow. The e-invoice and PDF/X-4 checks run on a pull request only when it changes the code they cover.
 * **PHPStan.** Fixes for newer PHP versions and PHPStan 2.2.15. [#6] [#295] [#319] [#451]
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
