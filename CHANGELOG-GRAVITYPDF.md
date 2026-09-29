@@ -133,6 +133,8 @@ Bugfixes
 * A percentage alpha, as in `rgba(255, 0, 0, 50%)`, gave an opacity above 1, which viewers draw opaque.
 * A fourth argument to `rgb()` or `hsl()` is read as the alpha instead of being dropped.
 * `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
+* A declaration mPDF cannot read replaced the value before it. A `calc()`, `min()`, `max()`, `clamp()` or `var()` length became 0, so `margin: calc(…)` removed the default margins, and a colour mPDF does not know, or one written with `var()`, drew the text black. Such a declaration is now dropped, as a browser drops it, so the earlier declaration, the default or the inherited value applies. [#552]
+* `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]

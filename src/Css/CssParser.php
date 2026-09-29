@@ -328,6 +328,11 @@ class CssParser
 				continue;
 			}
 
+			// Dropped before it can replace an earlier declaration of the property in the same block
+			if (!$this->normalizeProperties->canParse($property, $value)) {
+				continue;
+			}
+
 			$classProperties[$property] = $value;
 		}
 

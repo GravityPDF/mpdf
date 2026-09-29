@@ -132,4 +132,78 @@ class SizeConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		];
 	}
 
+	/**
+	 * The units and number forms CSS has that are not read as pixels, on the default A4 page
+	 *
+	 * @dataProvider cssSizesProvider
+	 *
+	 * @param string $size
+	 * @param float $converted In millimetres
+	 */
+	public function testConvertsCssUnitsAndNumbers($size, $converted)
+	{
+		$this->assertEqualsWithDelta($converted, $this->converter->convert($size, 0, 4.0), 0.001);
+	}
+
+	/**
+	 * A length, and what it is in millimetres with a 4mm font size on an A4 page, whose sides are whole points and so not exact millimetres
+	 *
+	 * @return array[]
+	 */
+	public function cssSizesProvider()
+	{
+		return [
+			'quarter-millimetres' => ['40Q', 10.0],
+			'uppercase quarter-millimetres' => ['40q', 10.0],
+			'the page width' => ['10vw', 21.0],
+			'the page height' => ['10vh', 29.7],
+			'the shorter page side' => ['10vmin', 21.0],
+			'the longer page side' => ['10vmax', 29.7],
+			'zeros, as half an em' => ['2ch', 4.0],
+			'a plus sign' => ['+5mm', 5.0],
+			'an exponent with a plus sign' => ['1e+1mm', 10.0],
+			'an exponent with no sign' => ['1e1mm', 10.0],
+		];
+	}
+
+	/**
+	 * @dataProvider lengthsProvider
+	 *
+	 * @param string $value
+	 * @param bool $isLength
+	 */
+	public function testIsLength($value, $isLength)
+	{
+		$this->assertSame($isLength, $this->converter->isLength($value));
+	}
+
+	/**
+	 * A value, and whether convert() reads it as a number in a unit it knows
+	 *
+	 * @return array[]
+	 */
+	public function lengthsProvider()
+	{
+		return [
+			['5mm', true],
+			['-5.5MM', true],
+			['+5mm', true],
+			['.5em', true],
+			['1e+1mm', true],
+			['1E-1pt', true],
+			['0', true],
+			['1.5', true],
+			['40Q', true],
+			['50%', true],
+			['10vmax', true],
+			['1,5mm', false],
+			['10 px', false],
+			['5foo', false],
+			['10dvh', false],
+			['calc(5mm', false],
+			['auto', false],
+			['', false],
+		];
+	}
+
 }

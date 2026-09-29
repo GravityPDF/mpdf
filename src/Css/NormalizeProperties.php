@@ -33,6 +33,34 @@ class NormalizeProperties
 	 */
 	private $properties = [];
 
+	/**
+	 * Properties whose value is made only of lengths and keywords, as keys
+	 *
+	 * @var bool[]
+	 */
+	private static $lengthProperties = [
+		'MARGIN' => true, 'MARGIN-TOP' => true, 'MARGIN-RIGHT' => true, 'MARGIN-BOTTOM' => true, 'MARGIN-LEFT' => true,
+		'MARGIN-HEADER' => true, 'MARGIN-FOOTER' => true,
+		'PADDING' => true, 'PADDING-TOP' => true, 'PADDING-RIGHT' => true, 'PADDING-BOTTOM' => true, 'PADDING-LEFT' => true,
+		'WIDTH' => true, 'HEIGHT' => true, 'MIN-WIDTH' => true, 'MAX-WIDTH' => true, 'MIN-HEIGHT' => true, 'MAX-HEIGHT' => true,
+		'TOP' => true, 'RIGHT' => true, 'BOTTOM' => true, 'LEFT' => true,
+		'FONT-SIZE' => true, 'LINE-HEIGHT' => true, 'TEXT-INDENT' => true, 'LETTER-SPACING' => true, 'WORD-SPACING' => true,
+		'BORDER-WIDTH' => true, 'BORDER-TOP-WIDTH' => true, 'BORDER-RIGHT-WIDTH' => true, 'BORDER-BOTTOM-WIDTH' => true,
+		'BORDER-LEFT-WIDTH' => true, 'BORDER-SPACING' => true,
+		'BORDER-RADIUS' => true, 'BORDER-TOP-LEFT-RADIUS' => true, 'BORDER-TOP-RIGHT-RADIUS' => true,
+		'BORDER-BOTTOM-LEFT-RADIUS' => true, 'BORDER-BOTTOM-RIGHT-RADIUS' => true,
+	];
+
+	/**
+	 * Properties whose whole value is one colour, as keys
+	 *
+	 * @var bool[]
+	 */
+	private static $colorProperties = [
+		'COLOR' => true, 'BACKGROUND-COLOR' => true,
+		'BORDER-TOP-COLOR' => true, 'BORDER-RIGHT-COLOR' => true, 'BORDER-BOTTOM-COLOR' => true, 'BORDER-LEFT-COLOR' => true,
+	];
+
 	public function __construct(Mpdf $mpdf, SizeConverter $sizeConverter, ColorConverter $colorConverter)
 	{
 		$this->mpdf = $mpdf;
@@ -65,6 +93,11 @@ class NormalizeProperties
 			}
 
 			$v = $this->compactColorFunctions($v);
+
+			if (isset(self::$lengthProperties[$k]) && strpos($v, '+') !== false) {
+				// "+5mm" is 5mm; the code reading font sizes and unitless line heights looks for a digit first
+				$v = preg_replace('/(^|[\s\/])\+(?=[\d.])/', '$1', $v);
+			}
 
 			if ($k === 'FONT') {
 				$this->processFontProperty($v);
@@ -134,6 +167,47 @@ class NormalizeProperties
 		return preg_replace_callback('/\b(rgba?|hsla?|(?:device-)?cmyka?)\(([^()]*)\)/i', static function ($m) {
 			return $m[1] . '(' . preg_replace(ColorConverter::ARGUMENT_SEPARATOR, ',', trim($m[2])) . ')';
 		}, $value);
+	}
+
+	/**
+	 * Whether mPDF can read the value of a declaration.
+	 *
+	 * A browser drops a declaration it cannot parse, so the value it would have replaced still applies. mPDF drops
+	 * a value that uses a CSS function it does not implement, a length it cannot read or in a unit it does not
+	 * know, and a colour it does not recognise where the colour is the whole value. Keywords are not checked.
+	 *
+	 * @param string $property The property name, uppercased
+	 * @param string $value
+	 *
+	 * @return bool
+	 */
+	public function canParse($property, $value)
+	{
+		if (strpos($value, '!') !== false) {
+			$value = preg_replace('/\s*!\s*important\s*$/i', '', $value);
+		}
+		$value = strtolower(trim($value));
+
+		if (strpos($value, '(') !== false) {
+			// A function name inside a string or a url() is not a call
+			$code = preg_replace('/"[^"]*"|\'[^\']*\'|url\([^)]*\)/', '', $value);
+			if (preg_match('/(?<![\w-])(calc|min|max|clamp|var|env|attr)\(/', $code)) {
+				return false;
+			}
+		}
+
+		if (isset(self::$lengthProperties[$property])) {
+			foreach (preg_split('/[\s\/]+/', $value, -1, PREG_SPLIT_NO_EMPTY) as $part) {
+				if (!preg_match('/^-?[a-z_][\w-]*$/', $part) && !$this->sizeConverter->isLength($part)) {
+					return false;
+				}
+			}
+		} elseif (isset(self::$colorProperties[$property])) {
+			return in_array($value, ['transparent', 'currentcolor', 'inherit', 'initial', 'unset'], true)
+				|| $this->colorConverter->isColor($value);
+		}
+
+		return true;
 	}
 
 	/**
