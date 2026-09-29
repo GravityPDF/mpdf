@@ -1405,37 +1405,7 @@ abstract class BlockTag extends Tag
 		$this->mpdf->x = $this->mpdf->lMargin + $this->mpdf->blk[$this->mpdf->blklvl]['outer_left_margin'];
 
 		if (!$this->mpdf->tableLevel && $page_break_after) {
-			$save_blklvl = $this->mpdf->blklvl;
-			$save_blk = $this->mpdf->blk;
-			$save_silp = $this->mpdf->saveInlineProperties();
-			$save_ilp = $this->mpdf->InlineProperties;
-			$save_bflp = $this->mpdf->InlineBDF;
-			$save_bflpc = $this->mpdf->InlineBDFctr; // mPDF 6
-			// mPDF 6 pagebreaktype
-			$startpage = $this->mpdf->page;
-			$pagebreaktype = $this->mpdf->defaultPagebreakType;
-			if ($this->mpdf->ColActive) {
-				$pagebreaktype = 'cloneall';
-			}
-
-			// mPDF 6 pagebreaktype
-			$this->mpdf->_preForcedPagebreak($pagebreaktype);
-
-			if ($page_break_after === 'RIGHT') {
-				$this->mpdf->AddPage($this->mpdf->CurOrientation, 'NEXT-ODD');
-			} elseif ($page_break_after === 'LEFT') {
-				$this->mpdf->AddPage($this->mpdf->CurOrientation, 'NEXT-EVEN');
-			} else {
-				$this->mpdf->AddPage($this->mpdf->CurOrientation);
-			}
-
-			// mPDF 6 pagebreaktype
-			$this->mpdf->_postForcedPagebreak($pagebreaktype, $startpage, $save_blk, $save_blklvl);
-
-			$this->mpdf->InlineProperties = $save_ilp;
-			$this->mpdf->InlineBDF = $save_bflp;
-			$this->mpdf->InlineBDFctr = $save_bflpc; // mPDF 6
-			$this->mpdf->restoreInlineProperties($save_silp);
+			$this->forcePageBreak($page_break_after);
 		}
 		// mPDF 6 bidi
 		// Block
