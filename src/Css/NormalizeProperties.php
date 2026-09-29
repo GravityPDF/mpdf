@@ -13,6 +13,22 @@ use Mpdf\Utils\UtfString;
 class NormalizeProperties
 {
 
+	/** The page-break-* value each break-before, break-after and break-inside value is read as */
+	const PAGE_BREAK_VALUES = [
+		'auto' => 'auto',
+		'avoid' => 'avoid',
+		'avoid-page' => 'avoid',
+		'page' => 'always',
+		'left' => 'left',
+		'right' => 'right',
+		'recto' => 'right',
+		'verso' => 'left',
+		'column' => 'auto',
+		'avoid-column' => 'auto',
+		'region' => 'auto',
+		'avoid-region' => 'auto',
+	];
+
 	/**
 	 * @var Mpdf
 	 */
@@ -129,6 +145,8 @@ class NormalizeProperties
 				$this->processTextOutlineProperty($v);
 			} elseif ($k === 'SIZE' || $k === 'SHEET-SIZE') {
 				$this->processPageSizeProperty($k, $v);
+			} elseif ($k === 'BREAK-BEFORE' || $k === 'BREAK-AFTER' || $k === 'BREAK-INSIDE') {
+				$this->processBreakProperty($k, $v);
 			} elseif (in_array($k, ['BACKGROUND', 'BACKGROUND-IMAGE', 'BACKGROUND-REPEAT', 'BACKGROUND-POSITION'], true)) {
 				$this->processBackgroundProperty($k, $v);
 			} elseif ($k === 'IMAGE-ORIENTATION') {
@@ -1024,6 +1042,23 @@ class NormalizeProperties
 
 		$this->properties['SHEET-SIZE'] = $orientation === ['landscape'] ? array_reverse($sheet) : $sheet;
 		$this->properties['SIZE'] = 'AUTO';
+	}
+
+	/**
+	 * Read break-before, break-after and break-inside as the page-break-* property of the same name
+	 *
+	 * Recto and verso pages are the odd and even pages, which page-break-* calls right and left. Column and region
+	 * breaks are not page breaks, so they are read as auto. Any other value is dropped.
+	 *
+	 * @param string $property BREAK-BEFORE, BREAK-AFTER or BREAK-INSIDE
+	 * @param string $value
+	 * @return void
+	 */
+	private function processBreakProperty($property, $value)
+	{
+		if (array_key_exists($value, self::PAGE_BREAK_VALUES)) {
+			$this->properties['PAGE-' . $property] = self::PAGE_BREAK_VALUES[$value];
+		}
 	}
 
 	/**

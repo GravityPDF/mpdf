@@ -422,7 +422,7 @@ class Table extends Tag
 		} elseif ($this->mpdf->tableLevel == 1) {
 			$this->mpdf->table_keep_together = false;
 		}
-		if (isset($properties['PAGE-BREAK-AFTER']) && $this->mpdf->tableLevel == 1) {
+		if ($this->forcesPageBreak($properties, 'PAGE-BREAK-AFTER') && $this->mpdf->tableLevel == 1) {
 			$table['page_break_after'] = strtoupper($properties['PAGE-BREAK-AFTER']);
 		}
 
