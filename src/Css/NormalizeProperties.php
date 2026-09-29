@@ -104,7 +104,7 @@ class NormalizeProperties
 		$this->properties = [];
 
 		foreach ($prop as $k => $v) {
-			if ($k !== 'BACKGROUND-IMAGE' && $k !== 'BACKGROUND' && $k !== 'ODD-HEADER-NAME' && $k !== 'EVEN-HEADER-NAME' && $k !== 'ODD-FOOTER-NAME' && $k !== 'EVEN-FOOTER-NAME' && $k !== 'HEADER' && $k !== 'FOOTER') {
+			if ($k !== 'BACKGROUND-IMAGE' && $k !== 'BACKGROUND' && $k !== 'ODD-HEADER-NAME' && $k !== 'EVEN-HEADER-NAME' && $k !== 'ODD-FOOTER-NAME' && $k !== 'EVEN-FOOTER-NAME' && $k !== 'HEADER' && $k !== 'FOOTER' && $k !== 'LIST-STYLE' && $k !== 'LIST-STYLE-IMAGE') {
 				$v = strtolower($v);
 			}
 
@@ -1161,7 +1161,7 @@ class NormalizeProperties
 		}
 
 		if (preg_match('/url\([\'\"]{0,1}(.*?)[\'\"]{0,1}\)/i', $v, $m)) {
-			$this->properties['LIST-STYLE-IMAGE'] = strtolower(trim($m[1]));
+			$this->properties['LIST-STYLE-IMAGE'] = trim($m[1]);
 		}
 	}
 }
