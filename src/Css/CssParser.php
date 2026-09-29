@@ -117,8 +117,8 @@ class CssParser
 	) {
 		$this->mpdf = $mpdf;
 		$this->normalizeProperties = new NormalizeProperties($mpdf, $sizeConverter, $colorConverter);
-		$this->cssLoader = new CssLoader($mpdf, $assetFetcher, $cache);
-		$this->mediaQueryProcessor = new MediaQueryProcessor($mpdf);
+		$this->mediaQueryProcessor = new MediaQueryProcessor($mpdf, $sizeConverter);
+		$this->cssLoader = new CssLoader($mpdf, $assetFetcher, $cache, $this->mediaQueryProcessor);
 		$this->atRuleProcessor = new AtRuleProcessor($this->mediaQueryProcessor);
 		$this->commentParser = new CommentParser();
 		$this->inlineStyleParser = new InlineStyleParser($this->normalizeProperties);

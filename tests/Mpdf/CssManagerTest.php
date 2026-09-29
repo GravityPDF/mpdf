@@ -204,6 +204,21 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('#00ff00', $this->cssManager->CSS['P']['COLOR']);
 	}
 
+	/**
+	 * An @import for screen is not loaded when rendering for print, and one whose URL has no .css is
+	 */
+	public function testReadCSS_ImportMatchesMediaAndAnyUrl()
+	{
+		$this->createCssFile('screen.css', 'h1 { color: #ff0000; }');
+		$this->createCssFile('theme', 'p { color: #00ff00; }');
+		$this->mpdf->CSSselectMedia = 'print';
+
+		$this->cssManager->ReadCSS('<style>@import url("screen.css") screen; @import url("theme") print;</style>');
+
+		$this->assertArrayNotHasKey('H1', $this->cssManager->CSS);
+		$this->assertSame('#00ff00', $this->cssManager->CSS['P']['COLOR']);
+	}
+
 	public function testReadCSS_WithBackgroundUrlRewriting()
 	{
 		$this->createCssFile('theme.css', '.header { background: url(images/logo.png); }');
