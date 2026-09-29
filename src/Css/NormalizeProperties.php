@@ -470,7 +470,7 @@ class NormalizeProperties
 			'p' => false, // position
 		];
 
-		if (preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient\(.*\)/i', $s, $m)) {
+		if (preg_match('/(-moz-|-webkit-|-o-)*(repeating-)*(linear|radial)-gradient\(.*\)/i', $s, $m)) {
 			$background['i'] = $m[0];
 			return $background;
 		}
@@ -856,7 +856,7 @@ class NormalizeProperties
 				break;
 
 			case 'BACKGROUND-IMAGE':
-				if (preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient\(.*\)/i', $value, $m)) {
+				if (preg_match('/(-moz-|-webkit-|-o-)*(repeating-)*(linear|radial)-gradient\(.*\)/i', $value, $m)) {
 					$this->properties['BACKGROUND-IMAGE'] = $m[0];
 					return;
 				}
