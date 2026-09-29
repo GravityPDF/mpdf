@@ -258,15 +258,32 @@ class CssManager
 	}
 
 	/**
+	 * Whether the style sheet has a plain @page rule, or a :first, :left or :right one, that sets anything
+	 *
+	 * @return bool
+	 */
+	public function hasUnnamedPageRules()
+	{
+		foreach (['@PAGE', '@PAGE>>PSEUDO>>FIRST', '@PAGE>>PSEUDO>>LEFT', '@PAGE>>PSEUDO>>RIGHT'] as $rule) {
+			if (!empty($this->CSS[$rule])) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * The properties the :right, :left and :first rules under an @page rule add to the page, less the sheet size
 	 *
 	 * Their side margins are physical, not inner and outer, so on an even page they are handed over swapped for
 	 * Mpdf::pageSideMargins() to swap back.
 	 *
 	 * @param string $prefix The key of the @page rule in the style sheet, up to its pseudo pages
-	 * @param string $side 'R' or 'L'
+	 * @param string $side 'R' or 'L', or '' for the defaults of every page
 	 * @param bool $first Whether this is the first page
-	 * @param string $oddEven 'E' for an even page when margins are mirrored, else 'O'
+	 * @param string $oddEven 'E' for an even page when margins are mirrored, 'O' for any other page, or '' for the
+	 *                        defaults of every page
 	 * @return array
 	 */
 	public function pseudoPageProperties($prefix, $side, $first, $oddEven)

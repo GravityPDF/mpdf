@@ -145,7 +145,7 @@ class CssMerger
 		$this->mergeTableSpecificCss($tag, $attr);
 		$this->mergeStylesheetSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeTagSpecificSelectors($tag, $attr, $classes, $languageCode);
-		$this->mergeDescendantSelectors($inherit, $tag, $attr, $classes);
+		$this->mergeDescendantSelectors($inherit, $tag, $attr, $classes, $languageCode);
 		$this->mergeInlineStyle($tag, $attr);
 
 		return $this->cssProperties;
@@ -688,18 +688,19 @@ class CssMerger
 	 * @param string $tag HTML tag
 	 * @param array $attr HTML attributes
 	 * @param array $classes Array of class names
+	 * @param string $languageCode Short language code (e.g. 'en')
 	 * @return void
 	 */
-	protected function mergeDescendantSelectors($inherit, $tag, $attr, $classes)
+	protected function mergeDescendantSelectors($inherit, $tag, $attr, $classes, $languageCode)
 	{
 		if ($inherit === 'TOPTABLE' || $inherit === 'TABLE') {
-			$this->mergeTableDescendantSelectors($tag, $attr, $classes);
+			$this->mergeTableDescendantSelectors($tag, $attr, $classes, $languageCode);
 			return;
 		}
 
 		// Content of a table cell pushes no block level, so its descendant rules are the cell's
 		if (isset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl])) {
-			$this->mergeDescendantCss($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl], $tag, $attr, $classes);
+			$this->mergeDescendantCss($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl], $tag, $attr, $classes, $languageCode);
 			return;
 		}
 
@@ -709,7 +710,7 @@ class CssMerger
 		}
 
 		$cascadeCSS = $this->mpdf->blk[$level]['cascadeCSS'];
-		$this->mergeDescendantCss($cascadeCSS, $tag, $attr, $classes);
+		$this->mergeDescendantCss($cascadeCSS, $tag, $attr, $classes, $languageCode);
 
 		if ($this->sideEffects) {
 			$this->mpdf->blk[$level]['cascadeCSS'] = $cascadeCSS;
@@ -722,9 +723,10 @@ class CssMerger
 	 * @param string $tag HTML tag
 	 * @param array $attr HTML attributes
 	 * @param array $classes Array of class names
+	 * @param string $languageCode Short language code (e.g. 'en')
 	 * @return void
 	 */
-	protected function mergeTableDescendantSelectors($tag, $attr, $classes)
+	protected function mergeTableDescendantSelectors($tag, $attr, $classes, $languageCode)
 	{
 		$node = isset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl - 1]) ? $this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl - 1] : [];
 		if (empty($node)) {
@@ -771,9 +773,17 @@ class CssMerger
 			}
 		}
 
+		if ($attr['LANG'] !== '') {
+			$this->setMergedCss($node[$this->langKey($node, 'LANG>>', $attr['LANG'], $languageCode)], false, 9);
+		}
+
 		$this->setMergedCss($node['ID>>' . $attr['ID']], false, 9);
 		foreach ($classes as $class) {
 			$this->setMergedCss($node[$tag . '>>CLASS>>' . $class], false, 9);
+		}
+
+		if ($attr['LANG'] !== '') {
+			$this->setMergedCss($node[$this->langKey($node, $tag . '>>LANG>>', $attr['LANG'], $languageCode)], false, 9);
 		}
 
 		$this->setMergedCss($node[$tag . '>>ID>>' . $attr['ID']], false, 9);
@@ -790,8 +800,9 @@ class CssMerger
 	 * @param string $tag
 	 * @param array $attr
 	 * @param array $classes
+	 * @param string $languageCode Short language code (e.g. 'en')
 	 */
-	protected function mergeDescendantCss($cascadeCSS, $tag, $attr, $classes)
+	protected function mergeDescendantCss($cascadeCSS, $tag, $attr, $classes, $languageCode)
 	{
 		if (empty($cascadeCSS)) {
 			return;
@@ -802,12 +813,39 @@ class CssMerger
 			$this->setMergedCss($cascadeCSS['CLASS>>' . $class]);
 		}
 
+		if ($attr['LANG'] !== '') {
+			$this->setMergedCss($cascadeCSS[$this->langKey($cascadeCSS, 'LANG>>', $attr['LANG'], $languageCode)]);
+		}
+
 		$this->setMergedCss($cascadeCSS['ID>>' . $attr['ID']]);
 		foreach ($classes as $class) {
 			$this->setMergedCss($cascadeCSS[$tag . '>>CLASS>>' . $class]);
 		}
 
+		if ($attr['LANG'] !== '') {
+			$this->setMergedCss($cascadeCSS[$this->langKey($cascadeCSS, $tag . '>>LANG>>', $attr['LANG'], $languageCode)]);
+		}
+
 		$this->setMergedCss($cascadeCSS[$tag . '>>ID>>' . $attr['ID']]);
+	}
+
+	/**
+	 * The key of the descendant rule for an element's language: its full language (fr-ca) if a rule names it, or
+	 * failing that its short language code (fr), the same fallback the simple lang rules make
+	 *
+	 * @param array $rules Descendant rules lifted from the ancestors
+	 * @param string $prefix 'LANG>>', or the tag followed by '>>LANG>>'
+	 * @param string $lang The element's lang attribute, lowercased
+	 * @param string $languageCode Short language code (e.g. 'en')
+	 * @return string
+	 */
+	private function langKey($rules, $prefix, $lang, $languageCode)
+	{
+		if ($languageCode !== '' && !isset($rules[$prefix . $lang]['depth'])) {
+			return $prefix . $languageCode;
+		}
+
+		return $prefix . $lang;
 	}
 
 	/**
