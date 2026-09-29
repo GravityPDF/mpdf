@@ -29,7 +29,8 @@ class MediaQueryProcessor
 	{
 		preg_match_all($pattern, $html, $m);
 		foreach ($m[0] as $i => $url) {
-			if (!$this->mpdf->CSSselectMedia || !preg_match('/(' . trim($this->mpdf->CSSselectMedia) . '|all)/i', $m[1][$i])) {
+			// Unlike an @media block, a <style> or <link> for any medium is left out when CSSselectMedia names none
+			if (!$this->mpdf->CSSselectMedia || !$this->matches($m[1][$i])) {
 				$html = str_replace($m[0][$i], '', $html);
 			}
 		}
@@ -37,30 +38,13 @@ class MediaQueryProcessor
 	}
 
 	/**
-	 * Process @media queries in CSS.
+	 * Whether a media query list applies to the medium CSSselectMedia names. Every list applies when it names none.
 	 *
-	 * Filters or unwraps @media blocks based on configured media type.
-	 * If media doesn't match CSSselectMedia, the entire block is removed.
-	 * If it matches, the contents are unwrapped.
-	 *
-	 * @param string $cssStr CSS string potentially containing @media rules
-	 * @return string CSS string with media queries processed
+	 * @param string $mediaQueryList
+	 * @return bool
 	 */
-	public function processMediaQueries($cssStr)
+	public function matches($mediaQueryList)
 	{
-		if (!preg_match('/@media/', $cssStr)) {
-			return $cssStr;
-		}
-
-		preg_match_all('/@media(.*?)\{(([^\{\}]*\{[^\{\}]*\})+)\s*\}/is', $cssStr, $m);
-		foreach ($m[0] as $i => $value) {
-			if ($this->mpdf->CSSselectMedia && !preg_match('/(' . trim($this->mpdf->CSSselectMedia) . '|all)/i', $m[1][$i])) {
-				$cssStr = str_replace($m[0][$i], '', $cssStr);
-			} else {
-				$cssStr = str_replace($m[0][$i], ' ' . $m[2][$i] . ' ', $cssStr);
-			}
-		}
-
-		return $cssStr;
+		return !$this->mpdf->CSSselectMedia || preg_match('/(' . trim($this->mpdf->CSSselectMedia) . '|all)/i', $mediaQueryList) === 1;
 	}
 }

@@ -146,6 +146,11 @@ class NormalizeProperties
 			}
 		}
 
+		// A negative line-height is invalid, so the declaration is dropped
+		if (isset($this->properties['LINE-HEIGHT']) && (float) $this->properties['LINE-HEIGHT'] < 0) {
+			unset($this->properties['LINE-HEIGHT']);
+		}
+
 		return $this->properties;
 	}
 
