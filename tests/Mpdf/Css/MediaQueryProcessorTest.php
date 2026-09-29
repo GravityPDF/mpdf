@@ -54,28 +54,25 @@ class MediaQueryProcessorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals($html, $processed);
 	}
 
-	public function testProcessMediaQueriesMatch()
+	/**
+	 * A media query list applies when it names the medium CSSselectMedia names, or all media
+	 */
+	public function testMatchesTheMediumCssSelectMediaNames()
 	{
 		$this->mpdf->CSSselectMedia = 'print';
-		$css = '@media print { .print { color: black; } }';
 
-		$processed = $this->processor->processMediaQueries($css);
-		$this->assertStringContainsString(' .print { color: black; } ', $processed);
-		$this->assertStringNotContainsString('@media', $processed);
+		$this->assertTrue($this->processor->matches('print'));
+		$this->assertTrue($this->processor->matches('all'));
+		$this->assertFalse($this->processor->matches('screen'));
 	}
 
-	public function testProcessMediaQueriesNoMatch()
+	/**
+	 * Every media query list applies when CSSselectMedia names no medium
+	 */
+	public function testEveryListMatchesWithoutCssSelectMedia()
 	{
-		$this->mpdf->CSSselectMedia = 'screen';
-		$css = '@media print { .print { color: black; } }';
+		$this->mpdf->CSSselectMedia = '';
 
-		$processed = $this->processor->processMediaQueries($css);
-		$this->assertEmpty($processed);
-		
-		$css = 'body { color: red; } @media print { .print { color: black; } }';
-		$processed = $this->processor->processMediaQueries($css);
-		
-		$this->assertStringContainsString('body { color: red; }', $processed);
-		$this->assertStringNotContainsString('print', $processed);
+		$this->assertTrue($this->processor->matches('screen'));
 	}
 }
