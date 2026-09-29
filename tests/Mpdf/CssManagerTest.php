@@ -473,9 +473,8 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertArrayHasKey('CLASS>>THEME-DARK', $this->cssManager->CSS);
 		$this->assertEquals('#2c3e50', $this->cssManager->CSS['CLASS>>THEME-DARK']['BACKGROUND-COLOR']);
 
-		// Verify Nested/Complex Selectors
-		$this->assertArrayHasKey('CLASS>>NAV-ITEM:HOVER', $this->cssManager->CSS);
-		$this->assertEquals('#3498db', $this->cssManager->CSS['CLASS>>NAV-ITEM:HOVER']['COLOR']);
+		// A class with a pseudo-class mPDF cannot match is dropped, rather than stored under a class no element has
+		$this->assertArrayNotHasKey('CLASS>>NAV-ITEM:HOVER', $this->cssManager->CSS);
 
 		// Verify Media Queries are parsed and ignored
 		// Check if the base .container style is still there (max-width: 1200px).
