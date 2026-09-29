@@ -88,7 +88,7 @@ class CssManager
 	public $tbCSSlvl = 0;
 
 	/**
-	 * @var RuleSet The rules whose selector the legacy parser cannot read, compiled, from every stylesheet read
+	 * @var RuleSet The rules compiled for the matcher, from every stylesheet read
 	 */
 	private $rules;
 
@@ -131,14 +131,14 @@ class CssManager
 		$this->cascadeCSS = Arrays::uniqueRecursiveMerge($this->cascadeCSS, $this->cssParser->getCascadeCss());
 
 		foreach ($this->cssParser->getCompiledRules() as $rule) {
-			$this->rules->add($rule[0], $rule[1]);
+			$this->rules->add($rule[0], $rule[1], $rule[2]);
 		}
 
 		return $html;
 	}
 
 	/**
-	 * The rules whose selector the legacy parser cannot read, compiled, from every stylesheet read so far
+	 * The rules compiled for the matcher, from every stylesheet read so far
 	 *
 	 * @return RuleSet
 	 */

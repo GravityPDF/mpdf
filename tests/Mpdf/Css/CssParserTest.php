@@ -165,7 +165,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A rule the legacy parser cannot read is compiled for the matcher, and one it can read is not
+	 * A rule the legacy parser cannot read is compiled for the matcher, and a simple rule it can read is not
 	 *
 	 * @dataProvider routedSelectors
 	 *
@@ -185,6 +185,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertCount(1, $rules);
 		$this->assertSame(['COLOR' => 'blue'], $rules[0][1]);
+		$this->assertFalse($rules[0][2]);
 		$this->assertSame([], $this->parser->getCss());
 		$this->assertSame([], $this->parser->getCascadeCss());
 	}
@@ -198,11 +199,9 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'type' => ['p', false],
-			'descendant' => ['div p', false],
 			'class on a type' => ['p.a', false],
 			'lang' => ['p:lang(fr)', false],
 			'row nth-child' => ['tr:nth-child(2n)', false],
-			'cell nth-child in a descendant rule' => ['table td:nth-child(odd)', false],
 			'child' => ['div > p', true],
 			'child with no spaces' => ['div>p', true],
 			'adjacent sibling' => ['h1 + p', true],
@@ -211,6 +210,40 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'nth-child on an element outside a table' => ['li:nth-child(2n)', true],
 			'nth-child outside a table as an ancestor' => ['li:nth-child(2) p', true],
 			'first-of-type' => ['p:first-of-type', true],
+		];
+	}
+
+	/**
+	 * A descendant rule the legacy parser reads is compiled too, for the matcher to apply through the ancestors the
+	 * legacy engine does not look at
+	 *
+	 * @dataProvider legacyDescendantSelectors
+	 *
+	 * @param string $selector
+	 */
+	public function testCompilesALegacyDescendantRuleToMatchThroughInlineAncestors($selector)
+	{
+		$this->parser->parse('<style>' . $selector . ' { color: blue; }</style>');
+
+		$rules = $this->parser->getCompiledRules();
+		$this->assertCount(1, $rules);
+		$this->assertSame(['COLOR' => 'blue'], $rules[0][1]);
+		$this->assertTrue($rules[0][2]);
+		$this->assertNotEmpty($this->parser->getCascadeCss());
+	}
+
+	/**
+	 * A descendant selector the legacy parser reads
+	 *
+	 * @return array[]
+	 */
+	public function legacyDescendantSelectors()
+	{
+		return [
+			'types' => ['span em'],
+			'a class as the ancestor' => ['.x b'],
+			'three levels' => ['div .x b'],
+			'a cell nth-child' => ['table td:nth-child(odd)'],
 		];
 	}
 
