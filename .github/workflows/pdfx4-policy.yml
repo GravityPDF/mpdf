@@ -6,13 +6,33 @@
 name: "PDF/X-4 Policy"
 
 on:
+  # Pull requests run this only when they change one of these paths
   pull_request:
+    paths:
+      - ".github/workflows/pdfx4-policy.yml"
+      - "composer.json"
+      - "data/iccprofiles/**"
+      - "src/Color/**"
+      - "src/Fonts/Color/**"
+      - "src/Gradient.php"
+      - "src/Image/**"
+      - "src/Pdf/**"
+      - "src/Writer/**"
+      - "src/Xmp/**"
+      - "tests/data/icc/**"
+      - "utils/verapdf/**"
+  workflow_dispatch:
   push:
     branches:
       - "master"
       - "development"
       - "test"
       - "gravitypdf"
+
+# A push to a pull request cancels the run it replaces. Other events run in a group of their own
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"
+  cancel-in-progress: true
 
 jobs:
 

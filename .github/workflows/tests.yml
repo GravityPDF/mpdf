@@ -4,12 +4,21 @@ name: "Tests"
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches:
       - "master"
       - "development"
       - "test"
       - "gravitypdf"
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+# A push to a pull request cancels the run it replaces. Other events, and a label other than full-ci, run in a group of their own
+concurrency:
+  group: "${{ github.workflow }}-${{ (github.event.action != 'labeled' || github.event.label.name == 'full-ci') && github.event.pull_request.number || github.run_id }}"
+  cancel-in-progress: true
 
 jobs:
 
@@ -17,25 +26,29 @@ jobs:
 
     name: "Tests"
 
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
+
     runs-on: ${{ matrix.operating-system }}
 
     strategy:
       fail-fast: false
-      matrix:
-        php-version:
-          - "5.6"
-          - "7.0"
-          - "7.1"
-          - "7.2"
-          - "7.3"
-          - "7.4"
-          - "8.0"
-          - "8.1"
-          - "8.2"
-          - "8.3"
-          - "8.4"
-          - "8.5"
-        operating-system: [ubuntu-latest, windows-latest]
+      # A pull request without the full-ci label runs 5.6 and 8.5 on both systems, and 7.4 and 8.0 on Ubuntu
+      matrix: >-
+        ${{ fromJSON(
+          (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))
+          && '{
+            "php-version": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"],
+            "operating-system": ["ubuntu-latest", "windows-latest"]
+          }'
+          || '{
+            "php-version": ["5.6", "7.4", "8.0", "8.5"],
+            "operating-system": ["ubuntu-latest", "windows-latest"],
+            "exclude": [
+              {"php-version": "7.4", "operating-system": "windows-latest"},
+              {"php-version": "8.0", "operating-system": "windows-latest"}
+            ]
+          }'
+        ) }}
 
     steps:
       - name: "Checkout"
@@ -48,7 +61,7 @@ jobs:
           php-version: "${{ matrix.php-version }}"
           extensions: "mbstring, gd, bcmath, bz2, fileinfo"
           tools: composer:v2
-          ini-values: error_reporting=-1
+          ini-values: error_reporting=-1, opcache.enable_cli=1
 
       - name: "Locate Composer cache"
         id: composer-cache
