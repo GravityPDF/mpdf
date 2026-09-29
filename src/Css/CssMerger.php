@@ -908,9 +908,9 @@ class CssMerger
 	/**
 	 * The index, from 0, that nth-child matches the row or cell being opened against.
 	 *
-	 * A row is counted among the rows of the table, less the header rows and, outside the footer, the footer rows. A
-	 * cell is counted among the cells opened in its row, so the grid columns a colspan or a rowspan takes up before it
-	 * do not count.
+	 * A row is counted among the rows of its row group: the thead, a tbody, the tfoot, or the rows written straight into
+	 * the table. A cell is counted among the cells opened in its row, so the grid columns a colspan or a rowspan takes
+	 * up before it do not count.
 	 *
 	 * @param string $tag TR, TD or TH
 	 * @return int
@@ -925,19 +925,11 @@ class CssMerger
 			return count(array_filter($cells, 'is_array'));
 		}
 
+		// A table starts with the rows written straight into it, until a row group opens
 		$level = $this->mpdf->tableLevel;
-		$table = isset($this->mpdf->tbctr[$level], $this->mpdf->table[$level][$this->mpdf->tbctr[$level]]) ? $this->mpdf->table[$level][$this->mpdf->tbctr[$level]] : [];
-		$row = $this->mpdf->row;
-		$theadCount = !empty($table['is_thead']) ? count($table['is_thead']) : 0;
-		$tfootCount = !empty($table['is_tfoot']) ? count($table['is_tfoot']) : 0;
+		$start = isset($this->mpdf->tbctr[$level], $this->mpdf->table[$level][$this->mpdf->tbctr[$level]]['rowgroupstart']) ? $this->mpdf->table[$level][$this->mpdf->tbctr[$level]]['rowgroupstart'] : 0;
 
-		if ($this->mpdf->tabletfoot) {
-			$row -= $theadCount;
-		} elseif (!$this->mpdf->tablethead) {
-			$row -= ($theadCount + $tfootCount);
-		}
-
-		return $row;
+		return $this->mpdf->row - $start;
 	}
 
 	/**
