@@ -402,7 +402,8 @@ class NormalizeProperties
 	 * Process BORDER shorthand and individual border properties.
 	 *
 	 * Handles BORDER, BORDER-TOP, BORDER-RIGHT, BORDER-BOTTOM, BORDER-LEFT properties
-	 * by normalizing them to consistent "width style color" format.
+	 * by normalizing them to consistent "width style color" format. Each side's width, style and colour
+	 * longhands are set too, so the shorthand replaces longhands given before it in the cascade.
 	 *
 	 * @param string $propertyKey Property key (BORDER, BORDER-TOP, etc.)
 	 * @param string $value Property value
@@ -417,9 +418,14 @@ class NormalizeProperties
 			return;
 		}
 
+		list($width, $style, $color) = explode(' ', $value);
+
 		$sides = $propertyKey === 'BORDER' ? ['BORDER-TOP', 'BORDER-RIGHT', 'BORDER-BOTTOM', 'BORDER-LEFT'] : [$propertyKey];
 		foreach ($sides as $side) {
 			$this->properties[$side] = $value;
+			$this->properties[$side . '-WIDTH'] = $width;
+			$this->properties[$side . '-STYLE'] = $style;
+			$this->properties[$side . '-COLOR'] = $color;
 		}
 	}
 
@@ -943,25 +949,14 @@ class NormalizeProperties
 					break;
 				}
 
+				// A part not given takes its initial value, replacing a longhand given before it in the cascade
 				$this->properties['BACKGROUND-COLOR'] = isset($bg['c']) ? $bg['c'] : 'transparent';
 				$this->properties['BACKGROUND-IMAGE'] = isset($bg['i']) ? $bg['i'] : '';
-
-				if ($this->properties['BACKGROUND-IMAGE'] !== '') {
-					if (isset($bg['r'])) {
-						$this->properties['BACKGROUND-REPEAT'] = $bg['r'];
-					}
-					if (!empty($bg['p'])) {
-						$this->properties['BACKGROUND-POSITION'] = $bg['p'];
-					}
-					if (isset($bg['s'])) {
-						$this->properties['BACKGROUND-SIZE'] = $bg['s'];
-					}
-				}
-
-				if (isset($bg['o'])) {
-					$this->properties['BACKGROUND-ORIGIN'] = $bg['o'];
-					$this->properties['BACKGROUND-CLIP'] = $bg['k'];
-				}
+				$this->properties['BACKGROUND-REPEAT'] = isset($bg['r']) ? $bg['r'] : 'repeat';
+				$this->properties['BACKGROUND-POSITION'] = !empty($bg['p']) ? $bg['p'] : '0% 0%';
+				$this->properties['BACKGROUND-SIZE'] = isset($bg['s']) ? $bg['s'] : 'auto';
+				$this->properties['BACKGROUND-ORIGIN'] = isset($bg['o']) ? $bg['o'] : 'padding-box';
+				$this->properties['BACKGROUND-CLIP'] = isset($bg['k']) ? $bg['k'] : 'border-box';
 				break;
 
 			case 'BACKGROUND-IMAGE':

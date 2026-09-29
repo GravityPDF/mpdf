@@ -379,6 +379,8 @@ class CssParser
 				continue;
 			}
 
+			// A repeated property moves to its last place, so it is expanded after a shorthand written before it
+			unset($classProperties[$property]);
 			$classProperties[$property] = $value;
 		}
 

@@ -60,7 +60,10 @@ class InlineStyleParser
 			}
 
 			$values[$i] = str_replace('%ZZ', ';', $values[$i]); // mPDF 5.7.4 URLs
-			$classproperties[strtoupper($properties[$i])] = trim(preg_replace('/\s*!important/i', '', $values[$i]));
+			// A repeated property moves to its last place, so it is expanded after a shorthand written before it
+			$property = strtoupper($properties[$i]);
+			unset($classproperties[$property]);
+			$classproperties[$property] = trim(preg_replace('/\s*!important/i', '', $values[$i]));
 		}
 
 		return $this->normalizeProperties->normalize($classproperties);

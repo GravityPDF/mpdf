@@ -29,6 +29,12 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **`<annotation file="...">` is off by default.** Set `allowHtmlAnnotationFiles` to `true` to read the `file` attribute. [#375]
 * **A `<select>` without `size` is written as a combo box**, as browsers draw it. [#419]
 * **A `<select multiple>` without `size` is four rows tall instead of one**, as in browsers. Content after it on the page moves down. Add `size="1"` to keep the old height. [#437]
+* **The `border` and `background` shorthands reset the longhands they do not name**, as in a browser. [#552] [#614]
+  * `border`, or one side such as `border-top`, sets the width, style and colour of each side it covers. `p { border-top-color: red } p { border: 1px solid blue }` used to draw a red top and now draws a blue one.
+  * `background` sets the colour, image, repeat, position, size, origin and clip. A `background-position`, `-repeat` or `-size` given before a `background` no longer applies to its image.
+  * To keep the old look, restate the longhand after the shorthand, in the same rule or a later one.
+  * `border` keeps `border-radius`. `background` keeps mPDF's own `background-image-resize`, `-opacity` and `-resolution`, which it cannot set, in the same way that `background` leaves `background-blend-mode` alone in CSS. `background-size: auto` no longer stops `background-image-resize` from sizing the image.
+  * A property declared twice in one block is read at its last place, so `border-top-color: green; border: 1px solid blue; border-top-color: red` draws a red top.
 * **Dependencies changed.** `ext-json` is now required and `symfony/polyfill-intl-normalizer` is a new dependency. `myclabs/deep-copy` is no longer used. [#13] [#329]
 * **`outline-width` and `outline-color` no longer stroke the text.** mPDF read them as `text-outline-width` and `text-outline-color`, but in CSS they belong to the line around the box, which mPDF does not draw. `outline-width` on its own also raised an undefined-key warning. Write `text-outline-width` and `text-outline-color`, or `text-outline`, to keep stroking the text. [#578]
 
@@ -789,6 +795,7 @@ These changes do not change output.
 [#583]: https://github.com/GravityPDF/mpdf/pull/583
 [#582]: https://github.com/GravityPDF/mpdf/pull/582
 [#581]: https://github.com/GravityPDF/mpdf/pull/581
+[#614]: https://github.com/GravityPDF/mpdf/pull/614
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
