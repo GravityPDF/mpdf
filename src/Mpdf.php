@@ -3604,13 +3604,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$this->printfloatbuffer();
 
-			$previousArea = $this->pageArea();
-
 			// Move to next page
-			$this->page++;
-
-			$this->ResetMargins();
-			$this->moveIntoPageArea($previousArea);
+			$growth = $this->turnToPage($this->page + 1);
 			$this->SetAutoPageBreak($this->autoPageBreak, $this->bMargin);
 			$this->x = $this->lMargin;
 			$this->y = $this->tMargin;
@@ -3654,6 +3649,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->cMarginL = $bak_cml;
 			$this->cMarginR = $bak_cmr;
 			$this->divwidth = $bak_dw;
+			$this->resizeFlowingBlock($growth);
 
 			return '';
 		}
@@ -3931,7 +3927,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		/* -- END COLUMNS -- */
 
-		$widthGained = $previousArea ? $this->moveIntoPageArea($previousArea) : 0;
+		$growth = $previousArea ? $this->moveIntoPageArea($previousArea) : 0;
 
 		// RESET BLOCK BORDER TOP
 		if (!$this->ColActive) {
@@ -3954,12 +3950,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->cMarginL = $bak_cml;
 		$this->cMarginR = $bak_cmr;
 		$this->divwidth = $bak_dw;
-
-		// The rest of the block being written takes its width on the new page
-		if ($widthGained && $this->divwidth && !$this->flowingBlockAttr['is_table']) {
-			$this->divwidth += $widthGained;
-			$this->flowingBlockAttr['width'] += $widthGained * Mpdf::SCALE;
-		}
+		$this->resizeFlowingBlock($growth);
 
 		$this->lineheight = $bak_lh;
 	}
@@ -10392,9 +10383,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Added collapsible to allow collapsible top-margin on new page
 		// Line feed; default value is last cell height
 
-		$margin = isset($this->blk[$this->blklvl]['outer_left_margin']) ? $this->blk[$this->blklvl]['outer_left_margin'] : 0;
-
-		$this->x = $this->lMargin + $margin;
+		$this->x = $this->lMargin + $this->outerLeftMargin();
 
 		if ($collapsible && ($this->y == $this->tMargin) && (!$this->ColActive)) {
 			$h = 0;
@@ -11453,6 +11442,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->ResetMargins();
 		$this->pgwidth = $this->w - $this->lMargin - $this->rMargin;
 		$this->SetAutoPageBreak($this->autoPageBreak, $this->bMargin);
+		$this->pageDim[$this->page]['sideMargins'] = [$this->DeflMargin, $this->DefrMargin];
 
 		// Reset column top margin
 		$this->y0 = $this->tMargin;
@@ -15106,8 +15096,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// Writes after the marker so not overwritten later by page background etc.
 					$this->pages[$this->page] = preg_replace('/(___BACKGROUND___PATTERNS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->pages[$this->page]);
 					$this->pageBackgrounds = [];
-					$this->page = $new_page;
-					$this->ResetMargins();
+					$this->turnToPage($new_page);
 					$this->Reset();
 					$this->pageoutput[$this->page] = [];
 				}
@@ -16429,9 +16418,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// Writes after the marker so not overwritten later by page background etc.
 			$this->pages[$this->page] = preg_replace('/(___BACKGROUND___PATTERNS' . $this->uniqstr . ')/', '\\1' . "\n" . $s . "\n", $this->pages[$this->page]);
 			$this->pageBackgrounds = [];
-			$this->page = $new_page;
+			$this->turnToPage($new_page);
+		} else {
+			$this->ResetMargins();
 		}
-		$this->ResetMargins();
 		$this->pageoutput[$this->page] = [];
 
 		$this->y = (round($end * 1000) % 1000000) / 1000; // mod changes operands to integers before processing
@@ -17089,6 +17079,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$blockdir = $cell_dir;
 		}
 		$oldpage = $this->page;
+		$outerLeft = $this->outerLeftMargin();
 
 		// ADDED for Out of Block now done as Flowing Block
 		if ($this->divwidth == 0) {
@@ -17432,6 +17423,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 						// Added to correct for OddEven Margins
 						if ($this->page != $oldpage) {
+							$bak_x += $this->outerLeftMargin() - $outerLeft;
+							$outerLeft = $this->outerLeftMargin();
 							if (($this->page - $oldpage) % 2 == 1) {
 								$bak_x += $this->MarginCorrection;
 							}
@@ -17608,6 +17601,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					// Added to correct for OddEven Margins
 					if ($this->page != $oldpage) {
+						$bak_x += $this->outerLeftMargin() - $outerLeft;
+						$outerLeft = $this->outerLeftMargin();
 						if (($this->page - $oldpage) % 2 == 1) {
 							$bak_x += $this->MarginCorrection;
 						}
@@ -17639,6 +17634,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
 					// Added to correct for OddEven Margins
 					if ($this->page != $oldpage) {
+						$bak_x += $this->outerLeftMargin() - $outerLeft;
+						$outerLeft = $this->outerLeftMargin();
 						if (($this->page - $oldpage) % 2 == 1) {
 							$bak_x += $this->MarginCorrection;
 							$this->x = $bak_x;
@@ -17673,6 +17670,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->finishFlowingBlock(true); // true = END of flowing block
 				// Added to correct for OddEven Margins
 				if ($this->page != $oldpage) {
+					$bak_x += $this->outerLeftMargin() - $outerLeft;
+					$outerLeft = $this->outerLeftMargin();
 					if (($this->page - $oldpage) % 2 == 1) {
 						$bak_x += $this->MarginCorrection;
 						$this->x = $bak_x;

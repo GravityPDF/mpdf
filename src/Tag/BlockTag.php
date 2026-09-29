@@ -1214,8 +1214,7 @@ abstract class BlockTag extends Tag
 					$this->mpdf->pages[$this->mpdf->page]
 				);
 				$this->mpdf->pageBackgrounds = [];
-				$this->mpdf->page = $new_page;
-				$this->mpdf->ResetMargins();
+				$this->mpdf->turnToPage($new_page);
 				$this->mpdf->Reset();
 				$this->mpdf->pageoutput[$this->mpdf->page] = [];
 			}
@@ -1333,8 +1332,7 @@ abstract class BlockTag extends Tag
 			]);
 
 			$this->mpdf->y = $this->mpdf->blk[$this->mpdf->blklvl]['float_start_y'];
-			$this->mpdf->page = $this->mpdf->blk[$this->mpdf->blklvl]['startpage'];
-			$this->mpdf->ResetMargins();
+			$this->mpdf->turnToPage($this->mpdf->blk[$this->mpdf->blklvl]['startpage']);
 			$this->mpdf->pageoutput[$this->mpdf->page] = [];
 		}
 		/* -- END CSS-FLOAT -- */
