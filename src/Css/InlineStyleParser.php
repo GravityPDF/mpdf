@@ -67,42 +67,32 @@ class InlineStyleParser
 	}
 
 	/**
-	 * Process URLs in CSS strings by encoding special characters.
+	 * Rewrite each url() as url('...'), with the characters that would break the parsing after it encoded.
 	 *
-	 * Characters "(", ")", and ";" in url() can cause problems parsing CSS.
-	 * This method URLencodes ( and ), and temporarily encodes ";" to prevent
-	 * confusion with CSS segment delimiters.
+	 * The URL is read as CSS reads it: in either quote, with the other quote allowed inside, or unquoted, without the
+	 * whitespace around it. A backslash before a quote, a parenthesis or whitespace is dropped. Other backslashes
+	 * are kept, as a Windows path is full of them. Parentheses and braces are percent-encoded, and ";" becomes the
+	 * placeholder %ZZ, which the caller turns back once the declarations are split.
 	 *
 	 * @param string $css CSS string containing url() references
 	 * @return string CSS string with processed URLs
 	 */
 	public function processUrlsInCss($css)
 	{
-		if (strpos($css, 'url(') === false) {
+		if (stripos($css, 'url(') === false) {
 			return $css;
 		}
 
-		// Process urls with double quotes
-		preg_match_all('/url\(\"(.*?)\"\)/', $css, $m);
-		foreach ($m[1] as $i => $url) {
-			$tmp = str_replace(['(', ')', ';'], ['%28', '%29', '%ZZ'], $m[1][$i]);
-			$css = str_replace($m[0][$i], 'url(\'' . $tmp . '\')', $css);
-		}
+		// Possessive, so a long data URI does not run PCRE out of stack one character at a time
+		return preg_replace_callback(
+			'/url\(\s*(?:"((?:[^"\\\\]++|\\\\.)*+)"|\'((?:[^\'\\\\]++|\\\\.)*+)\'|((?:[^)\\\\]++|\\\\.)*+))\s*\)/is',
+			function ($m) {
+				$url = isset($m[3]) ? rtrim($m[3]) : (isset($m[2]) ? $m[2] : $m[1]);
+				$url = preg_replace('/\\\\(["\'()\s])/', '$1', $url);
 
-		// Process urls with single quotes
-		preg_match_all('/url\(\'(.*?)\'\)/', $css, $m);
-		foreach ($m[1] as $i => $url) {
-			$tmp = str_replace(['(', ')', ';'], ['%28', '%29', '%ZZ'], $m[1][$i]);
-			$css = str_replace($m[0][$i], 'url(\'' . $tmp . '\')', $css);
-		}
-
-		// Process urls without quotes
-		preg_match_all('/url\(([^\'\"].*?[^\'\"])\)/', $css, $m);
-		foreach ($m[1] as $i => $url) {
-			$tmp = str_replace(['(', ')', ';'], ['%28', '%29', '%ZZ'], $m[1][$i]);
-			$css = str_replace($m[0][$i], 'url(\'' . $tmp . '\')', $css);
-		}
-
-		return $css;
+				return "url('" . str_replace(['(', ')', '{', '}', ';'], ['%28', '%29', '%7B', '%7D', '%ZZ'], $url) . "')";
+			},
+			$css
+		);
 	}
 }
