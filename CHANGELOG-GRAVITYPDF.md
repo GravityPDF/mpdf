@@ -105,6 +105,7 @@ New features
 * **Child and sibling combinators, and structural pseudo-classes.** `div > p`, `h1 + p`, `h1 ~ p`, and `:first-child`, `:nth-child()`, `:first-of-type` and `:nth-of-type()` on any element, are matched against the elements open around the one being styled. Rules using them were dropped before, so a document that has them changes. They are applied with the descendant rules, after them, in order of specificity and then of source order. [mpdf/mpdf#7] [mpdf/mpdf#318] [#538] [#620]
 * **Descendant rules through inline elements.** A descendant rule whose ancestor is an inline element, a block inside a table cell, or the `tbody` a table leaves out, such as `span em`, or `.note b` for a `<span class="note">`, applies. [mpdf/mpdf#830] [#538] [#621]
 * **Attribute selectors and `:lang()`.** `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`, `[a^=v]`, `[a$=v]` and `[a*=v]`, with the `i` and `s` flags, match as in HTML: case-insensitively for the attributes HTML lists as such, and case-sensitively for the rest. `:lang()` matches the language an element inherits, from an ancestor or from the `<html>` or `<body>` tag. [mpdf/mpdf#134] [mpdf/mpdf#1838] [#538] [#627]
+* **`:not()`, `:is()` and `:where()`.** Each takes a selector list whose selectors may have combinators, such as `p:not(.note, div > p)` or `:is(h2, h3) + p`. `:is()` and `:where()` leave out a selector they cannot read, as browsers do. `:not()` and `:is()` weigh as their most specific argument, and `:where()` as nothing. Rules using them were dropped before. [#538] [#628]
 
 Performance
 -----------
@@ -816,3 +817,4 @@ These changes do not change output.
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
 [#625]: https://github.com/GravityPDF/mpdf/pull/625
 [#627]: https://github.com/GravityPDF/mpdf/pull/627
+[#628]: https://github.com/GravityPDF/mpdf/pull/628

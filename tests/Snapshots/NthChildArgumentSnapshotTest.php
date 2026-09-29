@@ -3,8 +3,8 @@
 namespace Snapshots;
 
 /**
- * nth-child rules on table cells followed by something mPDF cannot match, dropped whole rather than applied to every
- * cell the formula names.
+ * nth-child rules on table cells followed by parts that, with the formula, name no cell, or that mPDF cannot match.
+ * Each shades no cell, rather than every cell the formula names.
  *
  * @group snapshot
  */
@@ -30,7 +30,7 @@ class NthChildArgumentSnapshotTest extends Snapshot
 			'td:nth-child(2):not(.x)' => 'names only second cells without the class x, and every second cell has it',
 			'td:nth-child(2):nth-child(odd)' => 'names a cell that is both second and odd',
 			'td:nth-child(2 of .x)' => 'names the second cell with the class x, and each row has only one',
-			'tr:nth-child(2) td:not(.x)' => 'has a part mPDF cannot match, so not even the second row is shaded',
+			'tr:nth-child(2) td:hover' => 'has a part that never matches in a PDF, so not even the second row is shaded',
 		];
 
 		ob_start();

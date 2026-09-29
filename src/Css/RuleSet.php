@@ -276,6 +276,9 @@ class RuleSet
 	}
 
 	/**
+	 * Only the compounds' own pseudo-classes are looked at: the legacy parser reads no :not() or :is(), so a legacy
+	 * rule has no :lang() inside one
+	 *
 	 * @param array $selector
 	 *
 	 * @return bool Whether a compiled selector names :lang()
