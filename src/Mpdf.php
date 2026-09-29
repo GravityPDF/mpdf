@@ -14518,7 +14518,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->page_box['current'] = '';
 			$this->page_box['using'] = true;
 			list($pborientation, $pbmgl, $pbmgr, $pbmgt, $pbmgb, $pbmgh, $pbmgf, $hname, $fname, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat) = $this->SetPagedMediaCSS('', false, '');
-			$this->DefOrientation = $this->CurOrientation = $pborientation;
+			// CurOrientation is left alone: _beginpage() turns the sheet when the first page's orientation differs from it
+			$this->DefOrientation = $pborientation;
 			$this->orig_lMargin = $this->DeflMargin = $pbmgl;
 			$this->orig_rMargin = $this->DefrMargin = $pbmgr;
 			$this->orig_tMargin = $this->tMargin = $pbmgt;
@@ -16199,7 +16200,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$p = [];
 		$p['SIZE'] = 'AUTO';
 
-		// Uses mPDF original margins as default, less the outer width they include, which is added below
+		// Default to the original margins, less the outer width they already include; this page's own is added below
 		$outerLR = $this->page_box['orig_outer_width_LR'];
 		$outerTB = $this->page_box['orig_outer_width_TB'];
 		$p['MARGIN-RIGHT'] = strval($this->orig_rMargin - $outerLR) . 'mm';
@@ -16287,51 +16288,34 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$p['ORIENTATION'] = 'P';
 			}
 			$this->_setPageSize($newformat, $p['ORIENTATION']);
+		} elseif (is_array($p['SIZE'])) {
+			$p['ORIENTATION'] = $p['SIZE']['W'] > $p['SIZE']['H'] ? 'L' : 'P';
+		} elseif (strtoupper($p['SIZE']) == 'AUTO') {
+			$p['ORIENTATION'] = $this->DefOrientation;
+		} elseif (strtoupper($p['SIZE']) == 'LANDSCAPE') {
+			$p['ORIENTATION'] = 'L';
+		} else {
+			$p['ORIENTATION'] = 'P';
 		}
 
-		if (isset($p['SIZE']) && is_array($p['SIZE']) && !$newformat) {
-			if ($p['SIZE']['W'] > $p['SIZE']['H']) {
-				$p['ORIENTATION'] = 'L';
-			} else {
-				$p['ORIENTATION'] = 'P';
-			}
+		// fw and fh are the sheet before it is turned
+		if ($p['ORIENTATION'] === 'P') {
+			$sheetw = $this->fw;
+			$sheeth = $this->fh;
+		} else {
+			$sheetw = $this->fh;
+			$sheeth = $this->fw;
 		}
+
 		if (is_array($p['SIZE'])) {
-			if ($p['SIZE']['W'] > $this->fw) {
-				$p['SIZE']['W'] = $this->fw;
-			} // mPD 4.2 use fw not fPt
-			if ($p['SIZE']['H'] > $this->fh) {
-				$p['SIZE']['H'] = $this->fh;
-			}
-			if (($p['ORIENTATION'] == $this->DefOrientation && !$newformat) || ($newformat && $p['ORIENTATION'] == 'P')) {
-				$outer_width_LR = ($this->fw - $p['SIZE']['W']) / 2;
-				$outer_width_TB = ($this->fh - $p['SIZE']['H']) / 2;
-			} else {
-				$outer_width_LR = ($this->fh - $p['SIZE']['W']) / 2;
-				$outer_width_TB = ($this->fw - $p['SIZE']['H']) / 2;
-			}
-			$pgw = $p['SIZE']['W'];
-			$pgh = $p['SIZE']['H'];
+			$pgw = min($p['SIZE']['W'], $sheetw);
+			$pgh = min($p['SIZE']['H'], $sheeth);
 		} else { // AUTO LANDSCAPE PORTRAIT
-			$outer_width_LR = 0;
-			$outer_width_TB = 0;
-			if (!$newformat) {
-				if (strtoupper($p['SIZE']) == 'AUTO') {
-					$p['ORIENTATION'] = $this->DefOrientation;
-				} elseif (strtoupper($p['SIZE']) == 'LANDSCAPE') {
-					$p['ORIENTATION'] = 'L';
-				} else {
-					$p['ORIENTATION'] = 'P';
-				}
-			}
-			if (($p['ORIENTATION'] == $this->DefOrientation && !$newformat) || ($newformat && $p['ORIENTATION'] == 'P')) {
-				$pgw = $this->fw;
-				$pgh = $this->fh;
-			} else {
-				$pgw = $this->fh;
-				$pgh = $this->fw;
-			}
+			$pgw = $sheetw;
+			$pgh = $sheeth;
 		}
+		$outer_width_LR = ($sheetw - $pgw) / 2;
+		$outer_width_TB = ($sheeth - $pgh) / 2;
 
 		if (isset($p['HEADER']) && $p['HEADER']) {
 			$header = $p['HEADER'];

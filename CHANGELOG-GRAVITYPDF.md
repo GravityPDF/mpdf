@@ -112,6 +112,7 @@ Bugfixes
 * **`page-break-inside: avoid`** now moves the whole block to the next page when it does not fit. Its text, list numbers, floats, links, bookmarks, index and contents entries, form fields and annotations each appear once, on the page the block ends up on. A block that fits is laid out only once. [#38] [#43] [#60] [#63]
 * A table with no background left the next table painted twice. [#43]
 * `@page { size: A4 }`, or a `size` of two lengths with no `margin`, gave 63 pages with one character on each. A page-size name such as `A4`, `letter` or `A5 landscape` now sets the sheet, as a browser sets the paper, and the space around a page box given as two lengths is no longer counted twice. [mpdf/mpdf#1220] [#552] [#562]
+* `@page { size: landscape }`, or a page box wider than it is tall, left the first page portrait, and `size: portrait` left a landscape document landscape. The first page now turns. A page box and percentage margins are measured on the turned sheet, so `size: 250mm 150mm` on A4 is no longer cut to 210 mm wide. [#552] [#562]
 * `background-size: cover` scaled by the wrong ratio when the image came out shorter than the area. [mpdf/mpdf#833] [#22]
 * Only double-quoted attributes were read. Single-quoted, unquoted and bare attributes are now read as well. [mpdf/mpdf#2030] [#24]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]

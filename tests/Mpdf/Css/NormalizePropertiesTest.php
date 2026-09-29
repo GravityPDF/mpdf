@@ -380,7 +380,7 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The keywords and lengths the size property took before page-size names are read as before
+	 * Keywords and lengths are read as they were before page-size names
 	 */
 	public function testPageSizeKeywordsAndLengths()
 	{

@@ -901,7 +901,7 @@ class NormalizeProperties
 	}
 
 	/**
-	 * Set the sheet from a page-size name such as "a4", "letter" or "a5 landscape", as a browser sets the paper
+	 * Set the sheet from a page-size name such as "a4", "letter" or "a5 landscape"
 	 *
 	 * The sheet is portrait unless "landscape" is given. A value that is not one name, with at most one orientation,
 	 * is dropped.
