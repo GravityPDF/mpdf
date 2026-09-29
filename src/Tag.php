@@ -13,6 +13,16 @@ class Tag
 	use Strict;
 
 	/**
+	 * @var array<string, true> The start tags that close an open <p>
+	 */
+	private static $paragraphClosers = [
+		'ADDRESS' => true, 'ARTICLE' => true, 'ASIDE' => true, 'BLOCKQUOTE' => true, 'CENTER' => true, 'DIV' => true,
+		'DL' => true, 'FIELDSET' => true, 'FORM' => true, 'H1' => true, 'H2' => true, 'H3' => true, 'H4' => true,
+		'H5' => true, 'H6' => true, 'HGROUP' => true, 'HR' => true, 'MAIN' => true, 'NAV' => true, 'OL' => true,
+		'P' => true, 'PRE' => true, 'SECTION' => true, 'TABLE' => true, 'UL' => true,
+	];
+
+	/**
 	 * @var \Mpdf\Mpdf
 	 */
 	private $mpdf;
@@ -170,6 +180,18 @@ class Tag
 		return $className;
 	}
 
+	/**
+	 * Whether the start tag of an element closes an open <p>, as HTML lets its end tag be left out before it
+	 *
+	 * @param string $tag The tag name, uppercased
+	 *
+	 * @return bool
+	 */
+	public static function closesParagraph($tag)
+	{
+		return isset(self::$paragraphClosers[$tag]);
+	}
+
 	public function OpenTag($tag, $attr, &$ahtml, &$ihtml)
 	{
 		// Correct for tags where HTML5 specifies optional end tags excluding table elements (cf WriteHTML() )
@@ -191,14 +213,8 @@ class Tag
 					$this->CloseTag('DD', $ahtml, $ihtml);
 					$closed = true;
 				}
-				// p end tag may be omitted if immediately followed by an address, article, aside, blockquote, div, dl,
-				// fieldset, form, h1, h2, h3, h4, h5, h6, hgroup, hr, main, nav, ol, p, pre, section, table, ul
-				if (!$closed && $this->mpdf->blk[$this->mpdf->blklvl]['tag'] == 'P'
-						&& ($tag == 'P' || $tag == 'DIV' || $tag == 'H1' || $tag == 'H2' || $tag == 'H3'
-							|| $tag == 'H4' || $tag == 'H5' || $tag == 'H6' || $tag == 'UL' || $tag == 'OL'
-							|| $tag == 'TABLE' || $tag == 'PRE' || $tag == 'FORM' || $tag == 'ADDRESS' || $tag == 'BLOCKQUOTE'
-							|| $tag == 'CENTER' || $tag == 'DL' || $tag == 'HR' || $tag == 'ARTICLE' || $tag == 'ASIDE'
-							|| $tag == 'FIELDSET' || $tag == 'HGROUP' || $tag == 'MAIN' || $tag == 'NAV' || $tag == 'SECTION')) {
+				// p end tag may be omitted if immediately followed by one of the elements closesParagraph() lists
+				if (!$closed && $this->mpdf->blk[$this->mpdf->blklvl]['tag'] == 'P' && self::closesParagraph($tag)) {
 					$this->CloseTag('P', $ahtml, $ihtml);
 					$closed = true;
 				}

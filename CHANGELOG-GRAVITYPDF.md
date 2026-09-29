@@ -356,6 +356,7 @@ These changes do not change output.
   * The coding standard and PHPStan run as one Lint workflow. The e-invoice and PDF/X-4 checks run on a pull request only when it changes the code they cover.
 * **PHPStan.** Fixes for newer PHP versions and PHPStan 2.2.15. [#6] [#295] [#319] [#451]
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
+* **Open elements.** `WriteHTML()` keeps a stack of the elements open in the HTML it reads, so that CSS rules can be matched against an element's parents, ancestors and earlier siblings rather than only the blocks mPDF lays out. Each element carries its position among its siblings and a record of the siblings before it. `Mpdf::getOpenElements()` reads it. [#533]
 
 [mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
 [mpdf/mpdf#747]: https://github.com/mpdf/mpdf/issues/747
@@ -750,6 +751,7 @@ These changes do not change output.
 [#526]: https://github.com/GravityPDF/mpdf/issues/526
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
+[#533]: https://github.com/GravityPDF/mpdf/issues/533
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
 [#560]: https://github.com/GravityPDF/mpdf/pull/560

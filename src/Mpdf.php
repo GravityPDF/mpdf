@@ -50,6 +50,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	use Strict;
 	use FpdiTrait;
 	use PageAreas;
+	use TracksOpenElements;
 	use MpdfPsrLogAwareTrait;
 
 	const VERSION = '8.3.2';
@@ -1250,6 +1251,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->defaultTableAlign = 'L';
 
 		$this->fixedPosBlockSave = [];
+		$this->openElements = $this->newOpenElementStack();
 		$this->extraFontSubsets = 0;
 
 		$this->blockContext = 1;
@@ -14663,6 +14665,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->mb_enc) {
 			mb_internal_encoding($this->mb_enc);
 		}
+		// Headers, footers and positioned blocks are written in the middle of the flow as documents of their own, so the
+		// flow's open elements are set aside for them. A positioned block's content starts inside the block, whose frame
+		// the <div> standing in for it takes
+		$flowElements = null;
+		$standIn = false;
+		if ($mode === HTMLParserMode::HTML_HEADER_BUFFER) {
+			$flowElements = $this->openElements;
+			$standIn = $this->fixedPosBlockElements !== null;
+			$this->openElements = $standIn ? $this->fixedPosBlockElements : $this->newOpenElementStack();
+		} elseif ($init) {
+			$this->openElements = $this->newOpenElementStack();
+		}
+		$floor = $standIn ? count($this->openElements) : 1; // the frames this HTML cannot close
+
 		$pbc = 0;
 		$this->subPos = -1;
 		$cnt = count($a);
@@ -14900,15 +14916,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->fixedPosBlockDepth--;
 						}
 						if ($this->fixedPosBlockDepth == 0) {
-							$this->fixedPosBlockSave[] = [$this->fixedPosBlock, $this->fixedPosBlockBBox, $this->page];
+							// Its content was only buffered, so the open elements are as they were inside its start tag
+							$this->fixedPosBlockSave[] = [$this->fixedPosBlock, $this->fixedPosBlockBBox, $this->page, $this->openElements];
 							$this->fixedPosBlock = '';
 							$this->inFixedPosBlock = false;
+							// The block's frame is the top one, as its content was only buffered
+							$this->closeElementsDownTo(count($this->openElements) - 1);
 							continue;
 						}
 						$this->fixedPosBlock .= '<' . $e . '>';
 						continue;
 					}
 					/* -- END CSS-POSITION -- */
+
+					// Before CloseTag(), which puts back a page-break-inside: avoid block that ran onto another page
+					$this->closeElementsEndedBy($endtag, $floor);
 
 					// mPDF 6
 					// Correct for tags where HTML5 specifies optional end tags (see also OpenTag() )
@@ -14980,24 +15002,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// mPDF 6
 					$this->tag->CloseTag($endtag, $a, $i); // mPDF 6
 				} else { // OPENING TAG
-					if ($this->blk[$this->blklvl]['hide']) {
-						if (strpos($e, ' ')) {
-							$te = strtoupper(substr($e, 0, strpos($e, ' ')));
-						} else {
-							$te = strtoupper($e);
-						}
-						// mPDF 6
-						if ($te == 'THEAD' || $te == 'TBODY' || $te == 'TFOOT' || $te == 'TR' || $te == 'TD' || $te == 'TH') {
-							$this->lastoptionaltag = $te;
-						}
-						if (in_array($te, $this->outerblocktags) || in_array($te, $this->innerblocktags)) {
-							$this->blklvl++;
-							$this->blk[$this->blklvl]['hide'] = true;
-							$this->blk[$this->blklvl]['tag'] = $te; // mPDF 6
-						}
-						continue;
-					}
-
 					/* -- CSS-POSITION -- */
 					if ($this->inFixedPosBlock) {
 						if (strpos($e, ' ')) {
@@ -15076,7 +15080,42 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 						$attr[$name] = trim($value);
 					}
+					$selfClosing = substr($e, -1) === '/';
+
+					// An element inside one hidden with display: none is not laid out, but it is one of the document's
+					// elements, and the selectors that look at its siblings read its attributes
+					if ($this->blk[$this->blklvl]['hide']) {
+						if (strpos($e, ' ')) {
+							$te = strtoupper(substr($e, 0, strpos($e, ' ')));
+						} else {
+							$te = strtoupper($e);
+						}
+						// mPDF 6
+						if ($te == 'THEAD' || $te == 'TBODY' || $te == 'TFOOT' || $te == 'TR' || $te == 'TD' || $te == 'TH') {
+							$this->lastoptionaltag = $te;
+						}
+						if (in_array($te, $this->outerblocktags) || in_array($te, $this->innerblocktags)) {
+							$this->blklvl++;
+							$this->blk[$this->blklvl]['hide'] = true;
+							$this->blk[$this->blklvl]['tag'] = $te; // mPDF 6
+						}
+						$this->closeElementsImpliedBy($tag, $floor);
+						$this->startElement($tag, $attr, $selfClosing);
+						continue;
+					}
+
+					$this->closeElementsImpliedBy($tag, $floor);
+					$token = $i;
 					$this->tag->OpenTag($tag, $attr, $a, $i); // mPDF 6
+					// Unless it put back a page-break-inside: avoid block, which rewinds the parser to that block's start
+					// tag and the open elements to how they were there
+					if ($i === $token) {
+						if ($standIn) {
+							$standIn = false;
+						} else {
+							$this->startElement($tag, $attr, $selfClosing);
+						}
+					}
 					/* -- CSS-POSITION -- */
 					if ($this->inFixedPosBlock) {
 						$this->fixedPosBlockBBox = [$tag, $attr, $this->x, $this->y];
@@ -15084,7 +15123,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->fixedPosBlockDepth = 1;
 					}
 					/* -- END CSS-POSITION -- */
-					if (preg_match('/\/$/', $e)) {
+					if ($selfClosing) {
 						$this->tag->CloseTag($tag, $a, $i);
 					}
 				}
@@ -15092,6 +15131,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // end of	foreach($a as $i=>$e)
 
 		if ($close) {
+			$this->closeElementsDownTo($floor);
+
 			// Close any open block tags
 			for ($b = $this->blklvl; $b > 0; $b--) {
 				$this->tag->CloseTag($this->blk[$b]['tag'], $a, $i);
@@ -15160,12 +15201,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				foreach ($this->fixedPosBlockSave as $fpbs) {
 					$old_page = $this->page;
 					$this->page = $fpbs[2];
+					$this->fixedPosBlockElements = $fpbs[3];
 					$this->WriteFixedPosHTML($fpbs[0], 0, 0, 100, 100, 'auto', $fpbs[1]);  // 0,0,10,10 are overwritten by bbox
+					$this->fixedPosBlockElements = null;
 					$this->page = $old_page;
 				}
 				$this->fixedPosBlockSave = [];
 			}
 			/* -- END CSS-POSITION -- */
+		}
+
+		if ($flowElements !== null) {
+			$this->openElements = $flowElements;
 		}
 	}
 
@@ -25137,8 +25184,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$save_fpb = $this->fixedPosBlockSave;
+		$save_elements = $this->openElements;
 		$this->WriteHTML($html);
 		$this->fixedPosBlockSave = $save_fpb;
+		$this->openElements = $save_elements;
 
 		$this->breakpoints[$this->CurrCol][] = $this->y;  // *COLUMNS*
 	}
