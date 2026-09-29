@@ -85,6 +85,10 @@ New features
 * **CSS styling.** Form fields take their CSS colour, background and border. Static fields draw them, and active fields use the border's width and style. [#442] [#469]
 * **Static list boxes.** A static list box is drawn as rows of options, with the selected rows highlighted. [#446]
 
+### Paged media
+
+* **Side margins on `:first`, `:left` and `:right` pages.** The `:first`, `:left` and `:right` pages of an `@page` rule, named or not, can set `margin-left` and `margin-right`. Text flowing from page to page is set in the page area of each page, and columns are laid out across it. A side margin on a pseudo page belongs to that side of the physical page, so it is not mirrored. [#476] [#510]
+
 Performance
 -----------
 
@@ -669,6 +673,7 @@ These changes do not change output.
 [#471]: https://github.com/GravityPDF/mpdf/pull/471
 [#474]: https://github.com/GravityPDF/mpdf/issues/474
 [#475]: https://github.com/GravityPDF/mpdf/issues/475
+[#476]: https://github.com/GravityPDF/mpdf/issues/476
 [#482]: https://github.com/GravityPDF/mpdf/issues/482
 [#485]: https://github.com/GravityPDF/mpdf/pull/485
 [#486]: https://github.com/GravityPDF/mpdf/pull/486
@@ -685,6 +690,7 @@ These changes do not change output.
 [#503]: https://github.com/GravityPDF/mpdf/pull/503
 [#505]: https://github.com/GravityPDF/mpdf/pull/505
 [#507]: https://github.com/GravityPDF/mpdf/pull/507
+[#510]: https://github.com/GravityPDF/mpdf/pull/510
 [#512]: https://github.com/GravityPDF/mpdf/pull/512
 [#514]: https://github.com/GravityPDF/mpdf/pull/514
 [#515]: https://github.com/GravityPDF/mpdf/pull/515

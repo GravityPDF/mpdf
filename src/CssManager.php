@@ -231,4 +231,69 @@ class CssManager
 	{
 		return $this->cssMerger->getBorderDominance($side);
 	}
+
+	/**
+	 * Whether a :first, :left or :right rule of the plain @page rule, or of the named page, sets a side margin
+	 *
+	 * @param string|null $name The named page, or '' or null for none
+	 * @return bool
+	 */
+	public function pseudoPagesSetSideMargins($name)
+	{
+		$prefixes = ['@PAGE>>'];
+		if ($name) {
+			$prefixes[] = '@PAGE>>NAMED>>' . strtoupper($name) . '>>';
+		}
+
+		foreach ($prefixes as $prefix) {
+			foreach (['FIRST', 'LEFT', 'RIGHT'] as $pseudo) {
+				$rule = $prefix . 'PSEUDO>>' . $pseudo;
+				if (isset($this->CSS[$rule]['MARGIN-LEFT']) || isset($this->CSS[$rule]['MARGIN-RIGHT'])) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The properties the :right, :left and :first rules under an @page rule add to the page, less the sheet size
+	 *
+	 * Their side margins are physical, not inner and outer, so on an even page they are handed over swapped for
+	 * Mpdf::pageSideMargins() to swap back.
+	 *
+	 * @param string $prefix The key of the @page rule in the style sheet, up to its pseudo pages
+	 * @param string $side 'R' or 'L'
+	 * @param bool $first Whether this is the first page
+	 * @param string $oddEven 'E' for an even page when margins are mirrored, else 'O'
+	 * @return array
+	 */
+	public function pseudoPageProperties($prefix, $side, $first, $oddEven)
+	{
+		$properties = [];
+		foreach (['RIGHT' => $side == 'R', 'LEFT' => $side == 'L', 'FIRST' => $first] as $pseudo => $applies) {
+			if (!$applies || !isset($this->CSS[$prefix . 'PSEUDO>>' . $pseudo])) {
+				continue;
+			}
+
+			$rule = $this->CSS[$prefix . 'PSEUDO>>' . $pseudo];
+			unset($rule['SIZE'], $rule['SHEET-SIZE']);
+
+			if ($oddEven === 'E') {
+				$physical = $rule;
+				unset($rule['MARGIN-LEFT'], $rule['MARGIN-RIGHT']);
+				if (isset($physical['MARGIN-LEFT'])) {
+					$rule['MARGIN-RIGHT'] = $physical['MARGIN-LEFT'];
+				}
+				if (isset($physical['MARGIN-RIGHT'])) {
+					$rule['MARGIN-LEFT'] = $physical['MARGIN-RIGHT'];
+				}
+			}
+
+			$properties = array_merge($properties, $rule);
+		}
+
+		return $properties;
+	}
 }
