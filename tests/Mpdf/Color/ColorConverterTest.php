@@ -96,6 +96,60 @@ class ColorConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		];
 	}
 
+	/**
+	 * rgb(), rgba(), hsl() and hsla() written with spaces and a slash before the alpha, with a fourth comma-separated
+	 * argument as the alpha, with a percentage alpha, and with the hue as an angle
+	 *
+	 * @dataProvider modernSyntaxProvider
+	 *
+	 * @param string $input
+	 * @param string $output
+	 */
+	public function testConvertModernSyntax($input, $output)
+	{
+		$converter = new ColorConverter($this->mpdf, new ColorModeConverter(), $this->restrictor);
+
+		$this->assertSame($output, $converter->convert($input));
+	}
+
+	/**
+	 * Each colour, and its binary string: the mode, then the channels, then the alpha as a percentage
+	 *
+	 * @return string[][]
+	 */
+	public function modernSyntaxProvider()
+	{
+		return [
+			['rgb(255 0 0)', "3\xff\x00\x00\x00\x00"],
+			['rgb( 255  128 0 )', "3\xff\x80\x00\x00\x00"],
+			['rgb(100% 0% 50%)', "3\xff\x00\x7f\x00\x00"],
+			['rgb(255 0 0 / 50%)', "5\xff\x00\x002\x00"],
+			['rgb(255 0 0/.25)', "5\xff\x00\x00\x19\x00"],
+			['rgba(255 0 0 / 0.5)', "5\xff\x00\x002\x00"],
+			['rgba(255 0 0)', "3\xff\x00\x00\x00\x00"],
+			['rgb(255, 0, 0, 0.5)', "5\xff\x00\x002\x00"],
+			['rgba(255, 0, 0, 50%)', "5\xff\x00\x002\x00"],
+
+			['hsl(120 100% 50%)', "3\x00\xff\x00\x00\x00"],
+			['hsl(120 100% 50% / .5)', "5\x00\xff\x002\x00"],
+			['hsla(120 100% 50% / 50%)', "5\x00\xff\x002\x00"],
+			['hsl(120, 100%, 50%, 0.5)', "5\x00\xff\x002\x00"],
+			['hsla(120, 100%, 50%)', "3\x00\xff\x00\x00\x00"],
+
+			['hsl(120deg 100% 50%)', "3\x00\xff\x00\x00\x00"],
+			['hsl(120deg, 100%, 50%)', "3\x00\xff\x00\x00\x00"],
+			['hsl(0.5turn 100% 50%)', "3\x00\xff\xff\x00\x00"],
+			['hsl(200grad 100% 50%)', "3\x00\xff\xff\x00\x00"],
+			['hsl(3.14159265rad 100% 50%)', "3\x00\xff\xff\x00\x00"],
+			['hsl(-120 100% 50%)', "3\x00\x00\xff\x00\x00"],
+			['hsl(480 100% 50%)', "3\x00\xff\x00\x00\x00"],
+
+			['rgb(var(--red))', "3\x00\x00\x00\x00\x00"],
+			['rgba(var(--red))', "3\x00\x00\x00\x00\x00"],
+			['cmyk(var(--black))', "4\x00\x00\x00d\x00"],
+		];
+	}
+
 	public function testConvertUnknownSpotColor()
 	{
 		$this->expectException(\Mpdf\MpdfException::class);
