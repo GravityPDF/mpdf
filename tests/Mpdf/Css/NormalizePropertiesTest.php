@@ -319,4 +319,77 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('dejavusansmono', $result['FONT-FAMILY']);
 	}
 
+	/**
+	 * A page-size name in the size property sets the sheet in millimetres, portrait unless landscape is given, and
+	 * the page box is left at auto
+	 *
+	 * @dataProvider providerPageSizeName
+	 */
+	public function testPageSizeNameSetsTheSheet($size, $sheet)
+	{
+		$result = $this->normalizeProperties->normalize(['SIZE' => $size]);
+
+		$this->assertSame('AUTO', $result['SIZE']);
+		$this->assertSame($sheet, array_map('round', $result['SHEET-SIZE']));
+	}
+
+	/**
+	 * Page-size names, with and without an orientation on either side
+	 *
+	 * @return array
+	 */
+	public function providerPageSizeName()
+	{
+		return [
+			'A4' => ['A4', [210.0, 297.0]],
+			'lower case' => ['a4', [210.0, 297.0]],
+			'letter' => ['letter', [216.0, 279.0]],
+			'portrait' => ['A5 portrait', [148.0, 210.0]],
+			'landscape' => ['A5 landscape', [210.0, 148.0]],
+			'landscape first' => ['landscape A5', [210.0, 148.0]],
+			'ledger is portrait, as in CSS' => ['ledger', [279.0, 432.0]],
+		];
+	}
+
+	/**
+	 * A size that is not one known page-size name with at most one orientation is dropped
+	 *
+	 * @dataProvider providerInvalidPageSizeName
+	 */
+	public function testInvalidPageSizeNameIsDropped($size)
+	{
+		$result = $this->normalizeProperties->normalize(['SIZE' => $size]);
+
+		$this->assertArrayNotHasKey('SIZE', $result);
+		$this->assertArrayNotHasKey('SHEET-SIZE', $result);
+	}
+
+	/**
+	 * Sizes that name no page size, or more than one
+	 *
+	 * @return array
+	 */
+	public function providerInvalidPageSizeName()
+	{
+		return [
+			'unknown name' => ['bogus'],
+			'two names' => ['A4 A5'],
+			'two orientations' => ['A4 portrait landscape'],
+			'name and length' => ['A4 100mm'],
+		];
+	}
+
+	/**
+	 * Keywords and lengths are read as they were before page-size names
+	 */
+	public function testPageSizeKeywordsAndLengths()
+	{
+		$this->assertSame(['SIZE' => 'AUTO'], $this->normalizeProperties->normalize(['SIZE' => 'auto']));
+		$this->assertSame(['SIZE' => 'LANDSCAPE'], $this->normalizeProperties->normalize(['SIZE' => 'landscape']));
+
+		$result = $this->normalizeProperties->normalize(['SIZE' => '100mm 150mm']);
+		$this->assertArrayNotHasKey('SHEET-SIZE', $result);
+		$this->assertEquals(['W' => 100, 'H' => 150], array_map('round', $result['SIZE']));
+	}
+
 }

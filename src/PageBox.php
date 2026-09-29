@@ -13,6 +13,9 @@ class PageBox implements \ArrayAccess
 			'current' => null,
 			'outer_width_LR' => null,
 			'outer_width_TB' => null,
+			// The outer widths already counted in Mpdf::$orig_lMargin and the other original margins
+			'orig_outer_width_LR' => 0,
+			'orig_outer_width_TB' => 0,
 			'using' => null,
 		];
 	}
