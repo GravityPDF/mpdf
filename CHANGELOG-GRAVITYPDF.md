@@ -173,6 +173,9 @@ Bugfixes
   * A byte order mark at the start of a stylesheet, as `WriteHTML(file_get_contents('style.css'), HTMLParserMode::HEADER_CSS)` passes one on, no longer spoils the first rule.
   * An `@import` is loaded only from the stylesheet's own rules, not from a comment, a string or a block.
   * A `style` attribute is split the same way, so `style="font-family: 'a;b', serif; color: red"` applies both, and a value may run over several lines.
+* An HTML comment between two words drew a space: `Book<!-- x -->keeper` read "Book keeper", and `<p><!-- x --></p>` held a space. A comment now leaves nothing in its place, as in a browser and as `HTMLParserMode::HTML_BODY` already had it, in either `cssMode`. A document that relied on the space can put one next to the comment. [#636] [#637]
+  * In the default parser mode, a `<!--` inside a `<script>`, as in `var s = "<!--"`, drew part of the script and lost the text up to the end of the next comment.
+  * In `HTMLParserMode::HTML_BODY`, a `<script>` tag inside a comment lost the text up to the next script's end.
 * `td:nth-child()` and `th:nth-child()` counted grid columns, so a `colspan` or `rowspan` before a cell made the rule miss it and reach the cell after. They now count the cells of the row. `:first-child` on a `tr`, `td` or `th` now works, as `:nth-child(1)`. [#528] [#572]
 * Some colour values were read wrongly. [#552] [#570]
   * `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
@@ -844,3 +847,5 @@ These changes do not change output.
 [#633]: https://github.com/GravityPDF/mpdf/pull/633
 [#635]: https://github.com/GravityPDF/mpdf/pull/635
 [#634]: https://github.com/GravityPDF/mpdf/pull/634
+[#636]: https://github.com/GravityPDF/mpdf/issues/636
+[#637]: https://github.com/GravityPDF/mpdf/pull/637
