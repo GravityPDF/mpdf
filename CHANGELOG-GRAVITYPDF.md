@@ -87,6 +87,7 @@ New features
 
 ### Paged media
 
+* **`break-before`, `break-after` and `break-inside`.** They are read as their `page-break-*` equivalents: `page` as `always`, `recto` and `verso` as `right` and `left`, and `avoid-page` as `avoid`. Column and region breaks are not page breaks, so they are read as `auto`. [#552] [#569]
 * **Side margins on `:first`, `:left` and `:right` pages.** The `:first`, `:left` and `:right` pages of an `@page` rule, named or not, can set `margin-left` and `margin-right`. Text flowing from page to page is set in the page area of each page, and columns are laid out across it. A side margin on a pseudo page belongs to that side of the physical page, so it is not mirrored. [#476] [#510]
   * Text beside a float, and the blocks around it, keep to the page area of each page the float runs over. [#549]
   * A block with a set width keeps its place in each page area: a centred block stays centred, and a block pushed right by `margin-left: auto` or set right to left stays against the right margin. [#550] [#551] [#553]
@@ -117,6 +118,7 @@ Bugfixes
 * A table with no background left the next table painted twice. [#43]
 * `@page { size: A4 }`, or a `size` of two lengths with no `margin`, gave 63 pages with one character on each. A page-size name such as `A4`, `letter` or `A5 landscape` now sets the sheet, as a browser sets the paper, and the space around a page box given as two lengths is no longer counted twice. [mpdf/mpdf#1220] [#552] [#562]
 * `@page { size: landscape }`, or a page box wider than it is tall, left the first page portrait, and `size: portrait` left a landscape document landscape. The first page now turns. A page box and percentage margins are measured on the turned sheet, so `size: 250mm 150mm` on A4 is no longer cut to 210 mm wide. [#552] [#562]
+* `page-break-before: auto` or `avoid` on a block inside another block closed the outer block and opened it again, so its border was drawn around each part. `page-break-after: auto` or `avoid` on a table started a new page. [#552] [#569]
 * `background-size: cover` scaled by the wrong ratio when the image came out shorter than the area. [mpdf/mpdf#833] [#22]
 * Only double-quoted attributes were read. Single-quoted, unquoted and bare attributes are now read as well. [mpdf/mpdf#2030] [#24]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
@@ -747,6 +749,7 @@ These changes do not change output.
 [#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
+[#569]: https://github.com/GravityPDF/mpdf/pull/569
 [#577]: https://github.com/GravityPDF/mpdf/pull/577
 [#568]: https://github.com/GravityPDF/mpdf/pull/568
 [#567]: https://github.com/GravityPDF/mpdf/pull/567
