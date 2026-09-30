@@ -345,6 +345,7 @@ These changes do not change output.
 * **Annotation objects.** Annotation object numbers are given once instead of being predicted in `PageWriter`. [#360]
 * **ToUnicode.** The byte-subset ToUnicode map is built in one place. [#372]
 * **UTF-8 decoding.** A valid UTF-8 string is decoded with mbstring. [#364]
+* **Glyph outline numbers.** A glyph outline's coordinates are written through `NumericString::decimal()`, as the colour glyphs and SVG paths write theirs. [#625]
 * **Snapshot tests.** Snapshot tests compare bytes first, then PDF objects, then pixels. Snapshot documents carry nothing of the machine that made them. [#72]
 * **Data scripts.** Composer scripts regenerate the Unicode, emoji, joining, language system, font cache, subset, shaping and grey profile data, and update snapshots.
 * **CI.** [#5] [#310] [#317] [#376] [#377] [#615]
@@ -781,3 +782,4 @@ These changes do not change output.
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
+[#625]: https://github.com/GravityPDF/mpdf/pull/625
