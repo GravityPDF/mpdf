@@ -3,6 +3,8 @@
 namespace Mpdf\Css;
 
 use Mpdf\Mpdf;
+use Mpdf\SizeConverter;
+use Psr\Log\NullLogger;
 
 /**
  * The pass that unwraps, keeps or removes each at-rule before a stylesheet is split into rules at each brace
@@ -22,7 +24,9 @@ class AtRuleProcessorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		parent::set_up();
 
-		$this->processor = new AtRuleProcessor(new MediaQueryProcessor(new Mpdf()));
+		$mpdf = new Mpdf();
+		$sizeConverter = new SizeConverter($mpdf->dpi, $mpdf->default_font_size, $mpdf, new NullLogger());
+		$this->processor = new AtRuleProcessor(new MediaQueryProcessor($mpdf, $sizeConverter));
 	}
 
 	/**

@@ -143,6 +143,8 @@ Bugfixes
 * `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552] [#565]
 * `line-height: 0` gave lines a normal height. Lines now have no height, as in a browser. A line height well below the font size, such as `0.5` or `1mm`, was stretched down to the baseline; it is now kept. A negative `line-height`, which shrank lines to odd heights, is now ignored. [#552] [#567]
 * The rule after an `@supports`, `@layer`, `@keyframes`, `@container` or other block at-rule was lost, and so were the rules inside `@supports` and `@layer`. The rule after `@charset`, `@namespace` or `@import` was lost too. `@supports` and `@layer` blocks are now unwrapped as `@media` blocks are, except `@supports not`, and other at-rules are removed whole. [#524] [#566]
+* `@media` was matched by looking for the word `print`, so `@media not print` applied, `orientation` was ignored and `min-width` never matched. Media queries are now evaluated for the print medium against the page current when the stylesheet is read: media types with `not` and `only`; `and`, `or` and `not` conditions; and `width`, `height` and `orientation`, with `min-`/`max-` prefixes and range syntax such as `(width >= 600px)`. An A4 page is about 794px wide, so `@media (min-width: 768px)` rules now apply to it. [#552] [#575]
+* `@import` ignored its media list, and did not load a URL that does not end in `.css`, such as a Google Fonts stylesheet. [#552] [#575]
 * `td:nth-child()` and `th:nth-child()` counted grid columns, so a `colspan` or `rowspan` before a cell made the rule miss it and reach the cell after. They now count the cells of the row. `:first-child` on a `tr`, `td` or `th` now works, as `:nth-child(1)`. [#528] [#572]
 * Some colour values were read wrongly. [#552] [#570]
 * `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
@@ -764,6 +766,7 @@ These changes do not change output.
 [#568]: https://github.com/GravityPDF/mpdf/pull/568
 [#567]: https://github.com/GravityPDF/mpdf/pull/567
 [#566]: https://github.com/GravityPDF/mpdf/pull/566
+[#575]: https://github.com/GravityPDF/mpdf/pull/575
 [#572]: https://github.com/GravityPDF/mpdf/pull/572
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
