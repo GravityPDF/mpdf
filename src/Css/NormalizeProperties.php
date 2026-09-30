@@ -901,7 +901,8 @@ class NormalizeProperties
 	 * Parse border property parts (width, style, color).
 	 *
 	 * Each part may come in any position and at most once. A part left out takes its initial value. A CSS-wide
-	 * keyword gives the initial value of all three until the keywords are resolved.
+	 * keyword gives the initial value of all three until the keywords are resolved. The initial colour is currentColor
+	 * in standard mode, and black in legacy mode.
 	 *
 	 * @param string[] $prop Components of the border property value
 	 * @return array|false Array containing 'w' (width), 's' (style), 'c' (color), or false when a component is none of them
@@ -936,7 +937,7 @@ class NormalizeProperties
 			$parts[$kind] = $part;
 		}
 
-		return $parts + ['w' => 'medium', 's' => 'none', 'c' => '#000000'];
+		return $parts + ['w' => 'medium', 's' => 'none', 'c' => BorderMerger::initialColor($this->mpdf->cssMode)];
 	}
 
 	/**

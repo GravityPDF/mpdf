@@ -91,6 +91,10 @@ class InlinePropertyConverter
 				$css['TEXT-OUTLINE-COLOR'] = $this->colorConverter->colAtoString($properties['textparam']['outline-COLOR']);
 			}
 
+			if (!empty($properties['textparam']['transparent'])) {
+				$css['COLOR'] = 'transparent';
+			}
+
 			if (!empty($properties['textparam']['outline-WIDTH'])) {
 				$css['TEXT-OUTLINE-WIDTH'] = $properties['textparam']['outline-WIDTH'] . 'mm';
 			}

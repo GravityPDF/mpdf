@@ -241,11 +241,13 @@ abstract class Tag
 		}
 
 		// The cascade folds border-top-width, -style and -color into BORDER-TOP, and keeps them. A part given only as a
-		// longhand brings BorderMerger's defaults for the others, which the field should not take.
+		// longhand brings BorderMerger's defaults for the others, which the field should not take. In standard mode the
+		// default colour is the field's own, and a shorthand always sets the colour longhand
 		$border = array_combine(array_keys(BorderMerger::DEFAULTS), array_pad(preg_split('/\s+/', trim($properties['BORDER-TOP']), 3), 3, ''));
 		$longhand = isset($properties['BORDER-TOP-WIDTH']) || isset($properties['BORDER-TOP-STYLE']) || isset($properties['BORDER-TOP-COLOR']);
 		foreach ($border as $part => $value) {
-			if ($value === '' || ($longhand && !isset($properties['BORDER-TOP-' . $part]) && $value === BorderMerger::DEFAULTS[$part])) {
+			$default = $value === BorderMerger::DEFAULTS[$part] || ($part === 'COLOR' && $this->mpdf->cssMode === CssMode::STANDARD);
+			if ($value === '' || ($longhand && !isset($properties['BORDER-TOP-' . $part]) && $default)) {
 				continue;
 			}
 			if ($part === 'WIDTH') {

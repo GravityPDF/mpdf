@@ -2,6 +2,7 @@
 
 namespace Mpdf\Css;
 
+use Mpdf\CssMode;
 use Mpdf\Exception\InvalidArgumentException;
 
 class BorderMerger
@@ -27,16 +28,29 @@ class BorderMerger
 	];
 
 	/**
+	 * The colour of a border that names none: currentColor in standard mode, and black in legacy mode
+	 *
+	 * @param string $cssMode One of the Mpdf\CssMode values
+	 * @return string
+	 */
+	public static function initialColor($cssMode)
+	{
+		return $cssMode === CssMode::STANDARD ? 'currentcolor' : self::DEFAULTS['COLOR'];
+	}
+
+	/**
 	 * Merge borders into CSS properties.
 	 *
 	 * @param array $newProperties properties to merge from
 	 * @param array $cssProperties current CSS properties (passed by reference)
+	 * @param string|null $initialColor The colour a side's shorthand is built with when no longhand gives one, in
+	 *                                  place of the default
 	 * @return void
 	 */
-	public function mergeBorderProperties($newProperties, &$cssProperties)
+	public function mergeBorderProperties($newProperties, &$cssProperties, $initialColor = null)
 	{
 		foreach (['TOP', 'RIGHT', 'BOTTOM', 'LEFT'] as $side) {
-			$this->mergeSideBorder($side, $newProperties, $cssProperties);
+			$this->mergeSideBorder($side, $newProperties, $cssProperties, $initialColor);
 		}
 	}
 
@@ -49,9 +63,11 @@ class BorderMerger
 	 * @param string $side Side to merge (TOP, RIGHT, BOTTOM, LEFT)
 	 * @param array $properties Source border properties
 	 * @param array $cssProperties Target CSS properties (passed by reference)
+	 * @param string|null $initialColor The colour to build the shorthand with when no longhand gives one, in place of
+	 *                                  the default
 	 * @return void
 	 */
-	protected function mergeSideBorder($side, $properties, &$cssProperties)
+	protected function mergeSideBorder($side, $properties, &$cssProperties, $initialColor = null)
 	{
 		// Merges $a['BORDER-TOP-STYLE'] to $cssProperties['BORDER-TOP'] etc.
 		$borderKey = 'BORDER-' . $side;
@@ -79,6 +95,9 @@ class BorderMerger
 				// Build new border from scratch with defaults
 				if (!isset($borderParts)) {
 					$borderParts = self::DEFAULTS;
+					if ($initialColor !== null) {
+						$borderParts['COLOR'] = $initialColor;
+					}
 				}
 
 				$borderParts[$el] = $value;
