@@ -93,7 +93,7 @@ class CssManager
 	private $rules;
 
 	/**
-	 * @var RuleSet The rules read as the user agent's: under the standard cascade, those of the default stylesheet,
+	 * @var RuleSet The rules read as the user agent's: in standard mode, those of the default stylesheet,
 	 *              which author rules beat whatever their specificity
 	 */
 	private $defaultRules;
@@ -124,7 +124,7 @@ class CssManager
 	 * parses all CSS rules into the internal CSS storage structure.
 	 *
 	 * @param string $html HTML content containing CSS
-	 * @param bool $userAgent Whether to keep its rules apart as the user agent's, which the standard cascade applies
+	 * @param bool $userAgent Whether to keep its rules apart as the user agent's, which standard mode applies
 	 *                        with the built-in defaults, as it does the default stylesheet's
 	 * @return string HTML with CSS content removed
 	 */

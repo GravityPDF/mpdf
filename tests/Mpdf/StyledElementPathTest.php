@@ -23,7 +23,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesThePathToTheElementBeingStyled($html, array $expected)
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssCascade' => 'legacy']);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => 'legacy']);
 		$mpdf->WriteHTML($html);
 
 		$this->assertSame($expected, $mpdf->styledPaths);
@@ -39,7 +39,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesThePositionTheElementHasOnItsPath($html)
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssCascade' => 'legacy']);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => 'legacy']);
 		$mpdf->WriteHTML($html . '<style>tr > td, tbody > tr { font-weight: bold; }</style>'
 			. '<table><tr><td>a</td><td>b</td></tr></table><table><tbody><tr><td>c</td></tr></tbody><tr><td>d</td></tr></table>');
 
@@ -86,7 +86,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testLetsGoOfTheElementOnceItsStartTagIsRead()
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssCascade' => 'legacy']);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => 'legacy']);
 		$mpdf->WriteHTML('<style>div > p { color: red; }</style><div><p>a</p><p>b</p></div>');
 
 		$this->assertNull($mpdf->getStyledElementPath());
@@ -97,7 +97,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesNoPathForASpanWrappedAroundARunOfAnotherScript()
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => '', 'autoScriptToLang' => true, 'cssCascade' => 'legacy']);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => '', 'autoScriptToLang' => true, 'cssMode' => 'legacy']);
 		$mpdf->WriteHTML('<style>p > span { color: red; }</style><p>abc שלום <span>def</span></p>');
 
 		$this->assertSame([null, '>P>SPAN'], $mpdf->styledPaths);

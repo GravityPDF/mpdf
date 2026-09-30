@@ -109,7 +109,7 @@ class DescendantLangSelectorSnapshotTest extends Snapshot
 		$html = ob_get_clean();
 
 		// A regional language named in full winning over its short code, whatever the order, is the legacy cascade's
-		$this->mpdf = $this->createMpdf(['cssCascade' => 'legacy']);
+		$this->mpdf = $this->createMpdf(['cssMode' => 'legacy']);
 
 		$this->mpdf->WriteHTML($html);
 	}

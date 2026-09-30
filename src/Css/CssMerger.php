@@ -112,7 +112,7 @@ class CssMerger
 
 		$attr = is_array($attr) ? $attr : [];
 
-		if ($this->mpdf->cssCascade === 'standard') {
+		if ($this->mpdf->cssMode === 'standard') {
 			return $this->mergeInCascadeOrder($inherit, $tag, $attr);
 		}
 
@@ -159,7 +159,7 @@ class CssMerger
 	}
 
 	/**
-	 * Merges an element's CSS as the standard cascade orders it, in layers, each over the one before: the inherited
+	 * Merges an element's CSS as standard mode orders it, in layers, each over the one before: the inherited
 	 * values, the built-in defaults and the default stylesheet's rules, the presentational attributes as author rules
 	 * of zero specificity, the author rules, and the inline style. The rules of each stylesheet apply by specificity,
 	 * then in the order they were written.

@@ -31,7 +31,7 @@ class DescendantLangSelectorTest extends TestCase
 	 */
 	public function testTheRuleColoursTheText($css, $html, $expected)
 	{
-		$colours = $this->textColours('<style>' . $css . '</style>' . $html, ['cssCascade' => 'legacy']);
+		$colours = $this->textColours('<style>' . $css . '</style>' . $html, ['cssMode' => 'legacy']);
 
 		$this->assertArrayHasKey('text', $colours);
 		$this->assertSame($expected, $colours['text']);

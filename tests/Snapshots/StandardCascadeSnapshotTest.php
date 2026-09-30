@@ -115,7 +115,7 @@ class StandardCascadeSnapshotTest extends Snapshot
 		<?php
 		$html = ob_get_clean();
 
-		$this->mpdf = $this->createMpdf(['cssCascade' => 'standard']);
+		$this->mpdf = $this->createMpdf(['cssMode' => 'standard']);
 
 		$this->mpdf->WriteHTML($html);
 	}

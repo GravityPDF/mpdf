@@ -268,7 +268,7 @@ class StructuralSelectorTest extends TestCase
 	 */
 	public function testAppliesMatchedRulesBySpecificityThenPosition($css, $html, $expected)
 	{
-		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssCascade' => 'legacy']);
+		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssMode' => 'legacy']);
 
 		$this->assertSame($expected, $colours['text']);
 	}

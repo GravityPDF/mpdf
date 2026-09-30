@@ -25,7 +25,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$logger = new NullLogger();
 		// The legacy cascade stores rules by key and in the descendant tree as well as compiling them
-		$this->mpdf = new Mpdf(['cssCascade' => 'legacy']);
+		$this->mpdf = new Mpdf(['cssMode' => 'legacy']);
 		$this->mpdf->setLogger($logger);
 
 		$assetFetcher = $this->getMockBuilder(AssetFetcher::class)
@@ -348,7 +348,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testCompilesEveryRuleUnderTheStandardCascade()
 	{
-		$this->mpdf->cssCascade = 'standard';
+		$this->mpdf->cssMode = 'standard';
 		$this->parser->parse('<style>p { color: red; } .a, div .b { color: green; } li:first-child { color: blue; } @page { margin-left: 1cm; }</style>');
 
 		$rules = $this->parser->getCompiledRules();

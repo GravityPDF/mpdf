@@ -28,7 +28,7 @@ class PositionedBlockSelectorTest extends TestCase
 	 */
 	protected function config()
 	{
-		return ['cssCascade' => 'legacy'];
+		return ['cssMode' => 'legacy'];
 	}
 
 	/**

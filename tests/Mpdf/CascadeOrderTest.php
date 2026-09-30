@@ -5,7 +5,7 @@ namespace Mpdf;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
- * The order the rules that set the same property of an element are applied in, under each value of cssCascade. The
+ * The order the rules that set the same property of an element are applied in, under each value of cssMode. The
  * legacy cascade applies them in a fixed order of selector groups; the standard cascade by specificity, then by the
  * order they are written in, as a browser does.
  */
@@ -32,7 +32,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testAppliesTheRulesInTheCascadesOrder($cascade, $css, $html, array $expected)
 	{
-		$this->assertDrawnInColours($expected, $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssCascade' => $cascade]));
+		$this->assertDrawnInColours($expected, $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssMode' => $cascade]));
 	}
 
 	/**
@@ -171,7 +171,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testAStylesheetWrittenLaterComesLater()
 	{
-		$mpdf = $this->drawDocument('<style>.b { color: #008000; }</style>', ['cssCascade' => 'standard']);
+		$mpdf = $this->drawDocument('<style>.b { color: #008000; }</style>', ['cssMode' => 'standard']);
 		$mpdf->WriteHTML('<style>.a { color: #f00; }</style><p class="a b">both</p>');
 
 		$this->assertSame(self::RED, $mpdf->drawnColours[0]);
@@ -189,7 +189,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testAnAuthorRuleBeatsTheDefaultStylesheet($cascade, $authorWins)
 	{
-		$mpdf = $this->drawDocument('<style>ul { margin: 0 0 20mm 0; }</style><ul><li>outer<ul><li>inner</li></ul></li><li>next</li></ul>', ['cssCascade' => $cascade]);
+		$mpdf = $this->drawDocument('<style>ul { margin: 0 0 20mm 0; }</style><ul><li>outer<ul><li>inner</li></ul></li><li>next</li></ul>', ['cssMode' => $cascade]);
 		$y = $this->keyedByText($mpdf, $mpdf->drawnY);
 
 		$this->assertEqualsWithDelta($authorWins ? 20 : 0, $y['next'] - $y['inner'] - ($y['inner'] - $y['outer']), 0.5);
@@ -221,7 +221,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testAPresentationalAttributeComesAfterTheDefaults($cascade, $html, $expected)
 	{
-		$page = $this->pages($this->render($html, ['cssCascade' => $cascade]))[0];
+		$page = $this->pages($this->render($html, ['cssMode' => $cascade]))[0];
 
 		$this->assertStringContainsString($expected, $page);
 	}
@@ -251,8 +251,8 @@ class CascadeOrderTest extends TestCase
 	public function testVspaceBeatsTheDefaultMarginOfAnImage()
 	{
 		$html = '<img src="' . __DIR__ . '/../data/img/tiger.jpg" width="20" vspace="30" /><p>after</p>';
-		$legacy = $this->drawDocument($html, ['cssCascade' => 'legacy']);
-		$standard = $this->drawDocument($html, ['cssCascade' => 'standard']);
+		$legacy = $this->drawDocument($html, ['cssMode' => 'legacy']);
+		$standard = $this->drawDocument($html, ['cssMode' => 'standard']);
 
 		$this->assertEqualsWithDelta(2 * 30 * 25.4 / 96, $standard->drawnY[0] - $legacy->drawnY[0], 0.1);
 	}
@@ -262,7 +262,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testTheBodyTakesWhatTheApiWritesForIt()
 	{
-		$mpdf = new TextRecordingMpdf(['mode' => 'c', 'cssCascade' => 'standard']);
+		$mpdf = new TextRecordingMpdf(['mode' => 'c', 'cssMode' => 'standard']);
 		$mpdf->SetDefaultBodyCSS('color', '#008000');
 		$mpdf->WriteHTML('<p>body text</p>');
 
@@ -275,7 +275,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testBodyRulesStyleTheDocument()
 	{
-		$mpdf = $this->drawDocument('<style>body { font-size: 20pt; } body > p.c { color: #008000; }</style><p>plain</p><p class="c">classed</p>', ['cssCascade' => 'standard']);
+		$mpdf = $this->drawDocument('<style>body { font-size: 20pt; } body > p.c { color: #008000; }</style><p>plain</p><p class="c">classed</p>', ['cssMode' => 'standard']);
 		$sizes = $this->keyedByText($mpdf, $mpdf->drawnFontSize);
 		$colours = $this->keyedByText($mpdf, $mpdf->drawnColours);
 
@@ -291,8 +291,8 @@ class CascadeOrderTest extends TestCase
 	public function testTheDefaultStylesheetApplies()
 	{
 		$html = '<ul><li>outer<ul><li>inner</li></ul></li><li>next</li></ul>';
-		$legacy = $this->drawDocument($html, ['cssCascade' => 'legacy']);
-		$standard = $this->drawDocument($html, ['cssCascade' => 'standard']);
+		$legacy = $this->drawDocument($html, ['cssMode' => 'legacy']);
+		$standard = $this->drawDocument($html, ['cssMode' => 'standard']);
 
 		$this->assertSame($legacy->drawnY, $standard->drawnY);
 	}
@@ -306,7 +306,7 @@ class CascadeOrderTest extends TestCase
 		$svg = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="20"><text class="t" x="0" y="15">Hi</text></svg>';
 		$html = '<style>.t { fill: #00ff00; }</style><img src="data:image/svg+xml;base64,' . base64_encode($svg) . '" />';
 
-		$this->assertStringContainsString('0.000 1.000 0.000 rg', $this->render($html, ['cssCascade' => 'standard', 'svgClasses' => true]));
+		$this->assertStringContainsString('0.000 1.000 0.000 rg', $this->render($html, ['cssMode' => 'standard', 'svgClasses' => true]));
 	}
 
 	/**
@@ -314,7 +314,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testPageRulesStillApply()
 	{
-		$mpdf = $this->drawDocument('<style>@page { margin-left: 50mm; }</style><p>text</p>', ['cssCascade' => 'standard']);
+		$mpdf = $this->drawDocument('<style>@page { margin-left: 50mm; }</style><p>text</p>', ['cssMode' => 'standard']);
 
 		$this->assertEqualsWithDelta(50, $mpdf->drawnBoxes[0][1], 0.01);
 	}
@@ -329,8 +329,8 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testADocumentWhoseRulesDoNotCompeteIsDrawnAlike($html)
 	{
-		$legacy = $this->pages($this->render($html, ['cssCascade' => 'legacy']));
-		$standard = $this->pages($this->render($html, ['cssCascade' => 'standard']));
+		$legacy = $this->pages($this->render($html, ['cssMode' => 'legacy']));
+		$standard = $this->pages($this->render($html, ['cssMode' => 'standard']));
 
 		$this->assertSame($legacy, $standard);
 	}
@@ -362,8 +362,8 @@ class CascadeOrderTest extends TestCase
 	public function testRefusesAnUnknownCascade()
 	{
 		$this->expectException(MpdfException::class);
-		$this->expectExceptionMessage('cssCascade (browser) is not valid. (Use: legacy or standard)');
+		$this->expectExceptionMessage('cssMode (browser) is not valid. (Use: legacy or standard)');
 
-		new Mpdf(['cssCascade' => 'browser']);
+		new Mpdf(['cssMode' => 'browser']);
 	}
 }

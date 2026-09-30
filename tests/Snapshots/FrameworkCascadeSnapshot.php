@@ -5,7 +5,7 @@ namespace Snapshots;
 /**
  * A page styled the way a CSS framework and a theme style one: components, utility classes, ids, and descendant and
  * child rules that compete for the same elements on specificity and source order. Written under each value of
- * cssCascade, with captions saying what each cascade draws.
+ * cssMode, with captions saying what each cascade draws.
  *
  * @group snapshot
  */
@@ -71,7 +71,7 @@ abstract class FrameworkCascadeSnapshot extends Snapshot
 		</style>
 
 		<h1>A framework's stylesheet</h1>
-		<p class="caption">Written with cssCascade set to <?php echo $this->cascade(); ?>.</p>
+		<p class="caption">Written with cssMode set to <?php echo $this->cascade(); ?>.</p>
 
 		<h2>Navbar</h2>
 		<p class="caption">#brand against .navbar &gt; .container a. Standard: "Brand" is yellow and bold, the id beating the child rule. Legacy: "Brand" is grey like the other links, though still bold, because a rule only the matcher reads is applied after the id.</p>
@@ -112,7 +112,7 @@ abstract class FrameworkCascadeSnapshot extends Snapshot
 		<?php
 		$html = ob_get_clean();
 
-		$this->mpdf = $this->createMpdf(['cssCascade' => $this->cascade()]);
+		$this->mpdf = $this->createMpdf(['cssMode' => $this->cascade()]);
 
 		$this->mpdf->WriteHTML($html);
 	}

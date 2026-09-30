@@ -20,7 +20,7 @@ class TableCellDescendantSelectorTest extends \Yoast\PHPUnitPolyfills\TestCases\
 	 */
 	protected function config()
 	{
-		return ['cssCascade' => 'legacy'];
+		return ['cssMode' => 'legacy'];
 	}
 
 	/**

@@ -21,7 +21,7 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		parent::set_up();
 
 		// The merges below read the legacy cascade's keys and trees
-		$this->mpdf = new Mpdf(['cssCascade' => 'legacy']);
+		$this->mpdf = new Mpdf(['cssMode' => 'legacy']);
 
 		$this->cssManager = $this->cssManagerOf($this->mpdf);
 
@@ -587,7 +587,7 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testPreviewsABlockUnderTheStandardCascadeWithoutSideEffects()
 	{
-		$mpdf = new Mpdf(['cssCascade' => 'standard']);
+		$mpdf = new Mpdf(['cssMode' => 'standard']);
 		$mpdf->WriteHTML('<style>.box > p { color: red; } p.lead { margin-top: 5mm; }</style><div class="box">', \Mpdf\HTMLParserMode::DEFAULT_MODE, true, false);
 
 		$cssManager = $this->cssManagerOf($mpdf);

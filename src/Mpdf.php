@@ -237,7 +237,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * @var string 'standard' or 'legacy'. See ConfigVariables
 	 */
-	var $cssCascade;
+	var $cssMode;
 
 	var $forcePortraitHeaders;
 	var $forcePortraitMargins;
@@ -1176,8 +1176,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$originalConfig = $config;
 		$config = $this->initConfig($originalConfig);
 
-		if (!in_array($this->cssCascade, ['legacy', 'standard'], true)) {
-			throw new \Mpdf\MpdfException(sprintf('cssCascade (%s) is not valid. (Use: legacy or standard)', $this->cssCascade));
+		if (!in_array($this->cssMode, ['legacy', 'standard'], true)) {
+			throw new \Mpdf\MpdfException(sprintf('cssMode (%s) is not valid. (Use: legacy or standard)', $this->cssMode));
 		}
 
 		if ($this->isPdfx4() && version_compare($this->pdf_version, '1.6', '<')) {
@@ -1599,7 +1599,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if (file_exists($this->defaultCssFile)) {
 			$css = file_get_contents($this->defaultCssFile);
-			$this->cssManager->ReadCSS('<style> ' . $css . ' </style>', $this->cssCascade === 'standard');
+			$this->cssManager->ReadCSS('<style> ' . $css . ' </style>', $this->cssMode === 'standard');
 		} else {
 			throw new \Mpdf\MpdfException(sprintf('Unable to read default CSS file "%s"', $this->defaultCssFile));
 		}
