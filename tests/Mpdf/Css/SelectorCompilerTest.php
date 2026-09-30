@@ -151,7 +151,13 @@ class SelectorCompilerTest extends TestCase
 			'only-of-type' => ['p:only-of-type', [['tag' => 'P', 'pseudos' => [['only-of-type']]]], []],
 			'empty' => ['p:empty', [['tag' => 'P', 'pseudos' => [['empty']]]], []],
 			'first and last together' => ['td:first-child:last-child', [['tag' => 'TD', 'pseudos' => [['nth-child', 0, 1], ['nth-last-child', 0, 1]]]], []],
-			'last-child in not' => [':not(:last-child)', [['pseudos' => [['not', [['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => [['nth-last-child', 0, 1]]]], 'combinators' => [], 'specificity' => [0, 1, 0], 'universal' => false]]]]]], []],
+			'last-child in not' => [':not(:last-child)', [['pseudos' => [['not', [['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => [['nth-last-child', 0, 1]]]], 'combinators' => [], 'specificity' => [0, 1, 0], 'universal' => false, 'never' => false]]]]]], []],
+			'root' => [':root', [['tag' => null, 'pseudos' => [['root']]]], []],
+			'html' => ['HTML > body', [$tag('HTML'), $tag('BODY')], ['>']],
+			'link' => ['a:link', [['tag' => 'A', 'pseudos' => [['link']]]], []],
+			'any-link as link' => [':Any-Link', [['tag' => null, 'pseudos' => [['link']]]], []],
+			'visited never matches' => ['a:visited', [['tag' => 'A', 'pseudos' => [['never']]]], []],
+			'a state a reader acts out never matches' => ['a:hover:focus:active:focus-within:focus-visible:target', [['tag' => 'A', 'pseudos' => [['never'], ['never'], ['never'], ['never'], ['never'], ['never']]]], []],
 			'pseudo-class with no type' => [':first-child', [['tag' => null, 'pseudos' => [['nth-child', 0, 1]]]], []],
 			'lang with one range' => [':lang(fr)', [['pseudos' => [['lang', ['fr']]]]], []],
 			'lang with ranges in any case, some quoted' => [
@@ -254,7 +260,7 @@ class SelectorCompilerTest extends TestCase
 			'not with a complex selector' => ['p:not(div > p)', 'not', [['P', []]]],
 			'is' => [':is(h1, h2)', 'is', [['H1', []], ['H2', []]]],
 			'where' => [':where(h1, .x)', 'is', [['H1', []], [null, ['X']]]],
-			'is leaves out what it cannot read' => [':is(h1, a:hover, ::before, h2)', 'is', [['H1', []], ['H2', []]]],
+			'is leaves out what it cannot read' => [':is(h1, a:has(b), ::before, h2)', 'is', [['H1', []], ['H2', []]]],
 			'is nested in is' => [':is(:is(h1), p)', 'is', [[null, []], ['P', []]]],
 			'not with a comma inside an attribute value' => ['p:not([title="a, b"])', 'not', [[null, []]]],
 			'not with a closing parenthesis inside an attribute value' => ['p:not([title=")"], .x)', 'not', [[null, []], [null, ['X']]]],
@@ -289,7 +295,6 @@ class SelectorCompilerTest extends TestCase
 			'a tag mPDF does not style as an ancestor' => ['sup > b'],
 			'a pseudo-element' => ['p::before'],
 			'a pseudo-element written with one colon is not a pseudo-class mPDF knows' => ['p:before'],
-			'a pseudo-class with no meaning in a PDF' => ['a:hover'],
 			'a pseudo-class that looks inside the element' => ['li:has(> a)'],
 			'last-child with an argument' => ['li:last-child(2)'],
 			'empty with an argument' => ['p:empty()'],
@@ -318,11 +323,11 @@ class SelectorCompilerTest extends TestCase
 			'lang with no range' => [':lang()'],
 			'lang with an empty range between commas' => [':lang(fr,,de)'],
 			'lang with no parentheses' => [':lang'],
-			'not with an argument it cannot read' => ['p:not(.a, a:hover)'],
+			'not with an argument it cannot read' => ['p:not(.a, a:has(b))'],
 			'not with a pseudo-element' => ['p:not(::before)'],
 			'not left open' => ['p:not(.a'],
 			'not with nothing' => ['p:not()'],
-			'is with nothing it can read' => [':is(a:hover, ::before)'],
+			'is with nothing it can read' => [':is(a:has(b), ::before)'],
 			'where with nothing' => [':where()'],
 			'a stray comma in not' => ['p:not(.a,)'],
 		];
@@ -368,9 +373,50 @@ class SelectorCompilerTest extends TestCase
 			'is with a type and an id' => [':is(p, #x)', [1, 0, 0]],
 			'where counts nothing' => [':where(#a, .b) > p', [0, 0, 1]],
 			'where inside is' => [':is(:where(#a), .b)', [0, 1, 0]],
-			'is leaves out what it cannot read from its specificity too' => [':is(.a, #b:hover)', [0, 1, 0]],
+			'is leaves out what it cannot read from its specificity too' => [':is(.a, #b:has(c))', [0, 1, 0]],
 			'nested' => ['li:not(:is(.a, #b)):nth-child(2)', [1, 1, 1]],
+			'root' => [':root', [0, 1, 0]],
+			'html' => ['html', [0, 0, 1]],
+			'link' => ['a:link', [0, 1, 1]],
+			'any-link' => [':any-link', [0, 1, 0]],
+			'visited' => ['a:visited', [0, 1, 1]],
+			'not hover counts as a class' => ['p:not(:hover)', [0, 1, 1]],
 			'each pseudo-class that looks ahead counts as a class' => ['li:last-child:nth-last-child(1):only-child:last-of-type:nth-last-of-type(1):only-of-type:empty', [0, 7, 1]],
+		];
+	}
+
+	/**
+	 * A selector with a pseudo-class that never matches in a PDF, as :hover, is marked, so that its rule is dropped. In
+	 * the argument of :not() or :is() it does not mark the selector around it
+	 *
+	 * @dataProvider selectorsThatNeverMatch
+	 *
+	 * @param string $selector
+	 * @param bool $never
+	 */
+	public function testMarksASelectorThatNeverMatches($selector, $never)
+	{
+		$this->assertSame($never, $this->compiler->compile($selector)['never']);
+	}
+
+	/**
+	 * A selector, and whether it never matches
+	 *
+	 * @return array[]
+	 */
+	public function selectorsThatNeverMatch()
+	{
+		return [
+			'hover' => ['a:hover', true],
+			'visited' => ['a:visited', true],
+			'focus on an ancestor' => ['form:focus-within input', true],
+			'target on a sibling' => ['h2:target + p', true],
+			'active beside a pseudo-class that matches' => ['a:link:active', true],
+			'not hover' => ['a:not(:hover)', false],
+			'is hover' => [':is(a:hover, p)', false],
+			'link' => ['a:link', false],
+			'root' => [':root', false],
+			'a type' => ['p', false],
 		];
 	}
 

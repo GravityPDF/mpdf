@@ -199,6 +199,17 @@ trait TracksOpenElements
 	}
 
 	/**
+	 * The path html and body are matched against when the document's own CSS is merged: the document's frame alone,
+	 * carrying the language of the <html> or <body> tag
+	 *
+	 * @return array[]
+	 */
+	public function getDocumentPath()
+	{
+		return $this->newOpenElementStack();
+	}
+
+	/**
 	 * A path with a frame added for an element opened in its last element, after the children that element has so
 	 * far, and put under the tbody the stack gives a row written straight into a table
 	 *

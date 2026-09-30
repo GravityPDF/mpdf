@@ -117,7 +117,8 @@ class ServiceFactory
 			$inlinePropertyConverter,
 			$colorConverter,
 			$borderMerger,
-			new PresentationalHints($mpdf, $normalizeProperties)
+			new PresentationalHints($mpdf, $normalizeProperties),
+			$sizeConverter
 		);
 
 		$cssManager = new CssManager($cssParser, $cssMerger);

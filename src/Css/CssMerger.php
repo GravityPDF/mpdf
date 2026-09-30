@@ -7,6 +7,7 @@ use Mpdf\CssMode;
 use Mpdf\CssManager;
 use Mpdf\Exception\InvalidArgumentException;
 use Mpdf\Mpdf;
+use Mpdf\SizeConverter;
 use Mpdf\Utils\Arrays;
 
 class CssMerger
@@ -63,6 +64,11 @@ class CssMerger
 	private $presentationalHints;
 
 	/**
+	 * @var SizeConverter
+	 */
+	private $sizeConverter;
+
+	/**
 	 * @var bool When true, state outside this object will be modified
 	 * @internal self::previewBlockCss() uses this property to look ahead without affecting state
 	 */
@@ -76,7 +82,8 @@ class CssMerger
 		InlinePropertyConverter $inlinePropertyConverter,
 		ColorConverter $colorConverter,
 		BorderMerger $borderMerger,
-		PresentationalHints $presentationalHints
+		PresentationalHints $presentationalHints,
+		SizeConverter $sizeConverter
 	) {
 		$this->mpdf = $mpdf;
 		$this->normalizeProperties = $normalizeProperties;
@@ -86,6 +93,7 @@ class CssMerger
 		$this->colorConverter = $colorConverter;
 		$this->borderMerger = $borderMerger;
 		$this->presentationalHints = $presentationalHints;
+		$this->sizeConverter = $sizeConverter;
 	}
 
 	/**
@@ -213,8 +221,10 @@ class CssMerger
 			// Merged outside the document's elements, and written to by Mpdf::SetDefaultBodyCSS() and the like
 			$important = $this->cssManager->getImportantCss();
 			$importantDefault = $this->cssManager->getDefaultImportantCss();
-			$rules = [isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : []];
-			$importantRules = isset($important['BODY']) ? [$important['BODY']] : [];
+			$body = isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : [];
+			$this->setMergedCss($body, false);
+			$rules = [];
+			$importantRules = array_merge(isset($important['BODY']) ? [$important['BODY']] : [], $this->mergeDocumentRules());
 			$importantDefaultRules = isset($importantDefault['BODY']) ? [$importantDefault['BODY']] : [];
 		} else {
 			list($rules, $importantRules) = $this->cssManager->getRules()->matchingDeclarations($tag, $id, $classes, $path);
@@ -225,6 +235,42 @@ class CssMerger
 		$this->mergeEach(array_merge([$inline], $importantRules, [$importantInline], $importantDefaultRules), $dominance);
 
 		return $this->cssProperties;
+	}
+
+	/**
+	 * Merges html's rules into body's CSS, and body's own rules again over them. mPDF has no html element: the
+	 * document's frame stands for body, and html is matched as its parent, so html's declarations, its !important
+	 * ones included, reach the text as a parent's would, and lose to body's. Both win over what SetDefaultBodyCSS() and
+	 * the like set.
+	 *
+	 * html's font size, read against the default font size, is the root's, which rem and body's own size are read
+	 * against
+	 *
+	 * @return array[] The !important declarations of body's rules, which apply after body's style
+	 */
+	private function mergeDocumentRules()
+	{
+		$rules = $this->cssManager->getRules();
+		$path = $this->mpdf->getDocumentPath();
+		$initial = $this->mpdf->initial_font_size;
+		$this->mpdf->root_font_size = $initial;
+
+		list($html, $importantHtml) = $rules->documentDeclarations(true, $path);
+		foreach (array_merge($html, $importantHtml) as $properties) {
+			if (isset($properties['FONT-SIZE'])) {
+				$size = $this->sizeConverter->convertFontSize($properties['FONT-SIZE'], $initial / Mpdf::SCALE, $initial);
+				if ($size !== null) {
+					$this->mpdf->root_font_size = $size;
+					$properties['FONT-SIZE'] = $size . 'pt';
+				}
+			}
+			$this->setMergedCss($properties, false);
+		}
+
+		list($body, $importantBody) = $rules->documentDeclarations(false, $path);
+		$this->mergeEach($body, false);
+
+		return $importantBody;
 	}
 
 	/**
