@@ -323,4 +323,266 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(['P', 'CLASS>>A', '@PAGE'], array_keys($this->parser->getCss()));
 		$this->assertSame([], $this->parser->getCascadeCss());
 	}
+
+	/**
+	 * Each at-rule is unwrapped, kept or left out whole, in either cssMode, and the rules around it are stored as
+	 * they are written
+	 *
+	 * @dataProvider atRulesInEachMode
+	 *
+	 * @param string $mode
+	 * @param string $css
+	 * @param array[] $expected Each key stored, with the values of the properties to check
+	 */
+	public function testAtRules($mode, $css, array $expected)
+	{
+		$this->mpdf->cssMode = $mode;
+		$this->parser->parse('<style>' . $css . '</style>');
+
+		$this->assertSame($expected, $this->storedValues($expected));
+	}
+
+	/**
+	 * Each stylesheet in atRules() in each cssMode
+	 *
+	 * @return array[]
+	 */
+	public function atRulesInEachMode()
+	{
+		return $this->inEachMode($this->atRules());
+	}
+
+	/**
+	 * Stylesheets with an at-rule in them, and the keys each stores
+	 *
+	 * @return array[]
+	 */
+	private function atRules()
+	{
+		$p = ['P' => ['COLOR' => 'red']];
+		$h1 = ['H1' => ['COLOR' => 'blue']];
+		$h1p = ['H1' => ['COLOR' => 'blue'], 'P' => ['COLOR' => 'red']];
+
+		return [
+			'no at-rule' => ['p { color: red }', $p],
+
+			'@charset' => ['@charset "UTF-8"; p { color: red }', $p],
+			'@namespace' => ['@namespace svg url(http://www.w3.org/2000/svg); p { color: red }', $p],
+			'@import' => ['@import url("a.css") screen; @import "b.css"; p { color: red }', $p],
+			'@import with semicolons in its url()' => ['@import url(https://fonts.example/css2?family=Inter:wght@300;400;500&display=swap); p { color: red }', $p],
+			'@layer statement' => ['@layer base, theme; p { color: red }', $p],
+
+			'@keyframes' => ['@keyframes spin { from { opacity: 0 } to { opacity: 1 } } p { color: red }', $p],
+			'prefixed @keyframes' => ['@-webkit-keyframes spin { 0% { opacity: 0 } } p { color: red }', $p],
+			'@container' => ['@container (min-width: 1px) { h1 { color: blue } } p { color: red }', $p],
+			'@font-feature-values' => ['@font-feature-values Font { @swash { fancy: 1 } } p { color: red }', $p],
+			'@font-face' => ['@font-face { font-family: x; src: url(x.ttf) } p { color: red }', $p],
+			'an empty unknown block' => ['@unknown {} p { color: red }', $p],
+
+			'@supports' => ['@supports (display: grid) { h1 { color: blue } } p { color: red }', $h1p],
+			'@supports not' => ['@supports not (display: grid) { h1 { color: blue } } p { color: red }', $p],
+			'@supports with not inside it' => ['@supports (display: grid) and (not (display: inline-grid)) { h1 { color: blue } }', $h1],
+			'@layer block' => ['@layer base { h1 { color: blue } } p { color: red }', $h1p],
+			'@layer block with no name' => ['@layer { h1 { color: blue } }', $h1],
+
+			'@media for print' => ['@media print { h1 { color: blue } } p { color: red }', $h1p],
+			'@media for screen' => ['@media screen { h1 { color: blue } } p { color: red }', $p],
+			'@media in upper case' => ['@MEDIA print { h1 { color: blue } }', $h1],
+			'an empty @media block' => ['@media print {} p { color: red }', $p],
+			'@media inside @supports' => ['@supports (display: grid) { @media print { h1 { color: blue } } @media screen { h2 { color: blue } } }', $h1],
+			'@supports inside @media' => ['@media print { @supports (display: grid) { h1 { color: blue } } h2 { color: blue } }', $h1 + ['H2' => ['COLOR' => 'blue']]],
+			'@media inside @media' => ['@media print { @media all { h1 { color: blue } } }', $h1],
+			'@keyframes inside @media' => ['@media print { @keyframes spin { from { opacity: 0 } } h1 { color: blue } }', $h1],
+			'@media left open' => ['p { color: red } @media print { h1 { color: blue }', ['P' => ['COLOR' => 'red'], 'H1' => ['COLOR' => 'blue']]],
+
+			'@page' => ['@page { margin-top: 10mm } p { color: red }', ['@PAGE' => ['MARGIN-TOP' => '10mm'], 'P' => ['COLOR' => 'red']]],
+			'@page with a pseudo page' => ['@page :first { margin-top: 10mm }', ['@PAGE>>PSEUDO>>FIRST' => ['MARGIN-TOP' => '10mm']]],
+			'@page with a pseudo page and no space' => ['@page:first { margin-top: 10mm }', ['@PAGE>>PSEUDO>>FIRST' => ['MARGIN-TOP' => '10mm']]],
+			'@page inside @media' => ['@media print { @page { margin-top: 10mm } }', ['@PAGE' => ['MARGIN-TOP' => '10mm']]],
+			'@page with margin boxes' => [
+				'@page { margin-top: 10mm; @top-center { content: "}" } margin-bottom: 20mm; @bottom-left { content: "y" } } p { color: red }',
+				['@PAGE' => ['MARGIN-TOP' => '10mm', 'MARGIN-BOTTOM' => '20mm'], 'P' => ['COLOR' => 'red']],
+			],
+
+			'a brace in a string in a prelude' => ['@supports (content: "}") { h1 { color: blue } } p { color: red }', $h1p],
+			'a brace in a string in a removed block' => ['@keyframes x { from { content: "}" } } p { color: red }', $p],
+			'a brace in a string in an unwrapped block' => ['@layer { h1 { content: \'{\'; color: blue } } p { color: red }', $h1p],
+			'a quote escaped in a string' => ['@keyframes x { from { content: "\"}" } } p { color: red }', $p],
+			'a semicolon in a string in a statement' => ['@import "a;b.css"; p { color: red }', $p],
+			'an escaped brace' => ['@keyframes x { from { content: \} } } p { color: red }', $p],
+			'an at sign in a declaration' => ['h1 { color: blue; background: url(a@2x.png) } p { color: red }', $h1p],
+			'a string left open at the end of a line' => ["@keyframes x { from { content: \"} } }\n} } p { color: red }", $p],
+			'a statement left open' => ['p { color: red } @import "a.css"', $p],
+		];
+	}
+
+	/**
+	 * Braces, semicolons and comment markers inside strings, url() and escapes are part of the declaration or selector
+	 * they are in, in either cssMode, and the rules around them are stored as they are written
+	 *
+	 * @dataProvider constructsInEachMode
+	 *
+	 * @param string $mode
+	 * @param string $css
+	 * @param array[] $expected Each key stored, with the values of the properties to check
+	 */
+	public function testStringsUrlsAndEscapes($mode, $css, array $expected)
+	{
+		$this->mpdf->cssMode = $mode;
+		$this->parser->parse('<style>' . $css . '</style>');
+
+		$this->assertSame($expected, $this->storedValues($expected));
+	}
+
+	/**
+	 * Each stylesheet in constructs() in each cssMode
+	 *
+	 * @return array[]
+	 */
+	public function constructsInEachMode()
+	{
+		return $this->inEachMode($this->constructs());
+	}
+
+	/**
+	 * Stylesheets with braces, semicolons or comment markers in strings, url() or escapes, and the keys each stores
+	 *
+	 * @return array[]
+	 */
+	private function constructs()
+	{
+		$quotes = function ($value) {
+			return ['Q' => ['QUOTES' => $value], 'P' => ['COLOR' => 'red']];
+		};
+
+		return [
+			'braces in a string' => ['q { quotes: "}" "{" } p { color: red }', $quotes('"}" "{"')],
+			'an unbalanced brace in a string' => ['q { quotes: "}" } p { color: red }', $quotes('"}"')],
+			'a semicolon in a string' => ['q { quotes: ";" ";" } p { color: red }', $quotes('";" ";"')],
+			'a declaration in a string' => [
+				'p { color: red; font-family: \'x;color:blue;y\', monospace }',
+				['P' => ['COLOR' => 'red', 'FONT-FAMILY' => 'monospace']],
+			],
+			'an escaped quote in a string' => ['q { quotes: "\"}" "x" } p { color: red }', $quotes('"\"}" "x"')],
+			'a comment opener in a string' => ['q { quotes: "/*" "x" } p { color: red } q { quotes: "*/" "x" }', $quotes('"*/" "x"')],
+			'a comment in a string' => ['q { quotes: "/* x */" "y" } p { color: red }', $quotes('"/* x */" "y"')],
+			'a comment with a quote in it' => ['/* it\'s } */ q { quotes: "x" "y" } p { color: red }', $quotes('"x" "y"')],
+			'a string left open at a line break' => ["q { quotes: \"a}b\n; } p { color: red }", ['Q' => [], 'P' => ['COLOR' => 'red']]],
+
+			'an escaped brace in a selector' => ['.a\{b { color: blue } p { color: red }', ['P' => ['COLOR' => 'red']]],
+			'a brace in an attribute selector' => ['q[title="{"] { color: blue } p { color: red }', ['P' => ['COLOR' => 'red']]],
+
+			'braces and a semicolon in an unquoted url()' => [
+				'div { background-image: url(http://example.com/a};{b.png) } p { color: red }',
+				['DIV' => ['BACKGROUND-IMAGE' => 'http://example.com/a%7D;%7Bb.png'], 'P' => ['COLOR' => 'red']],
+			],
+			'a semicolon in a quoted url()' => [
+				'div { background-image: url("data:image/svg+xml;utf8,<svg></svg>"); color: blue } p { color: red }',
+				['DIV' => ['BACKGROUND-IMAGE' => 'data:image/svg+xml;utf8,<svg></svg>', 'COLOR' => 'blue'], 'P' => ['COLOR' => 'red']],
+			],
+			'a percent sign and ZZ in a url()' => ['div { background-image: url(http://example.com/a%ZZb.png) }', ['DIV' => ['BACKGROUND-IMAGE' => 'http://example.com/a%ZZb.png']]],
+
+			'a rule nested in a block' => [
+				'q { color: blue; & b { color: green } margin-top: 1mm } p { color: red }',
+				['Q' => ['COLOR' => 'blue', 'MARGIN-TOP' => '1mm'], 'P' => ['COLOR' => 'red']],
+			],
+			'an at-rule nested in a block' => [
+				'q { color: blue; @media print { color: green } margin-top: 1mm } p { color: red }',
+				['Q' => ['COLOR' => 'blue', 'MARGIN-TOP' => '1mm'], 'P' => ['COLOR' => 'red']],
+			],
+			'whitespace across lines' => ["p\n{ margin:\n1mm\t2mm; }", ['P' => ['MARGIN-TOP' => '1mm', 'MARGIN-RIGHT' => '2mm']]],
+		];
+	}
+
+	/**
+	 * In standard mode, a selector with escapes in it reaches the compiler whole, which reads each escape as the
+	 * character it stands for
+	 */
+	public function testASelectorWithEscapesReachesTheCompilerWhole()
+	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
+		$this->parser->parse('<style>.sm\\:hidden { color: blue } .a\\{b\\;c { color: green }</style>');
+
+		$rules = $this->parser->getCompiledRules();
+		$this->assertCount(2, $rules);
+		$this->assertSame(['SM:HIDDEN'], $rules[0][0]['compounds'][0]['classes']);
+		$this->assertSame(['COLOR' => 'blue'], $rules[0][1]);
+		$this->assertSame(['A{B;C'], $rules[1][0]['compounds'][0]['classes']);
+		$this->assertSame(['COLOR' => 'green'], $rules[1][1]);
+	}
+
+	/**
+	 * A block, comment or string left open in one stylesheet ends with it, and the next stylesheet is read from its
+	 * start
+	 *
+	 * @dataProvider stylesheetsLeftOpen
+	 *
+	 * @param string $first
+	 */
+	public function testEachStylesheetIsReadOnItsOwn($first)
+	{
+		$this->parser->parse('<style>' . $first . '</style><style>p { color: red }</style>');
+
+		$this->assertSame(['COLOR' => 'red'], $this->parser->getCss()['P']);
+	}
+
+	/**
+	 * Stylesheets that leave something open at their end
+	 *
+	 * @return array[]
+	 */
+	public function stylesheetsLeftOpen()
+	{
+		return [
+			'a block' => ['h1 { color: blue'],
+			'a comment' => ['/* h1 { color: blue }'],
+			'a string' => ['h1 { font-family: "a'],
+		];
+	}
+
+	/**
+	 * A byte order mark at the start of a stylesheet, as one read from a file may have, is not part of its first rule
+	 */
+	public function testAByteOrderMarkIsNotPartOfTheFirstRule()
+	{
+		$this->parser->parse("<style> \xEF\xBB\xBF@charset \"UTF-8\"; p { color: red }</style><style>\xEF\xBB\xBFh1 { color: blue }</style>");
+
+		$this->assertSame(['P' => ['COLOR' => 'red'], 'H1' => ['COLOR' => 'blue']], $this->parser->getCss());
+	}
+
+	/**
+	 * Each case in each cssMode
+	 *
+	 * @param array[] $cases
+	 *
+	 * @return array[] Each case with the mode before its arguments, named for both
+	 */
+	private function inEachMode(array $cases)
+	{
+		$data = [];
+		foreach ([CssMode::LEGACY, CssMode::STANDARD] as $mode) {
+			foreach ($cases as $name => $case) {
+				$data[$mode . ': ' . $name] = array_merge([$mode], $case);
+			}
+		}
+
+		return $data;
+	}
+
+	/**
+	 * The keys the last CSS parsed stored, each with the values of the properties named for it
+	 *
+	 * @param array[] $properties The properties to read for each key, keyed by their names
+	 *
+	 * @return array[] Each key stored, with those of the properties named for it that it has
+	 */
+	private function storedValues(array $properties)
+	{
+		$stored = [];
+		foreach ($this->parser->getCss() as $key => $values) {
+			$stored[$key] = array_intersect_key($values, isset($properties[$key]) ? $properties[$key] : []);
+		}
+
+		return $stored;
+	}
 }

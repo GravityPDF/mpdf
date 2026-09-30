@@ -32,12 +32,18 @@ class CssLoader
 	 */
 	private $mediaQueryProcessor;
 
+	/**
+	 * @var StylesheetTokenizer
+	 */
+	private $tokenizer;
+
 	public function __construct(Mpdf $mpdf, AssetFetcher $assetFetcher, Cache $cache, MediaQueryProcessor $mediaQueryProcessor)
 	{
 		$this->mpdf = $mpdf;
 		$this->assetFetcher = $assetFetcher;
 		$this->cache = $cache;
 		$this->mediaQueryProcessor = $mediaQueryProcessor;
+		$this->tokenizer = new StylesheetTokenizer();
 	}
 
 	/**
@@ -93,29 +99,40 @@ class CssLoader
 		}
 
 		preg_match_all('/<style.*?>(.*?)<\/style>/si', $html, $styles);
+		foreach ($styles[1] as $css) {
+			$cssUrls = array_merge($cssUrls, $this->extractImportUrls($css));
+		}
 
-		return array_merge($cssUrls, $this->extractImportUrls(implode(' ', $styles[1])));
+		return $cssUrls;
 	}
 
 	/**
 	 * The URLs the @import rules in $css load, less those whose media query list does not match
 	 *
-	 * A layer() before the media query list is ignored. A supports() condition is taken to pass, as the rules in an
-	 * @supports block are unwrapped, so one that starts with not fails.
+	 * Only an @import among the stylesheet's own rules is read, not one in a comment, a string or a block. A layer()
+	 * before the media query list is ignored. A supports() condition is taken to pass, as the rules in an @supports
+	 * block are unwrapped, so one that starts with not fails.
 	 *
 	 * @param string $css
 	 * @return string[]
 	 */
 	private function extractImportUrls($css)
 	{
+		if (stripos($css, '@import') === false) {
+			return [];
+		}
+
 		$url = '(?|url\(\s*"([^"]*)"\s*\)|url\(\s*\'([^\']*)\'\s*\)|url\(\s*([^\s"\')]*)\s*\)|"([^"]*)"|\'([^\']*)\')';
 		$layer = '(?:\s*layer(?:\([^)]*\))?)?';
 		$supports = '(?:\s*supports\(\s*(not\b)?(?:[^()]|\([^()]*\))*\))?';
-		preg_match_all('/@import\s*' . $url . $layer . $supports . '([^;{}]*)/i', $css, $imports, PREG_SET_ORDER);
+		$pattern = '/^' . $url . $layer . $supports . '(.*)$/is';
 
 		$urls = [];
-		foreach ($imports as $import) {
-			if ($import[1] !== '' && $import[2] === '' && $this->mediaQueryProcessor->matches($import[3])) {
+		foreach ($this->tokenizer->rules($this->tokenizer->removeComments($css)) as $rule) {
+			if ($rule[0] === 'import' && $rule[2] === null
+				&& preg_match($pattern, $rule[1], $import)
+				&& $import[1] !== '' && $import[2] === '' && $this->mediaQueryProcessor->matches($import[3])
+			) {
 				$urls[] = $import[1];
 			}
 		}
@@ -135,8 +152,6 @@ class CssLoader
 	 */
 	public function processExternalCssImports($stylesheetCss, $path, &$externalCss, &$externalCssCount)
 	{
-		$css = '';
-
 		$cssBasePath = preg_replace('/\/[^\/]*$/', '', $path) . '/';
 		foreach ($this->extractImportUrls($stylesheetCss) as $cxtembedded) {
 			// path is relative to original stylesheet!!
@@ -144,9 +159,7 @@ class CssLoader
 			$externalCssCount++;
 		}
 
-		$css .= ' ' . $this->resolveBackgroundUrls($stylesheetCss, $cssBasePath);
-
-		return $css;
+		return $this->resolveBackgroundUrls($stylesheetCss, $cssBasePath);
 	}
 
 	/**
