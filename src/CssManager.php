@@ -125,7 +125,7 @@ class CssManager
 	 *
 	 * @param string $html HTML content containing CSS
 	 * @param bool $userAgent Whether to keep its rules apart as the user agent's, which the standard cascade applies
-	 *                        with the built-in defaults. The default stylesheet's are
+	 *                        with the built-in defaults, as it does the default stylesheet's
 	 * @return string HTML with CSS content removed
 	 */
 	public function readCss($html, $userAgent = false)

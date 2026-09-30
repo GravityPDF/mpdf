@@ -30,8 +30,6 @@ class CascadeContextTest extends TestCase
 	 */
 	public function testTheWinningRuleStylesTheElement($context, $css, array $groups)
 	{
-		$mpdf = $this->drawDocument($this->document($context, $css, $groups), ['cssCascade' => 'standard']);
-
 		$expected = [];
 		foreach ($groups as $group) {
 			foreach ($group[1] as $text => $subject) {
@@ -39,7 +37,7 @@ class CascadeContextTest extends TestCase
 			}
 		}
 
-		$this->assertDrawnInColours($expected, $this->keyedByText($mpdf, $mpdf->drawnColours));
+		$this->assertDrawnInColours($expected, $this->drawnColours($this->document($context, $css, $groups), ['cssCascade' => 'standard']));
 	}
 
 	/**

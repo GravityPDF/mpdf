@@ -151,7 +151,8 @@ class CssMerger
 		$this->mergeStylesheetSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeTagSpecificSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeDescendantSelectors($inherit, $tag, $attr, $classes, $languageCode);
-		$this->mergeCompiledRules($tag, $attr);
+		// The rules only the matcher reads, such as div > p, h1 + p and li:first-child, go after the descendant rules
+		$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $attr['ID'], $this->classesOf($attr), [$this->mpdf, 'getStyledElementPath']);
 		$this->mergeInlineStyle($tag, $attr);
 
 		return $this->cssProperties;
@@ -170,10 +171,16 @@ class CssMerger
 	 */
 	private function mergeInCascadeOrder($inherit, $tag, array $attr)
 	{
-		// Found once for both rule sets. previewBlockCss() looks at an element that is not being written, so it is put
-		// in the innermost open element, and nothing is recorded
-		$elements = $this->sideEffects ? $this->mpdf->getStyledElementPath() : $this->mpdf->getOpenElementPathFor($tag, $attr);
-		$path = function () use ($elements) {
+		// Found once, when a rule set first has a rule filed under the element. previewBlockCss() looks at an element
+		// that is not being written, so it is put in the innermost open element, and nothing is recorded
+		$mpdf = $this->mpdf;
+		$sideEffects = $this->sideEffects;
+		$elements = false;
+		$path = function () use ($mpdf, $sideEffects, $tag, $attr, &$elements) {
+			if ($elements === false) {
+				$elements = $sideEffects ? $mpdf->getStyledElementPath() : $mpdf->getOpenElementPathFor($tag, $attr);
+			}
+
 			return $elements;
 		};
 
@@ -181,10 +188,13 @@ class CssMerger
 			$attr['LANG'] = strtolower($attr['LANG']);
 		}
 
+		$id = isset($attr['ID']) ? $attr['ID'] : '';
+		$classes = $this->classesOf($attr);
+
 		$this->mergeInheritedBlockProperties($inherit, $tag);
 
 		$this->mergeDefaultCss($tag);
-		$this->mergeMatchingRules($this->cssManager->getDefaultRules(), $tag, $attr, $path);
+		$this->mergeMatchingRules($this->cssManager->getDefaultRules(), $tag, $id, $classes, $path);
 
 		$this->mergeInlineAttributes($tag, $attr);
 		$this->mergeTableSpecificCss($tag, $attr);
@@ -194,7 +204,7 @@ class CssMerger
 			$body = isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : [];
 			$this->setMergedCss($body, false);
 		} else {
-			$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $attr, $path);
+			$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $id, $classes, $path);
 		}
 
 		$this->mergeInlineStyle($tag, $attr);
@@ -203,25 +213,33 @@ class CssMerger
 	}
 
 	/**
-	 * Merges the declarations of the rules of a rule set an element matches, in the order they apply: by specificity,
-	 * then by their position in the stylesheets. Each rule that reaches a table cell draws its borders over those of
-	 * its neighbours
+	 * Merges the declarations of the rules in a rule set that an element matches, in the order they apply: by
+	 * specificity, then by their position in the stylesheets. Each rule that reaches a table cell draws its borders
+	 * over those of its neighbours
 	 *
 	 * @param RuleSet $rules
 	 * @param string $tag HTML tag name, uppercased
-	 * @param array $attr HTML attributes, with ID and CLASS uppercased
+	 * @param string $id Uppercased, or empty for none
+	 * @param string[] $classes Uppercased
 	 * @param callable $path Gives the open elements from the document down to the element, or null for none
 	 * @return void
 	 */
-	private function mergeMatchingRules(RuleSet $rules, $tag, array $attr, callable $path)
+	private function mergeMatchingRules(RuleSet $rules, $tag, $id, array $classes, callable $path)
 	{
-		$id = isset($attr['ID']) ? $attr['ID'] : '';
-		$classes = isset($attr['CLASS']) ? preg_split('/\s+/', $attr['CLASS'], -1, PREG_SPLIT_NO_EMPTY) : [];
 		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
 
 		foreach ($rules->matchingDeclarations($tag, $id, $classes, $path) as $properties) {
 			$this->setMergedCss($properties, false, $dominance);
 		}
+	}
+
+	/**
+	 * @param array $attr HTML attributes, with CLASS uppercased
+	 * @return string[] The element's classes
+	 */
+	private function classesOf(array $attr)
+	{
+		return isset($attr['CLASS']) ? preg_split('/\s+/', $attr['CLASS'], -1, PREG_SPLIT_NO_EMPTY) : [];
 	}
 
 	/**
@@ -924,20 +942,6 @@ class CssMerger
 		}
 
 		return $keys;
-	}
-
-	/**
-	 * Apply the rules whose selector only the matcher reads, such as div > p, h1 + p and li:first-child, matched
-	 * against the element and the open elements around it. They go with the descendant rules, after them, in the
-	 * order of their specificity and then of their position in the stylesheets.
-	 *
-	 * @param string $tag HTML tag name, uppercased
-	 * @param array $attr HTML attributes, with ID and CLASS uppercased and ID empty for none
-	 * @return void
-	 */
-	protected function mergeCompiledRules($tag, $attr)
-	{
-		$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $attr, [$this->mpdf, 'getStyledElementPath']);
 	}
 
 	/**

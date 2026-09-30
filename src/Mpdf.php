@@ -235,7 +235,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $CSSselectMedia;
 
 	/**
-	 * @var string 'legacy' or 'standard'. See ConfigVariables
+	 * @var string 'standard' or 'legacy'. See ConfigVariables
 	 */
 	var $cssCascade;
 
@@ -5176,15 +5176,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetFontSize($size, $write = true)
 	{
-		// Set font size in points
+		// Set font size in points. Recorded even when it is already in force: Reset() empties it after setting the
+		// size, and the text saved for a table cell carries it
+		$this->currentfontsize = $size;
 		if ($this->FontSizePt == $size) {
-			// Reset() empties it after setting the size, and the text saved for a table cell carries it
-			$this->currentfontsize = $size;
 			return;
 		}
 		$this->FontSizePt = $size;
 		$this->FontSize = $size / Mpdf::SCALE;
-		$this->currentfontsize = $size;
 		if ($write) {
 			$fontout = (sprintf('BT /F%d %.3F Tf ET', $this->CurrentFont['i'], $this->FontSizePt));
 			// Edited mPDF 3.0

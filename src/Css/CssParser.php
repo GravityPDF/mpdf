@@ -223,7 +223,7 @@ class CssParser
 	/**
 	 * The rules of the last CSS parsed for the matcher: those whose selector the legacy parser cannot read, and the
 	 * descendant and :lang() rules it stores, which the matcher applies where the legacy engine cannot match them.
-	 * Under the standard cascade, every rule
+	 * Under the standard cascade, every rule it read
 	 *
 	 * @return array[] Each [compiled selector, declarations, whether the legacy parser stores it too], in the order
 	 *                 they were written
@@ -314,12 +314,14 @@ class CssParser
 			return;
 		}
 
+		$tag = $level === 1 ? $this->selectorParser->parseSimpleSelector($tags) : null;
+		$simple = $tag !== null && $this->isLegacySelector([$tag]);
+
 		if ($this->mpdf->cssCascade === 'standard') {
 			$this->compileRule($written, $classProperties);
 
 			// Simple rules are still stored by key, for what reads CssManager::$CSS directly: BODY, and SVG's classes
-			$tag = $level === 1 ? $this->selectorParser->parseSimpleSelector($tags) : null;
-			if ($tag !== null && $this->isLegacySelector([$tag])) {
+			if ($simple) {
 				$this->storeSimpleRule($tag, $classProperties);
 			}
 
@@ -327,8 +329,7 @@ class CssParser
 		}
 
 		if ($level === 1) {
-			$tag = $this->selectorParser->parseSimpleSelector($tags);
-			if (!$this->isLegacySelector($tag === null ? [] : [$tag])) {
+			if (!$simple) {
 				$this->compileRule($written, $classProperties);
 				return;
 			}

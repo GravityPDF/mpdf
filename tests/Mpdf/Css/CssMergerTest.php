@@ -23,11 +23,7 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		// The merges below read the legacy cascade's keys and trees
 		$this->mpdf = new Mpdf(['cssCascade' => 'legacy']);
 
-		// Get CssManager (private property of Mpdf, but we can reflect it)
-		$reflection = new \ReflectionClass($this->mpdf);
-		$property   = $reflection->getProperty('cssManager');
-		$property->setAccessible(true);
-		$this->cssManager = $property->getValue($this->mpdf);
+		$this->cssManager = $this->cssManagerOf($this->mpdf);
 
 		// Get CssMerger (private property of CssManager)
 		$reflection = new \ReflectionClass($this->cssManager);
@@ -36,6 +32,22 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->cssMerger = $property->getValue($this->cssManager);
 
 		$this->mpdf->AddPage();
+	}
+
+	/**
+	 * A document's CssManager, which it keeps private
+	 *
+	 * @param Mpdf $mpdf
+	 *
+	 * @return CssManager
+	 */
+	private function cssManagerOf(Mpdf $mpdf)
+	{
+		$reflection = new \ReflectionClass($mpdf);
+		$property = $reflection->getProperty('cssManager');
+		$property->setAccessible(true);
+
+		return $property->getValue($mpdf);
 	}
 
 	protected function tear_down()
@@ -578,10 +590,7 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf = new Mpdf(['cssCascade' => 'standard']);
 		$mpdf->WriteHTML('<style>.box > p { color: red; } p.lead { margin-top: 5mm; }</style><div class="box">', \Mpdf\HTMLParserMode::DEFAULT_MODE, true, false);
 
-		$reflection = new \ReflectionClass($mpdf);
-		$property = $reflection->getProperty('cssManager');
-		$property->setAccessible(true);
-		$cssManager = $property->getValue($mpdf);
+		$cssManager = $this->cssManagerOf($mpdf);
 
 		$elements = $mpdf->getOpenElements();
 		$blocks = $mpdf->blk;
