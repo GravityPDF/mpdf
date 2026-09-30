@@ -24,7 +24,8 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		parent::set_up();
 
 		$logger = new NullLogger();
-		$this->mpdf = new Mpdf();
+		// The legacy cascade stores rules by key and in the descendant tree as well as compiling them
+		$this->mpdf = new Mpdf(['cssCascade' => 'legacy']);
 		$this->mpdf->setLogger($logger);
 
 		$assetFetcher = $this->getMockBuilder(AssetFetcher::class)

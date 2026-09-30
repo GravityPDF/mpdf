@@ -47,8 +47,8 @@ class DescendantLangSelectorSnapshotTest extends Snapshot
 			table.cells td:lang(de) { color: #1f3a93; font-weight: bold; }
 			table.content td :lang(fr) { color: #0a7d32; font-weight: bold; }
 			div.regional :lang(fr) { color: #0a7d32; font-weight: bold; }
-			div.regional :lang(pt-br) { color: #1f3a93; font-style: italic; }
 			div.regional :lang(pt) { color: #ff0000; }
+			div.regional :lang(pt-br) { color: #1f3a93; font-style: italic; }
 			div.order .note { color: #ff0000; } div.order p:lang(fr) { color: #0a7d32; font-weight: bold; }
 		</style>
 

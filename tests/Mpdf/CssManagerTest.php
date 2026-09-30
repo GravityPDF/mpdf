@@ -19,7 +19,8 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->tempDir = sys_get_temp_dir() . '/mpdf_test_' . uniqid();
 		mkdir($this->tempDir);
 
-		$this->mpdf = new Mpdf(['tempDir' => $this->tempDir]);
+		// The merges below read the legacy cascade's keys and trees
+		$this->mpdf = new Mpdf(['tempDir' => $this->tempDir, 'cssCascade' => 'legacy']);
 		$this->mpdf->setBasePath($this->tempDir);
 
 		// Use reflection to access private cssManager property

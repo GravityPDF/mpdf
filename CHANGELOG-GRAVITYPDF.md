@@ -37,6 +37,10 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A property declared twice in one block is read at its last place, so `border-top-color: green; border: 1px solid blue; border-top-color: red` draws a red top.
 * **Dependencies changed.** `ext-json` is now required and `symfony/polyfill-intl-normalizer` is a new dependency. `myclabs/deep-copy` is no longer used. [#13] [#329]
 * **`outline-width` and `outline-color` no longer stroke the text.** mPDF read them as `text-outline-width` and `text-outline-color`, but in CSS they belong to the line around the box, which mPDF does not draw. `outline-width` on its own also raised an undefined-key warning. Write `text-outline-width` and `text-outline-color`, or `text-outline`, to keep stroking the text. [#578]
+* **CSS rules apply by specificity, then in the order they are written**, as in a browser. mPDF applied them in a fixed order of selector groups, so `div p` beat `#id`, `p.c` beat `#i`, `body p` beat `.lead`, the rule from the nearest ancestor beat a heavier descendant rule, and classes applied in alphabetical order. Now the more specific selector wins each of those, and of `.a { } .b { } .a { }` the second `.a` wins. Set `'cssCascade' => 'legacy'` to keep the old order. [#535] [#631]
+  * Each element takes, in order: the values it inherits; the built-in defaults and the rules of the default stylesheet (`defaultCssFile`), which any author rule beats; HTML attributes such as `<hr color>`, `width` and `vspace`, as author rules of no specificity; the stylesheets; then `style=""`.
+  * Class and id names still match whatever their case.
+  * An author's `a { }` rule now reaches the links of the table of contents and the index too. Style `a.mpdf_toc_a` and `a.mpdf_index_link` to keep them plain.
 
 New features
 ------------
@@ -106,10 +110,6 @@ New features
 * **Descendant rules through inline elements.** A descendant rule whose ancestor is an inline element, a block inside a table cell, or the `tbody` a table leaves out, such as `span em`, or `.note b` for a `<span class="note">`, applies. [mpdf/mpdf#830] [#538] [#621]
 * **Attribute selectors and `:lang()`.** `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`, `[a^=v]`, `[a$=v]` and `[a*=v]`, with the `i` and `s` flags, match as in HTML: case-insensitively for the attributes HTML lists as such, and case-sensitively for the rest. `:lang()` matches the language an element inherits, from an ancestor or from the `<html>` or `<body>` tag. [mpdf/mpdf#134] [mpdf/mpdf#1838] [#538] [#627]
 * **`:not()`, `:is()` and `:where()`.** Each takes a selector list whose selectors may have combinators, such as `p:not(.note, div > p)` or `:is(h2, h3) + p`. `:is()` and `:where()` leave out a selector they cannot read, as browsers do. `:not()` and `:is()` weigh as their most specific argument, and `:where()` as nothing. Rules using them were dropped before. [#538] [#628]
-* **The standard cascade, behind the `cssCascade` option.** With `'cssCascade' => 'standard'`, rules that set the same property apply as they do in a browser: by specificity, then in the order they are written. `#note` beats `div p` and `p.lead`, `body p` no longer beats `.lead`, and of `.a { } .b { } .a { }` the second `.a` wins. The default, `'legacy'`, keeps mPDF's fixed order of selector groups and today's output. [#535] [#631]
-  * Each element takes, in order: the values it inherits; the built-in defaults and the rules of the default stylesheet (`defaultCssFile`), which author rules beat whatever their specificity; HTML attributes such as `<hr color>`, `width` and `vspace`, as author rules of no specificity; the stylesheets; then `style=""`.
-  * Class and id names still match whatever their case.
-  * An author's `a { }` rule now reaches the links of the table of contents and the index too, as it would in a browser. Style `a.mpdf_toc_a` and `a.mpdf_index_link` to keep them plain.
 
 Performance
 -----------

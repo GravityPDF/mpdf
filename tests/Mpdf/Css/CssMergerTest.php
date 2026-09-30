@@ -20,7 +20,8 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		parent::set_up();
 
-		$this->mpdf = new Mpdf();
+		// The merges below read the legacy cascade's keys and trees
+		$this->mpdf = new Mpdf(['cssCascade' => 'legacy']);
 
 		// Get CssManager (private property of Mpdf, but we can reflect it)
 		$reflection = new \ReflectionClass($this->mpdf);

@@ -21,13 +21,14 @@ class PositionedBlockSelectorTest extends TestCase
 	const BLACK = '0.000 g';
 
 	/**
-	 * The configuration the documents are written with: the default, the legacy cascade
+	 * The configuration the documents are written with: the legacy cascade. A subclass runs the tests under the
+	 * standard one
 	 *
 	 * @return array
 	 */
 	protected function config()
 	{
-		return [];
+		return ['cssCascade' => 'legacy'];
 	}
 
 	/**

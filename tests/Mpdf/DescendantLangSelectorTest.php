@@ -9,7 +9,7 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
  * in block content and in tables.
  *
  * A regional language such as fr-CA falls back to the rule for its short code, fr, when no rule names it in full,
- * as the simple lang rules do.
+ * as the simple lang rules do. That is how the legacy cascade matches them, and these run under it.
  */
 class DescendantLangSelectorTest extends TestCase
 {
@@ -31,7 +31,7 @@ class DescendantLangSelectorTest extends TestCase
 	 */
 	public function testTheRuleColoursTheText($css, $html, $expected)
 	{
-		$colours = $this->textColours('<style>' . $css . '</style>' . $html);
+		$colours = $this->textColours('<style>' . $css . '</style>' . $html, ['cssCascade' => 'legacy']);
 
 		$this->assertArrayHasKey('text', $colours);
 		$this->assertSame($expected, $colours['text']);

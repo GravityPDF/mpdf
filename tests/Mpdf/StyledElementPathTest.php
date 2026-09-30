@@ -6,7 +6,8 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
  * The open elements the CSS merger matches compiled rules against, for each element it styles: the element opened
- * by a start tag, a block opened again after a forced page break, a positioned block and the content written in it
+ * by a start tag, a block opened again after a forced page break, a positioned block and the content written in it.
+ * These run under the legacy cascade, which asks for the path only when a compiled rule is filed under the element
  */
 class StyledElementPathTest extends TestCase
 {
@@ -22,7 +23,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesThePathToTheElementBeingStyled($html, array $expected)
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c']);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssCascade' => 'legacy']);
 		$mpdf->WriteHTML($html);
 
 		$this->assertSame($expected, $mpdf->styledPaths);
@@ -38,7 +39,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesThePositionTheElementHasOnItsPath($html)
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c']);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssCascade' => 'legacy']);
 		$mpdf->WriteHTML($html . '<style>tr > td, tbody > tr { font-weight: bold; }</style>'
 			. '<table><tr><td>a</td><td>b</td></tr></table><table><tbody><tr><td>c</td></tr></tbody><tr><td>d</td></tr></table>');
 
@@ -85,7 +86,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testLetsGoOfTheElementOnceItsStartTagIsRead()
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c']);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssCascade' => 'legacy']);
 		$mpdf->WriteHTML('<style>div > p { color: red; }</style><div><p>a</p><p>b</p></div>');
 
 		$this->assertNull($mpdf->getStyledElementPath());
@@ -96,7 +97,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesNoPathForASpanWrappedAroundARunOfAnotherScript()
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => '', 'autoScriptToLang' => true]);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => '', 'autoScriptToLang' => true, 'cssCascade' => 'legacy']);
 		$mpdf->WriteHTML('<style>p > span { color: red; }</style><p>abc שלום <span>def</span></p>');
 
 		$this->assertSame([null, '>P>SPAN'], $mpdf->styledPaths);
