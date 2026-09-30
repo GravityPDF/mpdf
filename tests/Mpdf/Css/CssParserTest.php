@@ -254,7 +254,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return [
 			'hover' => ['a:hover'],
 			'pseudo-element' => ['p::before'],
-			'last-child' => ['li:last-child'],
+			'has' => ['li:has(> a)'],
 			'a tag outside allowedCSStags' => ['div > sup'],
 			'the universal selector, which waits for #530' => ['div > *'],
 			'the universal selector as an ancestor' => ['* + p'],

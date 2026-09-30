@@ -23,6 +23,12 @@ class SelectorMatcher
 	const FAILS_FOR_ANCESTORS = 2;
 
 	/**
+	 * @var bool Whether a pseudo-class that needs what follows an element was matched against one for which that is
+	 *           not known, and so did not match. :not() then does not match either
+	 */
+	private $undecided = false;
+
+	/**
 	 * Whether a selector matches the last element of a path
 	 *
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
@@ -158,12 +164,14 @@ class SelectorMatcher
 
 	/**
 	 * Whether a pseudo-class matches an element. :nth-child() counts the element among all its element siblings, and
-	 * :nth-of-type() among those with its tag; the document has no siblings, so it matches neither. :lang() matches the
-	 * language the element has or inherits. :is() matches when any selector in its list matches from the element,
-	 * combinators and all, and :not() when none does
+	 * :nth-of-type() among those with its tag. :nth-last-child(), :nth-last-of-type(), :only-child and :only-of-type
+	 * count from the parent's last child, and :empty reads whether the element holds anything, as
+	 * TracksOpenElements::readAhead() found; where it could not, they do not match. The document has no siblings, so
+	 * it matches none of these. :lang() matches the language the element has or inherits. :is() matches when any
+	 * selector in its list matches from the element, combinators and all, and :not() when none does and none was left
+	 * undecided
 	 *
-	 * @param array $pseudo A compiled pseudo-class: ['nth-child', a, b], ['nth-of-type', a, b], ['lang', ranges],
-	 *                      or ['is', selectors] or ['not', selectors]
+	 * @param array $pseudo A compiled pseudo-class, as SelectorCompiler describes them
 	 * @param array $element The element's frame or record, as element() gives it
 	 * @param array[] $path As matchesFrom() takes it
 	 * @param int $parent The depth of the element's parent on $path, as matchesFrom() takes it
@@ -174,13 +182,21 @@ class SelectorMatcher
 	private function matchesPseudoClass(array $pseudo, array $element, array $path, $parent, $index)
 	{
 		if ($pseudo[0] === 'is' || $pseudo[0] === 'not') {
+			$outer = $this->undecided;
+			$this->undecided = false;
+			$matched = false;
 			foreach ($pseudo[1] as $selector) {
 				if ($this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $parent, $index) === self::MATCHES) {
-					return $pseudo[0] === 'is';
+					$matched = true;
+					break;
 				}
 			}
 
-			return $pseudo[0] === 'not';
+			// :not() of what could not be decided cannot be either
+			$undecided = !$matched && $this->undecided;
+			$this->undecided = $outer || $undecided;
+
+			return $pseudo[0] === 'is' ? $matched : !$matched && !$undecided;
 		}
 
 		if ($pseudo[0] === 'lang') {
@@ -202,7 +218,31 @@ class SelectorMatcher
 			return $this->isNth($pseudo[1], $pseudo[2], $index + 1);
 		}
 
-		return $this->isNth($pseudo[1], $pseudo[2], $element['nthOfType']);
+		if ($pseudo[0] === 'nth-of-type') {
+			return $this->isNth($pseudo[1], $pseudo[2], $element['nthOfType']);
+		}
+
+		// The rest need what follows the element, which is not always known
+		$siblings = $path[$parent]['childTotal'];
+		$ofType = isset($path[$parent]['childTypeTotals'][$element['tag']]) ? $path[$parent]['childTypeTotals'][$element['tag']] : null;
+		if (($pseudo[0] === 'empty' ? $element['empty'] : $ofType) === null) {
+			$this->undecided = true;
+
+			return false;
+		}
+
+		switch ($pseudo[0]) {
+			case 'nth-last-child':
+				return $this->isNth($pseudo[1], $pseudo[2], $siblings - $index);
+			case 'nth-last-of-type':
+				return $this->isNth($pseudo[1], $pseudo[2], $ofType - $element['nthOfType'] + 1);
+			case 'only-child':
+				return $siblings === 1;
+			case 'only-of-type':
+				return $ofType === 1;
+			default:
+				return $element['empty'];
+		}
 	}
 
 	/**
@@ -296,7 +336,8 @@ class SelectorMatcher
 	 * @param int $parent The depth of the element's parent on $path, as matchesFrom() takes it
 	 * @param int $index The element's index among its parent's children, as matchesFrom() takes it
 	 *
-	 * @return array Its tag, id, classes, attr and nthOfType, and for an open element or the document its lang
+	 * @return array Its tag, id, classes, attr and nthOfType, for an element its empty, and for an open element or
+	 *               the document its lang
 	 */
 	private function element(array $path, $parent, $index)
 	{

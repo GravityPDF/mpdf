@@ -111,6 +111,9 @@ New features
 * **Descendant rules through inline elements.** A descendant rule whose ancestor is an inline element, a block inside a table cell, or the `tbody` a table leaves out, such as `span em`, or `.note b` for a `<span class="note">`, applies. [mpdf/mpdf#830] [#538] [#621]
 * **Attribute selectors and `:lang()`.** `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`, `[a^=v]`, `[a$=v]` and `[a*=v]`, with the `i` and `s` flags, match as in HTML: case-insensitively for the attributes HTML lists as such, and case-sensitively for the rest. `:lang()` matches the language an element inherits, from an ancestor or from the `<html>` or `<body>` tag. [mpdf/mpdf#134] [mpdf/mpdf#1838] [#538] [#627]
 * **`:not()`, `:is()` and `:where()`.** Each takes a selector list whose selectors may have combinators, such as `p:not(.note, div > p)` or `:is(h2, h3) + p`. `:is()` and `:where()` leave out a selector they cannot read, as browsers do. `:not()` and `:is()` weigh as their most specific argument, and `:where()` as nothing. Rules using them were dropped before. [#538] [#628]
+* **Pseudo-classes that look at what follows an element.** `:last-child`, `:nth-last-child()`, `:only-child`, `:last-of-type`, `:nth-last-of-type()`, `:only-of-type` and `:empty` match in the flow, in tables, headers and footers, and positioned blocks. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#537] [#634]
+  * `WriteHTML()` reads ahead through the HTML it is given to count each element's children. An element still open at the end of a call that leaves it open is not known in full, so these do not match its children in that call, and nor does `:not()` of them.
+  * `:empty` matches as in browsers: an element holding white space is not empty. In the default mode mPDF's CSS reader turns each HTML comment into a space, so an element holding only a comment is not empty either. A table cell holding only white space is empty, as mPDF strips it.
 
 Performance
 -----------
@@ -198,6 +201,7 @@ Bugfixes
 * `background-size` lengths such as `60mm` or `100px` drew the image 2.83 times too small, because they were used as points. [#574]
 * A stylesheet `url()` did not load its image when the path had spaces or parentheses, when there was whitespace inside the parentheses, or when it was an SVG data URI that is not base64, such as Bootstrap's `form-select` arrow. [#573]
 * `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. [#577]
+* Characters mPDF moved into a substitute font (`useSubstitutions`, and the fonts for supplementary planes) were wrapped in a `<span>` that stylesheet rules reached, so `span { border: 1px solid }` drew a box around them, and the span counted among its siblings for `:nth-child()`. In the standard CSS mode no rule reaches that span and it is not counted, as a browser has no such element. The legacy mode styles it as before. [#634]
 
 ### Images and SVG
 
@@ -791,6 +795,7 @@ These changes do not change output.
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
 [#535]: https://github.com/GravityPDF/mpdf/issues/535
 [#536]: https://github.com/GravityPDF/mpdf/issues/536
+[#537]: https://github.com/GravityPDF/mpdf/issues/537
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -838,3 +843,4 @@ These changes do not change output.
 [#632]: https://github.com/GravityPDF/mpdf/issues/632
 [#633]: https://github.com/GravityPDF/mpdf/pull/633
 [#635]: https://github.com/GravityPDF/mpdf/pull/635
+[#634]: https://github.com/GravityPDF/mpdf/pull/634

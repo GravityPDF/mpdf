@@ -52,7 +52,7 @@ class UnmatchableDescendantSelectorTest extends TestCase
 				self::BLACK,
 			],
 			'an unsupported pseudo-class after two parts' => [
-				'nav ul li:last-child { color: #ff0000; }',
+				'nav ul li:hover { color: #ff0000; }',
 				'<nav><ul><li>first</li><li>last</li></ul></nav>',
 				self::BLACK,
 			],

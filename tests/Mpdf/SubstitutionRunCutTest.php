@@ -68,7 +68,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame([
 			$this->text([0x61, 0x2665, 0xFE0E, 0x62]),
-			'span style="font-family: dejavusans"',
+			'span data-mpdf-script-run style="font-family: dejavusans"',
 			$this->text([0xFE0E]),
 			'/span',
 			'c',
@@ -92,7 +92,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			"one\n",
 			'',
 			'two',
-			'span style="font-family: garuda"',
+			'span data-mpdf-script-run style="font-family: garuda"',
 			$this->text([0x0E01]),
 			'/span',
 			"three\n",
@@ -115,7 +115,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame([
 			"one\ntwo",
-			'span style="font-family: garuda"',
+			'span data-mpdf-script-run style="font-family: garuda"',
 			$this->text([0x0E01]),
 			'/span',
 			"three\nfour",
@@ -144,7 +144,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame([
 			$before,
-			'span style="font-family: sun-extb"',
+			'span data-mpdf-script-run style="font-family: sun-extb"',
 			$run,
 			'/span',
 			$after,
