@@ -113,7 +113,7 @@ New features
 * **`:not()`, `:is()` and `:where()`.** Each takes a selector list whose selectors may have combinators, such as `p:not(.note, div > p)` or `:is(h2, h3) + p`. `:is()` and `:where()` leave out a selector they cannot read, as browsers do. `:not()` and `:is()` weigh as their most specific argument, and `:where()` as nothing. Rules using them were dropped before. [#538] [#628]
 * **Pseudo-classes that look at what follows an element.** `:last-child`, `:nth-last-child()`, `:only-child`, `:last-of-type`, `:nth-last-of-type()`, `:only-of-type` and `:empty` match in the flow, in tables, headers and footers, and positioned blocks. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#537] [#634]
   * `WriteHTML()` reads ahead through the HTML it is given to count each element's children. An element still open at the end of a call that leaves it open is not known in full, so these do not match its children in that call, and nor does `:not()` of them.
-  * `:empty` matches as in browsers: an element holding white space is not empty. In the default mode mPDF's CSS reader turns each HTML comment into a space, so an element holding only a comment is not empty either. A table cell holding only white space is empty, as mPDF strips it.
+  * `:empty` matches as in browsers: an element holding white space is not empty, and one holding only a comment is. A table cell holding only white space is empty, as mPDF strips it.
 
 Performance
 -----------

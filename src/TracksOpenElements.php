@@ -324,8 +324,7 @@ trait TracksOpenElements
 
 		foreach ($tokens as $i => $token) {
 			if ($i % 2 === 0) {
-				// White space is text, as browsers have it. Comments are gone by now, though the CSS reader leaves a space
-				// for each
+				// White space is text, as browsers have it. Comments are gone by now
 				if ($token !== '') {
 					$this->openElements[count($this->openElements) - 1]['empty'] = false;
 				}

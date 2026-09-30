@@ -239,10 +239,10 @@ class LookAheadSelectorTest extends TestCase
 	}
 
 	/**
-	 * :empty matches an element with no child elements and no text, as browsers have it: white space is text. A
-	 * comment is not, but in the default mode the CSS reader turns each comment into a space before the HTML is read,
-	 * so an element holding one is not empty; the body mode, which does not read CSS, drops comments outright. The
-	 * white space at the end of a table cell is stripped before the HTML is read, so a cell holding only that is empty
+	 * :empty matches an element with no child elements and no text, as browsers have it: white space is text, and a
+	 * comment is not, so an element holding only a comment is empty and one holding comments and white space is not.
+	 * The white space at the end of a table cell is stripped before the HTML is read, so a cell holding only that is
+	 * empty
 	 *
 	 * @dataProvider emptyElements
 	 *
@@ -257,8 +257,8 @@ class LookAheadSelectorTest extends TestCase
 	}
 
 	/**
-	 * HTML written in the body mode does not go through the CSS reader, so a comment is dropped and the element that
-	 * held only the comment is empty, as in a browser
+	 * HTML written in the body mode drops a comment too, so the element that held only the comment is empty, as in a
+	 * browser
 	 */
 	public function testAnElementHoldingOnlyACommentInTheBodyMode()
 	{
@@ -280,7 +280,7 @@ class LookAheadSelectorTest extends TestCase
 			'nothing in it' => ['<p></p>', true],
 			'a space' => ['<p> </p>', false],
 			'line breaks and tabs' => ["<p>\n\t\n</p>", false],
-			'a comment, which the CSS reader turns into a space' => ['<p><!-- nothing --></p>', false],
+			'a comment, which leaves nothing in its place' => ['<p><!-- nothing --></p>', true],
 			'comments and white space' => ['<p> <!-- one --> <!-- two --> </p>', false],
 			'a closed start tag' => ['<div />', true],
 			'a void element' => ['<hr />', true],
