@@ -13,6 +13,10 @@ class Path
 	 */
 	public static function relativeToAbsolutePath($relPath, $basePath)
 	{
+		if (stripos($relPath, 'data:') === 0) {
+			return $relPath;
+		}
+
 		 // Fix Windows paths
 		$relPath = str_replace("\\", '/', $relPath);
 

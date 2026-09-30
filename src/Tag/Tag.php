@@ -122,6 +122,19 @@ abstract class Tag
 	}
 
 	/**
+	 * Whether a page-break-before or page-break-after value starts a new page: always, left or right
+	 *
+	 * @param string[] $properties the element's computed CSS
+	 * @param string $property PAGE-BREAK-BEFORE or PAGE-BREAK-AFTER
+	 *
+	 * @return bool
+	 */
+	protected function forcesPageBreak(array $properties, $property)
+	{
+		return isset($properties[$property]) && in_array(strtoupper($properties[$property]), ['ALWAYS', 'LEFT', 'RIGHT'], true);
+	}
+
+	/**
 	 * An object's attributes with the visibility of the span it is in. Printing reads a span's visibility from its
 	 * text buffer entry, and an object put straight into the buffer has none.
 	 *

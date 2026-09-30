@@ -621,7 +621,18 @@ class Gradient
 		$this->writer->write($s);
 	}
 
-	private function parseMozLinearGradient($m, $repeat)
+	/**
+	 * Reads the arguments of a linear gradient into the start point or angle Gradient() works from, where y runs up the
+	 * box and angles run counter-clockwise from pointing right
+	 *
+	 * @param string[] $m The match whose second element holds the arguments
+	 * @param bool $repeat Whether the gradient repeats
+	 * @param bool $legacy Whether the function is prefixed, where a keyword names the start side and angles already
+	 *                     run counter-clockwise from pointing right
+	 *
+	 * @return array
+	 */
+	private function parseMozLinearGradient($m, $repeat, $legacy)
 	{
 		$g = [];
 		$g['type'] = self::TYPE_LINEAR;
@@ -646,7 +657,7 @@ class Gradient
 		}
 		// Is first part $bgr[0] a valid point/angle?
 		$first = preg_split('/\s+/', trim($bgr[0]));
-		if (preg_match('/(left|center|right|bottom|top|deg|grad|rad)/i', $bgr[0]) && !preg_match('/(<#|rgb|rgba|hsl|hsla)/i', $bgr[0])) {
+		if (preg_match('/(left|center|right|bottom|top|deg|grad|rad|turn)/i', $bgr[0]) && !preg_match('/(<#|rgb|rgba|hsl|hsla)/i', $bgr[0])) {
 			$startStops = 1;
 		} elseif (trim($first[count($first) - 1]) === '0') {
 			$startStops = 1;
@@ -661,32 +672,45 @@ class Gradient
 		// first part a valid point/angle?
 		if ($startStops === 1) { // default values
 
-			// [<point> || <angle>,] = [<% em px left center right bottom top> || <deg grad rad 0>,]
-			if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad)/i', $bgr[0], $m)) {
-				$angle = $m[1] + 0;
-				if (strtolower($m[2]) === 'grad') {
-					$angle *= (360 / 400);
-				} elseif (strtolower($m[2]) === 'rad') {
-					$angle = rad2deg($angle);
-				}
-				while ($angle < 0) {
-					$angle += 360;
-				}
-				$angle %= 360;
+			// [<point> || <angle>,] = [<% em px left center right bottom top> || <deg grad rad turn 0>,]
+			if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad|turn)/i', $bgr[0], $m)) {
+				$perTurn = ['deg' => 360, 'grad' => 400, 'rad' => 2 * M_PI, 'turn' => 1];
+				$angle = (float) $m[1] * 360 / $perTurn[strtolower($m[2])];
 			} elseif (trim($first[count($first) - 1]) === '0') {
 				$angle = 0;
 			}
 
+			if (isset($angle)) {
+				// CSS Images angles point up at 0 and run clockwise
+				if (!$legacy) {
+					$angle = 90 - $angle;
+				}
+				$angle = fmod($angle, 360);
+				if ($angle < 0) {
+					$angle += 360;
+				}
+			}
+
+			// "to left" names the side the gradient ends at, and a legacy "left" the side it starts from
+			$to = strtolower($first[0]) === 'to';
+
 			if (stripos($bgr[0], 'left') !== false) {
-				$startx = 1;
+				$startx = $to ? 1 : 0;
 			} elseif (stripos($bgr[0], 'right') !== false) {
-				$startx = 0;
+				$startx = $to ? 0 : 1;
 			}
 
 			if (stripos($bgr[0], 'top') !== false) {
-				$starty = 1;
+				$starty = $to ? 0 : 1;
 			} elseif (stripos($bgr[0], 'bottom') !== false) {
-				$starty = 0;
+				$starty = $to ? 1 : 0;
+			}
+
+			// Corner to corner across the box, so the other two corners take the colour halfway along, as CSS Images
+			// gives for "to top right"
+			if ($to && isset($startx, $starty)) {
+				$endx = 1 - $startx;
+				$endy = 1 - $starty;
 			}
 
 			// Check for %? ?% or %%
@@ -954,7 +978,7 @@ class Gradient
 		$repeat = strpos($bg, 'repeating-') !== false;
 
 		if (preg_match('/linear-gradient\((.*)\)/', $bg, $m)) {
-			$g = $this->parseMozLinearGradient($m, $repeat);
+			$g = $this->parseMozLinearGradient($m, $repeat, (bool) preg_match('/-(moz|webkit|o)-/', $bg));
 			if (count($g['stops'])) {
 				return $g;
 			}

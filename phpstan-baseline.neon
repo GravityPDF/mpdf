@@ -67,12 +67,6 @@ parameters:
 			path: src/Form.php
 
 		-
-			message: '#^Binary operation "\+" between non\-empty\-string and 0 results in an error\.$#'
-			identifier: binaryOp.invalid
-			count: 1
-			path: src/Gradient.php
-
-		-
 			message: '#^Variable \$angle in isset\(\) always exists and is not nullable\.$#'
 			identifier: isset.variable
 			count: 1
