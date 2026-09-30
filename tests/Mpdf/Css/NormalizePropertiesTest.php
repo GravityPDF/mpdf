@@ -555,6 +555,46 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The standard mode keeps the weight the font shorthand names for it to be computed from the parent's; the legacy
+	 * mode reads anything with bold in it as bold, and any other weight as normal
+	 *
+	 * @dataProvider providerFontShorthandWeight
+	 *
+	 * @param string $value The shorthand's value
+	 * @param string $standard The weight it should give in the standard mode
+	 * @param string $legacy The weight it should give in the legacy mode
+	 */
+	public function testFontShorthandWeight($value, $standard, $legacy)
+	{
+		$weights = [];
+		foreach ([\Mpdf\CssMode::STANDARD, \Mpdf\CssMode::LEGACY] as $mode) {
+			$this->mpdf->cssMode = $mode;
+			$result = $this->normalizeProperties->normalize(['FONT' => $value]);
+			$weights[] = $result['FONT-WEIGHT'];
+		}
+
+		$this->assertSame([$standard, $legacy], $weights);
+	}
+
+	/**
+	 * @return array[] Shorthand values and the weight each gives in the standard mode, then in the legacy mode
+	 */
+	public function providerFontShorthandWeight()
+	{
+		return [
+			'none' => ['12pt serif', 'normal', 'normal'],
+			'normal' => ['normal 12pt serif', 'normal', 'normal'],
+			'bold' => ['bold 12pt serif', 'bold', 'bold'],
+			'bold after the style' => ['italic bold 12pt serif', 'bold', 'bold'],
+			'bolder' => ['bolder 12pt serif', 'bolder', 'bold'],
+			'lighter' => ['lighter 12pt serif', 'lighter', 'normal'],
+			'number' => ['600 12pt serif', '600', 'normal'],
+			'number after normal and the style' => ['normal italic 300 12pt serif', '300', 'normal'],
+			'keyword in capitals' => ['BOLDER 12pt serif', 'bolder', 'bold'],
+		];
+	}
+
+	/**
 	 * An unquoted family name with spaces is read whole before its words are tried on their own
 	 */
 	public function testUnquotedFamilyNameWithSpaces()

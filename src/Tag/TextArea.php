@@ -65,7 +65,7 @@ class TextArea extends Tag
 			$this->mpdf->SetFont($properties['FONT-FAMILY'], '', 0, false);
 		}
 		if (isset($properties['FONT-SIZE']) && $properties['FONT-SIZE'] !== 'auto') {
-			$mmsize = $this->sizeConverter->convert($properties['FONT-SIZE'], $this->mpdf->default_font_size / Mpdf::SCALE);
+			$mmsize = $this->sizeConverter->convertFontSizeToMm($properties['FONT-SIZE'], $this->mpdf->default_font_size / Mpdf::SCALE);
 			$this->mpdf->SetFontSize($mmsize * Mpdf::SCALE, false);
 		}
 		if (isset($properties['COLOR'])) {
