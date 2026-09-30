@@ -176,6 +176,8 @@ class Td extends Tag
 
 		if ($this->mpdf->cssMode === CssMode::STANDARD) {
 			$properties = $this->mergeInheritedCss($tag, $attr, isset($table['rowInherited']) ? $table['rowInherited'] : $this->mpdf->base_table_properties);
+			// For a table nested in the cell, which inherits it
+			$table['cellTextAlign'] = isset($properties['TEXT-ALIGN']) ? $properties['TEXT-ALIGN'] : '';
 		} else {
 			$properties = $this->cssManager->MergeCSS('TABLE', $tag, $attr);
 			$properties = Arrays::uniqueRecursiveMerge($this->mpdf->base_table_properties, $properties);

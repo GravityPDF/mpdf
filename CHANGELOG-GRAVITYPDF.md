@@ -61,6 +61,11 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * `initial` gives the property's initial value, such as `currentColor` for a border's colour, and the document's default font and size for `font-family` and `font-size`. `unset` is `inherit` for an inherited property and `initial` for any other.
   * `revert` and `revert-layer` give the value of the built-in defaults and the default stylesheet, such as a heading's size, a list's margin or a cell's padding, and are `unset` where those give none. An HTML attribute such as `cellpadding` counts as an author rule, so `revert` goes past it too.
   * A shorthand passes the keyword to each of its longhands, so `border: inherit` takes every side's width, style and colour, and `font: initial` resets the size, family, style, weight, line height and variants.
+* **A table inherits from the block around it**, as in a browser, under the standard `cssMode`. It used to start from the document's defaults, so `<div style="color: red; font-family: monospace">` around a table left its cells black and in the body's font. Now a table takes every inherited property from the block, list item, header or positioned block it is in, and a nested table takes its cell's `text-align` and `line-height` too. [#543] [#656]
+  * `table { font-size: 80% }` is taken of the block's size, not the document's.
+  * The built-in default style no longer gives a table `hyphens: manual` and `font-kerning: auto`, which a browser's does not, so a table inherits them. It keeps the table's `line-height: 1.2` where the block's is `normal`, as tables have always been drawn.
+  * A `th` in a table in a right-aligned block is aligned right, since it inherits an alignment.
+  * Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep tables starting from the document's defaults.
 
 New features
 ------------
@@ -918,3 +923,5 @@ These changes do not change output.
 [#653]: https://github.com/GravityPDF/mpdf/pull/653
 [#542]: https://github.com/GravityPDF/mpdf/issues/542
 [#655]: https://github.com/GravityPDF/mpdf/pull/655
+[#543]: https://github.com/GravityPDF/mpdf/issues/543
+[#656]: https://github.com/GravityPDF/mpdf/pull/656

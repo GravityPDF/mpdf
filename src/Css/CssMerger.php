@@ -52,6 +52,13 @@ class CssMerger
 	const BORDER_SIDE_PROPERTY = '/^(BORDER-(?:TOP|RIGHT|BOTTOM|LEFT))(?:-(WIDTH|STYLE|COLOR))?$/';
 
 	/**
+	 * The inherited properties the built-in default style (DefaultCss) sets on a table, with their values. A browser's
+	 * default style sets none, so under the standard cascade a table takes them from what it is in. A value changed
+	 * through the defaultCSS option still applies. See standardTableDefaults()
+	 */
+	const TABLE_INHERITED_DEFAULTS = ['LINE-HEIGHT' => '1.2', 'HYPHENS' => 'manual', 'FONT-KERNING' => 'auto'];
+
+	/**
 	 * @var \Mpdf\Mpdf
 	 */
 	private $mpdf;
@@ -255,7 +262,7 @@ class CssMerger
 
 		// The built-in defaults and the default stylesheet are merged on their own first, for revert to read
 		$this->cssProperties = [];
-		$this->mergeDefaultCss($tag);
+		$this->mergeDefaultCss($tag, $inherited);
 		list($defaultRules, $importantDefaultRules) = $this->cssManager->getDefaultRules()->matchingDeclarations($tag, $id, $classes, $path);
 		$this->mergeEach($defaultRules, $dominance);
 		$defaults = $this->cssProperties;
@@ -772,7 +779,8 @@ class CssMerger
 	}
 
 	/**
-	 * Merge the properties a block inherits from the block it is opened in.
+	 * Merge the properties a block inherits from the block it is opened in. Under the standard cascade, a table that
+	 * is not in a cell inherits from the block it is opened in too.
 	 *
 	 * @param string $inherit Inheritance type (TOPTABLE, TABLE, BLOCK)
 	 * @param string $tag HTML tag name
@@ -780,11 +788,12 @@ class CssMerger
 	 */
 	protected function mergeInheritedBlockProperties($inherit, $tag)
 	{
-		if ($inherit !== 'BLOCK') {
+		$table = $inherit === 'TOPTABLE' && $this->mpdf->cssMode === CssMode::STANDARD;
+		if ($inherit !== 'BLOCK' && !$table) {
 			return;
 		}
 
-		$previousBlockLevel = $this->getBlockLevel();
+		$previousBlockLevel = $this->getBlockLevel($inherit);
 		$previousBlock = isset($this->mpdf->blk[$previousBlockLevel]) ? $this->mpdf->blk[$previousBlockLevel] : [];
 
 		// Block properties which are inherited
@@ -868,6 +877,11 @@ class CssMerger
 			}
 			$this->cssProperties = array_merge($this->cssProperties, $converted); // mPDF 5.7.1
 		}
+
+		if ($table) {
+			// Not the margin collapse, column background, text decoration or vertical-align a child block takes
+			$this->cssProperties = InheritedProperties::of($this->cssProperties, InheritedProperties::names());
+		}
 	}
 
 	/**
@@ -947,19 +961,46 @@ class CssMerger
 	 * Merge default CSS for the tag.
 	 *
 	 * @param string $tag HTML tag name
+	 * @param array $inherited What the element inherits, under the standard cascade, which a table's defaults read
 	 * @return void
 	 */
-	protected function mergeDefaultCss($tag)
+	protected function mergeDefaultCss($tag, array $inherited = [])
 	{
 		if (!isset($this->mpdf->defaultCSS[$tag])) {
 			return;
 		}
 
-		$zp = $this->normalizeProperties->normalize($this->mpdf->defaultCSS[$tag]);
+		$defaults = $this->mpdf->defaultCSS[$tag];
+		if ($tag === 'TABLE' && $this->mpdf->cssMode === CssMode::STANDARD) {
+			$defaults = $this->standardTableDefaults($defaults, $inherited);
+		}
+
+		$zp = $this->normalizeProperties->normalize($defaults);
 		if (is_array($zp)) {  // Default overwrites Inherited
 			$this->cssProperties = array_merge($this->cssProperties, $zp);  // !! Note other way round !!
 			$this->mergeBorderProperties($zp);
 		}
+	}
+
+	/**
+	 * A table's defaults under the standard cascade, without the built-in ones that stop it inheriting hyphens,
+	 * font-kerning and line-height. The built-in line-height of 1.2 stays for a table that inherits normal, or
+	 * nothing, since mPDF draws a table's normal line-height at 1.2 and a block's at normal_lineheight
+	 *
+	 * @param array $defaults The table's entry in Mpdf::$defaultCSS
+	 * @param array $inherited What the table inherits
+	 * @return array
+	 */
+	private function standardTableDefaults(array $defaults, array $inherited)
+	{
+		$inheritable = self::TABLE_INHERITED_DEFAULTS;
+		$lineHeight = isset($inherited['LINE-HEIGHT']) ? $inherited['LINE-HEIGHT'] : 'N';
+		// The content of a positioned block is handed normal as the number it stands for
+		if (in_array(strtoupper($lineHeight), ['N', 'NORMAL'], true) || $lineHeight == $this->mpdf->normalLineheight) {
+			unset($inheritable['LINE-HEIGHT']);
+		}
+
+		return array_diff_assoc($defaults, $inheritable);
 	}
 
 	/**
