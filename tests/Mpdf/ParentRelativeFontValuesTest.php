@@ -177,9 +177,11 @@ class ParentRelativeFontValuesTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 				['aa' => ['', 11.0], 'bb' => ['', 11.0]],
 			],
 			'larger and smaller form fields' => [
-				'<p><input type="text" style="font-size: larger" value="aa" /> <select style="font-size: smaller"><option>bb</option></select> <textarea style="font-size: larger">cc</textarea></p>',
-				['aa' => ['', 13.2], 'bb' => ['', 9.17], 'cc' => ['', 13.2]], // from the document's 11pt, as a field's other sizes are
-				['aa' => ['', 0.0], 'bb' => ['', 0.0], 'cc' => ['', 0.0]],
+				'<p style="font-size: 14pt"><input type="text" style="font-size: larger" value="aa" /> <select style="font-size: smaller"><option>bb</option></select> <textarea style="font-size: larger">cc</textarea></p>',
+				// From the document's 11pt, as a field's other sizes are
+				['aa' => ['', 13.2], 'bb' => ['', 9.17], 'cc' => ['', 13.2]],
+				// Ignored rather than drawn at 0pt, so each field keeps the paragraph's size, as an ignored size does elsewhere
+				['aa' => ['', 14.0], 'bb' => ['', 14.0], 'cc' => ['', 14.0]],
 			],
 			'weights that are not weights keep the parent\'s' => [
 				'<div style="font-weight: 600">aa<p style="font-weight: 1001">bb</p><p style="font-weight: heavy">cc</p></div>',

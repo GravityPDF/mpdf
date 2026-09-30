@@ -17,7 +17,9 @@ class Select extends Tag
 		}
 		if (isset($properties['FONT-SIZE'])) {
 			$mmsize = $this->sizeConverter->convertFontSizeToMm($properties['FONT-SIZE'], $this->mpdf->default_font_size / Mpdf::SCALE);
-			$this->mpdf->SetFontSize($mmsize * Mpdf::SCALE, false);
+			if ($mmsize !== null) {
+				$this->mpdf->SetFontSize($mmsize * Mpdf::SCALE, false);
+			}
 		}
 		if (isset($attr['SPELLCHECK']) && strtolower($attr['SPELLCHECK']) === 'true') {
 			$this->mpdf->selectoption['SPELLCHECK'] = true;

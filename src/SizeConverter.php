@@ -209,11 +209,16 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 	 * @param string $size
 	 * @param float $parentSize In mm
 	 *
-	 * @return float
+	 * @return float|null Null for larger or smaller in the legacy CSS mode, which ignores them
 	 */
 	public function convertFontSizeToMm($size, $parentSize)
 	{
-		return $this->isRelativeFontSize($size) ? $parentSize * RelativeFontValues::sizeRatio($size) : $this->convert($size, $parentSize);
+		$ratio = RelativeFontValues::sizeRatio($size);
+		if ($ratio === null) {
+			return $this->convert($size, $parentSize);
+		}
+
+		return $this->mpdf->cssMode === CssMode::STANDARD ? $parentSize * $ratio : null;
 	}
 
 	/**

@@ -245,6 +245,7 @@ Bugfixes
 ### Forms
 
 * A `<select>` with a bare `disabled` attribute was not disabled. [#429]
+* `font-size: larger` or `smaller` on an `<input>`, `<select>` or `<textarea>` drew its value at 0pt, so it could not be seen. In the legacy CSS mode the value is now ignored and the field keeps the size around it; in the standard mode it is 1.2 times the document's size, or that divided by 1.2. [#545] [#647]
 * A button with no `name` raised warnings under `useActiveForms`. Unnamed buttons are now named `Submit_<n>`, `Reset_<n>` or `Button_<n>`. [#438]
 * Text wider than its field was cut off. It is now drawn in a smaller font, both on the page and in an active field's appearance. [#433] [#441]
 * A shaped value too long for its field is cut to the longest start that fits, and only between whole clusters. [#460] [#492]
@@ -825,6 +826,7 @@ These changes do not change output.
 [#536]: https://github.com/GravityPDF/mpdf/issues/536
 [#537]: https://github.com/GravityPDF/mpdf/issues/537
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
+[#545]: https://github.com/GravityPDF/mpdf/issues/545
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -869,8 +871,6 @@ These changes do not change output.
 [#628]: https://github.com/GravityPDF/mpdf/pull/628
 [#629]: https://github.com/GravityPDF/mpdf/pull/629
 [#631]: https://github.com/GravityPDF/mpdf/pull/631
-[#545]: https://github.com/GravityPDF/mpdf/issues/545
-[#647]: https://github.com/GravityPDF/mpdf/pull/647
 [#632]: https://github.com/GravityPDF/mpdf/issues/632
 [#633]: https://github.com/GravityPDF/mpdf/pull/633
 [#634]: https://github.com/GravityPDF/mpdf/pull/634
@@ -884,3 +884,4 @@ These changes do not change output.
 [#642]: https://github.com/GravityPDF/mpdf/pull/642
 [#643]: https://github.com/GravityPDF/mpdf/pull/643
 [#644]: https://github.com/GravityPDF/mpdf/pull/644
+[#647]: https://github.com/GravityPDF/mpdf/pull/647
