@@ -19873,7 +19873,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					break;
 
 				case 'TEXT-OUTLINE-WIDTH':
-				case 'OUTLINE-WIDTH':
 					switch (strtoupper($v)) {
 						case 'THIN':
 							$v = '0.03em';
@@ -19895,7 +19894,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					break;
 
 				case 'TEXT-OUTLINE-COLOR':
-				case 'OUTLINE-COLOR':
 					if (strtoupper($v) == 'INVERT') {
 						if ($this->colorarray) {
 							$cor = $this->colorarray;

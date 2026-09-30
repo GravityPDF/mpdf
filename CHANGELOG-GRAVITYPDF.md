@@ -30,6 +30,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **A `<select>` without `size` is written as a combo box**, as browsers draw it. [#419]
 * **A `<select multiple>` without `size` is four rows tall instead of one**, as in browsers. Content after it on the page moves down. Add `size="1"` to keep the old height. [#437]
 * **Dependencies changed.** `ext-json` is now required and `symfony/polyfill-intl-normalizer` is a new dependency. `myclabs/deep-copy` is no longer used. [#13] [#329]
+* **`outline-width` and `outline-color` no longer stroke the text.** mPDF read them as `text-outline-width` and `text-outline-color`, but in CSS they belong to the line around the box, which mPDF does not draw. `outline-width` on its own also raised an undefined-key warning. Write `text-outline-width` and `text-outline-color`, or `text-outline`, to keep stroking the text. [#578]
 
 New features
 ------------
@@ -775,6 +776,7 @@ These changes do not change output.
 [#575]: https://github.com/GravityPDF/mpdf/pull/575
 [#572]: https://github.com/GravityPDF/mpdf/pull/572
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
+[#578]: https://github.com/GravityPDF/mpdf/pull/578
 [#580]: https://github.com/GravityPDF/mpdf/pull/580
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
