@@ -7,6 +7,12 @@ use Mpdf\Mpdf;
 class SelectorParser
 {
 	/**
+	 * A class or id name, without the . or #. Stylesheets are uppercased before they are parsed, so the lowercase
+	 * letters are only for callers that do not.
+	 */
+	const NAME = '[A-Za-z0-9_\-\x80-\xFF]+';
+
+	/**
 	 * @var Mpdf
 	 */
 	private $mpdf;
@@ -75,24 +81,14 @@ class SelectorParser
 		}
 
 		$tag = '';
-		if (preg_match('/^[.](.*)$/', $t, $m)) {
-			$classes = explode('.', $m[1]);
-			sort($classes);
-			$tag = 'CLASS>>' . implode('.', $classes);
-		} elseif (preg_match('/^[#](.*)$/', $t, $m)) {
-			$tag = 'ID>>' . $m[1];
+		if (preg_match('/^(' . $this->mpdf->allowedCSStags . ')?((?:[.#]' . self::NAME . ')+)$/', $t, $m)) {
+			$tag = $this->compoundKey($m[1], $m[2]);
 		} elseif (preg_match('/^\[LANG=[\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\]$/', $t, $m)) {
 			$tag = 'LANG>>' . strtolower($m[1]);
 		} elseif (preg_match('/^:LANG\([\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\)$/', $t, $m)) { // mPDF 6  Special case for lang as attribute selector
 			$tag = 'LANG>>' . strtolower($m[1]);
-		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')[.](.*)$/', $t, $m)) { // mPDF 6  Special case for lang as attribute selector
-			$classes = explode('.', $m[2]);
-			sort($classes);
-			$tag = $m[1] . '>>CLASS>>' . implode('.', $classes);
 		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\s*:NTH-CHILD\(([\-+]?\d*N(?:[\-+]\d+)?|[\-+]?\d+|ODD|EVEN)\)$/', $t, $m)) { // the whole argument is a formula, with nothing after it
 			$tag = $m[1] . '>>SELECTORNTHCHILD>>' . $m[2];
-		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')[#](.*)$/', $t, $m)) {
-			$tag = $m[1] . '>>ID>>' . $m[2];
 		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\[LANG=[\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\]$/', $t, $m)) {
 			$tag = $m[1] . '>>LANG>>' . strtolower($m[2]);
 		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . '):LANG\([\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\)$/', $t, $m)) {  // mPDF 6  Special case for lang as attribute selector
@@ -102,6 +98,44 @@ class SelectorParser
 		}
 
 		return $tag ?: null;
+	}
+
+	/**
+	 * The key for a tag, id and classes written as one part, such as P#I.C or .B.A: the tag, then the id, then the
+	 * classes in alphabetical order, so P.C#I and P#I.C give the same key, P>>ID>>I>>CLASS>>C
+	 *
+	 * @param string $tag The tag, or an empty string
+	 * @param string $names The id and classes, each with its # or .
+	 * @return string|null Null for two different ids, which no element has
+	 */
+	private function compoundKey($tag, $names)
+	{
+		preg_match_all('/([.#])(' . self::NAME . ')/', $names, $parts, PREG_SET_ORDER);
+
+		$id = null;
+		$classes = [];
+		foreach ($parts as $part) {
+			if ($part[1] === '.') {
+				$classes[] = $part[2];
+			} elseif ($id !== null && $id !== $part[2]) {
+				return null;
+			} else {
+				$id = $part[2];
+			}
+		}
+
+		$key = $tag === '' ? [] : [$tag];
+		if ($id !== null) {
+			$key[] = 'ID>>' . $id;
+		}
+
+		if ($classes) {
+			$classes = array_unique($classes);
+			sort($classes);
+			$key[] = 'CLASS>>' . implode('.', $classes);
+		}
+
+		return implode('>>', $key);
 	}
 
 	/**

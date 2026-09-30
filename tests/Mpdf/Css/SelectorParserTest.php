@@ -86,6 +86,74 @@ class SelectorParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'in the middle' => [['DIV', '*', 'P']],
 			'last, after two parts' => [['DIV', 'P', '>', 'SPAN']],
 			'last, after one part' => [['TABLE', 'TR:LAST-CHILD']],
+			'a class with a pseudo-class' => [['DIV', 'P.C:HOVER']],
+			'an id with a pseudo-class' => [['DIV', '#I:FIRST-CHILD']],
+		];
+	}
+
+	/**
+	 * An id written with classes gives one key whatever order they are written in: the tag, the id, then the classes
+	 * in alphabetical order
+	 *
+	 * @dataProvider compoundSelectors
+	 *
+	 * @param string $selector
+	 * @param string $expected
+	 */
+	public function testParseSimpleSelectorGivesAnIdWithClassesOneKey($selector, $expected)
+	{
+		$this->assertSame($expected, $this->parser->parseSimpleSelector([$selector]));
+		$this->assertSame(['DIV', $expected], $this->parser->parseCascadedSelector(['DIV', $selector]));
+	}
+
+	/**
+	 * Parts naming an id with classes, and the key each gives
+	 *
+	 * @return array[]
+	 */
+	public function compoundSelectors()
+	{
+		return [
+			'tag, id, class' => ['P#I.C', 'P>>ID>>I>>CLASS>>C'],
+			'tag, class, id' => ['P.C#I', 'P>>ID>>I>>CLASS>>C'],
+			'id, class' => ['#I.C', 'ID>>I>>CLASS>>C'],
+			'class, id' => ['.C#I', 'ID>>I>>CLASS>>C'],
+			'two classes around the id' => ['P.B#I.A', 'P>>ID>>I>>CLASS>>A.B'],
+			'tag, two classes, id' => ['P.A.B#I', 'P>>ID>>I>>CLASS>>A.B'],
+			'the same class twice' => ['.C.C', 'CLASS>>C'],
+			'the same id twice' => ['#I#I.C', 'ID>>I>>CLASS>>C'],
+		];
+	}
+
+	/**
+	 * A part with a class or id that mPDF cannot match gives no key, so the rule is dropped
+	 *
+	 * @dataProvider malformedCompoundSelectors
+	 *
+	 * @param string $selector
+	 */
+	public function testParseSimpleSelectorGivesNothingForAMalformedClassOrId($selector)
+	{
+		$this->assertNull($this->parser->parseSimpleSelector([$selector]));
+	}
+
+	/**
+	 * Parts with a class or id followed by something that is not a class or id, or with two ids
+	 *
+	 * @return array[]
+	 */
+	public function malformedCompoundSelectors()
+	{
+		return [
+			'a class with a pseudo-class' => ['.C:HOVER'],
+			'a tag and class with a pseudo-class' => ['P.C:FIRST-CHILD'],
+			'an id with an attribute' => ['#I[TITLE]'],
+			'a tag and id with a pseudo-element' => ['P#I::BEFORE'],
+			'a child combinator without spaces' => ['.A>.B'],
+			'two ids' => ['#I#J'],
+			'an empty class' => ['.A..B'],
+			'a bare dot' => ['.'],
+			'a bare hash' => ['#'],
 		];
 	}
 
