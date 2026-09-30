@@ -20,7 +20,8 @@ class CascadeContextTest extends TestCase
 
 	/**
 	 * Each subject is drawn in the colour the rules that win leave it in: the element the heavier or later rule
-	 * matches, and a near miss that only the other rule matches
+	 * matches, and a near miss that only the other rule matches. The document is closed, so its header and footer are
+	 * drawn on the page, and each subject is checked to be drawn in the context the case names
 	 *
 	 * @dataProvider casesInContexts
 	 *
@@ -37,7 +38,11 @@ class CascadeContextTest extends TestCase
 			}
 		}
 
-		$this->assertDrawnInColours($expected, $this->drawnColours($this->document($context, $css, $groups), ['cssMode' => CssMode::STANDARD]));
+		$mpdf = $this->drawDocument($this->document($context, $css, $groups), ['cssMode' => CssMode::STANDARD]);
+		$mpdf->OutputBinaryData();
+
+		$this->assertDrawnInColours($expected, $this->keyedByText($mpdf, $mpdf->drawnColours));
+		$this->assertDrawnInContext($context, $mpdf, array_keys($expected));
 	}
 
 	/**
@@ -173,41 +178,8 @@ class CascadeContextTest extends TestCase
 			$html .= $context === 'inline' ? '<p>' . $inner . '</p>' : $inner;
 		}
 
-		switch ($context) {
-			case 'header':
-				return $style . '<htmlpageheader name="h">' . $html . '</htmlpageheader><sethtmlpageheader name="h" value="on" show-this-page="1" /><p>body</p>';
-
-			case 'footer':
-				return $style . '<htmlpagefooter name="f">' . $html . '</htmlpagefooter><sethtmlpagefooter name="f" value="on" /><p>body</p>';
-
-			case 'positioned block':
-				return $style . '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm;">' . $html . '</div>';
-
-			case 'kept block':
-				// Too little of the first page is left for the block, which is laid out again on the second
-				return $style . str_repeat('<p>filler</p>', 44) . '<div style="page-break-inside: avoid"><p>kept</p>' . $html . '</div>';
-
-			case 'forced page break':
-				return $style . '<div class="w"><p>before the break</p><pagebreak />' . $html . '</div>';
-
-			default:
-				return $style . $html;
-		}
-	}
-
-	/**
-	 * The kept-block context does lay its block out twice: it starts on the first page, runs over, and is laid out
-	 * again from the top of the second
-	 */
-	public function testTheKeptBlockMovesToTheNextPage()
-	{
-		$mpdf = $this->drawDocument($this->document('kept block', '.c { color: #f00; }', [[[''], ['kept subject' => ['class="c"'], 'second' => [''], 'third' => ['']]]]), ['cssMode' => CssMode::STANDARD]);
-		$pages = $this->keyedByText($mpdf, array_map(function ($box) {
-			return $box[0];
-		}, $mpdf->drawnBoxes));
-
-		$this->assertSame(2, $pages['kept']);
-		$this->assertSame(2, $pages['kept subject']);
+		// A table cell and an inline element are the subjects' own tags, in the flow
+		return $style . ($context === 'table cell' ? $html : $this->inContext($context, $html));
 	}
 
 	/**

@@ -258,7 +258,7 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$reflection = new \ReflectionClass($this->mpdf);
 		$property = $reflection->getProperty('styledElement');
 		$property->setAccessible(true);
-		$property->setValue($this->mpdf, ['path' => [$tbody], 'tag' => 'TR', 'attr' => [], 'level' => false]);
+		$property->setValue($this->mpdf, ['path' => [$tbody], 'tag' => 'TR', 'attr' => []]);
 	}
 
 	public function testMergeFullCSS_WithTRTag_NthChildOdd()

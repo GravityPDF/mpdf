@@ -54,7 +54,8 @@ class CascadeOrderTest extends TestCase
 
 	/**
 	 * Rules that compete for an element's colour, a document for them, and the colours its text is drawn in by the
-	 * legacy cascade, as measured, and by the standard cascade, as the Selectors and Cascade specifications give them
+	 * legacy cascade, as measured, which drops a rule only the matcher reads, and by the standard cascade, as the
+	 * Selectors and Cascade specifications give them
 	 *
 	 * @return array[] Each [css, html, legacy colours, standard colours]
 	 */
@@ -130,25 +131,25 @@ class CascadeOrderTest extends TestCase
 			'an id beats a child rule' => [
 				'#inner { color: #008000; } div > p { color: #f00; }',
 				'<div><p id="inner">id</p><p>no id</p></div>',
-				['id' => self::RED, 'no id' => self::RED],
+				['id' => self::GREEN, 'no id' => self::BLACK],
 				['id' => self::GREEN, 'no id' => self::RED],
 			],
 			'an id beats an attribute selector' => [
 				'[data-x] { color: #f00; } #i { color: #008000; }',
 				'<p id="i" data-x="1">both</p><p data-x="1">attribute only</p>',
-				['both' => self::RED, 'attribute only' => self::RED],
+				['both' => self::GREEN, 'attribute only' => self::BLACK],
 				['both' => self::GREEN, 'attribute only' => self::RED],
 			],
 			':not() counts its argument, so the later rule wins' => [
 				'p:not(.x) { color: #008000; } p.y { color: #f00; }',
 				'<p class="y">y</p><p>neither</p>',
-				['y' => self::GREEN, 'neither' => self::GREEN],
+				['y' => self::RED, 'neither' => self::BLACK],
 				['y' => self::RED, 'neither' => self::GREEN],
 			],
 			':where() counts nothing' => [
 				':where(#o) p { color: #f00; } div p { color: #008000; }',
 				'<div id="o"><p>inside</p></div>',
-				['inside' => self::RED],
+				['inside' => self::GREEN],
 				['inside' => self::GREEN],
 			],
 			'the inline style beats an id' => [

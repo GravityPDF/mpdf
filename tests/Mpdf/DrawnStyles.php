@@ -55,6 +55,66 @@ trait DrawnStyles
 	}
 
 	/**
+	 * HTML in one of the places an element is styled in apart from the flow of a page
+	 *
+	 * @param string $context table cell, header, footer, positioned block, kept block (a page-break-inside: avoid
+	 *                        block laid out again on the next page), forced page break (after one, inside a block), or
+	 *                        anything else for the flow
+	 * @param string $html
+	 *
+	 * @return string
+	 */
+	private function inContext($context, $html)
+	{
+		switch ($context) {
+			case 'table cell':
+				return '<table><tr><td>' . $html . '</td></tr></table>';
+
+			case 'header':
+				return '<htmlpageheader name="h">' . $html . '</htmlpageheader><sethtmlpageheader name="h" value="on" show-this-page="1" /><p>body</p>';
+
+			case 'footer':
+				return '<htmlpagefooter name="f">' . $html . '</htmlpagefooter><sethtmlpagefooter name="f" value="on" /><p>body</p>';
+
+			case 'positioned block':
+				return '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm;">' . $html . '</div>';
+
+			case 'kept block':
+				// The block starts on the first page, runs over it, and is put back and laid out again on the second
+				return '<div style="height: 200mm">filler</div><div style="page-break-inside: avoid"><p>kept</p>' . $html
+					. '<div style="height: 60mm"></div></div>';
+
+			case 'forced page break':
+				return '<div class="w"><p>before the break</p><pagebreak />' . $html . '</div>';
+
+			default:
+				return $html;
+		}
+	}
+
+	/**
+	 * Pieces of text put in a context by inContext() are drawn where it puts them, so that a context cannot quietly
+	 * stop testing what it is named for: in the header, the footer or the positioned block, and on the second page
+	 * after the forced page break or once the kept block has been put back and laid out again
+	 *
+	 * @param string $context As inContext() takes it
+	 * @param TextRecordingMpdf $mpdf The document, written and closed
+	 * @param string[] $texts The pieces of text
+	 */
+	private function assertDrawnInContext($context, TextRecordingMpdf $mpdf, array $texts)
+	{
+		$this->assertSame($context === 'kept block' ? 1 : 0, $mpdf->unwinds, 'How often a kept block is put back');
+
+		$boxes = $this->keyedByText($mpdf, $mpdf->drawnBoxes);
+		$drawnIn = $this->keyedByText($mpdf, $mpdf->drawnIn);
+		$where = ['header' => 'header', 'footer' => 'footer', 'positioned block' => 'positioned'];
+		foreach ($texts as $text) {
+			$this->assertSame(isset($where[$context]) ? $where[$context] : '', $drawnIn[$text], $text);
+			$this->assertSame(in_array($context, ['kept block', 'forced page break'], true) ? 2 : 1, $boxes[$text][0], $text);
+		}
+	}
+
+	/**
 	 * Keys what was recorded of each piece of text a document drew by the text itself, so a test can look a piece up
 	 * by what it says
 	 *

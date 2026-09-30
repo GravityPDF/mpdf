@@ -49,6 +49,34 @@ class ShorthandResetsLonghandsTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	}
 
 	/**
+	 * In legacy mode a border shorthand leaves an earlier top colour in place, as mPDF v7 did, so the top side is red
+	 *
+	 * @dataProvider legacyBorderProvider
+	 *
+	 * @param string $element The element the rules select: p, span, td or collapsed td
+	 * @param string $css The rules, with {el} for the element
+	 * @param string $style The element's style attribute
+	 */
+	public function testLegacyModeKeepsAnEarlierBorderLonghand($element, $css, $style = '')
+	{
+		$this->assertDrawn(self::RED, $this->renderElement($element, $css, $style, CssMode::LEGACY));
+	}
+
+	/**
+	 * The cases of borderResetProvider() in which the shorthand is written in a rule of the same group as the earlier
+	 * longhand. Legacy mode applies a class rule after a tag rule, and the style attribute after both, whatever their
+	 * order, so there the shorthand's own colour wins in legacy mode too
+	 *
+	 * @return array[]
+	 */
+	public function legacyBorderProvider()
+	{
+		return array_filter($this->borderResetProvider(), function ($case, $name) {
+			return !isset($case[2]) && strpos($name, 'a later class rule') === false;
+		}, ARRAY_FILTER_USE_BOTH);
+	}
+
+	/**
 	 * Each element with each way of giving a longhand before a border shorthand
 	 *
 	 * @return array[]
@@ -125,6 +153,21 @@ class ShorthandResetsLonghandsTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 		$pdf = $this->renderElement($element, $css, $style);
 
 		$this->assertDrawn(self::NATURAL_TILE, $pdf);
+	}
+
+	/**
+	 * In legacy mode a background shorthand leaves an earlier repeat in place, as mPDF v7 did, so the image is not
+	 * repeated
+	 *
+	 * @dataProvider backgroundResetProvider
+	 *
+	 * @param string $element The element the rules select: p or td
+	 * @param string $css The rules, with {el} for the element and {img} for the image
+	 * @param string $style The element's style attribute
+	 */
+	public function testLegacyModeKeepsEarlierBackgroundLonghands($element, $css, $style = '')
+	{
+		$this->assertDrawn(self::NO_REPEAT, $this->renderElement($element, $css, $style, CssMode::LEGACY));
 	}
 
 	/**
@@ -263,10 +306,11 @@ class ShorthandResetsLonghandsTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	 * @param string $element p, span, td, or collapsed td for a cell of a table with collapsed borders
 	 * @param string $css The rules, with {el} for the element and {img} for the image
 	 * @param string $style The element's style attribute
+	 * @param string $cssMode A CssMode constant
 	 *
 	 * @return string
 	 */
-	private function renderElement($element, $css, $style = '')
+	private function renderElement($element, $css, $style = '', $cssMode = CssMode::STANDARD)
 	{
 		$replace = ['{el}' => $element === 'collapsed td' ? 'td' : $element, '{img}' => $this->backgroundImage()];
 		$attributes = 'class="x"' . ($style !== '' ? ' style="' . strtr($style, $replace) . '"' : '');
@@ -282,7 +326,7 @@ class ShorthandResetsLonghandsTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 
 		return $this->assertDrawsSilently(function (Mpdf $mpdf) use ($css, $replace, $body) {
 			$mpdf->WriteHTML('<style>' . strtr($css, $replace) . '</style><div class="wrap">' . $body . '</div>');
-		});
+		}, ['cssMode' => $cssMode]);
 	}
 
 }

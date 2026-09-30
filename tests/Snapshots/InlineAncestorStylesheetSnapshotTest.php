@@ -4,8 +4,8 @@ namespace Snapshots;
 
 /**
  * Stylesheets in the style of CMS themes and invoice templates whose descendant rules name inline elements and
- * blocks inside table cells as ancestors, mixed with rules the legacy engine matches through blocks and with child
- * and sibling combinators.
+ * blocks inside table cells as ancestors, mixed with rules matched through blocks and with child and sibling
+ * combinators, in standard mode.
  *
  * @group snapshot
  */
@@ -102,16 +102,16 @@ class InlineAncestorStylesheetSnapshotTest extends Snapshot
 		</table>
 
 		<h2 class="section">Competing rules</h2>
-		<p class="caption">Descendant rules matched through blocks keep the order the legacy engine gives them. Those only an inline ancestor matches come after them, by specificity and then by source order. Each bold word says the colour it should be.</p>
+		<p class="caption">The rules compete by specificity, then by source order, whether a block or an inline element is the ancestor they match through. Each bold word says the colour it should be.</p>
 		<div class="pricing">
 			<p><b>Green</b>: .pricing b, through the div.</p>
 			<p><span class="deal"><b>Orange</b></span>: .pricing p .deal &gt; b outweighs .pricing .deal b, which only the span matches.</p>
-			<p><span class="plain"><b>Blue</b></span>: .pricing .plain b, which only the span matches, comes after .pricing b.</p>
+			<p><span class="plain"><b>Blue</b></span>: .pricing .plain b, which only the span matches, outweighs .pricing b.</p>
 		</div>
 		<?php
 		$html = ob_get_clean();
 
-		$this->mpdf = $this->createMpdf();
+		$this->mpdf = $this->createMpdf(['cssMode' => \Mpdf\CssMode::STANDARD]);
 
 		$this->mpdf->WriteHTML($html);
 	}

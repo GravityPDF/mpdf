@@ -134,7 +134,7 @@ class LogicalStylesheetSnapshotTest extends Snapshot
 		<?php
 		$html = ob_get_clean();
 
-		$this->mpdf = $this->createMpdf();
+		$this->mpdf = $this->createMpdf(['cssMode' => \Mpdf\CssMode::STANDARD]);
 
 		$this->mpdf->WriteHTML($html);
 	}

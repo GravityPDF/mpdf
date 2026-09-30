@@ -122,8 +122,8 @@ class CssParser
 	private $nthChildFormulas = ['TR' => [], 'TD' => [], 'TH' => []];
 
 	/**
-	 * @var array[] The rules of the last CSS parsed for the matcher, each compiled: [compiled selector, declarations,
-	 *              whether the legacy parser stores it too], in the order they were written
+	 * @var array[] The rules of the last CSS parsed for the matcher, each compiled: [compiled selector, declarations],
+	 *              in the order they were written
 	 */
 	private $compiledRules = [];
 
@@ -222,12 +222,9 @@ class CssParser
 	}
 
 	/**
-	 * The rules of the last CSS parsed for the matcher: those whose selector the legacy parser cannot read, and the
-	 * descendant and :lang() rules it stores, which the matcher applies where the legacy engine cannot match them.
-	 * In standard mode, every rule it read
+	 * The rules of the last CSS parsed for the matcher, in standard mode. Legacy mode compiles none
 	 *
-	 * @return array[] Each [compiled selector, declarations, whether the legacy parser stores it too], in the order
-	 *                 they were written
+	 * @return array[] Each [compiled selector, declarations], in the order they were written
 	 */
 	public function getCompiledRules()
 	{
@@ -318,36 +315,25 @@ class CssParser
 		$tag = $level === 1 ? $this->selectorParser->parseSimpleSelector($tags) : null;
 		$simple = $tag !== null && $this->isLegacySelector([$tag]);
 
+		// Legacy mode applies simple rules from these keys, and standard mode keeps them for what reads
+		// CssManager::$CSS directly: BODY, and SVG's classes
+		if ($simple) {
+			$this->storeSimpleRule($tag, $classProperties);
+		}
+
 		if ($this->mpdf->cssMode === CssMode::STANDARD) {
 			$this->compileRule($written, $classProperties);
-
-			// Simple rules are still stored by key, for what reads CssManager::$CSS directly: BODY, and SVG's classes
-			if ($simple) {
-				$this->storeSimpleRule($tag, $classProperties);
-			}
 
 			return;
 		}
 
+		// Legacy mode drops a rule the legacy parser cannot read
 		if ($level === 1) {
-			if (!$simple) {
-				$this->compileRule($written, $classProperties);
-				return;
-			}
-
-			// The legacy engine only matches :lang() against an element's own lang attribute, not one it inherits
-			if (strpos($selector, ':LANG(') !== false) {
-				$this->compileRule($written, $classProperties, true);
-			}
-
-			$this->storeSimpleRule($tag, $classProperties);
-
 			return;
 		}
 
 		$cascade = $this->selectorParser->parseCascadedSelector($tags);
 		if (!$this->isLegacySelector($cascade)) {
-			$this->compileRule($written, $classProperties);
 			return;
 		}
 
@@ -359,9 +345,6 @@ class CssParser
 
 		$cascadeCSS = Arrays::uniqueRecursiveMerge($cascadeCSS, $classProperties);
 		$cascadeCSS['depth'] = $level;
-
-		// The legacy engine only looks for the ancestors a descendant rule names among blocks and table parts
-		$this->compileRule($written, $classProperties, true);
 	}
 
 	/**
@@ -426,10 +409,9 @@ class CssParser
 	 *
 	 * @param string $selector As written
 	 * @param array $classProperties
-	 * @param bool $legacy Whether the legacy parser stores it too
 	 * @return void
 	 */
-	private function compileRule($selector, array $classProperties, $legacy = false)
+	private function compileRule($selector, array $classProperties)
 	{
 		if (!$classProperties) {
 			return;
@@ -439,7 +421,7 @@ class CssParser
 
 		// The universal selector changes which elements existing documents style, so it waits for #530
 		if ($compiled !== null && !$compiled['universal']) {
-			$this->compiledRules[] = [$compiled, $classProperties, $legacy];
+			$this->compiledRules[] = [$compiled, $classProperties];
 		}
 	}
 

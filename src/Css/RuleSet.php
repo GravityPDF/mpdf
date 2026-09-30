@@ -6,18 +6,13 @@ namespace Mpdf\Css;
  * Compiled stylesheet rules, filed under the rightmost compound of their selector as browsers file them: by its id,
  * else its first class, else its tag, else with the rules any element may match. An element then only has to be
  * matched against the rules filed under its own id, classes and tag, and those.
- *
- * The descendant rules the legacy engine applies too are filed apart. They are only looked at for an element with an
- * ancestor that opened no level of the legacy descendant rules, such as an inline element, since the legacy engine
- * matches the rest. A rule naming :lang() is looked at for every element, as the legacy engine does not match an
- * inherited language.
  */
 class RuleSet
 {
 
 	/**
 	 * @var array[] Each rule, by its position in the stylesheets read: [compiled selector, declarations, the ancestors
-	 *              it requires as requiredAncestors() gives them, whether the legacy engine applies it too]
+	 *              it requires as requiredAncestors() gives them]
 	 */
 	private $rules = [];
 
@@ -26,11 +21,6 @@ class RuleSet
 	 *            compound names none: ['id' => [id => positions], 'class' => [...], 'tag' => [...], 'any' => positions]
 	 */
 	private $index = ['id' => [], 'class' => [], 'tag' => [], 'any' => []];
-
-	/**
-	 * @var array The descendant rules the legacy engine applies too, filed in the same way
-	 */
-	private $legacyIndex = ['id' => [], 'class' => [], 'tag' => [], 'any' => []];
 
 	/**
 	 * @var SelectorMatcher Matches each rule filed under an element against the open elements around it
@@ -50,21 +40,13 @@ class RuleSet
 	 *
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
 	 * @param array $declarations Its normalised declarations
-	 * @param bool $legacy For a rule the legacy engine applies too: match it only where the legacy engine cannot,
-	 *                     such as through an inline element or another ancestor that opens no level of its
-	 *                     descendant rules
 	 */
-	public function add(array $selector, array $declarations, $legacy = false)
+	public function add(array $selector, array $declarations)
 	{
 		$position = count($this->rules);
-		$this->rules[] = [$selector, $declarations, self::requiredAncestors($selector), $legacy];
+		$this->rules[] = [$selector, $declarations, self::requiredAncestors($selector)];
 
-		$subject = $selector['compounds'][count($selector['compounds']) - 1];
-		if ($legacy && !self::namesLanguage($selector)) {
-			self::file($this->legacyIndex, $subject, $position);
-		} else {
-			self::file($this->index, $subject, $position);
-		}
+		self::file($this->index, $selector['compounds'][count($selector['compounds']) - 1], $position);
 	}
 
 	/**
@@ -96,8 +78,7 @@ class RuleSet
 	public function matchingDeclarations($tag, $id, array $classes, callable $path)
 	{
 		$candidates = $this->candidates($tag, $id, $classes);
-		$legacyCandidates = self::collect($this->legacyIndex, $tag, $id, $classes);
-		if (!$candidates && !$legacyCandidates) {
+		if (!$candidates) {
 			return [];
 		}
 
@@ -106,21 +87,17 @@ class RuleSet
 			return [];
 		}
 
-		if ($legacyCandidates && self::hasAncestorOpeningNoLevel($path)) {
-			$candidates = array_merge($candidates, $legacyCandidates);
-		}
-
 		$ancestors = self::ancestorsOf($path);
 		$matched = [];
 		foreach ($candidates as $position) {
-			list($selector, , $required, $legacy) = $this->rules[$position];
+			list($selector, , $required) = $this->rules[$position];
 			foreach ($required as $key) {
 				if (!isset($ancestors[$key])) {
 					continue 2;
 				}
 			}
 
-			if ($this->matcher->matches($selector, $path) && !($legacy && $this->matcher->matches($selector, $path, true))) {
+			if ($this->matcher->matches($selector, $path)) {
 				$matched[] = $position;
 			}
 		}
@@ -146,8 +123,7 @@ class RuleSet
 	/**
 	 * @param int $position
 	 *
-	 * @return array The rule at a position, as it is kept: [compiled selector, declarations, required ancestors,
-	 *               whether the legacy engine applies it too]
+	 * @return array The rule at a position, as it is kept: [compiled selector, declarations, required ancestors]
 	 */
 	public function rule($position)
 	{
@@ -253,46 +229,5 @@ class RuleSet
 		}
 
 		return $keys;
-	}
-
-	/**
-	 * Whether an ancestor of the element opened no level of the legacy descendant rules, such as an inline element or
-	 * a block inside a table cell. Only then can a descendant rule the legacy engine applies too match where the
-	 * legacy engine does not, so the rules filed in the legacy index are only looked at for such an element
-	 *
-	 * @param array[] $path The open elements from the document down to the element, with the element last
-	 *
-	 * @return bool
-	 */
-	private static function hasAncestorOpeningNoLevel(array $path)
-	{
-		for ($depth = count($path) - 2; $depth > 0; $depth--) {
-			if (!$path[$depth]['level']) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	/**
-	 * Only the compounds' own pseudo-classes are looked at: the legacy parser reads no :not() or :is(), so a legacy
-	 * rule has no :lang() inside one
-	 *
-	 * @param array $selector
-	 *
-	 * @return bool Whether a compiled selector names :lang()
-	 */
-	private static function namesLanguage(array $selector)
-	{
-		foreach ($selector['compounds'] as $compound) {
-			foreach ($compound['pseudos'] as $pseudo) {
-				if ($pseudo[0] === 'lang') {
-					return true;
-				}
-			}
-		}
-
-		return false;
 	}
 }

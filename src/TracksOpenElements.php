@@ -34,10 +34,9 @@ trait TracksOpenElements
 	private $openElements;
 
 	/**
-	 * @var array|null The element whose CSS is being merged: the open elements it sits in (path), its tag and
-	 * attributes (attr), and whether it opens a level of the legacy descendant rules (level), or, for an element that
-	 * is already open, the open elements down to it and a null tag. Null while no element of the document is being
-	 * styled. WriteHTML() sets it while a start tag's handler runs, reopenBlock() while a block is opened again, and
+	 * @var array|null The element whose CSS is being merged: the open elements it sits in (path) and its tag and
+	 * attributes (attr), or, for an element that is already open, the open elements down to it and a null tag. Null
+	 * while no element of the document is being styled. WriteHTML() sets it while a start tag's handler runs, reopenBlock() while a block is opened again, and
 	 * WriteFixedPosHTML() while a positioned block's own CSS is merged. See getStyledElementPath()
 	 */
 	private $styledElement;
@@ -116,8 +115,6 @@ trait TracksOpenElements
 	 *   place in the list
 	 * - childTypes: how many children so far have each tag
 	 * - computed: its computed values, not filled in yet
-	 * - level: whether it opened a level of the descendant rules the legacy parser stores, as a block, and a table and
-	 *   its parts do. The document does too
 	 *
 	 * @return array[]
 	 */
@@ -208,19 +205,6 @@ trait TracksOpenElements
 	}
 
 	/**
-	 * Notes that the element whose CSS is being merged opens a level of the descendant rules the legacy parser
-	 * stores, as a block, a table and a table part do. CssMerger calls it when it lifts those rules at the element.
-	 * WriteHTML() then marks the element's frame, and the matcher leaves the rules that go through it to the legacy
-	 * engine, so none is applied twice
-	 */
-	public function markStyledElementAsLevel()
-	{
-		if ($this->styledElement !== null) {
-			$this->styledElement['level'] = true;
-		}
-	}
-
-	/**
 	 * Makes the stack a document starts from: a single frame standing for the document, with nothing written into it
 	 * yet. The constructor starts from one, and so does a WriteHTML() call that starts a new document, such as the one
 	 * InsertIndex() makes for the index, and a header or footer written apart from the flow. The frame carries the
@@ -230,10 +214,7 @@ trait TracksOpenElements
 	 */
 	private function newOpenElementStack()
 	{
-		$document = $this->newElementFrame('', [], $this->documentLang, 1, 1);
-		$document['level'] = true;
-
-		return [$document];
+		return [$this->newElementFrame('', [], $this->documentLang, 1, 1)];
 	}
 
 	/**
@@ -260,7 +241,6 @@ trait TracksOpenElements
 			'children' => [],
 			'childTypes' => [],
 			'computed' => null,
-			'level' => false,
 		];
 	}
 
@@ -273,10 +253,8 @@ trait TracksOpenElements
 	 * @param string $tag
 	 * @param string[] $attr
 	 * @param bool $selfClosing Whether the start tag ends with a slash
-	 * @param bool $level Whether the legacy engine lifted descendant rules at it, as it does at a block, a table and a
-	 *                    table part. The matcher leaves the rules that go through such an element to the legacy engine
 	 */
-	private function startElement($tag, array $attr, $selfClosing, $level)
+	private function startElement($tag, array $attr, $selfClosing)
 	{
 		if ($tag === '' || isset(self::$substitutionTags[$tag])) {
 			return;
@@ -284,12 +262,11 @@ trait TracksOpenElements
 
 		$parent = count($this->openElements) - 1;
 		if (self::impliesTbody($tag, $this->openElements[$parent])) {
-			$this->startElement('TBODY', [], false, false);
+			$this->startElement('TBODY', [], false);
 			$parent++;
 		}
 
 		$frame = $this->newChildFrame($this->openElements[$parent], $tag, $attr);
-		$frame['level'] = $level;
 
 		if ($selfClosing || isset(self::$voidTags[$tag])) {
 			$this->recordClosedElement($frame);
@@ -392,7 +369,7 @@ trait TracksOpenElements
 		$arr = [];
 		$i = 0;
 		$outerElement = $this->styledElement;
-		$this->styledElement = $depth === null ? null : ['path' => array_slice($this->openElements, 0, $depth + 1), 'tag' => null, 'attr' => [], 'level' => false];
+		$this->styledElement = $depth === null ? null : ['path' => array_slice($this->openElements, 0, $depth + 1), 'tag' => null, 'attr' => []];
 		$this->tag->OpenTag($block['tag'], $block['attr'], $arr, $i);
 		$this->styledElement = $outerElement;
 	}

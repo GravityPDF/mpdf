@@ -5,10 +5,9 @@ namespace Mpdf;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
- * Descendant rules the legacy parser reads, matched through ancestors the legacy engine does not look at: inline
- * elements, blocks inside a table cell and a tbody a table implies. The legacy engine only looks for the ancestors
- * a descendant rule names among blocks and table parts, so the matcher applies a rule where only such an ancestor
- * lets it match, and leaves the rest to the legacy engine.
+ * Descendant rules matched through ancestors the legacy engine does not look at: inline elements, blocks inside a
+ * table cell and a tbody a table implies. Standard mode matches them against every open element. The legacy engine
+ * only looks for the ancestors a descendant rule names among blocks and table parts, as it did before.
  */
 class InlineAncestorSelectorTest extends TestCase
 {
@@ -28,9 +27,9 @@ class InlineAncestorSelectorTest extends TestCase
 	 * @param string $html
 	 * @param array<string, string> $expected Pieces of text and the colour each should be drawn in
 	 */
-	public function testMatchesThroughAncestorsTheLegacyEngineDoesNotLookAt($css, $html, array $expected)
+	public function testStandardModeMatchesThroughAnyAncestor($css, $html, array $expected)
 	{
-		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html);
+		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssMode' => CssMode::STANDARD]);
 
 		foreach ($expected as $text => $colour) {
 			$this->assertArrayHasKey($text, $colours, sprintf('"%s" is not drawn', $text));
@@ -106,8 +105,8 @@ class InlineAncestorSelectorTest extends TestCase
 	}
 
 	/**
-	 * A descendant rule the legacy engine applies through blocks is not applied again by the matcher, after the
-	 * rules the legacy engine applied after it
+	 * In legacy mode, descendant rules found through blocks apply in the order of the ancestors they were found at,
+	 * as the legacy engine applied them
 	 *
 	 * @dataProvider legacyMatches
 	 *
@@ -115,7 +114,7 @@ class InlineAncestorSelectorTest extends TestCase
 	 * @param string $html
 	 * @param string $expected The colour the text "text" should be drawn in
 	 */
-	public function testLeavesToTheLegacyEngineWhatItMatches($css, $html, $expected)
+	public function testLegacyModeAppliesDescendantRulesInAncestorOrder($css, $html, $expected)
 	{
 		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssMode' => CssMode::LEGACY]);
 
@@ -157,19 +156,5 @@ class InlineAncestorSelectorTest extends TestCase
 				self::BLUE,
 			],
 		];
-	}
-
-	/**
-	 * Rules matched through an inline ancestor come after the descendant rules the legacy engine applies, as the
-	 * rules only the matcher reads do
-	 */
-	public function testAppliesRulesMatchedThroughAnInlineAncestorAfterTheLegacyOnes()
-	{
-		$colours = $this->drawnColours(
-			'<style>.y b { color: #00f; } .x b { color: #f00; }</style><p class="x"><span class="y"><b>text</b></span></p>',
-			['cssMode' => CssMode::LEGACY]
-		);
-
-		$this->assertSame(self::BLUE, $colours['text']);
 	}
 }

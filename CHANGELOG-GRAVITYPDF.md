@@ -29,7 +29,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **`<annotation file="...">` is off by default.** Set `allowHtmlAnnotationFiles` to `true` to read the `file` attribute. [#375]
 * **A `<select>` without `size` is written as a combo box**, as browsers draw it. [#419]
 * **A `<select multiple>` without `size` is four rows tall instead of one**, as in browsers. Content after it on the page moves down. Add `size="1"` to keep the old height. [#437]
-* **The `border` and `background` shorthands reset the longhands they do not name**, as in a browser. [#552] [#614]
+* **The `border` and `background` shorthands reset the longhands they do not name**, as in a browser, in standard mode. [#552] [#614]
   * `border`, or one side such as `border-top`, sets the width, style and colour of each side it covers. `p { border-top-color: red } p { border: 1px solid blue }` used to draw a red top and now draws a blue one.
   * `background` sets the colour, image, repeat, position, size, origin and clip. A `background-position`, `-repeat` or `-size` given before a `background` no longer applies to its image.
   * To keep the old look, restate the longhand after the shorthand, in the same rule or a later one.
@@ -41,6 +41,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * Each element takes, in order: the values it inherits; the built-in defaults and the rules of the default stylesheet (`defaultCssFile`), which any author rule beats; HTML attributes such as `<hr color>`, `width` and `vspace`, as author rules of no specificity; the stylesheets; then `style=""`.
   * Class and id names still match whatever their case.
   * An author's `a { }` rule now reaches the links of the table of contents and the index too. Style `a.mpdf_toc_a` and `a.mpdf_index_link` to keep them plain.
+  * In legacy mode, a rule whose selector mPDF v7 could not read is dropped: child and sibling combinators, structural pseudo-classes outside tables, attribute selectors other than `[lang]`, `:lang()` through an ancestor, descendant rules through inline ancestors, and `:not()`, `:is()` and `:where()`. The `font`, `border` and `background` shorthands leave the longhands they do not name, as mPDF v7 did. Fixes to how values and selectors are read apply in both modes. [#633]
 
 New features
 ------------
@@ -176,7 +177,7 @@ Bugfixes
   * With several layers, mPDF still draws only the first, now over the colour given in the last.
 * A `border` or `background` shorthand with a part that is none of its parts, such as `border: 1px solid bogus`, is dropped, as a browser drops it, so the value it would have replaced still applies. `border: 1px solid bogus` used to draw a black border. [#552] [#583]
 * `tr:nth-child()` counted the rows of the whole table less its header and footer rows, so a second `<tbody>` carried on the count of the first, and `tr:first-child` missed the first footer row when `<tfoot>` came after the body. Rows are now counted within their `<thead>`, `<tbody>` or `<tfoot>`, or within the run of rows written straight into the table. [#528] [#582]
-* `font: small-caps 14pt serif` drew the text in full-size capitals, as `text-transform: uppercase` does. It is now drawn in small capitals, as `font-variant: small-caps` draws it. The `font` shorthand also kept a `line-height` and a `font-variant` it inherited; like the style and weight, they are now reset to `normal` when the shorthand does not name them, as in a browser. To keep a line height, give it in the shorthand, as in `font: 14pt/1.5 serif`, or declare `line-height` after it. A `font` shorthand with a negative line height, such as `font: 12pt/-1 serif`, is dropped whole. `font-variant: normal` now resets `font-variant-position` as well. [#552] [#581]
+* `font: small-caps 14pt serif` drew the text in full-size capitals, as `text-transform: uppercase` does. It is now drawn in small capitals, as `font-variant: small-caps` draws it. The `font` shorthand also kept a `line-height` and a `font-variant` it inherited; like the style and weight, in standard mode they are now reset to `normal` when the shorthand does not name them, as in a browser. To keep a line height, give it in the shorthand, as in `font: 14pt/1.5 serif`, or declare `line-height` after it. A `font` shorthand with a negative line height, such as `font: 12pt/-1 serif`, is dropped whole. `font-variant: normal` now resets `font-variant-position` as well. [#552] [#581]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -829,3 +830,4 @@ These changes do not change output.
 [#629]: https://github.com/GravityPDF/mpdf/pull/629
 [#631]: https://github.com/GravityPDF/mpdf/pull/631
 [#632]: https://github.com/GravityPDF/mpdf/issues/632
+[#633]: https://github.com/GravityPDF/mpdf/pull/633

@@ -27,17 +27,14 @@ class SelectorMatcher
 	 *
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
 	 * @param array[] $path The open elements from the document down to the element
-	 * @param bool $legacyView Whether to match as the legacy engine does: a descendant combinator only looks at the
-	 *                         ancestors that opened a level of the legacy descendant rules, and :lang() only at an
-	 *                         element's own lang attribute, as that engine reads it
 	 *
 	 * @return bool
 	 */
-	public function matches(array $selector, array $path, $legacyView = false)
+	public function matches(array $selector, array $path)
 	{
 		$depth = count($path) - 1;
 
-		return $this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView) === self::MATCHES;
+		return $this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $depth - 1, $path[$depth]['nthChild'] - 1) === self::MATCHES;
 	}
 
 	/**
@@ -56,13 +53,12 @@ class SelectorMatcher
 	 * @param int $parent The depth on $path of the element's parent, or -1 for the document itself
 	 * @param int $index The element's index among its parent's children, from 0. At the number of children the parent
 	 *                   has closed, it is the open element at the next depth
-	 * @param bool $legacyView Whether to match as the legacy engine does, as matches() takes it
 	 *
 	 * @return int self::MATCHES, or how far the failure reaches: self::FAILS_HERE or self::FAILS_FOR_ANCESTORS
 	 */
-	private function matchesFrom(array $selector, $compound, array $path, $parent, $index, $legacyView)
+	private function matchesFrom(array $selector, $compound, array $path, $parent, $index)
 	{
-		if (!$this->matchesCompound($selector['compounds'][$compound], $path, $parent, $index, $legacyView)) {
+		if (!$this->matchesCompound($selector['compounds'][$compound], $path, $parent, $index)) {
 			return self::FAILS_HERE;
 		}
 
@@ -77,15 +73,11 @@ class SelectorMatcher
 					return self::FAILS_FOR_ANCESTORS;
 				}
 
-				return $this->matchesFrom($selector, $compound, $path, $parent - 1, $path[$parent]['nthChild'] - 1, $legacyView);
+				return $this->matchesFrom($selector, $compound, $path, $parent - 1, $path[$parent]['nthChild'] - 1);
 
 			case ' ':
 				for ($depth = $parent; $depth >= 0; $depth--) {
-					if ($legacyView && !$path[$depth]['level']) {
-						continue;
-					}
-
-					$result = $this->matchesFrom($selector, $compound, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView);
+					$result = $this->matchesFrom($selector, $compound, $path, $depth - 1, $path[$depth]['nthChild'] - 1);
 					if ($result !== self::FAILS_HERE) {
 						return $result;
 					}
@@ -98,7 +90,7 @@ class SelectorMatcher
 					return self::FAILS_HERE;
 				}
 
-				return $this->matchesFrom($selector, $compound, $path, $parent, $index - 1, $legacyView);
+				return $this->matchesFrom($selector, $compound, $path, $parent, $index - 1);
 
 			default:
 				// None of the siblings before it has the tag, if the parent has had no child with it
@@ -108,7 +100,7 @@ class SelectorMatcher
 				}
 
 				for ($sibling = 0; $sibling < $index; $sibling++) {
-					$result = $this->matchesFrom($selector, $compound, $path, $parent, $sibling, $legacyView);
+					$result = $this->matchesFrom($selector, $compound, $path, $parent, $sibling);
 					if ($result !== self::FAILS_HERE) {
 						return $result;
 					}
@@ -126,11 +118,10 @@ class SelectorMatcher
 	 * @param array[] $path As matchesFrom() takes it
 	 * @param int $parent The depth of the element's parent on $path, as matchesFrom() takes it
 	 * @param int $index The element's index among its parent's children, as matchesFrom() takes it
-	 * @param bool $legacyView Whether to match as the legacy engine does, as matches() takes it
 	 *
 	 * @return bool
 	 */
-	private function matchesCompound(array $compound, array $path, $parent, $index, $legacyView)
+	private function matchesCompound(array $compound, array $path, $parent, $index)
 	{
 		$element = $this->element($path, $parent, $index);
 
@@ -157,7 +148,7 @@ class SelectorMatcher
 		}
 
 		foreach ($compound['pseudos'] as $pseudo) {
-			if (!$this->matchesPseudoClass($pseudo, $element, $path, $parent, $index, $legacyView)) {
+			if (!$this->matchesPseudoClass($pseudo, $element, $path, $parent, $index)) {
 				return false;
 			}
 		}
@@ -167,9 +158,9 @@ class SelectorMatcher
 
 	/**
 	 * Whether a pseudo-class matches an element. :nth-child() counts the element among all its element siblings, and
-	 * :nth-of-type() among those with its tag; the document has no siblings, so it matches neither. :lang() matches
-	 * the language the element has or inherits, or, in the legacy view, only its own lang attribute. :is() matches
-	 * when any selector in its list matches from the element, combinators and all, and :not() when none does
+	 * :nth-of-type() among those with its tag; the document has no siblings, so it matches neither. :lang() matches the
+	 * language the element has or inherits. :is() matches when any selector in its list matches from the element,
+	 * combinators and all, and :not() when none does
 	 *
 	 * @param array $pseudo A compiled pseudo-class: ['nth-child', a, b], ['nth-of-type', a, b], ['lang', ranges],
 	 *                      or ['is', selectors] or ['not', selectors]
@@ -177,15 +168,14 @@ class SelectorMatcher
 	 * @param array[] $path As matchesFrom() takes it
 	 * @param int $parent The depth of the element's parent on $path, as matchesFrom() takes it
 	 * @param int $index The element's index among its parent's children, as matchesFrom() takes it
-	 * @param bool $legacyView Whether to match as the legacy engine does, as matches() takes it
 	 *
 	 * @return bool
 	 */
-	private function matchesPseudoClass(array $pseudo, array $element, array $path, $parent, $index, $legacyView)
+	private function matchesPseudoClass(array $pseudo, array $element, array $path, $parent, $index)
 	{
 		if ($pseudo[0] === 'is' || $pseudo[0] === 'not') {
 			foreach ($pseudo[1] as $selector) {
-				if ($this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $parent, $index, $legacyView) === self::MATCHES) {
+				if ($this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $parent, $index) === self::MATCHES) {
 					return $pseudo[0] === 'is';
 				}
 			}
@@ -194,21 +184,14 @@ class SelectorMatcher
 		}
 
 		if ($pseudo[0] === 'lang') {
-			if (!$legacyView) {
-				// A closed sibling's record keeps no lang: it has its own, or its parent's
-				if (isset($element['lang'])) {
-					$lang = $element['lang'];
-				} else {
-					$lang = isset($element['attr']['LANG']) ? $element['attr']['LANG'] : $path[$parent]['lang'];
-				}
-
-				return $this->matchesLanguage($pseudo[1], strtolower($lang));
+			// A closed sibling's record keeps no lang: it has its own, or its parent's
+			if (isset($element['lang'])) {
+				$lang = $element['lang'];
+			} else {
+				$lang = isset($element['attr']['LANG']) ? $element['attr']['LANG'] : $path[$parent]['lang'];
 			}
 
-			// The legacy engine reads the element's own lang, or the language of one such as fr-ca
-			$lang = isset($element['attr']['LANG']) ? strtolower($element['attr']['LANG']) : '';
-
-			return in_array($lang, $pseudo[1], true) || (strlen($lang) === 5 && in_array(substr($lang, 0, 2), $pseudo[1], true));
+			return $this->matchesLanguage($pseudo[1], strtolower($lang));
 		}
 
 		if ($parent < 0) {
