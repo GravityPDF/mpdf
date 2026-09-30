@@ -380,6 +380,51 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * break-before, break-after and break-inside are read as the page-break-* property of the same name
+	 *
+	 * @dataProvider providerBreakProperty
+	 */
+	public function testBreakPropertyIsReadAsPageBreak($value, $expected)
+	{
+		foreach (['BEFORE', 'AFTER', 'INSIDE'] as $side) {
+			$this->assertSame(['PAGE-BREAK-' . $side => $expected], $this->normalizeProperties->normalize(['BREAK-' . $side => $value]));
+		}
+	}
+
+	/**
+	 * Each break value and the page-break-* value it becomes
+	 *
+	 * @return array
+	 */
+	public function providerBreakProperty()
+	{
+		return [
+			['auto', 'auto'],
+			['avoid', 'avoid'],
+			['avoid-page', 'avoid'],
+			['page', 'always'],
+			['left', 'left'],
+			['right', 'right'],
+			['recto', 'right'],
+			['verso', 'left'],
+			['column', 'auto'],
+			['avoid-column', 'auto'],
+			['region', 'auto'],
+			['avoid-region', 'auto'],
+			['PAGE', 'always'],
+		];
+	}
+
+	/**
+	 * A break value that is not a CSS one is dropped
+	 */
+	public function testUnknownBreakValueIsDropped()
+	{
+		$this->assertSame([], $this->normalizeProperties->normalize(['BREAK-BEFORE' => 'always']));
+		$this->assertSame([], $this->normalizeProperties->normalize(['BREAK-AFTER' => 'sideways']));
+	}
+
+	/**
 	 * Keywords and lengths are read as they were before page-size names
 	 */
 	public function testPageSizeKeywordsAndLengths()

@@ -13,6 +13,22 @@ use Mpdf\Utils\UtfString;
 class NormalizeProperties
 {
 
+	/** The page-break-* value each break-before, break-after and break-inside value is read as */
+	const PAGE_BREAK_VALUES = [
+		'auto' => 'auto',
+		'avoid' => 'avoid',
+		'avoid-page' => 'avoid',
+		'page' => 'always',
+		'left' => 'left',
+		'right' => 'right',
+		'recto' => 'right',
+		'verso' => 'left',
+		'column' => 'auto',
+		'avoid-column' => 'auto',
+		'region' => 'auto',
+		'avoid-region' => 'auto',
+	];
+
 	/**
 	 * @var Mpdf
 	 */
@@ -129,6 +145,8 @@ class NormalizeProperties
 				$this->processTextOutlineProperty($v);
 			} elseif ($k === 'SIZE' || $k === 'SHEET-SIZE') {
 				$this->processPageSizeProperty($k, $v);
+			} elseif ($k === 'BREAK-BEFORE' || $k === 'BREAK-AFTER' || $k === 'BREAK-INSIDE') {
+				$this->processBreakProperty($k, $v);
 			} elseif (in_array($k, ['BACKGROUND', 'BACKGROUND-IMAGE', 'BACKGROUND-REPEAT', 'BACKGROUND-POSITION'], true)) {
 				$this->processBackgroundProperty($k, $v);
 			} elseif ($k === 'IMAGE-ORIENTATION') {
@@ -477,7 +495,7 @@ class NormalizeProperties
 
 		if (preg_match('/url\(/i', $s)) {
 			// If color, set and strip it off
-			if (preg_match('/^\s*(#[0-9a-fA-F]{3,6}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})\s+(url\(.*)/i', $s, $m)) {
+			if (preg_match('/^\s*(#[0-9a-fA-F]{3,8}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})\s+(url\(.*)/i', $s, $m)) {
 				$background['c'] = strtolower($m[1]);
 				$s = $m[3];
 			}
@@ -502,7 +520,7 @@ class NormalizeProperties
 			return $background;
 		}
 
-		if (preg_match('/^\s*(#[0-9a-fA-F]{3,6}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})/i', $s, $m)) {
+		if (preg_match('/^\s*(#[0-9a-fA-F]{3,8}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})/i', $s, $m)) {
 			$background['c'] = strtolower($m[1]);
 		}
 
@@ -1029,6 +1047,23 @@ class NormalizeProperties
 
 		$this->properties['SHEET-SIZE'] = $orientation === ['landscape'] ? array_reverse($sheet) : $sheet;
 		$this->properties['SIZE'] = 'AUTO';
+	}
+
+	/**
+	 * Read break-before, break-after and break-inside as the page-break-* property of the same name
+	 *
+	 * Recto and verso pages are the odd and even pages, which page-break-* calls right and left. Column and region
+	 * breaks are not page breaks, so they are read as auto. Any other value is dropped.
+	 *
+	 * @param string $property BREAK-BEFORE, BREAK-AFTER or BREAK-INSIDE
+	 * @param string $value
+	 * @return void
+	 */
+	private function processBreakProperty($property, $value)
+	{
+		if (array_key_exists($value, self::PAGE_BREAK_VALUES)) {
+			$this->properties['PAGE-' . $property] = self::PAGE_BREAK_VALUES[$value];
+		}
 	}
 
 	/**
