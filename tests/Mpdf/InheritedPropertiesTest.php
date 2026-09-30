@@ -8,9 +8,9 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 /**
  * Each inherited text property reaches a descendant's text through every channel mPDF hands inherited values on by:
  * a block to its child blocks, in the flow, in a list, in a header or footer, in a block laid out twice because it is
- * kept together and after a forced page break; a positioned block to its content; a table to its cells; and a cell to
- * the cells of a table nested in it. The descendant's text is read in the same state as when the descendant sets the
- * value itself. Under legacy the channels drop what mPDF v7 dropped.
+ * kept together and after a forced page break; an inline element to a block opened inside it; a positioned block to
+ * its content; a table to its cells; and a cell to the cells of a table nested in it. The descendant's text is read in
+ * the same state as when the descendant sets the value itself. Under legacy the channels drop what mPDF v7 dropped.
  */
 class InheritedPropertiesTest extends TestCase
 {
@@ -51,6 +51,7 @@ class InheritedPropertiesTest extends TestCase
 	const CONTEXTS = [
 		'block to child block' => '<div style="{A}"><p style="{D}">qq</p></div>',
 		'block to inline element' => '<div style="{A}">zz <span style="{D}">qq</span></div>',
+		'inline element to child block' => '<span style="{A}">zz<div style="{D}">qq</div></span>',
 		'list to item' => '<ul style="{A}"><li style="{D}">qq</li></ul>',
 		'list item to child block' => '<ul><li style="{A}"><div style="{D}">qq</div></li></ul>',
 		'body to block' => '<body style="{A}"><p style="{D}">qq</p></body>',
@@ -65,13 +66,20 @@ class InheritedPropertiesTest extends TestCase
 	];
 
 	/**
-	 * What legacy's channels drop, by context. A block hands its child blocks no text shadow. A positioned block hands
+	 * What legacy's channels drop, by context. An inline element hands a block opened inside it only its language
+	 * override, which the block does not reset. A block hands its child blocks no text shadow. A positioned block hands
 	 * its content no word spacing, hyphenation or outline, and its child blocks no text shadow. A table hands its cells
 	 * no font variant, feature setting, language override, transform, shadow or outline. A cell hands the cells of a
 	 * table nested in it only its spacing and its language override
 	 */
 	const LEGACY_DROPPED = [
 		'block to child block' => ['TEXT-SHADOW'],
+		'inline element to child block' => [
+			'COLOR', 'FONT-FAMILY', 'FONT-SIZE', 'FONT-STYLE', 'FONT-WEIGHT', 'FONT-KERNING', 'FONT-VARIANT-POSITION',
+			'FONT-VARIANT-CAPS', 'FONT-VARIANT-LIGATURES', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES',
+			'FONT-FEATURE-SETTINGS', 'LETTER-SPACING', 'WORD-SPACING', 'TEXT-TRANSFORM', 'TEXT-SHADOW', 'HYPHENS',
+			'TEXT-OUTLINE', 'TEXT-OUTLINE-COLOR', 'TEXT-OUTLINE-WIDTH',
+		],
 		'list to item' => ['TEXT-SHADOW'],
 		'list item to child block' => ['TEXT-SHADOW'],
 		'body to block' => ['TEXT-SHADOW'],

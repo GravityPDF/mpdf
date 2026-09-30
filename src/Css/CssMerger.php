@@ -440,7 +440,8 @@ class CssMerger
 
 	/**
 	 * The colour an element takes when it sets none, as mPDF passes it on in each context: a block takes the colour of
-	 * the block it is opened in, a table and its parts the table's, and anything else the colour of the text around it
+	 * the block or inline elements it is opened in, a table and its parts the table's, and anything else the colour of
+	 * the text around it
 	 *
 	 * @param string $inherit Inheritance context
 	 * @return string|null Null for the document's default colour
@@ -452,8 +453,8 @@ class CssMerger
 		}
 
 		if ($inherit === 'BLOCK') {
-			$level = $this->getBlockLevel();
-			$colorarray = isset($this->mpdf->blk[$level]['InlineProperties']['colorarray']) ? $this->mpdf->blk[$level]['InlineProperties']['colorarray'] : '';
+			$saved = InheritedProperties::blockTextState($this->mpdf->blk, $this->getBlockLevel());
+			$colorarray = isset($saved['colorarray']) ? $saved['colorarray'] : '';
 		} else {
 			$colorarray = $this->mpdf->colorarray;
 		}
@@ -813,8 +814,8 @@ class CssMerger
 			$this->cssProperties['TEXT-INDENT'] = $previousBlock['text_indent'];
 		}
 
-		if (isset($previousBlock['InlineProperties'])) {
-			$saved = $previousBlock['InlineProperties'];
+		$saved = InheritedProperties::blockTextState($this->mpdf->blk, $previousBlockLevel);
+		if ($saved !== null) {
 			if ($this->mpdf->cssMode === CssMode::LEGACY) {
 				// mPDF v7 did not hand a block's text shadow on to its child blocks
 				unset($saved['textshadow']);

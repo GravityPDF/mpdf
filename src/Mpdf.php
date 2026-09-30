@@ -19272,10 +19272,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($arrayaux['FONT-SIZE'])) {
 			// The standard CSS mode reads body's size against html's, which the merge left in root_font_size
 			$standardBody = $tag == 'BODY' && $this->cssMode === CssMode::STANDARD;
+			$inherited = $type == 'BLOCK' ? InheritedProperties::blockTextState($this->blk, $this->blklvl - 1) : null;
 			if ($standardBody) {
 				$parentSize = $this->root_font_size / Mpdf::SCALE;
-			} elseif ($type == 'BLOCK' && $this->blklvl > 0 && isset($this->blk[$this->blklvl - 1]['InlineProperties']) && isset($this->blk[$this->blklvl - 1]['InlineProperties']['size'])) {
-				$parentSize = $this->blk[$this->blklvl - 1]['InlineProperties']['size'];
+			} elseif (isset($inherited['size'])) {
+				$parentSize = $inherited['size'];
 			} elseif ($type == 'TABLECELL') {
 				$parentSize = $this->default_font_size / Mpdf::SCALE;
 			} else {
