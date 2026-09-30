@@ -42,6 +42,10 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * Class and id names still match whatever their case.
   * An author's `a { }` rule now reaches the links of the table of contents and the index too. Style `a.mpdf_toc_a` and `a.mpdf_index_link` to keep them plain.
   * In legacy mode, a rule whose selector mPDF v7 could not read is dropped: child and sibling combinators, structural pseudo-classes outside tables, attribute selectors other than `[lang]`, `:lang()` through an ancestor, descendant rules through inline ancestors, and `:not()`, `:is()` and `:where()`. The `font`, `border` and `background` shorthands leave the longhands they do not name, as mPDF v7 did. Fixes to how values and selectors are read apply in both modes. [#633]
+* **`!important` is honoured**, as in a browser, in standard mode. mPDF read a declaration marked `!important` as any other, so `p { color: green !important } #i { color: red }` drew `<p id="i">` red, and so did `style="color: red"` on a `<p>`. Now an important declaration beats every declaration that is not, the inline style included. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to read the flag as nothing, as mPDF v7 did. [mpdf/mpdf#1010] [mpdf/mpdf#1707] [#532] [#638]
+  * Important declarations apply after the inline style: those of the stylesheets by specificity and then order, then those of `style=""`, then those of the default stylesheet (`defaultCssFile`), as a browser's own important declarations beat a page's.
+  * A shorthand marked `!important` makes every longhand it sets important, so `border: 1mm solid green !important` beats a `border-top-color` of a more specific rule or of a later declaration in the same block.
+  * `@page` rules, `body` rules and the class rules SVG text looks up take an important declaration over a later one of the same selector that is not. An important declaration of a `body` rule beats `<body style>`.
 
 New features
 ------------
@@ -155,6 +159,7 @@ Bugfixes
 * Descendant rules naming a table, row or cell, such as `td img` or `td span`, matched nothing inside the cell. [#223] [#507]
 * A descendant rule with a part mPDF cannot parse was cut short at that part and applied to the element before it. Such rules are now dropped. [#519]
 * An inline `style` with `!important` drew no border for a `border` shorthand, dropped the bottom padding of a two-value `padding`, drew text at 0pt for a `font-size`, and ignored an image's `height` with a warning. The flag is now removed, as it is from a stylesheet. [mpdf/mpdf#1010] [mpdf/mpdf#1707] [#523] [#561]
+* A declaration whose flag had a space after the bang, such as `margin: 5mm ! important`, kept the flag in its value: that margin set the right and left margins to `!` and the bottom one to `important`, a `font-size` was lost, and a `border` drew nothing. The flag is now found whatever its spacing and case, in stylesheets and inline styles, in either `cssMode`. [#532] [#638]
 * Text styled with the `font` shorthand or `<font face>` came out as empty boxes when the family was not installed or had a space in its name, such as `font: 12pt Roboto` or `font: 16px "DejaVu Sans Mono"`. It was drawn in the first registered font, which is the emoji font in a full install. The family is now read as `font-family` reads it: a name is kept whole, the list is tried in order, and when mPDF knows none of it the text keeps the family it inherits. `font-family` itself also reads an unquoted name with spaces whole. [#552] [#560]
 * A descendant rule ending in `:lang()` or `[lang]`, such as `div :lang(fr)`, `div p:lang(fr)` or `table [lang=fr]`, never applied. It now applies in block content and in tables, and a regional language such as `fr-CA` falls back to the rule for `fr`, as the simple lang rules do. [#525] [#559]
 * A rule such as `td:nth-child(2):not(.x)` or `td:nth-child(2 of .x)` was applied to the second cell of every row, as if it were `td:nth-child(2)`. A rule with anything after an nth-child argument, or with an argument that is not a formula, is now dropped. [mpdf/mpdf#83] [#522] [#564]
@@ -792,6 +797,7 @@ These changes do not change output.
 [#526]: https://github.com/GravityPDF/mpdf/issues/526
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
+[#532]: https://github.com/GravityPDF/mpdf/issues/532
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
 [#535]: https://github.com/GravityPDF/mpdf/issues/535
 [#536]: https://github.com/GravityPDF/mpdf/issues/536
@@ -845,3 +851,4 @@ These changes do not change output.
 [#634]: https://github.com/GravityPDF/mpdf/pull/634
 [#635]: https://github.com/GravityPDF/mpdf/pull/635
 [#639]: https://github.com/GravityPDF/mpdf/pull/639
+[#638]: https://github.com/GravityPDF/mpdf/pull/638

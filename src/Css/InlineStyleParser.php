@@ -24,7 +24,7 @@ class InlineStyleParser
 	 * Parse inline CSS style attribute.
 	 *
 	 * Parses a CSS string from an HTML style attribute and returns
-	 * an array of CSS properties.
+	 * an array of CSS properties. A declaration marked !important is read as any other.
 	 *
 	 * @param string $html CSS string from style attribute
 	 * @return array Parsed CSS properties
@@ -35,17 +35,61 @@ class InlineStyleParser
 	}
 
 	/**
-	 * The properties a list of declarations sets, whether from a style attribute or a stylesheet's block
+	 * Parse an HTML style attribute into the properties its normal declarations set and those its !important ones set
+	 *
+	 * @param string $html CSS string from style attribute
+	 * @return array[] [normal properties, important properties]
+	 */
+	public function parseByImportance($html)
+	{
+		return $this->parseDeclarationsByImportance($this->tokenizer->declarations(htmlspecialchars_decode($html)));
+	}
+
+	/**
+	 * The properties a list of declarations sets, whether from a style attribute or a stylesheet's block. A
+	 * declaration marked !important is read as any other
 	 *
 	 * @param string[][] $declarations Each [name, value], as StylesheetTokenizer::declarations() gives them
 	 * @return array Parsed CSS properties
 	 */
 	public function parseDeclarations(array $declarations)
 	{
-		$classproperties = [];
+		$values = $this->valuesByImportance($declarations, false);
+
+		return $this->normalizeProperties->normalize($values[0]);
+	}
+
+	/**
+	 * The properties the normal declarations of a list set, and those its !important ones set. Each set is normalised
+	 * on its own, so a shorthand marked !important expands into longhands that are all important
+	 *
+	 * @param string[][] $declarations Each [name, value], as StylesheetTokenizer::declarations() gives them
+	 * @return array[] [normal properties, important properties]
+	 */
+	public function parseDeclarationsByImportance(array $declarations)
+	{
+		$values = $this->valuesByImportance($declarations, true);
+
+		return [
+			$this->normalizeProperties->normalize($values[0]),
+			$this->normalizeProperties->normalize($values[1]),
+		];
+	}
+
+	/**
+	 * The value each declaration of a list gives its property, without !important, before the values are normalised
+	 *
+	 * @param string[][] $declarations Each [name, value], as StylesheetTokenizer::declarations() gives them
+	 * @param bool $split Whether the declarations marked !important are kept apart from the others
+	 * @return array[] [values of the normal declarations, values of the important ones], each keyed by the uppercased
+	 *                 property. Unless split, every declaration is in the first
+	 */
+	private function valuesByImportance(array $declarations, $split)
+	{
+		$values = [[], []];
 		foreach ($declarations as $declaration) {
 			$property = strtoupper(trim($declaration[0], " \t\n\r\0\x0B\f"));
-			$value = trim(preg_replace('/\s*!important/i', '', $this->processUrlsInCss($declaration[1])));
+			$value = trim(preg_replace('/\s*!\s*important\b/i', '', $this->processUrlsInCss($declaration[1]), -1, $important));
 
 			if (empty($property) || $value === '') {
 				continue;
@@ -62,11 +106,12 @@ class InlineStyleParser
 			}
 
 			// A repeated property moves to its last place, so it is expanded after a shorthand written before it
-			unset($classproperties[$property]);
-			$classproperties[$property] = $value;
+			$set = $split && $important ? 1 : 0;
+			unset($values[$set][$property]);
+			$values[$set][$property] = $value;
 		}
 
-		return $this->normalizeProperties->normalize($classproperties);
+		return $values;
 	}
 
 	/**

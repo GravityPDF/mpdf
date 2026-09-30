@@ -241,6 +241,80 @@ class InlineStyleParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The declarations marked !important are parsed apart from the others, each set on its own, so a shorthand marked
+	 * important gives important longhands, and a later declaration that is not important takes nothing from it
+	 *
+	 * @dataProvider declarationsByImportance
+	 *
+	 * @param string $style
+	 * @param array $normal The properties of the declarations not marked
+	 * @param array $important The properties of those marked !important
+	 */
+	public function testParseByImportanceKeepsTheImportantDeclarationsApart($style, array $normal, array $important)
+	{
+		$this->assertSame([$normal, $important], $this->inlineStyleParser->parseByImportance($style));
+	}
+
+	/**
+	 * Style attributes with declarations marked !important in various ways, and the two sets of properties each gives
+	 *
+	 * @return array[]
+	 */
+	public function declarationsByImportance()
+	{
+		return [
+			'none marked' => ['color: #f00', ['COLOR' => '#f00'], []],
+			'all marked' => ['color: #f00 !important', [], ['COLOR' => '#f00']],
+			'the flag in capitals, spaced from the bang' => ['color: #f00 ! IMPORTANT', [], ['COLOR' => '#f00']],
+			'the flag against the value, in mixed case' => ['color: #f00!Important', [], ['COLOR' => '#f00']],
+			'a later declaration not marked' => [
+				'color: #0f0 !important; color: #f00',
+				['COLOR' => '#f00'],
+				['COLOR' => '#0f0'],
+			],
+			'two marked, the later winning' => ['color: #f00 !important; color: #0f0 !important', [], ['COLOR' => '#0f0']],
+			'a marked shorthand and a later longhand' => [
+				'padding: 1mm 2mm !important; padding-top: 5mm',
+				['PADDING-TOP' => '5mm'],
+				['PADDING-TOP' => '1mm', 'PADDING-RIGHT' => '2mm', 'PADDING-BOTTOM' => '1mm', 'PADDING-LEFT' => '2mm'],
+			],
+			'a marked border shorthand' => [
+				'border-top-color: #00f; border: 1px solid #f00 !important',
+				['BORDER-TOP-COLOR' => '#00f'],
+				[
+					'BORDER-TOP' => '1px solid #f00',
+					'BORDER-TOP-WIDTH' => '1px',
+					'BORDER-TOP-STYLE' => 'solid',
+					'BORDER-TOP-COLOR' => '#f00',
+					'BORDER-RIGHT' => '1px solid #f00',
+					'BORDER-RIGHT-WIDTH' => '1px',
+					'BORDER-RIGHT-STYLE' => 'solid',
+					'BORDER-RIGHT-COLOR' => '#f00',
+					'BORDER-BOTTOM' => '1px solid #f00',
+					'BORDER-BOTTOM-WIDTH' => '1px',
+					'BORDER-BOTTOM-STYLE' => 'solid',
+					'BORDER-BOTTOM-COLOR' => '#f00',
+					'BORDER-LEFT' => '1px solid #f00',
+					'BORDER-LEFT-WIDTH' => '1px',
+					'BORDER-LEFT-STYLE' => 'solid',
+					'BORDER-LEFT-COLOR' => '#f00',
+				],
+			],
+			'a marked value mPDF cannot read' => ['width: 50%; width: calc(100% - 1mm) !important', ['WIDTH' => '50%'], []],
+		];
+	}
+
+	/**
+	 * Parsed without keeping them apart, a declaration marked !important is read as any other: a later declaration
+	 * of the property replaces it, as mPDF v7 read it
+	 */
+	public function testParseReadsTheFlagAsNothing()
+	{
+		$this->assertSame(['COLOR' => '#f00'], $this->inlineStyleParser->parse('color: #0f0 !important; color: #f00'));
+		$this->assertSame(['MARGIN-TOP' => '5mm', 'MARGIN-RIGHT' => '5mm', 'MARGIN-BOTTOM' => '5mm', 'MARGIN-LEFT' => '5mm'], $this->inlineStyleParser->parse('margin: 5mm ! important'));
+	}
+
+	/**
 	 * A declaration mPDF cannot read is dropped, so an earlier one of the same property in the attribute still applies
 	 */
 	public function testParseDropsADeclarationItCannotRead()
