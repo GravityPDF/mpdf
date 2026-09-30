@@ -93,6 +93,11 @@ class CssManager
 	private $rules;
 
 	/**
+	 * @var RuleSet The rules of the default stylesheet, compiled for the matcher
+	 */
+	private $defaultRules;
+
+	/**
 	 * CssManager constructor.
 	 *
 	 * Initializes the CSS manager with required dependencies and sets up
@@ -107,6 +112,7 @@ class CssManager
 		$this->cssMerger = $cssMerger;
 		$this->cssMerger->setCssManager($this);
 		$this->rules = new RuleSet();
+		$this->defaultRules = new RuleSet();
 	}
 
 	/**
@@ -121,6 +127,30 @@ class CssManager
 	 */
 	public function readCss($html)
 	{
+		return $this->read($html, $this->rules);
+	}
+
+	/**
+	 * Read the default stylesheet, Mpdf::$defaultCssFile. Its rules count as the built-in stylesheet's, which standard
+	 * mode applies with the built-in defaults, below every rule of the document's own stylesheets
+	 *
+	 * @param string $css The stylesheet, without a <style> tag around it
+	 * @return void
+	 */
+	public function readDefaultCss($css)
+	{
+		$this->read('<style> ' . $css . ' </style>', $this->defaultRules);
+	}
+
+	/**
+	 * Parse the CSS in HTML content into the stores readCss() describes, and file its compiled rules in a rule set
+	 *
+	 * @param string $html
+	 * @param RuleSet $rules
+	 * @return string HTML with CSS content removed
+	 */
+	private function read($html, RuleSet $rules)
+	{
 		if (!is_array($this->cascadeCSS)) {
 			$this->cascadeCSS = [];
 		}
@@ -131,7 +161,7 @@ class CssManager
 		$this->cascadeCSS = Arrays::uniqueRecursiveMerge($this->cascadeCSS, $this->cssParser->getCascadeCss());
 
 		foreach ($this->cssParser->getCompiledRules() as $rule) {
-			$this->rules->add($rule[0], $rule[1], $rule[2]);
+			$rules->add($rule[0], $rule[1], $rule[2]);
 		}
 
 		return $html;
@@ -145,6 +175,16 @@ class CssManager
 	public function getRules()
 	{
 		return $this->rules;
+	}
+
+	/**
+	 * The rules of the default stylesheet, compiled for the matcher
+	 *
+	 * @return RuleSet
+	 */
+	public function getDefaultRules()
+	{
+		return $this->defaultRules;
 	}
 
 	/**

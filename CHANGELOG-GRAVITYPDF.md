@@ -37,6 +37,10 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A property declared twice in one block is read at its last place, so `border-top-color: green; border: 1px solid blue; border-top-color: red` draws a red top.
 * **Dependencies changed.** `ext-json` is now required and `symfony/polyfill-intl-normalizer` is a new dependency. `myclabs/deep-copy` is no longer used. [#13] [#329]
 * **`outline-width` and `outline-color` no longer stroke the text.** mPDF read them as `text-outline-width` and `text-outline-color`, but in CSS they belong to the line around the box, which mPDF does not draw. `outline-width` on its own also raised an undefined-key warning. Write `text-outline-width` and `text-outline-color`, or `text-outline`, to keep stroking the text. [#578]
+* **CSS rules apply by specificity, then in the order they are written**, as in a browser. mPDF applied them in a fixed order of selector groups, so `div p` beat `#id`, `p.c` beat `#i`, `body p` beat `.lead`, the rule from the nearest ancestor beat a heavier descendant rule, and classes applied in alphabetical order. Now the more specific selector wins each of those, and of `.a { } .b { } .a { }` the second `.a` wins. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to parse and apply CSS as mPDF v7 did. [#535] [#631]
+  * Each element takes, in order: the values it inherits; the built-in defaults and the rules of the default stylesheet (`defaultCssFile`), which any author rule beats; HTML attributes such as `<hr color>`, `width` and `vspace`, as author rules of no specificity; the stylesheets; then `style=""`.
+  * Class and id names still match whatever their case.
+  * An author's `a { }` rule now reaches the links of the table of contents and the index too. Style `a.mpdf_toc_a` and `a.mpdf_index_link` to keep them plain.
 
 New features
 ------------
@@ -120,6 +124,7 @@ Performance
 * **Image metadata.** JPEG and PNG metadata is read from the file's structure instead of by scanning the whole file, and PNG chunks are read from a chunk index. [#47] [#48]
 * **GD memory.** GD asks for less memory when it re-encodes an image. [#49]
 * **nth-child rules in tables.** Each row and cell looks up the nth-child rules the stylesheet uses by their keys, instead of running a regex over every rule. A 2,000-cell table under 1,000 rules is written in about 540 ms instead of 745 ms. Class combinations are built only up to the most classes one compound selector names, not one whole selector. [#526] [#580]
+* **Selector matching.** A chain of descendant combinators stops trying ancestors once none left can match, instead of trying every combination of them, and a general sibling combinator skips a tag the parent has no child of and looks from the first sibling. `.x div div div div div p` is matched on a path 50 deep in well under a millisecond instead of 4 seconds, and `h2 ~ p` against 5,000 paragraphs after an `<h2>` in 20 ms instead of 5 seconds. [#535] [#631]
 
 Bugfixes
 --------
@@ -132,6 +137,7 @@ Bugfixes
 * `@page { size: landscape }`, or a page box wider than it is tall, left the first page portrait, and `size: portrait` left a landscape document landscape. The first page now turns. A page box and percentage margins are measured on the turned sheet, so `size: 250mm 150mm` on A4 is no longer cut to 210 mm wide. [#552] [#562]
 * `page-break-before: auto` or `avoid` on a block inside another block closed the outer block and opened it again, so its border was drawn around each part. `page-break-after: auto` or `avoid` on a table started a new page. [#552] [#569]
 * `page-break-before` on a table was ignored. On a top-level table, `always`, `left` and `right` now start it on a new page, inside the blocks around it. [#552] [#622]
+* A table with a `font-size` and a row with `text-rotate` threw a `TypeError` on PHP 8, and raised a warning before it. A cell whose font size was already in force saved its text with an empty size. [#632] [#631]
 * `background-size: cover` scaled by the wrong ratio when the image came out shorter than the area. [mpdf/mpdf#833] [#22]
 * Only double-quoted attributes were read. Single-quoted, unquoted and bare attributes are now read as well. [mpdf/mpdf#2030] [#24]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
@@ -777,6 +783,7 @@ These changes do not change output.
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
+[#535]: https://github.com/GravityPDF/mpdf/issues/535
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -820,3 +827,5 @@ These changes do not change output.
 [#627]: https://github.com/GravityPDF/mpdf/pull/627
 [#628]: https://github.com/GravityPDF/mpdf/pull/628
 [#629]: https://github.com/GravityPDF/mpdf/pull/629
+[#631]: https://github.com/GravityPDF/mpdf/pull/631
+[#632]: https://github.com/GravityPDF/mpdf/issues/632

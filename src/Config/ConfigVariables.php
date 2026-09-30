@@ -2,6 +2,7 @@
 
 namespace Mpdf\Config;
 
+use Mpdf\CssMode;
 use Mpdf\Css\DefaultCss;
 use Mpdf\Language\LanguageToFont;
 use Mpdf\Language\LanguageToFontRegistry;
@@ -268,6 +269,9 @@ class ConfigVariables
 			// CSS & STYLES
 			// screen, print, or any other CSS @media type (except "all")
 			'CSSselectMedia' => 'print',
+
+			// How CSS is parsed and applied: CssMode::STANDARD as a browser does, CssMode::LEGACY as mPDF v7 did
+			'cssMode' => CssMode::STANDARD,
 
 			// PAGE HEADERS & FOOTERS
 			'forcePortraitHeaders' => false,

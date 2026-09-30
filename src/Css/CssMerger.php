@@ -3,6 +3,7 @@
 namespace Mpdf\Css;
 
 use Mpdf\Color\ColorConverter;
+use Mpdf\CssMode;
 use Mpdf\CssManager;
 use Mpdf\Exception\InvalidArgumentException;
 use Mpdf\Mpdf;
@@ -112,6 +113,10 @@ class CssMerger
 
 		$attr = is_array($attr) ? $attr : [];
 
+		if ($this->mpdf->cssMode === CssMode::STANDARD) {
+			return $this->mergeInCascadeOrder($inherit, $tag, $attr);
+		}
+
 		$classes = [];
 		if (isset($attr['CLASS'])) {
 			// filter out classes that don't have any CSS applied, which reduces likelyhood of O(2^N) memory issue
@@ -140,16 +145,102 @@ class CssMerger
 
 		$this->mergeTableCascadingCss($inherit, $tag, $attr, $classes);
 		$this->mergeBlockCascadingCss($inherit, $tag, $attr, $classes);
+		$this->mergeInheritedBlockProperties($inherit, $tag);
 		$this->mergeInlineAttributes($tag, $attr);
 		$this->mergeDefaultCss($tag);
 		$this->mergeTableSpecificCss($tag, $attr);
 		$this->mergeStylesheetSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeTagSpecificSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeDescendantSelectors($inherit, $tag, $attr, $classes, $languageCode);
-		$this->mergeCompiledRules($tag, $attr);
+		// The rules only the matcher reads, such as div > p, h1 + p and li:first-child, go after the descendant rules
+		$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $attr['ID'], $this->classesOf($attr), [$this->mpdf, 'getStyledElementPath']);
 		$this->mergeInlineStyle($tag, $attr);
 
 		return $this->cssProperties;
+	}
+
+	/**
+	 * Merges an element's CSS as standard mode orders it, in layers, each over the one before: the inherited
+	 * values, the built-in defaults and the default stylesheet's rules, the presentational attributes as author rules
+	 * of zero specificity, the author rules, and the inline style. The rules of each stylesheet apply by specificity,
+	 * then in the order they were written.
+	 *
+	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
+	 * @param string $tag HTML tag name
+	 * @param array $attr HTML attributes, as the tag handler was given them
+	 * @return array Merged CSS properties array
+	 */
+	private function mergeInCascadeOrder($inherit, $tag, array $attr)
+	{
+		// Found once, when a rule set first has a rule filed under the element. previewBlockCss() looks at an element
+		// that is not being written, so it is put in the innermost open element, and nothing is recorded
+		$mpdf = $this->mpdf;
+		$sideEffects = $this->sideEffects;
+		$elements = false;
+		$path = function () use ($mpdf, $sideEffects, $tag, $attr, &$elements) {
+			if ($elements === false) {
+				$elements = $sideEffects ? $mpdf->getStyledElementPath() : $mpdf->getOpenElementPathFor($tag, $attr);
+			}
+
+			return $elements;
+		};
+
+		if (isset($attr['LANG'])) {
+			$attr['LANG'] = strtolower($attr['LANG']);
+		}
+
+		$id = isset($attr['ID']) ? $attr['ID'] : '';
+		$classes = $this->classesOf($attr);
+
+		$this->mergeInheritedBlockProperties($inherit, $tag);
+
+		$this->mergeDefaultCss($tag);
+		$this->mergeMatchingRules($this->cssManager->getDefaultRules(), $tag, $id, $classes, $path);
+
+		$this->mergeInlineAttributes($tag, $attr);
+		$this->mergeTableSpecificCss($tag, $attr);
+
+		if ($tag === 'BODY') {
+			// Merged outside the document's elements, and written to by Mpdf::SetDefaultBodyCSS() and the like
+			$body = isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : [];
+			$this->setMergedCss($body, false);
+		} else {
+			$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $id, $classes, $path);
+		}
+
+		$this->mergeInlineStyle($tag, $attr);
+
+		return $this->cssProperties;
+	}
+
+	/**
+	 * Merges the declarations of the rules in a rule set that an element matches, in the order they apply: by
+	 * specificity, then by their position in the stylesheets. Each rule that reaches a table cell draws its borders
+	 * over those of its neighbours
+	 *
+	 * @param RuleSet $rules
+	 * @param string $tag HTML tag name, uppercased
+	 * @param string $id Uppercased, or empty for none
+	 * @param string[] $classes Uppercased
+	 * @param callable $path Gives the open elements from the document down to the element, or null for none
+	 * @return void
+	 */
+	private function mergeMatchingRules(RuleSet $rules, $tag, $id, array $classes, callable $path)
+	{
+		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
+
+		foreach ($rules->matchingDeclarations($tag, $id, $classes, $path) as $properties) {
+			$this->setMergedCss($properties, false, $dominance);
+		}
+	}
+
+	/**
+	 * @param array $attr HTML attributes, with CLASS uppercased
+	 * @return string[] The element's classes
+	 */
+	private function classesOf(array $attr)
+	{
+		return isset($attr['CLASS']) ? preg_split('/\s+/', $attr['CLASS'], -1, PREG_SPLIT_NO_EMPTY) : [];
 	}
 
 	/**
@@ -231,7 +322,8 @@ class CssMerger
 	/**
 	 * Merge block cascading CSS.
 	 *
-	 * Handles inheritance and cascading of CSS properties for block elements.
+	 * Lifts the descendant rules that go through a block element into its level of the block stack, for the elements
+	 * inside it.
 	 *
 	 * @param string $inherit Inheritance type (TOPTABLE, TABLE, BLOCK)
 	 * @param string $tag HTML tag name
@@ -283,6 +375,23 @@ class CssMerger
 			$this->mpdf->blk[$this->mpdf->blklvl] = $currentBlock;
 			$this->mpdf->markStyledElementAsLevel();
 		}
+	}
+
+	/**
+	 * Merge the properties a block inherits from the block it is opened in.
+	 *
+	 * @param string $inherit Inheritance type (TOPTABLE, TABLE, BLOCK)
+	 * @param string $tag HTML tag name
+	 * @return void
+	 */
+	protected function mergeInheritedBlockProperties($inherit, $tag)
+	{
+		if ($inherit !== 'BLOCK') {
+			return;
+		}
+
+		$previousBlockLevel = $this->getBlockLevel();
+		$previousBlock = isset($this->mpdf->blk[$previousBlockLevel]) ? $this->mpdf->blk[$previousBlockLevel] : [];
 
 		// Block properties which are inherited
 		if (!empty($previousBlock['margin_collapse'])) {
@@ -834,27 +943,6 @@ class CssMerger
 		}
 
 		return $keys;
-	}
-
-	/**
-	 * Apply the rules whose selector only the matcher reads, such as div > p, h1 + p and li:first-child, matched
-	 * against the element and the open elements around it. They go with the descendant rules, after them, in the
-	 * order of their specificity and then of their position in the stylesheets.
-	 *
-	 * @param string $tag HTML tag name, uppercased
-	 * @param array $attr HTML attributes, with ID and CLASS uppercased and ID empty for none
-	 * @return void
-	 */
-	protected function mergeCompiledRules($tag, $attr)
-	{
-		$classes = isset($attr['CLASS']) ? preg_split('/\s+/', $attr['CLASS'], -1, PREG_SPLIT_NO_EMPTY) : [];
-		$path = [$this->mpdf, 'getStyledElementPath'];
-
-		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
-
-		foreach ($this->cssManager->getRules()->matchingDeclarations($tag, $attr['ID'], $classes, $path) as $properties) {
-			$this->setMergedCss($properties, false, $dominance);
-		}
 	}
 
 	/**

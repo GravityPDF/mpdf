@@ -20,13 +20,10 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		parent::set_up();
 
-		$this->mpdf = new Mpdf();
+		// The merges below read the legacy cascade's keys and trees
+		$this->mpdf = new Mpdf(['cssMode' => \Mpdf\CssMode::LEGACY]);
 
-		// Get CssManager (private property of Mpdf, but we can reflect it)
-		$reflection = new \ReflectionClass($this->mpdf);
-		$property   = $reflection->getProperty('cssManager');
-		$property->setAccessible(true);
-		$this->cssManager = $property->getValue($this->mpdf);
+		$this->cssManager = $this->cssManagerOf($this->mpdf);
 
 		// Get CssMerger (private property of CssManager)
 		$reflection = new \ReflectionClass($this->cssManager);
@@ -35,6 +32,22 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->cssMerger = $property->getValue($this->cssManager);
 
 		$this->mpdf->AddPage();
+	}
+
+	/**
+	 * A document's CssManager, which it keeps private
+	 *
+	 * @param Mpdf $mpdf
+	 *
+	 * @return CssManager
+	 */
+	private function cssManagerOf(Mpdf $mpdf)
+	{
+		$reflection = new \ReflectionClass($mpdf);
+		$property = $reflection->getProperty('cssManager');
+		$property->setAccessible(true);
+
+		return $property->getValue($mpdf);
 	}
 
 	protected function tear_down()
@@ -566,5 +579,29 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$result = $this->cssMerger->previewBlockCss('DIV', ['CLASS' => 'A B C D']);
 
 		$this->assertEquals('green', $result['COLOR']);
+	}
+
+	/**
+	 * Under the standard cascade, previewBlockCss() matches the stylesheet against the open elements with the block
+	 * in the innermost one, as a merge there would, and leaves the open elements and the block stack as they were
+	 */
+	public function testPreviewsABlockUnderTheStandardCascadeWithoutSideEffects()
+	{
+		$mpdf = new Mpdf(['cssMode' => \Mpdf\CssMode::STANDARD]);
+		$mpdf->WriteHTML('<style>.box > p { color: red; } p.lead { margin-top: 5mm; }</style><div class="box">', \Mpdf\HTMLParserMode::DEFAULT_MODE, true, false);
+
+		$cssManager = $this->cssManagerOf($mpdf);
+
+		$elements = $mpdf->getOpenElements();
+		$blocks = $mpdf->blk;
+		$level = $mpdf->blklvl;
+
+		$preview = $cssManager->previewBlockCss('P', ['CLASS' => 'LEAD']);
+
+		$this->assertSame('red', $preview['COLOR']);
+		$this->assertSame('5mm', $preview['MARGIN-TOP']);
+		$this->assertSame($elements, $mpdf->getOpenElements());
+		$this->assertSame($blocks, $mpdf->blk);
+		$this->assertSame($level, $mpdf->blklvl);
 	}
 }

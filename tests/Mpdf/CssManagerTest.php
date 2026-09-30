@@ -19,7 +19,8 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->tempDir = sys_get_temp_dir() . '/mpdf_test_' . uniqid();
 		mkdir($this->tempDir);
 
-		$this->mpdf = new Mpdf(['tempDir' => $this->tempDir]);
+		// The merges below read the legacy cascade's keys and trees
+		$this->mpdf = new Mpdf(['tempDir' => $this->tempDir, 'cssMode' => CssMode::LEGACY]);
 		$this->mpdf->setBasePath($this->tempDir);
 
 		// Use reflection to access private cssManager property
@@ -902,5 +903,36 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertCount(2, $candidates);
 		$this->assertSame(['COLOR' => 'red'], $rules->rule($candidates[0])[1]);
 		$this->assertSame(['COLOR' => 'green'], $rules->rule($candidates[1])[1]);
+	}
+
+	/**
+	 * The default stylesheet's rules are kept apart from the document's, and a document's stylesheet never adds to them
+	 */
+	public function testKeepsTheDefaultStylesheetsRulesApart()
+	{
+		$default = $this->cssManager->getDefaultRules()->candidates('UL', '', []);
+
+		$this->cssManager->readDefaultCss('ul > ul { margin-top: 0; }');
+		$this->cssManager->readCss('<style>body > ul { color: red; } ul > li { color: blue; }</style>');
+
+		$defaultRules = array_values(array_diff($this->cssManager->getDefaultRules()->candidates('UL', '', []), $default));
+		$documentRules = $this->cssManager->getRules()->candidates('UL', '', []);
+		$this->assertCount(1, $defaultRules);
+		$this->assertCount(1, $documentRules);
+		$this->assertSame(['MARGIN-TOP' => '0'], $this->cssManager->getDefaultRules()->rule($defaultRules[0])[1]);
+		$this->assertSame(['COLOR' => 'red'], $this->cssManager->getRules()->rule($documentRules[0])[1]);
+		$this->assertSame([], $this->cssManager->getDefaultRules()->candidates('LI', '', []));
+	}
+
+	/**
+	 * The default stylesheet is read into the same stores a document's stylesheet is, for what reads them directly
+	 */
+	public function testReadsTheDefaultStylesheetIntoTheSharedStores()
+	{
+		$this->cssManager->readDefaultCss('.note { color: red; } div p { margin: 0; } @page { margin-left: 1cm; }');
+
+		$this->assertSame('red', $this->cssManager->CSS['CLASS>>NOTE']['COLOR']);
+		$this->assertArrayHasKey('@PAGE', $this->cssManager->CSS);
+		$this->assertArrayHasKey('P', $this->cssManager->cascadeCSS['DIV']);
 	}
 }

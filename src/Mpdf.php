@@ -234,6 +234,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $useSubstitutions;
 	var $CSSselectMedia;
 
+	/**
+	 * @var string A CssMode constant. See ConfigVariables
+	 */
+	var $cssMode;
+
 	var $forcePortraitHeaders;
 	var $forcePortraitMargins;
 	var $displayDefaultOrientation;
@@ -1171,6 +1176,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$originalConfig = $config;
 		$config = $this->initConfig($originalConfig);
 
+		if (!in_array($this->cssMode, [CssMode::STANDARD, CssMode::LEGACY], true)) {
+			throw new \Mpdf\MpdfException(sprintf('cssMode (%s) is not valid. (Use: %s or %s)', $this->cssMode, CssMode::STANDARD, CssMode::LEGACY));
+		}
+
 		if ($this->isPdfx4() && version_compare($this->pdf_version, '1.6', '<')) {
 			$this->pdf_version = '1.6';
 		}
@@ -1590,7 +1599,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if (file_exists($this->defaultCssFile)) {
 			$css = file_get_contents($this->defaultCssFile);
-			$this->cssManager->ReadCSS('<style> ' . $css . ' </style>');
+			$this->cssManager->readDefaultCss($css);
 		} else {
 			throw new \Mpdf\MpdfException(sprintf('Unable to read default CSS file "%s"', $this->defaultCssFile));
 		}
@@ -5167,13 +5176,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetFontSize($size, $write = true)
 	{
-		// Set font size in points
+		// Set font size in points. Recorded even when it is already in force: Reset() empties it after setting the
+		// size, and the text saved for a table cell carries it
+		$this->currentfontsize = $size;
 		if ($this->FontSizePt == $size) {
 			return;
 		}
 		$this->FontSizePt = $size;
 		$this->FontSize = $size / Mpdf::SCALE;
-		$this->currentfontsize = $size;
 		if ($write) {
 			$fontout = (sprintf('BT /F%d %.3F Tf ET', $this->CurrentFont['i'], $this->FontSizePt));
 			// Edited mPDF 3.0

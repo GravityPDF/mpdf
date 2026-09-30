@@ -4,7 +4,8 @@ namespace Snapshots;
 
 /**
  * Descendant rules whose last part names a language, such as `div :lang(fr)`, `div [lang=fr]` and `div p:lang(fr)`,
- * in block content, inline content and tables, and a regional language falling back to the rule for its short code.
+ * in block content, inline content and tables, and a regional language falling back to the rule for its short code,
+ * under the legacy cascade.
  *
  * @group snapshot
  */
@@ -107,7 +108,8 @@ class DescendantLangSelectorSnapshotTest extends Snapshot
 		<?php
 		$html = ob_get_clean();
 
-		$this->mpdf = $this->createMpdf();
+		// A regional language named in full winning over its short code, whatever the order, is the legacy cascade's
+		$this->mpdf = $this->createMpdf(['cssMode' => \Mpdf\CssMode::LEGACY]);
 
 		$this->mpdf->WriteHTML($html);
 	}

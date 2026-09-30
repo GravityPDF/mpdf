@@ -41,6 +41,20 @@ trait DrawnStyles
 	}
 
 	/**
+	 * Each piece of text named is drawn, in the colour given for it
+	 *
+	 * @param array<string, string> $expected Pieces of text and the operator that should set each one's colour
+	 * @param array<string, string> $colours What was drawn, as drawnColours() gives it
+	 */
+	private function assertDrawnInColours(array $expected, array $colours)
+	{
+		foreach ($expected as $text => $colour) {
+			$this->assertArrayHasKey($text, $colours, sprintf('"%s" is not drawn', $text));
+			$this->assertSame($colour, $colours[$text], sprintf('"%s" is drawn in the wrong colour', $text));
+		}
+	}
+
+	/**
 	 * Keys what was recorded of each piece of text a document drew by the text itself, so a test can look a piece up
 	 * by what it says
 	 *

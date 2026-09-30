@@ -10,7 +10,7 @@
 /Contents 4 0 R>>
 endobj
 4 0 obj
-<</Length 12010>>
+<</Length 11851>>
 stream
  q 0 w 42.520 524.880 m 42.520 474.323 l 340.617 474.323 l 340.617 524.880 l 42.520 524.880 l  W n 
 q 0.941 0.949 1.000 rg
@@ -406,13 +406,13 @@ q 0.000 g  0 Tr BT 42.520 320.207 Td  (At the bottom of the page are two DIV ele
 0 Tr
 [] 0 d
 
- q 0 w 0.000 129.650 m 0.000 0.000 l 595.280 0.000 l 595.280 129.650 l 0.000 129.650 l  W n 
+ q 0 w 0.000 107.650 m 0.000 0.000 l 595.280 0.000 l 595.280 107.650 l 0.000 107.650 l  W n 
 q 1.000 0.933 0.867 rg
-0.000 129.650 595.280 -129.650 re f Q
+0.000 107.650 595.280 -107.650 re f Q
 Q
- q 0 w 0.000 129.650 m 0.000 0.000 l 595.280 0.000 l 595.280 129.650 l 0.000 129.650 l  W n 
- q 0.000 129.650 595.280 -129.650 re W n
- 595.280 0 0 129.650 0.000 0.000 cm
+ q 0 w 0.000 107.650 m 0.000 0.000 l 595.280 0.000 l 595.280 107.650 l 0.000 107.650 l  W n 
+ q 0.000 107.650 595.280 -107.650 re W n
+ 595.280 0 0 107.650 0.000 0.000 cm
 /Sh4 sh 
  Q 
 Q
@@ -420,17 +420,17 @@ Q
 
 q
 0.000 w
-0.000 129.650 m 
-0.750 128.900 l 
-594.530 128.900 l 
-595.280 129.650 l 
+0.000 107.650 m 
+0.750 106.900 l 
+594.530 106.900 l 
+595.280 107.650 l 
  h W n 
 0.750 w
 0.533 0.000 0.000 RG
 0 j
 0 J
-595.280 129.275 m 
-0.000 129.275 l 
+595.280 107.275 m 
+0.000 107.275 l 
 S
 
 Q
@@ -460,8 +460,8 @@ Q
 2 J
 q
 0.000 w
-0.000 129.650 m 
-0.750 128.900 l 
+0.000 107.650 m 
+0.750 106.900 l 
 0.750 0.750 l 
 0.000 0.000 l 
  h W n 
@@ -469,7 +469,7 @@ q
 0.533 0.000 0.000 RG
 0 j
 0 J
-0.375 129.650 m 
+0.375 107.650 m 
 0.375 0.000 l 
 S
 
@@ -480,8 +480,8 @@ Q
 2 J
 q
 0.000 w
-595.280 129.650 m 
-594.530 128.900 l 
+595.280 107.650 m 
+594.530 106.900 l 
 594.530 0.750 l 
 595.280 0.000 l 
  h W n 
@@ -490,7 +490,7 @@ q
 0 j
 0 J
 594.905 0.000 m 
-594.905 129.650 l 
+594.905 107.650 l 
 S
 
 Q
@@ -509,21 +509,21 @@ BT /F1 11.000 Tf ET
 [] 0 d
 /GS1 gs
 BT /F3 11.000 Tf ET
-BT 0.179 Tc ET
-BT 0.835 Tw ET
-q 0.000 g  0 Tr BT 28.250 90.202 Td  (1 Praesent pharetra nulla in turpis. Sed ipsum nulla, sodales nec, vulputate in, scelerisque vitae, magna.) Tj ET Q
-BT 0.100 Tc ET
-BT 0.476 Tw ET
-q 0.000 g  0 Tr BT 28.250 75.572 Td  (Praesent pharetra nulla in turpis. Sed ipsum nulla, sodales nec, vulputate in, scelerisque vitae, magna. Sed) Tj ET Q
-BT 0.143 Tc ET
-BT 0.673 Tw ET
-q 0.000 g  0 Tr BT 28.250 60.942 Td  (egestas justo nec ipsum. Nulla facilisi. Praesent sit amet pede quis metus aliquet vulputate. Donec luctus.) Tj ET Q
-BT 0.119 Tc ET
-BT 0.493 Tw ET
-q 0.000 g  0 Tr BT 28.250 46.312 Td  (Cras euismod tellus vel leo. Sed egestas justo nec ipsum. Nulla facilisi. Praesent sit amet pede quis metus) Tj ET Q
+BT 0.033 Tc ET
+BT 0.156 Tw ET
+q 0.000 g  0 Tr BT 17.250 79.202 Td  (1 Praesent pharetra nulla in turpis. Sed ipsum nulla, sodales nec, vulputate in, scelerisque vitae, magna. Praesent) Tj ET Q
+BT 0.102 Tc ET
+BT 0.477 Tw ET
+q 0.000 g  0 Tr BT 17.250 64.572 Td  (pharetra nulla in turpis. Sed ipsum nulla, sodales nec, vulputate in, scelerisque vitae, magna. Sed egestas justo) Tj ET Q
+BT 0.083 Tc ET
+BT 0.386 Tw ET
+q 0.000 g  0 Tr BT 17.250 49.942 Td  (nec ipsum. Nulla facilisi. Praesent sit amet pede quis metus aliquet vulputate. Donec luctus. Cras euismod tellus) Tj ET Q
+BT 0.116 Tc ET
+BT 0.507 Tw ET
+q 0.000 g  0 Tr BT 17.250 35.312 Td  (vel leo. Sed egestas justo nec ipsum. Nulla facilisi. Praesent sit amet pede quis metus aliquet vulputate. Donec) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 28.250 31.682 Td  (aliquet vulputate. Donec luctus. Cras euismod tellus vel leo.) Tj ET Q
+q 0.000 g  0 Tr BT 17.250 20.682 Td  (luctus. Cras euismod tellus vel leo.) Tj ET Q
 /GS1 gs
 
 
@@ -535,37 +535,37 @@ q 0.000 g  0 Tr BT 28.250 31.682 Td  (aliquet vulputate. Donec luctus. Cras euis
 [] 0 d
 
  q
-1.0000 0.0000 0.0000 1.0000 196.7520 30.5820 cm
-0.0000 -1.0000 1.0000 0.0000 144.4840 567.5327 cm
- q 0 w 356.008 211.524 m 356.008 45.354 l 552.760 45.354 l 552.760 211.524 l 356.008 211.524 l  W n 
+1.0000 0.0000 0.0000 1.0000 196.7520 81.8420 cm
+0.0000 -1.0000 1.0000 0.0000 195.7440 516.2727 cm
+ q 0 w 356.008 160.264 m 356.008 45.354 l 552.760 45.354 l 552.760 160.264 l 356.008 160.264 l  W n 
 q 1.000 0.933 0.867 rg
-356.008 211.524 196.752 -166.170 re f Q
+356.008 160.264 196.752 -114.910 re f Q
 Q
- q 0 w 356.008 211.524 m 356.008 45.354 l 552.760 45.354 l 552.760 211.524 l 356.008 211.524 l  W n 
- q 356.008 211.524 196.752 -166.170 re W n
- 196.752 0 0 166.170 356.008 45.354 cm
+ q 0 w 356.008 160.264 m 356.008 45.354 l 552.760 45.354 l 552.760 160.264 l 356.008 160.264 l  W n 
+ q 356.008 160.264 196.752 -114.910 re W n
+ 196.752 0 0 114.910 356.008 45.354 cm
 /Sh5 sh 
  Q 
 Q
  Q
 
  q
-1.0000 0.0000 0.0000 1.0000 196.7520 30.5820 cm
-0.0000 -1.0000 1.0000 0.0000 144.4840 567.5327 cm
+1.0000 0.0000 0.0000 1.0000 196.7520 81.8420 cm
+0.0000 -1.0000 1.0000 0.0000 195.7440 516.2727 cm
 
 q
 0.000 w
-356.008 211.524 m 
-356.758 210.774 l 
-552.010 210.774 l 
-552.760 211.524 l 
+356.008 160.264 m 
+356.758 159.514 l 
+552.010 159.514 l 
+552.760 160.264 l 
  h W n 
 0.750 w
 0.533 0.000 0.000 RG
 0 j
 0 J
-552.760 211.149 m 
-356.008 211.149 l 
+552.760 159.889 m 
+356.008 159.889 l 
 S
 
 Q
@@ -595,8 +595,8 @@ Q
 2 J
 q
 0.000 w
-356.008 211.524 m 
-356.758 210.774 l 
+356.008 160.264 m 
+356.758 159.514 l 
 356.758 46.104 l 
 356.008 45.354 l 
  h W n 
@@ -604,7 +604,7 @@ q
 0.533 0.000 0.000 RG
 0 j
 0 J
-356.383 211.524 m 
+356.383 160.264 m 
 356.383 45.354 l 
 S
 
@@ -615,8 +615,8 @@ Q
 2 J
 q
 0.000 w
-552.760 211.524 m 
-552.010 210.774 l 
+552.760 160.264 m 
+552.010 159.514 l 
 552.010 46.104 l 
 552.760 45.354 l 
  h W n 
@@ -625,7 +625,7 @@ q
 0 j
 0 J
 552.385 45.354 m 
-552.385 211.524 l 
+552.385 160.264 l 
 S
 
 Q
@@ -636,11 +636,11 @@ Q
  Q
 
  q
-1.0000 0.0000 0.0000 1.0000 196.7520 30.5820 cm
-0.0000 -1.0000 1.0000 0.0000 144.4840 567.5327 cm
+1.0000 0.0000 0.0000 1.0000 196.7520 81.8420 cm
+0.0000 -1.0000 1.0000 0.0000 195.7440 516.2727 cm
 
 q
-0.9914 0.0000 0.0000 0.9914 3.1172 1.7664 cm
+0.9818 0.0000 0.0000 0.9818 6.6043 2.8078 cm
 BT /F1 11.000 Tf ET
 1.000 g
 0.000 G
@@ -650,33 +650,27 @@ BT /F1 11.000 Tf ET
 [] 0 d
 /GS1 gs
 BT /F3 11.000 Tf ET
-BT 0.638 Tc ET
-BT 2.873 Tw ET
-q 0.000 g  0 Tr BT 373.258 183.076 Td  (2 Praesent pharetra nulla in) Tj ET Q
-BT 0.166 Tc ET
-BT 0.856 Tw ET
-q 0.000 g  0 Tr BT 373.258 168.446 Td  (turpis. Sed ipsum nulla, sodales) Tj ET Q
-BT 0.455 Tc ET
-BT 2.934 Tw ET
-q 0.000 g  0 Tr BT 373.258 153.816 Td  (nec, vulputate in, scelerisque) Tj ET Q
-BT 0.146 Tc ET
-BT 0.732 Tw ET
-q 0.000 g  0 Tr BT 373.258 139.186 Td  (vitae, magna. Sed egestas justo) Tj ET Q
-BT 1.116 Tc ET
-BT 6.199 Tw ET
-q 0.000 g  0 Tr BT 373.258 124.556 Td  (nec ipsum. Nulla facilisi.) Tj ET Q
-BT 0.635 Tc ET
-BT 2.751 Tw ET
-q 0.000 g  0 Tr BT 373.258 109.926 Td  (Praesent sit amet pede quis) Tj ET Q
-BT 0.265 Tc ET
-BT 1.711 Tw ET
-q 0.000 g  0 Tr BT 373.258 95.296 Td  (metus aliquet vulputate. Donec) Tj ET Q
-BT 0.306 Tc ET
-BT 1.531 Tw ET
-q 0.000 g  0 Tr BT 373.258 80.666 Td  (luctus. Cras euismod tellus vel) Tj ET Q
+BT 0.335 Tc ET
+BT 1.563 Tw ET
+q 0.000 g  0 Tr BT 362.258 142.816 Td  (2 Praesent pharetra nulla in turpis.) Tj ET Q
+BT 0.890 Tc ET
+BT 4.155 Tw ET
+q 0.000 g  0 Tr BT 362.258 128.186 Td  (Sed ipsum nulla, sodales nec,) Tj ET Q
+BT 0.009 Tc ET
+BT 0.059 Tw ET
+q 0.000 g  0 Tr BT 362.258 113.556 Td  (vulputate in, scelerisque vitae, magna.) Tj ET Q
+BT 0.289 Tc ET
+BT 1.270 Tw ET
+q 0.000 g  0 Tr BT 362.258 98.926 Td  (Sed egestas justo nec ipsum. Nulla) Tj ET Q
+BT 0.255 Tc ET
+BT 1.222 Tw ET
+q 0.000 g  0 Tr BT 362.258 84.296 Td  (facilisi. Praesent sit amet pede quis) Tj ET Q
+BT 0.029 Tc ET
+BT 0.181 Tw ET
+q 0.000 g  0 Tr BT 362.258 69.666 Td  (metus aliquet vulputate. Donec luctus.) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 373.258 66.036 Td  (leo.) Tj ET Q
+q 0.000 g  0 Tr BT 362.258 55.036 Td  (Cras euismod tellus vel leo.) Tj ET Q
 /GS1 gs
 
 Q
@@ -696,7 +690,7 @@ endobj
 /Contents 6 0 R>>
 endobj
 6 0 obj
-<</Length 29571>>
+<</Length 29523>>
 stream
  2 J
 0.567 w
@@ -713,7 +707,7 @@ BT /F1 11.000 Tf ET
 
 
 q
-0.6777 0.0000 0.0000 0.6777 17.2485 253.1643 cm
+0.6848 0.0000 0.0000 0.6848 16.8684 247.5865 cm
 BT /F1 11.000 Tf ET
 1.000 g
 0.000 G
@@ -723,639 +717,638 @@ BT /F1 11.000 Tf ET
 [] 0 d
 /GS1 gs
 BT /F2 22.000 Tf ET
-q 0.000 g  0 Tr BT 64.520 737.279 Td  (mPDF) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 748.279 Td  (mPDF) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F4 11.000 Tf ET
-q 0.000 g  0 Tr BT 64.520 719.184 Td  (Fixed-position block element with Autofit) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 730.184 Td  (Fixed-position block element with Autofit) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-q 0.000 g  0 Tr BT 75.520 693.851 Td  (Using the CSS properties position and overflow:auto it is possible to fit text to a single page:) Tj ET Q
+q 0.000 g  0 Tr BT 64.520 704.851 Td  (Using the CSS properties position and overflow:auto it is possible to fit text to a single page:) Tj ET Q
 /GS1 gs
-BT 0.006 Tc ET
-BT 0.027 Tw ET
-q 0.000 g  0 Tr BT 64.520 666.901 Td  (Nulla felis erat, imperdiet eu, ullamcorper non, nonummy quis, elit. Suspendisse potenti. Ut a eros at ligula vehicula pretium. Maecenas feugiat pede vel risus.) Tj ET Q
-BT 0.021 Tc ET
-BT 0.092 Tw ET
-q 0.000 g  0 Tr BT 64.520 652.271 Td  (Nulla et lectus. Fusce eleifend neque sit amet erat. Integer consectetuer nulla non orci. Morbi feugiat pulvinar dolor. Cras odio. Donec mattis, nisi id euismod) Tj ET Q
-BT 0.085 Tc ET
-BT 0.425 Tw ET
-q 0.000 g  0 Tr BT 64.520 637.641 Td  (auctor, neque metus pellentesque risus, at eleifend lacus sapien et risus. Phasellus metus. Phasellus feugiat, lectus ac aliquam molestie, leo lacus tincidunt) Tj ET Q
-BT 0.029 Tc ET
-BT 0.122 Tw ET
-q 0.000 g  0 Tr BT 64.520 623.011 Td  (turpis, vel aliquam quam odio et sapien. Mauris ante pede, auctor ac, suscipit quis, malesuada sed, nulla. Integer sit amet odio sit amet lectus luctus euismod.) Tj ET Q
+BT 0.061 Tc ET
+BT 0.279 Tw ET
+q 0.000 g  0 Tr BT 53.520 677.901 Td  (Nulla felis erat, imperdiet eu, ullamcorper non, nonummy quis, elit. Suspendisse potenti. Ut a eros at ligula vehicula pretium. Maecenas feugiat pede vel risus.) Tj ET Q
+BT 0.076 Tc ET
+BT 0.334 Tw ET
+q 0.000 g  0 Tr BT 53.520 663.271 Td  (Nulla et lectus. Fusce eleifend neque sit amet erat. Integer consectetuer nulla non orci. Morbi feugiat pulvinar dolor. Cras odio. Donec mattis, nisi id euismod) Tj ET Q
+BT 0.023 Tc ET
+BT 0.114 Tw ET
+q 0.000 g  0 Tr BT 53.520 648.641 Td  (auctor, neque metus pellentesque risus, at eleifend lacus sapien et risus. Phasellus metus. Phasellus feugiat, lectus ac aliquam molestie, leo lacus tincidunt turpis,) Tj ET Q
+BT 0.040 Tc ET
+BT 0.163 Tw ET
+q 0.000 g  0 Tr BT 53.520 634.011 Td  (vel aliquam quam odio et sapien. Mauris ante pede, auctor ac, suscipit quis, malesuada sed, nulla. Integer sit amet odio sit amet lectus luctus euismod. Donec et) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 64.520 608.381 Td  (Donec et nulla. Sed quis orci.) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 619.381 Td  (nulla. Sed quis orci.) Tj ET Q
 /GS1 gs
-BT 0.080 Tc ET
-BT 0.378 Tw ET
-q 0.000 g  0 Tr BT 75.520 582.751 Td  (DIV: Proin aliquet lorem id felis. Curabitur vel libero at mauris nonummy tincidunt. Donec imperdiet. Vestibulum sem sem,) Tj ET Q
-BT 0.060 Tc ET
-BT 0.294 Tw ET
-q 0.000 g  0 Tr BT 75.520 568.121 Td  (lacinia vel, molestie et, laoreet eget, urna. Curabitur viverra faucibus pede. Morbi lobortis. Donec dapibus. Donec tempus. Ut) Tj ET Q
+BT 0.153 Tc ET
+BT 0.720 Tw ET
+q 0.000 g  0 Tr BT 64.520 593.751 Td  (DIV: Proin aliquet lorem id felis. Curabitur vel libero at mauris nonummy tincidunt. Donec imperdiet. Vestibulum sem sem,) Tj ET Q
+BT 0.025 Tc ET
+BT 0.119 Tw ET
+q 0.000 g  0 Tr BT 64.520 579.121 Td  (lacinia vel, molestie et, laoreet eget, urna. Curabitur viverra faucibus pede. Morbi lobortis. Donec dapibus. Donec tempus. Ut arcu) Tj ET Q
+BT 0.101 Tc ET
+BT 0.435 Tw ET
+q 0.000 g  0 Tr BT 64.520 564.491 Td  (enim, rhoncus ac, venenatis eu, porttitor mollis, dui. Sed vitae risus. In elementum sem placerat dui. Nam tristique eros in nisl.) Tj ET Q
+BT 0 Tc ET
+BT 0 Tw ET
+q 0.000 g  0 Tr BT 64.520 549.861 Td  (Nulla cursus sapien non quam porta porttitor. Quisque dictum ipsum ornare tortor. Fusce ornare tempus enim.) Tj ET Q
+/GS1 gs
+q 112.500 0 0 112.500 642.969 492.306 cm /I1 Do Q
+/GS1 gs
+BT 0.131 Tc ET
+BT 0.626 Tw ET
+q 0.000 g  0 Tr BT 283.520 459.251 Td  (DIV: Proin aliquet lorem id felis. Curabitur vel libero at mauris nonummy tincidunt. Donec imperdiet.) Tj ET Q
+BT 0.090 Tc ET
+BT 0.444 Tw ET
+q 0.000 g  0 Tr BT 283.520 444.621 Td  (Vestibulum sem sem, lacinia vel, molestie et, laoreet eget, urna. Curabitur viverra faucibus pede. Morbi) Tj ET Q
+BT 0.052 Tc ET
+BT 0.242 Tw ET
+q 0.000 g  0 Tr BT 283.520 429.991 Td  (lobortis. Donec dapibus. Donec tempus. Ut arcu enim, rhoncus ac, venenatis eu, porttitor mollis, dui. Sed) Tj ET Q
 BT 0.033 Tc ET
-BT 0.139 Tw ET
-q 0.000 g  0 Tr BT 75.520 553.491 Td  (arcu enim, rhoncus ac, venenatis eu, porttitor mollis, dui. Sed vitae risus. In elementum sem placerat dui. Nam tristique eros in) Tj ET Q
+BT 0.135 Tw ET
+q 0.000 g  0 Tr BT 283.520 415.361 Td  (vitae risus. In elementum sem placerat dui. Nam tristique eros in nisl. Nulla cursus sapien non quam porta) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 75.520 538.861 Td  (nisl. Nulla cursus sapien non quam porta porttitor. Quisque dictum ipsum ornare tortor. Fusce ornare tempus enim.) Tj ET Q
-/GS1 gs
-q 112.500 0 0 112.500 639.439 481.306 cm /I1 Do Q
-/GS1 gs
-BT 0.044 Tc ET
-BT 0.210 Tw ET
-q 0.000 g  0 Tr BT 294.520 448.251 Td  (DIV: Proin aliquet lorem id felis. Curabitur vel libero at mauris nonummy tincidunt. Donec imperdiet.) Tj ET Q
-BT 0.006 Tc ET
-BT 0.028 Tw ET
-q 0.000 g  0 Tr BT 294.520 433.621 Td  (Vestibulum sem sem, lacinia vel, molestie et, laoreet eget, urna. Curabitur viverra faucibus pede. Morbi) Tj ET Q
-BT 0.083 Tc ET
-BT 0.394 Tw ET
-q 0.000 g  0 Tr BT 294.520 418.991 Td  (lobortis. Donec dapibus. Donec tempus. Ut arcu enim, rhoncus ac, venenatis eu, porttitor mollis, dui.) Tj ET Q
-BT 0.150 Tc ET
-BT 0.612 Tw ET
-q 0.000 g  0 Tr BT 294.520 404.361 Td  (Sed vitae risus. In elementum sem placerat dui. Nam tristique eros in nisl. Nulla cursus sapien non) Tj ET Q
-BT 0 Tc ET
-BT 0 Tw ET
-q 0.000 g  0 Tr BT 294.520 389.731 Td  (quam porta porttitor. Quisque dictum ipsum ornare tortor. Fusce ornare tempus enim.) Tj ET Q
+q 0.000 g  0 Tr BT 283.520 400.731 Td  (porttitor. Quisque dictum ipsum ornare tortor. Fusce ornare tempus enim.) Tj ET Q
 /GS1 gs
 /GS2 gs
-q 219.000 0 0 62.250 75.520 397.056 cm /I2 Do Q
+q 219.000 0 0 62.250 64.520 408.056 cm /I2 Do Q
 /GS1 gs
-BT 0.035 Tc ET
-BT 0.178 Tw ET
-q 0.000 g  0 Tr BT 94.520 362.781 Td  (Blockquote: Maecenas arcu justo, malesuada eu, dapibus ac, adipiscing vitae, turpis. Fusce mollis. Aliquam egestas. In purus dolor, facilisis at,) Tj ET Q
-BT 0.061 Tc ET
-BT 0.300 Tw ET
-q 0.000 g  0 Tr BT 94.520 348.151 Td  (fermentum nec, molestie et, metus. Maecenas arcu justo, malesuada eu, dapibus ac, adipiscing vitae, turpis. Fusce mollis. Aliquam egestas. In) Tj ET Q
+BT 0.096 Tc ET
+BT 0.484 Tw ET
+q 0.000 g  0 Tr BT 83.520 373.781 Td  (Blockquote: Maecenas arcu justo, malesuada eu, dapibus ac, adipiscing vitae, turpis. Fusce mollis. Aliquam egestas. In purus dolor, facilisis at,) Tj ET Q
+BT 0.007 Tc ET
+BT 0.032 Tw ET
+q 0.000 g  0 Tr BT 83.520 359.151 Td  (fermentum nec, molestie et, metus. Maecenas arcu justo, malesuada eu, dapibus ac, adipiscing vitae, turpis. Fusce mollis. Aliquam egestas. In purus) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 94.520 333.521 Td  (purus dolor, facilisis at, fermentum nec, molestie et, metus.) Tj ET Q
+q 0.000 g  0 Tr BT 83.520 344.521 Td  (dolor, facilisis at, fermentum nec, molestie et, metus.) Tj ET Q
 /GS1 gs
 BT /F5 11.000 Tf ET
-BT 0.013 Tc ET
-BT 0.065 Tw ET
-q 0.000 g  0 Tr BT 64.520 318.968 Td  (Address: Vestibulum feugiat, orci at imperdiet tincidunt, mauris erat facilisis urna, sagittis ultricies dui nisl et lectus. Sed lacinia, lectus vitae dictum sodales,) Tj ET Q
+BT 0.005 Tc ET
+BT 0.022 Tw ET
+q 0.000 g  0 Tr BT 53.520 329.968 Td  (Address: Vestibulum feugiat, orci at imperdiet tincidunt, mauris erat facilisis urna, sagittis ultricies dui nisl et lectus. Sed lacinia, lectus vitae dictum sodales, elit) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 64.520 304.338 Td  (elit ipsum ultrices orci, non euismod arcu diam non metus.) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 315.338 Td  (ipsum ultrices orci, non euismod arcu diam non metus.) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-q 0.000 0.000 1.000 rg  0 Tr BT 75.520 278.631 Td  (Hyperlink \(<a>\)) Tj ET 0.000 0.000 1.000 RG   0.550 w 0 j 0 J  75.520 277.256 m 147.493 277.256 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 0.000 1.000 rg  0 Tr BT 64.520 289.631 Td  (Hyperlink \(<a>\)) Tj ET 0.000 0.000 1.000 RG   0.550 w 0 j 0 J  64.520 288.256 m 136.493 288.256 l S  0.567 w 2 j 2 J  1.000 g  Q
 /GS1 gs
-q 0.000 0.000 1.000 rg  0 Tr BT 75.520 242.001 Td  (Hyperlink \(<a>\)) Tj ET 0.000 0.000 1.000 RG   0.550 w 0 j 0 J  75.520 240.626 m 147.493 240.626 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 0.000 1.000 rg  0 Tr BT 64.520 253.001 Td  (Hyperlink \(<a>\)) Tj ET 0.000 0.000 1.000 RG   0.550 w 0 j 0 J  64.520 251.626 m 136.493 251.626 l S  0.567 w 2 j 2 J  1.000 g  Q
 /GS1 gs
-q 0.000 0.000 1.000 rg  0 Tr BT 75.520 205.371 Td  (Hyperlink \(<a>\)) Tj ET 0.000 0.000 1.000 RG   0.550 w 0 j 0 J  75.520 203.996 m 147.493 203.996 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 0.000 1.000 rg  0 Tr BT 64.520 216.371 Td  (Hyperlink \(<a>\)) Tj ET 0.000 0.000 1.000 RG   0.550 w 0 j 0 J  64.520 214.996 m 136.493 214.996 l S  0.567 w 2 j 2 J  1.000 g  Q
 /GS1 gs
-q 0.000 g  0 Tr BT 75.520 166.861 Td  (Styles - ) Tj ET Q
+q 0.000 g  0 Tr BT 64.520 177.861 Td  (Styles - ) Tj ET Q
 BT /F6 11.000 Tf ET
-q 0.000 g  0 Tr BT 111.578 166.861 Td  (tt\(teletype\)) Tj ET Q
+q 0.000 g  0 Tr BT 100.578 177.861 Td  (tt\(teletype\)) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 190.778 166.861 Td  ( ) Tj ET Q
+q 0.000 g  0 Tr BT 179.778 177.861 Td  ( ) Tj ET Q
 BT /F5 11.000 Tf ET
-q 0.000 g  0 Tr BT 193.528 166.861 Td  (italic) Tj ET Q
+q 0.000 g  0 Tr BT 182.528 177.861 Td  (italic) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 216.144 166.861 Td  ( ) Tj ET Q
+q 0.000 g  0 Tr BT 205.144 177.861 Td  ( ) Tj ET Q
 BT /F2 11.000 Tf ET
-q 0.000 g  0 Tr BT 218.894 166.861 Td  (bold) Tj ET Q
+q 0.000 g  0 Tr BT 207.894 177.861 Td  (bold) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 239.684 166.861 Td  ( ) Tj ET Q
+q 0.000 g  0 Tr BT 228.684 177.861 Td  ( ) Tj ET Q
 BT /F1 12.870 Tf ET
-q 0.000 g  0 Tr BT 242.434 166.861 Td  (big) Tj ET Q
+q 0.000 g  0 Tr BT 231.434 177.861 Td  (big) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 258.882 166.861 Td  ( ) Tj ET Q
+q 0.000 g  0 Tr BT 247.882 177.861 Td  ( ) Tj ET Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 261.632 166.861 Td  (small) Tj ET Q
+q 0.000 g  0 Tr BT 250.632 177.861 Td  (small) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 281.416 166.861 Td  ( ) Tj ET Q
+q 0.000 g  0 Tr BT 270.416 177.861 Td  ( ) Tj ET Q
 BT /F5 11.000 Tf ET
-q 0.000 g  0 Tr BT 284.166 166.861 Td  (emphasis) Tj ET Q
+q 0.000 g  0 Tr BT 273.166 177.861 Td  (emphasis) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 325.108 166.861 Td  ( ) Tj ET Q
+q 0.000 g  0 Tr BT 314.108 177.861 Td  ( ) Tj ET Q
 BT /F2 11.000 Tf ET
-q 0.000 g  0 Tr BT 327.858 166.861 Td  (strong) Tj ET Q
+q 0.000 g  0 Tr BT 316.858 177.861 Td  (strong) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 75.520 151.544 Td  (new lines) Tj ET Q
+q 0.000 g  0 Tr BT 64.520 162.544 Td  (new lines) Tj ET Q
 BT /F6 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 75.520 134.531 Td  (code) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 64.520 145.531 Td  (code) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 102.335 134.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 91.109 145.531 Td  ( ) Tj ET Q
 BT /F6 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 105.624 134.531 Td  (sample) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 94.103 145.531 Td  (sample) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 145.848 134.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 133.987 145.531 Td  ( ) Tj ET Q
 BT /F6 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 149.136 134.531 Td  (keyboard) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 136.981 145.531 Td  (keyboard) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 202.768 134.531 Td  ( ) Tj ET Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 206.056 134.531 Td  (variable) Tj ET Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 242.319 134.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 190.160 145.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 193.154 145.531 Td  (variable) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 228.964 145.531 Td  ( ) Tj ET Q
 BT /F5 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 245.607 134.531 Td  (citation) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 231.958 145.531 Td  (citation) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 280.055 134.531 Td  ( abbr. ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 265.953 145.531 Td  ( abbr. ) Tj ET Q
 BT /F2 8.470 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 309.448 134.531 Td  (ACRONYM) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 294.475 145.531 Td  (ACRONYM) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 355.338 134.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 339.969 145.531 Td  ( ) Tj ET Q
 BT /F1 6.050 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 358.626 140.031 Td  (sup) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 342.963 151.031 Td  (sup) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 367.342 134.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 351.508 145.531 Td  ( ) Tj ET Q
 BT /F1 6.050 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 370.630 132.331 Td  (sub) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 354.502 143.331 Td  (sub) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 379.345 134.531 Td  ( ) Tj ET Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 382.634 134.531 Td  (strike) Tj ET 0.000 G   0.550 w 0 j 0 J  382.634 136.716 m 407.700 136.716 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 407.700 134.531 Td  ( ) Tj ET Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 410.988 134.531 Td  (strike-s) Tj ET 0.000 G   0.550 w 0 j 0 J  410.988 136.716 m 444.204 136.716 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 444.204 134.531 Td  ( ) Tj ET Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 447.492 134.531 Td  (underline) Tj ET 0.000 G   0.550 w 0 j 0 J  447.492 133.156 m 489.974 133.156 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 489.974 134.531 Td  ( ) Tj ET Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 493.263 134.531 Td  (delete) Tj ET 0.000 G   0.550 w 0 j 0 J  493.263 136.716 m 520.155 136.716 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 520.155 134.531 Td  ( ) Tj ET Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 523.443 134.531 Td  (insert) Tj ET 0.000 G   0.550 w 0 j 0 J  523.443 133.156 m 548.509 133.156 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 548.509 134.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 363.048 145.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 366.041 145.531 Td  (strike) Tj ET 0.000 G   0.550 w 0 j 0 J  366.041 147.716 m 390.768 147.716 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 390.768 145.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 393.762 145.531 Td  (strike-s) Tj ET 0.000 G   0.550 w 0 j 0 J  393.762 147.716 m 426.525 147.716 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 426.525 145.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 429.519 145.531 Td  (underline) Tj ET 0.000 G   0.550 w 0 j 0 J  429.519 144.156 m 471.492 144.156 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 471.492 145.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 474.486 145.531 Td  (delete) Tj ET 0.000 G   0.550 w 0 j 0 J  474.486 147.716 m 501.038 147.716 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 501.038 145.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 504.032 145.531 Td  (insert) Tj ET 0.000 G   0.550 w 0 j 0 J  504.032 144.156 m 528.758 144.156 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 528.758 145.531 Td  ( ) Tj ET Q
 BT /F5 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 551.797 134.531 Td  (To be or not to be) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 531.752 145.531 Td  (To be or not to be) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.000 g  0 Tr BT 634.370 134.531 Td  ( ) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.000 g  0 Tr BT 612.117 145.531 Td  ( ) Tj ET Q
 BT /F3 13.200 Tf ET
-BT 0.104 Tc ET
-BT 0.435 Tw ET
-q 0.533 0.000 0.000 rg  0 Tr BT 637.659 134.531 Td  (font changing face,) Tj ET Q
+BT 0.047 Tc ET
+BT 0.196 Tw ET
+q 0.533 0.000 0.000 rg  0 Tr BT 615.110 145.531 Td  (font changing face, size) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.533 0.000 0.000 rg  0 Tr BT 75.520 116.831 Td  (size and color) Tj ET Q
+q 0.533 0.000 0.000 rg  0 Tr BT 64.520 127.831 Td  (and color) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 15.000 Tf ET
-q 0.267 0.000 0.400 rg  0 Tr BT 64.520 80.838 Td  (Paragraph using the in-line style to determine the font-size \(15pt\) and colour) Tj ET Q
+q 0.267 0.000 0.400 rg  0 Tr BT 53.520 91.838 Td  (Paragraph using the in-line style to determine the font-size \(15pt\) and colour) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F2 12.870 Tf ET
-q 0.000 g  0 Tr BT 64.520 62.790 Td  (Testing BIG, SMALL, UNDERLINE, STRIKETHROUGH, FONT color, ACRONYM, SUPERSCRIPT and SUBSCRIPT) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 73.790 Td  (Testing BIG, SMALL, UNDERLINE, STRIKETHROUGH, FONT color, ACRONYM, SUPERSCRIPT and SUBSCRIPT) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 64.520 44.273 Td  (This is ) Tj ET Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 97.843 44.273 Td  (strikethrough) Tj ET 0.000 G   0.550 w 0 j 0 J  97.843 46.458 m 157.257 46.458 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 157.257 44.273 Td  ( in ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 53.520 55.273 Td  (This is ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 86.315 55.273 Td  (strikethrough) Tj ET 0.000 G   0.550 w 0 j 0 J  86.315 57.458 m 145.302 57.458 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 145.302 55.273 Td  ( in ) Tj ET Q
 BT /F2 11.000 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 172.012 44.273 Td  (block) Tj ET 0.000 G   0.550 w 0 j 0 J  172.012 46.504 m 197.975 46.504 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 159.660 55.273 Td  (block) Tj ET 0.000 G   0.550 w 0 j 0 J  159.660 57.504 m 185.459 57.504 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 11.000 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 197.975 44.273 Td  ( and ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 185.459 55.273 Td  ( and ) Tj ET Q
 BT /F1 9.130 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 220.114 44.273 Td  (small ) Tj ET Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 242.761 44.273 Td  (strikethrough) Tj ET 0.000 G   0.457 w 0 j 0 J  242.761 46.087 m 292.203 46.087 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 292.203 44.273 Td  ( in ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 207.168 55.273 Td  (small ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 229.485 55.273 Td  (strikethrough) Tj ET 0.000 G   0.457 w 0 j 0 J  229.485 57.087 m 278.500 57.087 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 278.500 55.273 Td  ( in ) Tj ET Q
 BT /F5 9.130 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 304.568 44.273 Td  (small span) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 290.468 55.273 Td  (small span) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 344.693 44.273 Td  ( and ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 330.132 55.273 Td  ( and ) Tj ET Q
 BT /F1 12.870 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 366.831 44.273 Td  (big ) Tj ET Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 386.961 44.273 Td  (strikethrough) Tj ET 0.000 G   0.643 w 0 j 0 J  386.961 46.829 m 456.348 46.829 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 456.348 44.273 Td  ( in big span) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 351.841 55.273 Td  (big ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 371.706 55.273 Td  (strikethrough) Tj ET 0.000 G   0.643 w 0 j 0 J  371.706 57.829 m 440.667 57.829 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 440.667 55.273 Td  ( in big span) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 517.444 44.273 Td  ( and then ) Tj ET Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 561.797 44.273 Td  (underline and ) Tj ET 0.000 G   0.550 w 0 j 0 J  561.797 42.898 m 626.003 42.898 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 626.003 44.273 Td  (strikethrough and ) Tj ET 0.000 G   0.550 w 0 j 0 J  626.003 42.898 m 707.556 42.898 l S  0.567 w 2 j 2 J  1.000 g  0.000 G   0.550 w 0 j 0 J  626.003 46.458 m 707.556 46.458 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 500.970 55.273 Td  ( and then ) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 544.596 55.273 Td  (underline and ) Tj ET 0.000 G   0.550 w 0 j 0 J  544.596 53.898 m 608.077 53.898 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 608.077 55.273 Td  (strikethrough and ) Tj ET 0.000 G   0.550 w 0 j 0 J  608.077 53.898 m 688.774 53.898 l S  0.567 w 2 j 2 J  1.000 g  0.000 G   0.550 w 0 j 0 J  608.077 57.458 m 688.774 57.458 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 6.050 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 707.556 49.773 Td  (sup) Tj ET 0.000 G   0.550 w 0 j 0 J  707.556 42.898 m 716.133 42.898 l S  0.567 w 2 j 2 J  1.000 g  0.000 G   0.550 w 0 j 0 J  707.556 46.458 m 716.133 46.458 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 688.774 60.773 Td  (sup) Tj ET 0.000 G   0.550 w 0 j 0 J  688.774 53.898 m 697.252 53.898 l S  0.567 w 2 j 2 J  1.000 g  0.000 G   0.550 w 0 j 0 J  688.774 57.458 m 697.252 57.458 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 11.000 Tf ET
-BT 0.058 Tc ET
-BT 0.233 Tw ET
-q 0.000 g  0 Tr BT 716.133 44.273 Td  ( but out of) Tj ET Q
+BT 0.025 Tc ET
+BT 0.100 Tw ET
+q 0.000 g  0 Tr BT 697.252 55.273 Td  ( but out of span) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 64.520 29.036 Td  (span again but ) Tj ET Q
-q 0.000 0.000 0.533 rg  0 Tr BT 130.817 29.036 Td  (blue) Tj ET Q
-q 0.000 g  0 Tr BT 149.759 29.036 Td  ( font and ) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 40.036 Td  (again but ) Tj ET Q
+q 0.000 0.000 0.533 rg  0 Tr BT 96.904 40.036 Td  (blue) Tj ET Q
+q 0.000 g  0 Tr BT 115.846 40.036 Td  ( font and ) Tj ET Q
 BT /F2 8.470 Tf ET
-q 0.000 g  0 Tr BT 191.614 29.036 Td  (ACRONYM) Tj ET Q
+q 0.000 g  0 Tr BT 157.701 40.036 Td  (ACRONYM) Tj ET Q
 BT /F1 11.000 Tf ET
-q 0.000 g  0 Tr BT 236.776 29.036 Td  ( text) Tj ET Q
+q 0.000 g  0 Tr BT 202.863 40.036 Td  ( text) Tj ET Q
 /GS1 gs
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 64.520 13.880 Td  (This is a ) Tj ET Q
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 0.533 0.000 rg  0 Tr BT 106.873 13.880 Td  (green reference) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 53.520 24.880 Td  (This is a ) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 0.533 0.000 rg  0 Tr BT 97.440 24.880 Td  (green reference) Tj ET Q
 BT /F1 6.050 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 0.533 0.000 rg  0 Tr BT 176.674 19.380 Td  (32-47) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 0.533 0.000 rg  0 Tr BT 168.396 30.380 Td  (32-47) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 191.190 13.880 Td  ( and ) Tj ET Q
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 213.990 13.880 Td  (underlined reference) Tj ET 0.000 G   0.550 w 0 j 0 J  213.990 12.505 m 306.809 12.505 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 183.182 24.880 Td  ( and ) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 206.937 24.880 Td  (underlined reference) Tj ET 0.000 G   0.550 w 0 j 0 J  206.937 23.505 m 301.180 23.505 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 6.050 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 306.809 19.380 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  306.809 12.505 m 321.325 12.505 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 301.180 30.380 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  301.180 23.505 m 315.967 23.505 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 11.000 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 321.325 13.880 Td  ( then reference) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 315.967 24.880 Td  ( then reference) Tj ET Q
 BT /F1 6.050 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 388.895 11.680 Td  (32-47) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 385.033 22.680 Td  (32-47) Tj ET Q
 BT /F1 11.000 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 403.411 13.880 Td  ( and ) Tj ET Q
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 426.210 13.880 Td  (underlined reference) Tj ET 0.000 G   0.550 w 0 j 0 J  426.210 12.505 m 519.029 12.505 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 399.820 24.880 Td  ( and ) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 423.574 24.880 Td  (underlined reference) Tj ET 0.000 G   0.550 w 0 j 0 J  423.574 23.505 m 517.818 23.505 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 6.050 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 519.029 11.680 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  519.029 12.505 m 533.546 12.505 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 517.818 22.680 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  517.818 23.505 m 532.605 23.505 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 11.000 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 533.546 13.880 Td  ( then ) Tj ET Q
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 559.483 13.880 Td  (Strikethrough reference) Tj ET 0.000 G   0.550 w 0 j 0 J  559.483 16.065 m 665.996 16.065 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 532.605 24.880 Td  ( then ) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 559.551 24.880 Td  (Strikethrough reference) Tj ET 0.000 G   0.550 w 0 j 0 J  559.551 27.065 m 667.651 27.065 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 6.050 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 665.996 19.380 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  665.996 16.065 m 680.512 16.065 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 667.651 30.380 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  667.651 27.065 m 682.438 27.065 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 11.000 Tf ET
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 680.512 13.880 Td  ( and ) Tj ET Q
-BT 0.080 Tc ET
-BT 0.507 Tw ET
-q 0.000 g  0 Tr BT 703.312 13.880 Td  (strikethrough) Tj ET 0.000 G   0.550 w 0 j 0 J  703.312 16.065 m 763.019 16.065 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 682.438 24.880 Td  ( and ) Tj ET Q
+BT 0.134 Tc ET
+BT 0.849 Tw ET
+q 0.000 g  0 Tr BT 706.192 24.880 Td  (strikethrough) Tj ET 0.000 G   0.550 w 0 j 0 J  706.192 27.065 m 766.603 27.065 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 64.520 -1.341 Td  (reference) Tj ET 0.000 G   0.550 w 0 j 0 J  64.520 0.844 m 105.429 0.844 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 53.520 9.659 Td  (reference) Tj ET 0.000 G   0.550 w 0 j 0 J  53.520 11.844 m 94.429 11.844 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 6.050 Tf ET
-q 0.000 g  0 Tr BT 105.429 -3.541 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  105.429 0.844 m 119.543 0.844 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 94.429 7.459 Td  (32-47) Tj ET 0.000 G   0.550 w 0 j 0 J  94.429 11.844 m 108.543 11.844 l S  0.567 w 2 j 2 J  1.000 g  Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 12.870 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 64.520 -19.056 Td  (Repeated in ) Tj ET Q
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 129.181 -19.056 Td  (BIG) Tj ET 0.000 G   0.643 w 0 j 0 J  129.181 -20.665 m 151.386 -20.665 l S  0.567 w 2 j 2 J  1.000 g  Q
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 151.386 -19.056 Td  (: This is reference) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 53.520 -8.056 Td  (Repeated in ) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 119.574 -8.056 Td  (BIG) Tj ET 0.000 G   0.643 w 0 j 0 J  119.574 -9.665 m 141.966 -9.665 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 141.966 -8.056 Td  (: This is reference) Tj ET Q
 BT /F1 7.078 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 244.448 -12.621 Td  (32-47) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 237.180 -1.621 Td  (32-47) Tj ET Q
 BT /F1 12.870 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 261.035 -19.056 Td  ( and ) Tj ET Q
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 286.276 -19.056 Td  (underlined reference) Tj ET 0.000 G   0.643 w 0 j 0 J  286.276 -20.665 m 392.767 -20.665 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 254.078 -8.056 Td  ( and ) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 280.277 -8.056 Td  (underlined reference) Tj ET 0.000 G   0.643 w 0 j 0 J  280.277 -9.665 m 388.336 -9.665 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 7.078 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 392.767 -12.621 Td  (32-47) Tj ET 0.000 G   0.643 w 0 j 0 J  392.767 -20.665 m 409.354 -20.665 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 388.336 -1.621 Td  (32-47) Tj ET 0.000 G   0.643 w 0 j 0 J  388.336 -9.665 m 405.234 -9.665 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 12.870 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 409.354 -19.056 Td  ( then reference) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 405.234 -8.056 Td  ( then reference) Tj ET Q
 BT /F1 7.078 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 486.182 -21.630 Td  (32-47) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 483.642 -10.630 Td  (32-47) Tj ET Q
 BT /F1 12.870 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 502.769 -19.056 Td  ( and ) Tj ET Q
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 528.010 -19.056 Td  (underlined reference) Tj ET 0.000 G   0.643 w 0 j 0 J  528.010 -20.665 m 634.501 -20.665 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 500.540 -8.056 Td  ( and ) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 526.739 -8.056 Td  (underlined reference) Tj ET 0.000 G   0.643 w 0 j 0 J  526.739 -9.665 m 634.798 -9.665 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 7.078 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 634.501 -21.630 Td  (32-47) Tj ET 0.000 G   0.643 w 0 j 0 J  634.501 -20.665 m 651.088 -20.665 l S  0.567 w 2 j 2 J  1.000 g  Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 634.798 -10.630 Td  (32-47) Tj ET 0.000 G   0.643 w 0 j 0 J  634.798 -9.665 m 651.696 -9.665 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 12.870 Tf ET
-BT 0.014 Tc ET
-BT 0.075 Tw ET
-q 0.000 g  0 Tr BT 651.088 -19.056 Td  ( but out of span again) Tj ET Q
+BT 0.077 Tc ET
+BT 0.398 Tw ET
+q 0.000 g  0 Tr BT 651.696 -8.056 Td  ( but out of span again) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 64.520 -36.865 Td  (but ) Tj ET Q
-q 0.000 0.000 0.533 rg  0 Tr BT 84.185 -36.865 Td  (blue) Tj ET Q
-q 0.000 g  0 Tr BT 106.347 -36.865 Td  ( font and ) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -25.865 Td  (but ) Tj ET Q
+q 0.000 0.000 0.533 rg  0 Tr BT 73.185 -25.865 Td  (blue) Tj ET Q
+q 0.000 g  0 Tr BT 95.347 -25.865 Td  ( font and ) Tj ET Q
 BT /F2 9.910 Tf ET
-q 0.000 g  0 Tr BT 155.318 -36.865 Td  (ACRONYM) Tj ET Q
+q 0.000 g  0 Tr BT 144.318 -25.865 Td  (ACRONYM) Tj ET Q
 BT /F1 12.870 Tf ET
-q 0.000 g  0 Tr BT 208.157 -36.865 Td  ( text) Tj ET Q
+q 0.000 g  0 Tr BT 197.157 -25.865 Td  ( text) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 64.520 -50.659 Td  (Repeated in small: This is reference) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -39.659 Td  (Repeated in small: This is reference) Tj ET Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 195.608 -46.094 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 184.608 -35.094 Td  (32-47) Tj ET Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 207.323 -50.659 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 225.072 -50.659 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  225.072 -51.800 m 300.358 -51.800 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 196.323 -39.659 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 214.072 -39.659 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  214.072 -40.800 m 289.358 -40.800 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 300.358 -46.094 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  300.358 -51.800 m 312.073 -51.800 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 289.358 -35.094 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  289.358 -40.800 m 301.073 -40.800 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 312.073 -50.659 Td  ( then reference) Tj ET Q
+q 0.000 g  0 Tr BT 301.073 -39.659 Td  ( then reference) Tj ET Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 366.315 -52.485 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 355.315 -41.485 Td  (32-47) Tj ET Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 378.030 -50.659 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 395.778 -50.659 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  395.778 -51.800 m 471.064 -51.800 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 367.030 -39.659 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 384.778 -39.659 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  384.778 -40.800 m 460.064 -40.800 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 471.064 -52.485 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  471.064 -51.800 m 482.780 -51.800 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 460.064 -41.485 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  460.064 -40.800 m 471.780 -40.800 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 482.780 -50.659 Td  ( but out of span again but ) Tj ET Q
-q 0.000 0.000 0.533 rg  0 Tr BT 577.878 -50.659 Td  (blue) Tj ET Q
-q 0.000 g  0 Tr BT 593.600 -50.659 Td  ( font and ) Tj ET Q
+q 0.000 g  0 Tr BT 471.780 -39.659 Td  ( but out of span again but ) Tj ET Q
+q 0.000 0.000 0.533 rg  0 Tr BT 566.878 -39.659 Td  (blue) Tj ET Q
+q 0.000 g  0 Tr BT 582.600 -39.659 Td  ( font and ) Tj ET Q
 BT /F2 7.030 Tf ET
-q 0.000 g  0 Tr BT 628.339 -50.659 Td  (ACRONYM) Tj ET Q
+q 0.000 g  0 Tr BT 617.339 -39.659 Td  (ACRONYM) Tj ET Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 665.824 -50.659 Td  ( text) Tj ET Q
+q 0.000 g  0 Tr BT 654.824 -39.659 Td  ( text) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-q 0.000 g  0 Tr BT 64.520 -65.172 Td  (The above repeated, but starting with a paragraph with font-size specified \(7pt\)) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -54.172 Td  (The above repeated, but starting with a paragraph with font-size specified \(7pt\)) Tj ET Q
 /GS1 gs
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 64.520 -75.782 Td  (This is ) Tj ET Q
-q 0.000 g  0 Tr BT 85.135 -75.782 Td  (strikethrough) Tj ET 0.000 G   0.350 w 0 j 0 J  85.135 -74.392 m 122.466 -74.392 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 122.466 -75.782 Td  ( in block and ) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -64.782 Td  (This is ) Tj ET Q
+q 0.000 g  0 Tr BT 74.135 -64.782 Td  (strikethrough) Tj ET 0.000 G   0.350 w 0 j 0 J  74.135 -63.392 m 111.466 -63.392 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 111.466 -64.782 Td  ( in block and ) Tj ET Q
 BT /F1 5.810 Tf ET
-q 0.000 g  0 Tr BT 160.574 -75.782 Td  (small ) Tj ET Q
-q 0.000 g  0 Tr BT 174.616 -75.782 Td  (strikethrough) Tj ET 0.000 G   0.290 w 0 j 0 J  174.616 -74.628 m 205.601 -74.628 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 205.601 -75.782 Td  ( in small span) Tj ET Q
+q 0.000 g  0 Tr BT 149.574 -64.782 Td  (small ) Tj ET Q
+q 0.000 g  0 Tr BT 163.616 -64.782 Td  (strikethrough) Tj ET 0.000 G   0.290 w 0 j 0 J  163.616 -63.628 m 194.601 -63.628 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 194.601 -64.782 Td  ( in small span) Tj ET Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 237.719 -75.782 Td  ( and then ) Tj ET Q
-q 0.000 g  0 Tr BT 265.131 -75.782 Td  (underline) Tj ET 0.000 G   0.350 w 0 j 0 J  265.131 -76.657 m 291.570 -76.657 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 291.570 -75.782 Td  ( but out of span again but ) Tj ET Q
-q 0.000 0.000 0.533 rg  0 Tr BT 364.482 -75.782 Td  (blue) Tj ET Q
-q 0.000 g  0 Tr BT 376.536 -75.782 Td  ( font and ) Tj ET Q
+q 0.000 g  0 Tr BT 226.719 -64.782 Td  ( and then ) Tj ET Q
+q 0.000 g  0 Tr BT 254.131 -64.782 Td  (underline) Tj ET 0.000 G   0.350 w 0 j 0 J  254.131 -65.657 m 280.570 -65.657 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 280.570 -64.782 Td  ( but out of span again but ) Tj ET Q
+q 0.000 0.000 0.533 rg  0 Tr BT 353.482 -64.782 Td  (blue) Tj ET Q
+q 0.000 g  0 Tr BT 365.536 -64.782 Td  ( font and ) Tj ET Q
 BT /F2 5.390 Tf ET
-q 0.000 g  0 Tr BT 403.171 -75.782 Td  (ACRONYM) Tj ET Q
+q 0.000 g  0 Tr BT 392.171 -64.782 Td  (ACRONYM) Tj ET Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 431.910 -75.782 Td  ( text) Tj ET Q
+q 0.000 g  0 Tr BT 420.910 -64.782 Td  ( text) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 64.520 -86.288 Td  (This is ) Tj ET Q
-q 0.000 g  0 Tr BT 85.135 -86.288 Td  (strikethrough) Tj ET 0.000 G   0.350 w 0 j 0 J  85.135 -84.898 m 122.466 -84.898 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 122.466 -86.288 Td  ( in block and ) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -75.288 Td  (This is ) Tj ET Q
+q 0.000 g  0 Tr BT 74.135 -75.288 Td  (strikethrough) Tj ET 0.000 G   0.350 w 0 j 0 J  74.135 -73.898 m 111.466 -73.898 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 111.466 -75.288 Td  ( in block and ) Tj ET Q
 BT /F1 8.190 Tf ET
-q 0.000 g  0 Tr BT 160.574 -86.288 Td  (big ) Tj ET Q
-q 0.000 g  0 Tr BT 173.088 -86.288 Td  (strikethrough) Tj ET 0.000 G   0.410 w 0 j 0 J  173.088 -84.662 m 216.765 -84.662 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 216.765 -86.288 Td  ( in big span) Tj ET Q
+q 0.000 g  0 Tr BT 149.574 -75.288 Td  (big ) Tj ET Q
+q 0.000 g  0 Tr BT 162.088 -75.288 Td  (strikethrough) Tj ET 0.000 G   0.410 w 0 j 0 J  162.088 -73.662 m 205.765 -73.662 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 205.765 -75.288 Td  ( in big span) Tj ET Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 254.759 -86.288 Td  ( and then ) Tj ET Q
-q 0.000 g  0 Tr BT 282.171 -86.288 Td  (underline) Tj ET 0.000 G   0.350 w 0 j 0 J  282.171 -87.163 m 308.610 -87.163 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 308.610 -86.288 Td  ( but out of span again but ) Tj ET Q
-q 0.000 0.000 0.533 rg  0 Tr BT 381.522 -86.288 Td  (blue) Tj ET Q
-q 0.000 g  0 Tr BT 393.576 -86.288 Td  ( font and ) Tj ET Q
+q 0.000 g  0 Tr BT 243.759 -75.288 Td  ( and then ) Tj ET Q
+q 0.000 g  0 Tr BT 271.171 -75.288 Td  (underline) Tj ET 0.000 G   0.350 w 0 j 0 J  271.171 -76.163 m 297.610 -76.163 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 297.610 -75.288 Td  ( but out of span again but ) Tj ET Q
+q 0.000 0.000 0.533 rg  0 Tr BT 370.522 -75.288 Td  (blue) Tj ET Q
+q 0.000 g  0 Tr BT 382.576 -75.288 Td  ( font and ) Tj ET Q
 BT /F2 5.390 Tf ET
-q 0.000 g  0 Tr BT 420.211 -86.288 Td  (ACRONYM) Tj ET Q
+q 0.000 g  0 Tr BT 409.211 -75.288 Td  (ACRONYM) Tj ET Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 448.950 -86.288 Td  ( text) Tj ET Q
+q 0.000 g  0 Tr BT 437.950 -75.288 Td  ( text) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 64.520 -96.319 Td  (This is reference) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -85.319 Td  (This is reference) Tj ET Q
 BT /F1 3.850 Tf ET
-q 0.000 g  0 Tr BT 111.168 -92.819 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 100.168 -81.819 Td  (32-47) Tj ET Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 120.150 -96.319 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 133.758 -96.319 Td  (underlined reference) Tj ET 0.000 G   0.350 w 0 j 0 J  133.758 -97.194 m 191.480 -97.194 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 109.150 -85.319 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 122.758 -85.319 Td  (underlined reference) Tj ET 0.000 G   0.350 w 0 j 0 J  122.758 -86.194 m 180.480 -86.194 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 3.850 Tf ET
-q 0.000 g  0 Tr BT 191.480 -92.819 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  191.480 -97.194 m 200.462 -97.194 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 180.480 -81.819 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  180.480 -86.194 m 189.462 -86.194 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 200.462 -96.319 Td  ( then reference) Tj ET Q
+q 0.000 g  0 Tr BT 189.462 -85.319 Td  ( then reference) Tj ET Q
 BT /F1 3.850 Tf ET
-q 0.000 g  0 Tr BT 242.049 -97.719 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 231.049 -86.719 Td  (32-47) Tj ET Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 251.031 -96.319 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 264.639 -96.319 Td  (underlined reference) Tj ET 0.000 G   0.350 w 0 j 0 J  264.639 -97.194 m 322.361 -97.194 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 240.031 -85.319 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 253.639 -85.319 Td  (underlined reference) Tj ET 0.000 G   0.350 w 0 j 0 J  253.639 -86.194 m 311.361 -86.194 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 3.850 Tf ET
-q 0.000 g  0 Tr BT 322.361 -97.719 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  322.361 -97.194 m 331.343 -97.194 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 311.361 -86.719 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  311.361 -86.194 m 320.343 -86.194 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 331.343 -96.319 Td  ( then ) Tj ET Q
-q 0.000 g  0 Tr BT 346.897 -96.319 Td  (Strikethrough reference) Tj ET 0.000 G   0.350 w 0 j 0 J  346.897 -94.929 m 413.180 -94.929 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 320.343 -85.319 Td  ( then ) Tj ET Q
+q 0.000 g  0 Tr BT 335.897 -85.319 Td  (Strikethrough reference) Tj ET 0.000 G   0.350 w 0 j 0 J  335.897 -83.929 m 402.180 -83.929 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 3.850 Tf ET
-q 0.000 g  0 Tr BT 413.180 -92.819 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  413.180 -94.929 m 422.162 -94.929 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 402.180 -81.819 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  402.180 -83.929 m 411.162 -83.929 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 7.000 Tf ET
-q 0.000 g  0 Tr BT 422.162 -96.319 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 435.770 -96.319 Td  (strikethrough reference) Tj ET 0.000 G   0.350 w 0 j 0 J  435.770 -94.929 m 500.884 -94.929 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 411.162 -85.319 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 424.770 -85.319 Td  (strikethrough reference) Tj ET 0.000 G   0.350 w 0 j 0 J  424.770 -83.929 m 489.884 -83.929 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 3.850 Tf ET
-q 0.000 g  0 Tr BT 500.884 -97.719 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  500.884 -94.929 m 509.866 -94.929 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 489.884 -86.719 Td  (32-47) Tj ET 0.000 G   0.350 w 0 j 0 J  489.884 -83.929 m 498.866 -83.929 l S  0.567 w 2 j 2 J  1.000 g  Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 64.520 -112.626 Td  (This tests ) Tj ET Q
-q 0.000 g  0 Tr BT 101.551 -112.626 Td  (underline) Tj ET 0.000 G   0.457 w 0 j 0 J  101.551 -113.767 m 136.035 -113.767 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 136.035 -112.626 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 153.784 -112.626 Td  (strikethrough) Tj ET 0.000 G   0.457 w 0 j 0 J  153.784 -110.813 m 202.474 -110.813 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 202.474 -112.626 Td  ( when they are ) Tj ET Q
-q 0.000 g  0 Tr BT 258.249 -112.626 Td  (used together) Tj ET 0.000 G   0.457 w 0 j 0 J  258.249 -113.767 m 307.186 -113.767 l S  0.567 w 2 j 2 J  1.000 g  0.000 G   0.457 w 0 j 0 J  258.249 -110.813 m 307.186 -110.813 l S  0.567 w 2 j 2 J  1.000 g  Q
-q 0.000 g  0 Tr BT 307.186 -112.626 Td  ( as they both use text-decoration) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -101.626 Td  (This tests ) Tj ET Q
+q 0.000 g  0 Tr BT 90.551 -101.626 Td  (underline) Tj ET 0.000 G   0.457 w 0 j 0 J  90.551 -102.767 m 125.035 -102.767 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 125.035 -101.626 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 142.784 -101.626 Td  (strikethrough) Tj ET 0.000 G   0.457 w 0 j 0 J  142.784 -99.813 m 191.474 -99.813 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 191.474 -101.626 Td  ( when they are ) Tj ET Q
+q 0.000 g  0 Tr BT 247.249 -101.626 Td  (used together) Tj ET 0.000 G   0.457 w 0 j 0 J  247.249 -102.767 m 296.186 -102.767 l S  0.567 w 2 j 2 J  1.000 g  0.000 G   0.457 w 0 j 0 J  247.249 -99.813 m 296.186 -99.813 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 296.186 -101.626 Td  ( as they both use text-decoration) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 64.520 -125.205 Td  (Repeated in small: This is reference) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -114.205 Td  (Repeated in small: This is reference) Tj ET Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 195.608 -120.640 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 184.608 -109.640 Td  (32-47) Tj ET Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 207.323 -125.205 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 225.072 -125.205 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  225.072 -126.346 m 300.358 -126.346 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 196.323 -114.205 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 214.072 -114.205 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  214.072 -115.346 m 289.358 -115.346 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 300.358 -120.640 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  300.358 -126.346 m 312.073 -126.346 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 289.358 -109.640 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  289.358 -115.346 m 301.073 -115.346 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 312.073 -125.205 Td  ( then reference) Tj ET Q
+q 0.000 g  0 Tr BT 301.073 -114.205 Td  ( then reference) Tj ET Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 366.315 -127.031 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 355.315 -116.031 Td  (32-47) Tj ET Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 378.030 -125.205 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 395.778 -125.205 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  395.778 -126.346 m 471.064 -126.346 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 367.030 -114.205 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 384.778 -114.205 Td  (underlined reference) Tj ET 0.000 G   0.457 w 0 j 0 J  384.778 -115.346 m 460.064 -115.346 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 5.021 Tf ET
-q 0.000 g  0 Tr BT 471.064 -127.031 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  471.064 -126.346 m 482.780 -126.346 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 460.064 -116.031 Td  (32-47) Tj ET 0.000 G   0.457 w 0 j 0 J  460.064 -115.346 m 471.780 -115.346 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 482.780 -125.205 Td  ( but out of span again but ) Tj ET Q
-q 0.000 0.000 0.533 rg  0 Tr BT 577.878 -125.205 Td  (blue) Tj ET Q
-q 0.000 g  0 Tr BT 593.600 -125.205 Td  ( font and ) Tj ET Q
+q 0.000 g  0 Tr BT 471.780 -114.205 Td  ( but out of span again but ) Tj ET Q
+q 0.000 0.000 0.533 rg  0 Tr BT 566.878 -114.205 Td  (blue) Tj ET Q
+q 0.000 g  0 Tr BT 582.600 -114.205 Td  ( font and ) Tj ET Q
 BT /F2 7.030 Tf ET
-q 0.000 g  0 Tr BT 628.339 -125.205 Td  (ACRONYM) Tj ET Q
+q 0.000 g  0 Tr BT 617.339 -114.205 Td  (ACRONYM) Tj ET Q
 BT /F1 9.130 Tf ET
-q 0.000 g  0 Tr BT 665.824 -125.205 Td  ( text) Tj ET Q
+q 0.000 g  0 Tr BT 654.824 -114.205 Td  ( text) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
 BT /F1 8.190 Tf ET
-q 0.000 g  0 Tr BT 64.520 -137.285 Td  (Repeated in BIG but with font-size set to 7pt by in-line css: This is reference) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -126.285 Td  (Repeated in BIG but with font-size set to 7pt by in-line css: This is reference) Tj ET Q
 BT /F1 4.505 Tf ET
-q 0.000 g  0 Tr BT 316.100 -133.190 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 305.100 -122.190 Td  (32-47) Tj ET Q
 BT /F1 8.190 Tf ET
-q 0.000 g  0 Tr BT 326.609 -137.285 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 342.530 -137.285 Td  (underlined reference) Tj ET 0.000 G   0.410 w 0 j 0 J  342.530 -138.309 m 410.065 -138.309 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 315.609 -126.285 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 331.530 -126.285 Td  (underlined reference) Tj ET 0.000 G   0.410 w 0 j 0 J  331.530 -127.309 m 399.065 -127.309 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 4.505 Tf ET
-q 0.000 g  0 Tr BT 410.065 -133.190 Td  (32-47) Tj ET 0.000 G   0.410 w 0 j 0 J  410.065 -138.309 m 420.574 -138.309 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 399.065 -122.190 Td  (32-47) Tj ET 0.000 G   0.410 w 0 j 0 J  399.065 -127.309 m 409.574 -127.309 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 8.190 Tf ET
-q 0.000 g  0 Tr BT 420.574 -137.285 Td  ( then reference) Tj ET Q
+q 0.000 g  0 Tr BT 409.574 -126.285 Td  ( then reference) Tj ET Q
 BT /F1 4.505 Tf ET
-q 0.000 g  0 Tr BT 469.231 -138.923 Td  (32-47) Tj ET Q
+q 0.000 g  0 Tr BT 458.231 -127.923 Td  (32-47) Tj ET Q
 BT /F1 8.190 Tf ET
-q 0.000 g  0 Tr BT 479.740 -137.285 Td  ( and ) Tj ET Q
-q 0.000 g  0 Tr BT 495.661 -137.285 Td  (underlined reference) Tj ET 0.000 G   0.410 w 0 j 0 J  495.661 -138.309 m 563.196 -138.309 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 468.740 -126.285 Td  ( and ) Tj ET Q
+q 0.000 g  0 Tr BT 484.661 -126.285 Td  (underlined reference) Tj ET 0.000 G   0.410 w 0 j 0 J  484.661 -127.309 m 552.196 -127.309 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 4.505 Tf ET
-q 0.000 g  0 Tr BT 563.196 -138.923 Td  (32-47) Tj ET 0.000 G   0.410 w 0 j 0 J  563.196 -138.309 m 573.705 -138.309 l S  0.567 w 2 j 2 J  1.000 g  Q
+q 0.000 g  0 Tr BT 552.196 -127.923 Td  (32-47) Tj ET 0.000 G   0.410 w 0 j 0 J  552.196 -127.309 m 562.705 -127.309 l S  0.567 w 2 j 2 J  1.000 g  Q
 BT /F1 8.190 Tf ET
-q 0.000 g  0 Tr BT 573.705 -137.285 Td  ( but out of span again but ) Tj ET Q
-q 0.000 0.000 0.533 rg  0 Tr BT 659.012 -137.285 Td  (blue) Tj ET Q
-q 0.000 g  0 Tr BT 673.115 -137.285 Td  ( font and ) Tj ET Q
+q 0.000 g  0 Tr BT 562.705 -126.285 Td  ( but out of span again but ) Tj ET Q
+q 0.000 0.000 0.533 rg  0 Tr BT 648.012 -126.285 Td  (blue) Tj ET Q
+q 0.000 g  0 Tr BT 662.115 -126.285 Td  ( font and ) Tj ET Q
 BT /F2 6.306 Tf ET
-q 0.000 g  0 Tr BT 704.278 -137.285 Td  (ACRONYM) Tj ET Q
+q 0.000 g  0 Tr BT 693.278 -126.285 Td  (ACRONYM) Tj ET Q
 BT /F1 8.190 Tf ET
-q 0.000 g  0 Tr BT 737.903 -137.285 Td  ( text) Tj ET Q
+q 0.000 g  0 Tr BT 726.903 -126.285 Td  ( text) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-BT 0.140 Tc ET
-BT 0.645 Tw ET
-q 0.000 g  0 Tr BT 64.520 -155.922 Td  (Sed bibendum. Nunc eleifend ornare velit. Sed consectetuer urna in erat. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos) Tj ET Q
-BT 0.073 Tc ET
-BT 0.349 Tw ET
-q 0.000 g  0 Tr BT 64.520 -170.552 Td  (hymenaeos. Mauris sodales semper metus. Maecenas justo libero, pretium at, malesuada eu, mollis et, arcu. Ut suscipit pede in nulla. Praesent elementum,) Tj ET Q
-BT 0.106 Tc ET
-BT 0.478 Tw ET
-q 0.000 g  0 Tr BT 64.520 -185.182 Td  (dolor ac fringilla posuere, elit libero rutrum massa, vel tincidunt dui tellus a ante. Sed aliquet euismod dolor. Vestibulum sed dui. Duis lobortis hendrerit) Tj ET Q
+BT 0.197 Tc ET
+BT 0.909 Tw ET
+q 0.000 g  0 Tr BT 53.520 -144.922 Td  (Sed bibendum. Nunc eleifend ornare velit. Sed consectetuer urna in erat. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos) Tj ET Q
+BT 0.026 Tc ET
+BT 0.126 Tw ET
+q 0.000 g  0 Tr BT 53.520 -159.552 Td  (hymenaeos. Mauris sodales semper metus. Maecenas justo libero, pretium at, malesuada eu, mollis et, arcu. Ut suscipit pede in nulla. Praesent elementum, dolor) Tj ET Q
+BT 0.024 Tc ET
+BT 0.109 Tw ET
+q 0.000 g  0 Tr BT 53.520 -174.182 Td  (ac fringilla posuere, elit libero rutrum massa, vel tincidunt dui tellus a ante. Sed aliquet euismod dolor. Vestibulum sed dui. Duis lobortis hendrerit quam. Donec) Tj ET Q
 BT 0 Tc ET
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 64.520 -199.812 Td  (quam. Donec tempus orci ut libero. Pellentesque suscipit malesuada nisi.) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -188.812 Td  (tempus orci ut libero. Pellentesque suscipit malesuada nisi.) Tj ET Q
 /GS1 gs
-BT 0.031 Tc ET
-BT 0.143 Tw ET
-q 0.000 g  0 Tr BT 64.520 -214.442 Td  (Praesent pharetra nulla in turpis. Sed ipsum nulla, sodales nec, vulputate in, scelerisque vitae, magna. Sed egestas justo nec ipsum. Nulla facilisi. Praesent sit) Tj ET Q
-BT 0.075 Tc ET
-BT 0.355 Tw ET
-q 0.000 g  0 Tr BT 64.520 -229.072 Td  (amet pede quis metus aliquet vulputate. Donec luctus. Cras euismod tellus vel leo. Cras tellus. Fusce aliquet. Curabitur tincidunt viverra ligula. Fusce eget) Tj ET Q
-BT 0.054 Tc ET
-BT 0.256 Tw ET
-q 0.000 g  0 Tr BT 64.520 -243.702 Td  (erat. Donec pede. Vestibulum id felis. Phasellus tincidunt ligula non pede. Morbi turpis. In vitae dui non erat placerat malesuada. Mauris adipiscing congue) Tj ET Q
+BT 0.085 Tc ET
+BT 0.396 Tw ET
+q 0.000 g  0 Tr BT 53.520 -203.442 Td  (Praesent pharetra nulla in turpis. Sed ipsum nulla, sodales nec, vulputate in, scelerisque vitae, magna. Sed egestas justo nec ipsum. Nulla facilisi. Praesent sit) Tj ET Q
+BT 0.045 Tc ET
+BT 0.210 Tw ET
+q 0.000 g  0 Tr BT 53.520 -218.072 Td  (amet pede quis metus aliquet vulputate. Donec luctus. Cras euismod tellus vel leo. Cras tellus. Fusce aliquet. Curabitur tincidunt viverra ligula. Fusce eget erat.) Tj ET Q
 BT 0 Tc ET
+BT 0.003 Tw ET
+q 0.000 g  0 Tr BT 53.520 -232.702 Td  (Donec pede. Vestibulum id felis. Phasellus tincidunt ligula non pede. Morbi turpis. In vitae dui non erat placerat malesuada. Mauris adipiscing congue ante. Proin) Tj ET Q
 BT 0 Tw ET
-q 0.000 g  0 Tr BT 64.520 -258.332 Td  (ante. Proin at erat. Aliquam mattis.) Tj ET Q
+q 0.000 g  0 Tr BT 53.520 -247.332 Td  (at erat. Aliquam mattis.) Tj ET Q
 /GS1 gs
 
 Q
@@ -1364,14 +1357,14 @@ Q
 endstream
 endobj
 7 0 obj
-<</Type /Annot /Subtype /Link /Rect [68.429 448.692 117.207 440.372] /NM (0002-0000) /M (D:20000101000000+00'00') /Border [0 0 0] /A <</S /URI /URI (https://example.com/dummy123456)>>
+<</Type /Annot /Subtype /Link /Rect [61.053 452.695 110.341 444.289] /NM (0002-0000) /M (D:20000101000000+00'00') /Border [0 0 0] /A <</S /URI /URI (https://example.com/dummy123456)>>
 >>
 endobj
 8 0 obj
-<</Type /Annot /Subtype /Link /Rect [68.429 423.867 117.207 415.547] /NM (0002-0001) /M (D:20000101000000+00'00') /Border [0 0 0] /Dest [1 0 R /XYZ 0 841.890 null]>>
+<</Type /Annot /Subtype /Link /Rect [61.053 427.611 110.341 419.204] /NM (0002-0001) /M (D:20000101000000+00'00') /Border [0 0 0] /Dest [1 0 R /XYZ 0 841.890 null]>>
 endobj
 9 0 obj
-<</Type /Annot /Subtype /Link /Rect [68.429 399.042 117.207 390.722] /NM (0002-0002) /M (D:20000101000000+00'00') /Border [0 0 0] /A <</S /URI /URI (http://www.pallcare.info)>>
+<</Type /Annot /Subtype /Link /Rect [61.053 402.526 110.341 394.119] /NM (0002-0002) /M (D:20000101000000+00'00') /Border [0 0 0] /A <</S /URI /URI (http://www.pallcare.info)>>
 >>
 endobj
 1 0 obj
@@ -2008,54 +2001,54 @@ endobj
 xref
 0 42
 0000000000 65535 f 
-0000042723 00000 n 
-0000118288 00000 n 
+0000042516 00000 n 
+0000118081 00000 n 
 0000000015 00000 n 
 0000000223 00000 n 
-0000012284 00000 n 
-0000012523 00000 n 
-0000042145 00000 n 
-0000042347 00000 n 
-0000042528 00000 n 
-0000042818 00000 n 
-0000042880 00000 n 
-0000042946 00000 n 
-0000043045 00000 n 
-0000043143 00000 n 
-0000043240 00000 n 
-0000043342 00000 n 
-0000043442 00000 n 
-0000043537 00000 n 
-0000095457 00000 n 
-0000116278 00000 n 
-0000116375 00000 n 
-0000116480 00000 n 
-0000116612 00000 n 
-0000116680 00000 n 
-0000116777 00000 n 
-0000116882 00000 n 
-0000117014 00000 n 
-0000117082 00000 n 
-0000117179 00000 n 
-0000117284 00000 n 
-0000117416 00000 n 
-0000117484 00000 n 
-0000117581 00000 n 
-0000117686 00000 n 
-0000117818 00000 n 
-0000117886 00000 n 
-0000117983 00000 n 
-0000118088 00000 n 
-0000118220 00000 n 
-0000118585 00000 n 
-0000118705 00000 n 
+0000012125 00000 n 
+0000012364 00000 n 
+0000041938 00000 n 
+0000042140 00000 n 
+0000042321 00000 n 
+0000042611 00000 n 
+0000042673 00000 n 
+0000042739 00000 n 
+0000042838 00000 n 
+0000042936 00000 n 
+0000043033 00000 n 
+0000043135 00000 n 
+0000043235 00000 n 
+0000043330 00000 n 
+0000095250 00000 n 
+0000116071 00000 n 
+0000116168 00000 n 
+0000116273 00000 n 
+0000116405 00000 n 
+0000116473 00000 n 
+0000116570 00000 n 
+0000116675 00000 n 
+0000116807 00000 n 
+0000116875 00000 n 
+0000116972 00000 n 
+0000117077 00000 n 
+0000117209 00000 n 
+0000117277 00000 n 
+0000117374 00000 n 
+0000117479 00000 n 
+0000117611 00000 n 
+0000117679 00000 n 
+0000117776 00000 n 
+0000117881 00000 n 
+0000118013 00000 n 
+0000118378 00000 n 
+0000118498 00000 n 
 trailer
 <<
 /Size 42
 /Root 41 0 R
 /Info 40 0 R
-/ID [<b76b831a5288ddc2347caa13afbe58ab> <b76b831a5288ddc2347caa13afbe58ab>]
+/ID [<30e812bb023eefe981039de1a1aa6be4> <30e812bb023eefe981039de1a1aa6be4>]
 >>
 startxref
-118815
+118608
 %%EOF

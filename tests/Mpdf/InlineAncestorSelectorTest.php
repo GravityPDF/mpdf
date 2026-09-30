@@ -117,7 +117,7 @@ class InlineAncestorSelectorTest extends TestCase
 	 */
 	public function testLeavesToTheLegacyEngineWhatItMatches($css, $html, $expected)
 	{
-		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html);
+		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssMode' => CssMode::LEGACY]);
 
 		$this->assertSame($expected, $colours['text']);
 	}
@@ -166,7 +166,8 @@ class InlineAncestorSelectorTest extends TestCase
 	public function testAppliesRulesMatchedThroughAnInlineAncestorAfterTheLegacyOnes()
 	{
 		$colours = $this->drawnColours(
-			'<style>.y b { color: #00f; } .x b { color: #f00; }</style><p class="x"><span class="y"><b>text</b></span></p>'
+			'<style>.y b { color: #00f; } .x b { color: #f00; }</style><p class="x"><span class="y"><b>text</b></span></p>',
+			['cssMode' => CssMode::LEGACY]
 		);
 
 		$this->assertSame(self::BLUE, $colours['text']);
