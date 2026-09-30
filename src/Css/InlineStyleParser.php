@@ -9,9 +9,15 @@ class InlineStyleParser
 	 */
 	private $normalizeProperties;
 
+	/**
+	 * @var StylesheetTokenizer
+	 */
+	private $tokenizer;
+
 	public function __construct(NormalizeProperties $normalizeProperties)
 	{
 		$this->normalizeProperties = $normalizeProperties;
+		$this->tokenizer = new StylesheetTokenizer();
 	}
 
 	/**
@@ -25,45 +31,39 @@ class InlineStyleParser
 	 */
 	public function parse($html)
 	{
-		$html = htmlspecialchars_decode($html); // mPDF 5.7.4 URLs
-		// mPDF 5.7.4 URLs
-		// Characters "(", ")", and ";" in url() e.g. background-image, cause problems parsing the CSS string
-		// URLencode ( and ), but change ";" to a code which can be converted back after parsing (so as not to confuse ;
-		// with a segment delimiter in the URI)
-		$html = $this->processUrlsInCss($html);
+		return $this->parseDeclarations($this->tokenizer->declarations(htmlspecialchars_decode($html)));
+	}
 
-		// Fix incomplete CSS code
-		$size = strlen($html) - 1;
-		if (substr($html, $size, 1) !== ';') {
-			$html .= ';';
-		}
-
-		// Make CSS[Name-of-the-class] = array(key => value)
-		$regexp = '|\\s*?(\\S+?):(.+?);|i';
-		preg_match_all($regexp, $html, $styleinfo);
-		$properties = $styleinfo[1];
-		$values = $styleinfo[2];
-
-		// Array-properties and Array-values must have the SAME SIZE!
+	/**
+	 * The properties a list of declarations sets, whether from a style attribute or a stylesheet's block
+	 *
+	 * @param string[][] $declarations Each [name, value], as StylesheetTokenizer::declarations() gives them
+	 * @return array Parsed CSS properties
+	 */
+	public function parseDeclarations(array $declarations)
+	{
 		$classproperties = [];
-		$properties_count = count($properties);
-		for ($i = 0; $i < $properties_count; $i++) {
+		foreach ($declarations as $declaration) {
+			$property = strtoupper(trim($declaration[0], " \t\n\r\0\x0B\f"));
+			$value = trim(preg_replace('/\s*!important/i', '', $this->processUrlsInCss($declaration[1])));
+
+			if (empty($property) || $value === '') {
+				continue;
+			}
 
 			// Ignores -webkit-gradient so doesn't override -moz-
-			if ((strtoupper($properties[$i]) === 'BACKGROUND-IMAGE' || strtoupper($properties[$i]) === 'BACKGROUND') && false !== stripos($values[$i], '-webkit-gradient')) {
+			if (($property === 'BACKGROUND-IMAGE' || $property === 'BACKGROUND') && false !== stripos($value, '-webkit-gradient')) {
 				continue;
 			}
 
-			// Dropped before it can replace an earlier declaration of the property in the same attribute
-			if (!$this->normalizeProperties->canParse(strtoupper($properties[$i]), $values[$i])) {
+			// Dropped before it can replace an earlier declaration of the property in the same list
+			if (!$this->normalizeProperties->canParse($property, $value)) {
 				continue;
 			}
 
-			$values[$i] = str_replace('%ZZ', ';', $values[$i]); // mPDF 5.7.4 URLs
 			// A repeated property moves to its last place, so it is expanded after a shorthand written before it
-			$property = strtoupper($properties[$i]);
 			unset($classproperties[$property]);
-			$classproperties[$property] = trim(preg_replace('/\s*!important/i', '', $values[$i]));
+			$classproperties[$property] = $value;
 		}
 
 		return $this->normalizeProperties->normalize($classproperties);
@@ -74,8 +74,7 @@ class InlineStyleParser
 	 *
 	 * The URL is read as CSS reads it: in either quote, with the other quote allowed inside, or unquoted, without the
 	 * whitespace around it. A backslash before a quote, a parenthesis or whitespace is dropped. Other backslashes
-	 * are kept, as a Windows path is full of them. Parentheses and braces are percent-encoded, and ";" becomes the
-	 * placeholder %ZZ, which the caller turns back once the declarations are split.
+	 * are kept, as a Windows path is full of them. Parentheses and braces are percent-encoded.
 	 *
 	 * @param string $css CSS string containing url() references
 	 * @return string CSS string with processed URLs
@@ -93,7 +92,7 @@ class InlineStyleParser
 				$url = isset($m[3]) ? rtrim($m[3]) : (isset($m[2]) ? $m[2] : $m[1]);
 				$url = preg_replace('/\\\\(["\'()\s])/', '$1', $url);
 
-				return "url('" . str_replace(['(', ')', '{', '}', ';'], ['%28', '%29', '%7B', '%7D', '%ZZ'], $url) . "')";
+				return "url('" . str_replace(['(', ')', '{', '}'], ['%28', '%29', '%7B', '%7D'], $url) . "')";
 			},
 			$css
 		);

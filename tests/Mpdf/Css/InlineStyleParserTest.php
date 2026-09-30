@@ -64,14 +64,44 @@ class InlineStyleParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals('image.png', $result['BACKGROUND-IMAGE']);
 	}
 
-	public function testProcessUrls_WithParenthesesAndSemicolons()
+	/**
+	 * A style attribute splits into declarations as a stylesheet's block does
+	 *
+	 * @dataProvider declarationLists
+	 *
+	 * @param string $style
+	 * @param array $expected
+	 */
+	public function testParse_SplitsDeclarationsAsABlock($style, array $expected)
 	{
-		$css = 'background: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\'%3E%3C/svg%3E");';
+		$this->assertSame($expected, $this->inlineStyleParser->parse($style));
+	}
 
-		$result = $this->inlineStyleParser->processUrlsInCss($css);
-		
-		$this->assertStringContainsString('svg+xml%ZZ', $result);
-		$this->assertStringNotContainsString('svg+xml;', $result);
+	/**
+	 * Style attributes, and the properties each gives
+	 *
+	 * @return array[]
+	 */
+	public function declarationLists()
+	{
+		return [
+			'a semicolon in a string' => ["font-family: 'x;color:#f00;y', monospace; color: #00f", ['FONT-FAMILY' => 'monospace', 'COLOR' => '#00f']],
+			'a semicolon in an unquoted url()' => ['background-image: url(a;b.png); color: #00f', ['BACKGROUND-IMAGE' => 'a;b.png', 'COLOR' => '#00f']],
+			'a value across lines' => ["color:\n#00f", ['COLOR' => '#00f']],
+			'a space before the colon' => ['color : #00f', ['COLOR' => '#00f']],
+			'escaped quotes as HTML entities' => ['font-family: &quot;a;b&quot;, monospace; color: #00f', ['FONT-FAMILY' => 'monospace', 'COLOR' => '#00f']],
+		];
+	}
+
+	/**
+	 * A semicolon in a url() is kept, and the declaration after it still applies
+	 */
+	public function testParse_WithASemicolonInAUrl()
+	{
+		$result = $this->inlineStyleParser->parse('background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\'%3E%3C/svg%3E"); color: #00f');
+
+		$this->assertSame('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\'%3E%3C/svg%3E', $result['BACKGROUND-IMAGE']);
+		$this->assertSame('#00f', $result['COLOR']);
 	}
 	
 	/**
@@ -109,15 +139,15 @@ class InlineStyleParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'spaces and parentheses' => ['url("sub dir/im (1).png")', "url('sub dir/im %281%29.png')"],
 			'whitespace around a quoted url' => ['url(  "a.png"  )', "url('a.png')"],
 			'whitespace around an unquoted url' => ["url(\n  a.png\t)", "url('a.png')"],
-			'semicolon and braces' => ["url('data:image/svg+xml;utf8,<svg><style>p{}</style></svg>')", "url('data:image/svg+xml%ZZutf8,<svg><style>p%7B%7D</style></svg>')"],
+			'semicolon and braces' => ["url('data:image/svg+xml;utf8,<svg><style>p{}</style></svg>')", "url('data:image/svg+xml;utf8,<svg><style>p%7B%7D</style></svg>')"],
 			'escaped quote' => ['url("a\\"b.png")', "url('a\"b.png')"],
 			'escaped parenthesis, unquoted' => ['url(a\\(1\\).png)', "url('a%281%29.png')"],
 			'escaped space, unquoted' => ['url(a\\ b.png)', "url('a b.png')"],
 			'Windows path' => ['url("D:\\a\\mpdf\\data\\img (1).png")', "url('D:\\a\\mpdf\\data\\img %281%29.png')"],
 			'two urls' => ['url(a.png), url( "b c.png" )', "url('a.png'), url('b c.png')"],
 			'upper case' => ['URL(a.png)', "url('a.png')"],
-			'long quoted data URI' => ['url("data:image/png;base64,' . $long . '")', "url('data:image/png%ZZbase64," . $long . "')"],
-			'long unquoted data URI' => ['url( data:image/png;base64,' . $long . ' )', "url('data:image/png%ZZbase64," . $long . "')"],
+			'long quoted data URI' => ['url("data:image/png;base64,' . $long . '")', "url('data:image/png;base64," . $long . "')"],
+			'long unquoted data URI' => ['url( data:image/png;base64,' . $long . ' )', "url('data:image/png;base64," . $long . "')"],
 		];
 	}
 

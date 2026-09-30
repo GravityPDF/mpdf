@@ -14,6 +14,11 @@ use Mpdf\AssetFetcher;
 class CssParser
 {
 	/**
+	 * Whitespace, each character of which is read as a space in a selector or declaration
+	 */
+	const WHITESPACE = '/\s/';
+
+	/**
 	 * @var Mpdf
 	 */
 	private $mpdf;
@@ -29,9 +34,9 @@ class CssParser
 	private $mediaQueryProcessor;
 
 	/**
-	 * @var AtRuleProcessor
+	 * @var StylesheetTokenizer
 	 */
-	private $atRuleProcessor;
+	private $tokenizer;
 
 	/**
 	 * @var CommentParser
@@ -138,7 +143,7 @@ class CssParser
 		$this->normalizeProperties = new NormalizeProperties($mpdf, $sizeConverter, $colorConverter);
 		$this->mediaQueryProcessor = new MediaQueryProcessor($mpdf, $sizeConverter);
 		$this->cssLoader = new CssLoader($mpdf, $assetFetcher, $cache, $this->mediaQueryProcessor);
-		$this->atRuleProcessor = new AtRuleProcessor($this->mediaQueryProcessor);
+		$this->tokenizer = new StylesheetTokenizer();
 		$this->commentParser = new CommentParser();
 		$this->inlineStyleParser = new InlineStyleParser($this->normalizeProperties);
 		$this->selectorParser = new SelectorParser($mpdf);
@@ -159,7 +164,7 @@ class CssParser
 		$this->compiledRules = [];
 
 		$ind = 0;
-		$css = '';
+		$stylesheets = [];
 
 		$html = $this->mediaQueryProcessor->filterByMediaQuery($html, '/<style[^>]*media=["\']([^"\'>]*)["\'].*?<\/style>/is');
 		$html = $this->mediaQueryProcessor->filterByMediaQuery($html, '/<link[^>]*media=["\']([^"\'>]*)["\'].*?>/is');
@@ -177,7 +182,7 @@ class CssParser
 
 			$stylesheetCss = $this->cssLoader->loadStylesheet($path);
 			if ($stylesheetCss) {
-				$css .= $this->cssLoader->processExternalCssImports($stylesheetCss, $path, $externalCss, $externalCssCount);
+				$stylesheets[] = $this->cssLoader->processExternalCssImports($stylesheetCss, $path, $externalCss, $externalCssCount);
 			}
 
 			$externalCssCount--;
@@ -185,19 +190,16 @@ class CssParser
 		}
 
 		// CSS as <style> in HTML document
-		$regexp = '/<style.*?>(.*?)<\/style>/si';
-		if (preg_match_all($regexp, $html, $cssBlock)) {
-			$css .= ' ' . $this->cssLoader->resolveBackgroundUrls(implode(' ', $cssBlock[1]));
+		if (preg_match_all('/<style.*?>(.*?)<\/style>/si', $html, $cssBlock)) {
+			foreach ($cssBlock[1] as $css) {
+				$stylesheets[] = $this->cssLoader->resolveBackgroundUrls($css);
+			}
 		}
 
-		$css = preg_replace('|/\*.*?\*/|s', ' ', $css);
-		$css = preg_replace('/(<\!\-\-|\-\->)/s', ' ', $css);
-		$css = $this->atRuleProcessor->process($css);
-		$css = preg_replace('/[\s\n\r\t\f]/s', ' ', $css);
-		$css = $this->cssLoader->processDataUriImages($css);
-		$css = $this->inlineStyleParser->processUrlsInCss($css);
-
-		$this->processCssString($css);
+		// Each is read on its own, so a block or comment one leaves open ends with it
+		foreach ($stylesheets as $css) {
+			$this->processCssString($this->tokenizer->removeComments($css));
+		}
 
 		// Remove CSS (tags and content), if any (it can be <style> or <style type="txt/css">)
 		$html = preg_replace('/<style.*?>(.*?)<\/style>/si', '', $html);
@@ -260,19 +262,51 @@ class CssParser
 	}
 
 	/**
-	 * @param string $css
+	 * Reads each rule in a list of rules, unwrapping the @media blocks that match, and @supports and @layer blocks.
+	 *
+	 * An @supports condition is taken to pass, as its rules are unwrapped, so an @supports not block, the fallback for
+	 * engines without a feature, is left out. Every other at-rule is left out, @page rules apart.
+	 *
+	 * @param string $css A stylesheet, or the content of an at-rule's block, with its comments removed
 	 * @return void
 	 */
 	private function processCssString($css)
 	{
-		preg_match_all('/(.*?)\{(.*?)\}/', $css, $styles);
-		$count = count($styles[1]);
-		for ($i = 0; $i < $count; $i++) {
-			$classProperties = $this->parseCssProperties($styles[2][$i]);
+		foreach ($this->tokenizer->rules($css) as $rule) {
+			list($name, $prelude, $block) = $rule;
 
-			foreach ($this->selectorCompiler->splitList($styles[1][$i]) as $selector) {
-				$this->processCssSelector($selector, $classProperties);
+			if ($block === null) {
+				continue;
 			}
+
+			if ($name === null || $name === 'page') {
+				$this->processRule($name === null ? $prelude : '@page ' . $prelude, $block);
+			} elseif (($name === 'media' && $this->mediaQueryProcessor->matches($prelude))
+				|| ($name === 'supports' && !preg_match('/^not\b/i', $prelude))
+				|| $name === 'layer'
+			) {
+				$this->processCssString($block);
+			}
+		}
+	}
+
+	/**
+	 * Stores the declarations of a rule under each selector in its list
+	 *
+	 * @param string $selectors
+	 * @param string $declarations
+	 * @return void
+	 */
+	private function processRule($selectors, $declarations)
+	{
+		$classProperties = $this->parseCssProperties($declarations);
+
+		if (strpbrk($selectors, "\t\n\r\f\v") !== false) {
+			$selectors = preg_replace(self::WHITESPACE, ' ', $selectors);
+		}
+
+		foreach ($this->selectorCompiler->splitList($selectors) as $selector) {
+			$this->processCssSelector($selector, $classProperties);
 		}
 	}
 
@@ -428,50 +462,24 @@ class CssParser
 	/**
 	 * Parse CSS property string into an array.
 	 *
-	 * @param string $rawStyles CSS style string (e.g. "color: red; font-size: 12px")
+	 * @param string $rawStyles The declarations of a block, with its comments removed (e.g. "color: red; font-size: 12px")
 	 * @return array Associative array of CSS properties
 	 */
 	public function parseCssProperties($rawStyles)
 	{
-		$classProperties = [];
-		$styles = explode(';', trim($rawStyles));
-
-		foreach ($styles as $style) {
-			if (empty(trim($style))) {
-				continue;
+		$declarations = $this->tokenizer->declarations($rawStyles);
+		foreach ($declarations as &$declaration) {
+			if (strpbrk($declaration[1], "\t\n\r\f\v") !== false) {
+				$declaration[1] = preg_replace(self::WHITESPACE, ' ', $declaration[1]);
 			}
 
-			// Changed to allow style="background: url('http://www.bpm1.com/bg.jpg')"
-			$tmp = explode(':', $style, 2);
-			$property = strtoupper(trim($tmp[0]));
-			$value = isset($tmp[1]) ? $tmp[1] : '';
-
-			$value = str_replace('%ZZ', ';', $value); // restore URL placeholder
-			$value = preg_replace('/\s*!important/i', '', $value);
-			$value = trim($value);
-
-			if (empty($property) || strlen($value) === 0) {
-				continue;
+			if (stripos($declaration[1], 'url(data:') !== false) {
+				$declaration[1] = $this->cssLoader->processDataUriImages($declaration[1]);
 			}
-
-			// Ignores -webkit-gradient so doesn't override -moz-
-			if (($property === 'BACKGROUND-IMAGE' || $property === 'BACKGROUND') &&
-				stripos($value, '-webkit-gradient') !== false
-			) {
-				continue;
-			}
-
-			// Dropped before it can replace an earlier declaration of the property in the same block
-			if (!$this->normalizeProperties->canParse($property, $value)) {
-				continue;
-			}
-
-			// A repeated property moves to its last place, so it is expanded after a shorthand written before it
-			unset($classProperties[$property]);
-			$classProperties[$property] = $value;
 		}
+		unset($declaration);
 
-		return $this->normalizeProperties->normalize($classProperties);
+		return $this->inlineStyleParser->parseDeclarations($declarations);
 	}
 
 	/**

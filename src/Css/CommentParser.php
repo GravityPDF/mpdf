@@ -21,10 +21,11 @@ class CommentParser
 	}
 
 	/**
-	 * Remove HTML and CSS comments from style blocks.
+	 * Remove the HTML comment markers from style blocks.
 	 *
-	 * Removes both HTML comments (<!-- -->) and CSS comments from
-	 * <style> tag contents while preserving the structure.
+	 * Replaces each <!-- and --> in <style> tag contents with a space, so removeHtmlComments() does not take the
+	 * stylesheet for a comment. CSS comments are left for StylesheetTokenizer::removeComments(), which knows a comment
+	 * marker inside a string is not one.
 	 *
 	 * @param string $html HTML content with style tags
 	 * @return string HTML with cleaned style blocks
@@ -37,8 +38,7 @@ class CommentParser
 		}
 
 		foreach ($m[1] as $style) {
-			$sub = str_replace(['<!--', '-->'], ' ', $style);
-			$sub = '>' . preg_replace('|/\*.*?\*/|s', ' ', $sub) . '</style>';
+			$sub = '>' . str_replace(['<!--', '-->'], ' ', $style) . '</style>';
 			$html = str_replace('>' . $style . '</style>', $sub, $html);
 		}
 

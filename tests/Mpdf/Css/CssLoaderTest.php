@@ -110,6 +110,47 @@ class CssLoaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Only an @import among a stylesheet's rules is loaded: not one in a comment, a string or a block, and not one
+	 * after a block left open
+	 */
+	public function testExtractExternalStylesheetUrlsReadsOnlyImportRules()
+	{
+		$html = '<style>
+			/* @import url(commented.css); */
+			@import url(https://fonts.example/css2?family=Inter:wght@300;400&display=swap);
+			p { font-family: "@import url(string.css);"; }
+			@media print { @import url(nested.css); }
+			@import url(after.css);
+		</style>
+		<style>h1 { color: red</style>
+		<style>@import url(next.css);</style>';
+
+		$this->assertSame(
+			['https://fonts.example/css2?family=Inter:wght@300;400&display=swap', 'after.css', 'next.css'],
+			$this->cssLoader->extractExternalStylesheetUrls($html)
+		);
+	}
+
+	/**
+	 * An @import in a loaded stylesheet is queued relative to that stylesheet when its media query list matches, in
+	 * either form, and not when it is in a comment
+	 */
+	public function testProcessExternalCssImportsSkipsACommentedImport()
+	{
+		$externalCss = [];
+		$count = 0;
+
+		$this->cssLoader->processExternalCssImports(
+			'/* @import "old.css"; */ @import "base.css"; p { color: red; }',
+			'http://example.com/css/main.css',
+			$externalCss,
+			$count
+		);
+
+		$this->assertSame(['http://example.com/css/base.css'], $externalCss);
+	}
+
+	/**
 	 * An @import in a loaded stylesheet is queued relative to that stylesheet when its media query list matches, in
 	 * either form
 	 */
