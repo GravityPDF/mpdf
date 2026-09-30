@@ -45,6 +45,21 @@ class NormalizeProperties
 	private $colorConverter;
 
 	/**
+	 * The keywords every property takes, which a shorthand takes only as its whole value
+	 */
+	const CSS_WIDE_KEYWORDS = ['inherit', 'initial', 'unset', 'revert'];
+
+	/**
+	 * An unsigned number, as a regex fragment
+	 */
+	const NUMBER = '(\d+\.?\d*|\.\d+)';
+
+	/**
+	 * The background-repeat keywords that may be given in pairs, one for each axis
+	 */
+	const REPEAT_KEYWORDS = ['repeat', 'no-repeat', 'space', 'round'];
+
+	/**
 	 * @var array
 	 */
 	private $properties = [];
@@ -395,31 +410,16 @@ class NormalizeProperties
 	 */
 	protected function processBorderProperty($propertyKey, $value)
 	{
-		switch ($propertyKey) {
-			case 'BORDER':
-				$value = $value !== '1' ? $this->normalizeBorderString($value) : '1px solid #000000';
+		$value = $propertyKey === 'BORDER' && $value === '1' ? '1px solid #000000' : $this->normalizeBorderString($value);
 
-				$this->properties['BORDER-TOP'] = $value;
-				$this->properties['BORDER-RIGHT'] = $value;
-				$this->properties['BORDER-BOTTOM'] = $value;
-				$this->properties['BORDER-LEFT'] = $value;
-				break;
+		// A value that is not a border is dropped, as a browser drops it
+		if ($value === false) {
+			return;
+		}
 
-			case 'BORDER-TOP':
-				$this->properties['BORDER-TOP'] = $this->normalizeBorderString($value);
-				break;
-
-			case 'BORDER-RIGHT':
-				$this->properties['BORDER-RIGHT'] = $this->normalizeBorderString($value);
-				break;
-
-			case 'BORDER-BOTTOM':
-				$this->properties['BORDER-BOTTOM'] = $this->normalizeBorderString($value);
-				break;
-
-			case 'BORDER-LEFT':
-				$this->properties['BORDER-LEFT'] = $this->normalizeBorderString($value);
-				break;
+		$sides = $propertyKey === 'BORDER' ? ['BORDER-TOP', 'BORDER-RIGHT', 'BORDER-BOTTOM', 'BORDER-LEFT'] : [$propertyKey];
+		foreach ($sides as $side) {
+			$this->properties[$side] = $value;
 		}
 	}
 
@@ -480,58 +480,168 @@ class NormalizeProperties
 	/**
 	 * Parse CSS background shorthand property.
 	 *
-	 * Extracts background color, image, repeat, and position from the
-	 * background shorthand property. Supports  gradients and url() images.
+	 * Reads the colour, image, position with an optional "/ size", repeat, attachment and boxes of each
+	 * comma-separated layer, in any order. Only the first layer is drawn, over the colour, which only the
+	 * last layer may carry.
 	 *
 	 * @param string $s Background property value
-	 * @return array Array with keys 'c' (color), 'i' (image), 'r' (repeat), 'p' (position)
+	 * @return array|false The parts given, keyed 'c' (color), 'i' (image), 'r' (repeat), 'p' (position),
+	 *                     's' (size), 'o' (origin) and 'k' (clip), or false when the value is not a background
 	 */
 	protected function parseCssBackground($s)
 	{
-		$background = [
-			'c' => false, // color
-			'i' => false, // image
-			'r' => false, // repeat
-			'p' => false, // position
-		];
-
-		if (preg_match('/(-moz-|-webkit-|-o-)*(repeating-)*(linear|radial)-gradient\(.*\)/i', $s, $m)) {
-			$background['i'] = $m[0];
-			return $background;
+		$layers = [[]];
+		foreach ($this->splitComponents($s) as $component) {
+			if ($component === ',') {
+				$layers[] = [];
+			} else {
+				$layers[count($layers) - 1][] = $component;
+			}
 		}
 
-		if (preg_match('/url\(/i', $s)) {
-			// If color, set and strip it off
-			if (preg_match('/^\s*(#[0-9a-fA-F]{3,8}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})\s+(url\(.*)/i', $s, $m)) {
-				$background['c'] = strtolower($m[1]);
-				$s = $m[3];
+		// A CSS-wide keyword gives the initial value, no background, until the keywords are resolved
+		if (count($layers) === 1 && count($layers[0]) === 1 && in_array(strtolower($layers[0][0]), self::CSS_WIDE_KEYWORDS, true)) {
+			return [];
+		}
+
+		$last = count($layers) - 1;
+		foreach ($layers as $n => $components) {
+			$layers[$n] = $this->parseBackgroundLayer($components);
+			if ($layers[$n] === false || ($n !== $last && isset($layers[$n]['c']))) {
+				return false;
+			}
+		}
+
+		if (isset($layers[$last]['c'])) {
+			$layers[0]['c'] = $layers[$last]['c'];
+		}
+
+		return $layers[0];
+	}
+
+	/**
+	 * Parse one layer of the background shorthand, whose parts may come in any order and each at most once.
+	 * A single box keyword sets both the origin and the clip.
+	 *
+	 * @param string[] $components
+	 * @return array|false The parts given, keyed as parseCssBackground() returns them, or false when a component is none of them
+	 */
+	private function parseBackgroundLayer(array $components)
+	{
+		$layer = [];
+		$count = count($components);
+
+		for ($i = 0; $i < $count; $i++) {
+			$keyword = strtolower($components[$i]);
+
+			if (preg_match('/^url\(\s*([\'"]?)(.*)\1\s*\)$/is', $components[$i], $m)) {
+				$kind = 'i';
+				$value = $m[2];
+			} elseif (preg_match('/^(?:-(?!(?:moz|webkit|o)-)[a-z]+-)?((-moz-|-webkit-|-o-)?(repeating-)?(linear|radial)-gradient\(.*\))$/is', $components[$i], $m)) {
+				// Drops a vendor prefix other than -moz-, -webkit- and -o-, which the gradient parser reads for their legacy angles
+				$kind = 'i';
+				$value = $m[1];
+			} elseif ($keyword === 'none') {
+				$kind = 'i';
+				$value = '';
+			} elseif ($this->isBackgroundPosition($keyword)) {
+				$kind = 'p';
+				$bits = [$keyword];
+				while (count($bits) < 4 && $i + 1 < $count && $this->isBackgroundPosition(strtolower($components[$i + 1]))) {
+					$bits[] = strtolower($components[++$i]);
+				}
+				// normalizeBackgroundPosition() reads one or two values; for the three- and four-value forms the position is left out
+				$value = $this->normalizeBackgroundPosition($bits);
+
+				if ($i + 1 < $count && $components[$i + 1] === '/') {
+					$i += 2;
+					$size = isset($components[$i]) ? [strtolower($components[$i])] : [];
+					if ($size !== ['cover'] && $size !== ['contain']) {
+						$sizeLength = '/^(auto|' . self::NUMBER . '([a-z]+|%)?)$/';
+						if (!$size || !preg_match($sizeLength, $size[0])) {
+							return false;
+						}
+						if ($i + 1 < $count && preg_match($sizeLength, strtolower($components[$i + 1]))) {
+							$size[] = strtolower($components[++$i]);
+						}
+					}
+					$layer['s'] = implode(' ', $size);
+				}
+			} elseif ($keyword === 'repeat-x' || $keyword === 'repeat-y') {
+				$kind = 'r';
+				$value = $keyword;
+			} elseif (in_array($keyword, self::REPEAT_KEYWORDS, true)) {
+				$kind = 'r';
+				$value = $keyword;
+				if ($i + 1 < $count && in_array(strtolower($components[$i + 1]), self::REPEAT_KEYWORDS, true)) {
+					$i++;
+				}
+			} elseif (in_array($keyword, ['scroll', 'fixed', 'local'], true)) {
+				$kind = 'a';
+				$value = $keyword;
+			} elseif (in_array($keyword, ['border-box', 'padding-box', 'content-box'], true)) {
+				$kind = isset($layer['o']) ? 'k' : 'o';
+				$value = $keyword;
+			} elseif ($this->isColorComponent($keyword)) {
+				$kind = 'c';
+				$value = $keyword;
+			} else {
+				return false;
 			}
 
-			if (preg_match('/url\([\'\"]{0,1}(.*?)[\'\"]{0,1}\)\s*(.*)/i', $s, $m)) {
-				$background['i'] = $m[1];
-				$s = strtolower($m[2]);
-				if (preg_match('/(repeat-x|repeat-y|no-repeat|repeat)/', $s, $m)) {
-					$background['r'] = $m[1];
-				}
-
-				// Remove repeat, attachment (discarded) and also any inherit
-				$s = preg_replace('/(repeat-x|repeat-y|no-repeat|repeat|scroll|fixed|inherit)/', '', $s);
-				$bits = preg_split('/\s+/', trim($s));
-
-				$normalizedPosition = $this->normalizeBackgroundPosition($bits);
-				if ($normalizedPosition !== false) {
-					$background['p'] = $normalizedPosition;
-				}
+			if (isset($layer[$kind])) {
+				return false;
 			}
 
-			return $background;
+			$layer[$kind] = $value;
 		}
 
-		if (preg_match('/^\s*(#[0-9a-fA-F]{3,8}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})/i', $s, $m)) {
-			$background['c'] = strtolower($m[1]);
+		if (count($layer) === 0) {
+			return false;
 		}
 
-		return $background;
+		if (isset($layer['o']) && !isset($layer['k'])) {
+			$layer['k'] = $layer['o'];
+		}
+
+		return $layer;
+	}
+
+	/**
+	 * Whether a background component is part of a position: a keyword, a length or a percentage
+	 *
+	 * @param string $component Lowercased component
+	 * @return bool
+	 */
+	private function isBackgroundPosition($component)
+	{
+		return preg_match('/^(left|right|top|bottom|center|[+-]?' . self::NUMBER . '([a-z]+|%)?)$/', $component) === 1;
+	}
+
+	/**
+	 * Whether a component of a shorthand is a colour
+	 *
+	 * @param string $component Lowercased component
+	 * @return bool
+	 */
+	private function isColorComponent($component)
+	{
+		return $component === 'transparent' || $component === 'currentcolor' || $this->colorConverter->isColor($component);
+	}
+
+	/**
+	 * Splits a shorthand value into its components at whitespace, keeping each function call and quoted
+	 * string whole. A comma or slash outside them is a component of its own.
+	 *
+	 * @param string $value
+	 * @return string[]
+	 */
+	private function splitComponents($value)
+	{
+		// Possessive, so an unclosed parenthesis fails at once rather than backtracking through every split
+		preg_match_all('/[,\/]|(?:[^\s,\/()"\']++|"[^"]*+"|\'[^\']*+\'|(\((?:[^()"\']++|"[^"]*+"|\'[^\']*+\'|(?1))*+\)))++/', $value, $m);
+
+		return $m[0];
 	}
 
 	/**
@@ -755,96 +865,62 @@ class NormalizeProperties
 	/**
 	 * Parse and normalize border shorthand property.
 	 *
-	 * Converts border shorthand syntax into standardized "width style color" format.
-	 * Handles various input formats and orders.
+	 * Converts border shorthand syntax, with its width, style and colour in any order, into the
+	 * "width style color" format the border longhands are merged into.
 	 *
 	 * @param string $bd Border property value
-	 * @return string Normalized border string in format "width style color"
+	 * @return string|false Normalized border string, or false when the value is not a border
 	 */
 	protected function normalizeBorderString($bd)
 	{
-		preg_match_all("/\((.*?)\)/", $bd, $m);
-		foreach ($m[1] as $i => $value) {
-			$sub = str_replace(' ', '', $m[1][$i]);
-			$bd = str_replace($m[1][$i], $sub, $bd);
+		$parts = $this->parseBorderParts($this->splitComponents($bd));
+		if ($parts === false) {
+			return false;
 		}
 
-		$prop = preg_split('/\s+/', trim($bd));
-		if (count($prop) > 3) {
-			return '';
-		}
-
-		$parts = $this->parseBorderParts($prop);
-		$w = $parts['w'];
-		$s = $parts['s'];
-		$c = $parts['c'];
-
-		$s = strtolower($s);
-
-		return $w . ' ' . $s . ' ' . $c;
+		return $parts['w'] . ' ' . $parts['s'] . ' ' . $parts['c'];
 	}
 
 	/**
 	 * Parse border property parts (width, style, color).
 	 *
-	 * Helper method for normalizeBorderString to determine width, style, and color
-	 * from split border property string.
+	 * Each part may come in any position and at most once. A part left out takes its initial value. A CSS-wide
+	 * keyword gives the initial value of all three until the keywords are resolved.
 	 *
-	 * @param array $prop Split border property string
-	 * @return array Array containing 'w' (width), 's' (style), 'c' (color)
+	 * @param string[] $prop Components of the border property value
+	 * @return array|false Array containing 'w' (width), 's' (style), 'c' (color), or false when a component is none of them
 	 */
 	protected function parseBorderParts($prop)
 	{
-		$width = 'medium';
-		$color = '#000000';
-		$style = 'none';
+		$parts = [];
 
-		switch (count($prop)) {
-			case 1:
-				if (in_array($prop[0], $this->mpdf->borderstyles, true) || $prop[0] === 'none' || $prop[0] === 'hidden') {
-					$style = $prop[0];
-				} elseif (is_array($this->colorConverter->convert($prop[0], $this->mpdf->PDFAXwarnings))) {
-					$color = $prop[0];
-				} else {
-					$width = $prop[0];
-				}
-				break;
-
-			case 2:
-				if (in_array($prop[1], $this->mpdf->borderstyles, true) || $prop[1] === 'none' || $prop[1] === 'hidden') {
-					$width = $prop[0];
-					$style = $prop[1];
-				} elseif (in_array($prop[0], $this->mpdf->borderstyles, true) || $prop[0] === 'none' || $prop[0] === 'hidden') {
-					$style = $prop[0];
-					$color = $prop[1];
-				} else {
-					$width = $prop[0];
-					$color = $prop[1];
-				}
-				break;
-
-			case 3:
-				if (0 === strpos($prop[0], '#')) {
-					$color = $prop[0];
-					$width = $prop[1];
-					$style = $prop[2];
-				} elseif (substr($prop[0], 1, 1) === '#') {
-					$style = $prop[0];
-					$color = $prop[1];
-					$width = $prop[2];
-				} elseif (in_array($prop[0], $this->mpdf->borderstyles) || $prop[0] === 'none' || $prop[0] === 'hidden') {
-					$style = $prop[0];
-					$width = $prop[1];
-					$color = $prop[2];
-				} else {
-					$width = $prop[0];
-					$style = $prop[1];
-					$color = $prop[2];
-				}
-				break;
+		if (count($prop) === 1 && in_array($prop[0], self::CSS_WIDE_KEYWORDS, true)) {
+			$prop = [];
+		} elseif (count($prop) === 0) {
+			return false;
 		}
 
-		return ['w' => $width, 's' => $style, 'c' => $color];
+		foreach ($prop as $part) {
+			if (in_array($part, $this->mpdf->borderstyles, true) || $part === 'none' || $part === 'hidden') {
+				$kind = 's';
+			} elseif (preg_match('/^(thin|medium|thick|' . self::NUMBER . '[a-z]*)$/', $part)) {
+				$kind = 'w';
+			} elseif ($this->isColorComponent($part)) {
+				$kind = 'c';
+				// Keeps a spot colour, whose name can have spaces, as one word of the border string
+				$part = str_replace(' ', '', $part);
+			} else {
+				return false;
+			}
+
+			if (isset($parts[$kind])) {
+				return false;
+			}
+
+			$parts[$kind] = $part;
+		}
+
+		return $parts + ['w' => 'medium', 's' => 'none', 'c' => '#000000'];
 	}
 
 	/**
@@ -861,22 +937,30 @@ class NormalizeProperties
 		switch ($property) {
 			case 'BACKGROUND':
 				$bg = $this->parseCssBackground($value);
-				if ($bg['c']) {
-					$this->properties['BACKGROUND-COLOR'] = $bg['c'];
-				} else {
-					$this->properties['BACKGROUND-COLOR'] = 'transparent';
+
+				// A value that is not a background is dropped, as a browser drops it
+				if ($bg === false) {
+					break;
 				}
 
-				if ($bg['i']) {
-					$this->properties['BACKGROUND-IMAGE'] = $bg['i'];
-					if ($bg['r']) {
+				$this->properties['BACKGROUND-COLOR'] = isset($bg['c']) ? $bg['c'] : 'transparent';
+				$this->properties['BACKGROUND-IMAGE'] = isset($bg['i']) ? $bg['i'] : '';
+
+				if ($this->properties['BACKGROUND-IMAGE'] !== '') {
+					if (isset($bg['r'])) {
 						$this->properties['BACKGROUND-REPEAT'] = $bg['r'];
 					}
-					if ($bg['p']) {
+					if (!empty($bg['p'])) {
 						$this->properties['BACKGROUND-POSITION'] = $bg['p'];
 					}
-				} else {
-					$this->properties['BACKGROUND-IMAGE'] = '';
+					if (isset($bg['s'])) {
+						$this->properties['BACKGROUND-SIZE'] = $bg['s'];
+					}
+				}
+
+				if (isset($bg['o'])) {
+					$this->properties['BACKGROUND-ORIGIN'] = $bg['o'];
+					$this->properties['BACKGROUND-CLIP'] = $bg['k'];
 				}
 				break;
 
