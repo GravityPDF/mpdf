@@ -281,6 +281,92 @@ class SelectorMatcherTest extends TestCase
 	}
 
 	/**
+	 * A failure left of a combinator stops the tries only where no other ancestor or sibling could match: a child
+	 * combinator that fails at the nearest ancestor is tried at the next one, and an adjacent or general sibling
+	 * combinator that fails at the first sibling at the next one
+	 *
+	 * @dataProvider retriedSelectors
+	 *
+	 * @param string $selector
+	 * @param bool $expected Whether it matches the paragraph in `<section><article><div><article>` that follows an
+	 *                       `<h2>`, an `<h1>`, an `<h2>` and a `<ul>`
+	 */
+	public function testTriesTheNextAncestorOrSiblingAfterAFailure($selector, $expected)
+	{
+		$path = [
+			$this->frame('', 1, 1, [], []),
+			$this->frame('SECTION', 1, 1, [], []),
+			$this->frame('ARTICLE', 1, 1, [], []),
+			$this->frame('DIV', 1, 1, [], []),
+			$this->frame('ARTICLE', 1, 1, [], [['H2'], ['H1'], ['H2'], ['UL']]),
+			$this->frame('P', 5, 1, [], []),
+		];
+
+		$this->assertSame($expected, $this->matcher->matches($this->compiler->compile($selector), $path));
+	}
+
+	/**
+	 * A selector whose left part fails where it is first tried, and whether it matches in the end
+	 *
+	 * @return array[]
+	 */
+	public function retriedSelectors()
+	{
+		return [
+			'a child of a further ancestor' => ['section > article p', true],
+			'a child of no ancestor' => ['div > section p', false],
+			'the second of two siblings is adjacent to the one it needs' => ['h1 + h2 ~ p', true],
+			'no sibling is adjacent to the one it needs' => ['ul + h2 ~ p', false],
+			'the second of two siblings follows the one it needs' => ['h1 ~ h2 ~ p', true],
+			'no sibling follows the one it needs' => ['ul ~ h1 ~ p', false],
+			'a sibling tag the parent has no child of' => ['h3 ~ p', false],
+			'an ancestor chain that fails everywhere' => ['p article section div p', false],
+		];
+	}
+
+	/**
+	 * A chain of descendant combinators whose leftmost compound names the nearest ancestor fails without trying every
+	 * combination of ancestors. On a path 50 deep, `.x div div div div div p` has nearly two million of them
+	 */
+	public function testGivesUpOnADescendantChainOnceNoAncestorCanMatch()
+	{
+		$path = [$this->frame('', 1, 1, [], [])];
+		for ($depth = 1; $depth < 50; $depth++) {
+			$path[] = $this->frame('DIV', 1, 1, $depth === 49 ? ['CLASS' => 'X'] : [], []);
+		}
+		$path[] = $this->frame('P', 1, 1, [], []);
+
+		$start = microtime(true);
+		$this->assertFalse($this->matcher->matches($this->compiler->compile('.x div div div div div p'), $path));
+		$this->assertTrue($this->matcher->matches($this->compiler->compile('div div div div div.x p'), $path));
+		$this->assertLessThan(1, microtime(true) - $start);
+	}
+
+	/**
+	 * A general sibling combinator finds a sibling at the start of a long run of them, and skips a tag its parent has
+	 * no child of, without walking back through every sibling for each element. Matching each of 5,000 paragraphs
+	 * after an `<h2>` walks 12.5 million siblings that way
+	 */
+	public function testFindsAnEarlierSiblingWithoutWalkingThroughEachOne()
+	{
+		$children = [['H2']];
+		for ($i = 0; $i < 5000; $i++) {
+			$children[] = ['P'];
+		}
+		$parent = $this->frame('', 1, 1, [], $children);
+		$heading = $this->compiler->compile('h2 ~ p');
+		$missing = $this->compiler->compile('h3 ~ p');
+
+		$start = microtime(true);
+		for ($i = 1; $i <= 5000; $i++) {
+			$path = [$parent, $this->frame('P', $i + 1, $i, [], [])];
+			$this->assertTrue($this->matcher->matches($heading, $path));
+			$this->assertFalse($this->matcher->matches($missing, $path));
+		}
+		$this->assertLessThan(1, microtime(true) - $start);
+	}
+
+	/**
 	 * The open elements the selectors are matched against: `<li class="x">`, the second item of a `<ul>` that follows
 	 * an `<h2>` and a `<p>` in `<div id="main" class="card">`, which follows an `<h1>`, a `<p class="a">` and a `<p>` in
 	 * the document

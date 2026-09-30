@@ -13,6 +13,15 @@ namespace Mpdf\Css;
 class SelectorMatcher
 {
 
+	/** The selector matches */
+	const MATCHES = 0;
+
+	/** It fails for this element, and may match another */
+	const FAILS_HERE = 1;
+
+	/** It fails for this element and for any other whose ancestors are all among this one's */
+	const FAILS_FOR_ANCESTORS = 2;
+
 	/**
 	 * Whether a selector matches the last element of a path
 	 *
@@ -28,13 +37,18 @@ class SelectorMatcher
 	{
 		$depth = count($path) - 1;
 
-		return $this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView);
+		return $this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView) === self::MATCHES;
 	}
 
 	/**
 	 * Whether a compound matches an element, and the compounds to its left match the elements its combinators lead to.
-	 * A descendant or general sibling combinator tries each ancestor or earlier sibling in turn, nearest first, so a
-	 * compound further left that fails on the nearest one is tried again on the next
+	 * A descendant combinator tries each ancestor in turn, nearest first, and a general sibling combinator each earlier
+	 * sibling, from the first, so a compound further left that fails on one is tried again on the next.
+	 *
+	 * A failure says how far it reaches, so that the tries stop once none left can match: when the compounds to the
+	 * left of a descendant combinator have failed at every ancestor, they fail at every ancestor of those ancestors
+	 * too, and at their siblings. Without this, a chain of descendant combinators is tried along every combination of
+	 * ancestors on a deep path.
 	 *
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
 	 * @param int $compound Which of its compounds to match, from the left
@@ -44,44 +58,63 @@ class SelectorMatcher
 	 *                   has closed, it is the open element at the next depth
 	 * @param bool $legacyView Whether to match as the legacy engine does, as matches() takes it
 	 *
-	 * @return bool
+	 * @return int self::MATCHES, or how far the failure reaches: self::FAILS_HERE or self::FAILS_FOR_ANCESTORS
 	 */
 	private function matchesFrom(array $selector, $compound, array $path, $parent, $index, $legacyView)
 	{
 		if (!$this->matchesCompound($selector['compounds'][$compound], $path, $parent, $index, $legacyView)) {
-			return false;
+			return self::FAILS_HERE;
 		}
 
 		if ($compound === 0) {
-			return true;
+			return self::MATCHES;
 		}
 
 		$compound--;
 		switch ($selector['combinators'][$compound]) {
 			case '>':
-				return $parent >= 0 && $this->matchesFrom($selector, $compound, $path, $parent - 1, $path[$parent]['nthChild'] - 1, $legacyView);
+				if ($parent < 0) {
+					return self::FAILS_FOR_ANCESTORS;
+				}
+
+				return $this->matchesFrom($selector, $compound, $path, $parent - 1, $path[$parent]['nthChild'] - 1, $legacyView);
 
 			case ' ':
 				for ($depth = $parent; $depth >= 0; $depth--) {
-					if ((!$legacyView || $path[$depth]['level'])
-						&& $this->matchesFrom($selector, $compound, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView)) {
-						return true;
+					if ($legacyView && !$path[$depth]['level']) {
+						continue;
+					}
+
+					$result = $this->matchesFrom($selector, $compound, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView);
+					if ($result !== self::FAILS_HERE) {
+						return $result;
 					}
 				}
 
-				return false;
+				return self::FAILS_FOR_ANCESTORS;
 
 			case '+':
-				return $parent >= 0 && $index > 0 && $this->matchesFrom($selector, $compound, $path, $parent, $index - 1, $legacyView);
+				if ($parent < 0 || $index === 0) {
+					return self::FAILS_HERE;
+				}
+
+				return $this->matchesFrom($selector, $compound, $path, $parent, $index - 1, $legacyView);
 
 			default:
-				for ($sibling = $index - 1; $parent >= 0 && $sibling >= 0; $sibling--) {
-					if ($this->matchesFrom($selector, $compound, $path, $parent, $sibling, $legacyView)) {
-						return true;
+				// None of the siblings before it has the tag, if the parent has had no child with it
+				$tag = $selector['compounds'][$compound]['tag'];
+				if ($parent < 0 || ($tag !== null && !isset($path[$parent]['childTypes'][$tag]))) {
+					return self::FAILS_HERE;
+				}
+
+				for ($sibling = 0; $sibling < $index; $sibling++) {
+					$result = $this->matchesFrom($selector, $compound, $path, $parent, $sibling, $legacyView);
+					if ($result !== self::FAILS_HERE) {
+						return $result;
 					}
 				}
 
-				return false;
+				return self::FAILS_HERE;
 		}
 	}
 
@@ -152,7 +185,7 @@ class SelectorMatcher
 	{
 		if ($pseudo[0] === 'is' || $pseudo[0] === 'not') {
 			foreach ($pseudo[1] as $selector) {
-				if ($this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $parent, $index, $legacyView)) {
+				if ($this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $parent, $index, $legacyView) === self::MATCHES) {
 					return $pseudo[0] === 'is';
 				}
 			}
