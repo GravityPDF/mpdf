@@ -98,6 +98,17 @@ class CssManager
 	private $defaultRules;
 
 	/**
+	 * @var array[] The properties the !important declarations of the document's stylesheets set, under the keys of
+	 *              $CSS. Only standard mode reads them apart
+	 */
+	private $importantCss = [];
+
+	/**
+	 * @var array[] The properties the !important declarations of the default stylesheet set, under the keys of $CSS
+	 */
+	private $defaultImportantCss = [];
+
+	/**
 	 * CssManager constructor.
 	 *
 	 * Initializes the CSS manager with required dependencies and sets up
@@ -127,7 +138,7 @@ class CssManager
 	 */
 	public function readCss($html)
 	{
-		return $this->read($html, $this->rules);
+		return $this->read($html, $this->rules, $this->importantCss);
 	}
 
 	/**
@@ -139,17 +150,22 @@ class CssManager
 	 */
 	public function readDefaultCss($css)
 	{
-		$this->read('<style> ' . $css . ' </style>', $this->defaultRules);
+		$this->read('<style> ' . $css . ' </style>', $this->defaultRules, $this->defaultImportantCss);
 	}
 
 	/**
 	 * Parse the CSS in HTML content into the stores readCss() describes, and file its compiled rules in a rule set
 	 *
+	 * The !important declarations of the rules stored by key are kept apart as well, and laid again over $CSS after
+	 * each read, those of the default stylesheet last, so that what reads $CSS directly (@page, BODY, SVG's classes)
+	 * finds them over any declaration that is not important.
+	 *
 	 * @param string $html
 	 * @param RuleSet $rules
+	 * @param array $important Where the !important declarations of the rules stored by key go
 	 * @return string HTML with CSS content removed
 	 */
-	private function read($html, RuleSet $rules)
+	private function read($html, RuleSet $rules, array &$important)
 	{
 		if (!is_array($this->cascadeCSS)) {
 			$this->cascadeCSS = [];
@@ -160,11 +176,34 @@ class CssManager
 		$this->CSS = Arrays::uniqueRecursiveMerge($this->CSS, $this->cssParser->getCss());
 		$this->cascadeCSS = Arrays::uniqueRecursiveMerge($this->cascadeCSS, $this->cssParser->getCascadeCss());
 
+		$important = Arrays::uniqueRecursiveMerge($important, $this->cssParser->getImportantCss());
+		$this->CSS = Arrays::uniqueRecursiveMerge($this->CSS, $this->importantCss, $this->defaultImportantCss);
+
 		foreach ($this->cssParser->getCompiledRules() as $rule) {
-			$rules->add($rule[0], $rule[1]);
+			$rules->add($rule[0], $rule[1], $rule[2]);
 		}
 
 		return $html;
+	}
+
+	/**
+	 * The properties the !important declarations of the document's rules stored by key in $CSS set, such as BODY's
+	 *
+	 * @return array[] Under the keys of $CSS
+	 */
+	public function getImportantCss()
+	{
+		return $this->importantCss;
+	}
+
+	/**
+	 * The properties the !important declarations of the default stylesheet's rules stored by key in $CSS set
+	 *
+	 * @return array[] Under the keys of $CSS
+	 */
+	public function getDefaultImportantCss()
+	{
+		return $this->defaultImportantCss;
 	}
 
 	/**

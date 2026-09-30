@@ -325,6 +325,40 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Under the standard cascade each rule keeps its !important declarations apart from the others, compiled and
+	 * under the key of a rule stored by key, @page rules included
+	 */
+	public function testKeepsImportantDeclarationsApartUnderTheStandardCascade()
+	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
+		$this->parser->parse('<style>p { color: red !important; margin: 1mm; } div > p { font-size: 9pt ! IMPORTANT; } @page { margin-left: 1cm !important; } p { color: blue !important; }</style>');
+
+		$rules = $this->parser->getCompiledRules();
+		$this->assertCount(3, $rules);
+		$this->assertSame(['MARGIN-TOP' => '1mm', 'MARGIN-RIGHT' => '1mm', 'MARGIN-BOTTOM' => '1mm', 'MARGIN-LEFT' => '1mm'], $rules[0][1]);
+		$this->assertSame(['COLOR' => 'red'], $rules[0][2]);
+		$this->assertSame([], $rules[1][1]);
+		$this->assertSame(['FONT-SIZE' => '9pt'], $rules[1][2]);
+		$this->assertSame(['COLOR' => 'blue'], $rules[2][2]);
+
+		$this->assertSame(['MARGIN-TOP' => '1mm', 'MARGIN-RIGHT' => '1mm', 'MARGIN-BOTTOM' => '1mm', 'MARGIN-LEFT' => '1mm'], $this->parser->getCss()['P']);
+		$this->assertSame([], $this->parser->getCss()['@PAGE']);
+		$this->assertSame(['P' => ['COLOR' => 'blue'], '@PAGE' => ['MARGIN-LEFT' => '1cm']], $this->parser->getImportantCss());
+	}
+
+	/**
+	 * Under the legacy cascade a declaration marked !important is stored with the others, and the one after it
+	 * replaces it
+	 */
+	public function testReadsTheFlagAsNothingUnderTheLegacyCascade()
+	{
+		$this->parser->parse('<style>p { color: red !important; color: green; margin-top: 1mm ! important; }</style>');
+
+		$this->assertSame(['COLOR' => 'green', 'MARGIN-TOP' => '1mm'], $this->parser->getCss()['P']);
+		$this->assertSame([], $this->parser->getImportantCss());
+	}
+
+	/**
 	 * Each at-rule is unwrapped, kept or left out whole, in either cssMode, and the rules around it are stored as
 	 * they are written
 	 *
