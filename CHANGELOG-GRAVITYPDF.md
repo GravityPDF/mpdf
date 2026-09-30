@@ -137,6 +137,7 @@ Bugfixes
 * `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552] [#565]
 * `line-height: 0` gave lines a normal height. Lines now have no height, as in a browser. A line height well below the font size, such as `0.5` or `1mm`, was stretched down to the baseline; it is now kept. A negative `line-height`, which shrank lines to odd heights, is now ignored. [#552] [#567]
 * A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#571]
+* The rule after an `@supports`, `@layer`, `@keyframes`, `@container` or other block at-rule was lost, and so were the rules inside `@supports` and `@layer`. The rule after `@charset`, `@namespace` or `@import` was lost too. `@supports` and `@layer` blocks are now unwrapped as `@media` blocks are, except `@supports not`, and other at-rules are removed whole. [#524] [#566]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -722,6 +723,7 @@ These changes do not change output.
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
 [#522]: https://github.com/GravityPDF/mpdf/issues/522
 [#523]: https://github.com/GravityPDF/mpdf/issues/523
+[#524]: https://github.com/GravityPDF/mpdf/issues/524
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
 [#525]: https://github.com/GravityPDF/mpdf/issues/525
@@ -742,4 +744,5 @@ These changes do not change output.
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
 [#567]: https://github.com/GravityPDF/mpdf/pull/567
 [#571]: https://github.com/GravityPDF/mpdf/pull/571
+[#566]: https://github.com/GravityPDF/mpdf/pull/566
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
