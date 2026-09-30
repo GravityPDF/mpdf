@@ -16513,7 +16513,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$spacer = ' ';
 		// IMAGE
 		if ($listitemimage && $listitemimage != 'none') {
-			$listitemimage = trim(preg_replace('/url\(["\']*(.*?)["\']*\)/', '\\1', $listitemimage));
+			$listitemimage = trim(preg_replace('/url\(["\']*(.*?)["\']*\)/i', '\\1', $listitemimage));
 
 			// ? Restrict maximum height/width of list marker??
 			$maxWidth = 100;
@@ -19382,7 +19382,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->blk[$this->blklvl]['list_style_type'] = strtolower($v);
 						break;
 					case 'LIST-STYLE-IMAGE':
-						$this->blk[$this->blklvl]['list_style_image'] = strtolower($v);
+						$this->blk[$this->blklvl]['list_style_image'] = strtolower($v) === 'none' ? 'none' : $v;
 						break;
 					case 'LIST-STYLE-POSITION':
 						$this->blk[$this->blklvl]['list_style_position'] = strtolower($v);
