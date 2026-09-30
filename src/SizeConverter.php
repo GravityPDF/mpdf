@@ -78,7 +78,9 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 				break;
 
 			case 'rem':
-				$size *= $this->mpdf->default_font_size / Mpdf::SCALE;
+				// The legacy CSS mode reads rem against body, whose font size a table's replaces while it is written
+				$root = $this->mpdf->cssMode === CssMode::STANDARD ? $this->mpdf->root_font_size : $this->mpdf->default_font_size;
+				$size *= $root / Mpdf::SCALE;
 				break;
 
 			case '%':
@@ -172,6 +174,28 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $size;
+	}
+
+	/**
+	 * Reads a font size: a length against the parent's font size, or a keyword such as small against the size medium
+	 * stands for
+	 *
+	 * @param string $value
+	 * @param float $parent The parent's font size in mm, which em and % are read against
+	 * @param float $medium The size in points medium stands for
+	 *
+	 * @return float|null In points, or null for a value it does not read
+	 */
+	public function convertFontSize($value, $parent, $medium)
+	{
+		$first = substr($value, 0, 1);
+		if (is_numeric($first) || $first === '.') {
+			return $this->convert($value, $parent) * Mpdf::SCALE;
+		}
+
+		$keyword = strtoupper($value);
+
+		return isset($this->mpdf->fontsizes[$keyword]) ? $this->mpdf->fontsizes[$keyword] * $medium : null;
 	}
 
 	/**

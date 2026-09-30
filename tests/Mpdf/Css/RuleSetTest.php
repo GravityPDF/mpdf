@@ -197,6 +197,72 @@ class RuleSetTest extends TestCase
 	}
 
 	/**
+	 * html and body are matched from the document's frame alone, html as body's parent. Each gets the declarations of
+	 * the rules it matches, by specificity and then position, and rules for any element are among them
+	 */
+	public function testGivesTheDeclarationsOfHtmlAndBody()
+	{
+		$rules = new RuleSet();
+		$selectors = [':root', 'html', 'body', 'html > body', ':root body', 'body:not(:root)', ':lang(fr)', 'div > body', 'html body p'];
+		foreach ($selectors as $position => $selector) {
+			$rules->add($this->compiler->compile($selector), ['COLOR' => 'rule ' . $position]);
+		}
+
+		$path = $this->path();
+		$path[0]['lang'] = 'fr';
+		$document = [$path[0]];
+
+		$this->assertSame(
+			[['COLOR' => 'rule 1'], ['COLOR' => 'rule 0'], ['COLOR' => 'rule 6']],
+			$rules->documentDeclarations(true, $document)
+		);
+		$this->assertSame(
+			[['COLOR' => 'rule 2'], ['COLOR' => 'rule 3'], ['COLOR' => 'rule 6'], ['COLOR' => 'rule 4'], ['COLOR' => 'rule 5']],
+			$rules->documentDeclarations(false, $document)
+		);
+	}
+
+	/**
+	 * A rule whose subject names no id, class or tag is filed for any element, unless it names :root, which only html
+	 * matches, or :link, which only a and area match
+	 */
+	public function testFilesRootUnderHtmlAndLinkUnderItsTags()
+	{
+		$rules = new RuleSet();
+		foreach ([':root', ':link', ':any-link:not(.x)', ':first-child'] as $selector) {
+			$rules->add($this->compiler->compile($selector), ['COLOR' => 'red']);
+		}
+
+		$candidates = function ($tag) use ($rules) {
+			$positions = $rules->candidates($tag, '', []);
+			sort($positions);
+
+			return $positions;
+		};
+
+		$this->assertSame([0, 3], $candidates('HTML'));
+		$this->assertSame([1, 2, 3], $candidates('A'));
+		$this->assertSame([1, 2, 3], $candidates('AREA'));
+		$this->assertSame([3], $candidates('P'));
+	}
+
+	/**
+	 * html is an ancestor of every element, and passes the check a rule naming an ancestor goes through first
+	 */
+	public function testHasHtmlAmongTheAncestorsOfEveryElement()
+	{
+		$rules = new RuleSet();
+		$rules->add($this->compiler->compile('html p'), ['COLOR' => 'html']);
+		$rules->add($this->compiler->compile(':root > body > div p'), ['COLOR' => 'root']);
+
+		$path = function () {
+			return $this->path();
+		};
+
+		$this->assertSame([['COLOR' => 'html'], ['COLOR' => 'root']], $rules->matchingDeclarations('P', '', [], $path));
+	}
+
+	/**
 	 * The open elements a rule is matched against: a `<p>` as the first child of `<div id="main" class="a">`, the
 	 * document's first child
 	 *

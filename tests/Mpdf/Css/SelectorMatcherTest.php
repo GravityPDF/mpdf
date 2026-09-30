@@ -112,6 +112,28 @@ class SelectorMatcherTest extends TestCase
 			'where' => [':where(#main) li.x', true],
 			'nested' => ['li:not(:is(.y, :first-child))', true],
 			'body in is' => [':is(body) > div li', true],
+			'html as an ancestor' => ['html li', true],
+			'html as the parent of body' => ['html > body > div > ul > li', true],
+			'html is not the parent of what body holds' => ['html > div li', false],
+			'html has no parent' => ['div > html li', false],
+			'html has no siblings' => ['html + body li', false],
+			'html is not the first child' => ['html:first-child li', false],
+			'root as an ancestor' => [':root li', true],
+			'root as the parent of body' => [':root > body li', true],
+			'root is not body' => [':root > div li', false],
+			'body is not the root' => ['body:root li', false],
+			'the element is not the root' => ['li:root', false],
+			'not the root' => ['li:not(:root)', true],
+			'root in is' => [':is(:root) div li', true],
+			'hover' => ['li:hover', false],
+			'hover on an ancestor' => ['div:hover li', false],
+			'focus, active, focus-within, focus-visible and target' => ['li:is(:focus, :active, :focus-within, :focus-visible, :target)', false],
+			'not hover' => ['li:not(:hover)', true],
+			'not visited' => ['li:not(:visited)', true],
+			'not hover on an ancestor' => ['div:not(:hover) li', true],
+			'is hover' => ['li:is(:hover)', false],
+			'link on an element with no href' => ['li:link', false],
+			'not link on an element with no href' => ['li:not(:link)', true],
 		];
 	}
 
@@ -196,6 +218,66 @@ class SelectorMatcherTest extends TestCase
 			'the language of the document' => ['body:lang(fr) a', true],
 			'the language of a sibling of an ancestor' => ['p:lang(de) + div a', true],
 			'a language a sibling of an ancestor does not have' => ['p:lang(fr) + div a', false],
+			'link' => ['a:link', true],
+			'any-link' => [':any-link', true],
+			'visited' => ['a:visited', false],
+			'link and hover' => ['a:link:hover', false],
+			'not link' => ['a:not(:link)', false],
+			'not visited' => ['a:not(:visited)', true],
+			'link with a class' => ['a.card:link', false],
+			'an element with a link attribute that is not href' => ['div[id]:link a', false],
+			'the language of the root' => [':root:lang(fr) a', true],
+			'another language on html' => ['html:lang(de) a', false],
+		];
+	}
+
+	/**
+	 * html and body, which the document's frame stands for, are matched with html as body's parent, and neither with
+	 * a sibling. The document says lang="fr"
+	 *
+	 * @dataProvider documentSelectors
+	 *
+	 * @param string $selector
+	 * @param bool $html Whether it matches html
+	 * @param bool $body Whether it matches body
+	 */
+	public function testMatchesHtmlAndBody($selector, $html, $body)
+	{
+		$document = $this->frame('', 1, 1, [], []);
+		$document['lang'] = 'fr';
+		$compiled = $this->compiler->compile($selector);
+
+		$this->assertSame($html, $this->matcher->matchesDocumentElement($compiled, [$document], true), 'html');
+		$this->assertSame($body, $this->matcher->matchesDocumentElement($compiled, [$document], false), 'body');
+	}
+
+	/**
+	 * A selector, and whether it matches html and body
+	 *
+	 * @return array[]
+	 */
+	public function documentSelectors()
+	{
+		return [
+			'html' => ['html', true, false],
+			'root' => [':root', true, false],
+			'html as the root' => ['html:root', true, false],
+			'body' => ['body', false, true],
+			'body as the root' => ['body:root', false, false],
+			'body as the child of html' => ['html > body', false, true],
+			'body as the child of the root' => [':root > body', false, true],
+			'body in html' => ['html body', false, true],
+			'body in body' => ['body body', false, false],
+			'html in body' => ['body html', false, false],
+			'html beside body' => ['html + body', false, false],
+			'body after something' => [':root ~ body', false, false],
+			'html as a first child' => ['html:first-child', false, false],
+			'not the root' => [':not(:root)', false, true],
+			'not html' => ['body:not(html)', false, true],
+			'the language of the document' => [':lang(fr)', true, true],
+			'another language' => ['html:lang(de)', false, false],
+			'hover' => ['html:hover', false, false],
+			'a class' => ['html.a', false, false],
 		];
 	}
 

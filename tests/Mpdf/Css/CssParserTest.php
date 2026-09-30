@@ -150,6 +150,54 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A rule that never matches in a PDF, or names a pseudo-element, is dropped in either mode without its classes
+	 * being counted: they are kept out of the class names the merger looks up and out of the class depth
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param string $mode
+	 */
+	public function testARuleThatNeverMatchesRecordsNothing($mode)
+	{
+		$this->mpdf->cssMode = $mode;
+		$this->parser->parse('<style>
+			a.x.y.z:hover, .nav .item:focus, .btn:active span, a.seen:visited, .menu:focus-within .sub, .note:target,
+			p.intro::first-line, .quote::before, li.item::marker, .field::placeholder, .text::selection { color: red; }
+			.kept { color: blue; }
+		</style>');
+
+		$this->assertSame(['KEPT'], $this->parser->getUsedClassNames());
+		$this->assertSame(1, $this->parser->getMaxClassDepth());
+		$this->assertSame(['CLASS>>KEPT' => ['COLOR' => 'blue']], $this->parser->getCss());
+		$this->assertSame([], $this->parser->getCascadeCss());
+		$this->assertCount($mode === CssMode::STANDARD ? 1 : 0, $this->parser->getCompiledRules());
+	}
+
+	/**
+	 * The classes of every rule stored for the legacy merger are counted, whether they are on the element or on an
+	 * ancestor
+	 */
+	public function testCountsTheClassesOfStoredRules()
+	{
+		$this->parser->parse('<style>.a.b { color: red; } div.c p { color: red; } p#i.d { color: red; } div > .e { color: red; }</style>');
+
+		$used = $this->parser->getUsedClassNames();
+		sort($used);
+
+		$this->assertSame(['A', 'B', 'C', 'D'], $used);
+	}
+
+	/**
+	 * Each CSS mode
+	 *
+	 * @return array[]
+	 */
+	public function modes()
+	{
+		return [CssMode::STANDARD => [CssMode::STANDARD], CssMode::LEGACY => [CssMode::LEGACY]];
+	}
+
+	/**
 	 * The nth-child keys of stored rules are recorded for each of TR, TD and TH, and those of dropped rules are not
 	 */
 	public function testNthChildKeysOfStoredRulesAreRecorded()
@@ -224,6 +272,11 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'attribute value on a type' => ['a[href^="http"]', true],
 			'lang attribute with a hyphen match' => ['p[lang|=fr]', true],
 			'lang pseudo-class in a combinator chain' => ['div > :lang(fr)', true],
+			'root' => [':root', true],
+			'html' => ['html', true],
+			'link' => ['a:link', true],
+			'any-link' => [':any-link', true],
+			'not hover' => ['p:not(:hover)', true],
 		];
 	}
 
@@ -253,7 +306,13 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'hover' => ['a:hover'],
+			'visited' => ['a:visited'],
+			'focus, active, focus-within, focus-visible and target' => ['a:focus, a:active, form:focus-within input, a:focus-visible, h2:target'],
+			'hover on an ancestor' => ['nav li:hover a'],
+			'link and hover' => ['a:link:hover'],
 			'pseudo-element' => ['p::before'],
+			'marker, selection and placeholder' => ['li::marker, p::selection, input::placeholder'],
+			'first-line and first-letter' => ['p::first-line, p:first-letter'],
 			'has' => ['li:has(> a)'],
 			'a tag outside allowedCSStags' => ['div > sup'],
 			'the universal selector, which waits for #530' => ['div > *'],
