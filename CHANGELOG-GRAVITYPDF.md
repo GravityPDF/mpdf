@@ -159,6 +159,7 @@ Bugfixes
 * When a hyphenation hyphen moved to the next line, its record stayed on the line before. In a bidi paragraph that drew a hyphen in the wrong place and dropped the one that moved. [mpdf/mpdf#1831] [#145]
 * A hyphen inserted at a line break had no bidi direction. It now takes the direction of the word it breaks. [#116] [#137]
 * `$extgstates` had no default, so `count()` on it threw a `TypeError` on PHP 8. [mpdf/mpdf#2135] [#20]
+* A stylesheet `url()` did not load its image when the path had spaces or parentheses, when there was whitespace inside the parentheses, or when it was an SVG data URI that is not base64, such as Bootstrap's `form-select` arrow. [#573]
 * `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. [#577]
 
 ### Images and SVG
@@ -755,6 +756,7 @@ These changes do not change output.
 [#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
+[#573]: https://github.com/GravityPDF/mpdf/pull/573
 [#569]: https://github.com/GravityPDF/mpdf/pull/569
 [#577]: https://github.com/GravityPDF/mpdf/pull/577
 [#568]: https://github.com/GravityPDF/mpdf/pull/568
