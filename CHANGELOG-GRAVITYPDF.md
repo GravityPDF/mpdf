@@ -371,6 +371,7 @@ These changes do not change output.
 * **PHPStan.** Fixes for newer PHP versions and PHPStan 2.2.15. [#6] [#295] [#319] [#451]
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
 * **Open elements.** `WriteHTML()` keeps a stack of the elements open in the HTML it reads, so that CSS rules can be matched against an element's parents, ancestors and earlier siblings rather than only the blocks mPDF lays out. Each element carries its position among its siblings and a record of the siblings before it. `Mpdf::getOpenElements()` reads it. [#533]
+* **Compiled selectors.** A rule whose selector the legacy parser cannot read is compiled into its compound selectors, the combinators between them and its specificity, and filed under its rightmost compound for the selector matcher. A selector list is split at the commas outside parentheses, brackets and strings, so `:is(h1, h2)` and `[title="a,b"]` stay whole. [#538] [#619]
 
 [mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
 [mpdf/mpdf#747]: https://github.com/mpdf/mpdf/issues/747
@@ -766,6 +767,7 @@ These changes do not change output.
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
+[#538]: https://github.com/GravityPDF/mpdf/issues/538
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
 [#560]: https://github.com/GravityPDF/mpdf/pull/560
@@ -799,6 +801,7 @@ These changes do not change output.
 [#581]: https://github.com/GravityPDF/mpdf/pull/581
 [#614]: https://github.com/GravityPDF/mpdf/pull/614
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
+[#619]: https://github.com/GravityPDF/mpdf/pull/619
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
 [#625]: https://github.com/GravityPDF/mpdf/pull/625

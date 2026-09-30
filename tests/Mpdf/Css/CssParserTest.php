@@ -163,4 +163,126 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(['TD>>SELECTORNTHCHILD>>2N+1', 'TD>>SELECTORNTHCHILD>>1'], array_keys($this->parser->getNthChildFormulas('TD')));
 		$this->assertSame([], $this->parser->getNthChildFormulas('TH'));
 	}
+
+	/**
+	 * A rule the legacy parser cannot read is compiled for the matcher, and one it can read is not
+	 *
+	 * @dataProvider routedSelectors
+	 *
+	 * @param string $selector
+	 * @param bool $compiled Whether it goes to the matcher
+	 */
+	public function testCompilesOnlyWhatTheLegacyParserCannotRead($selector, $compiled)
+	{
+		$this->parser->parse('<style>' . $selector . ' { color: blue; }</style>');
+
+		$rules = $this->parser->getCompiledRules();
+		if (!$compiled) {
+			$this->assertSame([], $rules);
+
+			return;
+		}
+
+		$this->assertCount(1, $rules);
+		$this->assertSame(['COLOR' => 'blue'], $rules[0][1]);
+		$this->assertSame([], $this->parser->getCss());
+		$this->assertSame([], $this->parser->getCascadeCss());
+	}
+
+	/**
+	 * A selector, and whether it goes to the matcher rather than the legacy parser
+	 *
+	 * @return array[]
+	 */
+	public function routedSelectors()
+	{
+		return [
+			'type' => ['p', false],
+			'descendant' => ['div p', false],
+			'class on a type' => ['p.a', false],
+			'lang' => ['p:lang(fr)', false],
+			'row nth-child' => ['tr:nth-child(2n)', false],
+			'cell nth-child in a descendant rule' => ['table td:nth-child(odd)', false],
+			'child' => ['div > p', true],
+			'child with no spaces' => ['div>p', true],
+			'adjacent sibling' => ['h1 + p', true],
+			'general sibling' => ['h1 ~ p', true],
+			'first-child' => ['li:first-child', true],
+			'nth-child on an element outside a table' => ['li:nth-child(2n)', true],
+			'nth-child outside a table as an ancestor' => ['li:nth-child(2) p', true],
+			'first-of-type' => ['p:first-of-type', true],
+		];
+	}
+
+	/**
+	 * A rule the legacy parser cannot read and the matcher cannot match either is dropped, as it was before
+	 *
+	 * @dataProvider droppedSelectors
+	 *
+	 * @param string $selector
+	 */
+	public function testDropsWhatNeitherCanRead($selector)
+	{
+		$this->parser->parse('<style>' . $selector . ' { color: blue; }</style>');
+
+		$this->assertSame([], $this->parser->getCompiledRules());
+		$this->assertSame([], $this->parser->getCss());
+		$this->assertSame([], $this->parser->getCascadeCss());
+	}
+
+	/**
+	 * A selector neither the legacy parser nor the matcher can match
+	 *
+	 * @return array[]
+	 */
+	public function droppedSelectors()
+	{
+		return [
+			'hover' => ['a:hover'],
+			'pseudo-element' => ['p::before'],
+			'last-child' => ['li:last-child'],
+			'a tag outside allowedCSStags' => ['div > sup'],
+			'the universal selector, which waits for #530' => ['div > *'],
+			'the universal selector as an ancestor' => ['* + p'],
+		];
+	}
+
+	/**
+	 * A list is split into its selectors before either parser reads them, so commas inside parentheses and strings
+	 * stay with their selector and each selector goes its own way
+	 */
+	public function testSplitsAListBeforeReadingItsSelectors()
+	{
+		$this->parser->parse('<style>li:nth-child( 2n + 1 ), div > p, h1 { color: blue; }</style>');
+
+		$this->assertSame(['H1' => ['COLOR' => 'blue']], $this->parser->getCss());
+
+		$rules = $this->parser->getCompiledRules();
+		$this->assertCount(2, $rules);
+		$this->assertSame([['nth-child', 2, 1]], $rules[0][0]['compounds'][0]['pseudos']);
+		$this->assertSame(['>'], $rules[1][0]['combinators']);
+	}
+
+	/**
+	 * A compiled rule without declarations has nothing to apply and is not kept
+	 */
+	public function testDoesNotKeepAnEmptyRule()
+	{
+		$this->parser->parse('<style>div > p { }</style>');
+
+		$this->assertSame([], $this->parser->getCompiledRules());
+	}
+
+	/**
+	 * Each parse starts a new list of compiled rules, as it starts new stores for the legacy parser
+	 */
+	public function testStartsANewListOfCompiledRulesForEachParse()
+	{
+		$this->parser->parse('<style>div > p { color: blue; }</style>');
+		$this->parser->parse('<style>h1 + p { color: red; }</style>');
+
+		$rules = $this->parser->getCompiledRules();
+		$this->assertCount(1, $rules);
+		$this->assertSame(['+'], $rules[0][0]['combinators']);
+	}
 }

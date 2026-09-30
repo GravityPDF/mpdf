@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Mpdf\Css\CssMerger;
+use Mpdf\Css\RuleSet;
 use Mpdf\Exception\InvalidArgumentException;
 use Mpdf\Utils\Arrays;
 use Mpdf\Css\CssParser;
@@ -87,6 +88,11 @@ class CssManager
 	public $tbCSSlvl = 0;
 
 	/**
+	 * @var RuleSet The rules whose selector the legacy parser cannot read, compiled, from every stylesheet read
+	 */
+	private $rules;
+
+	/**
 	 * CssManager constructor.
 	 *
 	 * Initializes the CSS manager with required dependencies and sets up
@@ -100,6 +106,7 @@ class CssManager
 		$this->cssParser = $cssParser;
 		$this->cssMerger = $cssMerger;
 		$this->cssMerger->setCssManager($this);
+		$this->rules = new RuleSet();
 	}
 
 	/**
@@ -123,7 +130,21 @@ class CssManager
 		$this->CSS = Arrays::uniqueRecursiveMerge($this->CSS, $this->cssParser->getCss());
 		$this->cascadeCSS = Arrays::uniqueRecursiveMerge($this->cascadeCSS, $this->cssParser->getCascadeCss());
 
+		foreach ($this->cssParser->getCompiledRules() as $rule) {
+			$this->rules->add($rule[0], $rule[1]);
+		}
+
 		return $html;
+	}
+
+	/**
+	 * The rules whose selector the legacy parser cannot read, compiled, from every stylesheet read so far
+	 *
+	 * @return RuleSet
+	 */
+	public function getRules()
+	{
+		return $this->rules;
 	}
 
 	/**
