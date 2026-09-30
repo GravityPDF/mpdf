@@ -120,16 +120,17 @@ class CssMerger
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes including CLASS, ID, STYLE
+	 * @param array $inherited Under the standard cascade, what the element inherits, under everything else merged
 	 * @return array Merged CSS properties array
 	 */
-	public function merge($inherit, $tag, $attr)
+	public function merge($inherit, $tag, $attr, array $inherited = [])
 	{
 		$this->cssProperties = [];
 
 		$attr = is_array($attr) ? $attr : [];
 
 		if ($this->mpdf->cssMode === CssMode::STANDARD) {
-			return $this->mergeInCascadeOrder($inherit, $tag, $attr);
+			return $this->mergeInCascadeOrder($inherit, $tag, $attr, $inherited);
 		}
 
 		$classes = [];
@@ -183,9 +184,10 @@ class CssMerger
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes, as the tag handler was given them
+	 * @param array $inherited What the element inherits, besides what a block takes from its parent block
 	 * @return array Merged CSS properties array
 	 */
-	private function mergeInCascadeOrder($inherit, $tag, array $attr)
+	private function mergeInCascadeOrder($inherit, $tag, array $attr, array $inherited)
 	{
 		// Found once, when a rule set first has a rule filed under the element. previewBlockCss() looks at an element
 		// that is not being written, so it is put in the innermost open element, and nothing is recorded
@@ -208,11 +210,16 @@ class CssMerger
 		$classes = $this->classesOf($attr);
 		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
 
+		$this->cssProperties = $inherited;
 		$this->mergeInheritedBlockProperties($inherit, $tag);
 
 		$this->mergeDefaultCss($tag);
 		list($defaultRules, $importantDefaultRules) = $this->cssManager->getDefaultRules()->matchingDeclarations($tag, $id, $classes, $path);
 		$this->mergeEach($defaultRules, $dominance);
+		// HTML's rendering rules centre a th only when the text-align it inherits is the initial value
+		if ($tag === 'TH' && isset($inherited['TEXT-ALIGN'])) {
+			$this->cssProperties['TEXT-ALIGN'] = $inherited['TEXT-ALIGN'];
+		}
 
 		$this->mergePresentationalHints($tag, $attr);
 		$this->mergeTableSpecificCss($tag, $attr);
@@ -308,8 +315,34 @@ class CssMerger
 	 */
 	public function previewBlockCss($tag, $attr)
 	{
+		return $this->preview('BLOCK', $tag, $attr);
+	}
+
+	/**
+	 * The CSS an element of a table would be given if it were opened now in the innermost open element, without
+	 * opening it. Tr reads it for the tbody that a row written straight into a table is put in
+	 *
+	 * @param string $tag HTML tag name
+	 * @param array $attr HTML attributes array
+	 * @return array CSS properties that would be applied
+	 */
+	public function previewTableCss($tag, $attr)
+	{
+		return $this->preview('TABLE', $tag, $attr);
+	}
+
+	/**
+	 * Merges an element's CSS without changing any state outside this object
+	 *
+	 * @param string $inherit Inheritance context (BLOCK, TABLE)
+	 * @param string $tag HTML tag name
+	 * @param array $attr HTML attributes array
+	 * @return array CSS properties that would be applied
+	 */
+	private function preview($inherit, $tag, $attr)
+	{
 		$this->sideEffects = false;
-		$results = $this->merge('BLOCK', $tag, $attr);
+		$results = $this->merge($inherit, $tag, $attr);
 		$this->sideEffects = true;
 
 		return $results;
