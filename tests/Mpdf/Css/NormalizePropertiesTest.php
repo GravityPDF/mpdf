@@ -5,6 +5,7 @@ namespace Mpdf\Css;
 use Mpdf\Color\ColorConverter;
 use Mpdf\Color\ColorModeConverter;
 use Mpdf\Color\ColorSpaceRestrictor;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\SizeConverter;
 use Psr\Log\NullLogger;
@@ -227,25 +228,58 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function providerBorderString()
 	{
 		return [
-			['solid', 'medium solid #000000'],
+			['solid', 'medium solid currentcolor'],
 			['#ff0000', 'medium none #ff0000'],
-			['2px', '2px none #000000'],
-			['2px solid', '2px solid #000000'],
+			['2px', '2px none currentcolor'],
+			['2px solid', '2px solid currentcolor'],
 			['solid #ff0000', 'medium solid #ff0000'],
 			['2px #ff0000', '2px none #ff0000'],
 			['2px solid #ff0000', '2px solid #ff0000'],
 			['#ff0000 2px solid', '2px solid #ff0000'],
-			['none', 'medium none #000000'],
+			['none', 'medium none currentcolor'],
 			['solid #c00 2mm', '2mm solid #c00'],
 			['2mm #c00 solid', '2mm solid #c00'],
 			['red 2mm solid', '2mm solid red'],
 			['solid 2mm red', '2mm solid red'],
 			['#c00 solid', 'medium solid #c00'],
-			['dashed thick', 'thick dashed #000000'],
+			['dashed thick', 'thick dashed currentcolor'],
 			['solid rgb(204 0 0) 0.5mm', '0.5mm solid rgb(204,0,0)'],
 			['transparent 1px solid', '1px solid transparent'],
 			['SOLID 2MM #C00', '2mm solid #c00'],
-			['inherit', 'medium none #000000'],
+			['inherit', 'medium none currentcolor'],
+		];
+	}
+
+	/**
+	 * In legacy mode a border with no colour is black, as it was in mPDF v7
+	 *
+	 * @dataProvider providerBorderWithNoColour
+	 *
+	 * @param string $input
+	 * @param string $expected
+	 */
+	public function testABorderWithNoColourIsBlackInLegacyMode($input, $expected)
+	{
+		$this->mpdf->cssMode = CssMode::LEGACY;
+
+		$result = $this->normalizeProperties->normalize(['BORDER' => $input]);
+
+		$this->assertSame($expected, $result['BORDER-TOP']);
+	}
+
+	/**
+	 * Border values that name no colour, and a CSS-wide keyword, with what legacy mode normalizes them to
+	 *
+	 * @return string[][]
+	 */
+	public function providerBorderWithNoColour()
+	{
+		return [
+			'a style' => ['solid', 'medium solid #000000'],
+			'a width and a style' => ['2px solid', '2px solid #000000'],
+			'none' => ['none', 'medium none #000000'],
+			'inherit' => ['inherit', 'medium none #000000'],
+			'a colour' => ['2px solid #c00', '2px solid #c00'],
 		];
 	}
 
@@ -370,10 +404,10 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		]);
 
 		foreach (['TOP', 'RIGHT', 'BOTTOM'] as $side) {
-			$this->assertSame('medium dashed #000000', $result['BORDER-' . $side]);
+			$this->assertSame('medium dashed currentcolor', $result['BORDER-' . $side]);
 			$this->assertSame('medium', $result['BORDER-' . $side . '-WIDTH']);
 			$this->assertSame('dashed', $result['BORDER-' . $side . '-STYLE']);
-			$this->assertSame('#000000', $result['BORDER-' . $side . '-COLOR']);
+			$this->assertSame('currentcolor', $result['BORDER-' . $side . '-COLOR']);
 		}
 
 		$this->assertSame('1mm solid #00f', $result['BORDER-LEFT']);

@@ -156,6 +156,43 @@ class ActiveFieldBorderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A field with a colour of its own keeps the default border colour when only the border's width or style is given.
+	 * A border shorthand with no colour draws in the field's colour in standard mode, where a border's colour is
+	 * currentColor, and in black in legacy mode
+	 *
+	 * @dataProvider borderColoursInModes
+	 *
+	 * @param string $mode
+	 * @param string $border
+	 * @param string $expected The field's /BC
+	 */
+	public function testABorderWithNoColourTakesTheFieldsColourOnlyFromAShorthand($mode, $border, $expected)
+	{
+		$pdf = $this->render('<form><input type="text" name="f" value="x" style="color: #c00; ' . $border . '" /></form>', ['useActiveForms' => true, 'cssMode' => $mode]);
+
+		$this->assertStringContainsString('/BC [ ' . $expected . ' ]', $this->widget($pdf, 'f'));
+	}
+
+	/**
+	 * Borders naming no colour, in both modes
+	 *
+	 * @return string[][]
+	 */
+	public function borderColoursInModes()
+	{
+		return [
+			'standard, a width' => [CssMode::STANDARD, 'border-width: 2pt', '0.6 0.6 0.72'],
+			'standard, a style' => [CssMode::STANDARD, 'border-style: dashed', '0.6 0.6 0.72'],
+			'standard, a shorthand' => [CssMode::STANDARD, 'border: 2pt solid', '0.800 0.000 0.000'],
+			'standard, a shorthand in currentColor' => [CssMode::STANDARD, 'border: 2pt solid currentColor', '0.800 0.000 0.000'],
+			'legacy, a width' => [CssMode::LEGACY, 'border-width: 2pt', '0.6 0.6 0.72'],
+			'legacy, a style' => [CssMode::LEGACY, 'border-style: dashed', '0.6 0.6 0.72'],
+			'legacy, a shorthand' => [CssMode::LEGACY, 'border: 2pt solid', '0.000 0.000 0.000'],
+			'legacy, a shorthand in currentColor' => [CssMode::LEGACY, 'border: 2pt solid currentColor', '0.800 0.000 0.000'],
+		];
+	}
+
+	/**
 	 * A PDF/A document restricted to CMYK writes the border colour in CMYK, in both /MK and the appearance
 	 */
 	public function testTheBorderColourFollowsTheOutputIntent()

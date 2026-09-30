@@ -182,4 +182,48 @@ class ShadowParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertStringContainsString('1.000 0.000 0.000 rg', $mpdf->Output('', 'S'));
 	}
+
+	/**
+	 * withColor() gives the colour to each shadow that names none, and leaves the others and none alone
+	 *
+	 * @dataProvider shadowsWithAndWithoutColours
+	 *
+	 * @param string $value
+	 * @param string $expected
+	 */
+	public function testWithColorGivesTheColourToEachShadowThatNamesNone($value, $expected)
+	{
+		$this->assertSame($expected, ShadowParser::withColor($value, 'currentcolor'));
+	}
+
+	/**
+	 * Shadow values, and each with currentColor given to the shadows that name no colour
+	 *
+	 * @return string[][]
+	 */
+	public function shadowsWithAndWithoutColours()
+	{
+		return [
+			'offsets' => ['2px 2px', '2px 2px currentcolor'],
+			'a blur and a spread' => ['2px 2px 3px -1px', '2px 2px 3px -1px currentcolor'],
+			'inset' => ['inset 2px 2px', 'inset 2px 2px currentcolor'],
+			'inset last' => ['2px 2px inset', '2px 2px inset currentcolor'],
+			'a colour' => ['2px 2px #c00', '2px 2px #c00'],
+			'a colour first' => ['red 2px 2px', 'red 2px 2px'],
+			'a colour function' => ['2px 2px rgba(0,0,0,0.5)', '2px 2px rgba(0,0,0,0.5)'],
+			'several' => ['2px 2px rgb(0, 0, 255), 3px 3px, inset 1px 1px', '2px 2px rgb(0, 0, 255), 3px 3px currentcolor, inset 1px 1px currentcolor'],
+			'none' => ['none', 'none'],
+		];
+	}
+
+	/**
+	 * A shadow whose colour converts to nothing, such as transparent, draws nothing, where one with no colour is grey
+	 */
+	public function testATransparentShadowIsDropped()
+	{
+		$this->assertCount(1, $this->shadowParser->parseBoxShadow('2px 2px transparent, 3px 3px'));
+		$this->assertCount(0, $this->shadowParser->parseBoxShadow('2px 2px 1px transparent'));
+		$this->assertCount(0, $this->shadowParser->parseTextShadow('2px 2px transparent'));
+		$this->assertCount(1, $this->shadowParser->parseTextShadow('2px 2px'));
+	}
 }

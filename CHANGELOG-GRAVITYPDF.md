@@ -54,6 +54,8 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A table's `border` gives each cell a 1px border of its own, which a rule for the table's border leaves alone. Before, the cells copied the table's border.
 * **`line-height` on an inline element sets the height of its line**, as in a browser. mPDF ignored it, so `<span style="line-height: 30mm">` left its line as it was. Now each inline element's box is as tall as its line-height, and a line grows to hold the tallest box on it, text or image, in blocks and table cells alike. The block's own line height is the least a line can be, so a smaller inline line-height, or `0`, does not shrink it. A percentage in `vertical-align` is taken of the element's own line-height. `line-height` on a `<p>` or `<div>` inside a table cell, which mPDF lays out as inline content, can now make its lines taller than the cell's. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore it as before. [#548] [#646]
 * **`rem` is read against the font size of `html`, in standard mode**, as in a browser. It was read against the font size of `body`, and inside a table against the table's. Now `1rem` is the default font size, from the `default_font_size` configuration or `SetDefaultFontSize()`, unless an `html` or `:root` rule sizes `html`: with `html { font-size: 62.5% }`, `1.6rem` is the default size again. A `body { font-size }` rule no longer changes it. To keep the old sizes, give them in `em` or points, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#529] [#642]
+* **A border, `box-shadow` or `text-shadow` that names no colour is drawn in the element's colour**, which is `currentColor`, as in a browser. A border was drawn black and a shadow grey (`#888888`). `div { color: #c00; border: 1px solid; box-shadow: 2mm 2mm }` now draws a red border and a red shadow. This applies to the `border` shorthands and to a border built from `border-style` or `border-width` alone. Name the colour, as in `border: 1px solid #000`, or set `'cssMode' => \Mpdf\CssMode::LEGACY`, to keep black borders and grey shadows. [#540] [#651]
+  * `currentColor` written in `background-color`, a gradient stop, `box-shadow`, `text-shadow`, `topntail` or `thead-underline` is read as the element's colour too, and `color: currentColor` as the colour it inherits. Before, the background was not painted, the gradient lost the stop, the shadows were grey, the table lines black, and `color: currentColor` on a block drew black. Legacy mode ignores `currentColor` there as before.
 
 New features
 ------------
@@ -206,6 +208,12 @@ Bugfixes
   * With several layers, mPDF still draws only the first, now over the colour given in the last.
 * A `border` or `background` shorthand with a part that is none of its parts, such as `border: 1px solid bogus`, is dropped, as a browser drops it, so the value it would have replaced still applies. `border: 1px solid bogus` used to draw a black border. [#552] [#583]
 * `tr:nth-child()` counted the rows of the whole table less its header and footer rows, so a second `<tbody>` carried on the count of the first, and `tr:first-child` missed the first footer row when `<tfoot>` came after the body. Rows are now counted within their `<thead>`, `<tbody>` or `<tfoot>`, or within the run of rows written straight into the table. [#528] [#582]
+* `currentColor` in a border raised two "Uninitialized string offset" warnings for each side and drew it black, and in `text-outline` it raised an undefined-key warning and drew black. Both are now drawn in the element's colour, set or inherited. [#540] [#651]
+* Colours that convert to nothing were drawn black or grey instead of drawing nothing. [#552] [#540] [#651]
+  * A `transparent` side of a border, as in Bootstrap's `border: 1px solid transparent`, was drawn black, with warnings on a block. It now takes its width and draws nothing, on blocks, inline elements, table cells and images.
+  * `border-style: hidden` on a block or an image drew a black hairline, with warnings.
+  * `color: transparent` drew black text. The text is now laid out and written in the invisible text rendering mode, so it takes its place and can be selected but is not seen. Its `text-shadow` is still drawn.
+  * A `box-shadow` or `text-shadow` in `transparent` was grey. It is no longer drawn.
 * `font: small-caps 14pt serif` drew the text in full-size capitals, as `text-transform: uppercase` does. It is now drawn in small capitals, as `font-variant: small-caps` draws it. The `font` shorthand also kept a `line-height` and a `font-variant` it inherited; like the style and weight, in standard mode they are now reset to `normal` when the shorthand does not name them, as in a browser. To keep a line height, give it in the shorthand, as in `font: 14pt/1.5 serif`, or declare `line-height` after it. A `font` shorthand with a negative line height, such as `font: 12pt/-1 serif`, is dropped whole. `font-variant: normal` now resets `font-variant-position` as well. [#552] [#581]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
@@ -830,6 +838,7 @@ These changes do not change output.
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
 [#545]: https://github.com/GravityPDF/mpdf/issues/545
 [#539]: https://github.com/GravityPDF/mpdf/issues/539
+[#540]: https://github.com/GravityPDF/mpdf/issues/540
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -889,3 +898,4 @@ These changes do not change output.
 [#644]: https://github.com/GravityPDF/mpdf/pull/644
 [#647]: https://github.com/GravityPDF/mpdf/pull/647
 [#648]: https://github.com/GravityPDF/mpdf/pull/648
+[#651]: https://github.com/GravityPDF/mpdf/pull/651

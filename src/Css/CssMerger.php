@@ -14,6 +14,34 @@ class CssMerger
 {
 
 	/**
+	 * The properties that resolve currentColor in both modes. Legacy mode raised warnings for it in each
+	 */
+	const CURRENT_COLOR_PROPERTIES = [
+		'BORDER-TOP',
+		'BORDER-RIGHT',
+		'BORDER-BOTTOM',
+		'BORDER-LEFT',
+		'BORDER-TOP-COLOR',
+		'BORDER-RIGHT-COLOR',
+		'BORDER-BOTTOM-COLOR',
+		'BORDER-LEFT-COLOR',
+		'TEXT-OUTLINE-COLOR',
+	];
+
+	/**
+	 * The other properties mPDF reads a colour from that can name currentColor, which legacy mode ignores in them. A
+	 * background image names it in the stops of a gradient
+	 */
+	const STANDARD_CURRENT_COLOR_PROPERTIES = [
+		'BACKGROUND-COLOR',
+		'BACKGROUND-IMAGE',
+		'BOX-SHADOW',
+		'TEXT-SHADOW',
+		'TOPNTAIL',
+		'THEAD-UNDERLINE',
+	];
+
+	/**
 	 * @var \Mpdf\Mpdf
 	 */
 	private $mpdf;
@@ -168,6 +196,7 @@ class CssMerger
 		$this->mergeTagSpecificSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeDescendantSelectors($inherit, $tag, $attr, $classes, $languageCode);
 		$this->mergeInlineStyle($tag, $attr);
+		$this->resolveCurrentColor($inherit);
 
 		return $this->cssProperties;
 	}
@@ -233,8 +262,102 @@ class CssMerger
 
 		list($inline, $importantInline) = isset($attr['STYLE']) ? $this->inlineStyleParser->parseByImportance($attr['STYLE']) : [[], []];
 		$this->mergeEach(array_merge([$inline], $importantRules, [$importantInline], $importantDefaultRules), $dominance);
+		$this->resolveCurrentColor($inherit);
 
 		return $this->cssProperties;
+	}
+
+	/**
+	 * Replaces currentColor in the merged properties with the element's colour, which is its own color, or the one it
+	 * inherits. In standard mode, color: currentColor is the colour the element inherits, and a shadow that names no
+	 * colour takes currentColor, as a border does. Legacy mode resolves it only where it raised warnings
+	 *
+	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE, or empty)
+	 * @return void
+	 */
+	private function resolveCurrentColor($inherit)
+	{
+		$properties = self::CURRENT_COLOR_PROPERTIES;
+
+		if ($this->mpdf->cssMode === CssMode::STANDARD) {
+			$properties = array_merge($properties, self::STANDARD_CURRENT_COLOR_PROPERTIES);
+
+			foreach (['BOX-SHADOW', 'TEXT-SHADOW'] as $property) {
+				if (isset($this->cssProperties[$property])) {
+					$this->cssProperties[$property] = ShadowParser::withColor($this->cssProperties[$property], 'currentcolor');
+				}
+			}
+
+			if (isset($this->cssProperties['COLOR']) && strtolower($this->cssProperties['COLOR']) === 'currentcolor') {
+				$inherited = $this->inheritedColor($inherit);
+				if ($inherited === null) {
+					unset($this->cssProperties['COLOR']);
+				} else {
+					$this->cssProperties['COLOR'] = $inherited;
+				}
+			}
+		}
+
+		$color = null;
+		foreach ($properties as $property) {
+			if (!isset($this->cssProperties[$property]) || stripos($this->cssProperties[$property], 'currentcolor') === false) {
+				continue;
+			}
+
+			// The same word in a url() is part of the address
+			if ($property === 'BACKGROUND-IMAGE' && stripos($this->cssProperties[$property], 'gradient(') === false) {
+				continue;
+			}
+
+			if ($color === null) {
+				$color = $this->elementColor($inherit);
+			}
+
+			$this->cssProperties[$property] = str_ireplace('currentcolor', $color, $this->cssProperties[$property]);
+		}
+	}
+
+	/**
+	 * The colour currentColor stands for in the element's merged properties
+	 *
+	 * @param string $inherit Inheritance context
+	 * @return string A colour with no spaces, which a border or shadow value keeps as one component
+	 */
+	private function elementColor($inherit)
+	{
+		$color = isset($this->cssProperties['COLOR']) ? $this->cssProperties['COLOR'] : '';
+		if (!$this->colorConverter->isColor($color) && strtolower($color) !== 'transparent') {
+			$color = $this->inheritedColor($inherit);
+		}
+
+		if ($color === null) {
+			$color = isset($this->cssManager->CSS['BODY']['COLOR']) ? $this->cssManager->CSS['BODY']['COLOR'] : '#000000';
+		}
+
+		return str_replace(' ', '', $color);
+	}
+
+	/**
+	 * The colour an element takes when it sets none, as mPDF passes it on in each context: a block takes the colour of
+	 * the block it is opened in, a table and its parts the table's, and anything else the colour of the text around it
+	 *
+	 * @param string $inherit Inheritance context
+	 * @return string|null Null for the document's default colour
+	 */
+	private function inheritedColor($inherit)
+	{
+		if ($inherit === 'TABLE' || $inherit === 'TOPTABLE') {
+			return isset($this->mpdf->base_table_properties['COLOR']) ? $this->mpdf->base_table_properties['COLOR'] : null;
+		}
+
+		if ($inherit === 'BLOCK') {
+			$level = $this->getBlockLevel();
+			$colorarray = isset($this->mpdf->blk[$level]['InlineProperties']['colorarray']) ? $this->mpdf->blk[$level]['InlineProperties']['colorarray'] : '';
+		} else {
+			$colorarray = $this->mpdf->colorarray;
+		}
+
+		return $colorarray ? $this->colorConverter->colAtoString($colorarray) : null;
 	}
 
 	/**
@@ -1214,7 +1337,7 @@ class CssMerger
 	 */
 	protected function mergeBorderProperties($properties)
 	{
-		$this->borderMerger->mergeBorderProperties($properties, $this->cssProperties);
+		$this->borderMerger->mergeBorderProperties($properties, $this->cssProperties, BorderMerger::initialColor($this->mpdf->cssMode));
 	}
 
 	/**

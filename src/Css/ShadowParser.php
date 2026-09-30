@@ -53,6 +53,26 @@ class ShadowParser
 	}
 
 	/**
+	 * Gives each shadow in a box-shadow or text-shadow value that names no colour the colour given. A component that
+	 * starts with a letter or # and is not inset is a colour, and so is none, which leaves the value as it is.
+	 *
+	 * @param string $value Shadow property value
+	 * @param string $color
+	 * @return string
+	 */
+	public static function withColor($value, $color)
+	{
+		$shadows = preg_split('/,(?![^(]*\))/', $value);
+		foreach ($shadows as $i => $shadow) {
+			if (!preg_match('/(^|\s)(?!inset\b)[a-z#]/i', trim($shadow))) {
+				$shadows[$i] = rtrim($shadow) . ' ' . $color;
+			}
+		}
+
+		return implode(',', $shadows);
+	}
+
+	/**
 	 * Parse box-shadow CSS property.
 	 *
 	 * Converts box-shadow CSS property string into array format used internally.
@@ -137,6 +157,11 @@ class ShadowParser
 				preg_replace('/\*/', ',', $p[4]),
 				$this->mpdf->PDFAXwarnings
 			);
+		}
+
+		if (isset($boxShadow['col']) && $boxShadow['col'] === false) {
+			// A transparent shadow draws nothing
+			return null;
 		}
 
 		if (empty($boxShadow['col'])) {
@@ -241,6 +266,10 @@ class ShadowParser
 				preg_replace('/\*/', ',', $p[3]),
 				$this->mpdf->PDFAXwarnings
 			);
+		}
+
+		if (isset($textShadow['col']) && $textShadow['col'] === false) {
+			return null;
 		}
 
 		if (empty($textShadow['col'])) {
