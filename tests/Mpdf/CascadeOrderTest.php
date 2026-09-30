@@ -178,9 +178,9 @@ class CascadeOrderTest extends TestCase
 	}
 
 	/**
-	 * The default stylesheet is the user agent's under the standard cascade, so an author's rule beats it whatever the
-	 * specificity: `ul { margin-bottom }` reaches a nested list over the default `ul ul { margin-bottom: 0 }`. The
-	 * legacy cascade applies the descendant rule last
+	 * The default stylesheet counts as the built-in stylesheet under the standard cascade, so an author's rule beats
+	 * it whatever the specificity: `ul { margin-bottom }` reaches a nested list over the default
+	 * `ul ul { margin-bottom: 0 }`. The legacy cascade applies the descendant rule last
 	 *
 	 * @dataProvider cascades
 	 *

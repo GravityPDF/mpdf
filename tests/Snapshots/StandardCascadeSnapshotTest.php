@@ -102,7 +102,7 @@ class StandardCascadeSnapshotTest extends Snapshot
 		<p class="caption">The inline style beats #id: the line is green.</p>
 		<div class="case"><p id="c9" style="color: #0a7d32">Inline style against an id</p></div>
 
-		<p class="caption">ul.class beats the default stylesheet's ul ul, which is the user agent's: the nested list keeps the 4mm gap below it, so "Outer two" is well below "Inner two".</p>
+		<p class="caption">ul.class beats the default stylesheet's ul ul, which counts as the built-in stylesheet's: the nested list keeps the 4mm gap below it, so "Outer two" is well below "Inner two".</p>
 		<div class="case">
 			<ul class="c10"><li>Outer one<ul class="c10"><li>Inner one</li><li>Inner two</li></ul></li><li>Outer two</li></ul>
 		</div>

@@ -93,8 +93,7 @@ class CssManager
 	private $rules;
 
 	/**
-	 * @var RuleSet The rules read as the user agent's: in standard mode, those of the default stylesheet,
-	 *              which author rules beat whatever their specificity
+	 * @var RuleSet The rules of the default stylesheet, compiled for the matcher
 	 */
 	private $defaultRules;
 
@@ -124,11 +123,33 @@ class CssManager
 	 * parses all CSS rules into the internal CSS storage structure.
 	 *
 	 * @param string $html HTML content containing CSS
-	 * @param bool $userAgent Whether to keep its rules apart as the user agent's, which standard mode applies
-	 *                        with the built-in defaults, as it does the default stylesheet's
 	 * @return string HTML with CSS content removed
 	 */
-	public function readCss($html, $userAgent = false)
+	public function readCss($html)
+	{
+		return $this->read($html, $this->rules);
+	}
+
+	/**
+	 * Read the default stylesheet, Mpdf::$defaultCssFile. Its rules count as the built-in stylesheet's, which standard
+	 * mode applies with the built-in defaults, below every rule of the document's own stylesheets
+	 *
+	 * @param string $css The stylesheet, without a <style> tag around it
+	 * @return void
+	 */
+	public function readDefaultCss($css)
+	{
+		$this->read('<style> ' . $css . ' </style>', $this->defaultRules);
+	}
+
+	/**
+	 * Parse the CSS in HTML content into the stores readCss() describes, and file its compiled rules in a rule set
+	 *
+	 * @param string $html
+	 * @param RuleSet $rules
+	 * @return string HTML with CSS content removed
+	 */
+	private function read($html, RuleSet $rules)
 	{
 		if (!is_array($this->cascadeCSS)) {
 			$this->cascadeCSS = [];
@@ -139,7 +160,6 @@ class CssManager
 		$this->CSS = Arrays::uniqueRecursiveMerge($this->CSS, $this->cssParser->getCss());
 		$this->cascadeCSS = Arrays::uniqueRecursiveMerge($this->cascadeCSS, $this->cssParser->getCascadeCss());
 
-		$rules = $userAgent ? $this->defaultRules : $this->rules;
 		foreach ($this->cssParser->getCompiledRules() as $rule) {
 			$rules->add($rule[0], $rule[1], $rule[2]);
 		}
@@ -158,7 +178,7 @@ class CssManager
 	}
 
 	/**
-	 * The rules read as the user agent's
+	 * The rules of the default stylesheet, compiled for the matcher
 	 *
 	 * @return RuleSet
 	 */
