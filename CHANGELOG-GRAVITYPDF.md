@@ -52,6 +52,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * `<div align>` passes its alignment on to what it holds, and `<li type>` beats the marker the item inherits from its list.
   * Attributes mPDF ignored now take effect: `<hr align>`, `<hr size>`, `<img align>` (float left or right, or vertical alignment), `<img border>`, `<thead align>`, and `<table border>` wider than 1.
   * A table's `border` gives each cell a 1px border of its own, which a rule for the table's border leaves alone. Before, the cells copied the table's border.
+* **`line-height` on an inline element sets the height of its line**, as in a browser. mPDF ignored it, so `<span style="line-height: 30mm">` left its line as it was. Now each inline element's box is as tall as its line-height, and a line grows to hold the tallest box on it, text or image, in blocks and table cells alike. The block's own line height is the least a line can be, so a smaller inline line-height, or `0`, does not shrink it. A percentage in `vertical-align` is taken of the element's own line-height. `line-height` on a `<p>` or `<div>` inside a table cell, which mPDF lays out as inline content, can now make its lines taller than the cell's. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore it as before. [#548]
 
 New features
 ------------
@@ -857,6 +858,7 @@ These changes do not change output.
 [#629]: https://github.com/GravityPDF/mpdf/pull/629
 [#631]: https://github.com/GravityPDF/mpdf/pull/631
 [#632]: https://github.com/GravityPDF/mpdf/issues/632
+[#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#633]: https://github.com/GravityPDF/mpdf/pull/633
 [#634]: https://github.com/GravityPDF/mpdf/pull/634
 [#635]: https://github.com/GravityPDF/mpdf/pull/635
