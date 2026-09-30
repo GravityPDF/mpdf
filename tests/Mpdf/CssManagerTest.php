@@ -908,6 +908,39 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Under the standard cascade the !important declarations of rules stored by key are laid over CssManager::$CSS
+	 * after every stylesheet read, so what reads it directly finds them over a later declaration that is not
+	 * important, and those of the default stylesheet over the document's. Both are kept apart as well
+	 */
+	public function testLaysImportantDeclarationsOverTheStoredRules()
+	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
+		$this->cssManager->readDefaultCss('body { color: gray !important; margin-top: 1mm; }');
+		$this->cssManager->readCss('<style>body { color: red !important; font-size: 9pt !important; } @page { margin-left: 5mm !important; }</style>');
+		$this->cssManager->readCss('<style>body { color: blue; font-size: 12pt; margin-top: 2mm; } @page { margin-left: 9mm; }</style>');
+
+		$this->assertSame('gray', $this->cssManager->CSS['BODY']['COLOR']);
+		$this->assertSame('9pt', $this->cssManager->CSS['BODY']['FONT-SIZE']);
+		$this->assertSame('2mm', $this->cssManager->CSS['BODY']['MARGIN-TOP']);
+		$this->assertSame('5mm', $this->cssManager->CSS['@PAGE']['MARGIN-LEFT']);
+		$this->assertSame(['BODY' => ['COLOR' => 'red', 'FONT-SIZE' => '9pt'], '@PAGE' => ['MARGIN-LEFT' => '5mm']], $this->cssManager->getImportantCss());
+		$this->assertSame(['BODY' => ['COLOR' => 'gray']], $this->cssManager->getDefaultImportantCss());
+	}
+
+	/**
+	 * Under the legacy cascade a declaration marked !important is stored as any other, and a later one replaces it
+	 */
+	public function testStoresImportantDeclarationsAsAnyOtherUnderTheLegacyCascade()
+	{
+		$this->cssManager->readCss('<style>body { color: red !important; } @page { margin-left: 5mm !important; }</style>');
+		$this->cssManager->readCss('<style>body { color: blue; } @page { margin-left: 9mm; }</style>');
+
+		$this->assertSame('blue', $this->cssManager->CSS['BODY']['COLOR']);
+		$this->assertSame('9mm', $this->cssManager->CSS['@PAGE']['MARGIN-LEFT']);
+		$this->assertSame([], $this->cssManager->getImportantCss());
+	}
+
+	/**
 	 * The default stylesheet's rules are kept apart from the document's, and a document's stylesheet never adds to them
 	 */
 	public function testKeepsTheDefaultStylesheetsRulesApart()

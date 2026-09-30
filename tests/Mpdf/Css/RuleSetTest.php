@@ -129,6 +129,32 @@ class RuleSetTest extends TestCase
 
 		$this->assertSame(
 			[['COLOR' => 'rule 1'], ['COLOR' => 'rule 4'], ['COLOR' => 'rule 3'], ['COLOR' => 'rule 0'], ['COLOR' => 'rule 2'], ['COLOR' => 'rule 5']],
+			$rules->matchingDeclarations('P', '', [], $path)[0]
+		);
+	}
+
+	/**
+	 * The !important declarations of the rules an element matches come apart from the others, in the same order, and
+	 * only from the rules that have any
+	 */
+	public function testGivesTheImportantDeclarationsApartInTheSameOrder()
+	{
+		$rules = new RuleSet();
+		$rules->add($this->compiler->compile('#main > p'), ['COLOR' => 'id'], ['FONT-SIZE' => 'id']);
+		$rules->add($this->compiler->compile('div > p'), ['COLOR' => 'first tag'], ['FONT-SIZE' => 'first tag']);
+		$rules->add($this->compiler->compile('p:first-child'), ['COLOR' => 'pseudo-class']);
+		$rules->add($this->compiler->compile('div > p'), [], ['FONT-SIZE' => 'second tag']);
+		$rules->add($this->compiler->compile('ul > p'), ['COLOR' => 'no match'], ['FONT-SIZE' => 'no match']);
+
+		$path = function () {
+			return $this->path();
+		};
+
+		$this->assertSame(
+			[
+				[['COLOR' => 'first tag'], [], ['COLOR' => 'pseudo-class'], ['COLOR' => 'id']],
+				[['FONT-SIZE' => 'first tag'], ['FONT-SIZE' => 'second tag'], ['FONT-SIZE' => 'id']],
+			],
 			$rules->matchingDeclarations('P', '', [], $path)
 		);
 	}
@@ -145,13 +171,13 @@ class RuleSetTest extends TestCase
 			return null;
 		};
 
-		$this->assertSame([], $this->rules->matchingDeclarations('LI', '', [], $path));
+		$this->assertSame([[], []], $this->rules->matchingDeclarations('LI', '', [], $path));
 		$this->assertTrue($asked, 'The rule for any element should ask');
 
 		$rules = new RuleSet();
 		$rules->add($this->compiler->compile('div > p'), ['COLOR' => 'red']);
 		$asked = false;
-		$this->assertSame([], $rules->matchingDeclarations('LI', '', [], $path));
+		$this->assertSame([[], []], $rules->matchingDeclarations('LI', '', [], $path));
 		$this->assertFalse($asked);
 	}
 
@@ -167,7 +193,7 @@ class RuleSetTest extends TestCase
 			return $this->path();
 		};
 
-		$this->assertSame([], $rules->matchingDeclarations('SPAN', '', [], $path));
+		$this->assertSame([[], []], $rules->matchingDeclarations('SPAN', '', [], $path));
 	}
 
 	/**

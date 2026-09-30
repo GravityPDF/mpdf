@@ -14468,6 +14468,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$zproperties = [];
+		$bodyAttr = [];
 		if ($mode === HTMLParserMode::DEFAULT_MODE || $mode === HTMLParserMode::HEADER_CSS) {
 			$this->ReadMetaTags($html);
 
@@ -14492,7 +14493,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$html = $m[2];
 				// Changed to allow style="background: url('bg.jpg')"
 				if (preg_match('/style=[\"](.*?)[\"]/ism', $m[1], $mm) || preg_match('/style=[\'](.*?)[\']/ism', $m[1], $mm)) {
-					$zproperties = $this->cssManager->readInlineCSS($mm[1]);
+					if ($this->cssMode === CssMode::STANDARD) {
+						// Merged as an element's style is, so the !important declarations of a body rule beat it
+						$bodyAttr['STYLE'] = $mm[1];
+						$zproperties = [];
+					} else {
+						$zproperties = $this->cssManager->readInlineCSS($mm[1]);
+					}
 				}
 				if (preg_match('/dir=[\'\"]\s*rtl\s*[\'\"]/ism', $m[1])) {
 					$zproperties['DIRECTION'] = 'rtl';
@@ -14508,7 +14515,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 		}
-		$properties = $this->cssManager->MergeCSS('BLOCK', 'BODY', '');
+		$properties = $this->cssManager->MergeCSS('BLOCK', 'BODY', $bodyAttr);
 		if ($zproperties) {
 			$properties = Arrays::uniqueRecursiveMerge($properties, $zproperties);
 		}

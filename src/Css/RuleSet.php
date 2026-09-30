@@ -12,7 +12,7 @@ class RuleSet
 
 	/**
 	 * @var array[] Each rule, by its position in the stylesheets read: [compiled selector, declarations, the ancestors
-	 *              it requires as requiredAncestors() gives them]
+	 *              it requires as requiredAncestors() gives them, !important declarations]
 	 */
 	private $rules = [];
 
@@ -40,11 +40,12 @@ class RuleSet
 	 *
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
 	 * @param array $declarations Its normalised declarations
+	 * @param array $important Its normalised !important declarations
 	 */
-	public function add(array $selector, array $declarations)
+	public function add(array $selector, array $declarations, array $important = [])
 	{
 		$position = count($this->rules);
-		$this->rules[] = [$selector, $declarations, self::requiredAncestors($selector)];
+		$this->rules[] = [$selector, $declarations, self::requiredAncestors($selector), $important];
 
 		self::file($this->index, $selector['compounds'][count($selector['compounds']) - 1], $position);
 	}
@@ -65,7 +66,8 @@ class RuleSet
 	}
 
 	/**
-	 * The declarations of the rules an element matches, in the order they apply: by specificity, then by position
+	 * The declarations of the rules an element matches, in the order they apply: by specificity, then by position.
+	 * The normal declarations and the !important ones are given apart, as they apply in different layers
 	 *
 	 * @param string $tag Uppercased
 	 * @param string $id Uppercased, or empty for none
@@ -73,18 +75,18 @@ class RuleSet
 	 * @param callable $path Gives the open elements from the document down to the element, or null for none. Only
 	 *                       called when a rule is filed under the element
 	 *
-	 * @return array[]
+	 * @return array[] [the normal declarations of each rule, the !important declarations of each rule with any]
 	 */
 	public function matchingDeclarations($tag, $id, array $classes, callable $path)
 	{
 		$candidates = $this->candidates($tag, $id, $classes);
 		if (!$candidates) {
-			return [];
+			return [[], []];
 		}
 
 		$path = call_user_func($path);
 		if ($path === null || $path[count($path) - 1]['tag'] !== $tag) {
-			return [];
+			return [[], []];
 		}
 
 		$ancestors = self::ancestorsOf($path);
@@ -112,9 +114,12 @@ class RuleSet
 			return $a - $b;
 		});
 
-		$declarations = [];
+		$declarations = [[], []];
 		foreach ($matched as $position) {
-			$declarations[] = $this->rules[$position][1];
+			$declarations[0][] = $this->rules[$position][1];
+			if ($this->rules[$position][3]) {
+				$declarations[1][] = $this->rules[$position][3];
+			}
 		}
 
 		return $declarations;
@@ -123,7 +128,8 @@ class RuleSet
 	/**
 	 * @param int $position
 	 *
-	 * @return array The rule at a position, as it is kept: [compiled selector, declarations, required ancestors]
+	 * @return array The rule at a position, as it is kept: [compiled selector, declarations, required ancestors,
+	 *               !important declarations]
 	 */
 	public function rule($position)
 	{
