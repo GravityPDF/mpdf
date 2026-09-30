@@ -892,6 +892,7 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testKeepsTheCompiledRulesOfEveryStylesheetRead()
 	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
 		$rules = $this->cssManager->getRules();
 		$this->assertSame([], $rules->candidates('P', '', []));
 
@@ -900,9 +901,10 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$candidates = $rules->candidates('P', '', []);
 		sort($candidates);
-		$this->assertCount(2, $candidates);
+		$this->assertCount(3, $candidates);
 		$this->assertSame(['COLOR' => 'red'], $rules->rule($candidates[0])[1]);
-		$this->assertSame(['COLOR' => 'green'], $rules->rule($candidates[1])[1]);
+		$this->assertSame(['COLOR' => 'blue'], $rules->rule($candidates[1])[1]);
+		$this->assertSame(['COLOR' => 'green'], $rules->rule($candidates[2])[1]);
 	}
 
 	/**
@@ -910,6 +912,7 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testKeepsTheDefaultStylesheetsRulesApart()
 	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
 		$default = $this->cssManager->getDefaultRules()->candidates('UL', '', []);
 
 		$this->cssManager->readDefaultCss('ul > ul { margin-top: 0; }');

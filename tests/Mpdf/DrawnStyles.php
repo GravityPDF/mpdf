@@ -55,6 +55,43 @@ trait DrawnStyles
 	}
 
 	/**
+	 * HTML in one of the places an element is styled in apart from the flow of a page
+	 *
+	 * @param string $context table cell, header, footer, positioned block, kept block (a page-break-inside: avoid
+	 *                        block laid out again on the next page), forced page break (after one, inside a block), or
+	 *                        anything else for the flow
+	 * @param string $html
+	 *
+	 * @return string
+	 */
+	private function inContext($context, $html)
+	{
+		switch ($context) {
+			case 'table cell':
+				return '<table><tr><td>' . $html . '</td></tr></table>';
+
+			case 'header':
+				return '<htmlpageheader name="h">' . $html . '</htmlpageheader><sethtmlpageheader name="h" value="on" show-this-page="1" /><p>body</p>';
+
+			case 'footer':
+				return '<htmlpagefooter name="f">' . $html . '</htmlpagefooter><sethtmlpagefooter name="f" value="on" /><p>body</p>';
+
+			case 'positioned block':
+				return '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm;">' . $html . '</div>';
+
+			case 'kept block':
+				// Too little of the first page is left for the block, which is laid out again on the second
+				return str_repeat('<p>filler</p>', 44) . '<div style="page-break-inside: avoid"><p>kept</p>' . $html . '</div>';
+
+			case 'forced page break':
+				return '<div class="w"><p>before the break</p><pagebreak />' . $html . '</div>';
+
+			default:
+				return $html;
+		}
+	}
+
+	/**
 	 * Keys what was recorded of each piece of text a document drew by the text itself, so a test can look a piece up
 	 * by what it says
 	 *

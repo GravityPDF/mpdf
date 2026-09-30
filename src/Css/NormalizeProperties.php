@@ -3,6 +3,7 @@
 namespace Mpdf\Css;
 
 use Mpdf\Color\ColorConverter;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\MpdfException;
 use Mpdf\PageFormat;
@@ -253,8 +254,8 @@ class NormalizeProperties
 	 *
 	 * Expands the CSS font shorthand into individual components:
 	 * font-family, font-size, line-height, font-style, font-weight and the font-variant longhands.
-	 * A component the value does not name is reset to normal. A value with no size and family,
-	 * such as a system font keyword (caption, menu), is dropped.
+	 * In standard mode, a component the value does not name is reset to normal. In either mode, a value with no
+	 * size and family, such as a system font keyword (caption, menu), is dropped.
 	 *
 	 * @param string $value Font property value
 	 * @return void
@@ -278,7 +279,9 @@ class NormalizeProperties
 		$this->processFontFamilyProperty('FONT-FAMILY', $family);
 
 		$this->properties['FONT-SIZE'] = $size;
-		$this->properties['LINE-HEIGHT'] = $lineHeight !== '' ? $lineHeight : 'normal';
+		if ($lineHeight !== '' || $this->resetsOmittedParts()) {
+			$this->properties['LINE-HEIGHT'] = $lineHeight !== '' ? $lineHeight : 'normal';
+		}
 
 		// Check for font-style
 		if (preg_match('/(italic|oblique)/i', $keywords)) {
@@ -295,7 +298,9 @@ class NormalizeProperties
 		}
 
 		// Check for small-caps, the only font-variant value the shorthand can name
-		$this->processFontVariantProperty('normal');
+		if ($this->resetsOmittedParts()) {
+			$this->processFontVariantProperty('normal');
+		}
 		if (stripos($keywords, 'small-caps') !== false) {
 			$this->properties['FONT-VARIANT-CAPS'] = 'small-caps';
 		}
@@ -402,8 +407,8 @@ class NormalizeProperties
 	 * Process BORDER shorthand and individual border properties.
 	 *
 	 * Handles BORDER, BORDER-TOP, BORDER-RIGHT, BORDER-BOTTOM, BORDER-LEFT properties
-	 * by normalizing them to consistent "width style color" format. Each side's width, style and colour
-	 * longhands are set too, so the shorthand replaces longhands given before it in the cascade.
+	 * by normalizing them to consistent "width style color" format. In standard mode, each side's width, style and
+	 * colour longhands are set too, so the shorthand replaces longhands given before it in the cascade.
 	 *
 	 * @param string $propertyKey Property key (BORDER, BORDER-TOP, etc.)
 	 * @param string $value Property value
@@ -421,11 +426,14 @@ class NormalizeProperties
 		list($width, $style, $color) = explode(' ', $value);
 
 		$sides = $propertyKey === 'BORDER' ? ['BORDER-TOP', 'BORDER-RIGHT', 'BORDER-BOTTOM', 'BORDER-LEFT'] : [$propertyKey];
+		$resets = $this->resetsOmittedParts();
 		foreach ($sides as $side) {
 			$this->properties[$side] = $value;
-			$this->properties[$side . '-WIDTH'] = $width;
-			$this->properties[$side . '-STYLE'] = $style;
-			$this->properties[$side . '-COLOR'] = $color;
+			if ($resets) {
+				$this->properties[$side . '-WIDTH'] = $width;
+				$this->properties[$side . '-STYLE'] = $style;
+				$this->properties[$side . '-COLOR'] = $color;
+			}
 		}
 	}
 
@@ -930,6 +938,44 @@ class NormalizeProperties
 	}
 
 	/**
+	 * Whether a shorthand sets the parts it does not name to their initial values, replacing longhands given before it
+	 * in the cascade, as CSS has it. In legacy mode it leaves them as they were
+	 *
+	 * @return bool
+	 */
+	private function resetsOmittedParts()
+	{
+		return $this->mpdf->cssMode === CssMode::STANDARD;
+	}
+
+	/**
+	 * Sets only the parts a background shorthand names, besides its colour and image, as mPDF v7 read it: the
+	 * repeat, position and size only with an image, which they have nothing to apply to without
+	 *
+	 * @param array $bg The shorthand as parseCssBackground() reads it
+	 * @return void
+	 */
+	private function mergeBackgroundParts(array $bg)
+	{
+		if ($this->properties['BACKGROUND-IMAGE'] !== '') {
+			if (isset($bg['r'])) {
+				$this->properties['BACKGROUND-REPEAT'] = $bg['r'];
+			}
+			if (!empty($bg['p'])) {
+				$this->properties['BACKGROUND-POSITION'] = $bg['p'];
+			}
+			if (isset($bg['s'])) {
+				$this->properties['BACKGROUND-SIZE'] = $bg['s'];
+			}
+		}
+
+		if (isset($bg['o'])) {
+			$this->properties['BACKGROUND-ORIGIN'] = $bg['o'];
+			$this->properties['BACKGROUND-CLIP'] = $bg['k'];
+		}
+	}
+
+	/**
 	 * Process background related CSS properties.
 	 *
 	 * Handles BACKGROUND, BACKGROUND-IMAGE, BACKGROUND-REPEAT, and BACKGROUND-POSITION.
@@ -949,9 +995,15 @@ class NormalizeProperties
 					break;
 				}
 
-				// A part not given takes its initial value, replacing a longhand given before it in the cascade
 				$this->properties['BACKGROUND-COLOR'] = isset($bg['c']) ? $bg['c'] : 'transparent';
 				$this->properties['BACKGROUND-IMAGE'] = isset($bg['i']) ? $bg['i'] : '';
+
+				if (!$this->resetsOmittedParts()) {
+					$this->mergeBackgroundParts($bg);
+					break;
+				}
+
+				// A part not given takes its initial value, replacing a longhand given before it in the cascade
 				$this->properties['BACKGROUND-REPEAT'] = isset($bg['r']) ? $bg['r'] : 'repeat';
 				$this->properties['BACKGROUND-POSITION'] = !empty($bg['p']) ? $bg['p'] : '0% 0%';
 				$this->properties['BACKGROUND-SIZE'] = isset($bg['s']) ? $bg['s'] : 'auto';

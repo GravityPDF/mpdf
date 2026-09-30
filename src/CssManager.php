@@ -161,7 +161,7 @@ class CssManager
 		$this->cascadeCSS = Arrays::uniqueRecursiveMerge($this->cascadeCSS, $this->cssParser->getCascadeCss());
 
 		foreach ($this->cssParser->getCompiledRules() as $rule) {
-			$rules->add($rule[0], $rule[1], $rule[2]);
+			$rules->add($rule[0], $rule[1]);
 		}
 
 		return $html;

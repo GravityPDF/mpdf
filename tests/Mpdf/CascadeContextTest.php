@@ -173,26 +173,8 @@ class CascadeContextTest extends TestCase
 			$html .= $context === 'inline' ? '<p>' . $inner . '</p>' : $inner;
 		}
 
-		switch ($context) {
-			case 'header':
-				return $style . '<htmlpageheader name="h">' . $html . '</htmlpageheader><sethtmlpageheader name="h" value="on" show-this-page="1" /><p>body</p>';
-
-			case 'footer':
-				return $style . '<htmlpagefooter name="f">' . $html . '</htmlpagefooter><sethtmlpagefooter name="f" value="on" /><p>body</p>';
-
-			case 'positioned block':
-				return $style . '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm;">' . $html . '</div>';
-
-			case 'kept block':
-				// Too little of the first page is left for the block, which is laid out again on the second
-				return $style . str_repeat('<p>filler</p>', 44) . '<div style="page-break-inside: avoid"><p>kept</p>' . $html . '</div>';
-
-			case 'forced page break':
-				return $style . '<div class="w"><p>before the break</p><pagebreak />' . $html . '</div>';
-
-			default:
-				return $style . $html;
-		}
+		// A table cell and an inline element are the subjects' own tags, in the flow
+		return $style . ($context === 'table cell' ? $html : $this->inContext($context, $html));
 	}
 
 	/**

@@ -152,8 +152,6 @@ class CssMerger
 		$this->mergeStylesheetSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeTagSpecificSelectors($tag, $attr, $classes, $languageCode);
 		$this->mergeDescendantSelectors($inherit, $tag, $attr, $classes, $languageCode);
-		// The rules only the matcher reads, such as div > p, h1 + p and li:first-child, go after the descendant rules
-		$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $attr['ID'], $this->classesOf($attr), [$this->mpdf, 'getStyledElementPath']);
 		$this->mergeInlineStyle($tag, $attr);
 
 		return $this->cssProperties;
@@ -279,8 +277,6 @@ class CssMerger
 			return;
 		}
 
-		$this->mpdf->markStyledElementAsLevel();
-
 		if ($inherit === 'TOPTABLE') {
 			// Save Cascading CSS e.g. "div.topic p" at this block level
 			if (isset($this->mpdf->blk[$this->mpdf->blklvl]['cascadeCSS'])) {
@@ -373,7 +369,6 @@ class CssMerger
 		// Set the new block info
 		if ($this->sideEffects) {
 			$this->mpdf->blk[$this->mpdf->blklvl] = $currentBlock;
-			$this->mpdf->markStyledElementAsLevel();
 		}
 	}
 

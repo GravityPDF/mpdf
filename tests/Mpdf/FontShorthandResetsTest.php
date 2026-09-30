@@ -6,20 +6,38 @@ use Mpdf\Css\TextVars;
 
 /**
  * The font shorthand draws small-caps as small capitals, resets the line-height, style, weight and variant it does not
- * name, and is dropped when it names a system font.
+ * name, and is dropped when it names a system font. Legacy mode draws small capitals too, but resets only the style
+ * and weight, as mPDF v7 did.
  */
 class FontShorthandResetsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
-	 * small-caps in the shorthand draws small capitals, not the text in full-size capitals
+	 * small-caps in the shorthand draws small capitals, not the text in full-size capitals, in either mode
+	 *
+	 * @dataProvider cssModes
+	 *
+	 * @param string $cssMode
 	 */
-	public function testSmallCapsDrawsSmallCapitals()
+	public function testSmallCapsDrawsSmallCapitals($cssMode)
 	{
-		$mpdf = $this->render('<style>p { font: small-caps 14pt dejavuserif }</style><p>qq</p>');
+		$mpdf = $this->render('<style>p { font: small-caps 14pt dejavuserif }</style><p>qq</p>', $cssMode);
 
 		$this->assertSame(['qq'], $mpdf->drawnText);
 		$this->assertSame(TextVars::FC_SMALLCAPS, $mpdf->drawnTextvar[0] & (TextVars::FC_SMALLCAPS | TextVars::FT_UPPERCASE));
+	}
+
+	/**
+	 * Each CssMode
+	 *
+	 * @return string[][]
+	 */
+	public function cssModes()
+	{
+		return [
+			'standard' => [CssMode::STANDARD],
+			'legacy' => [CssMode::LEGACY],
+		];
 	}
 
 	/**
@@ -32,6 +50,16 @@ class FontShorthandResetsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame($normal->drawnLineHeight, $reset->drawnLineHeight);
 		$this->assertLessThan(3 * 14 * 25.4 / 72, $reset->drawnLineHeight[0]);
+	}
+
+	/**
+	 * In legacy mode a shorthand with no line-height leaves the one inherited, as mPDF v7 did
+	 */
+	public function testLegacyModeKeepsTheInheritedLineHeight()
+	{
+		$mpdf = $this->render('<style>div { line-height: 3 } p { font: 14pt dejavuserif }</style><div><p>qq</p></div>', CssMode::LEGACY);
+
+		$this->assertEqualsWithDelta(3 * 14 * 25.4 / 72, $mpdf->drawnLineHeight[0], 0.001);
 	}
 
 	/**
@@ -59,6 +87,22 @@ class FontShorthandResetsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * In legacy mode the shorthand resets the style and weight, and leaves the variant it inherits, as mPDF v7 did
+	 *
+	 * @dataProvider providerStyleWeightAndVariant
+	 *
+	 * @param string $html A document whose shorthand names no style, weight or variant, inside text that has all three
+	 */
+	public function testLegacyModeKeepsTheInheritedVariant($html)
+	{
+		$mpdf = $this->render($html, CssMode::LEGACY);
+
+		$this->assertSame(['qq'], $mpdf->drawnText);
+		$this->assertSame([''], $mpdf->drawnFontStyle);
+		$this->assertSame(TextVars::FC_SMALLCAPS, $mpdf->drawnTextvar[0] & TextVars::FC_SMALLCAPS);
+	}
+
+	/**
 	 * @return array[] Documents whose shorthand should reset the style, weight and variant it inherits
 	 */
 	public function providerStyleWeightAndVariant()
@@ -83,12 +127,13 @@ class FontShorthandResetsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * @param string $html The document
+	 * @param string $cssMode A CssMode constant
 	 *
 	 * @return FontStateRecordingMpdf The document written, with the state each line was drawn with
 	 */
-	private function render($html)
+	private function render($html, $cssMode = CssMode::STANDARD)
 	{
-		$mpdf = new FontStateRecordingMpdf();
+		$mpdf = new FontStateRecordingMpdf(['cssMode' => $cssMode]);
 		$mpdf->WriteHTML($html);
 
 		return $mpdf;

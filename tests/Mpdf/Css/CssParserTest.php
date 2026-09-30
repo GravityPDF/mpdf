@@ -7,6 +7,7 @@ use Mpdf\Cache;
 use Mpdf\Color\ColorConverter;
 use Mpdf\Color\ColorModeConverter;
 use Mpdf\Color\ColorSpaceRestrictor;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\SizeConverter;
 use Psr\Log\NullLogger;
@@ -25,7 +26,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$logger = new NullLogger();
 		// The legacy cascade stores rules by key and in the descendant tree as well as compiling them
-		$this->mpdf = new Mpdf(['cssMode' => \Mpdf\CssMode::LEGACY]);
+		$this->mpdf = new Mpdf(['cssMode' => CssMode::LEGACY]);
 		$this->mpdf->setLogger($logger);
 
 		$assetFetcher = $this->getMockBuilder(AssetFetcher::class)
@@ -166,33 +167,41 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A rule the legacy parser cannot read is compiled for the matcher, and a simple rule it can read is not
+	 * Legacy mode compiles no rule. It keeps a rule the legacy parser reads, and drops one only the matcher could
+	 * read, as mPDF did before the matcher
 	 *
 	 * @dataProvider routedSelectors
 	 *
 	 * @param string $selector
-	 * @param bool $compiled Whether it goes to the matcher
+	 * @param bool $matcherOnly Whether only the matcher reads it
 	 */
-	public function testCompilesOnlyWhatTheLegacyParserCannotRead($selector, $compiled)
+	public function testLegacyModeDropsWhatTheLegacyParserCannotRead($selector, $matcherOnly)
 	{
 		$this->parser->parse('<style>' . $selector . ' { color: blue; }</style>');
 
-		$rules = $this->parser->getCompiledRules();
-		if (!$compiled) {
-			$this->assertSame([], $rules);
-
-			return;
-		}
-
-		$this->assertCount(1, $rules);
-		$this->assertSame(['COLOR' => 'blue'], $rules[0][1]);
-		$this->assertFalse($rules[0][2]);
-		$this->assertSame([], $this->parser->getCss());
-		$this->assertSame([], $this->parser->getCascadeCss());
+		$this->assertSame([], $this->parser->getCompiledRules());
+		$this->assertSame($matcherOnly, $this->parser->getCss() === [] && $this->parser->getCascadeCss() === []);
 	}
 
 	/**
-	 * A selector, and whether it goes to the matcher rather than the legacy parser
+	 * Standard mode compiles every rule, whichever parser reads it
+	 *
+	 * @dataProvider routedSelectors
+	 *
+	 * @param string $selector
+	 */
+	public function testStandardModeCompilesEveryRule($selector)
+	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
+		$this->parser->parse('<style>' . $selector . ' { color: blue; }</style>');
+
+		$rules = $this->parser->getCompiledRules();
+		$this->assertCount(1, $rules);
+		$this->assertSame(['COLOR' => 'blue'], $rules[0][1]);
+	}
+
+	/**
+	 * A selector, and whether only the matcher reads it, not the legacy parser
 	 *
 	 * @return array[]
 	 */
@@ -219,58 +228,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A descendant rule the legacy parser reads is compiled too, for the matcher to apply through the ancestors the
-	 * legacy engine does not look at
-	 *
-	 * @dataProvider legacyDescendantSelectors
-	 *
-	 * @param string $selector
-	 */
-	public function testCompilesALegacyDescendantRuleToMatchThroughInlineAncestors($selector)
-	{
-		$this->parser->parse('<style>' . $selector . ' { color: blue; }</style>');
-
-		$rules = $this->parser->getCompiledRules();
-		$this->assertCount(1, $rules);
-		$this->assertSame(['COLOR' => 'blue'], $rules[0][1]);
-		$this->assertTrue($rules[0][2]);
-		$this->assertNotEmpty($this->parser->getCascadeCss());
-	}
-
-	/**
-	 * A descendant selector the legacy parser reads
-	 *
-	 * @return array[]
-	 */
-	public function legacyDescendantSelectors()
-	{
-		return [
-			'types' => ['span em'],
-			'a class as the ancestor' => ['.x b'],
-			'three levels' => ['div .x b'],
-			'a cell nth-child' => ['table td:nth-child(odd)'],
-			'lang' => ['div :lang(fr)'],
-			'a lang attribute' => ['[lang=fr] b'],
-		];
-	}
-
-	/**
-	 * A simple :lang() rule the legacy parser reads is compiled too, for the matcher to apply to an element that
-	 * inherits its language rather than having its own lang attribute
-	 */
-	public function testCompilesALegacyLangRuleToMatchAnInheritedLanguage()
-	{
-		$this->parser->parse('<style>p:lang(fr) { color: blue; } p[lang=fr] { color: red; }</style>');
-
-		$rules = $this->parser->getCompiledRules();
-		$this->assertCount(1, $rules);
-		$this->assertSame([['lang', ['fr']]], $rules[0][0]['compounds'][0]['pseudos']);
-		$this->assertTrue($rules[0][2]);
-		$this->assertArrayHasKey('P>>LANG>>fr', $this->parser->getCss());
-	}
-
-	/**
-	 * A rule the legacy parser cannot read and the matcher cannot match either is dropped, as it was before
+	 * A rule the legacy parser cannot read and the matcher cannot match either is dropped in standard mode too
 	 *
 	 * @dataProvider droppedSelectors
 	 *
@@ -278,6 +236,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testDropsWhatNeitherCanRead($selector)
 	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
 		$this->parser->parse('<style>' . $selector . ' { color: blue; }</style>');
 
 		$this->assertSame([], $this->parser->getCompiledRules());
@@ -304,18 +263,20 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A list is split into its selectors before either parser reads them, so commas inside parentheses and strings
-	 * stay with their selector and each selector goes its own way
+	 * stay with their selector and each selector is compiled whole
 	 */
 	public function testSplitsAListBeforeReadingItsSelectors()
 	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
 		$this->parser->parse('<style>li:nth-child( 2n + 1 ), div > p, h1 { color: blue; }</style>');
 
 		$this->assertSame(['H1' => ['COLOR' => 'blue']], $this->parser->getCss());
 
 		$rules = $this->parser->getCompiledRules();
-		$this->assertCount(2, $rules);
+		$this->assertCount(3, $rules);
 		$this->assertSame([['nth-child', 2, 1]], $rules[0][0]['compounds'][0]['pseudos']);
 		$this->assertSame(['>'], $rules[1][0]['combinators']);
+		$this->assertSame('H1', $rules[2][0]['compounds'][0]['tag']);
 	}
 
 	/**
@@ -323,6 +284,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testDoesNotKeepAnEmptyRule()
 	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
 		$this->parser->parse('<style>div > p { }</style>');
 
 		$this->assertSame([], $this->parser->getCompiledRules());
@@ -333,6 +295,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testStartsANewListOfCompiledRulesForEachParse()
 	{
+		$this->mpdf->cssMode = CssMode::STANDARD;
 		$this->parser->parse('<style>div > p { color: blue; }</style>');
 		$this->parser->parse('<style>h1 + p { color: red; }</style>');
 
@@ -348,7 +311,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testCompilesEveryRuleUnderTheStandardCascade()
 	{
-		$this->mpdf->cssMode = \Mpdf\CssMode::STANDARD;
+		$this->mpdf->cssMode = CssMode::STANDARD;
 		$this->parser->parse('<style>p { color: red; } .a, div .b { color: green; } li:first-child { color: blue; } @page { margin-left: 1cm; }</style>');
 
 		$rules = $this->parser->getCompiledRules();
@@ -357,7 +320,6 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			[['COLOR' => 'red'], ['COLOR' => 'green'], ['COLOR' => 'green'], ['COLOR' => 'blue']],
 			array_column($rules, 1)
 		);
-		$this->assertSame([false, false, false, false], array_column($rules, 2));
 		$this->assertSame(['P', 'CLASS>>A', '@PAGE'], array_keys($this->parser->getCss()));
 		$this->assertSame([], $this->parser->getCascadeCss());
 	}

@@ -15120,7 +15120,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->blk[$this->blklvl]['tag'] = $te; // mPDF 6
 						}
 						$this->closeElementsImpliedBy($tag, $floor);
-						$this->startElement($tag, $attr, $selfClosing, false);
+						$this->startElement($tag, $attr, $selfClosing);
 						continue;
 					}
 
@@ -15128,17 +15128,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$token = $i;
 					// The <div> standing in for a positioned block has had the block's rules, through its style
 					$outerElement = $this->styledElement;
-					$this->styledElement = !$standIn && $this->isDocumentElement($tag, $attr) ? ['path' => $this->openElements, 'tag' => $tag, 'attr' => $attr, 'level' => false] : null;
+					$this->styledElement = !$standIn && $this->isDocumentElement($tag, $attr) ? ['path' => $this->openElements, 'tag' => $tag, 'attr' => $attr] : null;
 					$this->tag->OpenTag($tag, $attr, $a, $i); // mPDF 6
 					// Unless it put back a page-break-inside: avoid block, which rewinds the parser to that block's start
 					// tag and the open elements to how they were there
 					if ($i === $token) {
 						if ($standIn) {
-							// Its content matches the block's descendant rules, as the content of a block does
-							$this->openElements[count($this->openElements) - 1]['level'] = true;
 							$standIn = false;
 						} else {
-							$this->startElement($tag, $attr, $selfClosing, $this->styledElement !== null && $this->styledElement['level']);
+							$this->startElement($tag, $attr, $selfClosing);
 						}
 					}
 					// Held on to, the copy of the stack would make recording each closed child copy its parent's record
@@ -15325,7 +15323,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->blk[1]['attr'] = $attr;
 			$this->Reset();
 			$outerElement = $this->styledElement;
-			$this->styledElement = $this->fixedPosBlockElements === null ? null : ['path' => $this->fixedPosBlockElements, 'tag' => null, 'attr' => [], 'level' => false];
+			$this->styledElement = $this->fixedPosBlockElements === null ? null : ['path' => $this->fixedPosBlockElements, 'tag' => null, 'attr' => []];
 			$p = $this->cssManager->MergeCSS('BLOCK', $tag, $attr);
 			$this->styledElement = $outerElement;
 			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];

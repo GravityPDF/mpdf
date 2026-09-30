@@ -74,7 +74,7 @@ abstract class FrameworkCascadeSnapshot extends Snapshot
 		<p class="caption">Written with cssMode set to <?php echo $this->cascade(); ?>.</p>
 
 		<h2>Navbar</h2>
-		<p class="caption">#brand against .navbar &gt; .container a. Standard: "Brand" is yellow and bold, the id beating the child rule. Legacy: "Brand" is grey like the other links, though still bold, because a rule only the matcher reads is applied after the id.</p>
+		<p class="caption">#brand against .navbar &gt; .container a. Standard: "Brand" is yellow and bold, the id beating the child rule. Legacy: the child rule is dropped, as mPDF v7 read no child combinator, so "Brand" is yellow and "Home" and "Docs" are blue, all three underlined as links are by default.</p>
 		<div class="navbar"><div class="container"><a id="brand" href="#top">Brand</a> <a href="#home">Home</a> <a href="#docs">Docs</a></div></div>
 
 		<h2>Card</h2>

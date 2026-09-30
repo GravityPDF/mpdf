@@ -257,8 +257,7 @@ class StructuralSelectorTest extends TestCase
 	}
 
 	/**
-	 * Matched rules are applied with the descendant rules, after them and before the inline style: by specificity,
-	 * then by position
+	 * Rules using these selectors compete with the rest by specificity, then by position, and lose to the inline style
 	 *
 	 * @dataProvider precedence
 	 *
@@ -268,7 +267,7 @@ class StructuralSelectorTest extends TestCase
 	 */
 	public function testAppliesMatchedRulesBySpecificityThenPosition($css, $html, $expected)
 	{
-		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssMode' => CssMode::LEGACY]);
+		$colours = $this->drawnColours('<style>' . $css . '</style>' . $html, ['cssMode' => CssMode::STANDARD]);
 
 		$this->assertSame($expected, $colours['text']);
 	}
@@ -306,15 +305,15 @@ class StructuralSelectorTest extends TestCase
 				$html,
 				self::BLUE,
 			],
-			'matched rules come after the id rule, as descendant rules do' => [
+			'an id beats a child rule' => [
 				'#inner { color: #00f; } div > p { color: #f00; }',
 				$html,
-				self::RED,
+				self::BLUE,
 			],
-			'matched rules come after the legacy descendant rules, whatever their weight' => [
+			'a heavier descendant rule beats a child rule' => [
 				'div > p { color: #f00; } #outer p.note { color: #00f; }',
 				$html,
-				self::RED,
+				self::BLUE,
 			],
 			'the inline style still wins' => [
 				'div > p { color: #f00; }',

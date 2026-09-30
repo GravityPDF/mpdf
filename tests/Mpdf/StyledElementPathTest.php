@@ -6,15 +6,15 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
  * The open elements the CSS merger matches compiled rules against, for each element it styles: the element opened
- * by a start tag, a block opened again after a forced page break, a positioned block and the content written in it.
- * These run under the legacy cascade, which asks for the path only when a compiled rule is filed under the element
+ * by a start tag, a block opened again after a forced page break, a positioned block and the content written in it
  */
 class StyledElementPathTest extends TestCase
 {
 
 	/**
-	 * Each time a compiled rule is filed under the element being styled, the path to that element is asked for. A
-	 * block is styled twice, once to preview its CSS
+	 * The path to an element being styled is asked for once for each time it is styled, if a compiled rule is filed
+	 * under it: once for an element opened, and again for a block opened again after a forced page break and for the
+	 * content of a positioned block, which is written twice
 	 *
 	 * @dataProvider documents
 	 *
@@ -23,7 +23,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesThePathToTheElementBeingStyled($html, array $expected)
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => CssMode::LEGACY]);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => CssMode::STANDARD]);
 		$mpdf->WriteHTML($html);
 
 		$this->assertSame($expected, $mpdf->styledPaths);
@@ -39,7 +39,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesThePositionTheElementHasOnItsPath($html)
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => CssMode::LEGACY]);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => CssMode::STANDARD]);
 		$mpdf->WriteHTML($html . '<style>tr > td, tbody > tr { font-weight: bold; }</style>'
 			. '<table><tr><td>a</td><td>b</td></tr></table><table><tbody><tr><td>c</td></tr></tbody><tr><td>d</td></tr></table>');
 
@@ -59,7 +59,7 @@ class StyledElementPathTest extends TestCase
 		return [
 			'elements in the flow' => [
 				'<style>div > p, p > b { color: red; }</style><div><p>a <b>b</b></p></div><p>c</p>',
-				['>DIV>P', '>DIV>P', '>DIV>P>B', '>P', '>P'],
+				['>DIV>P', '>DIV>P>B', '>P'],
 			],
 			'a row written straight into a table sits in a tbody' => [
 				'<style>tbody > tr { color: red; }</style><table><tr><td>a</td></tr></table>',
@@ -71,12 +71,12 @@ class StyledElementPathTest extends TestCase
 			],
 			'blocks opened again after a forced page break' => [
 				'<style>body > div, div > p { color: red; }</style><div><p>a<pagebreak />b</p></div>',
-				['>DIV', '>DIV', '>DIV>P', '>DIV>P', '>DIV', '>DIV', '>DIV>P', '>DIV>P'],
+				['>DIV', '>DIV>P', '>DIV', '>DIV>P'],
 			],
 			'a positioned block and its content, which is written twice, but not the div standing in for it' => [
 				'<style>span > div, div > p { color: red; }</style>'
 				. '<span><div style="position: absolute; top: 50mm; left: 20mm; width: 50mm"><p>a</p></div></span>',
-				['>SPAN>DIV', '>SPAN>DIV', null, null, '>SPAN>DIV>P', '>SPAN>DIV>P', null, null, '>SPAN>DIV>P', '>SPAN>DIV>P'],
+				['>SPAN>DIV', null, '>SPAN>DIV>P', null, '>SPAN>DIV>P'],
 			],
 		];
 	}
@@ -86,7 +86,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testLetsGoOfTheElementOnceItsStartTagIsRead()
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => CssMode::LEGACY]);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c', 'cssMode' => CssMode::STANDARD]);
 		$mpdf->WriteHTML('<style>div > p { color: red; }</style><div><p>a</p><p>b</p></div>');
 
 		$this->assertNull($mpdf->getStyledElementPath());
@@ -97,7 +97,7 @@ class StyledElementPathTest extends TestCase
 	 */
 	public function testGivesNoPathForASpanWrappedAroundARunOfAnotherScript()
 	{
-		$mpdf = new StyledPathRecordingMpdf(['mode' => '', 'autoScriptToLang' => true, 'cssMode' => CssMode::LEGACY]);
+		$mpdf = new StyledPathRecordingMpdf(['mode' => '', 'autoScriptToLang' => true, 'cssMode' => CssMode::STANDARD]);
 		$mpdf->WriteHTML('<style>p > span { color: red; }</style><p>abc שלום <span>def</span></p>');
 
 		$this->assertSame([null, '>P>SPAN'], $mpdf->styledPaths);
