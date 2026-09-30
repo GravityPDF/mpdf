@@ -74,6 +74,53 @@ class InlineStyleParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringNotContainsString('svg+xml;', $result);
 	}
 	
+	/**
+	 * Each url() is read as CSS reads it and written back single quoted, with the characters the parsing after it
+	 * splits on encoded
+	 *
+	 * @dataProvider urlProvider
+	 *
+	 * @param string $css
+	 * @param string $expected
+	 */
+	public function testProcessUrls($css, $expected)
+	{
+		$this->assertSame($expected, $this->inlineStyleParser->processUrlsInCss($css));
+	}
+
+	/**
+	 * CSS with url() values, and what processUrlsInCss() makes of it
+	 *
+	 * @return array
+	 */
+	public function urlProvider()
+	{
+		$long = str_repeat('iVBORw0KGgo', 20000);
+
+		return [
+			'double quotes with single quotes inside' => [
+				'a { background: url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\'/%3e") }',
+				'a { background: url(\'data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\'/%3e\') }',
+			],
+			'single quotes with double quotes inside' => [
+				'a { background: url(\'data:image/svg+xml,%3csvg xmlns="http://www.w3.org/2000/svg"/%3e\') }',
+				'a { background: url(\'data:image/svg+xml,%3csvg xmlns="http://www.w3.org/2000/svg"/%3e\') }',
+			],
+			'spaces and parentheses' => ['url("sub dir/im (1).png")', "url('sub dir/im %281%29.png')"],
+			'whitespace around a quoted url' => ['url(  "a.png"  )', "url('a.png')"],
+			'whitespace around an unquoted url' => ["url(\n  a.png\t)", "url('a.png')"],
+			'semicolon and braces' => ["url('data:image/svg+xml;utf8,<svg><style>p{}</style></svg>')", "url('data:image/svg+xml%ZZutf8,<svg><style>p%7B%7D</style></svg>')"],
+			'escaped quote' => ['url("a\\"b.png")', "url('a\"b.png')"],
+			'escaped parenthesis, unquoted' => ['url(a\\(1\\).png)', "url('a%281%29.png')"],
+			'escaped space, unquoted' => ['url(a\\ b.png)', "url('a b.png')"],
+			'Windows path' => ['url("D:\\a\\mpdf\\data\\img (1).png")', "url('D:\\a\\mpdf\\data\\img %281%29.png')"],
+			'two urls' => ['url(a.png), url( "b c.png" )', "url('a.png'), url('b c.png')"],
+			'upper case' => ['URL(a.png)', "url('a.png')"],
+			'long quoted data URI' => ['url("data:image/png;base64,' . $long . '")', "url('data:image/png%ZZbase64," . $long . "')"],
+			'long unquoted data URI' => ['url( data:image/png;base64,' . $long . ' )', "url('data:image/png%ZZbase64," . $long . "')"],
+		];
+	}
+
 	public function testParse_WithWebkitGradient()
 	{
 		$html = 'background: -webkit-gradient(linear, left top, left bottom, from(#ccc), to(#000));';

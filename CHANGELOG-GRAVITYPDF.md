@@ -87,9 +87,14 @@ New features
 
 ### Paged media
 
+* **`break-before`, `break-after` and `break-inside`.** They are read as their `page-break-*` equivalents: `page` as `always`, `recto` and `verso` as `right` and `left`, and `avoid-page` as `avoid`. Column and region breaks are not page breaks, so they are read as `auto`. [#552] [#569]
 * **Side margins on `:first`, `:left` and `:right` pages.** The `:first`, `:left` and `:right` pages of an `@page` rule, named or not, can set `margin-left` and `margin-right`. Text flowing from page to page is set in the page area of each page, and columns are laid out across it. A side margin on a pseudo page belongs to that side of the physical page, so it is not mirrored. [#476] [#510]
   * Text beside a float, and the blocks around it, keep to the page area of each page the float runs over. [#549]
   * A block with a set width keeps its place in each page area: a centred block stays centred, and a block pushed right by `margin-left: auto` or set right to left stays against the right margin. [#550] [#551] [#553]
+
+### CSS
+
+* **An id written with classes.** Selectors such as `p#note.warning`, `p.warning#note`, `#note.warning` and `p.a.b#note` match, on their own and as parts of descendant rules, in any order of id and classes. They are applied after `p#note`. A selector with a class or id followed by something mPDF cannot match, such as `.a:hover` or `#note::before`, is dropped like any other selector mPDF cannot match. [#527] [#568]
 
 Performance
 -----------
@@ -113,6 +118,7 @@ Bugfixes
 * A table with no background left the next table painted twice. [#43]
 * `@page { size: A4 }`, or a `size` of two lengths with no `margin`, gave 63 pages with one character on each. A page-size name such as `A4`, `letter` or `A5 landscape` now sets the sheet, as a browser sets the paper, and the space around a page box given as two lengths is no longer counted twice. [mpdf/mpdf#1220] [#552] [#562]
 * `@page { size: landscape }`, or a page box wider than it is tall, left the first page portrait, and `size: portrait` left a landscape document landscape. The first page now turns. A page box and percentage margins are measured on the turned sheet, so `size: 250mm 150mm` on A4 is no longer cut to 210 mm wide. [#552] [#562]
+* `page-break-before: auto` or `avoid` on a block inside another block closed the outer block and opened it again, so its border was drawn around each part. `page-break-after: auto` or `avoid` on a table started a new page. [#552] [#569]
 * `background-size: cover` scaled by the wrong ratio when the image came out shorter than the area. [mpdf/mpdf#833] [#22]
 * Only double-quoted attributes were read. Single-quoted, unquoted and bare attributes are now read as well. [mpdf/mpdf#2030] [#24]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
@@ -135,6 +141,13 @@ Bugfixes
 * `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
 * A declaration mPDF cannot read replaced the value before it. A `calc()`, `min()`, `max()`, `clamp()` or `var()` length became 0, so `margin: calc(…)` removed the default margins, and a colour mPDF does not know, or one written with `var()`, drew the text black. Such a declaration is now dropped, as a browser drops it, so the earlier declaration, the default or the inherited value applies. [#552] [#565]
 * `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552] [#565]
+* `line-height: 0` gave lines a normal height. Lines now have no height, as in a browser. A line height well below the font size, such as `0.5` or `1mm`, was stretched down to the baseline; it is now kept. A negative `line-height`, which shrank lines to odd heights, is now ignored. [#552] [#567]
+* The rule after an `@supports`, `@layer`, `@keyframes`, `@container` or other block at-rule was lost, and so were the rules inside `@supports` and `@layer`. The rule after `@charset`, `@namespace` or `@import` was lost too. `@supports` and `@layer` blocks are now unwrapped as `@media` blocks are, except `@supports not`, and other at-rules are removed whole. [#524] [#566]
+* `td:nth-child()` and `th:nth-child()` counted grid columns, so a `colspan` or `rowspan` before a cell made the rule miss it and reach the cell after. They now count the cells of the row. `:first-child` on a `tr`, `td` or `th` now works, as `:nth-child(1)`. [#528] [#572]
+* Some colour values were read wrongly. [#552] [#570]
+* `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
+* A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
+* `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -147,6 +160,8 @@ Bugfixes
 * A hyphen inserted at a line break had no bidi direction. It now takes the direction of the word it breaks. [#116] [#137]
 * `$extgstates` had no default, so `count()` on it threw a `TypeError` on PHP 8. [mpdf/mpdf#2135] [#20]
 * `background-size` lengths such as `60mm` or `100px` drew the image 2.83 times too small, because they were used as points. [#574]
+* A stylesheet `url()` did not load its image when the path had spaces or parentheses, when there was whitespace inside the parentheses, or when it was an SVG data URI that is not base64, such as Bootstrap's `form-select` arrow. [#573]
+* `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. [#577]
 
 ### Images and SVG
 
@@ -721,9 +736,12 @@ These changes do not change output.
 [#519]: https://github.com/GravityPDF/mpdf/pull/519
 [#522]: https://github.com/GravityPDF/mpdf/issues/522
 [#523]: https://github.com/GravityPDF/mpdf/issues/523
+[#524]: https://github.com/GravityPDF/mpdf/issues/524
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
 [#525]: https://github.com/GravityPDF/mpdf/issues/525
+[#527]: https://github.com/GravityPDF/mpdf/issues/527
+[#528]: https://github.com/GravityPDF/mpdf/issues/528
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
 [#560]: https://github.com/GravityPDF/mpdf/pull/560
@@ -740,4 +758,12 @@ These changes do not change output.
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
 [#574]: https://github.com/GravityPDF/mpdf/pull/574
+[#573]: https://github.com/GravityPDF/mpdf/pull/573
+[#569]: https://github.com/GravityPDF/mpdf/pull/569
+[#577]: https://github.com/GravityPDF/mpdf/pull/577
+[#568]: https://github.com/GravityPDF/mpdf/pull/568
+[#567]: https://github.com/GravityPDF/mpdf/pull/567
+[#566]: https://github.com/GravityPDF/mpdf/pull/566
+[#572]: https://github.com/GravityPDF/mpdf/pull/572
+[#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#615]: https://github.com/GravityPDF/mpdf/pull/615

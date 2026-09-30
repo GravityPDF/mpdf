@@ -66,11 +66,14 @@ class AssetFetcher implements \Psr\Log\LoggerAwareInterface, \Mpdf\AssetFetcherI
 			return $this->contentLoader->load($path);
 		}
 
-		if ($path && $check = @fopen($path, 'rb')) {
-			fclose($check);
-			$this->logger->debug(sprintf('Fetching content of file "%s" with non-local basepath', $path), ['context' => LogContext::REMOTE_CONTENT]);
+		// A path read from a URL, such as a stylesheet's url(), can carry percent-encoded spaces and parentheses
+		foreach (array_unique([$path, rawurldecode($path)]) as $candidate) {
+			if ($candidate && $check = @fopen($candidate, 'rb')) {
+				fclose($check);
+				$this->logger->debug(sprintf('Fetching content of file "%s" with non-local basepath', $candidate), ['context' => LogContext::REMOTE_CONTENT]);
 
-			return $this->contentLoader->load($path);
+				return $this->contentLoader->load($candidate);
+			}
 		}
 
 		return $data;

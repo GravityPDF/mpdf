@@ -393,7 +393,7 @@ abstract class BlockTag extends Tag
 		// If page-box has changed AND/OR PAGE-BREAK-BEFORE
 		// mPDF 6 (uses $p - preview of properties so blklvl can be incremented after page-break)
 		if (!$this->mpdf->tableLevel && (($pagesel && (!$this->mpdf->page_box['current'] || $pagesel != $this->mpdf->page_box['current']))
-				|| (isset($p['PAGE-BREAK-BEFORE']) && $p['PAGE-BREAK-BEFORE']))) {
+				|| $this->forcesPageBreak($p, 'PAGE-BREAK-BEFORE'))) {
 			// mPDF 6 pagebreaktype
 			$startpage = $this->mpdf->page;
 			$pagebreaktype = $this->mpdf->defaultPagebreakType;
