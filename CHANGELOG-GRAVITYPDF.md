@@ -130,6 +130,7 @@ New features
 * **The universal selector.** `*` matches every element: alone, with a class, an id, an attribute or a pseudo-class, on either side of a combinator, and inside `:is()`, `:where()` and `:not()`. It weighs nothing, so any rule naming a tag, class, id, attribute or pseudo-class beats it. It reaches `html` and `body` too, so `* { color: … }` colours text written straight into the body, and `* { font-size: … }` sets the size `rem` is read against. Rules using it were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [mpdf/mpdf#312] [mpdf/mpdf#1168] [mpdf/mpdf#1838] [#530] [#644]
   * A reset such as `* { margin: 0; padding: 0 }` now takes away the default margins of paragraphs, headings and lists, a list's indent and a cell's padding, as in a browser. It reaches the lines of the table of contents and the index as well, which are the document's elements, so their levels are no longer indented. Style `div.mpdf_toc_level_1` and the like to indent them again.
   * mPDF's own `<barcode>`, `<dottab>` and `<textcircle>` are not HTML elements. A rule reaches them only by naming their tag, or an id or class they carry, so `*`, and `:empty`, `[attr]` or `:not()` alone, leave them as they are: `:empty { display: none }` does not hide a barcode.
+* **Font weights as numbers, `bolder` and `lighter`, and `font-size: larger` and `smaller`.** In the standard CSS mode, `font-weight` takes a number from 1 to 1000, and `bolder` and `lighter` step from the parent's weight by the table in CSS Fonts. The weight is inherited as a number, so `bolder` inside `bolder` gives 900 and `lighter` inside 700 gives 400, and `h1 { font-weight: lighter }` is regular, one step down from its parent's 400. A weight above 500 is drawn with the family's bold face and any other with its regular face. `larger` and `smaller` multiply and divide the parent's size by 1.2. A form field reads them against the document's size, as it reads its other font sizes. The `font` shorthand's weight is read the same way. All of these were ignored before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to read only `normal` and `bold`, as before. [#545] [#647]
 
 Performance
 -----------
@@ -244,6 +245,7 @@ Bugfixes
 ### Forms
 
 * A `<select>` with a bare `disabled` attribute was not disabled. [#429]
+* `font-size: larger` or `smaller` on an `<input>`, `<select>`, `<textarea>` or `<textcircle>` drew its text at 0pt, so it could not be seen. In the legacy CSS mode the value is now ignored and the element keeps the size around it; in the standard mode it is 1.2 times the document's size, or that divided by 1.2. [#545] [#647]
 * A button with no `name` raised warnings under `useActiveForms`. Unnamed buttons are now named `Submit_<n>`, `Reset_<n>` or `Button_<n>`. [#438]
 * Text wider than its field was cut off. It is now drawn in a smaller font, both on the page and in an active field's appearance. [#433] [#441]
 * A shaped value too long for its field is cut to the longest start that fits, and only between whole clusters. [#460] [#492]
@@ -824,6 +826,7 @@ These changes do not change output.
 [#536]: https://github.com/GravityPDF/mpdf/issues/536
 [#537]: https://github.com/GravityPDF/mpdf/issues/537
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
+[#545]: https://github.com/GravityPDF/mpdf/issues/545
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -881,3 +884,4 @@ These changes do not change output.
 [#642]: https://github.com/GravityPDF/mpdf/pull/642
 [#643]: https://github.com/GravityPDF/mpdf/pull/643
 [#644]: https://github.com/GravityPDF/mpdf/pull/644
+[#647]: https://github.com/GravityPDF/mpdf/pull/647

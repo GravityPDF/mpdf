@@ -41,7 +41,12 @@ class InlinePropertyConverter
 			$css['FONT-SIZE'] = $properties['sizePt'] . 'pt';
 		}
 
-		if (!empty($properties['B'])) {
+		// The computed weight is saved in the standard CSS mode only. A block starts from the normal weight
+		if (isset($properties['weight'])) {
+			if ($properties['weight'] != RelativeFontValues::NORMAL_WEIGHT) {
+				$css['FONT-WEIGHT'] = (string) $properties['weight'];
+			}
+		} elseif (!empty($properties['B'])) {
 			$css['FONT-WEIGHT'] = 'bold';
 		}
 

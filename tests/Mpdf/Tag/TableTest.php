@@ -81,7 +81,7 @@ class TableTest extends BaseTagTestCase
 		$this->assertEquals('rtl', $table['direction']);
 		$this->assertEquals('#ff0000', $table['bgcolor'][-1]);
 		$this->assertEquals(Border::ALL, $table['border']);
-		$this->assertEquals('BOLD', $this->mpdf->base_table_properties['FONT-WEIGHT']);
+		$this->assertSame('700', $this->mpdf->base_table_properties['FONT-WEIGHT']); // the computed weight
 		$this->assertEquals('ITALIC', $this->mpdf->base_table_properties['FONT-STYLE']);
 		$this->assertEquals('blue', $this->mpdf->base_table_properties['COLOR']);
 		$this->assertEquals('2px', $this->mpdf->base_table_properties['LETTER-SPACING']);

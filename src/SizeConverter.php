@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Psr\Log\LoggerInterface;
+use Mpdf\Css\RelativeFontValues;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\PsrLogAwareTrait\PsrLogAwareTrait;
 
@@ -177,11 +178,11 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Reads a font size: a length against the parent's font size, or a keyword such as small against the size medium
-	 * stands for
+	 * Reads a font size: a length against the parent's font size, larger or smaller as the parent's multiplied or
+	 * divided by 1.2 in the standard CSS mode, or a keyword such as small against the size medium stands for
 	 *
 	 * @param string $value
-	 * @param float $parent The parent's font size in mm, which em and % are read against
+	 * @param float $parent The parent's font size in mm, which em, %, larger and smaller are read against
 	 * @param float $medium The size in points medium stands for
 	 *
 	 * @return float|null In points, or null for a value it does not read
@@ -193,9 +194,32 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 			return $this->convert($value, $parent) * Mpdf::SCALE;
 		}
 
+		$ratio = RelativeFontValues::sizeRatio($value);
+		if ($ratio !== null) {
+			return $this->mpdf->cssMode === CssMode::STANDARD ? $parent * $ratio * Mpdf::SCALE : null;
+		}
+
 		$keyword = strtoupper($value);
 
 		return isset($this->mpdf->fontsizes[$keyword]) ? $this->mpdf->fontsizes[$keyword] * $medium : null;
+	}
+
+	/**
+	 * A font-size, in mm, against the parent element's size
+	 *
+	 * @param string $size
+	 * @param float $parentSize In mm
+	 *
+	 * @return float|null Null for larger or smaller in the legacy CSS mode, which ignores them
+	 */
+	public function convertFontSizeToMm($size, $parentSize)
+	{
+		$ratio = RelativeFontValues::sizeRatio($size);
+		if ($ratio === null) {
+			return $this->convert($size, $parentSize);
+		}
+
+		return $this->mpdf->cssMode === CssMode::STANDARD ? $parentSize * $ratio : null;
 	}
 
 	/**

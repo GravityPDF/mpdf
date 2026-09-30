@@ -290,8 +290,10 @@ class NormalizeProperties
 			$this->properties['FONT-STYLE'] = 'normal';
 		}
 
-		// Check for font-weight
-		if (stripos($keywords, 'bold') !== false) {
+		// Check for font-weight. Legacy mode reads bolder as bold, and lighter and the numbers as normal
+		if ($this->mpdf->cssMode === CssMode::STANDARD && preg_match('/\b(bold|bolder|lighter|\d+)\b/i', $keywords, $weight)) {
+			$this->properties['FONT-WEIGHT'] = strtolower($weight[1]);
+		} elseif (stripos($keywords, 'bold') !== false) {
 			$this->properties['FONT-WEIGHT'] = 'bold';
 		} else {
 			$this->properties['FONT-WEIGHT'] = 'normal';

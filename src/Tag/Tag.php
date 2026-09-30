@@ -208,6 +208,20 @@ abstract class Tag
 	}
 
 	/**
+	 * Sets the font size a font-size gives a form field or text circle, read against the document's size. larger and
+	 * smaller leave it as it is in the legacy CSS mode, which ignores them
+	 *
+	 * @param string $size
+	 */
+	protected function setFontSizeAgainstDocument($size)
+	{
+		$mmsize = $this->sizeConverter->convertFontSizeToMm($size, $this->mpdf->default_font_size / Mpdf::SCALE);
+		if ($mmsize !== null) {
+			$this->mpdf->SetFontSize($mmsize * Mpdf::SCALE, false);
+		}
+	}
+
+	/**
 	 * The background and border a form field's CSS sets, for Form to draw whether or not forms are active. What the
 	 * CSS leaves unset is left out, so Form keeps its default.
 	 *

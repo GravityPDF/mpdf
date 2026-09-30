@@ -7,6 +7,7 @@ use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
 use Mpdf\Css\CommentParser;
+use Mpdf\Css\RelativeFontValues;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextVars;
 use Mpdf\Fonts\Color\ColorFormats;
@@ -875,6 +876,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $links; // array of internal links
 	var $FontFamily; // current font family
 	var $FontStyle; // current font style
+
+	/**
+	 * @var int|float The computed font-weight of the text being written, in the standard CSS mode, which sets the B style.
+	 * Tags that set the B style on their own leave it behind, so it is read through RelativeFontValues::weightForStyle()
+	 */
+	var $fontWeight = RelativeFontValues::NORMAL_WEIGHT;
+
 	var $CurrentFont; // current font info
 	var $FontSizePt; // current font size in points
 	var $FontSize; // current font size in user unit
@@ -7157,6 +7165,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$saved['lang'] = $this->currentLang;
 		$saved['fontLanguageOverride'] = $this->fontLanguageOverride; // mPDF 5.7.1
 		$saved['display_off'] = $this->inlineDisplayOff;
+		if ($this->cssMode === CssMode::STANDARD) {
+			$saved['weight'] = RelativeFontValues::weightForStyle($this->fontWeight, $this->B);
+		}
 
 		return $saved;
 	}
@@ -7200,6 +7211,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->currentfontstyle = $saved['style'];
 		$this->currentfontsize = $saved['sizePt'];
 		$this->SetStylesArray(['B' => $saved['B'], 'I' => $saved['I']]); // mPDF 5.7.1
+		if (isset($saved['weight'])) {
+			$this->fontWeight = $saved['weight'];
+		}
 
 		$this->TextColor = $saved['color'];
 		$this->FillColor = $saved['bgcolor'];
@@ -19758,7 +19772,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					break;
 
-				case 'FONT-WEIGHT': // normal bold // Does not support: bolder, lighter, 100..900(step value=100)
+				case 'FONT-WEIGHT':
+					if ($this->cssMode === CssMode::STANDARD) {
+						$parentWeight = RelativeFontValues::parentWeight($this, $type);
+						$weight = RelativeFontValues::weight($v, $parentWeight);
+						$this->fontWeight = $weight === null ? $parentWeight : $weight;
+						$this->SetStyle('B', RelativeFontValues::isBold($this->fontWeight));
+						break;
+					}
+					// Legacy mode reads only normal and bold
 					switch (strtoupper($v)) {
 						case 'BOLD':
 							$this->SetStyle('B', true);
@@ -20198,6 +20220,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		foreach (['B', 'I'] as $s) {
 			$this->$s = false;
 		}
+		$this->fontWeight = RelativeFontValues::NORMAL_WEIGHT;
 		$this->currentfontstyle = '';
 		$this->SetFont('', '', 0, false);
 	}

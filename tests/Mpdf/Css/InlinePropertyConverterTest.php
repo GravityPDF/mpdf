@@ -40,6 +40,19 @@ class InlinePropertyConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\Test
 		$this->assertEquals('italic', $result['FONT-STYLE']);
 	}
 
+	/**
+	 * A computed weight, saved in the standard CSS mode, passes on as a number unless it is normal, the weight a block
+	 * starts from; without one, the bold flag passes on as bold
+	 */
+	public function testConvertFontWeight()
+	{
+		$this->assertSame('900', $this->converter->convert(['B' => true, 'weight' => 900])['FONT-WEIGHT']);
+		$this->assertSame('300', $this->converter->convert(['B' => false, 'weight' => 300])['FONT-WEIGHT']);
+		$this->assertArrayNotHasKey('FONT-WEIGHT', $this->converter->convert(['B' => false, 'weight' => 400]));
+		$this->assertSame('bold', $this->converter->convert(['B' => true])['FONT-WEIGHT']);
+		$this->assertArrayNotHasKey('FONT-WEIGHT', $this->converter->convert(['B' => false]));
+	}
+
 	public function testConvertFontSize()
 	{
 		$bilp = ['sizePt' => 14];

@@ -4,6 +4,7 @@ namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
 use Mpdf\Css\PresentationalHints;
+use Mpdf\Css\RelativeFontValues;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Utils\Rotation;
@@ -300,12 +301,10 @@ class Table extends Tag
 		$this->mpdf->base_table_properties['FONT-FAMILY'] = $this->mpdf->FontFamily;
 
 		if (isset($properties['FONT-SIZE'])) {
-			if ($this->mpdf->tableLevel > 1) {
-				$tableFontSize = $this->sizeConverter->convert($this->mpdf->base_table_properties['FONT-SIZE']);
-				$mmsize = $this->sizeConverter->convert($properties['FONT-SIZE'], $tableFontSize);
-			} else {
-				$mmsize = $this->sizeConverter->convert($properties['FONT-SIZE'], $this->mpdf->default_font_size / Mpdf::SCALE);
-			}
+			$parentSize = $this->mpdf->tableLevel > 1
+				? $this->sizeConverter->convert($this->mpdf->base_table_properties['FONT-SIZE'])
+				: $this->mpdf->default_font_size / Mpdf::SCALE;
+			$mmsize = $this->sizeConverter->convertFontSizeToMm($properties['FONT-SIZE'], $parentSize);
 			if ($mmsize) {
 				$this->mpdf->default_font_size = $mmsize * Mpdf::SCALE;
 				$this->mpdf->SetFontSize($this->mpdf->default_font_size, false);
@@ -314,7 +313,12 @@ class Table extends Tag
 		$this->mpdf->base_table_properties['FONT-SIZE'] = $this->mpdf->FontSize . 'mm';
 
 		if (isset($properties['FONT-WEIGHT'])) {
-			if (strtoupper($properties['FONT-WEIGHT']) === 'BOLD') {
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				$weight = RelativeFontValues::weight($properties['FONT-WEIGHT'], RelativeFontValues::tableWeight($this->mpdf->base_table_properties));
+				if ($weight !== null) {
+					$this->mpdf->base_table_properties['FONT-WEIGHT'] = (string) $weight;
+				}
+			} elseif (strtoupper($properties['FONT-WEIGHT']) === 'BOLD') {
 				$this->mpdf->base_table_properties['FONT-WEIGHT'] = 'BOLD';
 			}
 		}
