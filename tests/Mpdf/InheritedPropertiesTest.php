@@ -9,8 +9,9 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
  * Each inherited text property reaches a descendant's text through every channel mPDF hands inherited values on by:
  * a block to its child blocks, in the flow, in a list, in a header or footer, in a block laid out twice because it is
  * kept together and after a forced page break; an inline element to a block opened inside it; a positioned block to
- * its content; a table to its cells; and a cell to the cells of a table nested in it. The descendant's text is read in
- * the same state as when the descendant sets the value itself. Under legacy the channels drop what mPDF v7 dropped.
+ * its content; a table, a row group and a row to their cells, wherever the table is; and a cell to the cells of a
+ * table nested in it. The descendant's text is read in the same state as when the descendant sets the value itself.
+ * Under legacy the channels drop what mPDF v7 dropped.
  */
 class InheritedPropertiesTest extends TestCase
 {
@@ -61,6 +62,18 @@ class InheritedPropertiesTest extends TestCase
 		'block to child block after a forced page break' => '<div style="{A}"><p>zz</p><pagebreak /><p style="{D}">qq</p></div>',
 		'positioned block to child block' => '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm; {A}"><p style="{D}">qq</p></div>',
 		'table to cell' => '<table style="{A}"><tr><td style="{D}">qq</td></tr></table>',
+		'row to cell' => '<table><tr style="{A}"><td style="{D}">qq</td></tr></table>',
+		'row rule to cell' => '<style>tr.a { {A} }</style><table><tr class="a"><td style="{D}">qq</td></tr></table>',
+		'tbody to cell' => '<table><tbody style="{A}"><tr><td style="{D}">qq</td></tr></tbody></table>',
+		'thead to cell' => '<table><thead style="{A}"><tr><td style="{D}">qq</td></tr></thead><tbody><tr><td>zz</td></tr></tbody></table>',
+		'tfoot to cell' => '<table><tbody><tr><td>zz</td></tr></tbody><tfoot style="{A}"><tr><td style="{D}">qq</td></tr></tfoot></table>',
+		'implied tbody to cell of its second row' => '<style>tbody { {A} }</style><table><tr><td>zz</td></tr><tr><td style="{D}">qq</td></tr></table>',
+		'row in a header to cell' => '<htmlpageheader name="h"><table><tbody style="{A}"><tr><td style="{D}">qq</td></tr></tbody></table></htmlpageheader><sethtmlpageheader name="h" value="on" show-this-page="1" /><p>body</p>',
+		'row in a list item to cell' => '<ul><li><table><thead style="{A}"><tr><td style="{D}">qq</td></tr></thead></table></li></ul>',
+		'row in a positioned block to cell' => '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm"><table><tr style="{A}"><td style="{D}">qq</td></tr></table></div>',
+		'row in a kept block to cell' => '{FILLER}<div style="page-break-inside: avoid"><p>zz</p><table><tr style="{A}"><td style="{D}">qq</td></tr></table></div>',
+		'row to nested table cell' => '<table><tr><td><table><tr style="{A}"><td style="{D}">qq</td></tr></table></td></tr></table>',
+		'outer row to nested table cell' => '<table><tr style="{A}"><td><table><tr><td style="{D}">qq</td></tr></table></td></tr></table>',
 		'cell to child block' => '<table><tr><td style="{A}"><div style="{D}">qq</div></td></tr></table>',
 		'cell to nested table cell' => '<table><tr><td style="{A}"><table><tr><td style="{D}">qq</td></tr></table></td></tr></table>',
 	];
@@ -69,8 +82,8 @@ class InheritedPropertiesTest extends TestCase
 	 * What legacy's channels drop, by context. An inline element hands a block opened inside it only its language
 	 * override, which the block does not reset. A block hands its child blocks no text shadow. A positioned block hands
 	 * its content no word spacing, hyphenation or outline, and its child blocks no text shadow. A table hands its cells
-	 * no font variant, feature setting, language override, transform, shadow or outline. A cell hands the cells of a
-	 * table nested in it only its spacing and its language override
+	 * no font variant, feature setting, language override, transform, shadow or outline. A row group or a row hands its
+	 * cells nothing. A cell hands the cells of a table nested in it only its spacing and its language override
 	 */
 	const LEGACY_DROPPED = [
 		'block to child block' => ['TEXT-SHADOW'],
@@ -95,6 +108,18 @@ class InheritedPropertiesTest extends TestCase
 			'FONT-VARIANT-ALTERNATES', 'FONT-FEATURE-SETTINGS', 'FONT-LANGUAGE-OVERRIDE', 'TEXT-TRANSFORM', 'TEXT-SHADOW',
 			'TEXT-OUTLINE', 'TEXT-OUTLINE-COLOR', 'TEXT-OUTLINE-WIDTH',
 		],
+		'row to cell' => InheritedProperties::TEXT,
+		'row rule to cell' => InheritedProperties::TEXT,
+		'tbody to cell' => InheritedProperties::TEXT,
+		'thead to cell' => InheritedProperties::TEXT,
+		'tfoot to cell' => InheritedProperties::TEXT,
+		'implied tbody to cell of its second row' => InheritedProperties::TEXT,
+		'row in a header to cell' => InheritedProperties::TEXT,
+		'row in a list item to cell' => InheritedProperties::TEXT,
+		'row in a positioned block to cell' => InheritedProperties::TEXT,
+		'row in a kept block to cell' => InheritedProperties::TEXT,
+		'row to nested table cell' => InheritedProperties::TEXT,
+		'outer row to nested table cell' => InheritedProperties::TEXT,
 		'cell to nested table cell' => [
 			'COLOR', 'FONT-FAMILY', 'FONT-SIZE', 'FONT-STYLE', 'FONT-WEIGHT', 'FONT-VARIANT-POSITION', 'FONT-VARIANT-CAPS',
 			'FONT-VARIANT-LIGATURES', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES', 'FONT-FEATURE-SETTINGS',
@@ -296,7 +321,7 @@ class InheritedPropertiesTest extends TestCase
 	 */
 	private function carries($mode, $context, $property)
 	{
-		if ($context === 'cell to nested table cell' && in_array($property, self::TABLE_DEFAULTS, true)) {
+		if (in_array($context, ['cell to nested table cell', 'outer row to nested table cell'], true) && in_array($property, self::TABLE_DEFAULTS, true)) {
 			return false;
 		}
 

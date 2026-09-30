@@ -14,6 +14,7 @@ class TFoot extends Tag
 		$this->mpdf->tabletfoot = 1;
 		$this->mpdf->tablethead = 0;
 		$properties = $this->cssManager->MergeCSS('TABLE', 'TFOOT', $attr);
+		$this->inheritRowGroup($properties);
 		if (isset($properties['FONT-WEIGHT'])) {
 			$this->mpdf->tfoot_font_weight = '';
 			if (strtoupper($properties['FONT-WEIGHT']) === 'BOLD') {

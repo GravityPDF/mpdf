@@ -321,8 +321,9 @@ class Table extends Tag
 		if ($this->mpdf->cssMode === CssMode::LEGACY) {
 			$this->setLegacyBaseProperties($properties);
 		} else {
-			// The font family and size are resolved above, and the weight is computed from the enclosing table's
-			$inherited = InheritedProperties::of($properties, array_diff(InheritedProperties::TEXT, ['FONT-FAMILY', 'FONT-SIZE']));
+			// The font family and size are resolved above, and the weight is computed from the enclosing table's. A th in the
+			// table is centred unless it inherits a text-align
+			$inherited = InheritedProperties::of($properties, array_merge(array_diff(InheritedProperties::TEXT, ['FONT-FAMILY', 'FONT-SIZE']), ['TEXT-ALIGN']));
 			if (isset($inherited['FONT-WEIGHT'])) {
 				$weight = RelativeFontValues::weight($inherited['FONT-WEIGHT'], RelativeFontValues::tableWeight($this->mpdf->base_table_properties));
 				if ($weight === null) {
