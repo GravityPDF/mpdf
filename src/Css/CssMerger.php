@@ -679,6 +679,21 @@ class CssMerger
 				$this->mergeBorderProperties($zp);
 			}
 		}
+
+		// STYLESHEET ID WITH CLASSES e.g. #smallone.note{}  p#smallone.note{}
+		foreach ($this->idClassKeys($tag, $attr['ID'], $classes) as $key) {
+			if (empty($this->cssManager->CSS[$key])) {
+				continue;
+			}
+
+			$zp = $this->cssManager->CSS[$key];
+			if ($tag === 'TD' || $tag === 'TH') {
+				$this->setDominanceFromProperties($zp, 9);
+			}
+
+			$this->cssProperties = array_merge($this->cssProperties, $zp);
+			$this->mergeBorderProperties($zp);
+		}
 	}
 
 	/**
@@ -787,6 +802,11 @@ class CssMerger
 		}
 
 		$this->setMergedCss($node[$tag . '>>ID>>' . $attr['ID']], false, 9);
+		foreach ($this->idClassKeys($tag, $attr['ID'], $classes) as $key) {
+			if (isset($node[$key])) {
+				$this->setMergedCss($node[$key], false, 9);
+			}
+		}
 
 		if ($this->sideEffects) {
 			$this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl - 1] = $node;
@@ -827,6 +847,11 @@ class CssMerger
 		}
 
 		$this->setMergedCss($cascadeCSS[$tag . '>>ID>>' . $attr['ID']]);
+		foreach ($this->idClassKeys($tag, $attr['ID'], $classes) as $key) {
+			if (isset($cascadeCSS[$key])) {
+				$this->setMergedCss($cascadeCSS[$key]);
+			}
+		}
 	}
 
 	/**
@@ -846,6 +871,30 @@ class CssMerger
 		}
 
 		return $prefix . $lang;
+	}
+
+	/**
+	 * The keys of the rules for an id with classes that can match an element, in the order they apply: for each
+	 * combination of its classes, #id.class and then tag#id.class
+	 *
+	 * @param string $tag
+	 * @param string $id
+	 * @param string[] $classes Combinations of the element's classes, as merge() builds them
+	 * @return string[]
+	 */
+	private function idClassKeys($tag, $id, $classes)
+	{
+		$keys = [];
+		if ($id === '') {
+			return $keys;
+		}
+
+		foreach ($classes as $class) {
+			$keys[] = 'ID>>' . $id . '>>CLASS>>' . $class;
+			$keys[] = $tag . '>>ID>>' . $id . '>>CLASS>>' . $class;
+		}
+
+		return $keys;
 	}
 
 	/**
@@ -980,6 +1029,12 @@ class CssMerger
 		// STYLESHEET CLASS e.g. #smallone{}  #redletter{}
 		if (isset($id) && isset($p[$tag . '>>ID>>' . $id])) {
 			$this->mergeCssProperties($p[$tag . '>>ID>>' . $id], $t);
+		}
+
+		foreach ($this->idClassKeys($tag, $id, $classes) as $key) {
+			if (isset($p[$key])) {
+				$this->mergeCssProperties($p[$key], $t);
+			}
 		}
 	}
 
