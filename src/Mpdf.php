@@ -12467,6 +12467,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// for images / inline objects / replaced elements
 		$mta = 0; // Maximum top-aligned
 		$mba = 0; // Maximum bottom-aligned
+		// Whether the line box holds the extended heights, which include line-height, of the inline elements on it
+		$inlineStacking = !in_array($line_stacking_strategy, ['block-line-height', 'grid-height', 'max-height'], true);
+		// Whether an inline element with its own line-height (cssMode standard) is on the line
+		$elementLineheightOnLine = false;
 		foreach ($content as $k => $chunk) {
 			if (isset($this->objectbuffer[$k]) && $this->objectbuffer[$k]['type'] == 'listmarker') {
 				$ypos[$k] = $ypos[-1];
@@ -12494,6 +12498,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			} elseif (isset($this->objectbuffer[$k])) {
 				$oh = $this->objectbuffer[$k]['OUTER-HEIGHT'];
 				$va = $this->objectbuffer[$k]['vertical-align'];
+
+				// An image in an inline element with its own line-height: the element's box is on the line as well
+				if (isset($font[$k]['textparam']['line-height']) && $inlineStacking) {
+					$elementLineheightOnLine = true;
+					$elementYpos = $this->_setLineYpos($font[$k]['size'], $font[$k]['curr']['desc'], $font[$k]['textparam']['line-height']);
+					$topy = max($topy, $elementYpos['exttop']);
+					$bottomy = min($bottomy, $elementYpos['extbottom']);
+				}
 
 				if ($va == 'BS') { //  (BASELINE default)
 					if ($oh > $topy) {
@@ -12530,8 +12542,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				// FOR FLOWING BLOCK
 				$fontsize = $font[$k]['size'];
 				$fontdesc = $font[$k]['curr']['desc'];
-				// In future could set CSS line-height from inline elements; for now, use block level:
-				$ypos[$k] = $this->_setLineYpos($fontsize, $fontdesc, $CSSlineheight, $ypos[-1]);
+				if (isset($font[$k]['textparam']['line-height'])) {
+					// An inline element's own line-height
+					$elementLineheightOnLine = true;
+					$ypos[$k] = $this->_setLineYpos($fontsize, $fontdesc, $font[$k]['textparam']['line-height']);
+				} else {
+					$ypos[$k] = $this->_setLineYpos($fontsize, $fontdesc, $CSSlineheight, $ypos[-1]);
+				}
 
 				if (isset($font[$k]['textparam']['text-baseline']) && $font[$k]['textparam']['text-baseline'] != 0) {
 					$ypos[$k]['baseline-shift'] = $font[$k]['textparam']['text-baseline'];
@@ -12602,6 +12619,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+
+		// A line with an inline element's own line-height holds the block's strut as well, as CSS has it, so a
+		// line-height below the block's does not shrink the line
+		if ($elementLineheightOnLine && $inlineStacking) {
+			$topy = max($topy, $ypos[-1]['exttop']);
+			$bottomy = min($bottomy, $ypos[-1]['extbottom']);
+		}
 
 		// TOP or BOTTOM aligned images
 		if ($mta > ($topy - $bottomy)) {
@@ -19355,6 +19379,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->SetFont($this->currentfontfamily, $this->currentfontstyle, 0, false);
 		}
 
+		// In cssMode standard an inline element's line-height gives the height of its box on the line, and is read
+		// before vertical-align, whose percentages refer to it
+		if ($type == 'INLINE' && isset($arrayaux['LINE-HEIGHT']) && $this->cssMode === CssMode::STANDARD) {
+			$this->textparam['line-height'] = $this->fixLineheight($arrayaux['LINE-HEIGHT']);
+		}
+
 		foreach ($arrayaux as $k => $v) {
 			if ($type != 'INLINE' && $tag != 'BODY' && $type != 'TABLECELL') {
 				switch ($k) {
@@ -19678,7 +19708,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								break;
 							// mPDF 5.7.3  inline text-decoration parameters
 							default:
-								$lh = $this->_computeLineheight($this->blk[$this->blklvl]['line_height']);
+								$lh = $this->_computeLineheight(isset($this->textparam['line-height']) ? $this->textparam['line-height'] : $this->blk[$this->blklvl]['line_height']);
 								$sz = $this->sizeConverter->convert($v, $lh, $this->FontSize, false);
 								$this->textvar = ($this->textvar & ~TextVars::FA_SUBSCRIPT);
 								$this->textvar = ($this->textvar & ~TextVars::FA_SUPERSCRIPT);
