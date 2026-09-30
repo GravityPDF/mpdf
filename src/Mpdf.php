@@ -878,7 +878,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $FontStyle; // current font style
 
 	/**
-	 * @var int|float The computed font-weight of the text being written, in the standard CSS mode, which sets the B style
+	 * @var int|float The computed font-weight of the text being written, in the standard CSS mode, which sets the B style.
+	 * Tags that set the B style on their own leave it behind, so it is read through RelativeFontValues::weightForStyle()
 	 */
 	var $fontWeight = RelativeFontValues::NORMAL_WEIGHT;
 
@@ -7165,7 +7166,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$saved['fontLanguageOverride'] = $this->fontLanguageOverride; // mPDF 5.7.1
 		$saved['display_off'] = $this->inlineDisplayOff;
 		if ($this->cssMode === CssMode::STANDARD) {
-			$saved['weight'] = $this->fontWeight;
+			$saved['weight'] = RelativeFontValues::weightForStyle($this->fontWeight, $this->B);
 		}
 
 		return $saved;
@@ -19773,7 +19774,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				case 'FONT-WEIGHT':
 					if ($this->cssMode === CssMode::STANDARD) {
-						$parentWeight = $this->parentFontWeight($type);
+						$parentWeight = RelativeFontValues::parentWeight($this, $type);
 						$weight = RelativeFontValues::weight($v, $parentWeight);
 						$this->fontWeight = $weight === null ? $parentWeight : $weight;
 						$this->SetStyle('B', RelativeFontValues::isBold($this->fontWeight));
@@ -20163,53 +20164,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
-	/**
-	 * The B style is also set on its own, by some tags and when a text buffer is replayed. When it no longer agrees with
-	 * the computed font-weight, the weight becomes bold's 700 or normal's 400
-	 */
-	private function syncFontWeight()
-	{
-		if (RelativeFontValues::isBold($this->fontWeight) !== (bool) $this->B) {
-			$this->fontWeight = $this->B ? 700 : RelativeFontValues::NORMAL_WEIGHT;
-		}
-	}
-
-	/**
-	 * The computed font-weight of the parent of the element setCSS() is styling, which bolder and lighter step from. A
-	 * block starts from the state its parent block saved, and a table cell from its table's weight; an inline element
-	 * is styled in its parent's state
-	 *
-	 * @param string $type As setCSS() takes it
-	 *
-	 * @return int|float
-	 */
-	private function parentFontWeight($type)
-	{
-		if ($type === 'BLOCK' && $this->blklvl > 0 && isset($this->blk[$this->blklvl - 1]['InlineProperties']['weight'])) {
-			return $this->blk[$this->blklvl - 1]['InlineProperties']['weight'];
-		}
-
-		if ($type === 'TABLECELL') {
-			return $this->tableFontWeight();
-		}
-
-		return $this->fontWeight;
-	}
-
-	/**
-	 * @return int|float The computed font-weight of the table being written, which its cells inherit
-	 */
-	public function tableFontWeight()
-	{
-		return isset($this->base_table_properties['FONT-WEIGHT']) ? (float) $this->base_table_properties['FONT-WEIGHT'] : RelativeFontValues::NORMAL_WEIGHT;
-	}
-
 	/* -- END HTML-CSS -- */
 
 	function SetStyle($tag, $enable)
 	{
 		$this->$tag = $enable;
-		$this->syncFontWeight();
 		$style = '';
 		foreach (['B', 'I'] as $s) {
 			if ($this->$s) {
@@ -20236,7 +20195,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$style .= $s;
 			}
 		}
-		$this->syncFontWeight();
 		$this->currentfontstyle = $style;
 		$this->SetFont('', $style, 0, false);
 	}
@@ -20253,7 +20211,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->$s = false;
 			}
 		}
-		$this->syncFontWeight();
 		$this->currentfontstyle = $style;
 		$this->SetFont('', $style, 0, false);
 	}

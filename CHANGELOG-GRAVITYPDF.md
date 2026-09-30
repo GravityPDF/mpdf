@@ -245,7 +245,7 @@ Bugfixes
 ### Forms
 
 * A `<select>` with a bare `disabled` attribute was not disabled. [#429]
-* `font-size: larger` or `smaller` on an `<input>`, `<select>` or `<textarea>` drew its value at 0pt, so it could not be seen. In the legacy CSS mode the value is now ignored and the field keeps the size around it; in the standard mode it is 1.2 times the document's size, or that divided by 1.2. [#545] [#647]
+* `font-size: larger` or `smaller` on an `<input>`, `<select>`, `<textarea>` or `<textcircle>` drew its text at 0pt, so it could not be seen. In the legacy CSS mode the value is now ignored and the element keeps the size around it; in the standard mode it is 1.2 times the document's size, or that divided by 1.2. [#545] [#647]
 * A button with no `name` raised warnings under `useActiveForms`. Unnamed buttons are now named `Submit_<n>`, `Reset_<n>` or `Button_<n>`. [#438]
 * Text wider than its field was cut off. It is now drawn in a smaller font, both on the page and in an active field's appearance. [#433] [#441]
 * A shaped value too long for its field is cut to the longest start that fits, and only between whole clusters. [#460] [#492]

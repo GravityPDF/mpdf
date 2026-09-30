@@ -194,8 +194,9 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 			return $this->convert($value, $parent) * Mpdf::SCALE;
 		}
 
-		if ($this->isRelativeFontSize($value)) {
-			return $parent * RelativeFontValues::sizeRatio($value) * Mpdf::SCALE;
+		$ratio = RelativeFontValues::sizeRatio($value);
+		if ($ratio !== null) {
+			return $this->mpdf->cssMode === CssMode::STANDARD ? $parent * $ratio * Mpdf::SCALE : null;
 		}
 
 		$keyword = strtoupper($value);
@@ -219,19 +220,6 @@ class SizeConverter implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $this->mpdf->cssMode === CssMode::STANDARD ? $parentSize * $ratio : null;
-	}
-
-	/**
-	 * Whether a font-size is larger or smaller, which the standard CSS mode reads as the parent's size multiplied or
-	 * divided by 1.2. The legacy mode ignores them
-	 *
-	 * @param string $size
-	 *
-	 * @return bool
-	 */
-	public function isRelativeFontSize($size)
-	{
-		return $this->mpdf->cssMode === CssMode::STANDARD && RelativeFontValues::sizeRatio($size) !== null;
 	}
 
 	/**

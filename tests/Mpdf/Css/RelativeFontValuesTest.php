@@ -110,4 +110,24 @@ class RelativeFontValuesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertNull(RelativeFontValues::sizeRatio('120%'));
 		$this->assertNull(RelativeFontValues::sizeRatio('1.2em'));
 	}
+
+	/**
+	 * A weight that agrees with the B style is kept; one that does not becomes bold's 700 or normal's 400
+	 */
+	public function testWeightForStyle()
+	{
+		$this->assertSame(600, RelativeFontValues::weightForStyle(600, true));
+		$this->assertSame(300, RelativeFontValues::weightForStyle(300, false));
+		$this->assertSame(700, RelativeFontValues::weightForStyle(300, true));
+		$this->assertSame(400, RelativeFontValues::weightForStyle(900, false));
+	}
+
+	/**
+	 * A table with no font-weight of its own hands its cells the normal weight, and one with a weight hands that on
+	 */
+	public function testTableWeight()
+	{
+		$this->assertSame(400, RelativeFontValues::tableWeight([]));
+		$this->assertSame(800.0, RelativeFontValues::tableWeight(['FONT-WEIGHT' => '800']));
+	}
 }

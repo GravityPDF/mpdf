@@ -65,10 +65,7 @@ class TextArea extends Tag
 			$this->mpdf->SetFont($properties['FONT-FAMILY'], '', 0, false);
 		}
 		if (isset($properties['FONT-SIZE']) && $properties['FONT-SIZE'] !== 'auto') {
-			$mmsize = $this->sizeConverter->convertFontSizeToMm($properties['FONT-SIZE'], $this->mpdf->default_font_size / Mpdf::SCALE);
-			if ($mmsize !== null) {
-				$this->mpdf->SetFontSize($mmsize * Mpdf::SCALE, false);
-			}
+			$this->setFontSizeAgainstDocument($properties['FONT-SIZE']);
 		}
 		if (isset($properties['COLOR'])) {
 			$objattr['color'] = $this->colorConverter->convert($properties['COLOR'], $this->mpdf->PDFAXwarnings);

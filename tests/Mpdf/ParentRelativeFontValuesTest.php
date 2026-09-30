@@ -29,6 +29,22 @@ class ParentRelativeFontValuesTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	}
 
 	/**
+	 * A text circle reads larger and smaller against the document's size, as a form field does, and in the legacy mode
+	 * ignores them, keeping the paragraph's size rather than being drawn at 0pt
+	 */
+	public function testATextCircleReadsLargerAgainstTheDocumentSize()
+	{
+		$html = '<p style="font-size: 14pt"><textcircle r="30mm" top-text="Circular" style="font-size: larger" /></p>';
+		foreach ([CssMode::STANDARD => '13.200', CssMode::LEGACY => '14.000'] as $mode => $size) {
+			$mpdf = new Mpdf(['mode' => 'c', 'cssMode' => $mode]);
+			$mpdf->SetCompression(false);
+			$mpdf->WriteHTML($html);
+
+			$this->assertStringContainsString(' ' . $size . ' Tf', $mpdf->Output('', 'S'), $mode);
+		}
+	}
+
+	/**
 	 * @return array[] Each case of nested values in each context, under each CSS mode, with the style and size each
 	 * piece of text is drawn in
 	 */
