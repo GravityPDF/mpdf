@@ -13,6 +13,16 @@ class TableCellDescendantSelectorTest extends \Yoast\PHPUnitPolyfills\TestCases\
 	const RED = '1.000 0.000 0.000 rg';
 
 	/**
+	 * The configuration the documents are written with: the default, the legacy cascade
+	 *
+	 * @return array
+	 */
+	protected function config()
+	{
+		return [];
+	}
+
+	/**
 	 * A table of one cell holding the given content, in a div, under the given stylesheet
 	 *
 	 * @param string $css
@@ -60,7 +70,7 @@ class TableCellDescendantSelectorTest extends \Yoast\PHPUnitPolyfills\TestCases\
 	 */
 	public function testARuleReachesAPictureInTheCell($selector, $content)
 	{
-		$this->assertEqualsWithDelta(20, $this->drawnWidth($this->table($selector . ' { max-width: 20mm; }', $content)), 0.01);
+		$this->assertEqualsWithDelta(20, $this->drawnWidth($this->table($selector . ' { max-width: 20mm; }', $content), $this->config()), 0.01);
 	}
 
 	/**
@@ -68,7 +78,7 @@ class TableCellDescendantSelectorTest extends \Yoast\PHPUnitPolyfills\TestCases\
 	 */
 	public function testARuleForAnotherCellDoesNotMatch()
 	{
-		$width = $this->drawnWidth($this->table('td.other img { max-width: 20mm; }', self::image()));
+		$width = $this->drawnWidth($this->table('td.other img { max-width: 20mm; }', self::image()), $this->config());
 
 		$this->assertEqualsWithDelta(292 * 25.4 / 96, $width, 0.01);
 	}
@@ -94,7 +104,7 @@ class TableCellDescendantSelectorTest extends \Yoast\PHPUnitPolyfills\TestCases\
 	 */
 	public function testARuleReachesTextInTheCell($selector, $content)
 	{
-		$colours = $this->textColours($this->table($selector . ' { color: #ff0000; }', $content));
+		$colours = $this->textColours($this->table($selector . ' { color: #ff0000; }', $content), $this->config());
 
 		$this->assertSame(self::RED, $colours['red']);
 	}

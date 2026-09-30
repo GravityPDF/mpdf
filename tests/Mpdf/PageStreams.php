@@ -263,12 +263,13 @@ trait PageStreams
 	 *
 	 * @param string $html
 	 * @param int $page Counted from 0
+	 * @param array $config
 	 *
 	 * @return array[]
 	 */
-	private function imagePlacements($html, $page = 0)
+	private function imagePlacements($html, $page = 0, $config = [])
 	{
-		$pages = $this->pages($this->render($html));
+		$pages = $this->pages($this->render($html, $config));
 		$this->assertArrayHasKey($page, $pages);
 		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $pages[$page], $matches, PREG_SET_ORDER);
 
@@ -281,12 +282,13 @@ trait PageStreams
 	 * The width of the only image on the first page, in millimetres
 	 *
 	 * @param string $html
+	 * @param array $config
 	 *
 	 * @return float
 	 */
-	private function drawnWidth($html)
+	private function drawnWidth($html, $config = [])
 	{
-		$placements = $this->imagePlacements($html);
+		$placements = $this->imagePlacements($html, 0, $config);
 		$this->assertCount(1, $placements);
 
 		return $placements[0]['w'];
@@ -296,12 +298,13 @@ trait PageStreams
 	 * The fill colour each piece of text on the first page is drawn in, keyed by that text
 	 *
 	 * @param string $html
+	 * @param array $config
 	 *
 	 * @return string[]
 	 */
-	private function textColours($html)
+	private function textColours($html, $config = [])
 	{
-		$pages = $this->pages($this->render($html));
+		$pages = $this->pages($this->render($html, $config));
 		preg_match_all('/q ([\d. ]+ (?:rg|g)) .*?\((.*?)\) Tj/', $pages[0], $drawn, PREG_SET_ORDER);
 
 		$colours = [];

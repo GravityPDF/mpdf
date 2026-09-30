@@ -21,6 +21,16 @@ class PositionedBlockSelectorTest extends TestCase
 	const BLACK = '0.000 g';
 
 	/**
+	 * The configuration the documents are written with: the default, the legacy cascade
+	 *
+	 * @return array
+	 */
+	protected function config()
+	{
+		return [];
+	}
+
+	/**
 	 * A descendant rule naming the block's class reaches a paragraph and a table cell inside it
 	 */
 	public function testClassDescendantRulesReachTheContentOfAnAbsoluteBlock()
@@ -31,7 +41,7 @@ class PositionedBlockSelectorTest extends TestCase
 			.box { color: #0000ff; }
 			</style>
 			<div class="box"><p>flow p</p><table><tr><td>flow td</td></tr></table></div>
-			<div class="box" style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>abs p</p><table><tr><td>abs td</td></tr></table><span>abs span</span></div>');
+			<div class="box" style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>abs p</p><table><tr><td>abs td</td></tr></table><span>abs span</span></div>', $this->config());
 
 		$this->assertSame(self::GREEN, $colours['flow p']);
 		$this->assertSame(self::RED, $colours['flow td']);
@@ -46,7 +56,7 @@ class PositionedBlockSelectorTest extends TestCase
 	public function testIdDescendantRulesReachTheContentOfAFixedBlock()
 	{
 		$colours = $this->textColours('<style>#side p { color: #ff0000; }</style>
-			<div id="side" style="position: fixed; top: 10mm; left: 20mm; width: 100mm;"><p>fixed p</p></div>');
+			<div id="side" style="position: fixed; top: 10mm; left: 20mm; width: 100mm;"><p>fixed p</p></div>', $this->config());
 
 		$this->assertSame(self::RED, $colours['fixed p']);
 	}
@@ -57,7 +67,7 @@ class PositionedBlockSelectorTest extends TestCase
 	public function testTheContentIsAChildOfTheBlockItself()
 	{
 		$colours = $this->textColours('<style>.box div p { color: #ff0000; }</style>
-			<div class="box" style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>direct p</p><div><p>nested p</p></div></div>');
+			<div class="box" style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>direct p</p><div><p>nested p</p></div></div>', $this->config());
 
 		$this->assertSame(self::BLACK, $colours['direct p']);
 		$this->assertSame(self::RED, $colours['nested p']);
@@ -70,7 +80,7 @@ class PositionedBlockSelectorTest extends TestCase
 	{
 		$colours = $this->textColours('<style>.box p { color: #00aa00; }</style>
 			<div class="box" style="position: absolute; top: 20mm; left: 20mm; width: 100mm;"><p>boxed p</p></div>
-			<div style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>plain p</p></div>');
+			<div style="position: absolute; top: 100mm; left: 20mm; width: 100mm;"><p>plain p</p></div>', $this->config());
 
 		$this->assertSame(self::GREEN, $colours['boxed p']);
 		$this->assertSame(self::BLACK, $colours['plain p']);

@@ -234,6 +234,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $useSubstitutions;
 	var $CSSselectMedia;
 
+	/**
+	 * @var string 'legacy' or 'standard'. See ConfigVariables
+	 */
+	var $cssCascade;
+
 	var $forcePortraitHeaders;
 	var $forcePortraitMargins;
 	var $displayDefaultOrientation;
@@ -1171,6 +1176,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$originalConfig = $config;
 		$config = $this->initConfig($originalConfig);
 
+		if (!in_array($this->cssCascade, ['legacy', 'standard'], true)) {
+			throw new \Mpdf\MpdfException(sprintf('cssCascade (%s) is not valid. (Use: legacy or standard)', $this->cssCascade));
+		}
+
 		if ($this->isPdfx4() && version_compare($this->pdf_version, '1.6', '<')) {
 			$this->pdf_version = '1.6';
 		}
@@ -1590,7 +1599,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if (file_exists($this->defaultCssFile)) {
 			$css = file_get_contents($this->defaultCssFile);
-			$this->cssManager->ReadCSS('<style> ' . $css . ' </style>');
+			$this->cssManager->ReadCSS('<style> ' . $css . ' </style>', $this->cssCascade === 'standard');
 		} else {
 			throw new \Mpdf\MpdfException(sprintf('Unable to read default CSS file "%s"', $this->defaultCssFile));
 		}

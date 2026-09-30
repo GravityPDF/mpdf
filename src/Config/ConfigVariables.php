@@ -269,6 +269,12 @@ class ConfigVariables
 			// screen, print, or any other CSS @media type (except "all")
 			'CSSselectMedia' => 'print',
 
+			// How the stylesheet's rules are ordered when several set the same property of an element:
+			// 'legacy' applies them in mPDF's fixed order of selector groups, in which a descendant rule such as
+			// "div p" beats an id; 'standard' orders them as CSS does, by specificity and then by the order they are
+			// written in
+			'cssCascade' => 'legacy',
+
 			// PAGE HEADERS & FOOTERS
 			'forcePortraitHeaders' => false,
 

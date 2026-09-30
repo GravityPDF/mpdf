@@ -142,20 +142,11 @@ trait TracksOpenElements
 			return null;
 		}
 
-		$path = $this->styledElement['path'];
-		$tag = $this->styledElement['tag'];
-		if ($tag === null) {
-			return $path;
+		if ($this->styledElement['tag'] === null) {
+			return $this->styledElement['path'];
 		}
 
-		$parent = count($path) - 1;
-		if (self::impliesTbody($tag, $path[$parent])) {
-			$path[] = $this->newChildFrame($path[$parent], 'TBODY', []);
-			$parent++;
-		}
-		$path[] = $this->newChildFrame($path[$parent], $tag, $this->styledElement['attr']);
-
-		return $path;
+		return $this->withChildFrame($this->styledElement['path'], $this->styledElement['tag'], $this->styledElement['attr']);
 	}
 
 	/**
@@ -177,6 +168,43 @@ trait TracksOpenElements
 		}
 
 		return self::impliesTbody($this->styledElement['tag'], $parent) ? 1 : count($parent['children']) + 1;
+	}
+
+	/**
+	 * The path an element would have if it were opened now, in the innermost open element, after the children that
+	 * element has so far. Nothing is recorded, so CssMerger::previewBlockCss() can match the selectors against it
+	 * without changing the stack
+	 *
+	 * @param string $tag Uppercased
+	 * @param string[] $attr
+	 *
+	 * @return array[] The open elements from the document down to it, with the element's own frame last
+	 */
+	public function getOpenElementPathFor($tag, array $attr)
+	{
+		return $this->withChildFrame($this->openElements, $tag, $attr);
+	}
+
+	/**
+	 * A path with a frame added for an element opened in its last element, after the children that element has so
+	 * far, and put under the tbody the stack gives a row written straight into a table
+	 *
+	 * @param array[] $path Open elements, outermost first
+	 * @param string $tag
+	 * @param string[] $attr
+	 *
+	 * @return array[]
+	 */
+	private function withChildFrame(array $path, $tag, array $attr)
+	{
+		$parent = count($path) - 1;
+		if (self::impliesTbody($tag, $path[$parent])) {
+			$path[] = $this->newChildFrame($path[$parent], 'TBODY', []);
+			$parent++;
+		}
+		$path[] = $this->newChildFrame($path[$parent], $tag, $attr);
+
+		return $path;
 	}
 
 	/**

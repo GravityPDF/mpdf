@@ -106,6 +106,10 @@ New features
 * **Descendant rules through inline elements.** A descendant rule whose ancestor is an inline element, a block inside a table cell, or the `tbody` a table leaves out, such as `span em`, or `.note b` for a `<span class="note">`, applies. [mpdf/mpdf#830] [#538] [#621]
 * **Attribute selectors and `:lang()`.** `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`, `[a^=v]`, `[a$=v]` and `[a*=v]`, with the `i` and `s` flags, match as in HTML: case-insensitively for the attributes HTML lists as such, and case-sensitively for the rest. `:lang()` matches the language an element inherits, from an ancestor or from the `<html>` or `<body>` tag. [mpdf/mpdf#134] [mpdf/mpdf#1838] [#538] [#627]
 * **`:not()`, `:is()` and `:where()`.** Each takes a selector list whose selectors may have combinators, such as `p:not(.note, div > p)` or `:is(h2, h3) + p`. `:is()` and `:where()` leave out a selector they cannot read, as browsers do. `:not()` and `:is()` weigh as their most specific argument, and `:where()` as nothing. Rules using them were dropped before. [#538] [#628]
+* **The standard cascade, behind the `cssCascade` option.** With `'cssCascade' => 'standard'`, rules that set the same property apply as they do in a browser: by specificity, then in the order they are written. `#note` beats `div p` and `p.lead`, `body p` no longer beats `.lead`, and of `.a { } .b { } .a { }` the second `.a` wins. The default, `'legacy'`, keeps mPDF's fixed order of selector groups and today's output. [#535] [#631]
+  * Each element takes, in order: the values it inherits; the built-in defaults and the rules of the default stylesheet (`defaultCssFile`), which author rules beat whatever their specificity; HTML attributes such as `<hr color>`, `width` and `vspace`, as author rules of no specificity; the stylesheets; then `style=""`.
+  * Class and id names still match whatever their case.
+  * An author's `a { }` rule now reaches the links of the table of contents and the index too, as it would in a browser. Style `a.mpdf_toc_a` and `a.mpdf_index_link` to keep them plain.
 
 Performance
 -----------
@@ -120,6 +124,7 @@ Performance
 * **Image metadata.** JPEG and PNG metadata is read from the file's structure instead of by scanning the whole file, and PNG chunks are read from a chunk index. [#47] [#48]
 * **GD memory.** GD asks for less memory when it re-encodes an image. [#49]
 * **nth-child rules in tables.** Each row and cell looks up the nth-child rules the stylesheet uses by their keys, instead of running a regex over every rule. A 2,000-cell table under 1,000 rules is written in about 540 ms instead of 745 ms. Class combinations are built only up to the most classes one compound selector names, not one whole selector. [#526] [#580]
+* **Selector matching.** A chain of descendant combinators stops trying ancestors once none left can match, instead of trying every combination of them, and a general sibling combinator skips a tag the parent has no child of and looks from the first sibling. `.x div div div div div p` is matched on a path 50 deep in well under a millisecond instead of 4 seconds, and `h2 ~ p` against 5,000 paragraphs after an `<h2>` in 20 ms instead of 5 seconds. [#535] [#631]
 
 Bugfixes
 --------
@@ -777,6 +782,7 @@ These changes do not change output.
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
+[#535]: https://github.com/GravityPDF/mpdf/issues/535
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -820,3 +826,4 @@ These changes do not change output.
 [#627]: https://github.com/GravityPDF/mpdf/pull/627
 [#628]: https://github.com/GravityPDF/mpdf/pull/628
 [#629]: https://github.com/GravityPDF/mpdf/pull/629
+[#631]: https://github.com/GravityPDF/mpdf/pull/631

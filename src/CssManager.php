@@ -93,6 +93,12 @@ class CssManager
 	private $rules;
 
 	/**
+	 * @var RuleSet The rules read as the user agent's: under the standard cascade, those of the default stylesheet,
+	 *              which author rules beat whatever their specificity
+	 */
+	private $defaultRules;
+
+	/**
 	 * CssManager constructor.
 	 *
 	 * Initializes the CSS manager with required dependencies and sets up
@@ -107,6 +113,7 @@ class CssManager
 		$this->cssMerger = $cssMerger;
 		$this->cssMerger->setCssManager($this);
 		$this->rules = new RuleSet();
+		$this->defaultRules = new RuleSet();
 	}
 
 	/**
@@ -117,9 +124,11 @@ class CssManager
 	 * parses all CSS rules into the internal CSS storage structure.
 	 *
 	 * @param string $html HTML content containing CSS
+	 * @param bool $userAgent Whether to keep its rules apart as the user agent's, which the standard cascade applies
+	 *                        with the built-in defaults. The default stylesheet's are
 	 * @return string HTML with CSS content removed
 	 */
-	public function readCss($html)
+	public function readCss($html, $userAgent = false)
 	{
 		if (!is_array($this->cascadeCSS)) {
 			$this->cascadeCSS = [];
@@ -130,8 +139,9 @@ class CssManager
 		$this->CSS = Arrays::uniqueRecursiveMerge($this->CSS, $this->cssParser->getCss());
 		$this->cascadeCSS = Arrays::uniqueRecursiveMerge($this->cascadeCSS, $this->cssParser->getCascadeCss());
 
+		$rules = $userAgent ? $this->defaultRules : $this->rules;
 		foreach ($this->cssParser->getCompiledRules() as $rule) {
-			$this->rules->add($rule[0], $rule[1], $rule[2]);
+			$rules->add($rule[0], $rule[1], $rule[2]);
 		}
 
 		return $html;
@@ -145,6 +155,16 @@ class CssManager
 	public function getRules()
 	{
 		return $this->rules;
+	}
+
+	/**
+	 * The rules read as the user agent's
+	 *
+	 * @return RuleSet
+	 */
+	public function getDefaultRules()
+	{
+		return $this->defaultRules;
 	}
 
 	/**

@@ -903,4 +903,20 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(['COLOR' => 'red'], $rules->rule($candidates[0])[1]);
 		$this->assertSame(['COLOR' => 'green'], $rules->rule($candidates[1])[1]);
 	}
+
+	/**
+	 * A stylesheet read as the user agent's keeps its rules apart from the author's
+	 */
+	public function testKeepsTheUserAgentsRulesApart()
+	{
+		$this->cssManager->readCss('<style>ul > ul { margin-top: 0; }</style>', true);
+		$this->cssManager->readCss('<style>body > ul { color: red; }</style>');
+
+		$userAgent = $this->cssManager->getDefaultRules()->candidates('UL', '', []);
+		$author = $this->cssManager->getRules()->candidates('UL', '', []);
+		$this->assertCount(1, $userAgent);
+		$this->assertCount(1, $author);
+		$this->assertSame(['MARGIN-TOP' => '0'], $this->cssManager->getDefaultRules()->rule($userAgent[0])[1]);
+		$this->assertSame(['COLOR' => 'red'], $this->cssManager->getRules()->rule($author[0])[1]);
+	}
 }

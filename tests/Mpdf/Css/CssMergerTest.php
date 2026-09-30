@@ -567,4 +567,31 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertEquals('green', $result['COLOR']);
 	}
+
+	/**
+	 * Under the standard cascade, previewBlockCss() matches the stylesheet against the open elements with the block
+	 * in the innermost one, as a merge there would, and leaves the open elements and the block stack as they were
+	 */
+	public function testPreviewsABlockUnderTheStandardCascadeWithoutSideEffects()
+	{
+		$mpdf = new Mpdf(['cssCascade' => 'standard']);
+		$mpdf->WriteHTML('<style>.box > p { color: red; } p.lead { margin-top: 5mm; }</style><div class="box">', \Mpdf\HTMLParserMode::DEFAULT_MODE, true, false);
+
+		$reflection = new \ReflectionClass($mpdf);
+		$property = $reflection->getProperty('cssManager');
+		$property->setAccessible(true);
+		$cssManager = $property->getValue($mpdf);
+
+		$elements = $mpdf->getOpenElements();
+		$blocks = $mpdf->blk;
+		$level = $mpdf->blklvl;
+
+		$preview = $cssManager->previewBlockCss('P', ['CLASS' => 'LEAD']);
+
+		$this->assertSame('red', $preview['COLOR']);
+		$this->assertSame('5mm', $preview['MARGIN-TOP']);
+		$this->assertSame($elements, $mpdf->getOpenElements());
+		$this->assertSame($blocks, $mpdf->blk);
+		$this->assertSame($level, $mpdf->blklvl);
+	}
 }
