@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
+use Mpdf\CssMode;
 
 class Tr extends Tag
 {
@@ -16,6 +17,7 @@ class Tr extends Tag
 		$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['nr'] ++;
 		$this->mpdf->col = -1;
 		$properties = $this->cssManager->MergeCSS('TABLE', 'TR', $attr);
+		$this->inheritRow($properties);
 
 		// write pagebreak markers into row list, so _tableWrite can respect it
 		if (isset($properties['PAGE-BREAK-BEFORE']) && strtoupper($properties['PAGE-BREAK-BEFORE']) === 'AVOID'
@@ -111,5 +113,27 @@ class Tr extends Tag
 			$this->mpdf->trow_text_rotate = '';
 			$this->mpdf->tabletheadjustfinished = false;
 		}
+	}
+
+	/**
+	 * Under the standard cascade, keeps what the row hands its cells, over what its row group does. A row written
+	 * straight into the table is in a tbody that the HTML leaves out, which the tbody rules style as they would one
+	 * that is written
+	 *
+	 * @param string[] $properties The row's merged CSS
+	 */
+	private function inheritRow(array $properties)
+	{
+		if ($this->mpdf->cssMode !== CssMode::STANDARD) {
+			return;
+		}
+
+		if ($this->mpdf->opensInImpliedTbody('TR')) {
+			$this->inheritRowGroup($this->cssManager->previewTableCss('TBODY', []));
+		}
+
+		$table = &$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]];
+		$rowGroup = isset($table['rowGroupInherited']) ? $table['rowGroupInherited'] : $this->mpdf->base_table_properties;
+		$table['rowInherited'] = $this->inheritedByTablePart($properties, $rowGroup);
 	}
 }

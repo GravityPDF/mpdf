@@ -322,8 +322,8 @@ class Table extends Tag
 		if ($this->mpdf->cssMode === CssMode::LEGACY) {
 			$this->setLegacyBaseProperties($properties);
 		} else {
-			// The font family and size are resolved above
-			$inherited = InheritedProperties::of($properties, array_diff(InheritedProperties::TEXT, ['FONT-FAMILY', 'FONT-SIZE']));
+			// The font family and size are resolved above. A th in the table is centred unless it inherits a text-align
+			$inherited = InheritedProperties::of($properties, array_merge(array_diff(InheritedProperties::TEXT, ['FONT-FAMILY', 'FONT-SIZE']), ['TEXT-ALIGN']));
 			$this->mpdf->base_table_properties = array_merge($this->mpdf->base_table_properties, $inherited);
 		}
 		// In cssMode legacy line-height: 0 is skipped, as mPDF v7 did

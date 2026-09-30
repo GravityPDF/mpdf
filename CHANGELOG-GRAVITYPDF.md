@@ -221,6 +221,7 @@ Bugfixes
 * Characters mPDF moved into a substitute font (`useSubstitutions`, and the fonts for supplementary planes) were wrapped in a `<span>` that stylesheet rules reached, so `span { border: 1px solid }` drew a box around them, and the span counted among its siblings for `:nth-child()`. In the standard CSS mode no rule reaches that span and it is not counted, as a browser has no such element. The legacy mode styles it as before. [#634]
 * Some inherited properties stopped short of where a browser takes them. A `text-shadow` did not reach a block's child blocks or list items. `word-spacing`, `hyphens` and `text-outline` did not reach the content of a positioned block. `text-transform`, `text-shadow`, `font-variant` and the other font features did not reach a table's cells. A table nested in a cell took none of the cell's colour, font, size, weight, style, transform or shadow. Each of these channels now carries every inherited property mPDF supports, from the one list in `Mpdf\Css\InheritedProperties`. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output. [#539] [#648]
 * `text-transform: none` on an inline element, such as a `<span>` in an uppercase paragraph, did not undo the transform it inherits. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the transform. [#552] [#539] [#648]
+* Styling a table row or row group, such as `tr.total { font-weight: bold }` or `<thead style="color: #fff">`, did not change the text of its cells, only their background. A `tr`, `thead`, `tbody` or `tfoot` now hands every inherited property to its cells, over the table's and under the cell's own, and a `tbody` rule reaches the rows written straight into a table. A row's `font-size: 80%` is taken of its row group's size, and a cell's of its row's. A `th` stays bold, and is centred only when it inherits no `text-align` from its row, row group or table, as HTML's rendering rules have it. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output. [#542] [#655]
 
 ### Images and SVG
 
@@ -877,3 +878,5 @@ These changes do not change output.
 [#643]: https://github.com/GravityPDF/mpdf/pull/643
 [#646]: https://github.com/GravityPDF/mpdf/pull/646
 [#648]: https://github.com/GravityPDF/mpdf/pull/648
+[#542]: https://github.com/GravityPDF/mpdf/issues/542
+[#655]: https://github.com/GravityPDF/mpdf/pull/655

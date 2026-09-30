@@ -7,6 +7,7 @@ use Mpdf\Strict;
 use Mpdf\Cache;
 use Mpdf\Color\ColorConverter;
 use Mpdf\Css\BorderMerger;
+use Mpdf\Css\InheritedProperties;
 use Mpdf\CssManager;
 use Mpdf\CssMode;
 use Mpdf\Form;
@@ -244,6 +245,57 @@ abstract class Tag
 		}
 
 		return $style;
+	}
+
+	/**
+	 * Under the standard cascade, keeps what a row group opened in the innermost table hands the cells of its rows.
+	 * Tr reads it back
+	 *
+	 * @param string[] $properties The row group's merged CSS
+	 */
+	protected function inheritRowGroup(array $properties)
+	{
+		if ($this->mpdf->cssMode === CssMode::STANDARD && $this->mpdf->tableLevel) {
+			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['rowGroupInherited'] = $this->inheritedByTablePart($properties, $this->mpdf->base_table_properties);
+		}
+	}
+
+	/**
+	 * The inherited properties a row group or a row hands its cells under the standard cascade: its own, over those
+	 * of the table or row group it is in. Its font size is resolved against theirs
+	 *
+	 * @param string[] $properties Its merged CSS
+	 * @param string[] $parent What the table or row group it is in hands its cells, with a font size in mm
+	 *
+	 * @return string[]
+	 */
+	protected function inheritedByTablePart(array $properties, array $parent)
+	{
+		$inherited = array_merge($parent, InheritedProperties::of($properties, InheritedProperties::names()));
+
+		if (isset($properties['FONT-SIZE'])) {
+			$inherited['FONT-SIZE'] = $this->relativeFontSize($properties['FONT-SIZE'], $parent['FONT-SIZE']);
+		}
+
+		return $inherited;
+	}
+
+	/**
+	 * A font size given as a number, in any unit, resolved against the size it is relative to. Keywords such as small
+	 * are kept, since setCSS() reads them against the default size whatever the parent's
+	 *
+	 * @param string $size
+	 * @param string $parentSize With a unit
+	 *
+	 * @return string
+	 */
+	protected function relativeFontSize($size, $parentSize)
+	{
+		if (!$this->sizeConverter->isLength($size)) {
+			return $size;
+		}
+
+		return $this->sizeConverter->convert($size, $this->sizeConverter->convert($parentSize)) . 'mm';
 	}
 
 	abstract public function open($attr, &$ahtml, &$ihtml);

@@ -210,6 +210,19 @@ trait TracksOpenElements
 	}
 
 	/**
+	 * Whether an element opened now in the innermost open element would be put in a tbody that the HTML leaves out,
+	 * as a row written straight into a table is
+	 *
+	 * @param string $tag Uppercased
+	 *
+	 * @return bool
+	 */
+	public function opensInImpliedTbody($tag)
+	{
+		return self::impliesTbody($tag, $this->openElements[count($this->openElements) - 1]);
+	}
+
+	/**
 	 * A path with a frame added for an element opened in its last element, after the children that element has so
 	 * far, and put under the tbody the stack gives a row written straight into a table
 	 *
