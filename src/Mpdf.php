@@ -7,6 +7,7 @@ use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
 use Mpdf\Css\CommentParser;
+use Mpdf\Css\InheritedProperties;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextVars;
@@ -15428,71 +15429,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			// Pass on in-line properties to the innerhtml
+			if ($this->cssMode === CssMode::LEGACY) {
+				$carried = InheritedProperties::LEGACY_POSITIONED;
+			} else {
+				// Text decorations and the stacking order are not inherited, but the <div> stands in for the block
+				$carried = array_merge(InheritedProperties::names(), ['TEXT-DECORATION', 'Z-INDEX']);
+			}
 			$css = '';
-			if (isset($p['TEXT-ALIGN'])) {
-				$css .= 'text-align: ' . strtolower($p['TEXT-ALIGN']) . '; ';
-			}
-			if (isset($p['TEXT-TRANSFORM'])) {
-				$css .= 'text-transform: ' . strtolower($p['TEXT-TRANSFORM']) . '; ';
-			}
-			if (isset($p['TEXT-INDENT'])) {
-				$css .= 'text-indent: ' . strtolower($p['TEXT-INDENT']) . '; ';
-			}
-			if (isset($p['TEXT-DECORATION'])) {
-				$css .= 'text-decoration: ' . strtolower($p['TEXT-DECORATION']) . '; ';
-			}
-			if (isset($p['FONT-FAMILY'])) {
-				$css .= 'font-family: ' . strtolower($p['FONT-FAMILY']) . '; ';
-			}
-			if (isset($p['FONT-STYLE'])) {
-				$css .= 'font-style: ' . strtolower($p['FONT-STYLE']) . '; ';
-			}
-			if (isset($p['FONT-WEIGHT'])) {
-				$css .= 'font-weight: ' . strtolower($p['FONT-WEIGHT']) . '; ';
-			}
-			if (isset($p['FONT-SIZE'])) {
-				$css .= 'font-size: ' . strtolower($p['FONT-SIZE']) . '; ';
-			}
-			if (isset($p['LINE-HEIGHT'])) {
-				$css .= 'line-height: ' . strtolower($p['LINE-HEIGHT']) . '; ';
-			}
-			if (isset($p['TEXT-SHADOW'])) {
-				$css .= 'text-shadow: ' . strtolower($p['TEXT-SHADOW']) . '; ';
-			}
-			if (isset($p['LETTER-SPACING'])) {
-				$css .= 'letter-spacing: ' . strtolower($p['LETTER-SPACING']) . '; ';
-			}
-			// mPDF 6
-			if (isset($p['FONT-VARIANT-POSITION'])) {
-				$css .= 'font-variant-position: ' . strtolower($p['FONT-VARIANT-POSITION']) . '; ';
-			}
-			if (isset($p['FONT-VARIANT-CAPS'])) {
-				$css .= 'font-variant-caps: ' . strtolower($p['FONT-VARIANT-CAPS']) . '; ';
-			}
-			if (isset($p['FONT-VARIANT-LIGATURES'])) {
-				$css .= 'font-variant-ligatures: ' . strtolower($p['FONT-VARIANT-LIGATURES']) . '; ';
-			}
-			if (isset($p['FONT-VARIANT-NUMERIC'])) {
-				$css .= 'font-variant-numeric: ' . strtolower($p['FONT-VARIANT-NUMERIC']) . '; ';
-			}
-			if (isset($p['FONT-VARIANT-ALTERNATES'])) {
-				$css .= 'font-variant-alternates: ' . strtolower($p['FONT-VARIANT-ALTERNATES']) . '; ';
-			}
-			if (isset($p['FONT-FEATURE-SETTINGS'])) {
-				$css .= 'font-feature-settings: ' . strtolower($p['FONT-FEATURE-SETTINGS']) . '; ';
-			}
-			if (isset($p['FONT-LANGUAGE-OVERRIDE'])) {
-				$css .= 'font-language-override: ' . strtolower($p['FONT-LANGUAGE-OVERRIDE']) . '; ';
-			}
-			if (isset($p['FONT-KERNING'])) {
-				$css .= 'font-kerning: ' . strtolower($p['FONT-KERNING']) . '; ';
-			}
-
-			if (isset($p['COLOR'])) {
-				$css .= 'color: ' . strtolower($p['COLOR']) . '; ';
-			}
-			if (isset($p['Z-INDEX'])) {
-				$css .= 'z-index: ' . $p['Z-INDEX'] . '; ';
+			foreach (InheritedProperties::of($p, $carried) as $property => $value) {
+				$css .= strtolower($property) . ': ' . strtolower($value) . '; ';
 			}
 			// The inner HTML is written as a document of its own, in which this <div> stands in for the positioned block
 			$html = '<div style="' . $css . '">' . $html . '</div>';
@@ -20011,10 +19956,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->textvar = ($this->textvar & ~TextVars::FT_CAPITALIZE); // mPDF 5.7.1
 							break;
 						case 'NONE':
-							break;
+							// mPDF v7 left the transform an inline element inherits in place
+							if ($this->cssMode === CssMode::LEGACY) {
+								break;
+							}
 							$this->textvar = ($this->textvar & ~TextVars::FT_UPPERCASE); // mPDF 5.7.1
 							$this->textvar = ($this->textvar & ~TextVars::FT_LOWERCASE); // mPDF 5.7.1
 							$this->textvar = ($this->textvar & ~TextVars::FT_CAPITALIZE); // mPDF 5.7.1
+							break;
 					}
 					break;
 
