@@ -224,6 +224,8 @@ Bugfixes
 * `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the directions mPDF v7 drew, prefixed or not. [#577] [#639]
 * In a table with collapsed borders, a row with a `border-color` and no border style, or a border of no width, took the borders of its cells away. A reset such as `* { border-color: #dee2e6 }` or `* { border: 0 solid }` gives every row a border like that. A row border that draws nothing now leaves the cells' borders; `hidden` still takes them away. A row's `border-top` or `border-bottom` was drawn only when the row also set `border-left`; each side is now drawn on its own. [#644]
 * Characters mPDF moved into a substitute font (`useSubstitutions`, and the fonts for supplementary planes) were wrapped in a `<span>` that stylesheet rules reached, so `span { border: 1px solid }` drew a box around them, and the span counted among its siblings for `:nth-child()`. In the standard CSS mode no rule reaches that span and it is not counted, as a browser has no such element. The legacy mode styles it as before. [#634]
+* Some inherited properties stopped short of where a browser takes them. A `text-shadow` did not reach a block's child blocks or list items. `word-spacing`, `hyphens` and `text-outline` did not reach the content of a positioned block. `text-transform`, `text-shadow`, `font-variant` and the other font features did not reach a table's cells. A table nested in a cell took none of the cell's colour, font, size, weight, style, transform or shadow. Each of these channels now carries every inherited property mPDF supports, from the one list in `Mpdf\Css\InheritedProperties`. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output. [#539] [#648]
+* `text-transform: none` on an inline element, such as a `<span>` in an uppercase paragraph, did not undo the transform it inherits. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the transform. [#552] [#539] [#648]
 
 ### Images and SVG
 
@@ -827,6 +829,7 @@ These changes do not change output.
 [#537]: https://github.com/GravityPDF/mpdf/issues/537
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
 [#545]: https://github.com/GravityPDF/mpdf/issues/545
+[#539]: https://github.com/GravityPDF/mpdf/issues/539
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -885,3 +888,4 @@ These changes do not change output.
 [#643]: https://github.com/GravityPDF/mpdf/pull/643
 [#644]: https://github.com/GravityPDF/mpdf/pull/644
 [#647]: https://github.com/GravityPDF/mpdf/pull/647
+[#648]: https://github.com/GravityPDF/mpdf/pull/648

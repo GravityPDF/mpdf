@@ -195,7 +195,13 @@ class UniversalSelectorTest extends TestCase
 			$html .= $close;
 		}
 
-		return '<style>' . str_replace(['{T}', '{O}'], [$subject, $other], $css) . '</style>' . $this->inContext($context, $html);
+		// The groups of the table cell context are tables already. Put in a cell, they would sit under a td that the
+		// rules naming the subjects' tag match too, and that the cells would inherit from
+		if ($context !== 'table cell') {
+			$html = $this->inContext($context, $html);
+		}
+
+		return '<style>' . str_replace(['{T}', '{O}'], [$subject, $other], $css) . '</style>' . $html;
 	}
 
 	/**

@@ -44,6 +44,58 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 	 */
 	public $drawnIn = [];
 
+	/** The font style each of those lines was drawn in, B, I, BI or none, in the same order. */
+	public $drawnFontStyles = [];
+
+	/** The text shadows each of those lines was drawn with, or '' for none, in the same order. */
+	public $drawnShadows = [];
+
+	/** The TextVars bits each of those lines was drawn with, in the same order. */
+	public $drawnTextVars = [];
+
+	/** Whether to record $bufferedStates, which costs a copy of the text state for each piece of text. */
+	public $recordBufferedStates = false;
+
+	/**
+	 * Each piece of text as it goes into a block's or a cell's buffer, before any line is broken, with the text state it
+	 * was read in, as saveInlineProperties() saves it: [text, state]
+	 */
+	public $bufferedStates = [];
+
+	/**
+	 * Records the text state a piece of a block's text is read in
+	 *
+	 * @param string $t
+	 * @param string $link
+	 * @param string $intlink
+	 * @param bool $return
+	 * @return array|null
+	 */
+	function _saveTextBuffer($t, $link = '', $intlink = '', $return = false)
+	{
+		if ($this->recordBufferedStates) {
+			$this->bufferedStates[] = [$t, $this->saveInlineProperties()];
+		}
+
+		return parent::_saveTextBuffer($t, $link, $intlink, $return);
+	}
+
+	/**
+	 * Records the text state a piece of a cell's text is read in
+	 *
+	 * @param string $t
+	 * @param string $link
+	 * @param string $intlink
+	 */
+	function _saveCellTextBuffer($t, $link = '', $intlink = '')
+	{
+		if ($this->recordBufferedStates) {
+			$this->bufferedStates[] = [$t, $this->saveInlineProperties()];
+		}
+
+		parent::_saveCellTextBuffer($t, $link, $intlink);
+	}
+
 	function Cell($w, $h = 0, $txt = '', $border = 0, $ln = 0, $align = '', $fill = 0, $link = '', $currentx = 0, $lcpaddingL = 0, $lcpaddingR = 0, $valign = 'M', $spanfill = 0, $exactWidth = false, $OTLdata = false, $textvar = 0, $lineBox = false)
 	{
 		if (is_string($txt) && trim($txt) !== '') {
@@ -55,6 +107,9 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 			$this->drawnY[] = $this->y;
 			$this->drawnColours[] = $this->TextColor;
 			$this->drawnIn[] = $this->whereDrawing();
+			$this->drawnFontStyles[] = $this->FontStyle;
+			$this->drawnShadows[] = $this->textshadow;
+			$this->drawnTextVars[] = $textvar;
 		}
 
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);

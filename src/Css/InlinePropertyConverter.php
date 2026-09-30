@@ -62,6 +62,10 @@ class InlinePropertyConverter
 			$css['WORD-SPACING'] = $properties['wSpacingCSS'];
 		}
 
+		if (!empty($properties['textshadow'])) {
+			$css['TEXT-SHADOW'] = $this->textShadow($properties['textshadow']);
+		}
+
 		if (!empty($properties['textparam'])) {
 			if (isset($properties['textparam']['hyphens'])) {
 				$hyphens = (int) $properties['textparam']['hyphens'];
@@ -190,5 +194,28 @@ class InlinePropertyConverter
 		}
 
 		return $css;
+	}
+
+	/**
+	 * Writes parsed text shadows back as a text-shadow value
+	 *
+	 * @param array[] $shadows As ShadowParser::parseTextShadow() gives them: the last shadow written first, with the
+	 *                         offsets and blur in millimetres
+	 * @return string
+	 */
+	private function textShadow(array $shadows)
+	{
+		$values = [];
+		foreach (array_reverse($shadows) as $shadow) {
+			$values[] = sprintf(
+				'%.10Fmm %.10Fmm %.10Fmm %s',
+				$shadow['x'],
+				$shadow['y'],
+				$shadow['blur'],
+				$this->colorConverter->colAtoString($shadow['col'])
+			);
+		}
+
+		return implode(', ', $values);
 	}
 }

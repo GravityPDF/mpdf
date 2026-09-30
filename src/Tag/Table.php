@@ -4,6 +4,8 @@ namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
 use Mpdf\Css\PresentationalHints;
+use Mpdf\Css\InheritedProperties;
+use Mpdf\Css\InlinePropertyConverter;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
@@ -60,9 +62,13 @@ class Table extends Tag
 		$this->cssManager->tbCSSlvl++;
 
 		if ($this->mpdf->tableLevel > 1) { // inherit table properties from cell in which nested
-			//$this->mpdf->base_table_properties['FONT-KERNING'] = ($this->mpdf->textvar & TextVars::FC_KERNING);	// mPDF 6
-			$this->mpdf->base_table_properties['LETTER-SPACING'] = $this->mpdf->lSpacingCSS;
-			$this->mpdf->base_table_properties['WORD-SPACING'] = $this->mpdf->wSpacingCSS;
+			if ($this->mpdf->cssMode === CssMode::LEGACY) {
+				//$this->mpdf->base_table_properties['FONT-KERNING'] = ($this->mpdf->textvar & TextVars::FC_KERNING);	// mPDF 6
+				$this->mpdf->base_table_properties['LETTER-SPACING'] = $this->mpdf->lSpacingCSS;
+				$this->mpdf->base_table_properties['WORD-SPACING'] = $this->mpdf->wSpacingCSS;
+			} else {
+				$this->inheritFromParentCell($this->mpdf->cell['PARENTCELL']);
+			}
 			// mPDF 6
 			$direction = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['direction'];
 			$txta = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['a'];
@@ -312,36 +318,20 @@ class Table extends Tag
 		}
 		$this->mpdf->base_table_properties['FONT-SIZE'] = $this->mpdf->FontSize . 'mm';
 
-		if (isset($properties['FONT-WEIGHT'])) {
-			if ($this->mpdf->cssMode === CssMode::STANDARD) {
-				$weight = RelativeFontValues::weight($properties['FONT-WEIGHT'], RelativeFontValues::tableWeight($this->mpdf->base_table_properties));
-				if ($weight !== null) {
-					$this->mpdf->base_table_properties['FONT-WEIGHT'] = (string) $weight;
+		if ($this->mpdf->cssMode === CssMode::LEGACY) {
+			$this->setLegacyBaseProperties($properties);
+		} else {
+			// The font family and size are resolved above, and the weight is computed from the enclosing table's
+			$inherited = InheritedProperties::of($properties, array_diff(InheritedProperties::TEXT, ['FONT-FAMILY', 'FONT-SIZE']));
+			if (isset($inherited['FONT-WEIGHT'])) {
+				$weight = RelativeFontValues::weight($inherited['FONT-WEIGHT'], RelativeFontValues::tableWeight($this->mpdf->base_table_properties));
+				if ($weight === null) {
+					unset($inherited['FONT-WEIGHT']);
+				} else {
+					$inherited['FONT-WEIGHT'] = (string) $weight;
 				}
-			} elseif (strtoupper($properties['FONT-WEIGHT']) === 'BOLD') {
-				$this->mpdf->base_table_properties['FONT-WEIGHT'] = 'BOLD';
 			}
-		}
-		if (isset($properties['FONT-STYLE'])) {
-			if (strtoupper($properties['FONT-STYLE']) === 'ITALIC') {
-				$this->mpdf->base_table_properties['FONT-STYLE'] = 'ITALIC';
-			}
-		}
-		if (isset($properties['COLOR'])) {
-			$this->mpdf->base_table_properties['COLOR'] = $properties['COLOR'];
-		}
-		if (isset($properties['FONT-KERNING'])) {
-			$this->mpdf->base_table_properties['FONT-KERNING'] = $properties['FONT-KERNING'];
-		}
-		if (isset($properties['LETTER-SPACING'])) {
-			$this->mpdf->base_table_properties['LETTER-SPACING'] = $properties['LETTER-SPACING'];
-		}
-		if (isset($properties['WORD-SPACING'])) {
-			$this->mpdf->base_table_properties['WORD-SPACING'] = $properties['WORD-SPACING'];
-		}
-		// mPDF 6
-		if (isset($properties['HYPHENS'])) {
-			$this->mpdf->base_table_properties['HYPHENS'] = $properties['HYPHENS'];
+			$this->mpdf->base_table_properties = array_merge($this->mpdf->base_table_properties, $inherited);
 		}
 		// In cssMode legacy line-height: 0 is skipped, as mPDF v7 did
 		$lineHeightSet = $this->mpdf->cssMode === CssMode::STANDARD
@@ -1261,6 +1251,58 @@ class Table extends Tag
 
 		if ($page_break_after) {
 			$this->forcePageBreak($page_break_after);
+		}
+	}
+
+	/**
+	 * Start a nested table from the text state of the cell it is in: its cells inherit the cell's inherited text
+	 * properties, and its font and font size become the default its cells are reset to. close() puts the outer
+	 * table's back.
+	 *
+	 * @param array $parentCell The cell's text state, as Mpdf::saveInlineProperties() saved it
+	 */
+	private function inheritFromParentCell(array $parentCell)
+	{
+		$converter = new InlinePropertyConverter($this->colorConverter);
+
+		$this->mpdf->base_table_properties = InheritedProperties::of($converter->convert($parentCell), InheritedProperties::TEXT);
+		$this->mpdf->default_font = $parentCell['family'];
+		$this->mpdf->default_font_size = $parentCell['sizePt'];
+	}
+
+	/**
+	 * Hand a table's cells the text properties mPDF v7 did: its font weight when bold, its font style when italic, its
+	 * colour, kerning, spacing and hyphenation
+	 *
+	 * @param array $properties The table's merged CSS
+	 */
+	private function setLegacyBaseProperties(array $properties)
+	{
+		if (isset($properties['FONT-WEIGHT'])) {
+			if (strtoupper($properties['FONT-WEIGHT']) === 'BOLD') {
+				$this->mpdf->base_table_properties['FONT-WEIGHT'] = 'BOLD';
+			}
+		}
+		if (isset($properties['FONT-STYLE'])) {
+			if (strtoupper($properties['FONT-STYLE']) === 'ITALIC') {
+				$this->mpdf->base_table_properties['FONT-STYLE'] = 'ITALIC';
+			}
+		}
+		if (isset($properties['COLOR'])) {
+			$this->mpdf->base_table_properties['COLOR'] = $properties['COLOR'];
+		}
+		if (isset($properties['FONT-KERNING'])) {
+			$this->mpdf->base_table_properties['FONT-KERNING'] = $properties['FONT-KERNING'];
+		}
+		if (isset($properties['LETTER-SPACING'])) {
+			$this->mpdf->base_table_properties['LETTER-SPACING'] = $properties['LETTER-SPACING'];
+		}
+		if (isset($properties['WORD-SPACING'])) {
+			$this->mpdf->base_table_properties['WORD-SPACING'] = $properties['WORD-SPACING'];
+		}
+		// mPDF 6
+		if (isset($properties['HYPHENS'])) {
+			$this->mpdf->base_table_properties['HYPHENS'] = $properties['HYPHENS'];
 		}
 	}
 
