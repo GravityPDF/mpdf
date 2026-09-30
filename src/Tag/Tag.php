@@ -233,6 +233,19 @@ abstract class Tag
 		return $style;
 	}
 
+	/**
+	 * Start a row group at the next row of the current table, so tr:nth-child counts from it. A thead, tbody or tfoot
+	 * starts one when it opens, and the rows written straight into the table after it closes make another.
+	 */
+	protected function startRowGroup()
+	{
+		if (!$this->mpdf->tableLevel) {
+			return;
+		}
+
+		$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['rowgroupstart'] = $this->mpdf->row + 1;
+	}
+
 	abstract public function open($attr, &$ahtml, &$ihtml);
 
 	abstract public function close(&$ahtml, &$ihtml);

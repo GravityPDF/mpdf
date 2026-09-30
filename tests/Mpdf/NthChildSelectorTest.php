@@ -170,4 +170,99 @@ class NthChildSelectorTest extends TestCase
 		];
 	}
 
+	/**
+	 * Only the text of the rows the rule names is red
+	 *
+	 * @dataProvider rowRules
+	 *
+	 * @param string $row A row selector
+	 * @param string $table
+	 * @param string[] $red The text of the rows the rule names, in the order it is drawn
+	 */
+	public function testTheRuleCountsTheRowsOfTheRowGroup($row, $table, $red)
+	{
+		$colours = $this->textColours('<style>' . $row . ' td, ' . $row . ' th { color: #ff0000; }</style>' . $table);
+
+		$this->assertSame($red, array_keys($colours, self::RED, true));
+	}
+
+	/**
+	 * A row selector, a table for it, and the text of the rows it names
+	 *
+	 * @return array[]
+	 */
+	public function rowRules()
+	{
+		$head = '<thead><tr><th>H1</th></tr><tr><th>H2</th></tr></thead>';
+		$body = '<tbody><tr><td>B1</td></tr><tr><td>B2</td></tr></tbody>';
+		$foot = '<tfoot><tr><td>F1</td></tr><tr><td>F2</td></tr></tfoot>';
+
+		return [
+			'the first row of each tbody' => [
+				'tr:first-child',
+				'<table><tbody><tr><td>A1</td></tr><tr><td>A2</td></tr></tbody>' . $body . '</table>',
+				['A1', 'B1'],
+			],
+			'the second row of each tbody' => [
+				'tr:nth-child(2)',
+				'<table><tbody><tr><td>A1</td></tr><tr><td>A2</td></tr><tr><td>A3</td></tr></tbody>' . $body . '</table>',
+				['A2', 'B2'],
+			],
+			'the first rows with the footer before the body' => [
+				'tr:first-child',
+				'<table>' . $head . $foot . $body . '</table>',
+				['H1', 'B1', 'F1'],
+			],
+			'the first rows with the footer after the body' => [
+				'tr:first-child',
+				'<table>' . $head . $body . $foot . '</table>',
+				['H1', 'B1', 'F1'],
+			],
+			'the second rows with the footer after the body' => [
+				'tr:nth-child(2)',
+				'<table>' . $head . $body . $foot . '</table>',
+				['H2', 'B2', 'F2'],
+			],
+			'rows written straight into the table after the header' => [
+				'tr:first-child',
+				'<table>' . $head . '<tr><td>B1</td></tr><tr><td>B2</td></tr></table>',
+				['H1', 'B1'],
+			],
+			'rows written straight into the table between two tbody' => [
+				'tr:first-child',
+				'<table>' . $body . '<tr><td>C1</td></tr><tr><td>C2</td></tr><tbody><tr><td>D1</td></tr></tbody></table>',
+				['B1', 'C1', 'D1'],
+			],
+			'a table nested in a header cell' => [
+				'tr:nth-child(2)',
+				'<table><thead><tr><th><table><tr><td>I1</td></tr><tr><td>I2</td></tr><tr><td>I3</td></tr></table></th></tr>'
+				. '<tr><th>H2</th></tr></thead>' . $body . '</table>',
+				['I2', 'H2', 'B2'],
+			],
+		];
+	}
+
+	/**
+	 * A header row repeated at the top of each page is drawn as it is in the header, and does not move the rows of the
+	 * body the rule names
+	 */
+	public function testARepeatedHeaderRowKeepsItsCount()
+	{
+		$rows = '';
+		for ($row = 1; $row <= 60; $row++) {
+			$rows .= '<tr><td>Row ' . $row . '</td></tr>';
+		}
+
+		$pages = $this->pages($this->render(
+			'<style>tr:nth-child(2) td, tr:nth-child(2) th { background-color: #00ff00; }</style>'
+			. '<table><thead><tr><th>H1</th></tr><tr><th>H2</th></tr></thead><tbody>' . $rows . '</tbody></table>'
+		));
+
+		$this->assertGreaterThan(1, count($pages));
+		$this->assertSame(2, substr_count($pages[0], self::FILL));
+		for ($page = 1; $page < count($pages); $page++) {
+			$this->assertSame(1, substr_count($pages[$page], self::FILL), 'Page ' . ($page + 1));
+		}
+	}
+
 }
