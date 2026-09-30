@@ -4,6 +4,7 @@ namespace Mpdf\Css;
 
 use Mpdf\AssetFetcher;
 use Mpdf\Cache;
+use Mpdf\CssMode;
 use Mpdf\Exception\AssetFetchingException;
 use Mpdf\Mpdf;
 use Mpdf\MpdfException;
@@ -99,27 +100,37 @@ class CssLoader
 		}
 
 		preg_match_all('/<style.*?>(.*?)<\/style>/si', $html, $styles);
-		foreach ($styles[1] as $css) {
-			$cssUrls = array_merge($cssUrls, $this->extractImportUrls($css));
-		}
 
-		return $cssUrls;
+		return array_merge($cssUrls, $this->extractImportUrls($styles[1], true));
 	}
 
 	/**
-	 * The URLs the @import rules in $css load, less those whose media query list does not match
+	 * The URLs the @import rules in the stylesheets load, less those whose media query list does not match
 	 *
-	 * Only an @import among the stylesheet's own rules is read, not one in a comment, a string or a block. A layer()
+	 * Only an @import among a stylesheet's own rules is read, not one in a comment, a string or a block. A layer()
 	 * before the media query list is ignored. A supports() condition is taken to pass, as the rules in an @supports
 	 * block are unwrapped, so one that starts with not fails.
 	 *
-	 * @param string $css
+	 * @param string[] $stylesheets
+	 * @param bool $inHtml Whether the stylesheets are the document's <style> blocks rather than one it loads, which
+	 *                     only legacy mode reads
 	 * @return string[]
 	 */
-	private function extractImportUrls($css)
+	private function extractImportUrls(array $stylesheets, $inHtml)
 	{
-		if (stripos($css, '@import') === false) {
-			return [];
+		$preludes = [];
+		foreach ($stylesheets as $css) {
+			if (stripos($css, '@import') !== false) {
+				foreach ($this->tokenizer->rules($this->tokenizer->removeComments($css)) as $rule) {
+					if ($rule[0] === 'import' && $rule[2] === null) {
+						$preludes[] = $rule[1];
+					}
+				}
+			}
+		}
+
+		if ($this->mpdf->cssMode === CssMode::LEGACY) {
+			return $this->legacyImportUrls($preludes, $inHtml);
 		}
 
 		$url = '(?|url\(\s*"([^"]*)"\s*\)|url\(\s*\'([^\']*)\'\s*\)|url\(\s*([^\s"\')]*)\s*\)|"([^"]*)"|\'([^\']*)\')';
@@ -128,9 +139,8 @@ class CssLoader
 		$pattern = '/^' . $url . $layer . $supports . '(.*)$/is';
 
 		$urls = [];
-		foreach ($this->tokenizer->rules($this->tokenizer->removeComments($css)) as $rule) {
-			if ($rule[0] === 'import' && $rule[2] === null
-				&& preg_match($pattern, $rule[1], $import)
+		foreach ($preludes as $prelude) {
+			if (preg_match($pattern, $prelude, $import)
 				&& $import[1] !== '' && $import[2] === '' && $this->mediaQueryProcessor->matches($import[3])
 			) {
 				$urls[] = $import[1];
@@ -138,6 +148,29 @@ class CssLoader
 		}
 
 		return $urls;
+	}
+
+	/**
+	 * The URLs @import rules load in cssMode legacy, as mPDF v7 read them: any URL of a .css file, whatever follows
+	 * it. Those in url() come first, then, in <style> blocks only, those written as strings
+	 *
+	 * @param string[] $preludes
+	 * @param bool $inHtml
+	 * @return string[]
+	 */
+	private function legacyImportUrls(array $preludes, $inHtml)
+	{
+		$urls = [];
+		$strings = [];
+		foreach ($preludes as $prelude) {
+			if (preg_match('/^url\([\'"]?(\S*?\.css(\?[^\s\'"]+)?)[\'"]?\)/i', $prelude, $m)) {
+				$urls[] = $m[1];
+			} elseif ($inHtml && preg_match('/^(?!url)[\'"]?(\S*?\.css(\?[^\s\'"]+)?)/i', $prelude, $m)) {
+				$strings[] = $m[1];
+			}
+		}
+
+		return array_merge($urls, $strings);
 	}
 
 	/**
@@ -153,7 +186,7 @@ class CssLoader
 	public function processExternalCssImports($stylesheetCss, $path, &$externalCss, &$externalCssCount)
 	{
 		$cssBasePath = preg_replace('/\/[^\/]*$/', '', $path) . '/';
-		foreach ($this->extractImportUrls($stylesheetCss) as $cxtembedded) {
+		foreach ($this->extractImportUrls([$stylesheetCss], false) as $cxtembedded) {
 			// path is relative to original stylesheet!!
 			$externalCss[] = Path::relativeToAbsolutePath($cxtembedded, $cssBasePath);
 			$externalCssCount++;

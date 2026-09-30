@@ -213,11 +213,28 @@ class CssManagerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->createCssFile('screen.css', 'h1 { color: #ff0000; }');
 		$this->createCssFile('theme', 'p { color: #00ff00; }');
 		$this->mpdf->CSSselectMedia = 'print';
+		$this->mpdf->cssMode = CssMode::STANDARD;
 
 		$this->cssManager->ReadCSS('<style>@import url("screen.css") screen; @import url("theme") print;</style>');
 
 		$this->assertArrayNotHasKey('H1', $this->cssManager->CSS);
 		$this->assertSame('#00ff00', $this->cssManager->CSS['P']['COLOR']);
+	}
+
+	/**
+	 * In cssMode legacy an @import is loaded whatever its media query list when its URL ends in .css, and not
+	 * otherwise
+	 */
+	public function testReadCSS_ImportLoadsEachCssFileInLegacyMode()
+	{
+		$this->createCssFile('screen.css', 'h1 { color: #ff0000; }');
+		$this->createCssFile('theme', 'p { color: #00ff00; }');
+		$this->mpdf->CSSselectMedia = 'print';
+
+		$this->cssManager->ReadCSS('<style>@import url("screen.css") screen; @import url("theme") print;</style>');
+
+		$this->assertSame('#ff0000', $this->cssManager->CSS['H1']['COLOR']);
+		$this->assertArrayNotHasKey('P', $this->cssManager->CSS);
 	}
 
 	public function testReadCSS_WithBackgroundUrlRewriting()

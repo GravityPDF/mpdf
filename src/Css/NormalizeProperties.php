@@ -181,7 +181,7 @@ class NormalizeProperties
 		}
 
 		// A negative line-height is invalid, so the declaration is dropped
-		if (isset($this->properties['LINE-HEIGHT']) && (float) $this->properties['LINE-HEIGHT'] < 0) {
+		if (isset($this->properties['LINE-HEIGHT']) && (float) $this->properties['LINE-HEIGHT'] < 0 && $this->dropsNegativeLineHeight()) {
 			unset($this->properties['LINE-HEIGHT']);
 		}
 
@@ -272,7 +272,7 @@ class NormalizeProperties
 		list(, $keywords, $size, $lineHeight, $family) = $m;
 
 		// A negative line-height makes the whole value invalid
-		if ((float) $lineHeight < 0) {
+		if ((float) $lineHeight < 0 && $this->dropsNegativeLineHeight()) {
 			return;
 		}
 
@@ -944,6 +944,17 @@ class NormalizeProperties
 	 * @return bool
 	 */
 	private function resetsOmittedParts()
+	{
+		return $this->mpdf->cssMode === CssMode::STANDARD;
+	}
+
+	/**
+	 * Whether a declaration with a negative line-height is dropped, as CSS has it. In legacy mode the value is kept,
+	 * as mPDF v7 kept it
+	 *
+	 * @return bool
+	 */
+	private function dropsNegativeLineHeight()
 	{
 		return $this->mpdf->cssMode === CssMode::STANDARD;
 	}
