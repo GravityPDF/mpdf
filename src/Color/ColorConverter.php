@@ -292,7 +292,7 @@ class ColorConverter
 		$c = false;
 
 		if (preg_match('/^[\d]+$/', $color)) {
-			$c = [static::MODE_GRAYSCALE, $color]; // i.e. integer only
+			$c = [static::MODE_GRAYSCALE, $this->clamp($color, 255)]; // i.e. integer only
 		} elseif (strpos($color, '#') === 0) { // case of #nnnnnn or #nnn
 			$c = $this->processHashColor($color);
 		} elseif (preg_match('/(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\((.*?)\)/', $color, $m)) {
@@ -340,16 +340,20 @@ class ColorConverter
 		// in case of Background: #CCC url() x-repeat etc.
 		$cor = preg_replace('/\s+.*/', '', $color);
 
-		// Turn #RGB into #RRGGBB
-		if (strlen($cor) === 4) {
-			$cor = '#' . $cor[1] . $cor[1] . $cor[2] . $cor[2] . $cor[3] . $cor[3];
+		// Turn #RGB into #RRGGBB, and #RGBA into #RRGGBBAA
+		if (strlen($cor) === 4 || strlen($cor) === 5) {
+			$cor = '#' . preg_replace('/./', '$0$0', substr($cor, 1));
 		}
 
 		$r = self::safeHexDec(substr($cor, 1, 2));
 		$g = self::safeHexDec(substr($cor, 3, 2));
 		$b = self::safeHexDec(substr($cor, 5, 2));
 
-		return [3, $r, $g, $b];
+		if (strlen($cor) === 9) {
+			return [static::MODE_RGBA, $r, $g, $b, self::safeHexDec(substr($cor, 7, 2)) * 100 / 255];
+		}
+
+		return [static::MODE_RGB, $r, $g, $b];
 	}
 
 	/**
@@ -367,24 +371,30 @@ class ColorConverter
 			// rgb() and rgba() are the same function, as are hsl() and hsla(): a fourth argument is the alpha
 			case 'hsl':
 			case 'hsla':
-				list($cores[0], $cores[1], $cores[2]) = $this->colorModeConverter->hsl2rgb($this->hueTurns($cores[0]), $cores[1], $cores[2]);
+				list($cores[0], $cores[1], $cores[2]) = $this->colorModeConverter->hsl2rgb(
+					$this->hueTurns($cores[0]),
+					$this->clamp($cores[1], 1),
+					$this->clamp($cores[2], 1)
+				);
 				// no break
 
 			case 'rgb':
 			case 'rgba':
+				$rgb = $this->clampEach(array_slice($cores, 0, 3), 255);
+
 				if (isset($cores[3])) {
-					return [static::MODE_RGBA, $cores[0], $cores[1], $cores[2], $cores[3] * 100];
+					return array_merge([static::MODE_RGBA], $rgb, [$this->clamp($cores[3], 1) * 100]);
 				}
 
-				return [static::MODE_RGB, $cores[0], $cores[1], $cores[2]];
+				return array_merge([static::MODE_RGB], $rgb);
 
 			case 'cmyk':
 			case 'device-cmyk':
-				return [static::MODE_CMYK, $cores[0], $cores[1], $cores[2], $cores[3]];
+				return array_merge([static::MODE_CMYK], $this->clampEach(array_slice($cores, 0, 4), 100));
 
 			case 'cmyka':
 			case 'device-cmyka':
-				return [static::MODE_CMYKA, $cores[0], $cores[1], $cores[2], $cores[3], $cores[4] * 100];
+				return array_merge([static::MODE_CMYKA], $this->clampEach(array_slice($cores, 0, 4), 100), [$this->clamp($cores[4], 1) * 100]);
 
 			case 'spot':
 				$name = strtoupper(trim($cores[0]));
@@ -451,6 +461,35 @@ class ColorConverter
 		}
 
 		return $cores;
+	}
+
+	/**
+	 * CSS clamps a value outside its range to the nearest end, where packing it into a byte would wrap it
+	 *
+	 * @param string|float $value
+	 * @param float $max
+	 *
+	 * @return float
+	 */
+	private function clamp($value, $max)
+	{
+		return max(0, min($max, (float) $value));
+	}
+
+	/**
+	 * @param array $values
+	 * @param float $max
+	 *
+	 * @return float[] Each value clamped to the range from 0 to $max
+	 */
+	private function clampEach(array $values, $max)
+	{
+		$clamped = [];
+		foreach ($values as $value) {
+			$clamped[] = $this->clamp($value, $max);
+		}
+
+		return $clamped;
 	}
 
 	/**

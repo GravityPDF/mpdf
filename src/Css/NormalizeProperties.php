@@ -495,7 +495,7 @@ class NormalizeProperties
 
 		if (preg_match('/url\(/i', $s)) {
 			// If color, set and strip it off
-			if (preg_match('/^\s*(#[0-9a-fA-F]{3,6}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})\s+(url\(.*)/i', $s, $m)) {
+			if (preg_match('/^\s*(#[0-9a-fA-F]{3,8}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})\s+(url\(.*)/i', $s, $m)) {
 				$background['c'] = strtolower($m[1]);
 				$s = $m[3];
 			}
@@ -520,7 +520,7 @@ class NormalizeProperties
 			return $background;
 		}
 
-		if (preg_match('/^\s*(#[0-9a-fA-F]{3,6}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})/i', $s, $m)) {
+		if (preg_match('/^\s*(#[0-9a-fA-F]{3,8}|(rgba|rgb|device-cmyka|cmyka|device-cmyk|cmyk|hsla|hsl|spot)\(.*?\)|[a-zA-Z]{3,})/i', $s, $m)) {
 			$background['c'] = strtolower($m[1]);
 		}
 
