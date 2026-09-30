@@ -166,21 +166,27 @@ class RuleSetTest extends TestCase
 	}
 
 	/**
-	 * The document's own frame is matched as body, by the rules filed for any element alone: the universal selector
-	 * and the other rules whose subject names no tag, id or class, when they match the root
+	 * html and body are matched by the rules filed for any element too: the universal selector and the other rules
+	 * whose subject names no tag, id or class, when they match there. html is body's parent and has no parent, and
+	 * neither has siblings
 	 */
-	public function testMatchesTheDocumentAsBodyWithTheRulesForAnyElement()
+	public function testMatchesHtmlAndBodyWithTheRulesForAnyElement()
 	{
 		$rules = new RuleSet();
-		foreach (['*', 'body', '* > *', ':not(p)', ':not(body)', '*:first-child', '*.a', '*:lang(fr)'] as $position => $selector) {
+		foreach (['*', 'body', '* > *', ':not(p)', ':not(body)', '*:first-child', '*.a', '*:lang(fr)', '* + *'] as $position => $selector) {
 			$rules->add($this->compiler->compile($selector), ['COLOR' => 'rule ' . $position]);
 		}
 
-		$path = function () {
-			return array_slice($this->path(), 0, 1);
-		};
+		$document = [$this->path()[0]];
 
-		$this->assertSame([['COLOR' => 'rule 0'], ['COLOR' => 'rule 3']], $rules->matchingDeclarations('', '', [], $path));
+		$this->assertSame(
+			[[['COLOR' => 'rule 0'], ['COLOR' => 'rule 3'], ['COLOR' => 'rule 4']], []],
+			$rules->documentDeclarations(true, $document)
+		);
+		$this->assertSame(
+			[[['COLOR' => 'rule 0'], ['COLOR' => 'rule 2'], ['COLOR' => 'rule 1'], ['COLOR' => 'rule 3']], []],
+			$rules->documentDeclarations(false, $document)
+		);
 	}
 
 	/**

@@ -112,7 +112,7 @@ class SelectorCompilerTest extends TestCase
 		$tag = function ($tag) {
 			return ['tag' => $tag, 'ids' => [], 'classes' => [], 'pseudos' => []];
 		};
-		$any = ['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => []]], 'combinators' => [], 'specificity' => [0, 0, 0]];
+		$any = ['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => []]], 'combinators' => [], 'specificity' => [0, 0, 0], 'never' => false];
 
 		return [
 			'type' => ['p', [$tag('P')], []],

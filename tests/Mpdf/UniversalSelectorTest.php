@@ -241,9 +241,10 @@ class UniversalSelectorTest extends TestCase
 	}
 
 	/**
-	 * The universal selector reaches body, as the document's root: text written straight into the body takes its
-	 * colour, and body's own rules outweigh it wherever they are written. Rules that need body to have a parent or a
-	 * sibling do not reach it
+	 * The universal selector reaches html and body: text written straight into the body takes its colour, and body's
+	 * own rules outweigh it wherever they are written. html is body's parent, so rules that need body to have a
+	 * parent, or html to be there, reach it, and text takes their colour from one or the other. Rules that need body to
+	 * have a sibling do not reach it
 	 *
 	 * @dataProvider bodyRules
 	 *
@@ -270,13 +271,28 @@ class UniversalSelectorTest extends TestCase
 			'a body rule written after it' => ['* { color: #f00; } body { color: #00f; }', self::BLUE],
 			'a body rule written before it' => ['body { color: #00f; } * { color: #f00; }', self::BLUE],
 			'the later of two' => ['* { color: #00f; } * { color: #f00; }', self::RED],
+			'an important universal rule over a body rule' => ['* { color: #f00 !important; } body { color: #00f; }', self::RED],
+			'an important body rule over an important universal rule' => ['body { color: #00f !important; } * { color: #f00 !important; }', self::BLUE],
 			'not another tag' => [':not(p) { color: #f00; }', self::RED],
-			'not body' => ['*:not(body) { color: #f00; }', self::BLACK],
-			'a child of anything' => ['* > * { color: #f00; }', self::BLACK],
-			'a descendant of anything' => ['* * { color: #f00; }', self::BLACK],
+			'not body, which html is' => ['*:not(body) { color: #f00; }', self::RED],
+			'a child of anything, as body is of html' => ['* > * { color: #f00; }', self::RED],
+			'a descendant of anything, as body is of html' => ['* * { color: #f00; }', self::RED],
+			'a child of anything but html' => [':not(html) > * { color: #f00; }', self::BLACK],
 			'a sibling of anything' => ['* + *, * ~ * { color: #f00; }', self::BLACK],
 			'with a class it does not have' => ['*.c { color: #f00; }', self::BLACK],
 		];
+	}
+
+	/**
+	 * The universal selector reaches html, so its font size is the one rem is read against
+	 */
+	public function testSetsTheSizeRemIsReadAgainst()
+	{
+		$mpdf = $this->drawDocument('<style>* { font-size: 20pt; } p.rem { font-size: 1rem; } p.half { font-size: 0.5rem; }</style><p class="rem">rem</p><p class="half">half</p>', ['cssMode' => CssMode::STANDARD]);
+		$sizes = $this->keyedByText($mpdf, $mpdf->drawnFontSize);
+
+		$this->assertEqualsWithDelta(20, $sizes['rem'], 0.001);
+		$this->assertEqualsWithDelta(10, $sizes['half'], 0.001);
 	}
 
 	/**
