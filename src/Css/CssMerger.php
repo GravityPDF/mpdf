@@ -510,7 +510,18 @@ class CssMerger
 		}
 
 		if (isset($previousBlock['InlineProperties'])) {
-			$converted = $this->inlinePropertyConverter->convert($previousBlock['InlineProperties']);
+			$saved = $previousBlock['InlineProperties'];
+			if ($this->mpdf->cssMode === CssMode::LEGACY) {
+				// mPDF v7 did not hand a block's text shadow on to its child blocks
+				unset($saved['textshadow']);
+				$converted = $this->inlinePropertyConverter->convert($saved);
+			} else {
+				// Text decorations and vertical-align are not inherited, but child blocks still take them (#544)
+				$converted = InheritedProperties::of(
+					$this->inlinePropertyConverter->convert($saved),
+					array_merge(InheritedProperties::TEXT, ['TEXT-DECORATION', 'VERTICAL-ALIGN'])
+				);
+			}
 			$this->cssProperties = array_merge($this->cssProperties, $converted); // mPDF 5.7.1
 		}
 	}
