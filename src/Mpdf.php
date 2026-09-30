@@ -5178,6 +5178,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		// Set font size in points
 		if ($this->FontSizePt == $size) {
+			// Reset() empties it after setting the size, and the text saved for a table cell carries it
+			$this->currentfontsize = $size;
 			return;
 		}
 		$this->FontSizePt = $size;
