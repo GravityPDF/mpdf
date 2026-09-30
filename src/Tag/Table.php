@@ -60,6 +60,7 @@ class Table extends Tag
 		$this->mpdf->tableLevel++;
 		$this->cssManager->tbCSSlvl++;
 
+		$cellInherited = [];
 		if ($this->mpdf->tableLevel > 1) { // inherit table properties from cell in which nested
 			if ($this->mpdf->cssMode === CssMode::LEGACY) {
 				//$this->mpdf->base_table_properties['FONT-KERNING'] = ($this->mpdf->textvar & TextVars::FC_KERNING);	// mPDF 6
@@ -74,6 +75,12 @@ class Table extends Tag
 			$cellLineHeight = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineHeight'];
 			$cellLineStackingStrategy = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineStackingStrategy'];
 			$cellLineStackingShift = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineStackingShift'];
+			// Under the standard cascade it inherits the cell's line-height and text-align through its merged CSS too
+			$outerTable = $this->mpdf->table[$this->mpdf->tableLevel - 1][$this->mpdf->tbctr[$this->mpdf->tableLevel - 1]];
+			$cellInherited = array_filter([
+				'LINE-HEIGHT' => $cellLineHeight,
+				'TEXT-ALIGN' => isset($outerTable['cellTextAlign']) ? $outerTable['cellTextAlign'] : '',
+			]);
 		}
 
 		if (isset($this->mpdf->tbctr[$this->mpdf->tableLevel])) {
@@ -170,7 +177,7 @@ class Table extends Tag
 		if ($this->cssManager->tbCSSlvl == 1) {
 			$properties = $this->cssManager->MergeCSS('TOPTABLE', 'TABLE', $attr);
 		} else {
-			$properties = $this->cssManager->MergeCSS('TABLE', 'TABLE', $attr);
+			$properties = $this->cssManager->MergeCSS('TABLE', 'TABLE', $attr, $this->mpdf->cssMode === CssMode::STANDARD ? $cellInherited : []);
 		}
 
 		$w = '';
@@ -306,9 +313,13 @@ class Table extends Tag
 		$this->mpdf->base_table_properties['FONT-FAMILY'] = $this->mpdf->FontFamily;
 
 		if (isset($properties['FONT-SIZE'])) {
+			$block = $this->mpdf->blk[$this->mpdf->blklvl];
 			if ($this->mpdf->tableLevel > 1) {
 				$tableFontSize = $this->sizeConverter->convert($this->mpdf->base_table_properties['FONT-SIZE']);
 				$mmsize = $this->sizeConverter->convert($properties['FONT-SIZE'], $tableFontSize);
+			} elseif ($this->mpdf->cssMode === CssMode::STANDARD && isset($block['InlineProperties']['size'])) {
+				// Its size is relative to the block's, as the size it inherits is the block's
+				$mmsize = $this->sizeConverter->convert($properties['FONT-SIZE'], $block['InlineProperties']['size']);
 			} else {
 				$mmsize = $this->sizeConverter->convert($properties['FONT-SIZE'], $this->mpdf->default_font_size / Mpdf::SCALE);
 			}

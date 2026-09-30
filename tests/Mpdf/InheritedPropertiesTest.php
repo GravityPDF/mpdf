@@ -60,6 +60,13 @@ class InheritedPropertiesTest extends TestCase
 		'block to child block after a forced page break' => '<div style="{A}"><p>zz</p><pagebreak /><p style="{D}">qq</p></div>',
 		'positioned block to child block' => '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm; {A}"><p style="{D}">qq</p></div>',
 		'table to cell' => '<table style="{A}"><tr><td style="{D}">qq</td></tr></table>',
+		'block to table cell' => '<div style="{A}"><table><tr><td style="{D}">qq</td></tr></table></div>',
+		'list item to table cell' => '<ul><li style="{A}"><table><tr><td style="{D}">qq</td></tr></table></li></ul>',
+		'body to table cell' => '<body style="{A}"><table><tr><td style="{D}">qq</td></tr></table></body>',
+		'header block to table cell' => '<htmlpageheader name="h"><div style="{A}"><table><tr><td style="{D}">qq</td></tr></table></div></htmlpageheader><sethtmlpageheader name="h" value="on" show-this-page="1" /><p>body</p>',
+		'positioned block to table cell' => '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm; {A}"><table><tr><td style="{D}">qq</td></tr></table></div>',
+		'kept block to table cell' => '{FILLER}<div style="page-break-inside: avoid; {A}"><p>zz</p><table><tr><td style="{D}">qq</td></tr></table></div>',
+		'block to table cell after a forced page break' => '<div style="{A}"><p>zz</p><pagebreak /><table><tr><td style="{D}">qq</td></tr></table></div>',
 		'row to cell' => '<table><tr style="{A}"><td style="{D}">qq</td></tr></table>',
 		'row rule to cell' => '<style>tr.a { {A} }</style><table><tr class="a"><td style="{D}">qq</td></tr></table>',
 		'tbody to cell' => '<table><tbody style="{A}"><tr><td style="{D}">qq</td></tr></tbody></table>',
@@ -79,8 +86,9 @@ class InheritedPropertiesTest extends TestCase
 	/**
 	 * What legacy's channels drop, by context. A block hands its child blocks no text shadow. A positioned block hands
 	 * its content no word spacing, hyphenation or outline, and its child blocks no text shadow. A table hands its cells
-	 * no font variant, feature setting, language override, transform, shadow or outline. A row group or a row hands its
-	 * cells nothing. A cell hands the cells of a table nested in it only its spacing and its language override
+	 * no font variant, feature setting, language override, transform, shadow or outline. A table starts from the
+	 * document's defaults, whatever block it is in. A row group or a row hands its cells nothing. A cell hands the
+	 * cells of a table nested in it only its spacing and its language override
 	 */
 	const LEGACY_DROPPED = [
 		'block to child block' => ['TEXT-SHADOW'],
@@ -99,6 +107,13 @@ class InheritedPropertiesTest extends TestCase
 			'FONT-VARIANT-ALTERNATES', 'FONT-FEATURE-SETTINGS', 'FONT-LANGUAGE-OVERRIDE', 'TEXT-TRANSFORM', 'TEXT-SHADOW',
 			'TEXT-OUTLINE', 'TEXT-OUTLINE-COLOR', 'TEXT-OUTLINE-WIDTH',
 		],
+		'block to table cell' => self::LEGACY_TABLE_DROPPED,
+		'list item to table cell' => self::LEGACY_TABLE_DROPPED,
+		'body to table cell' => self::LEGACY_BODY_TABLE_DROPPED,
+		'header block to table cell' => self::LEGACY_TABLE_DROPPED,
+		'positioned block to table cell' => self::LEGACY_TABLE_DROPPED,
+		'kept block to table cell' => self::LEGACY_TABLE_DROPPED,
+		'block to table cell after a forced page break' => self::LEGACY_TABLE_DROPPED,
 		'row to cell' => InheritedProperties::TEXT,
 		'row rule to cell' => InheritedProperties::TEXT,
 		'tbody to cell' => InheritedProperties::TEXT,
@@ -112,16 +127,34 @@ class InheritedPropertiesTest extends TestCase
 		'row to nested table cell' => InheritedProperties::TEXT,
 		'outer row to nested table cell' => InheritedProperties::TEXT,
 		'cell to nested table cell' => [
-			'COLOR', 'FONT-FAMILY', 'FONT-SIZE', 'FONT-STYLE', 'FONT-WEIGHT', 'FONT-VARIANT-POSITION', 'FONT-VARIANT-CAPS',
-			'FONT-VARIANT-LIGATURES', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES', 'FONT-FEATURE-SETTINGS',
-			'TEXT-TRANSFORM', 'TEXT-SHADOW', 'TEXT-OUTLINE', 'TEXT-OUTLINE-COLOR', 'TEXT-OUTLINE-WIDTH',
+			'COLOR', 'FONT-FAMILY', 'FONT-SIZE', 'FONT-STYLE', 'FONT-WEIGHT', 'FONT-KERNING', 'FONT-VARIANT-POSITION',
+			'FONT-VARIANT-CAPS', 'FONT-VARIANT-LIGATURES', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES',
+			'FONT-FEATURE-SETTINGS', 'TEXT-TRANSFORM', 'TEXT-SHADOW', 'HYPHENS', 'TEXT-OUTLINE', 'TEXT-OUTLINE-COLOR',
+			'TEXT-OUTLINE-WIDTH',
 		],
 	];
 
 	/**
-	 * What the default style of a table resets, whatever the table sits in (#543)
+	 * What legacy hands a table's cells from the block the table is in: only a font language override, which the text
+	 * state keeps through the table
 	 */
-	const TABLE_DEFAULTS = ['FONT-KERNING', 'HYPHENS'];
+	const LEGACY_TABLE_DROPPED = [
+		'COLOR', 'FONT-FAMILY', 'FONT-SIZE', 'FONT-STYLE', 'FONT-WEIGHT', 'FONT-KERNING', 'FONT-VARIANT-POSITION',
+		'FONT-VARIANT-CAPS', 'FONT-VARIANT-LIGATURES', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES',
+		'FONT-FEATURE-SETTINGS', 'LETTER-SPACING', 'WORD-SPACING', 'TEXT-TRANSFORM', 'TEXT-SHADOW', 'HYPHENS',
+		'TEXT-OUTLINE', 'TEXT-OUTLINE-COLOR', 'TEXT-OUTLINE-WIDTH',
+	];
+
+	/**
+	 * What legacy hands a table's cells from <body style="">: the font family and size, which set the defaults a table
+	 * starts from, and a font language override
+	 */
+	const LEGACY_BODY_TABLE_DROPPED = [
+		'COLOR', 'FONT-STYLE', 'FONT-WEIGHT', 'FONT-KERNING', 'FONT-VARIANT-POSITION', 'FONT-VARIANT-CAPS',
+		'FONT-VARIANT-LIGATURES', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES', 'FONT-FEATURE-SETTINGS',
+		'LETTER-SPACING', 'WORD-SPACING', 'TEXT-TRANSFORM', 'TEXT-SHADOW', 'HYPHENS', 'TEXT-OUTLINE',
+		'TEXT-OUTLINE-COLOR', 'TEXT-OUTLINE-WIDTH',
+	];
 
 	/**
 	 * The text states read for each document, so that each is written once
@@ -312,10 +345,6 @@ class InheritedPropertiesTest extends TestCase
 	 */
 	private function carries($mode, $context, $property)
 	{
-		if (in_array($context, ['cell to nested table cell', 'outer row to nested table cell'], true) && in_array($property, self::TABLE_DEFAULTS, true)) {
-			return false;
-		}
-
 		if ($mode === CssMode::STANDARD || !array_key_exists($context, self::LEGACY_DROPPED)) {
 			return true;
 		}
