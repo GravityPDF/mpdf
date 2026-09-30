@@ -209,6 +209,50 @@ class SelectorCompilerTest extends TestCase
 	}
 
 	/**
+	 * :not(), :is() and :where() hold their arguments compiled. :is() and :where() leave out an argument they cannot
+	 * read, and :where() is held as :is()
+	 *
+	 * @dataProvider selectorArguments
+	 *
+	 * @param string $selector
+	 * @param string $name The name it is held under
+	 * @param array[] $subjects The tag and classes of the last compound of each argument kept
+	 */
+	public function testReadsTheSelectorsAPseudoClassTakes($selector, $name, array $subjects)
+	{
+		$compiled = $this->compiler->compile($selector);
+
+		$this->assertNotNull($compiled);
+		$pseudo = $compiled['compounds'][0]['pseudos'][0];
+		$this->assertSame($name, $pseudo[0]);
+		$this->assertSame($subjects, array_map(function ($argument) {
+			$subject = $argument['compounds'][count($argument['compounds']) - 1];
+
+			return [$subject['tag'], $subject['classes']];
+		}, $pseudo[1]));
+	}
+
+	/**
+	 * A selector using :not(), :is() or :where(), the name its pseudo-class is held under, and its arguments
+	 *
+	 * @return array[]
+	 */
+	public function selectorArguments()
+	{
+		return [
+			'not with one class' => ['p:not(.a)', 'not', [[null, ['A']]]],
+			'not with a list, spaces and all' => ['p:not( .a ,.b )', 'not', [[null, ['A']], [null, ['B']]]],
+			'not with a complex selector' => ['p:not(div > p)', 'not', [['P', []]]],
+			'is' => [':is(h1, h2)', 'is', [['H1', []], ['H2', []]]],
+			'where' => [':where(h1, .x)', 'is', [['H1', []], [null, ['X']]]],
+			'is leaves out what it cannot read' => [':is(h1, a:hover, ::before, h2)', 'is', [['H1', []], ['H2', []]]],
+			'is nested in is' => [':is(:is(h1), p)', 'is', [[null, []], ['P', []]]],
+			'not with a comma inside an attribute value' => ['p:not([title="a, b"])', 'not', [[null, []]]],
+			'not with a closing parenthesis inside an attribute value' => ['p:not([title=")"], .x)', 'not', [[null, []], [null, ['X']]]],
+		];
+	}
+
+	/**
 	 * A selector mPDF cannot match, or that is not valid, compiles to nothing
 	 *
 	 * @dataProvider unmatchableSelectors
@@ -260,6 +304,13 @@ class SelectorCompilerTest extends TestCase
 			'lang with no range' => [':lang()'],
 			'lang with an empty range between commas' => [':lang(fr,,de)'],
 			'lang with no parentheses' => [':lang'],
+			'not with an argument it cannot read' => ['p:not(.a, a:hover)'],
+			'not with a pseudo-element' => ['p:not(::before)'],
+			'not left open' => ['p:not(.a'],
+			'not with nothing' => ['p:not()'],
+			'is with nothing it can read' => [':is(a:hover, ::before)'],
+			'where with nothing' => [':where()'],
+			'a stray comma in not' => ['p:not(.a,)'],
 		];
 	}
 
@@ -297,6 +348,14 @@ class SelectorCompilerTest extends TestCase
 			'attribute on a type' => ['a[href^="http"]', [0, 1, 1]],
 			'lang' => ['p:lang(fr)', [0, 1, 1]],
 			'attributes, classes and pseudo-classes together' => ['li.a[data-x]:first-child:lang(en)', [0, 4, 1]],
+			'not counts as its argument' => ['p:not(.a)', [0, 1, 1]],
+			'not counts as its most specific argument' => ['p:not(.a, #b, div span)', [1, 0, 1]],
+			'is counts as its most specific argument' => [':is(h1, .a.b, div p) + p', [0, 2, 1]],
+			'is with a type and an id' => [':is(p, #x)', [1, 0, 0]],
+			'where counts nothing' => [':where(#a, .b) > p', [0, 0, 1]],
+			'where inside is' => [':is(:where(#a), .b)', [0, 1, 0]],
+			'is leaves out what it cannot read from its specificity too' => [':is(.a, #b:hover)', [0, 1, 0]],
+			'nested' => ['li:not(:is(.a, #b)):nth-child(2)', [1, 1, 1]],
 		];
 	}
 
@@ -309,6 +368,9 @@ class SelectorCompilerTest extends TestCase
 		$this->assertTrue($this->compiler->compile('div > *')['universal']);
 		$this->assertTrue($this->compiler->compile('* + p')['universal']);
 		$this->assertFalse($this->compiler->compile('div > :first-child')['universal']);
+		$this->assertTrue($this->compiler->compile('p:not(*)')['universal']);
+		$this->assertTrue($this->compiler->compile(':is(h1, *) + p')['universal']);
+		$this->assertFalse($this->compiler->compile(':is(h1, h2) + p')['universal']);
 	}
 
 	/**

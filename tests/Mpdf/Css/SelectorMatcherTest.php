@@ -98,6 +98,20 @@ class SelectorMatcherTest extends TestCase
 			'the wrong closed sibling of an ancestor' => ['h1 + div li', false],
 			'body has no siblings' => ['body:first-child li', false],
 			'a chain through siblings and ancestors' => ['h1 ~ .card > h2 ~ ul > li + .x', true],
+			'not the first child' => ['li:not(:first-child)', true],
+			'not a class it has' => ['li:not(.x)', false],
+			'not any of a list, one of which it is' => ['li:not(.y, :nth-child(2))', false],
+			'not a complex selector it matches' => ['li:not(ul > li)', false],
+			'not a complex selector it does not match' => ['li:not(ol > li)', true],
+			'is one of a list' => [':is(ol, ul) > li', true],
+			'is none of a list' => [':is(ol, dl) > li', false],
+			'is a complex selector, matched from the element' => ['li:is(li + li)', true],
+			'is on an ancestor' => ['div:is(#main, .other) li', true],
+			'not on an ancestor' => ['div:not(.card) li', false],
+			'is on a closed sibling' => [':is(h2, h3) ~ ul > li', true],
+			'where' => [':where(#main) li.x', true],
+			'nested' => ['li:not(:is(.y, :first-child))', true],
+			'body in is' => [':is(body) > div li', true],
 		];
 	}
 

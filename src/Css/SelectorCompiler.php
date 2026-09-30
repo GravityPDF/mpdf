@@ -22,7 +22,9 @@ use Mpdf\Utils\UtfString;
  * for the attributes HTML lists as such, for id and class, whose values the tokenizer uppercases, and with the i flag.
  *
  * Pseudo-classes are held as [name, arguments...]: ['nth-child', a, b] and ['nth-of-type', a, b] for an+b, which
- * :first-child and :first-of-type are written as, and ['lang', ranges] with each language range lowercased.
+ * :first-child and :first-of-type are written as, ['lang', ranges] with each language range lowercased, and
+ * ['not', selectors] and ['is', selectors] with each selector compiled. :where() is held as :is(), its specificity
+ * being the only difference.
  */
 class SelectorCompiler
 {
@@ -205,12 +207,11 @@ class SelectorCompiler
 				$specificity[1]++;
 			} elseif ($c === ':') {
 				$pos++;
-				$pseudo = $this->parsePseudoClass($text, $pos);
+				$pseudo = $this->parsePseudoClass($text, $pos, $specificity, $universal);
 				if ($pseudo === null) {
 					return null;
 				}
 				$compound['pseudos'][] = $pseudo;
-				$specificity[1]++;
 			} else {
 				break;
 			}
@@ -220,20 +221,27 @@ class SelectorCompiler
 	}
 
 	/**
-	 * Reads a pseudo-class after its colon
+	 * Reads a pseudo-class after its colon. :not() and :is() count as their most specific argument, :where() as
+	 * nothing, and the others as a class
 	 *
 	 * @param string $text
 	 * @param int $pos
+	 * @param int[] $specificity Added to for the pseudo-class
+	 * @param bool $universal Set when an argument names *
 	 *
 	 * @return array|null As the class describes, or null for a pseudo-element or a pseudo-class mPDF cannot match
 	 */
-	private function parsePseudoClass($text, &$pos)
+	private function parsePseudoClass($text, &$pos, array &$specificity, &$universal)
 	{
 		if (!$this->startsIdentifier($text, $pos)) {
 			return null;
 		}
 
 		$name = strtolower($this->readName($text, $pos));
+		if ($name !== 'not' && $name !== 'is' && $name !== 'where') {
+			$specificity[1]++;
+		}
+
 		if ($name === 'first-child') {
 			return ['nth-child', 0, 1];
 		}
@@ -251,6 +259,10 @@ class SelectorCompiler
 			return null;
 		}
 
+		if ($name === 'not' || $name === 'is' || $name === 'where') {
+			return $this->parseSelectorArgument($name, $argument, $specificity, $universal);
+		}
+
 		if ($name === 'lang') {
 			$ranges = $this->parseLanguageRanges($argument);
 
@@ -264,6 +276,50 @@ class SelectorCompiler
 		$formula = $this->parseNth($argument);
 
 		return $formula === null ? null : [$name, $formula[0], $formula[1]];
+	}
+
+	/**
+	 * Reads the selector list :not(), :is() and :where() take. :is() and :where() leave out a selector they cannot
+	 * read, as browsers do, and :not() cannot be read with one
+	 *
+	 * @param string $name not, is or where
+	 * @param string $argument
+	 * @param int[] $specificity Added to for the most specific selector, except for :where()
+	 * @param bool $universal Set when a selector names *
+	 *
+	 * @return array|null
+	 */
+	private function parseSelectorArgument($name, $argument, array &$specificity, &$universal)
+	{
+		$selectors = [];
+		$heaviest = [0, 0, 0];
+		foreach ($this->splitList($argument) as $member) {
+			$compiled = $this->compile($member);
+			if ($compiled === null) {
+				if ($name === 'not') {
+					return null;
+				}
+				continue;
+			}
+
+			$selectors[] = $compiled;
+			$universal = $universal || $compiled['universal'];
+			if ($compiled['specificity'] > $heaviest) {
+				$heaviest = $compiled['specificity'];
+			}
+		}
+
+		if (!$selectors) {
+			return null;
+		}
+
+		if ($name !== 'where') {
+			foreach ($heaviest as $i => $count) {
+				$specificity[$i] += $count;
+			}
+		}
+
+		return [$name === 'not' ? 'not' : 'is', $selectors];
 	}
 
 	/**

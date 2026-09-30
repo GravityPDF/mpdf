@@ -56,8 +56,10 @@ class NthChildSelectorTest extends TestCase
 	{
 		return [
 			'a formula written with spaces' => ['td:nth-child(2n + 1)', 3],
-			'a part mPDF cannot match after an nth-child part' => ['tr:nth-child(2) td:not(.y)', 0],
+			'a part mPDF cannot match after an nth-child part' => ['tr:nth-child(2) td:hover', 0],
+			'a :not() part after an nth-child part' => ['tr:nth-child(2) td:not(.y)', 2],
 			'a pseudo-class after the nth-child argument' => ['td:nth-child(2):not(.x)', 0],
+			'a pseudo-class after the nth-child argument that the cells match' => ['td:nth-child(2):not(.y)', 3],
 			'a second nth-child after the argument' => ['td:nth-child(2):nth-child(odd)', 0],
 			'an of selector in the argument' => ['td:nth-child(2 of .x)', 0],
 			'the first row' => ['tr:first-child', 2],

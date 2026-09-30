@@ -135,9 +135,11 @@ class SelectorMatcher
 	/**
 	 * Whether a pseudo-class matches an element. :nth-child() counts the element among all its element siblings, and
 	 * :nth-of-type() among those with its tag; the document has no siblings, so it matches neither. :lang() matches
-	 * the language the element has or inherits, or, in the legacy view, only its own lang attribute
+	 * the language the element has or inherits, or, in the legacy view, only its own lang attribute. :is() matches
+	 * when any selector in its list matches from the element, combinators and all, and :not() when none does
 	 *
-	 * @param array $pseudo A compiled pseudo-class: ['nth-child', a, b], ['nth-of-type', a, b] or ['lang', ranges]
+	 * @param array $pseudo A compiled pseudo-class: ['nth-child', a, b], ['nth-of-type', a, b], ['lang', ranges],
+	 *                      or ['is', selectors] or ['not', selectors]
 	 * @param array $element The element's frame or record, as element() gives it
 	 * @param array[] $path As matchesFrom() takes it
 	 * @param int $parent The depth of the element's parent on $path, as matchesFrom() takes it
@@ -148,6 +150,16 @@ class SelectorMatcher
 	 */
 	private function matchesPseudoClass(array $pseudo, array $element, array $path, $parent, $index, $legacyView)
 	{
+		if ($pseudo[0] === 'is' || $pseudo[0] === 'not') {
+			foreach ($pseudo[1] as $selector) {
+				if ($this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $parent, $index, $legacyView)) {
+					return $pseudo[0] === 'is';
+				}
+			}
+
+			return $pseudo[0] === 'not';
+		}
+
 		if ($pseudo[0] === 'lang') {
 			if (!$legacyView) {
 				// A closed sibling's record keeps no lang: it has its own, or its parent's
