@@ -13,6 +13,9 @@ namespace Mpdf;
  * splits an element or a page-break-inside: avoid block is laid out twice. WriteHTML() drives it through these
  * methods.
  *
+ * It also holds the element whose CSS is being merged, which the selector matcher reads through
+ * getStyledElementPath().
+ *
  * @internal
  */
 trait TracksOpenElements
@@ -26,6 +29,15 @@ trait TracksOpenElements
 	 * See {@see getOpenElements()}
 	 */
 	private $openElements;
+
+	/**
+	 * @var array|null The element whose CSS is being merged: the open elements it sits in (path), and its tag and
+	 * attributes (attr), or, for an element that is already open, the open elements down to it and a null tag. Null
+	 * while no element of the document is being styled. WriteHTML() sets it while a start tag's handler runs,
+	 * reopenBlock() while a block is opened again, and WriteFixedPosHTML() while a positioned block's own CSS is
+	 * merged. See getStyledElementPath()
+	 */
+	private $styledElement;
 
 	/**
 	 * @var array[] For each start tag that ends an open element with no end tag of its own: the tags it ends the nearest
@@ -75,8 +87,8 @@ trait TracksOpenElements
 	 * - attr: its attributes, as the tag handlers are given them
 	 * - nthChild and nthOfType: its position among its element siblings, and among those of its own tag, from 1
 	 * - children: a record of each child closed so far, oldest first, which for the child open inside it are the
-	 *   siblings before that child. A record holds a child's tag, id, classes and attr; its position is its place in
-	 *   the list
+	 *   siblings before that child. A record holds a child's tag, id, classes, attr and nthOfType; its position is its
+	 *   place in the list
 	 * - childTypes: how many children so far have each tag
 	 * - computed: its computed values, not filled in yet
 	 *
@@ -85,6 +97,38 @@ trait TracksOpenElements
 	public function getOpenElements()
 	{
 		return $this->openElements;
+	}
+
+	/**
+	 * The element whose CSS is being merged, with the open elements around it, for the selectors that look at its
+	 * parent, ancestors and earlier siblings. CssMerger asks for it when a compiled rule is filed under the element's
+	 * tag, id or class. An element whose start tag is being read is not on the stack yet, so its frame is made here,
+	 * counted after the siblings closed before it, and a row written straight into a table is put under the tbody
+	 * the stack will give it
+	 *
+	 * @return array[]|null The open elements from the document down to it, in the shape getOpenElements() gives,
+	 *                      with the element's own frame last. Null when no element of the document is being styled
+	 */
+	public function getStyledElementPath()
+	{
+		if ($this->styledElement === null) {
+			return null;
+		}
+
+		$path = $this->styledElement['path'];
+		$tag = $this->styledElement['tag'];
+		if ($tag === null) {
+			return $path;
+		}
+
+		$parent = count($path) - 1;
+		if (self::impliesTbody($tag, $path[$parent])) {
+			$path[] = $this->newChildFrame($path[$parent], 'TBODY', []);
+			$parent++;
+		}
+		$path[] = $this->newChildFrame($path[$parent], $tag, $this->styledElement['attr']);
+
+		return $path;
 	}
 
 	/**
@@ -143,30 +187,117 @@ trait TracksOpenElements
 		}
 
 		$parent = count($this->openElements) - 1;
-		// A row written straight into a table sits in a tbody, as it does in a browser's tree
-		if ($tag === 'TR' && $this->openElements[$parent]['tag'] === 'TABLE') {
+		if (self::impliesTbody($tag, $this->openElements[$parent])) {
 			$this->startElement('TBODY', [], false);
 			$parent++;
 		}
 
-		// Marks a page-break-inside: avoid block laid out a second time. unset() would copy the array even without it
-		if (isset($attr['PAGEBREAKAVOIDCHECKED'])) {
-			unset($attr['PAGEBREAKAVOIDCHECKED']);
-		}
-
-		$frame = $this->newElementFrame(
-			$tag,
-			$attr,
-			isset($attr['LANG']) ? $attr['LANG'] : $this->openElements[$parent]['lang'],
-			count($this->openElements[$parent]['children']) + 1,
-			(isset($this->openElements[$parent]['childTypes'][$tag]) ? $this->openElements[$parent]['childTypes'][$tag] : 0) + 1
-		);
+		$frame = $this->newChildFrame($this->openElements[$parent], $tag, $attr);
 
 		if ($selfClosing || isset(self::$voidTags[$tag])) {
 			$this->recordClosedElement($frame);
 		} else {
 			$this->openElements[] = $frame;
 		}
+	}
+
+	/**
+	 * Whether a start tag opens its element inside a tbody that the HTML leaves out. A row written straight into a
+	 * table does, as in a browser's tree, so `table > tbody > tr` matches it
+	 *
+	 * @param string $tag
+	 * @param array $parent The frame of the element it is opened in
+	 *
+	 * @return bool
+	 */
+	private static function impliesTbody($tag, array $parent)
+	{
+		return $tag === 'TR' && $parent['tag'] === 'TABLE';
+	}
+
+	/**
+	 * Makes the frame for an element opened in $parent after the children $parent has so far. Its nthChild and
+	 * nthOfType are counted from those children, and it inherits $parent's lang when it has no lang of its own
+	 *
+	 * @param array $parent The frame of the element it is opened in
+	 * @param string $tag
+	 * @param string[] $attr
+	 *
+	 * @return array A frame for an element opened after the children its parent has so far
+	 */
+	private function newChildFrame(array $parent, $tag, array $attr)
+	{
+		// Marks a page-break-inside: avoid block laid out a second time. unset() would copy the array even without it
+		if (isset($attr['PAGEBREAKAVOIDCHECKED'])) {
+			unset($attr['PAGEBREAKAVOIDCHECKED']);
+		}
+
+		return $this->newElementFrame(
+			$tag,
+			$attr,
+			isset($attr['LANG']) ? $attr['LANG'] : $parent['lang'],
+			count($parent['children']) + 1,
+			(isset($parent['childTypes'][$tag]) ? $parent['childTypes'][$tag] : 0) + 1
+		);
+	}
+
+	/**
+	 * Whether a start tag is for an element of the document, which selectors match and count among its siblings.
+	 * The tags mPDF wraps substituted characters in, and the spans it wraps a run of another script in for
+	 * autoScriptToLang, are not. WriteHTML() only tells the merger which element it is styling for such a tag
+	 *
+	 * @param string $tag
+	 * @param string[] $attr
+	 *
+	 * @return bool
+	 */
+	private function isDocumentElement($tag, array $attr)
+	{
+		return $tag !== '' && !isset(self::$substitutionTags[$tag]) && !isset($attr[self::SCRIPT_RUN_ATTRIBUTE]);
+	}
+
+	/**
+	 * Finds each open block's element on the stack. The blocks are open elements too, in the same order, with the
+	 * inline elements and table parts they sit in between them. _postForcedPagebreak() calls it before it opens again
+	 * the blocks a forced page break closed, so that each is styled as its own element
+	 *
+	 * @param array[] $blocks The open blocks, from level 1
+	 * @param int $count How many there are
+	 *
+	 * @return array<int, int|null> For each level, the depth of its element's frame, or null if it has none
+	 */
+	private function openBlockDepths(array $blocks, $count)
+	{
+		$depths = [];
+		$depth = 1;
+		$frames = count($this->openElements);
+		for ($b = 1; $b <= $count; $b++) {
+			while ($depth < $frames && $this->openElements[$depth]['tag'] !== $blocks[$b]['tag']) {
+				$depth++;
+			}
+			$depths[$b] = $depth < $frames ? $depth : null;
+			$depth++;
+		}
+
+		return $depths;
+	}
+
+	/**
+	 * Opens again, through Tag::OpenTag(), a block a forced page break closed, with the selectors matched against the
+	 * block's own element. _postForcedPagebreak() calls it for each block it opens again. The element being styled
+	 * before is put back after, as the page break may come from the start tag of an element still to be styled
+	 *
+	 * @param array $block The block as it was before the page break
+	 * @param int|null $depth Where its element is on the stack of open elements, or null if it has none
+	 */
+	private function reopenBlock(array $block, $depth)
+	{
+		$arr = [];
+		$i = 0;
+		$outerElement = $this->styledElement;
+		$this->styledElement = $depth === null ? null : ['path' => array_slice($this->openElements, 0, $depth + 1), 'tag' => null, 'attr' => []];
+		$this->tag->OpenTag($block['tag'], $block['attr'], $arr, $i);
+		$this->styledElement = $outerElement;
 	}
 
 	/**
@@ -184,18 +315,24 @@ trait TracksOpenElements
 
 	/**
 	 * Records a closed element among its parent's children, which is what sibling selectors and the nth counts of
-	 * later siblings read. The parent is the frame now at the top of the stack
+	 * later siblings read. The parent is the frame now at the top of the stack. A span mPDF wraps a run of another
+	 * script in is left out, as it is not the document's
 	 *
 	 * @param array $frame The closed element's frame
 	 */
 	private function recordClosedElement(array $frame)
 	{
+		if (isset($frame['attr'][self::SCRIPT_RUN_ATTRIBUTE])) {
+			return;
+		}
+
 		$parent = count($this->openElements) - 1;
 		$this->openElements[$parent]['children'][] = [
 			'tag' => $frame['tag'],
 			'id' => $frame['id'],
 			'classes' => $frame['classes'],
 			'attr' => $frame['attr'],
+			'nthOfType' => $frame['nthOfType'],
 		];
 		$this->openElements[$parent]['childTypes'][$frame['tag']] = $frame['nthOfType'];
 	}

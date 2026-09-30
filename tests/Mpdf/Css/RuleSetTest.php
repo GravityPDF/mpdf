@@ -112,4 +112,87 @@ class RuleSetTest extends TestCase
 		$this->assertSame([0], $rules->candidates('P', 'MAIN', ['A']));
 	}
 
+	/**
+	 * The declarations of the rules an element matches come in the order they apply: by specificity, and rules of
+	 * the same specificity by position
+	 */
+	public function testGivesTheMatchingDeclarationsBySpecificityThenPosition()
+	{
+		$rules = new RuleSet();
+		foreach (['.a > p', 'div > p', 'p:first-child', 'body > div > p', 'div > p', '#main > p', 'ul > p'] as $position => $selector) {
+			$rules->add($this->compiler->compile($selector), ['COLOR' => 'rule ' . $position]);
+		}
+
+		$path = function () {
+			return $this->path();
+		};
+
+		$this->assertSame(
+			[['COLOR' => 'rule 1'], ['COLOR' => 'rule 4'], ['COLOR' => 'rule 3'], ['COLOR' => 'rule 0'], ['COLOR' => 'rule 2'], ['COLOR' => 'rule 5']],
+			$rules->matchingDeclarations('P', '', [], $path)
+		);
+	}
+
+	/**
+	 * The open elements are only asked for when a rule is filed under the element
+	 */
+	public function testOnlyAsksForThePathWhenARuleIsFiledUnderTheElement()
+	{
+		$asked = false;
+		$path = function () use (&$asked) {
+			$asked = true;
+
+			return null;
+		};
+
+		$this->assertSame([], $this->rules->matchingDeclarations('LI', '', [], $path));
+		$this->assertTrue($asked, 'The rule for any element should ask');
+
+		$rules = new RuleSet();
+		$rules->add($this->compiler->compile('div > p'), ['COLOR' => 'red']);
+		$asked = false;
+		$this->assertSame([], $rules->matchingDeclarations('LI', '', [], $path));
+		$this->assertFalse($asked);
+	}
+
+	/**
+	 * A path that ends in another element than the one being styled matches nothing
+	 */
+	public function testMatchesNothingForThePathOfAnotherElement()
+	{
+		$rules = new RuleSet();
+		$rules->add($this->compiler->compile('div > span'), ['COLOR' => 'red']);
+
+		$path = function () {
+			return $this->path();
+		};
+
+		$this->assertSame([], $rules->matchingDeclarations('SPAN', '', [], $path));
+	}
+
+	/**
+	 * The open elements a rule is matched against: a `<p>` as the first child of `<div id="main" class="a">`, the
+	 * document's first child
+	 *
+	 * @return array[] The frames from the document down to the paragraph
+	 */
+	private function path()
+	{
+		$frame = function ($tag, array $attr) {
+			return [
+				'tag' => $tag,
+				'id' => isset($attr['ID']) ? $attr['ID'] : '',
+				'classes' => isset($attr['CLASS']) ? [$attr['CLASS']] : [],
+				'lang' => '',
+				'attr' => $attr,
+				'nthChild' => 1,
+				'nthOfType' => 1,
+				'children' => [],
+				'childTypes' => [],
+				'computed' => null,
+			];
+		};
+
+		return [$frame('', []), $frame('DIV', ['ID' => 'MAIN', 'CLASS' => 'A']), $frame('P', [])];
+	}
 }

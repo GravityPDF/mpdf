@@ -102,6 +102,7 @@ New features
 ### CSS
 
 * **An id written with classes.** Selectors such as `p#note.warning`, `p.warning#note`, `#note.warning` and `p.a.b#note` match, on their own and as parts of descendant rules, in any order of id and classes. They are applied after `p#note`. A selector with a class or id followed by something mPDF cannot match, such as `.a:hover` or `#note::before`, is dropped like any other selector mPDF cannot match. [#527] [#568]
+* **Child and sibling combinators, and structural pseudo-classes.** `div > p`, `h1 + p`, `h1 ~ p`, and `:first-child`, `:nth-child()`, `:first-of-type` and `:nth-of-type()` on any element, are matched against the elements open around the one being styled. Rules using them were dropped before, so a document that has them changes. They are applied with the descendant rules, after them, in order of specificity and then of source order. [mpdf/mpdf#7] [mpdf/mpdf#318] [#538] [#620]
 
 Performance
 -----------
@@ -373,7 +374,9 @@ These changes do not change output.
 * **Open elements.** `WriteHTML()` keeps a stack of the elements open in the HTML it reads, so that CSS rules can be matched against an element's parents, ancestors and earlier siblings rather than only the blocks mPDF lays out. Each element carries its position among its siblings and a record of the siblings before it. `Mpdf::getOpenElements()` reads it. [#533]
 * **Compiled selectors.** A rule whose selector the legacy parser cannot read is compiled into its compound selectors, the combinators between them and its specificity, and filed under its rightmost compound for the selector matcher. A selector list is split at the commas outside parentheses, brackets and strings, so `:is(h1, h2)` and `[title="a,b"]` stay whole. [#538] [#619]
 
+[mpdf/mpdf#7]: https://github.com/mpdf/mpdf/issues/7
 [mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
+[mpdf/mpdf#318]: https://github.com/mpdf/mpdf/issues/318
 [mpdf/mpdf#747]: https://github.com/mpdf/mpdf/issues/747
 [mpdf/mpdf#833]: https://github.com/mpdf/mpdf/issues/833
 [mpdf/mpdf#1010]: https://github.com/mpdf/mpdf/issues/1010
@@ -802,6 +805,7 @@ These changes do not change output.
 [#614]: https://github.com/GravityPDF/mpdf/pull/614
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#619]: https://github.com/GravityPDF/mpdf/pull/619
+[#620]: https://github.com/GravityPDF/mpdf/pull/620
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
 [#625]: https://github.com/GravityPDF/mpdf/pull/625
