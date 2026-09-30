@@ -526,41 +526,14 @@ class CssMerger
 		// STYLESHEET nth-child SELECTOR e.g. tr:nth-child(odd)  td:nth-child(2n+1)
 		if ($tag === 'TR' || $tag === 'TD' || $tag === 'TH') {
 			$regex = '/(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)/';
+			$index = $this->nthChildIndex($tag);
 
 			foreach ($this->cssManager->CSS as $key => $selector) {
 				if (!preg_match('/' . $tag . '>>SELECTORNTHCHILD>>(.*)/', $key, $m)) {
 					continue;
 				}
 
-				$select = false;
-				switch ($tag) {
-					case 'TR':
-						$row = $this->mpdf->row;
-						$tableCell = isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]) ? $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]] : [];
-
-						$theadCount = !empty($tableCell['is_thead']) ? count($tableCell['is_thead']) : 0;
-						$tfootCount = !empty($tableCell['is_tfoot']) ? count($tableCell['is_tfoot']) : 0;
-
-						if ($this->mpdf->tabletfoot) {
-							$row -= $theadCount;
-						} elseif (!$this->mpdf->tablethead) {
-							$row -= ($theadCount + $tfootCount);
-						}
-
-						if (preg_match($regex, $m[1], $a)) { // mPDF 5.7.4
-							$select = $this->selectorParser->matchesNthChild($a, $row);
-						}
-						break;
-
-					case 'TH':
-					case 'TD':
-						if (preg_match($regex, $m[1], $a)) { // mPDF 5.7.4
-							$select = $this->selectorParser->matchesNthChild($a, $this->mpdf->col);
-						}
-						break;
-				}
-
-				if ($select) {
+				if (preg_match($regex, $m[1], $a) && $this->selectorParser->matchesNthChild($a, $index)) { // mPDF 5.7.4
 					$zp = $this->cssManager->CSS[$tag . '>>SELECTORNTHCHILD>>' . $m[1]];
 					if ($tag === 'TD' || $tag === 'TH') {
 						$this->setDominanceFromProperties($zp, 9);
@@ -679,6 +652,21 @@ class CssMerger
 				$this->mergeBorderProperties($zp);
 			}
 		}
+
+		// STYLESHEET ID WITH CLASSES e.g. #smallone.note{}  p#smallone.note{}
+		foreach ($this->idClassKeys($tag, $attr['ID'], $classes) as $key) {
+			if (empty($this->cssManager->CSS[$key])) {
+				continue;
+			}
+
+			$zp = $this->cssManager->CSS[$key];
+			if ($tag === 'TD' || $tag === 'TH') {
+				$this->setDominanceFromProperties($zp, 9);
+			}
+
+			$this->cssProperties = array_merge($this->cssProperties, $zp);
+			$this->mergeBorderProperties($zp);
+		}
 	}
 
 	/**
@@ -741,33 +729,15 @@ class CssMerger
 
 		// STYLESHEET nth-child SELECTOR e.g. tr:nth-child(odd)  td:nth-child(2n+1)
 		if ($tag === 'TR' || $tag === 'TD' || $tag === 'TH') {
+			$regex = '/(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)/';
+			$index = $this->nthChildIndex($tag);
+
 			foreach ($node as $k => $val) {
 				if (!preg_match('/' . $tag . '>>SELECTORNTHCHILD>>(.*)/', $k, $m)) {
 					continue;
 				}
 
-				$select = false;
-				$regex = '/(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)/';
-				if ($tag === 'TR') {
-					$row = $this->mpdf->row;
-					$table = isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]) ? $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]] : [];
-					$tableHeadCount = isset($table['is_thead']) ? count($table['is_thead']) : 0;
-					$tableFootCount = isset($table['is_tfoot']) ? count($table['is_tfoot']) : 0;
-
-					if ($this->mpdf->tabletfoot) {
-						$row -= $tableHeadCount;
-					} elseif (!$this->mpdf->tablethead) {
-						$row -= ($tableHeadCount + $tableFootCount);
-					}
-
-					if (preg_match($regex, $m[1], $a)) { // mPDF 5.7.4
-						$select = $this->selectorParser->matchesNthChild($a, $row);
-					}
-				} elseif (($tag === 'TD' || $tag === 'TH') && preg_match($regex, $m[1], $a)) {
-					$select = $this->selectorParser->matchesNthChild($a, $this->mpdf->col);
-				}
-
-				if ($select) {
+				if (preg_match($regex, $m[1], $a) && $this->selectorParser->matchesNthChild($a, $index)) { // mPDF 5.7.4
 					$this->setMergedCss($node[$tag . '>>SELECTORNTHCHILD>>' . $m[1]], false, 9);
 				}
 			}
@@ -787,6 +757,11 @@ class CssMerger
 		}
 
 		$this->setMergedCss($node[$tag . '>>ID>>' . $attr['ID']], false, 9);
+		foreach ($this->idClassKeys($tag, $attr['ID'], $classes) as $key) {
+			if (isset($node[$key])) {
+				$this->setMergedCss($node[$key], false, 9);
+			}
+		}
 
 		if ($this->sideEffects) {
 			$this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl - 1] = $node;
@@ -827,6 +802,11 @@ class CssMerger
 		}
 
 		$this->setMergedCss($cascadeCSS[$tag . '>>ID>>' . $attr['ID']]);
+		foreach ($this->idClassKeys($tag, $attr['ID'], $classes) as $key) {
+			if (isset($cascadeCSS[$key])) {
+				$this->setMergedCss($cascadeCSS[$key]);
+			}
+		}
 	}
 
 	/**
@@ -846,6 +826,30 @@ class CssMerger
 		}
 
 		return $prefix . $lang;
+	}
+
+	/**
+	 * The keys of the rules for an id with classes that can match an element, in the order they apply: for each
+	 * combination of its classes, #id.class and then tag#id.class
+	 *
+	 * @param string $tag
+	 * @param string $id
+	 * @param string[] $classes Combinations of the element's classes, as merge() builds them
+	 * @return string[]
+	 */
+	private function idClassKeys($tag, $id, $classes)
+	{
+		$keys = [];
+		if ($id === '') {
+			return $keys;
+		}
+
+		foreach ($classes as $class) {
+			$keys[] = 'ID>>' . $id . '>>CLASS>>' . $class;
+			$keys[] = $tag . '>>ID>>' . $id . '>>CLASS>>' . $class;
+		}
+
+		return $keys;
 	}
 
 	/**
@@ -884,44 +888,52 @@ class CssMerger
 		}
 
 		$regex = '/(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)/';
+		$index = $this->nthChildIndex($tag);
 
 		foreach ($sourceSelectors as $key => $selector) {
 			if (!preg_match('/' . $tag . '>>SELECTORNTHCHILD>>(.*)/', $key, $m)) {
 				continue;
 			}
 
-			$select = false;
-			switch ($tag) {
-				case 'TR':
-					$row = $this->mpdf->row;
-					$tableCell = isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]) ? $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]] : [];
-
-					$theadCount = !empty($tableCell['is_thead']) ? count($tableCell['is_thead']) : 0;
-					$tfootCount = !empty($tableCell['is_tfoot']) ? count($tableCell['is_tfoot']) : 0;
-
-					if ($this->mpdf->tabletfoot) {
-						$row -= $theadCount;
-					} elseif (!$this->mpdf->tablethead) {
-						$row -= ($theadCount + $tfootCount);
-					}
-
-					if (preg_match($regex, $m[1], $a)) { // mPDF 5.7.4
-						$select = $this->selectorParser->matchesNthChild($a, $row);
-					}
-					break;
-
-				case 'TH':
-				case 'TD':
-					if (preg_match($regex, $m[1], $a)) { // mPDF 5.7.4
-						$select = $this->selectorParser->matchesNthChild($a, $this->mpdf->col);
-					}
-					break;
-			}
-
-			if ($select) {
+			if (preg_match($regex, $m[1], $a) && $this->selectorParser->matchesNthChild($a, $index)) { // mPDF 5.7.4
 				$this->mergeCssProperties($sourceSelectors[$tag . '>>SELECTORNTHCHILD>>' . $m[1]], $targetProperties);
 			}
 		}
+	}
+
+	/**
+	 * The index, from 0, that nth-child matches the row or cell being opened against.
+	 *
+	 * A row is counted among the rows of the table, less the header rows and, outside the footer, the footer rows. A
+	 * cell is counted among the cells opened in its row, so the grid columns a colspan or a rowspan takes up before it
+	 * do not count.
+	 *
+	 * @param string $tag TR, TD or TH
+	 * @return int
+	 */
+	private function nthChildIndex($tag)
+	{
+		if ($tag !== 'TR') {
+			// The cell being opened is not in the grid yet, so this counts the cells before it. A grid column that a
+			// colspan or a rowspan takes up holds 0, not a cell.
+			$cells = isset($this->mpdf->cell[$this->mpdf->row]) ? $this->mpdf->cell[$this->mpdf->row] : [];
+
+			return count(array_filter($cells, 'is_array'));
+		}
+
+		$level = $this->mpdf->tableLevel;
+		$table = isset($this->mpdf->tbctr[$level], $this->mpdf->table[$level][$this->mpdf->tbctr[$level]]) ? $this->mpdf->table[$level][$this->mpdf->tbctr[$level]] : [];
+		$row = $this->mpdf->row;
+		$theadCount = !empty($table['is_thead']) ? count($table['is_thead']) : 0;
+		$tfootCount = !empty($table['is_tfoot']) ? count($table['is_tfoot']) : 0;
+
+		if ($this->mpdf->tabletfoot) {
+			$row -= $theadCount;
+		} elseif (!$this->mpdf->tablethead) {
+			$row -= ($theadCount + $tfootCount);
+		}
+
+		return $row;
 	}
 
 	/**
@@ -980,6 +992,12 @@ class CssMerger
 		// STYLESHEET CLASS e.g. #smallone{}  #redletter{}
 		if (isset($id) && isset($p[$tag . '>>ID>>' . $id])) {
 			$this->mergeCssProperties($p[$tag . '>>ID>>' . $id], $t);
+		}
+
+		foreach ($this->idClassKeys($tag, $id, $classes) as $key) {
+			if (isset($p[$key])) {
+				$this->mergeCssProperties($p[$key], $t);
+			}
 		}
 	}
 

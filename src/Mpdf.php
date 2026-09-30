@@ -2728,15 +2728,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$h = $ch;
 				}
 			} else {
+				// Lengths come from SetBackground() in mm, and everything here is in points
 				if (stristr($size['w'], '%')) {
 					$size['w'] = (float) $size['w'];
 					$size['w'] /= 100;
 					$size['w'] = ($cw * $size['w']);
+				} elseif (is_numeric($size['w'])) {
+					$size['w'] *= Mpdf::SCALE;
 				}
 				if (stristr($size['h'], '%')) {
 					$size['h'] = (float) $size['h'];
 					$size['h'] /= 100;
 					$size['h'] = ($ch * $size['h']);
+				} elseif (is_numeric($size['h'])) {
+					$size['h'] *= Mpdf::SCALE;
 				}
 				if ($size['w'] == 'auto' && $size['h'] == 'auto') {
 					$w = $imw;
@@ -12230,10 +12235,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	// Return either a number (factor) - based on current set fontsize (if % or em) - or exact lineheight (with 'mm' after it)
+	// A line height of zero is returned as '0mm', because a factor of 0 is read as no line height set
 	function fixLineheight($v)
 	{
-		$lh = false;
-		if (preg_match('/^[0-9\.,]*$/', $v) && $v >= 0) {
+		if (preg_match('/^[0.]*0(?:[a-z]+|%)?$/i', trim($v))) {
+			return '0mm';
+		} elseif (preg_match('/^[0-9\.,]*$/', $v) && $v >= 0) {
 			return ($v + 0);
 		} elseif (strtoupper($v) == 'NORMAL' || $v == 'N') {
 			return 'N';  // mPDF 6
@@ -12411,8 +12418,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$topy = $ypos[-1]['exttop'];
 			$bottomy = $ypos[-1]['extbottom'];
 		} else {
-			$topy = 0;
-			$bottomy = 0;
+			// Start from the baseline, or from the bottom of the block's line height when a line-height below the
+			// font's height leaves it above the baseline
+			$topy = $bottomy = max(0, $ypos[-1]['extbottom']);
 		}
 
 		// Get text-middle for aligning images/objects
@@ -12453,6 +12461,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if ($oh > $topy) {
 						$topy = $oh;
 					}
+					$bottomy = min($bottomy, 0);
 				} elseif ($va == 'M') {
 					if (($midpoint + $oh / 2) > $topy) {
 						$topy = $midpoint + $oh / 2;

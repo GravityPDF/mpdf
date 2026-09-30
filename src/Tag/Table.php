@@ -328,7 +328,7 @@ class Table extends Tag
 		if (isset($properties['HYPHENS'])) {
 			$this->mpdf->base_table_properties['HYPHENS'] = $properties['HYPHENS'];
 		}
-		if (!empty($properties['LINE-HEIGHT'])) {
+		if (isset($properties['LINE-HEIGHT']) && $properties['LINE-HEIGHT'] !== '') {
 			$table['cellLineHeight'] = $this->mpdf->fixLineheight($properties['LINE-HEIGHT']);
 		} elseif ($this->mpdf->tableLevel == 1) {
 			$table['cellLineHeight'] = $this->mpdf->blk[$this->mpdf->blklvl]['line_height'];
@@ -423,7 +423,7 @@ class Table extends Tag
 		} elseif ($this->mpdf->tableLevel == 1) {
 			$this->mpdf->table_keep_together = false;
 		}
-		if (isset($properties['PAGE-BREAK-AFTER']) && $this->mpdf->tableLevel == 1) {
+		if ($this->forcesPageBreak($properties, 'PAGE-BREAK-AFTER') && $this->mpdf->tableLevel == 1) {
 			$table['page_break_after'] = strtoupper($properties['PAGE-BREAK-AFTER']);
 		}
 

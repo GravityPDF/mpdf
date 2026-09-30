@@ -147,9 +147,11 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			$file = md5($data);
 		}
 
-		if (preg_match('/data:image\/(gif|jpe?g|png|webp|svg\+xml);base64,(.*)/', $file, $v)) {
+		// Decoded here rather than through PHP's data: wrapper, which refuses a parameter such as ";utf8". A
+		// percent-encoded SVG with "://" inside would otherwise be sent to the HTTP client
+		if (preg_match('/data:image\/(gif|jpe?g|png|webp|svg\+xml)((?:;[^,;]+)*),(.*)/s', $file, $v)) {
 			$type = $v[1];
-			$data = base64_decode($v[2]);
+			$data = preg_match('/;base64$/i', $v[2]) ? base64_decode($v[3]) : rawurldecode($v[3]);
 			$file = md5($data);
 		}
 

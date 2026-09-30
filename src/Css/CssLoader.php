@@ -27,11 +27,17 @@ class CssLoader
 	 */
 	private $cache;
 
-	public function __construct(Mpdf $mpdf, AssetFetcher $assetFetcher, Cache $cache)
+	/**
+	 * @var MediaQueryProcessor
+	 */
+	private $mediaQueryProcessor;
+
+	public function __construct(Mpdf $mpdf, AssetFetcher $assetFetcher, Cache $cache, MediaQueryProcessor $mediaQueryProcessor)
 	{
 		$this->mpdf = $mpdf;
 		$this->assetFetcher = $assetFetcher;
 		$this->cache = $cache;
+		$this->mediaQueryProcessor = $mediaQueryProcessor;
 	}
 
 	/**
@@ -67,8 +73,7 @@ class CssLoader
 	 * Finds all external CSS file references including:
 	 * - <link rel="stylesheet" href="...">
 	 * - <link href="..." rel="stylesheet">
-	 * - @import url(...)
-	 * - @import "..."
+	 * - @import url(...) and @import "..." in <style> blocks, whose media query list matches
 	 *
 	 * @param string $html HTML content to scan
 	 * @return array Array of CSS file URLs
@@ -87,17 +92,35 @@ class CssLoader
 			$cssUrls = array_merge($cssUrls, $cxt[1]);
 		}
 
-		// @import url(...)
-		if (preg_match_all('/@import url\([\'\"]{0,1}(\S*?\.css(\?[^\s\'\"]+)?)[\'\"]{0,1}\)\;?/si', $html, $cxt)) {
-			$cssUrls = array_merge($cssUrls, $cxt[1]);
+		preg_match_all('/<style.*?>(.*?)<\/style>/si', $html, $styles);
+
+		return array_merge($cssUrls, $this->extractImportUrls(implode(' ', $styles[1])));
+	}
+
+	/**
+	 * The URLs the @import rules in $css load, less those whose media query list does not match
+	 *
+	 * A layer() before the media query list is ignored. A supports() condition is taken to pass, as the rules in an
+	 * @supports block are unwrapped, so one that starts with not fails.
+	 *
+	 * @param string $css
+	 * @return string[]
+	 */
+	private function extractImportUrls($css)
+	{
+		$url = '(?|url\(\s*"([^"]*)"\s*\)|url\(\s*\'([^\']*)\'\s*\)|url\(\s*([^\s"\')]*)\s*\)|"([^"]*)"|\'([^\']*)\')';
+		$layer = '(?:\s*layer(?:\([^)]*\))?)?';
+		$supports = '(?:\s*supports\(\s*(not\b)?(?:[^()]|\([^()]*\))*\))?';
+		preg_match_all('/@import\s*' . $url . $layer . $supports . '([^;{}]*)/i', $css, $imports, PREG_SET_ORDER);
+
+		$urls = [];
+		foreach ($imports as $import) {
+			if ($import[1] !== '' && $import[2] === '' && $this->mediaQueryProcessor->matches($import[3])) {
+				$urls[] = $import[1];
+			}
 		}
 
-		// @import "..."
-		if (preg_match_all('/@import (?!url)[\'\"]{0,1}(\S*?\.css(\?[^\s\'\"]+)?)[\'\"]{0,1}\;?/si', $html, $cxt)) {
-			$cssUrls = array_merge($cssUrls, $cxt[1]);
-		}
-
-		return $cssUrls;
+		return $urls;
 	}
 
 	/**
@@ -115,12 +138,10 @@ class CssLoader
 		$css = '';
 
 		$cssBasePath = preg_replace('/\/[^\/]*$/', '', $path) . '/';
-		if (preg_match_all('/@import url\([\'\"]{0,1}(.*?\.css(\?\S+)?)[\'\"]{0,1}\)/si', $stylesheetCss, $cxtem)) {
-			foreach ($cxtem[1] as $cxtembedded) {
-				// path is relative to original stylesheet!!
-				$externalCss[] = Path::relativeToAbsolutePath($cxtembedded, $cssBasePath);
-				$externalCssCount++;
-			}
+		foreach ($this->extractImportUrls($stylesheetCss) as $cxtembedded) {
+			// path is relative to original stylesheet!!
+			$externalCss[] = Path::relativeToAbsolutePath($cxtembedded, $cssBasePath);
+			$externalCssCount++;
 		}
 
 		$css .= ' ' . $this->resolveBackgroundUrls($stylesheetCss, $cssBasePath);
