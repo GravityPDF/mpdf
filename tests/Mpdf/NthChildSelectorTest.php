@@ -15,9 +15,10 @@ class NthChildSelectorTest extends TestCase
 
 	const FILL = '0.000 1.000 0.000 rg';
 	const RED = '1.000 0.000 0.000 rg';
+	const BLUE = '0.000 0.000 1.000 rg';
 
 	/**
-	 * A table of three rows and two columns, the second cell of each row with the class x
+	 * A table of three rows and two columns in a div with the class d, the second cell of each row with the class x
 	 *
 	 * @return string
 	 */
@@ -28,7 +29,7 @@ class NthChildSelectorTest extends TestCase
 			$rows .= '<tr><td>R' . $row . 'C1</td><td class="x">R' . $row . 'C2</td></tr>';
 		}
 
-		return '<table>' . $rows . '</table>';
+		return '<div class="d"><table>' . $rows . '</table></div>';
 	}
 
 	/**
@@ -62,6 +63,44 @@ class NthChildSelectorTest extends TestCase
 			'the first row' => ['tr:first-child', 2],
 			'the first cell of each row' => ['td:first-child', 3],
 			'the first cell of the second row' => ['tr:nth-child(2) td:first-child', 1],
+			'a descendant rule from the table' => ['table td:nth-child(2)', 3],
+			'a descendant rule from the table and the row' => ['table tr:nth-child(odd) td:nth-child(2)', 2],
+			'a descendant rule from a block around the table' => ['div.d td:nth-child(2)', 3],
+			'a descendant rule from a block around the table, for the row' => ['div.d tr:nth-child(2)', 2],
+		];
+	}
+
+	/**
+	 * Of two nth-child rules that both match a cell, the one later in the stylesheet wins, wherever the rules are stored
+	 *
+	 * @dataProvider laterRules
+	 *
+	 * @param string $css
+	 * @param string $expected The colour the second cell is drawn in
+	 */
+	public function testALaterNthChildRuleWins($css, $expected)
+	{
+		$colours = $this->textColours('<style>' . $css . '</style><div class="d"><table><tr><td>a</td><td>X</td></tr></table></div>');
+
+		$this->assertSame($expected, $colours['X']);
+	}
+
+	/**
+	 * A stylesheet with two nth-child rules for the second cell, and the colour the later one gives it
+	 *
+	 * @return array[]
+	 */
+	public function laterRules()
+	{
+		// Each stylesheet first names the formulas in a rule that does not style the cell, so the order the stylesheet
+		// first uses them differs from the order the node that styles the cell holds them
+		$descendant = 'div.d td:nth-child(2) { font-weight: bold; } ';
+
+		return [
+			'n, then 2' => [$descendant . 'td:nth-child(n) { color: #ff0000; } td:nth-child(2) { color: #0000ff; }', self::BLUE],
+			'2, then n' => [$descendant . 'td:nth-child(2) { color: #0000ff; } td:nth-child(n) { color: #ff0000; }', self::RED],
+			'descendant rules, n then 2' => ['div.d td:nth-child(n) { color: #ff0000; } div.d td:nth-child(2) { color: #0000ff; } p td:nth-child(2) { font-weight: bold; }', self::BLUE],
+			'descendant rules, 2 then n' => ['p td:nth-child(n) { font-weight: bold; } div.d td:nth-child(2) { color: #0000ff; } div.d td:nth-child(n) { color: #ff0000; }', self::RED],
 		];
 	}
 

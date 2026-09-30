@@ -525,26 +525,15 @@ class CssMerger
 
 		// STYLESHEET nth-child SELECTOR e.g. tr:nth-child(odd)  td:nth-child(2n+1)
 		if ($tag === 'TR' || $tag === 'TD' || $tag === 'TH') {
-			$regex = '/(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)/';
-			$index = $this->nthChildIndex($tag);
-
-			foreach ($this->cssManager->CSS as $key => $selector) {
-				if (!preg_match('/' . $tag . '>>SELECTORNTHCHILD>>(.*)/', $key, $m)) {
-					continue;
+			foreach ($this->matchingNthChildRules($this->cssManager->CSS, $tag) as $zp) {
+				if ($tag === 'TD' || $tag === 'TH') {
+					$this->setDominanceFromProperties($zp, 9);
 				}
 
-				if (preg_match($regex, $m[1], $a) && $this->selectorParser->matchesNthChild($a, $index)) { // mPDF 5.7.4
-					$zp = $this->cssManager->CSS[$tag . '>>SELECTORNTHCHILD>>' . $m[1]];
-					if ($tag === 'TD' || $tag === 'TH') {
-						$this->setDominanceFromProperties($zp, 9);
-					}
-
-					if (is_array($zp)) {
-						$this->cssProperties = array_merge($this->cssProperties, $zp);
-						$this->mergeBorderProperties($zp);
-					}
+				if (is_array($zp)) {
+					$this->cssProperties = array_merge($this->cssProperties, $zp);
+					$this->mergeBorderProperties($zp);
 				}
-
 			}
 		}
 
@@ -729,17 +718,8 @@ class CssMerger
 
 		// STYLESHEET nth-child SELECTOR e.g. tr:nth-child(odd)  td:nth-child(2n+1)
 		if ($tag === 'TR' || $tag === 'TD' || $tag === 'TH') {
-			$regex = '/(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)/';
-			$index = $this->nthChildIndex($tag);
-
-			foreach ($node as $k => $val) {
-				if (!preg_match('/' . $tag . '>>SELECTORNTHCHILD>>(.*)/', $k, $m)) {
-					continue;
-				}
-
-				if (preg_match($regex, $m[1], $a) && $this->selectorParser->matchesNthChild($a, $index)) { // mPDF 5.7.4
-					$this->setMergedCss($node[$tag . '>>SELECTORNTHCHILD>>' . $m[1]], false, 9);
-				}
+			foreach ($this->matchingNthChildRules($node, $tag) as $rule) {
+				$this->setMergedCss($rule, false, 9);
 			}
 		}
 
@@ -887,18 +867,42 @@ class CssMerger
 			return;
 		}
 
-		$regex = '/(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)/';
-		$index = $this->nthChildIndex($tag);
+		foreach ($this->matchingNthChildRules($sourceSelectors, $tag) as $rule) {
+			$this->mergeCssProperties($rule, $targetProperties);
+		}
+	}
 
-		foreach ($sourceSelectors as $key => $selector) {
-			if (!preg_match('/' . $tag . '>>SELECTORNTHCHILD>>(.*)/', $key, $m)) {
+	/**
+	 * The nth-child rules in a node of the stylesheet that match the row or cell being opened.
+	 *
+	 * Only the nth-child keys CssManager::readCss() recorded are looked up, each directly in the node, so a node must
+	 * come from the stylesheet it read. Where several match, a later rule overrides an earlier one, so they are returned
+	 * in the order the node holds them.
+	 *
+	 * @param array $node CssManager::$CSS, or a level of the descendant rules
+	 * @param string $tag TR, TD or TH
+	 * @return array[] The properties of each matching rule, by key
+	 */
+	private function matchingNthChildRules($node, $tag)
+	{
+		$rules = [];
+		$index = null;
+		foreach ($this->cssManager->getNthChildFormulas($tag) as $key => $parts) {
+			if (!isset($node[$key])) {
 				continue;
 			}
 
-			if (preg_match($regex, $m[1], $a) && $this->selectorParser->matchesNthChild($a, $index)) { // mPDF 5.7.4
-				$this->mergeCssProperties($sourceSelectors[$tag . '>>SELECTORNTHCHILD>>' . $m[1]], $targetProperties);
+			if ($index === null) {
+				$index = $this->nthChildIndex($tag);
+			}
+
+			if ($this->selectorParser->matchesNthChild($parts, $index)) {
+				$rules[$key] = $node[$key];
 			}
 		}
+
+		// The index holds the keys in the order the whole stylesheet first used them, which need not be this node's
+		return count($rules) > 1 ? array_intersect_key($node, $rules) : $rules;
 	}
 
 	/**

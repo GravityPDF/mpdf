@@ -181,6 +181,17 @@ class CssManager
 	}
 
 	/**
+	 * The nth-child keys the stylesheet's rules use for a tag
+	 *
+	 * @param string $tag TR, TD or TH
+	 * @return array[] Each key mapped to its formula's parts for SelectorParser::matchesNthChild()
+	 */
+	public function getNthChildFormulas($tag)
+	{
+		return $this->cssParser->getNthChildFormulas($tag);
+	}
+
+	/**
 	 * Parse box-shadow CSS property.
 	 *
 	 * Converts box-shadow CSS property string into array format used internally.

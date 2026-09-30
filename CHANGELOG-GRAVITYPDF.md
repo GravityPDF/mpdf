@@ -108,6 +108,7 @@ Performance
 * **CJK output.** The subset fonts of a CJK document are written without rereading the font for each one. [#311]
 * **Image metadata.** JPEG and PNG metadata is read from the file's structure instead of by scanning the whole file, and PNG chunks are read from a chunk index. [#47] [#48]
 * **GD memory.** GD asks for less memory when it re-encodes an image. [#49]
+* **nth-child rules in tables.** Each row and cell looks up the nth-child rules the stylesheet uses by their keys, instead of running a regex over every rule. A 2,000-cell table under 1,000 rules is written in about 540 ms instead of 745 ms. Class combinations are built only up to the most classes one compound selector names, not one whole selector. [#526] [#580]
 
 Bugfixes
 --------
@@ -745,6 +746,7 @@ These changes do not change output.
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
 [#525]: https://github.com/GravityPDF/mpdf/issues/525
+[#526]: https://github.com/GravityPDF/mpdf/issues/526
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
@@ -773,6 +775,7 @@ These changes do not change output.
 [#575]: https://github.com/GravityPDF/mpdf/pull/575
 [#572]: https://github.com/GravityPDF/mpdf/pull/572
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
+[#580]: https://github.com/GravityPDF/mpdf/pull/580
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
