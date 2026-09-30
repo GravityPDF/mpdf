@@ -188,6 +188,8 @@ class CssMerger
 			return;
 		}
 
+		$this->mpdf->markStyledElementAsLevel();
+
 		if ($inherit === 'TOPTABLE') {
 			// Save Cascading CSS e.g. "div.topic p" at this block level
 			if (isset($this->mpdf->blk[$this->mpdf->blklvl]['cascadeCSS'])) {
@@ -279,6 +281,7 @@ class CssMerger
 		// Set the new block info
 		if ($this->sideEffects) {
 			$this->mpdf->blk[$this->mpdf->blklvl] = $currentBlock;
+			$this->mpdf->markStyledElementAsLevel();
 		}
 
 		// Block properties which are inherited

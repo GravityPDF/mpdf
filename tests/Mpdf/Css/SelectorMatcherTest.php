@@ -102,6 +102,47 @@ class SelectorMatcherTest extends TestCase
 	}
 
 	/**
+	 * Looking only at the ancestors that opened a level of the legacy descendant rules, a descendant combinator skips
+	 * the others
+	 *
+	 * @dataProvider levelSelectors
+	 *
+	 * @param string $selector
+	 * @param bool $anyAncestor Whether it matches through any ancestor
+	 * @param bool $legacyView Whether it matches as the legacy engine sees it
+	 */
+	public function testMatchesAsTheLegacyEngineWhenAsked($selector, $anyAncestor, $legacyView)
+	{
+		$document = $this->frame('', 1, 1, [], []);
+		$document['level'] = true;
+		$paragraph = $this->frame('P', 1, 1, ['CLASS' => 'A'], []);
+		$paragraph['level'] = true;
+		$path = [$document, $paragraph, $this->frame('SPAN', 1, 1, ['CLASS' => 'A'], []), $this->frame('B', 1, 1, [], [])];
+
+		$compiled = $this->compiler->compile($selector);
+		$this->assertSame($anyAncestor, $this->matcher->matches($compiled, $path));
+		$this->assertSame($legacyView, $this->matcher->matches($compiled, $path, true));
+	}
+
+	/**
+	 * A selector for <b> in <span class="a"> in <p class="a">, and whether it matches through any ancestor and
+	 * through levels only
+	 *
+	 * @return array[]
+	 */
+	public function levelSelectors()
+	{
+		return [
+			'the block' => ['p b', true, true],
+			'the inline element' => ['span b', true, false],
+			'a class on both' => ['.a b', true, true],
+			'both' => ['p span b', true, false],
+			'the document' => ['body b', true, true],
+			'a child combinator is not a descendant one' => ['span > b', true, true],
+		];
+	}
+
+	/**
 	 * The open elements the selectors are matched against: `<li class="x">`, the second item of a `<ul>` that follows
 	 * an `<h2>` and a `<p>` in `<div id="main" class="card">`, which follows an `<h1>`, a `<p class="a">` and a `<p>` in
 	 * the document
@@ -155,6 +196,7 @@ class SelectorMatcherTest extends TestCase
 			'children' => $records,
 			'childTypes' => $childTypes,
 			'computed' => null,
+			'level' => false,
 		];
 	}
 }

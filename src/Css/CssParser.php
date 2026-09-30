@@ -121,8 +121,8 @@ class CssParser
 	private $nthChildFormulas = ['TR' => [], 'TD' => [], 'TH' => []];
 
 	/**
-	 * @var array[] The rules of the last CSS parsed whose selector the legacy parser cannot read, each compiled:
-	 *              [compiled selector, declarations], in the order they were written
+	 * @var array[] The rules of the last CSS parsed for the matcher, each compiled: [compiled selector, declarations,
+	 *              whether the legacy parser stores it too], in the order they were written
 	 */
 	private $compiledRules = [];
 
@@ -221,9 +221,11 @@ class CssParser
 	}
 
 	/**
-	 * The rules of the last CSS parsed whose selector the legacy parser cannot read, compiled for the matcher
+	 * The rules of the last CSS parsed for the matcher: those whose selector the legacy parser cannot read, and the
+	 * descendant rules it stores, which the matcher applies through the ancestors the legacy engine does not look at
 	 *
-	 * @return array[] Each [compiled selector, declarations], in the order they were written
+	 * @return array[] Each [compiled selector, declarations, whether the legacy parser stores it too], in the order
+	 *                 they were written
 	 */
 	public function getCompiledRules()
 	{
@@ -343,6 +345,9 @@ class CssParser
 
 		$cascadeCSS = Arrays::uniqueRecursiveMerge($cascadeCSS, $classProperties);
 		$cascadeCSS['depth'] = $level;
+
+		// The legacy engine only looks for the ancestors a descendant rule names among blocks and table parts
+		$this->compileRule($written, $classProperties, true);
 	}
 
 	/**
@@ -389,9 +394,10 @@ class CssParser
 	 *
 	 * @param string $selector As written
 	 * @param array $classProperties
+	 * @param bool $legacy Whether the legacy parser stores it too
 	 * @return void
 	 */
-	private function compileRule($selector, array $classProperties)
+	private function compileRule($selector, array $classProperties, $legacy = false)
 	{
 		if (!$classProperties) {
 			return;
@@ -402,7 +408,7 @@ class CssParser
 		// The universal selector changes which elements existing documents style, so it waits for #530 and the
 		// standard cascade option
 		if ($compiled !== null && !$compiled['universal']) {
-			$this->compiledRules[] = [$compiled, $classProperties];
+			$this->compiledRules[] = [$compiled, $classProperties, $legacy];
 		}
 	}
 

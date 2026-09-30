@@ -18,14 +18,16 @@ class SelectorMatcher
 	 *
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
 	 * @param array[] $path The open elements from the document down to the element
+	 * @param bool $legacyView Whether to match as the legacy engine does: a descendant combinator only looks at the
+	 *                         ancestors that opened a level of the legacy descendant rules
 	 *
 	 * @return bool
 	 */
-	public function matches(array $selector, array $path)
+	public function matches(array $selector, array $path, $legacyView = false)
 	{
 		$depth = count($path) - 1;
 
-		return $this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $depth - 1, $path[$depth]['nthChild'] - 1);
+		return $this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView);
 	}
 
 	/**
@@ -39,10 +41,11 @@ class SelectorMatcher
 	 * @param int $parent The depth on $path of the element's parent, or -1 for the document itself
 	 * @param int $index The element's index among its parent's children, from 0. At the number of children the parent
 	 *                   has closed, it is the open element at the next depth
+	 * @param bool $legacyView Whether to match as the legacy engine does, as matches() takes it
 	 *
 	 * @return bool
 	 */
-	private function matchesFrom(array $selector, $compound, array $path, $parent, $index)
+	private function matchesFrom(array $selector, $compound, array $path, $parent, $index, $legacyView)
 	{
 		if (!$this->matchesCompound($selector['compounds'][$compound], $path, $parent, $index)) {
 			return false;
@@ -55,11 +58,12 @@ class SelectorMatcher
 		$compound--;
 		switch ($selector['combinators'][$compound]) {
 			case '>':
-				return $parent >= 0 && $this->matchesFrom($selector, $compound, $path, $parent - 1, $path[$parent]['nthChild'] - 1);
+				return $parent >= 0 && $this->matchesFrom($selector, $compound, $path, $parent - 1, $path[$parent]['nthChild'] - 1, $legacyView);
 
 			case ' ':
 				for ($depth = $parent; $depth >= 0; $depth--) {
-					if ($this->matchesFrom($selector, $compound, $path, $depth - 1, $path[$depth]['nthChild'] - 1)) {
+					if ((!$legacyView || $path[$depth]['level'])
+						&& $this->matchesFrom($selector, $compound, $path, $depth - 1, $path[$depth]['nthChild'] - 1, $legacyView)) {
 						return true;
 					}
 				}
@@ -67,11 +71,11 @@ class SelectorMatcher
 				return false;
 
 			case '+':
-				return $parent >= 0 && $index > 0 && $this->matchesFrom($selector, $compound, $path, $parent, $index - 1);
+				return $parent >= 0 && $index > 0 && $this->matchesFrom($selector, $compound, $path, $parent, $index - 1, $legacyView);
 
 			default:
 				for ($sibling = $index - 1; $parent >= 0 && $sibling >= 0; $sibling--) {
-					if ($this->matchesFrom($selector, $compound, $path, $parent, $sibling)) {
+					if ($this->matchesFrom($selector, $compound, $path, $parent, $sibling, $legacyView)) {
 						return true;
 					}
 				}
