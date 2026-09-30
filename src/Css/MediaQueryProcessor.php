@@ -2,6 +2,7 @@
 
 namespace Mpdf\Css;
 
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\SizeConverter;
 
@@ -65,11 +66,17 @@ class MediaQueryProcessor
 	 * Whether a media query list applies to the medium CSSselectMedia names. Every list applies when it names none, and
 	 * an empty list always applies.
 	 *
+	 * In cssMode legacy a list applies when it contains that medium's name or all anywhere, as mPDF v7 read it.
+	 *
 	 * @param string $mediaQueryList
 	 * @return bool
 	 */
 	public function matches($mediaQueryList)
 	{
+		if ($this->mpdf->cssMode === CssMode::LEGACY) {
+			return !$this->mpdf->CSSselectMedia || preg_match('/(' . trim($this->mpdf->CSSselectMedia) . '|all)/i', $mediaQueryList) === 1;
+		}
+
 		$mediaQueryList = strtolower(trim($mediaQueryList));
 		if (!$this->mpdf->CSSselectMedia || $mediaQueryList === '') {
 			return true;
