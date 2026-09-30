@@ -54,8 +54,8 @@ class TableInheritsFromBlockSnapshotTest extends Snapshot
 			<table style="font-size: 50%"><tr><td>10pt</td><td>10pt</td></tr></table>
 		</div>
 
-		<p class="caption">font-size: 20pt on a table, and font-size: 1rem on its second cell. The second cell is 10pt, the document's size.</p>
-		<table style="font-size: 20pt"><tr><td>20pt</td><td style="font-size: 1rem">10pt</td></tr></table>
+		<p class="caption">font-size: 20pt on a table, and font-size: 1rem on its second cell. The second cell is 11pt, the size of html, which no rule sets.</p>
+		<table style="font-size: 20pt"><tr><td>20pt</td><td style="font-size: 1rem">11pt</td></tr></table>
 
 		<div style="line-height: 2.5; text-align: right">
 			<p class="caption">line-height: 2.5 and text-align: right on a div. The cells' lines are 2.5 apart, and the th and the td are aligned right.</p>

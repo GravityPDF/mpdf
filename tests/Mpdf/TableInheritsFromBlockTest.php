@@ -151,6 +151,7 @@ class TableInheritsFromBlockTest extends TestCase
 			'rem in a table in a sized block' => ['<div style="font-size: 20pt"><table><tr><td style="font-size: 1rem">qq</td></tr></table></div>', 11.0, 11.0],
 			'rem on a table' => ['<div style="font-size: 20pt"><table style="font-size: 2rem"><tr><td>qq</td></tr></table></div>', 22.0, 22.0],
 			'rem in a nested table' => ['<table style="font-size: 20pt"><tr><td><table><tr><td style="font-size: 1rem">qq</td></tr></table></td></tr></table>', 11.0, 20.0],
+			'rem in a cell follows html' => ['<style>html { font-size: 16pt; }</style><table style="font-size: 8pt"><tr><td style="font-size: 1rem">qq</td></tr></table>', 16.0, 8.0],
 			'near miss: a size in points on the table' => ['<div style="font-size: 20pt"><table style="font-size: 8pt"><tr><td>qq</td></tr></table></div>', 8.0, 8.0],
 			'near miss: a block after the one that sets the size' => ['<div style="font-size: 20pt">zz</div><div><table style="font-size: 50%"><tr><td>qq</td></tr></table></div>', 5.5, 5.5],
 		];
