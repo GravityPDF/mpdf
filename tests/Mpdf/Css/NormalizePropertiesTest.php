@@ -367,9 +367,13 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				'inherit',
 				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => ''],
 			],
-			'a -webkit- gradient' => [
+			'a -webkit- gradient keeps its prefix for its legacy angles' => [
 				'-webkit-linear-gradient(left, red, blue)',
-				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => 'linear-gradient(left, red, blue)'],
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => '-webkit-linear-gradient(left, red, blue)'],
+			],
+			'a gradient with another vendor prefix' => [
+				'-ms-linear-gradient(to right, red, blue)',
+				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => 'linear-gradient(to right, red, blue)'],
 			],
 			'a -moz- gradient' => [
 				'-moz-linear-gradient(left, red, blue)',

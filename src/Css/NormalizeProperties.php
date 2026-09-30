@@ -530,8 +530,8 @@ class NormalizeProperties
 			if (preg_match('/^url\(\s*([\'"]?)(.*)\1\s*\)$/is', $components[$i], $m)) {
 				$kind = 'i';
 				$value = $m[2];
-			} elseif (preg_match('/^(?:-(?!moz-)[a-z]+-)?((-moz-)?(repeating-)?(linear|radial)-gradient\(.*\))$/is', $components[$i], $m)) {
-				// Drops a vendor prefix other than -moz-, which the gradient parser reads
+			} elseif (preg_match('/^(?:-(?!(?:moz|webkit|o)-)[a-z]+-)?((-moz-|-webkit-|-o-)?(repeating-)?(linear|radial)-gradient\(.*\))$/is', $components[$i], $m)) {
+				// Drops a vendor prefix other than -moz-, -webkit- and -o-, which the gradient parser reads for their legacy angles
 				$kind = 'i';
 				$value = $m[1];
 			} elseif ($keyword === 'none') {
