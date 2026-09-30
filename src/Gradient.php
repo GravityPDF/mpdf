@@ -623,17 +623,20 @@ class Gradient
 
 	/**
 	 * Reads the arguments of a linear gradient into the start point or angle Gradient() works from, where y runs up the
-	 * box and angles run counter-clockwise from pointing right
+	 * box and angles run counter-clockwise from pointing right. In legacy CSS mode the direction is read as mPDF v7
+	 * read it, whatever the prefix
 	 *
 	 * @param string[] $m The match whose second element holds the arguments
 	 * @param bool $repeat Whether the gradient repeats
-	 * @param bool $legacy Whether the function is prefixed, where a keyword names the start side and angles already
-	 *                     run counter-clockwise from pointing right
+	 * @param bool $prefixed Whether the function is prefixed, where a keyword names the start side and angles already
+	 *                       run counter-clockwise from pointing right
 	 *
 	 * @return array
 	 */
-	private function parseMozLinearGradient($m, $repeat, $legacy)
+	private function parseMozLinearGradient($m, $repeat, $prefixed)
 	{
+		$legacy = $this->mpdf->cssMode === CssMode::LEGACY;
+
 		$g = [];
 		$g['type'] = self::TYPE_LINEAR;
 		$g['colorspace'] = 'RGB';
@@ -657,7 +660,9 @@ class Gradient
 		}
 		// Is first part $bgr[0] a valid point/angle?
 		$first = preg_split('/\s+/', trim($bgr[0]));
-		if (preg_match('/(left|center|right|bottom|top|deg|grad|rad|turn)/i', $bgr[0]) && !preg_match('/(<#|rgb|rgba|hsl|hsla)/i', $bgr[0])) {
+		// mPDF v7 did not read turn, so a first stop whose colour name holds it, such as a spot colour, stays a stop
+		$units = $legacy ? 'deg|grad|rad' : 'deg|grad|rad|turn';
+		if (preg_match('/(left|center|right|bottom|top|' . $units . ')/i', $bgr[0]) && !preg_match('/(<#|rgb|rgba|hsl|hsla)/i', $bgr[0])) {
 			$startStops = 1;
 		} elseif (trim($first[count($first) - 1]) === '0') {
 			$startStops = 1;
@@ -672,45 +677,10 @@ class Gradient
 		// first part a valid point/angle?
 		if ($startStops === 1) { // default values
 
-			// [<point> || <angle>,] = [<% em px left center right bottom top> || <deg grad rad turn 0>,]
-			if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad|turn)/i', $bgr[0], $m)) {
-				$perTurn = ['deg' => 360, 'grad' => 400, 'rad' => 2 * M_PI, 'turn' => 1];
-				$angle = (float) $m[1] * 360 / $perTurn[strtolower($m[2])];
-			} elseif (trim($first[count($first) - 1]) === '0') {
-				$angle = 0;
-			}
-
-			if (isset($angle)) {
-				// CSS Images angles point up at 0 and run clockwise
-				if (!$legacy) {
-					$angle = 90 - $angle;
-				}
-				$angle = fmod($angle, 360);
-				if ($angle < 0) {
-					$angle += 360;
-				}
-			}
-
-			// "to left" names the side the gradient ends at, and a legacy "left" the side it starts from
-			$to = strtolower($first[0]) === 'to';
-
-			if (stripos($bgr[0], 'left') !== false) {
-				$startx = $to ? 1 : 0;
-			} elseif (stripos($bgr[0], 'right') !== false) {
-				$startx = $to ? 0 : 1;
-			}
-
-			if (stripos($bgr[0], 'top') !== false) {
-				$starty = $to ? 0 : 1;
-			} elseif (stripos($bgr[0], 'bottom') !== false) {
-				$starty = $to ? 1 : 0;
-			}
-
-			// Corner to corner across the box, so the other two corners take the colour halfway along, as CSS Images
-			// gives for "to top right"
-			if ($to && isset($startx, $starty)) {
-				$endx = 1 - $startx;
-				$endy = 1 - $starty;
+			if ($legacy) {
+				list($angle, $startx, $starty, $endx, $endy) = $this->readLegacyDirection($bgr[0], $first);
+			} else {
+				list($angle, $startx, $starty, $endx, $endy) = $this->readDirection($bgr[0], $first, $prefixed);
 			}
 
 			// Check for %? ?% or %%
@@ -794,6 +764,110 @@ class Gradient
 		}
 
 		return $g;
+	}
+
+	/**
+	 * Reads the angle or side keywords a linear gradient starts with, as CSS Images gives them for an unprefixed
+	 * function: "to" names the side the gradient ends at, and angles point up at 0 and run clockwise
+	 *
+	 * @param string $direction The first argument
+	 * @param string[] $words The first argument split at whitespace
+	 * @param bool $prefixed Whether the function is prefixed, where a keyword names the start side and angles already
+	 *                       run counter-clockwise from pointing right
+	 *
+	 * @return array The angle, start x, start y, end x and end y, each null where the argument does not set it
+	 */
+	private function readDirection($direction, array $words, $prefixed)
+	{
+		$angle = $startx = $starty = $endx = $endy = null;
+
+		// [<point> || <angle>,] = [<% em px left center right bottom top> || <deg grad rad turn 0>,]
+		if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad|turn)/i', $direction, $m)) {
+			$perTurn = ['deg' => 360, 'grad' => 400, 'rad' => 2 * M_PI, 'turn' => 1];
+			$angle = (float) $m[1] * 360 / $perTurn[strtolower($m[2])];
+		} elseif (trim($words[count($words) - 1]) === '0') {
+			$angle = 0;
+		}
+
+		if (isset($angle)) {
+			// CSS Images angles point up at 0 and run clockwise
+			if (!$prefixed) {
+				$angle = 90 - $angle;
+			}
+			$angle = fmod($angle, 360);
+			if ($angle < 0) {
+				$angle += 360;
+			}
+		}
+
+		// "to left" names the side the gradient ends at, and a prefixed "left" the side it starts from
+		$to = strtolower($words[0]) === 'to';
+
+		if (stripos($direction, 'left') !== false) {
+			$startx = $to ? 1 : 0;
+		} elseif (stripos($direction, 'right') !== false) {
+			$startx = $to ? 0 : 1;
+		}
+
+		if (stripos($direction, 'top') !== false) {
+			$starty = $to ? 0 : 1;
+		} elseif (stripos($direction, 'bottom') !== false) {
+			$starty = $to ? 1 : 0;
+		}
+
+		// Corner to corner across the box, so the other two corners take the colour halfway along, as CSS Images
+		// gives for "to top right"
+		if ($to && isset($startx, $starty)) {
+			$endx = 1 - $startx;
+			$endy = 1 - $starty;
+		}
+
+		return [$angle, $startx, $starty, $endx, $endy];
+	}
+
+	/**
+	 * Reads the angle or side keywords a linear gradient starts with as mPDF v7 did, prefixed or not and with or
+	 * without "to": "left" and "right" name the side the gradient ends at, "top" and "bottom" the side it starts
+	 * from, and angles run counter-clockwise from pointing right in whole degrees
+	 *
+	 * @param string $direction The first argument
+	 * @param string[] $words The first argument split at whitespace
+	 *
+	 * @return array The angle, start x, start y, end x and end y, each null where the argument does not set it
+	 */
+	private function readLegacyDirection($direction, array $words)
+	{
+		$angle = $startx = $starty = null;
+
+		if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad)/i', $direction, $m)) {
+			$angle = (float) $m[1];
+			if (strtolower($m[2]) === 'grad') {
+				$angle *= (360 / 400);
+			} elseif (strtolower($m[2]) === 'rad') {
+				$angle = rad2deg($angle);
+			}
+			$angle = fmod($angle, 360);
+			if ($angle < 0) {
+				$angle += 360;
+			}
+			$angle = (int) $angle % 360;
+		} elseif (trim($words[count($words) - 1]) === '0') {
+			$angle = 0;
+		}
+
+		if (stripos($direction, 'left') !== false) {
+			$startx = 1;
+		} elseif (stripos($direction, 'right') !== false) {
+			$startx = 0;
+		}
+
+		if (stripos($direction, 'top') !== false) {
+			$starty = 1;
+		} elseif (stripos($direction, 'bottom') !== false) {
+			$starty = 0;
+		}
+
+		return [$angle, $startx, $starty, null, null];
 	}
 
 	private function parseMozRadialGradient($m, $repeat)

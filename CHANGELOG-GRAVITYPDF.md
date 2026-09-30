@@ -200,7 +200,7 @@ Bugfixes
 * `rotate: 90deg` on a positioned block turned it on PHP 5.6 to 7.4 but not on PHP 8, where `"90deg" == 90` is false. The angle is now read as tables read it: whole degrees, with or without `deg`, so `270deg` turns the block as `-90` does. A positioned block also takes `180deg` as it takes `180`. [#579]
 * `background-size` lengths such as `60mm` or `100px` drew the image 2.83 times too small, because they were used as points. [#574]
 * A stylesheet `url()` did not load its image when the path had spaces or parentheses, when there was whitespace inside the parentheses, or when it was an SVG data URI that is not base64, such as Bootstrap's `form-select` arrow. [#573]
-* `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. [#577]
+* `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the directions mPDF v7 drew, prefixed or not. [#577] [#639]
 * Characters mPDF moved into a substitute font (`useSubstitutions`, and the fonts for supplementary planes) were wrapped in a `<span>` that stylesheet rules reached, so `span { border: 1px solid }` drew a box around them, and the span counted among its siblings for `:nth-child()`. In the standard CSS mode no rule reaches that span and it is not counted, as a browser has no such element. The legacy mode styles it as before. [#634]
 
 ### Images and SVG
@@ -842,5 +842,6 @@ These changes do not change output.
 [#631]: https://github.com/GravityPDF/mpdf/pull/631
 [#632]: https://github.com/GravityPDF/mpdf/issues/632
 [#633]: https://github.com/GravityPDF/mpdf/pull/633
-[#635]: https://github.com/GravityPDF/mpdf/pull/635
 [#634]: https://github.com/GravityPDF/mpdf/pull/634
+[#635]: https://github.com/GravityPDF/mpdf/pull/635
+[#639]: https://github.com/GravityPDF/mpdf/pull/639
