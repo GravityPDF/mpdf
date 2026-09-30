@@ -154,6 +154,7 @@ Bugfixes
   * A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
   * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
 * A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#623]
+* `tr:nth-child()` counted the rows of the whole table less its header and footer rows, so a second `<tbody>` carried on the count of the first, and `tr:first-child` missed the first footer row when `<tfoot>` came after the body. Rows are now counted within their `<thead>`, `<tbody>` or `<tfoot>`, or within the run of rows written straight into the table. [#528] [#582]
 * `font: small-caps 14pt serif` drew the text in full-size capitals, as `text-transform: uppercase` does. It is now drawn in small capitals, as `font-variant: small-caps` draws it. The `font` shorthand also kept a `line-height` and a `font-variant` it inherited; like the style and weight, they are now reset to `normal` when the shorthand does not name them, as in a browser. To keep a line height, give it in the shorthand, as in `font: 14pt/1.5 serif`, or declare `line-height` after it. A `font` shorthand with a negative line height, such as `font: 12pt/-1 serif`, is dropped whole. `font-variant: normal` now resets `font-variant-position` as well. [#552] [#581]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
@@ -780,6 +781,7 @@ These changes do not change output.
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#578]: https://github.com/GravityPDF/mpdf/pull/578
 [#580]: https://github.com/GravityPDF/mpdf/pull/580
+[#582]: https://github.com/GravityPDF/mpdf/pull/582
 [#581]: https://github.com/GravityPDF/mpdf/pull/581
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
