@@ -64,7 +64,7 @@ abstract class ParentRelativeFontReportSnapshot extends Snapshot
 		<p class="caption">h1 at weight 700, its small set smaller and lighter. Standard: the title is bold and "third quarter" regular at 13.3pt. Legacy: both are regular at 16pt, the number replacing the heading's bold without being read, and so are the h2 headings below, at weight 600.</p>
 
 		<p class="lead">Revenue grew <strong>twelve percent</strong> over the quarter, and <em>margins held <b>steady</b></em>.</p>
-		<p class="caption">The lead paragraph is larger and at weight 300; strong and em inside it are bolder, and b in em bolder again. Standard: the paragraph is 10.8pt, "twelve percent" and "margins held" regular at 400, and "steady" bold at 700. Legacy: the paragraph is 9pt and all of it regular.</p>
+		<p class="caption">The lead paragraph is larger and at weight 300; strong and em inside it are bolder, and b in em bolder again. Standard: the paragraph is 10.8pt, "twelve percent" and "margins held" regular at 400, and "steady" bold at 700. Legacy: the paragraph is 9pt and regular, but for "steady", which keeps the bold of b, as legacy drops the rule for b that goes through em, an inline element.</p>
 
 		<h2>Summary</h2>
 		<p class="caption">The table is at weight 500, its header cells at 700. The total cell is bolder, the notes smaller and lighter. A table nested in a cell is smaller, and its key cells bolder. Standard: the header cells and the total are bold and other cells regular; the notes and the breakdown are 7.5pt, the breakdown's keys bold. Legacy: every cell is regular at 9pt.</p>
