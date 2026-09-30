@@ -32,7 +32,8 @@ jobs:
 
     strategy:
       fail-fast: false
-      # A pull request without the full-ci label runs 5.6 and 8.5 on both systems, and 7.4 and 8.0 on Ubuntu
+      # A pull request without the full-ci label runs 8.5 on both systems, and 5.6, 7.4 and 8.0 on Ubuntu. 5.6 on Windows is
+      # the slowest job by minutes, so it waits for the push to gravitypdf
       matrix: >-
         ${{ fromJSON(
           (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))
@@ -44,6 +45,7 @@ jobs:
             "php-version": ["5.6", "7.4", "8.0", "8.5"],
             "operating-system": ["ubuntu-latest", "windows-latest"],
             "exclude": [
+              {"php-version": "5.6", "operating-system": "windows-latest"},
               {"php-version": "7.4", "operating-system": "windows-latest"},
               {"php-version": "8.0", "operating-system": "windows-latest"}
             ]
