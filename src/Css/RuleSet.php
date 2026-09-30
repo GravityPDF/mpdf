@@ -104,6 +104,38 @@ class RuleSet
 			}
 		}
 
+		return $this->inCascadeOrder($matched);
+	}
+
+	/**
+	 * The declarations of the rules html or body matches, in the order they apply. mPDF has no html element, and
+	 * matches html as the parent of body, which the document's frame stands for
+	 *
+	 * @param bool $html Whether for html rather than body
+	 * @param array[] $path The document's frame alone
+	 *
+	 * @return array[] [the normal declarations of each rule, the !important declarations of each rule with any]
+	 */
+	public function documentDeclarations($html, array $path)
+	{
+		$matched = [];
+		foreach ($this->candidates($html ? 'HTML' : 'BODY', '', []) as $position) {
+			if ($this->matcher->matchesDocumentElement($this->rules[$position][0], $path, $html)) {
+				$matched[] = $position;
+			}
+		}
+
+		return $this->inCascadeOrder($matched);
+	}
+
+	/**
+	 * @param int[] $matched The positions of the rules an element matches
+	 *
+	 * @return array[] Their declarations, in the order they apply: by specificity, then by position. [the normal
+	 *                 declarations of each rule, the !important declarations of each rule with any]
+	 */
+	private function inCascadeOrder(array $matched)
+	{
 		$rules = $this->rules;
 		usort($matched, function ($a, $b) use ($rules) {
 			// Arrays of the same keys compare element by element: ids, then classes, then tags
@@ -137,6 +169,9 @@ class RuleSet
 	}
 
 	/**
+	 * Files a rule under its id, class or tag. With none, :root files it under html, and :link under the tags it
+	 * matches
+	 *
 	 * @param array $index
 	 * @param array $subject The rightmost compound of a rule's selector
 	 * @param int $position The rule's position
@@ -149,6 +184,11 @@ class RuleSet
 			$index['class'][$subject['classes'][0]][] = $position;
 		} elseif ($subject['tag'] !== null) {
 			$index['tag'][$subject['tag']][] = $position;
+		} elseif (in_array(['root'], $subject['pseudos'], true)) {
+			$index['tag']['HTML'][] = $position;
+		} elseif (in_array(['link'], $subject['pseudos'], true)) {
+			$index['tag']['A'][] = $position;
+			$index['tag']['AREA'][] = $position;
 		} else {
 			$index['any'][] = $position;
 		}
@@ -219,11 +259,11 @@ class RuleSet
 	 * @param array[] $path The open elements from the document down to the element, with the element last
 	 *
 	 * @return array<string, true> The keys requiredAncestors() gives for the ids, classes and tags of the element's
-	 *                             ancestors, the document's frame being body
+	 *                             ancestors, the document's frame being body, with html above it
 	 */
 	private static function ancestorsOf(array $path)
 	{
-		$keys = ['T' . 'BODY' => true]; // the document's frame
+		$keys = ['T' . 'HTML' => true, 'T' . 'BODY' => true]; // html, and the document's frame
 		for ($depth = count($path) - 2; $depth > 0; $depth--) {
 			$keys['T' . $path[$depth]['tag']] = true;
 			if ($path[$depth]['id'] !== '') {

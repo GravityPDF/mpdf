@@ -53,6 +53,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * Attributes mPDF ignored now take effect: `<hr align>`, `<hr size>`, `<img align>` (float left or right, or vertical alignment), `<img border>`, `<thead align>`, and `<table border>` wider than 1.
   * A table's `border` gives each cell a 1px border of its own, which a rule for the table's border leaves alone. Before, the cells copied the table's border.
 * **`line-height` on an inline element sets the height of its line**, as in a browser. mPDF ignored it, so `<span style="line-height: 30mm">` left its line as it was. Now each inline element's box is as tall as its line-height, and a line grows to hold the tallest box on it, text or image, in blocks and table cells alike. The block's own line height is the least a line can be, so a smaller inline line-height, or `0`, does not shrink it. A percentage in `vertical-align` is taken of the element's own line-height. `line-height` on a `<p>` or `<div>` inside a table cell, which mPDF lays out as inline content, can now make its lines taller than the cell's. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore it as before. [#548] [#646]
+* **`rem` is read against the font size of `html`, in standard mode**, as in a browser. It was read against the font size of `body`, and inside a table against the table's. Now `1rem` is the default font size, from the `default_font_size` configuration or `SetDefaultFontSize()`, unless an `html` or `:root` rule sizes `html`: with `html { font-size: 62.5% }`, `1.6rem` is the default size again. A `body { font-size }` rule no longer changes it. To keep the old sizes, give them in `em` or points, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#529] [#642]
 
 New features
 ------------
@@ -125,6 +126,7 @@ New features
 * **Pseudo-classes that look at what follows an element.** `:last-child`, `:nth-last-child()`, `:only-child`, `:last-of-type`, `:nth-last-of-type()`, `:only-of-type` and `:empty` match in the flow, in tables, headers and footers, and positioned blocks. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#537] [#634]
   * `WriteHTML()` reads ahead through the HTML it is given to count each element's children. An element still open at the end of a call that leaves it open is not known in full, so these do not match its children in that call, and nor does `:not()` of them.
   * `:empty` matches as in browsers: an element holding white space is not empty, and one holding only a comment is. A table cell holding only white space is empty, as mPDF strips it.
+* **`:root`, `html`, `:link` and `:any-link`, in standard mode.** `a:link` and `:any-link` match a link with an `href`. mPDF has no `html` element, so `html` and `:root` match it as the parent of `body`: their rules reach the text as a parent's would, and rules for `body` win over them. `:visited`, `:hover`, `:focus`, `:active`, `:focus-within`, `:focus-visible` and `:target` never match, as a PDF is never visited or hovered, so `:not(:hover)` always does. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#529] [#642]
 
 Performance
 -----------
@@ -176,10 +178,10 @@ Bugfixes
   * `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
 * A declaration mPDF cannot read replaced the value before it. A `calc()`, `min()`, `max()`, `clamp()` or `var()` length became 0, so `margin: calc(…)` removed the default margins, and a colour mPDF does not know, or one written with `var()`, drew the text black. Such a declaration is now dropped, as a browser drops it, so the earlier declaration, the default or the inherited value applies. [#552] [#565]
 * `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552] [#565]
-* `line-height: 0` gave lines a normal height. Lines now have no height, as in a browser. A line height well below the font size, such as `0.5` or `1mm`, was stretched down to the baseline; it is now kept. A negative `line-height`, which shrank lines to odd heights, is now ignored. [#552] [#567]
+* `line-height: 0` gave lines a normal height. Lines now have no height, as in a browser. A line height well below the font size, such as `0.5` or `1mm`, was stretched down to the baseline; it is now kept. A negative `line-height`, which shrank lines to odd heights, is now ignored. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old reading of all three. [#552] [#567] [#643]
 * The rule after an `@supports`, `@layer`, `@keyframes`, `@container` or other block at-rule was lost, and so were the rules inside `@supports` and `@layer`. The rule after `@charset`, `@namespace` or `@import` was lost too. `@supports` and `@layer` blocks are now unwrapped as `@media` blocks are, except `@supports not`, and other at-rules are removed whole. [#524] [#566]
-* `@media` was matched by looking for the word `print`, so `@media not print` applied, `orientation` was ignored and `min-width` never matched. Media queries are now evaluated for the print medium against the page current when the stylesheet is read: media types with `not` and `only`; `and`, `or` and `not` conditions; and `width`, `height` and `orientation`, with `min-`/`max-` prefixes and range syntax such as `(width >= 600px)`. An A4 page is about 794px wide, so `@media (min-width: 768px)` rules now apply to it. [#552] [#575]
-* `@import` ignored its media list, and did not load a URL that does not end in `.css`, such as a Google Fonts stylesheet. [#552] [#575]
+* `@media` was matched by looking for the word `print`, so `@media not print` applied, `orientation` was ignored and `min-width` never matched. Media queries are now evaluated for the print medium against the page current when the stylesheet is read: media types with `not` and `only`; `and`, `or` and `not` conditions; and `width`, `height` and `orientation`, with `min-`/`max-` prefixes and range syntax such as `(width >= 600px)`. An A4 page is about 794px wide, so `@media (min-width: 768px)` rules now apply to it. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep matching by the word `print` or `all`. [#552] [#575] [#643]
+* `@import` ignored its media list, and did not load a URL that does not end in `.css`, such as a Google Fonts stylesheet. Legacy mode loads them as before, except that in either mode an `@import` is read only from `<style>` blocks and stylesheets, not from the body text. [#552] [#575] [#643]
 * A brace, semicolon or comment marker inside a quoted string, an unquoted `url()` or an escape broke the stylesheet around it. `q { quotes: "}" }` lost the rule after it, `font-family: 'a;color:red'` set the colour, a `/*` in one string and a `*/` in a later one removed every rule between them, and `@import url(…?family=Inter:wght@300;400)` lost the rule after it. A rule or at-rule nested in a block, as CSS nesting writes them, lost the rest of the block and the rule after it. Stylesheets are now split by a tokenizer that reads strings, `url()`, escapes and comments as CSS does, in either `cssMode`. A rule or at-rule nested in a block is left out, and the declarations after it apply. [#536] [#635]
   * A string left open ends at the line break, as in CSS. A block or comment left open ends with its `<style>` or stylesheet file instead of running into the next one.
   * A byte order mark at the start of a stylesheet, as `WriteHTML(file_get_contents('style.css'), HTMLParserMode::HEADER_CSS)` passes one on, no longer spoils the first rule.
@@ -807,6 +809,7 @@ These changes do not change output.
 [#526]: https://github.com/GravityPDF/mpdf/issues/526
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
+[#529]: https://github.com/GravityPDF/mpdf/issues/529
 [#531]: https://github.com/GravityPDF/mpdf/issues/531
 [#532]: https://github.com/GravityPDF/mpdf/issues/532
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
@@ -868,3 +871,5 @@ These changes do not change output.
 [#639]: https://github.com/GravityPDF/mpdf/pull/639
 [#641]: https://github.com/GravityPDF/mpdf/pull/641
 [#646]: https://github.com/GravityPDF/mpdf/pull/646
+[#643]: https://github.com/GravityPDF/mpdf/pull/643
+[#642]: https://github.com/GravityPDF/mpdf/pull/642

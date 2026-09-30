@@ -92,7 +92,7 @@ class LogicalSelectorTest extends TestCase
 				['first' => self::RED, 'second' => self::BLACK],
 			],
 			'is leaves out an argument it cannot read' => [
-				':is(h1, a:hover) + p { color: #f00; }',
+				':is(h1, a:has(b)) + p { color: #f00; }',
 				'<h1>One</h1><p>after h1</p>',
 				['after h1' => self::RED],
 			],
@@ -127,7 +127,7 @@ class LogicalSelectorTest extends TestCase
 				['c1' => self::BLACK, 'c2' => self::RED],
 			],
 			'not an argument it cannot read drops the rule' => [
-				'p:not(.a, a:hover) { color: #f00; }',
+				'p:not(.a, a:has(b)) { color: #f00; }',
 				'<p>plain</p>',
 				['plain' => self::BLACK],
 			],
