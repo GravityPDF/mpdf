@@ -28,6 +28,15 @@ trait TracksOpenElements
 	private $fixedPosBlockElements;
 
 	/**
+	 * @var array[] What readAhead() found each element to hold, by the key of its frame: its childTotal,
+	 * childTypeTotals and empty, as getOpenElements() describes them. A frame takes them from here when it is made
+	 */
+	private $lookAhead = [];
+
+	/** @var bool Whether readAhead() is walking the tokens, so that each element it closes is recorded in $lookAhead */
+	private $readingAhead = false;
+
+	/**
 	 * @var array[] The elements open in the HTML being written, outermost first, kept apart from the blocks in $blk.
 	 * See {@see getOpenElements()}
 	 */
@@ -111,9 +120,16 @@ trait TracksOpenElements
 	 * - attr: its attributes, as the tag handlers are given them
 	 * - nthChild and nthOfType: its position among its element siblings, and among those of its own tag, from 1
 	 * - children: a record of each child closed so far, oldest first, which for the child open inside it are the
-	 *   siblings before that child. A record holds a child's tag, id, classes, attr and nthOfType; its position is its
-	 *   place in the list
+	 *   siblings before that child. A record holds a child's tag, id, classes, attr, nthOfType and empty; its position
+	 *   is its place in the list
 	 * - childTypes: how many children so far have each tag
+	 * - key: where it is in the document, as the nthChild of it and of each of its ancestors. An element not counted
+	 *   among its parent's children, such as a span around a run of another script, shares it with the next one, and
+	 *   nothing is read ahead of it
+	 * - childTotal and childTypeTotals: how many children it has in all, and how many of each tag, as readAhead()
+	 *   found. Null when that is not known, as for an element still open at the end of a WriteHTML() call that
+	 *   leaves it open, and in the legacy CSS mode, which reads nothing ahead
+	 * - empty: whether it has no children and no text, white space included. Null when that is not known
 	 * - computed: its computed values, not filled in yet
 	 *
 	 * @return array[]
@@ -214,7 +230,7 @@ trait TracksOpenElements
 	 */
 	private function newOpenElementStack()
 	{
-		return [$this->newElementFrame('', [], $this->documentLang, 1, 1)];
+		return [$this->newElementFrame('', [], $this->documentLang, 1, 1, '')];
 	}
 
 	/**
@@ -225,12 +241,13 @@ trait TracksOpenElements
 	 * @param string $lang Its own lang attribute, or the one it inherits
 	 * @param int $nthChild Its position among its element siblings, from 1
 	 * @param int $nthOfType Its position among the siblings with its tag, from 1
+	 * @param string $key Where it is in the document, as getOpenElements() describes
 	 *
 	 * @return array A frame for an element with no children yet, as getOpenElements() describes
 	 */
-	private function newElementFrame($tag, array $attr, $lang, $nthChild, $nthOfType)
+	private function newElementFrame($tag, array $attr, $lang, $nthChild, $nthOfType, $key)
 	{
-		return [
+		$frame = [
 			'tag' => $tag,
 			'id' => isset($attr['ID']) ? $attr['ID'] : '',
 			'classes' => isset($attr['CLASS']) ? preg_split('/\s+/', $attr['CLASS'], -1, PREG_SPLIT_NO_EMPTY) : [],
@@ -240,8 +257,14 @@ trait TracksOpenElements
 			'nthOfType' => $nthOfType,
 			'children' => [],
 			'childTypes' => [],
+			'key' => $key,
+			'childTotal' => null,
+			'childTypeTotals' => null,
+			'empty' => null,
 			'computed' => null,
 		];
+
+		return isset($this->lookAhead[$key]) ? $this->lookAhead[$key] + $frame : $frame;
 	}
 
 	/**
@@ -276,6 +299,97 @@ trait TracksOpenElements
 	}
 
 	/**
+	 * Walks the tokens a WriteHTML() call is about to write, to find what each element holds: how many children it
+	 * has, how many of each tag, and whether it is empty. :last-child, :only-child, :empty and the like need that when
+	 * the element opens, before its end has been read. The walk goes through the methods WriteHTML() keeps the stack
+	 * with, on a copy of it, so each element is counted as the stack counts it; no tree is built. What it finds is kept
+	 * in $lookAhead for the frames made while the tokens are written, and given to the frames already open.
+	 *
+	 * An element the call leaves open is not known in full: its totals stay null, and so does whether it is empty,
+	 * unless it holds something already
+	 *
+	 * @param string[] $tokens Text and tags in turn, as WriteHTML() splits the HTML: each tag without its brackets
+	 * @param int $floor How many frames at the foot of the stack the HTML cannot close, as WriteHTML() counts them
+	 * @param bool $standIn Whether the first start tag stands in for the positioned block whose content is written,
+	 *                      whose frame is open already
+	 * @param bool $close Whether the call closes what is still open at its end
+	 */
+	private function readAhead(array $tokens, $floor, $standIn, $close)
+	{
+		$openElements = $this->openElements;
+		$this->lookAhead = [];
+		$this->readingAhead = true;
+		// The frames below the floor of a positioned block's content are the flow's, and were read with it
+		$from = $standIn ? $floor : 0;
+
+		foreach ($tokens as $i => $token) {
+			if ($i % 2 === 0) {
+				// White space is text, as browsers have it. Comments are gone by now, though the CSS reader leaves a space
+				// for each
+				if ($token !== '') {
+					$this->openElements[count($this->openElements) - 1]['empty'] = false;
+				}
+			} elseif (isset($token[0]) && $token[0] === '/') {
+				$this->closeElementsEndedBy(trim(strtoupper(substr($token, 1))), $floor);
+			} elseif (preg_match('/[a-zA-Z][\w:.\-]*/', $token, $name)) {
+				$tag = strtoupper($name[0]);
+				$this->closeElementsImpliedBy($tag, $floor);
+				if ($standIn) {
+					$standIn = false;
+					continue;
+				}
+
+				$this->openElements[count($this->openElements) - 1]['empty'] = false;
+				$attr = stripos($token, 'data-mpdf-script-run') !== false ? [self::SCRIPT_RUN_ATTRIBUTE => ''] : [];
+				$this->startElement($tag, $attr, substr($token, -1) === '/');
+			}
+		}
+
+		if ($close) {
+			$this->closeElementsDownTo($floor);
+		}
+
+		for ($depth = $from; $depth < count($this->openElements); $depth++) {
+			$frame = $this->openElements[$depth];
+			if ($close) {
+				// Only the document is left, and nothing more is written into it
+				$this->lookAhead[$frame['key']] = self::heldBy($frame);
+			} else {
+				$this->lookAhead[$frame['key']] = [
+					'childTotal' => null,
+					'childTypeTotals' => null,
+					'empty' => ($frame['empty'] === false || $frame['children']) ? false : null,
+				];
+			}
+		}
+
+		$this->readingAhead = false;
+		$this->openElements = $openElements;
+
+		foreach ($this->openElements as $depth => $frame) {
+			if (isset($this->lookAhead[$frame['key']])) {
+				$this->openElements[$depth] = $this->lookAhead[$frame['key']] + $frame;
+			}
+		}
+	}
+
+	/**
+	 * What readAhead() records of an element whose end has been read
+	 *
+	 * @param array $frame Its frame, as readAhead() kept it: empty is false once text or a start tag is read in it
+	 *
+	 * @return array Its childTotal, childTypeTotals and empty, as getOpenElements() describes them
+	 */
+	private static function heldBy(array $frame)
+	{
+		return [
+			'childTotal' => count($frame['children']),
+			'childTypeTotals' => $frame['childTypes'],
+			'empty' => $frame['empty'] !== false && !$frame['children'],
+		];
+	}
+
+	/**
 	 * Whether a start tag opens its element inside a tbody that the HTML leaves out. A row written straight into a
 	 * table does, as in a browser's tree, so `table > tbody > tr` matches it
 	 *
@@ -306,19 +420,23 @@ trait TracksOpenElements
 			unset($attr['PAGEBREAKAVOIDCHECKED']);
 		}
 
+		$nthChild = count($parent['children']) + 1;
+
 		return $this->newElementFrame(
 			$tag,
 			$attr,
 			isset($attr['LANG']) ? $attr['LANG'] : $parent['lang'],
-			count($parent['children']) + 1,
-			(isset($parent['childTypes'][$tag]) ? $parent['childTypes'][$tag] : 0) + 1
+			$nthChild,
+			(isset($parent['childTypes'][$tag]) ? $parent['childTypes'][$tag] : 0) + 1,
+			$parent['key'] . '.' . $nthChild
 		);
 	}
 
 	/**
 	 * Whether a start tag is for an element of the document, which selectors match and count among its siblings.
 	 * The tags mPDF wraps substituted characters in, and the spans it wraps a run of another script in for
-	 * autoScriptToLang, are not. WriteHTML() only tells the merger which element it is styling for such a tag
+	 * autoScriptToLang or a run of a substitute font in, are not. WriteHTML() only tells the merger which element it
+	 * is styling for such a tag
 	 *
 	 * @param string $tag
 	 * @param string[] $attr
@@ -390,8 +508,9 @@ trait TracksOpenElements
 	/**
 	 * Records a closed element among its parent's children, which is what sibling selectors and the nth counts of
 	 * later siblings read. The parent is the frame now at the top of the stack. A span mPDF wraps a run of another
-	 * script in is left out, as it is not the document's, and so is an element a browser moves out of the table part
-	 * it is written in
+	 * script or of a substitute font in is left out, as it is not the document's, and so is an element a browser moves
+	 * out of the table part it is written in. While readAhead() walks the tokens, what an element that is recorded
+	 * turned out to hold is kept in $lookAhead too
 	 *
 	 * @param array $frame The closed element's frame
 	 */
@@ -407,12 +526,17 @@ trait TracksOpenElements
 			return;
 		}
 
+		if ($this->readingAhead) {
+			$this->lookAhead[$frame['key']] = self::heldBy($frame);
+		}
+
 		$this->openElements[$parent]['children'][] = [
 			'tag' => $frame['tag'],
 			'id' => $frame['id'],
 			'classes' => $frame['classes'],
 			'attr' => $frame['attr'],
 			'nthOfType' => $frame['nthOfType'],
+			'empty' => $frame['empty'],
 		];
 		$this->openElements[$parent]['childTypes'][$frame['tag']] = $frame['nthOfType'];
 	}

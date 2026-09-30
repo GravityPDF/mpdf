@@ -21,10 +21,11 @@ use Mpdf\Utils\UtfString;
  * names attributes, and the operator empty for [name]. Values are compared case-insensitively, and held lowercased,
  * for the attributes HTML lists as such, for id and class, whose values the tokenizer uppercases, and with the i flag.
  *
- * Pseudo-classes are held as [name, arguments...]: ['nth-child', a, b] and ['nth-of-type', a, b] for an+b, which
- * :first-child and :first-of-type are written as, ['lang', ranges] with each language range lowercased, and
- * ['not', selectors] and ['is', selectors] with each selector compiled. :where() is held as :is(), its specificity
- * being the only difference.
+ * Pseudo-classes are held as [name, arguments...]: ['nth-child', a, b], ['nth-of-type', a, b], ['nth-last-child', a, b]
+ * and ['nth-last-of-type', a, b] for an+b, which :first-child, :first-of-type, :last-child and :last-of-type are
+ * written as, ['only-child'], ['only-of-type'] and ['empty'], ['lang', ranges] with each language range lowercased,
+ * and ['not', selectors] and ['is', selectors] with each selector compiled. :where() is held as :is(), its
+ * specificity being the only difference.
  */
 class SelectorCompiler
 {
@@ -42,6 +43,20 @@ class SelectorCompiler
 		'NOHREF' => true, 'NORESIZE' => true, 'NOSHADE' => true, 'NOWRAP' => true, 'READONLY' => true, 'REL' => true,
 		'REV' => true, 'RULES' => true, 'SCOPE' => true, 'SCROLLING' => true, 'SELECTED' => true, 'SHAPE' => true,
 		'TARGET' => true, 'TEXT' => true, 'TYPE' => true, 'VALIGN' => true, 'VALUETYPE' => true, 'VLINK' => true,
+	];
+
+	/**
+	 * @var array[] The pseudo-classes written without an argument, compiled. Those that count from the first or last
+	 *              sibling are held as the nth formula they stand for
+	 */
+	private static $pseudoClassesWithoutArguments = [
+		'first-child' => ['nth-child', 0, 1],
+		'first-of-type' => ['nth-of-type', 0, 1],
+		'last-child' => ['nth-last-child', 0, 1],
+		'last-of-type' => ['nth-last-of-type', 0, 1],
+		'only-child' => ['only-child'],
+		'only-of-type' => ['only-of-type'],
+		'empty' => ['empty'],
 	];
 
 	/**
@@ -242,11 +257,8 @@ class SelectorCompiler
 			$specificity[1]++;
 		}
 
-		if ($name === 'first-child') {
-			return ['nth-child', 0, 1];
-		}
-		if ($name === 'first-of-type') {
-			return ['nth-of-type', 0, 1];
+		if (isset(self::$pseudoClassesWithoutArguments[$name])) {
+			return self::$pseudoClassesWithoutArguments[$name];
 		}
 
 		if (!$this->isAt($text, $pos, '(')) {
@@ -269,7 +281,7 @@ class SelectorCompiler
 			return $ranges === null ? null : ['lang', $ranges];
 		}
 
-		if ($name !== 'nth-child' && $name !== 'nth-of-type') {
+		if (!in_array($name, ['nth-child', 'nth-of-type', 'nth-last-child', 'nth-last-of-type'], true)) {
 			return null;
 		}
 

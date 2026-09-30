@@ -45,7 +45,7 @@ class UnmatchableDescendantSelectorSnapshotTest extends Snapshot
 			div.combinators p + p { color: #ff0000; font-size: 16pt; }
 			div.combinators p ~ p { color: #ff0000; font-size: 16pt; }
 
-			nav ul li:last-child { color: #ff0000; font-weight: bold; }
+			nav ul li:has(+ li) { color: #ff0000; font-weight: bold; }
 			div.links p a:hover { background-color: #ff0000; }
 			div.quotes p::before { color: #ff0000; font-size: 16pt; }
 
@@ -68,7 +68,7 @@ class UnmatchableDescendantSelectorSnapshotTest extends Snapshot
 		</div>
 
 		<h2>Pseudo-classes and pseudo-elements</h2>
-		<p class="caption">Rules using :last-child, :hover and ::before are dropped. Nothing on this list or these paragraphs is red or bold, and no paragraph has a red background.</p>
+		<p class="caption">Rules using :has(), :hover and ::before are dropped. Nothing on this list or these paragraphs is red or bold, and no paragraph has a red background.</p>
 		<nav class="case">
 			<ul>
 				<li>First item</li>

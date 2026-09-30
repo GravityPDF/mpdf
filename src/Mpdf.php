@@ -60,7 +60,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const OBJECT_IDENTIFIER = "\xbb\xa4\xac";
 
 	/**
-	 * The attribute, as the tokenizer names it, that marks a span markScriptToLang() wraps a run of another script in
+	 * The attribute, as the tokenizer names it, that marks a span markScriptToLang() wraps a run of another script in,
+	 * or one the character substitution wraps a run it moves into another font in
 	 */
 	const SCRIPT_RUN_ATTRIBUTE = 'DATA-MPDF-SCRIPT-RUN';
 
@@ -14698,6 +14699,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->openElements = $this->newOpenElementStack();
 		}
 		$floor = $standIn ? count($this->openElements) : 1; // the frames this HTML cannot close
+		// What is read ahead is for this call's tokens only. A header or index written in the middle of the flow puts
+		// the flow's back when it is done. The legacy mode reads nothing ahead, as it drops the selectors that need it
+		$outerLookAhead = $this->lookAhead;
+		if ($this->cssMode === CssMode::STANDARD) {
+			$this->readAhead($a, $floor, $standIn, $close);
+		}
 
 		$pbc = 0;
 		$this->subPos = -1;
@@ -15239,6 +15246,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($flowElements !== null) {
 			$this->openElements = $flowElements;
 		}
+		$this->lookAhead = $outerLookAhead;
 	}
 
 	/* -- CSS-POSITION -- */
@@ -26740,7 +26748,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					return 0;
 				}
 				$writehtml_a[$writehtml_i] = $writehtml_e = $m[1];
-				array_splice($writehtml_a, $writehtml_i + 1, 0, ['span style="font-family: ' . $font . '"', $m[2], '/span', $m[3]]);
+				array_splice($writehtml_a, $writehtml_i + 1, 0, ['span data-mpdf-script-run style="font-family: ' . $font . '"', $m[2], '/span', $m[3]]);
 				$this->subPos = $writehtml_i;
 				return 4;
 			}
@@ -27181,7 +27189,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return [
 			'before' => mb_substr($text, 0, $offset, 'UTF-8'),
 			'insert' => $replacement === null
-				? ['span style="font-family: ' . $font . '"', mb_substr($text, $offset, $l, 'UTF-8'), '/span']
+				? ['span data-mpdf-script-run style="font-family: ' . $font . '"', mb_substr($text, $offset, $l, 'UTF-8'), '/span']
 				: [$font, $replacement, '/' . $font],
 			'rest' => mb_substr($text, $offset + $l, null, 'UTF-8'),
 			'from' => $start + $l,
