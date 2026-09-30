@@ -234,6 +234,23 @@ class FixedPseudoClassTest extends TestCase
 	}
 
 	/**
+	 * html's !important declarations beat its others, and reach body as a parent's would, so body's own declarations
+	 * beat them. body's !important declarations beat its style attribute
+	 */
+	public function testHtmlAndBodyImportantDeclarations()
+	{
+		$standard = ['cssMode' => CssMode::STANDARD];
+		$html = '<style>html { color: #f00 !important; } html { color: #00f; }</style>';
+
+		$this->assertSame(self::RED, $this->drawnColours($html . '<p>text</p>', $standard)['text']);
+		$this->assertSame(self::GREEN, $this->drawnColours($html . '<style>body { color: #008000; }</style><p>text</p>', $standard)['text']);
+		$this->assertSame(
+			self::GREEN,
+			$this->drawnColours('<style>body { color: #008000 !important; }</style><body style="color: #00f"><p>text</p></body>', $standard)['text']
+		);
+	}
+
+	/**
 	 * :root and html match the language of the <html> tag
 	 *
 	 * @dataProvider rootLanguages
@@ -301,6 +318,8 @@ class FixedPseudoClassTest extends TestCase
 			'root' => [':root { font-size: 62.5%; } p { font-size: 2rem; }', $p, 13.75, 22],
 			'the last rule for html' => ['html { font-size: 50%; } html { font-size: 62.5%; } p { font-size: 2rem; }', $p, 13.75, 22],
 			'the more specific rule for html' => [':root { font-size: 62.5%; } html { font-size: 50%; } p { font-size: 2rem; }', $p, 13.75, 22],
+			'an important rule for html' => ['html { font-size: 62.5% !important; } html { font-size: 50%; } p { font-size: 2rem; }', $p, 13.75, 22],
+			'html\'s important size under body\'s own' => ['html { font-size: 62.5% !important; } body { font-size: 1.6rem; }', $p, 11, 17.6],
 			'body without a size of its own takes html\'s' => ['html { font-size: 62.5%; }', $p, 6.875, 11],
 			'body in rem' => ['html { font-size: 62.5%; } body { font-size: 1.6rem; }', $p, 11, 17.6],
 			'body in em reads html' => ['html { font-size: 62.5%; } body { font-size: 1.6em; }', $p, 11, 17.6],

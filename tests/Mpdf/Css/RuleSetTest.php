@@ -213,11 +213,11 @@ class RuleSetTest extends TestCase
 		$document = [$path[0]];
 
 		$this->assertSame(
-			[['COLOR' => 'rule 1'], ['COLOR' => 'rule 0'], ['COLOR' => 'rule 6']],
+			[[['COLOR' => 'rule 1'], ['COLOR' => 'rule 0'], ['COLOR' => 'rule 6']], []],
 			$rules->documentDeclarations(true, $document)
 		);
 		$this->assertSame(
-			[['COLOR' => 'rule 2'], ['COLOR' => 'rule 3'], ['COLOR' => 'rule 6'], ['COLOR' => 'rule 4'], ['COLOR' => 'rule 5']],
+			[[['COLOR' => 'rule 2'], ['COLOR' => 'rule 3'], ['COLOR' => 'rule 6'], ['COLOR' => 'rule 4'], ['COLOR' => 'rule 5']], []],
 			$rules->documentDeclarations(false, $document)
 		);
 	}
@@ -259,7 +259,7 @@ class RuleSetTest extends TestCase
 			return $this->path();
 		};
 
-		$this->assertSame([['COLOR' => 'html'], ['COLOR' => 'root']], $rules->matchingDeclarations('P', '', [], $path));
+		$this->assertSame([['COLOR' => 'html'], ['COLOR' => 'root']], $rules->matchingDeclarations('P', '', [], $path)[0]);
 	}
 
 	/**

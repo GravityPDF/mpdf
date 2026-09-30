@@ -221,7 +221,8 @@ class CssMerger
 			// Merged outside the document's elements, and written to by Mpdf::SetDefaultBodyCSS() and the like
 			$important = $this->cssManager->getImportantCss();
 			$importantDefault = $this->cssManager->getDefaultImportantCss();
-			$this->setMergedCss(isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : [], false);
+			$body = isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : [];
+			$this->setMergedCss($body, false);
 			$rules = [];
 			$importantRules = array_merge(isset($important['BODY']) ? [$important['BODY']] : [], $this->mergeDocumentRules());
 			$importantDefaultRules = isset($importantDefault['BODY']) ? [$importantDefault['BODY']] : [];
