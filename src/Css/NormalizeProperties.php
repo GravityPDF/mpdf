@@ -46,7 +46,8 @@ class NormalizeProperties
 	private $colorConverter;
 
 	/**
-	 * The keywords every property takes, which a shorthand takes only as its whole value
+	 * The keywords every property takes, which a shorthand takes only as its whole value, as the legacy CSS mode reads
+	 * them. The standard mode reads them through CssWideKeywords
 	 */
 	const CSS_WIDE_KEYWORDS = ['inherit', 'initial', 'unset', 'revert'];
 
@@ -93,6 +94,57 @@ class NormalizeProperties
 		'BORDER-TOP-COLOR' => true, 'BORDER-RIGHT-COLOR' => true, 'BORDER-BOTTOM-COLOR' => true, 'BORDER-LEFT-COLOR' => true,
 	];
 
+	/**
+	 * The longhands mPDF reads for each shorthand, and for each property it reads under another name, which a CSS-wide
+	 * keyword given as the whole value is passed on to in the standard CSS mode
+	 *
+	 * @var string[][]
+	 */
+	private static $keywordLonghands = [
+		'FONT' => [
+			'FONT-FAMILY', 'FONT-SIZE', 'LINE-HEIGHT', 'FONT-STYLE', 'FONT-WEIGHT', 'FONT-VARIANT-LIGATURES',
+			'FONT-VARIANT-CAPS', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES', 'FONT-VARIANT-POSITION',
+		],
+		'FONT-VARIANT' => [
+			'FONT-VARIANT-LIGATURES', 'FONT-VARIANT-CAPS', 'FONT-VARIANT-NUMERIC', 'FONT-VARIANT-ALTERNATES',
+			'FONT-VARIANT-POSITION',
+		],
+		'MARGIN' => ['MARGIN-TOP', 'MARGIN-RIGHT', 'MARGIN-BOTTOM', 'MARGIN-LEFT'],
+		'PADDING' => ['PADDING-TOP', 'PADDING-RIGHT', 'PADDING-BOTTOM', 'PADDING-LEFT'],
+		'BORDER' => [
+			'BORDER-TOP', 'BORDER-TOP-WIDTH', 'BORDER-TOP-STYLE', 'BORDER-TOP-COLOR',
+			'BORDER-RIGHT', 'BORDER-RIGHT-WIDTH', 'BORDER-RIGHT-STYLE', 'BORDER-RIGHT-COLOR',
+			'BORDER-BOTTOM', 'BORDER-BOTTOM-WIDTH', 'BORDER-BOTTOM-STYLE', 'BORDER-BOTTOM-COLOR',
+			'BORDER-LEFT', 'BORDER-LEFT-WIDTH', 'BORDER-LEFT-STYLE', 'BORDER-LEFT-COLOR',
+		],
+		'BORDER-TOP' => ['BORDER-TOP', 'BORDER-TOP-WIDTH', 'BORDER-TOP-STYLE', 'BORDER-TOP-COLOR'],
+		'BORDER-RIGHT' => ['BORDER-RIGHT', 'BORDER-RIGHT-WIDTH', 'BORDER-RIGHT-STYLE', 'BORDER-RIGHT-COLOR'],
+		'BORDER-BOTTOM' => ['BORDER-BOTTOM', 'BORDER-BOTTOM-WIDTH', 'BORDER-BOTTOM-STYLE', 'BORDER-BOTTOM-COLOR'],
+		'BORDER-LEFT' => ['BORDER-LEFT', 'BORDER-LEFT-WIDTH', 'BORDER-LEFT-STYLE', 'BORDER-LEFT-COLOR'],
+		'BORDER-WIDTH' => ['BORDER-TOP-WIDTH', 'BORDER-RIGHT-WIDTH', 'BORDER-BOTTOM-WIDTH', 'BORDER-LEFT-WIDTH'],
+		'BORDER-STYLE' => ['BORDER-TOP-STYLE', 'BORDER-RIGHT-STYLE', 'BORDER-BOTTOM-STYLE', 'BORDER-LEFT-STYLE'],
+		'BORDER-COLOR' => ['BORDER-TOP-COLOR', 'BORDER-RIGHT-COLOR', 'BORDER-BOTTOM-COLOR', 'BORDER-LEFT-COLOR'],
+		'BORDER-SPACING' => ['BORDER-SPACING-H', 'BORDER-SPACING-V'],
+		'BORDER-RADIUS' => [
+			'BORDER-TOP-LEFT-RADIUS-H', 'BORDER-TOP-LEFT-RADIUS-V', 'BORDER-TOP-RIGHT-RADIUS-H', 'BORDER-TOP-RIGHT-RADIUS-V',
+			'BORDER-BOTTOM-RIGHT-RADIUS-H', 'BORDER-BOTTOM-RIGHT-RADIUS-V', 'BORDER-BOTTOM-LEFT-RADIUS-H',
+			'BORDER-BOTTOM-LEFT-RADIUS-V',
+		],
+		'BORDER-TOP-LEFT-RADIUS' => ['BORDER-TOP-LEFT-RADIUS-H', 'BORDER-TOP-LEFT-RADIUS-V'],
+		'BORDER-TOP-RIGHT-RADIUS' => ['BORDER-TOP-RIGHT-RADIUS-H', 'BORDER-TOP-RIGHT-RADIUS-V'],
+		'BORDER-BOTTOM-RIGHT-RADIUS' => ['BORDER-BOTTOM-RIGHT-RADIUS-H', 'BORDER-BOTTOM-RIGHT-RADIUS-V'],
+		'BORDER-BOTTOM-LEFT-RADIUS' => ['BORDER-BOTTOM-LEFT-RADIUS-H', 'BORDER-BOTTOM-LEFT-RADIUS-V'],
+		'BACKGROUND' => [
+			'BACKGROUND-COLOR', 'BACKGROUND-IMAGE', 'BACKGROUND-REPEAT', 'BACKGROUND-POSITION', 'BACKGROUND-SIZE',
+			'BACKGROUND-ORIGIN', 'BACKGROUND-CLIP',
+		],
+		'LIST-STYLE' => ['LIST-STYLE-TYPE', 'LIST-STYLE-IMAGE', 'LIST-STYLE-POSITION'],
+		'TEXT-OUTLINE' => ['TEXT-OUTLINE', 'TEXT-OUTLINE-WIDTH', 'TEXT-OUTLINE-COLOR'],
+		'BREAK-BEFORE' => ['PAGE-BREAK-BEFORE'],
+		'BREAK-AFTER' => ['PAGE-BREAK-AFTER'],
+		'BREAK-INSIDE' => ['PAGE-BREAK-INSIDE'],
+	];
+
 	public function __construct(Mpdf $mpdf, SizeConverter $sizeConverter, ColorConverter $colorConverter)
 	{
 		$this->mpdf = $mpdf;
@@ -118,8 +170,27 @@ class NormalizeProperties
 		}
 
 		$this->properties = [];
+		$standard = $this->mpdf->cssMode === CssMode::STANDARD;
 
 		foreach ($prop as $k => $v) {
+			// The size and sheet-size of an @page rule take no CSS-wide keyword
+			if ($standard && $k !== 'SIZE' && $k !== 'SHEET-SIZE') {
+				$keyword = CssWideKeywords::keywordOf($v);
+				if ($keyword !== null) {
+					// Resolved by CssMerger once the element's CSS is merged
+					foreach (isset(self::$keywordLonghands[$k]) ? self::$keywordLonghands[$k] : [$k] as $longhand) {
+						$this->properties[$longhand] = $keyword;
+					}
+					continue;
+				}
+
+				// A shorthand takes a keyword only as its whole value, so a browser drops `margin: 0 inherit`
+				if (isset(self::$keywordLonghands[$k]) && preg_match('/(?:inherit|initial|unset|revert)/i', $v)
+					&& array_filter($this->splitComponents($v), [CssWideKeywords::class, 'keywordOf'])) {
+					continue;
+				}
+			}
+
 			if ($k !== 'BACKGROUND-IMAGE' && $k !== 'BACKGROUND' && $k !== 'ODD-HEADER-NAME' && $k !== 'EVEN-HEADER-NAME' && $k !== 'ODD-FOOTER-NAME' && $k !== 'EVEN-FOOTER-NAME' && $k !== 'HEADER' && $k !== 'FOOTER' && $k !== 'LIST-STYLE' && $k !== 'LIST-STYLE-IMAGE') {
 				$v = strtolower($v);
 			}
@@ -243,6 +314,7 @@ class NormalizeProperties
 			}
 		} elseif (isset(self::$colorProperties[$property])) {
 			return in_array($value, ['transparent', 'currentcolor', 'inherit', 'initial', 'unset'], true)
+				|| ($this->mpdf->cssMode === CssMode::STANDARD && CssWideKeywords::keywordOf($value) !== null)
 				|| $this->colorConverter->isColor($value);
 		}
 
@@ -515,7 +587,8 @@ class NormalizeProperties
 			}
 		}
 
-		// A CSS-wide keyword gives the initial value, no background, until the keywords are resolved
+		// A CSS-wide keyword gives the initial value, no background. The standard CSS mode passes it to the longhands
+		// before this, for CssMerger to resolve
 		if (count($layers) === 1 && count($layers[0]) === 1 && in_array(strtolower($layers[0][0]), self::CSS_WIDE_KEYWORDS, true)) {
 			return [];
 		}
@@ -901,8 +974,8 @@ class NormalizeProperties
 	 * Parse border property parts (width, style, color).
 	 *
 	 * Each part may come in any position and at most once. A part left out takes its initial value. A CSS-wide
-	 * keyword gives the initial value of all three until the keywords are resolved. The initial colour is currentColor
-	 * in standard mode, and black in legacy mode.
+	 * keyword gives the initial value of all three. The standard CSS mode passes it to the longhands before this, for
+	 * CssMerger to resolve. The initial colour is currentColor in standard mode, and black in legacy mode.
 	 *
 	 * @param string[] $prop Components of the border property value
 	 * @return array|false Array containing 'w' (width), 's' (style), 'c' (color), or false when a component is none of them

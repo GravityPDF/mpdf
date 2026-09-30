@@ -14591,6 +14591,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($zproperties) {
 			$properties = Arrays::uniqueRecursiveMerge($properties, $zproperties);
 		}
+		if ($this->cssMode === CssMode::STANDARD) {
+			$this->setDocumentComputed($properties);
+		}
 
 		if (isset($properties['DIRECTION']) && $properties['DIRECTION']) {
 			$this->cssManager->CSS['BODY']['DIRECTION'] = $properties['DIRECTION'];
@@ -15215,7 +15218,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$token = $i;
 					// The <div> standing in for a positioned block has had the block's rules, through its style
 					$outerElement = $this->styledElement;
-					$this->styledElement = !$standIn && $this->isDocumentElement($tag, $attr) ? ['path' => $this->openElements, 'tag' => $tag, 'attr' => $attr] : null;
+					$this->styledElement = !$standIn && $this->isDocumentElement($tag, $attr) ? ['path' => $this->openElements, 'tag' => $tag, 'attr' => $attr, 'computed' => null] : null;
 					$this->tag->OpenTag($tag, $attr, $a, $i); // mPDF 6
 					// Unless it put back a page-break-inside: avoid block, which rewinds the parser to that block's start
 					// tag and the open elements to how they were there
@@ -15223,7 +15226,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if ($standIn) {
 							$standIn = false;
 						} else {
-							$this->startElement($tag, $attr, $selfClosing);
+							$this->startElement($tag, $attr, $selfClosing, $this->styledElement === null ? null : $this->styledElement['computed']);
 						}
 					}
 					// Held on to, the copy of the stack would make recording each closed child copy its parent's record
@@ -15411,9 +15414,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->blk[1]['attr'] = $attr;
 			$this->Reset();
 			$outerElement = $this->styledElement;
-			$this->styledElement = $this->fixedPosBlockElements === null ? null : ['path' => $this->fixedPosBlockElements, 'tag' => null, 'attr' => []];
+			$this->styledElement = $this->fixedPosBlockElements === null ? null : ['path' => $this->fixedPosBlockElements, 'tag' => null, 'attr' => [], 'computed' => null];
 			$p = $this->cssManager->MergeCSS('BLOCK', $tag, $attr);
 			$this->styledElement = $outerElement;
+			if ($this->cssMode === CssMode::STANDARD) {
+				$this->setFixedPosBlockComputed($p);
+			}
 			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];
 			if (isset($p['ROTATE'])) {
 				$rotate = Rotation::angle($p['ROTATE'], [90, -90, 180]);
@@ -17906,6 +17912,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->SetLineWidth($b['w'] / $k);
 		$this->SetDColor($b['c']);
+		// A colour mPDF cannot read, such as a CSS-wide keyword in the legacy CSS mode, converts to nothing
+		if (!isset($b['c'][0])) {
+			return;
+		}
 		if ($b['c'][0] == 5) { // RGBa
 			$this->SetAlpha(ord($b['c'][4]) / 100, 'Normal', false, 'S'); // mPDF 5.7.2
 		} elseif ($b['c'][0] == 6) { // CMYKa

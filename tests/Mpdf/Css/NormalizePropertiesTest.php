@@ -246,7 +246,6 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			['solid rgb(204 0 0) 0.5mm', '0.5mm solid rgb(204,0,0)'],
 			['transparent 1px solid', '1px solid transparent'],
 			['SOLID 2MM #C00', '2mm solid #c00'],
-			['inherit', 'medium none currentcolor'],
 		];
 	}
 
@@ -463,10 +462,6 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			],
 			'none' => [
 				'none',
-				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => ''],
-			],
-			'a keyword on its own' => [
-				'inherit',
 				['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => ''],
 			],
 			'a -webkit- gradient keeps its prefix for its legacy angles' => [
@@ -794,6 +789,8 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'transparent' => ['BACKGROUND-COLOR', 'transparent', true],
 			'currentColor' => ['BORDER-TOP-COLOR', 'currentColor', true],
 			'inherit' => ['COLOR', 'inherit', true],
+			'revert' => ['COLOR', 'revert', true],
+			'revert-layer' => ['BACKGROUND-COLOR', 'revert-layer', true],
 			'a colour with an inline !important' => ['COLOR', '#00f !important', true],
 			'a word that is not a colour' => ['COLOR', 'bogus', false],
 			'none as a background colour' => ['BACKGROUND-COLOR', 'none', false],
@@ -820,6 +817,141 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('1mm', $result['MARGIN-TOP']);
 		$this->assertSame('-2mm', $result['MARGIN-RIGHT']);
 		$this->assertSame('1.5', $result['LINE-HEIGHT']);
+	}
+
+	/**
+	 * In the standard CSS mode a CSS-wide keyword, in any case, is passed on to a property mPDF reads as it is, for
+	 * CssMerger to resolve. text-outline is read as itself and its two parts
+	 *
+	 * @dataProvider keywordProvider
+	 *
+	 * @param string $property
+	 * @param string $value
+	 * @param string[] $longhands
+	 */
+	public function testAKeywordIsPassedOnToEachLonghand($property, $value, array $longhands)
+	{
+		$this->assertSame(array_fill_keys($longhands, strtolower($value)), $this->normalizeProperties->normalize([$property => $value]));
+	}
+
+	/**
+	 * A property that is not a shorthand of the ones fullShorthandProvider() gives, with a CSS-wide keyword, and the
+	 * properties it is passed on to
+	 *
+	 * @return array[]
+	 */
+	public function keywordProvider()
+	{
+		return [
+			'font-family' => ['FONT-FAMILY', 'inherit', ['FONT-FAMILY']],
+			'background-image' => ['BACKGROUND-IMAGE', 'initial', ['BACKGROUND-IMAGE']],
+			'text-outline' => ['TEXT-OUTLINE', 'unset', ['TEXT-OUTLINE', 'TEXT-OUTLINE-WIDTH', 'TEXT-OUTLINE-COLOR']],
+			'a longhand' => ['COLOR', 'INITIAL', ['COLOR']],
+		];
+	}
+
+	/**
+	 * In the standard CSS mode a keyword, in any case, is passed on to each longhand a full value of the shorthand
+	 * writes, so the keyword and the value it resolves to set the same properties. A break-* property is read as its
+	 * page-break-* property
+	 *
+	 * @dataProvider fullShorthandProvider
+	 *
+	 * @param string $property
+	 * @param string $value A value that names every part of the shorthand
+	 * @param string $keyword
+	 */
+	public function testAKeywordReachesTheLonghandsAValueWrites($property, $value, $keyword)
+	{
+		$written = array_fill_keys(array_keys($this->normalizeProperties->normalize([$property => $value])), strtolower($keyword));
+		$passedOn = $this->normalizeProperties->normalize([$property => $keyword]);
+		ksort($written);
+		ksort($passedOn);
+
+		$this->assertSame($written, $passedOn);
+	}
+
+	/**
+	 * Each shorthand the keywords are passed on through, with a value that names every part, and a keyword
+	 *
+	 * @return string[][]
+	 */
+	public function fullShorthandProvider()
+	{
+		return [
+			'font' => ['FONT', 'italic bold small-caps 12pt/1.5 serif', 'initial'],
+			'font-variant' => ['FONT-VARIANT', 'normal', 'unset'],
+			'margin' => ['MARGIN', '1mm 2mm 3mm 4mm', 'revert'],
+			'padding' => ['PADDING', '1mm', 'Inherit'],
+			'border' => ['BORDER', '1mm solid red', 'inherit'],
+			'border-top' => ['BORDER-TOP', '1mm solid red', 'inherit'],
+			'border-right' => ['BORDER-RIGHT', '1mm solid red', 'initial'],
+			'border-bottom' => ['BORDER-BOTTOM', '1mm solid red', 'unset'],
+			'border-left' => ['BORDER-LEFT', '1mm solid red', 'revert'],
+			'border-width' => ['BORDER-WIDTH', '1mm', 'initial'],
+			'border-style' => ['BORDER-STYLE', 'solid', 'revert-layer'],
+			'border-color' => ['BORDER-COLOR', 'red', 'unset'],
+			'border-spacing' => ['BORDER-SPACING', '1mm 2mm', 'inherit'],
+			'border-radius' => ['BORDER-RADIUS', '1mm 2mm 3mm 4mm / 1mm', 'initial'],
+			'a corner' => ['BORDER-TOP-LEFT-RADIUS', '1mm 2mm', 'inherit'],
+			'background' => ['BACKGROUND', 'red url(a.png) no-repeat left top / cover padding-box content-box', 'inherit'],
+			'list-style' => ['LIST-STYLE', 'square inside url(a.png)', 'revert-layer'],
+			'break-before' => ['BREAK-BEFORE', 'page', 'inherit'],
+		];
+	}
+
+	/**
+	 * In the standard CSS mode a shorthand with a keyword among other parts is dropped, as a browser drops it, and a
+	 * keyword in an @page rule's size is not passed on
+	 *
+	 * @dataProvider keywordAmongPartsProvider
+	 *
+	 * @param string $property
+	 * @param string $value
+	 */
+	public function testAShorthandWithAKeywordAmongItsPartsIsDropped($property, $value)
+	{
+		$this->assertSame([], $this->normalizeProperties->normalize([$property => $value]));
+	}
+
+	/**
+	 * Shorthands with a CSS-wide keyword among other parts, and an @page size that is a keyword
+	 *
+	 * @return string[][]
+	 */
+	public function keywordAmongPartsProvider()
+	{
+		return [
+			'border' => ['BORDER', 'inherit solid'],
+			'margin' => ['MARGIN', '0 inherit'],
+			'padding' => ['PADDING', 'initial 2mm'],
+			'background' => ['BACKGROUND', 'red unset'],
+			'font' => ['FONT', 'revert 12pt serif'],
+			'an @page size' => ['SIZE', 'inherit'],
+		];
+	}
+
+	/**
+	 * A family name that is a keyword in quotes is a family name
+	 */
+	public function testAQuotedKeywordIsAFamilyName()
+	{
+		$this->assertArrayHasKey('FONT-SIZE', $this->normalizeProperties->normalize(['FONT' => '12pt "inherit", serif']));
+	}
+
+	/**
+	 * The legacy CSS mode reads a border or background shorthand with a CSS-wide keyword as its initial value, and
+	 * leaves a keyword out of the properties it cannot read, such as font-family. As it resets no longhand the
+	 * shorthand does not name, background sets only its colour and image
+	 */
+	public function testTheLegacyModeReadsAKeywordShorthandAsItsInitialValue()
+	{
+		$this->mpdf->cssMode = CssMode::LEGACY;
+
+		$this->assertSame('medium none #000000', $this->normalizeProperties->normalize(['BORDER-TOP' => 'inherit'])['BORDER-TOP']);
+		$this->assertSame(['BACKGROUND-COLOR' => 'transparent', 'BACKGROUND-IMAGE' => ''], $this->normalizeProperties->normalize(['BACKGROUND' => 'inherit']));
+		$this->assertSame([], $this->normalizeProperties->normalize(['FONT-FAMILY' => 'inherit']));
+		$this->assertFalse($this->normalizeProperties->canParse('COLOR', 'revert'));
 	}
 
 	/**

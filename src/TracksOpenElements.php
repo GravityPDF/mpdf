@@ -24,6 +24,9 @@ trait TracksOpenElements
 	/** @var string The language the <html> or <body> tag gives the document, which the document's frame carries */
 	private $documentLang = '';
 
+	/** @var array|null The properties merged for <body>, which the document's frame carries as its computed values */
+	private $documentComputed;
+
 	/** @var array[]|null The open elements as they stood inside the positioned block being written, for its content */
 	private $fixedPosBlockElements;
 
@@ -43,10 +46,11 @@ trait TracksOpenElements
 	private $openElements;
 
 	/**
-	 * @var array|null The element whose CSS is being merged: the open elements it sits in (path) and its tag and
-	 * attributes (attr), or, for an element that is already open, the open elements down to it and a null tag. Null
-	 * while no element of the document is being styled. WriteHTML() sets it while a start tag's handler runs, reopenBlock() while a block is opened again, and
-	 * WriteFixedPosHTML() while a positioned block's own CSS is merged. See getStyledElementPath()
+	 * @var array|null The element whose CSS is being merged: the open elements it sits in (path), its tag and
+	 * attributes (attr), and the properties merged for it (computed), or, for an element that is already open, the
+	 * open elements down to it and a null tag. Null while no element of the document is being styled. WriteHTML() sets
+	 * it while a start tag's handler runs, reopenBlock() while a block is opened again, and WriteFixedPosHTML() while a
+	 * positioned block's own CSS is merged. See getStyledElementPath()
 	 */
 	private $styledElement;
 
@@ -130,7 +134,11 @@ trait TracksOpenElements
 	 *   found. Null when that is not known, as for an element still open at the end of a WriteHTML() call that
 	 *   leaves it open, and in the legacy CSS mode, which reads nothing ahead
 	 * - empty: whether it has no children and no text, white space included. Null when that is not known
-	 * - computed: its computed values, not filled in yet
+	 * - computed: under the standard CSS mode, the properties CssMerger merged for it, with the CSS-wide keywords
+	 *   resolved, keyed by the uppercased longhands the normalised declarations name. The document's frame carries
+	 *   those of <body>. Null for an element whose CSS was not merged, such as the tbody a table's rows are put in
+	 *   when the HTML leaves it out, and under the legacy mode. `inherit` on a property that is not inherited reads
+	 *   the parent's
 	 *
 	 * @return array[]
 	 */
@@ -232,6 +240,47 @@ trait TracksOpenElements
 	}
 
 	/**
+	 * Keeps the properties merged for the element whose CSS is being merged, for its frame on the stack. CssMerger
+	 * calls it under the standard CSS mode, once it has resolved the CSS-wide keywords. An element already open, such
+	 * as a block a forced page break opens again, keeps the frame it has
+	 *
+	 * @param array $properties
+	 */
+	public function recordStyledElementComputed(array $properties)
+	{
+		if ($this->styledElement !== null && $this->styledElement['tag'] !== null) {
+			$this->styledElement['computed'] = $properties;
+		}
+	}
+
+	/**
+	 * Keeps the properties merged for <body>, which the document's frame carries as its computed values, in the
+	 * stack being written and in each stack a header, footer or new document starts from. WriteHTML() calls it under
+	 * the standard CSS mode when it merges them
+	 *
+	 * @param array $properties
+	 */
+	private function setDocumentComputed(array $properties)
+	{
+		$this->documentComputed = $properties;
+		$this->openElements[0]['computed'] = $properties;
+	}
+
+	/**
+	 * Keeps the properties merged for the positioned block being written, for the frame its content is written in.
+	 * Its start tag in the flow only previews its CSS, so WriteFixedPosHTML() calls it under the standard CSS mode
+	 * once it merges them
+	 *
+	 * @param array $properties
+	 */
+	private function setFixedPosBlockComputed(array $properties)
+	{
+		if ($this->fixedPosBlockElements !== null) {
+			$this->fixedPosBlockElements[count($this->fixedPosBlockElements) - 1]['computed'] = $properties;
+		}
+	}
+
+	/**
 	 * Makes the stack a document starts from: a single frame standing for the document, with nothing written into it
 	 * yet. The constructor starts from one, and so does a WriteHTML() call that starts a new document, such as the one
 	 * InsertIndex() makes for the index, and a header or footer written apart from the flow. The frame carries the
@@ -241,7 +290,10 @@ trait TracksOpenElements
 	 */
 	private function newOpenElementStack()
 	{
-		return [$this->newElementFrame('', [], $this->documentLang, 1, 1, '')];
+		$document = $this->newElementFrame('', [], $this->documentLang, 1, 1, '');
+		$document['computed'] = $this->documentComputed;
+
+		return [$document];
 	}
 
 	/**
@@ -287,8 +339,9 @@ trait TracksOpenElements
 	 * @param string $tag
 	 * @param string[] $attr
 	 * @param bool $selfClosing Whether the start tag ends with a slash
+	 * @param array|null $computed The properties merged for it, as recordStyledElementComputed() kept them
 	 */
-	private function startElement($tag, array $attr, $selfClosing)
+	private function startElement($tag, array $attr, $selfClosing, $computed = null)
 	{
 		if ($tag === '' || isset(self::$substitutionTags[$tag])) {
 			return;
@@ -301,6 +354,7 @@ trait TracksOpenElements
 		}
 
 		$frame = $this->newChildFrame($this->openElements[$parent], $tag, $attr);
+		$frame['computed'] = $computed;
 
 		if ($selfClosing || isset(self::$voidTags[$tag])) {
 			$this->recordClosedElement($frame);
@@ -497,7 +551,7 @@ trait TracksOpenElements
 		$arr = [];
 		$i = 0;
 		$outerElement = $this->styledElement;
-		$this->styledElement = $depth === null ? null : ['path' => array_slice($this->openElements, 0, $depth + 1), 'tag' => null, 'attr' => []];
+		$this->styledElement = $depth === null ? null : ['path' => array_slice($this->openElements, 0, $depth + 1), 'tag' => null, 'attr' => [], 'computed' => null];
 		$this->tag->OpenTag($block['tag'], $block['attr'], $arr, $i);
 		$this->styledElement = $outerElement;
 	}

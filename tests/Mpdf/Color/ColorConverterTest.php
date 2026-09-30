@@ -3,6 +3,7 @@
 namespace Mpdf\Color;
 
 use Mockery;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 
 class ColorConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
@@ -195,6 +196,19 @@ class ColorConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			['rebeccapurple', "3f3\x99\x00\x00"],
 			['violetred', "3\xd0\x20\x90\x00\x00"],
 		];
+	}
+
+	/**
+	 * The legacy CSS mode reads inherit as transparent. The standard mode resolves it before a colour is converted, so
+	 * there it is not a colour at all
+	 */
+	public function testInheritIsTransparentOnlyInTheLegacyMode()
+	{
+		$this->mpdf->cssMode = CssMode::LEGACY;
+		$this->assertFalse($this->converter->convert('inherit'));
+
+		$this->mpdf->cssMode = CssMode::STANDARD;
+		$this->assertSame('', $this->converter->convert('inherit'));
 	}
 
 	public function testConvertUnknownSpotColor()
