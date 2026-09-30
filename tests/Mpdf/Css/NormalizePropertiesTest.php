@@ -13,6 +13,19 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	/**
+	 * The longhands the background shorthand sets, with their initial values, in the order it sets them
+	 */
+	const BACKGROUND_INITIAL_VALUES = [
+		'BACKGROUND-COLOR' => 'transparent',
+		'BACKGROUND-IMAGE' => '',
+		'BACKGROUND-REPEAT' => 'repeat',
+		'BACKGROUND-POSITION' => '0% 0%',
+		'BACKGROUND-SIZE' => 'auto',
+		'BACKGROUND-ORIGIN' => 'padding-box',
+		'BACKGROUND-CLIP' => 'border-box',
+	];
+
+	/**
 	 * @var \Mpdf\Css\NormalizeProperties
 	 */
 	private $normalizeProperties;
@@ -308,11 +321,66 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * @dataProvider providerBackground
 	 *
 	 * @param string $value
-	 * @param array  $expected The properties it expands to
+	 * @param array  $expected The properties it sets to other than their initial values
 	 */
 	public function testBackgroundPartsInAnyOrder($value, array $expected)
 	{
-		$this->assertSame($expected, $this->normalizeProperties->normalize(['BACKGROUND' => $value]));
+		$this->assertSame(array_merge(self::BACKGROUND_INITIAL_VALUES, $expected), $this->normalizeProperties->normalize(['BACKGROUND' => $value]));
+	}
+
+	/**
+	 * The background shorthand sets every part it does not name to its initial value, and leaves mPDF's own
+	 * background properties alone
+	 */
+	public function testBackgroundResetsThePartsItDoesNotName()
+	{
+		$longhands = [
+			'BACKGROUND-REPEAT' => 'no-repeat',
+			'BACKGROUND-POSITION' => 'right bottom',
+			'BACKGROUND-SIZE' => 'cover',
+			'BACKGROUND-ORIGIN' => 'content-box',
+			'BACKGROUND-CLIP' => 'content-box',
+			'BACKGROUND-IMAGE-RESIZE' => '6',
+			'BACKGROUND-IMAGE-OPACITY' => '0.5',
+			'BACKGROUND-IMAGE-RESOLUTION' => '300dpi',
+		];
+
+		$result = $this->normalizeProperties->normalize($longhands + ['BACKGROUND' => '#fff url(bg.png)']);
+
+		$this->assertEquals(
+			array_merge(self::BACKGROUND_INITIAL_VALUES, ['BACKGROUND-COLOR' => '#fff', 'BACKGROUND-IMAGE' => 'bg.png']),
+			array_intersect_key($result, self::BACKGROUND_INITIAL_VALUES)
+		);
+		$this->assertSame('6', $result['BACKGROUND-IMAGE-RESIZE']);
+		$this->assertSame('0.5', $result['BACKGROUND-IMAGE-OPACITY']);
+		$this->assertSame('300dpi', $result['BACKGROUND-IMAGE-RESOLUTION']);
+	}
+
+	/**
+	 * The border shorthands set the width, style and colour longhands of each side they cover, and leave the others
+	 * and the radius alone
+	 */
+	public function testBorderSetsTheLonghandsOfItsSides()
+	{
+		$result = $this->normalizeProperties->normalize([
+			'BORDER-RADIUS' => '2mm',
+			'BORDER-COLOR' => 'red',
+			'BORDER' => 'dashed',
+			'BORDER-LEFT' => '1mm solid #00f',
+		]);
+
+		foreach (['TOP', 'RIGHT', 'BOTTOM'] as $side) {
+			$this->assertSame('medium dashed #000000', $result['BORDER-' . $side]);
+			$this->assertSame('medium', $result['BORDER-' . $side . '-WIDTH']);
+			$this->assertSame('dashed', $result['BORDER-' . $side . '-STYLE']);
+			$this->assertSame('#000000', $result['BORDER-' . $side . '-COLOR']);
+		}
+
+		$this->assertSame('1mm solid #00f', $result['BORDER-LEFT']);
+		$this->assertSame('1mm', $result['BORDER-LEFT-WIDTH']);
+		$this->assertSame('solid', $result['BORDER-LEFT-STYLE']);
+		$this->assertSame('#00f', $result['BORDER-LEFT-COLOR']);
+		$this->assertSame('2mm', $result['BORDER-TOP-LEFT-RADIUS-H']);
 	}
 
 	/**

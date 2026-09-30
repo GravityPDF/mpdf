@@ -2796,7 +2796,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$origin = 'padding-box';
 		}
 
-		if (isset($properties['BACKGROUND-SIZE'])) {
+		// The initial size, auto, leaves the image at its natural size or as background-image-resize sizes it
+		if (isset($properties['BACKGROUND-SIZE']) && !preg_match('/^\s*auto(\s+auto)?\s*$/i', $properties['BACKGROUND-SIZE'])) {
 			if (stristr($properties['BACKGROUND-SIZE'], 'contain')) {
 				$bsw = $bsh = 'contain';
 			} elseif (stristr($properties['BACKGROUND-SIZE'], 'cover')) {
