@@ -103,8 +103,8 @@ final class RelativeFontValues
 
 	/**
 	 * The computed font-weight of the parent of the element setCSS() is styling, which bolder and lighter step from. A
-	 * block starts from the state its parent block saved, and a table cell from its table's weight; an inline element
-	 * is styled in its parent's state
+	 * block starts from the state it inherits, and a table cell from its table's weight; an inline element is styled in
+	 * its parent's state
 	 *
 	 * @param Mpdf $mpdf
 	 * @param string $type As setCSS() takes it
@@ -113,8 +113,9 @@ final class RelativeFontValues
 	 */
 	public static function parentWeight(Mpdf $mpdf, $type)
 	{
-		if ($type === 'BLOCK' && $mpdf->blklvl > 0 && isset($mpdf->blk[$mpdf->blklvl - 1]['InlineProperties']['weight'])) {
-			return $mpdf->blk[$mpdf->blklvl - 1]['InlineProperties']['weight'];
+		$inherited = $type === 'BLOCK' ? InheritedProperties::blockTextState($mpdf->blk, $mpdf->blklvl - 1) : null;
+		if (isset($inherited['weight'])) {
+			return $inherited['weight'];
 		}
 
 		if ($type === 'TABLECELL') {

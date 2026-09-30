@@ -8,6 +8,8 @@ use Mpdf\Conversion\DecToGreek;
 use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
+use Mpdf\Css\InheritedProperties;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
@@ -112,7 +114,11 @@ abstract class BlockTag extends Tag
 
 		$this->mpdf->InlineBDF = []; // mPDF 6
 		$this->mpdf->InlineBDFctr = 0; // mPDF 6
-		$this->mpdf->InlineProperties = [];
+		if ($this->mpdf->cssMode === CssMode::LEGACY) {
+			$this->mpdf->InlineProperties = [];
+		} elseif (!$this->mpdf->tableLevel) {
+			$this->setOpenInlineElementsAside();
+		}
 		$this->mpdf->divbegin = true;
 
 		$this->mpdf->linebreakjustfinished = false;
@@ -539,6 +545,11 @@ abstract class BlockTag extends Tag
 		}
 
 		$this->mpdf->setCSS($properties, 'BLOCK', $tag); //name(id/class/style) found in the CSS array!
+		if ($this->mpdf->cssMode !== CssMode::LEGACY) {
+			// A link around the block covers its text
+			$inherited = InheritedProperties::blockTextState($this->mpdf->blk, $this->mpdf->blklvl - 1);
+			$this->mpdf->HREF = isset($inherited['HREF']) ? $inherited['HREF'] : '';
+		}
 		$currblk['InlineProperties'] = $this->mpdf->saveInlineProperties();
 
 		if (isset($properties['VISIBILITY'])) {
@@ -1398,7 +1409,9 @@ abstract class BlockTag extends Tag
 
 		$this->mpdf->lastblocklevelchange = -1;
 		// Reset Inline-type properties
-		if (isset($this->mpdf->blk[$this->mpdf->blklvl]['InlineProperties'])) {
+		if (isset($this->mpdf->blk[$this->mpdf->blklvl]['openInline'])) {
+			$this->putBackOpenInlineElements();
+		} elseif (isset($this->mpdf->blk[$this->mpdf->blklvl]['InlineProperties'])) {
 			$this->mpdf->restoreInlineProperties($this->mpdf->blk[$this->mpdf->blklvl]['InlineProperties']);
 		}
 
@@ -1421,6 +1434,46 @@ abstract class BlockTag extends Tag
 				}
 			}
 		}
+	}
+
+	/**
+	 * Sets aside the inline elements a block opens inside, under CssMode::STANDARD: their saved states and the text
+	 * state they set go on the enclosing block. The block inherits that text state, and close() puts both back, so the
+	 * text after the block is drawn in their style and their end tags restore what was there before them.
+	 *
+	 * A block opened a second time, as a kept block laid out again or a block reopened after a forced page break, finds
+	 * them already set aside and keeps them, as by then the text state has changed
+	 */
+	private function setOpenInlineElementsAside()
+	{
+		$block = &$this->mpdf->blk[$this->mpdf->blklvl];
+
+		if (!isset($block['openInline']) && array_filter($this->mpdf->InlineProperties)) {
+			$block['openInline'] = [
+				'properties' => $this->mpdf->InlineProperties,
+				'state' => $this->mpdf->saveInlineProperties(),
+			];
+
+			// The line before the block is printed next, and its text with no colour or link of its own is drawn in the
+			// current state
+			if (isset($block['InlineProperties'])) {
+				$this->mpdf->restoreInlineProperties($block['InlineProperties']);
+			}
+		}
+
+		$this->mpdf->InlineProperties = [];
+	}
+
+	/**
+	 * Puts back the inline elements setOpenInlineElementsAside() set aside on the block that is current again
+	 */
+	private function putBackOpenInlineElements()
+	{
+		$block = &$this->mpdf->blk[$this->mpdf->blklvl];
+
+		$this->mpdf->InlineProperties = $block['openInline']['properties'];
+		$this->mpdf->restoreInlineProperties($block['openInline']['state']);
+		unset($block['openInline']);
 	}
 
 }

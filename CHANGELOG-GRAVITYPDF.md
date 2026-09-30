@@ -241,6 +241,7 @@ Bugfixes
 * Characters mPDF moved into a substitute font (`useSubstitutions`, and the fonts for supplementary planes) were wrapped in a `<span>` that stylesheet rules reached, so `span { border: 1px solid }` drew a box around them, and the span counted among its siblings for `:nth-child()`. In the standard CSS mode no rule reaches that span and it is not counted, as a browser has no such element. The legacy mode styles it as before. [#634]
 * Some inherited properties stopped short of where a browser takes them. A `text-shadow` did not reach a block's child blocks or list items. `word-spacing`, `hyphens` and `text-outline` did not reach the content of a positioned block. `text-transform`, `text-shadow`, `font-variant` and the other font features did not reach a table's cells. A table nested in a cell took none of the cell's colour, font, size, weight, style, transform or shadow. Each of these channels now carries every inherited property mPDF supports, from the one list in `Mpdf\Css\InheritedProperties`. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output. [#539] [#648]
 * `text-transform: none` on an inline element, such as a `<span>` in an uppercase paragraph, did not undo the transform it inherits. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the transform. [#552] [#539] [#648]
+* A block inside an inline element, such as `<span class="note">…<div>…</div>…</span>` or a card written as `<a href="…"><div>…</div></a>`, lost the inline element's colour, font and other inherited text properties, and so did the inline element's text after the block. A link lost its colour and underline on the block's text and did not cover it. In a table cell the block kept the style, but the text after the inline element did too. A block now inherits the text properties of the inline elements it opens in, and the text after it is drawn in their style until they end. Text before the inline element, on the line before the block, is no longer drawn in the inline element's colour or covered by its link. Under the standard `cssMode` only; set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output. [#541] [#653]
 
 ### Images and SVG
 
@@ -912,3 +913,5 @@ These changes do not change output.
 [#652]: https://github.com/GravityPDF/mpdf/pull/652
 [#674]: https://github.com/GravityPDF/mpdf/pull/674
 [#675]: https://github.com/GravityPDF/mpdf/pull/675
+[#541]: https://github.com/GravityPDF/mpdf/issues/541
+[#653]: https://github.com/GravityPDF/mpdf/pull/653
