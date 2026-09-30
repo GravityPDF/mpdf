@@ -340,13 +340,6 @@ class CssParser
 	{
 		$selector = strtoupper($written);
 
-		// store classes in an index for faster lookups
-		if (strpos($selector, '.') !== false && preg_match_all('/\.([a-zA-Z0-9_\-]+)/', $selector, $matches)) {
-			foreach ($matches[1] as $className) {
-				$this->usedClassNames[$className] = true;
-			}
-		}
-
 		// Close up each nth-child argument, e.g. (2N + 1), so the selector still splits into its parts on whitespace
 		$selector = preg_replace_callback('/NTH-CHILD\(([^)]*)\)/', function ($m) {
 			return 'NTH-CHILD(' . preg_replace('/\s+/', '', $m[1]) . ')';
@@ -417,8 +410,8 @@ class CssParser
 	}
 
 	/**
-	 * Record what the merger needs to know about the key of one compound selector of a stored rule: how many classes
-	 * it names, and its nth-child formula.
+	 * Record what the merger needs to know about the key of one compound selector of a stored rule: the classes it
+	 * names and how many, and its nth-child formula. A rule that is not stored, as one naming :hover, records nothing.
 	 *
 	 * @param string $key A key SelectorParser::parseSimpleSelector() made, e.g. P>>CLASS>>A.B or TD>>SELECTORNTHCHILD>>2N+1
 	 * @return void
@@ -428,6 +421,11 @@ class CssParser
 		$classes = strpos($key, 'CLASS>>');
 		if ($classes !== false) {
 			$this->maxClassDepth = max($this->maxClassDepth, substr_count($key, '.', $classes) + 1);
+
+			preg_match_all('/\.([a-zA-Z0-9_\-]+)/', '.' . substr($key, $classes + 7), $matches);
+			foreach ($matches[1] as $className) {
+				$this->usedClassNames[$className] = true;
+			}
 		}
 
 		if (preg_match('/^(TR|TD|TH)>>SELECTORNTHCHILD>>(.*)$/', $key, $m) && !isset($this->nthChildFormulas[$m[1]][$key])) {
@@ -472,7 +470,7 @@ class CssParser
 		$compiled = $this->selectorCompiler->compile($selector);
 
 		// The universal selector changes which elements existing documents style, so it waits for #530
-		if ($compiled !== null && !$compiled['universal']) {
+		if ($compiled !== null && !$compiled['universal'] && !$compiled['never']) {
 			$this->compiledRules[] = [$compiled, $classProperties, $important];
 		}
 	}

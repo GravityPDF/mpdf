@@ -702,6 +702,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $margin_bottom_collapse;
 	var $default_font_size; // in pts
 	var $original_default_font_size; // used to save default sizes when using table default
+	var $initial_font_size; // in pts: the default font size set by the configuration or SetDefaultFontSize(), which html starts from in the standard CSS mode
+	var $root_font_size; // in pts: html's font size in the standard CSS mode, which rem is read against
 	var $original_default_font;
 	var $watermark_font;
 	var $defaultAlign;
@@ -12208,6 +12210,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function SetDefaultFontSize($fontsize)
 	{
+		$this->setBodyFontSize($fontsize);
+		$this->initial_font_size = $fontsize;
+		$this->root_font_size = $fontsize;
+	}
+
+	/**
+	 * Sets body's font size, which text is sized from where no rule sizes it. Unlike SetDefaultFontSize(), it leaves
+	 * the size html starts from as it is
+	 *
+	 * @param float $fontsize In points
+	 */
+	private function setBodyFontSize($fontsize)
+	{
 		$this->default_font_size = $fontsize;
 		$this->original_default_font_size = $fontsize;
 		$this->SetFontSize($fontsize);
@@ -14521,6 +14536,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 		$properties = $this->cssManager->MergeCSS('BLOCK', 'BODY', $bodyAttr);
+		if ($this->cssMode === CssMode::STANDARD) {
+			// Reset() styles text from CSS['BODY'], which holds neither html's rules nor body's with other selectors
+			foreach (['COLOR', 'FONT-STYLE', 'FONT-WEIGHT'] as $property) {
+				if (isset($properties[$property])) {
+					$this->cssManager->CSS['BODY'][$property] = $properties[$property];
+				}
+			}
+		}
 		if ($zproperties) {
 			$properties = Arrays::uniqueRecursiveMerge($properties, $zproperties);
 		}
@@ -19249,25 +19272,23 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Set font size first so that e.g. MARGIN 0.83em works on font size for this element
 		if (isset($arrayaux['FONT-SIZE'])) {
-			$v = $arrayaux['FONT-SIZE'];
-			$firstLetter = substr($v, 0, 1);
-			if (is_numeric($firstLetter) || ($firstLetter === '.')) {
-				if ($type == 'BLOCK' && $this->blklvl > 0 && isset($this->blk[$this->blklvl - 1]['InlineProperties']) && isset($this->blk[$this->blklvl - 1]['InlineProperties']['size'])) {
-					$mmsize = $this->sizeConverter->convert($v, $this->blk[$this->blklvl - 1]['InlineProperties']['size']);
-				} elseif ($type == 'TABLECELL') {
-					$mmsize = $this->sizeConverter->convert($v, $this->default_font_size / Mpdf::SCALE);
-				} else {
-					$mmsize = $this->sizeConverter->convert($v, $this->FontSize);
-				}
-				$this->SetFontSize($mmsize * (Mpdf::SCALE), false); // Get size in points (pt)
+			// The standard CSS mode reads body's size against html's, which the merge left in root_font_size
+			$standardBody = $tag == 'BODY' && $this->cssMode === CssMode::STANDARD;
+			if ($standardBody) {
+				$parentSize = $this->root_font_size / Mpdf::SCALE;
+			} elseif ($type == 'BLOCK' && $this->blklvl > 0 && isset($this->blk[$this->blklvl - 1]['InlineProperties']) && isset($this->blk[$this->blklvl - 1]['InlineProperties']['size'])) {
+				$parentSize = $this->blk[$this->blklvl - 1]['InlineProperties']['size'];
+			} elseif ($type == 'TABLECELL') {
+				$parentSize = $this->default_font_size / Mpdf::SCALE;
 			} else {
-				$v = strtoupper($v);
-				if (isset($this->fontsizes[$v])) {
-					$this->SetFontSize($this->fontsizes[$v] * $this->default_font_size, false);
-				}
+				$parentSize = $this->FontSize;
+			}
+			$ptsize = $this->sizeConverter->convertFontSize($arrayaux['FONT-SIZE'], $parentSize, $standardBody ? $this->initial_font_size : $this->default_font_size);
+			if ($ptsize !== null) {
+				$this->SetFontSize($ptsize, false);
 			}
 			if ($tag == 'BODY') {
-				$this->SetDefaultFontSize($this->FontSizePt);
+				$this->setBodyFontSize($this->FontSizePt);
 			}
 		}
 

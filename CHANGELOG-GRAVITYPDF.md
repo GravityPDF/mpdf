@@ -52,6 +52,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * `<div align>` passes its alignment on to what it holds, and `<li type>` beats the marker the item inherits from its list.
   * Attributes mPDF ignored now take effect: `<hr align>`, `<hr size>`, `<img align>` (float left or right, or vertical alignment), `<img border>`, `<thead align>`, and `<table border>` wider than 1.
   * A table's `border` gives each cell a 1px border of its own, which a rule for the table's border leaves alone. Before, the cells copied the table's border.
+* **`rem` is read against the font size of `html`, in standard mode**, as in a browser. It was read against the font size of `body`, and inside a table against the table's. Now `1rem` is the default font size, from the `default_font_size` configuration or `SetDefaultFontSize()`, unless an `html` or `:root` rule sizes `html`: with `html { font-size: 62.5% }`, `1.6rem` is the default size again. A `body { font-size }` rule no longer changes it. To keep the old sizes, give them in `em` or points, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#529] [#642]
 
 New features
 ------------
@@ -124,6 +125,7 @@ New features
 * **Pseudo-classes that look at what follows an element.** `:last-child`, `:nth-last-child()`, `:only-child`, `:last-of-type`, `:nth-last-of-type()`, `:only-of-type` and `:empty` match in the flow, in tables, headers and footers, and positioned blocks. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#537] [#634]
   * `WriteHTML()` reads ahead through the HTML it is given to count each element's children. An element still open at the end of a call that leaves it open is not known in full, so these do not match its children in that call, and nor does `:not()` of them.
   * `:empty` matches as in browsers: an element holding white space is not empty, and one holding only a comment is. A table cell holding only white space is empty, as mPDF strips it.
+* **`:root`, `html`, `:link` and `:any-link`, in standard mode.** `a:link` and `:any-link` match a link with an `href`. mPDF has no `html` element, so `html` and `:root` match it as the parent of `body`: their rules reach the text as a parent's would, and rules for `body` win over them. `:visited`, `:hover`, `:focus`, `:active`, `:focus-within`, `:focus-visible` and `:target` never match, as a PDF is never visited or hovered, so `:not(:hover)` always does. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#529] [#642]
 
 Performance
 -----------
@@ -806,6 +808,7 @@ These changes do not change output.
 [#526]: https://github.com/GravityPDF/mpdf/issues/526
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
+[#529]: https://github.com/GravityPDF/mpdf/issues/529
 [#531]: https://github.com/GravityPDF/mpdf/issues/531
 [#532]: https://github.com/GravityPDF/mpdf/issues/532
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
@@ -866,3 +869,4 @@ These changes do not change output.
 [#639]: https://github.com/GravityPDF/mpdf/pull/639
 [#641]: https://github.com/GravityPDF/mpdf/pull/641
 [#643]: https://github.com/GravityPDF/mpdf/pull/643
+[#642]: https://github.com/GravityPDF/mpdf/pull/642

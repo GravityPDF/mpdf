@@ -7,8 +7,8 @@ namespace Mpdf\Css;
  *
  * An element is found by its parent's depth on the path and its index among that parent's children. The open
  * element at a depth is the child after the ones its parent has closed so far, and those closed children are its
- * siblings before it. The frame at depth 0 stands for the document and is matched as body, the root: it has no
- * parent and no siblings.
+ * siblings before it. The frame at depth 0 stands for the document and is matched as body. mPDF has no html element:
+ * html, the root, is matched as body's parent, with no parent and no siblings of its own.
  */
 class SelectorMatcher
 {
@@ -21,6 +21,12 @@ class SelectorMatcher
 
 	/** It fails for this element and for any other whose ancestors are all among this one's */
 	const FAILS_FOR_ANCESTORS = 2;
+
+	/** The parent depth matchesFrom() takes for body, the element the document's frame stands for */
+	const BODY = -1;
+
+	/** The parent depth matchesFrom() takes for html, above body */
+	const HTML = -2;
 
 	/**
 	 * @var bool Whether a pseudo-class that needs what follows an element was matched against one for which that is
@@ -44,6 +50,20 @@ class SelectorMatcher
 	}
 
 	/**
+	 * Whether a selector matches html or body, which the document's frame stands for
+	 *
+	 * @param array $selector A selector SelectorCompiler::compile() compiled
+	 * @param array[] $path The document's frame alone
+	 * @param bool $html Whether to match html rather than body
+	 *
+	 * @return bool
+	 */
+	public function matchesDocumentElement(array $selector, array $path, $html)
+	{
+		return $this->matchesFrom($selector, count($selector['compounds']) - 1, $path, $html ? self::HTML : self::BODY, 0) === self::MATCHES;
+	}
+
+	/**
 	 * Whether a compound matches an element, and the compounds to its left match the elements its combinators lead to.
 	 * A descendant combinator tries each ancestor in turn, nearest first, and a general sibling combinator each earlier
 	 * sibling, from the first, so a compound further left that fails on one is tried again on the next.
@@ -56,7 +76,7 @@ class SelectorMatcher
 	 * @param array $selector A selector SelectorCompiler::compile() compiled
 	 * @param int $compound Which of its compounds to match, from the left
 	 * @param array[] $path The open elements from the document down to the element being styled
-	 * @param int $parent The depth on $path of the element's parent, or -1 for the document itself
+	 * @param int $parent The depth on $path of the element's parent, or self::BODY or self::HTML for those elements
 	 * @param int $index The element's index among its parent's children, from 0. At the number of children the parent
 	 *                   has closed, it is the open element at the next depth
 	 *
@@ -75,15 +95,16 @@ class SelectorMatcher
 		$compound--;
 		switch ($selector['combinators'][$compound]) {
 			case '>':
-				if ($parent < 0) {
+				if ($parent === self::HTML) {
 					return self::FAILS_FOR_ANCESTORS;
 				}
 
-				return $this->matchesFrom($selector, $compound, $path, $parent - 1, $path[$parent]['nthChild'] - 1);
+				return $this->matchesFrom($selector, $compound, $path, $parent - 1, $parent >= 0 ? $path[$parent]['nthChild'] - 1 : 0);
 
 			case ' ':
-				for ($depth = $parent; $depth >= 0; $depth--) {
-					$result = $this->matchesFrom($selector, $compound, $path, $depth - 1, $path[$depth]['nthChild'] - 1);
+				// Down to body's parent, html
+				for ($depth = $parent; $depth >= self::BODY; $depth--) {
+					$result = $this->matchesFrom($selector, $compound, $path, $depth - 1, $depth >= 0 ? $path[$depth]['nthChild'] - 1 : 0);
 					if ($result !== self::FAILS_HERE) {
 						return $result;
 					}
@@ -166,10 +187,10 @@ class SelectorMatcher
 	 * Whether a pseudo-class matches an element. :nth-child() counts the element among all its element siblings, and
 	 * :nth-of-type() among those with its tag. :nth-last-child(), :nth-last-of-type(), :only-child and :only-of-type
 	 * count from the parent's last child, and :empty reads whether the element holds anything, as
-	 * TracksOpenElements::readAhead() found; where it could not, they do not match. The document has no siblings, so
-	 * it matches none of these. :lang() matches the language the element has or inherits. :is() matches when any
+	 * TracksOpenElements::readAhead() found; where it could not, they do not match. body and html have no siblings, so
+	 * they match none of these. :lang() matches the language the element has or inherits. :is() matches when any
 	 * selector in its list matches from the element, combinators and all, and :not() when none does and none was left
-	 * undecided
+	 * undecided. :root matches html, and :link a link with an href
 	 *
 	 * @param array $pseudo A compiled pseudo-class, as SelectorCompiler describes them
 	 * @param array $element The element's frame or record, as element() gives it
@@ -210,7 +231,15 @@ class SelectorMatcher
 			return $this->matchesLanguage($pseudo[1], strtolower($lang));
 		}
 
-		if ($parent < 0) {
+		if ($pseudo[0] === 'root') {
+			return $parent === self::HTML;
+		}
+
+		if ($pseudo[0] === 'link') {
+			return ($element['tag'] === 'A' || $element['tag'] === 'AREA') && isset($element['attr']['HREF']);
+		}
+
+		if ($pseudo[0] === 'never' || $parent < 0) {
 			return false;
 		}
 
@@ -330,7 +359,7 @@ class SelectorMatcher
 	}
 
 	/**
-	 * An element: an open element's frame, a closed sibling's record, or body for the document
+	 * An element: an open element's frame, a closed sibling's record, body for the document, or html above it
 	 *
 	 * @param array[] $path As matchesFrom() takes it
 	 * @param int $parent The depth of the element's parent on $path, as matchesFrom() takes it
@@ -342,7 +371,7 @@ class SelectorMatcher
 	private function element(array $path, $parent, $index)
 	{
 		if ($parent < 0) {
-			return ['tag' => 'BODY', 'id' => '', 'classes' => [], 'attr' => [], 'lang' => $path[0]['lang']];
+			return ['tag' => $parent === self::HTML ? 'HTML' : 'BODY', 'id' => '', 'classes' => [], 'attr' => [], 'lang' => $path[0]['lang']];
 		}
 
 		if ($index === count($path[$parent]['children'])) {

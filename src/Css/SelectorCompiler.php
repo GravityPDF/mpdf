@@ -16,6 +16,8 @@ use Mpdf\Utils\UtfString;
  * - combinators: the combinator after each compound but the last, one of ' ', '>', '+' and '~'
  * - specificity: [ids, classes and attributes and pseudo-classes, tags]
  * - universal: whether it names the universal selector *
+ * - never: whether one of its compounds holds a pseudo-class that no element in a PDF matches, so that it matches
+ *   nothing
  *
  * Attribute selectors are held as [name, operator, value, case-insensitive]: the name uppercased, as the tokenizer
  * names attributes, and the operator empty for [name]. Values are compared case-insensitively, and held lowercased,
@@ -26,6 +28,10 @@ use Mpdf\Utils\UtfString;
  * written as, ['only-child'], ['only-of-type'] and ['empty'], ['lang', ranges] with each language range lowercased,
  * and ['not', selectors] and ['is', selectors] with each selector compiled. :where() is held as :is(), its
  * specificity being the only difference.
+ *
+ * Some pseudo-classes have a fixed answer in a PDF, where no link is visited and nothing is hovered over or focused.
+ * :root is held as ['root'], and :link and :any-link as ['link']. :visited, :hover, :focus and the other states a
+ * reader acts out are held as ['never']. They count as a class, and matter inside :not(), which then matches.
  */
 class SelectorCompiler
 {
@@ -57,6 +63,16 @@ class SelectorCompiler
 		'only-child' => ['only-child'],
 		'only-of-type' => ['only-of-type'],
 		'empty' => ['empty'],
+		'root' => ['root'],
+		'link' => ['link'],
+		'any-link' => ['link'],
+		'visited' => ['never'],
+		'hover' => ['never'],
+		'active' => ['never'],
+		'focus' => ['never'],
+		'focus-within' => ['never'],
+		'focus-visible' => ['never'],
+		'target' => ['never'],
 	];
 
 	/**
@@ -135,6 +151,7 @@ class SelectorCompiler
 		$combinators = [];
 		$specificity = [0, 0, 0];
 		$universal = false;
+		$never = false;
 
 		while (true) {
 			$compound = $this->parseCompound($text, $pos, $specificity, $universal);
@@ -142,6 +159,7 @@ class SelectorCompiler
 				return null;
 			}
 			$compounds[] = $compound;
+			$never = $never || in_array(['never'], $compound['pseudos'], true);
 
 			$space = $this->skipWhitespace($text, $pos);
 			if ($pos >= $length || $text[$pos] === ',' || $text[$pos] === ')') {
@@ -164,6 +182,7 @@ class SelectorCompiler
 			'combinators' => $combinators,
 			'specificity' => $specificity,
 			'universal' => $universal,
+			'never' => $never,
 		];
 	}
 
@@ -640,7 +659,8 @@ class SelectorCompiler
 
 	/**
 	 * Whether a type selector may name a tag. Which elements take part in the cascade is decided per tag, by
-	 * Mpdf::$allowedCSStags, as it is for the selectors the legacy parser reads
+	 * Mpdf::$allowedCSStags, as it is for the selectors the legacy parser reads. html is always allowed: the matcher
+	 * holds it as the parent of body
 	 *
 	 * @param string $tag Uppercased
 	 *
@@ -648,6 +668,10 @@ class SelectorCompiler
 	 */
 	private function isAllowedTag($tag)
 	{
+		if ($tag === 'HTML') {
+			return true;
+		}
+
 		if ($this->allowedTagsSource !== $this->mpdf->allowedCSStags) {
 			$this->allowedTagsSource = $this->mpdf->allowedCSStags;
 			$this->allowedTags = array_fill_keys(explode('|', strtoupper($this->allowedTagsSource)), true);
