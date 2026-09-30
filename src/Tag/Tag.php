@@ -135,6 +135,49 @@ abstract class Tag
 	}
 
 	/**
+	 * Start a new page for a page-break-before or page-break-after, closing the open blocks and opening them again on
+	 * the new page as the defaultPagebreakType option says
+	 *
+	 * @param string $pageBreak ALWAYS, LEFT or RIGHT
+	 *
+	 * @return void
+	 */
+	protected function forcePageBreak($pageBreak)
+	{
+		$save_blklvl = $this->mpdf->blklvl;
+		$save_blk = $this->mpdf->blk;
+		$save_silp = $this->mpdf->saveInlineProperties();
+		$save_ilp = $this->mpdf->InlineProperties;
+		$save_bflp = $this->mpdf->InlineBDF;
+		$save_bflpc = $this->mpdf->InlineBDFctr; // mPDF 6
+		// mPDF 6 pagebreaktype
+		$startpage = $this->mpdf->page;
+		$pagebreaktype = $this->mpdf->defaultPagebreakType;
+		if ($this->mpdf->ColActive) {
+			$pagebreaktype = 'cloneall';
+		}
+
+		// mPDF 6 pagebreaktype
+		$this->mpdf->_preForcedPagebreak($pagebreaktype);
+
+		if ($pageBreak === 'RIGHT') {
+			$this->mpdf->AddPage($this->mpdf->CurOrientation, 'NEXT-ODD');
+		} elseif ($pageBreak === 'LEFT') {
+			$this->mpdf->AddPage($this->mpdf->CurOrientation, 'NEXT-EVEN');
+		} else {
+			$this->mpdf->AddPage($this->mpdf->CurOrientation);
+		}
+
+		// mPDF 6 pagebreaktype
+		$this->mpdf->_postForcedPagebreak($pagebreaktype, $startpage, $save_blk, $save_blklvl);
+
+		$this->mpdf->InlineProperties = $save_ilp;
+		$this->mpdf->InlineBDF = $save_bflp;
+		$this->mpdf->InlineBDFctr = $save_bflpc; // mPDF 6
+		$this->mpdf->restoreInlineProperties($save_silp);
+	}
+
+	/**
 	 * An object's attributes with the visibility of the span it is in. Printing reads a span's visibility from its
 	 * text buffer entry, and an object put straight into the buffer has none.
 	 *
