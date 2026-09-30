@@ -8,6 +8,7 @@ use Mpdf\Cache;
 use Mpdf\Color\ColorConverter;
 use Mpdf\Css\BorderMerger;
 use Mpdf\CssManager;
+use Mpdf\CssMode;
 use Mpdf\Form;
 use Mpdf\Image\ImageProcessor;
 use Mpdf\Language\LanguageToFontInterface;
@@ -119,6 +120,18 @@ abstract class Tag
 	{
 		$property = strtolower($property);
 		return array_key_exists($property, self::ALIGN) ? self::ALIGN[$property] : '';
+	}
+
+	/**
+	 * Whether the standard cascade applies the document's CSS. Its presentational attributes then reach a tag
+	 * handler as hints among the merged properties, below any stylesheet rule, and are not read again from the
+	 * attributes
+	 *
+	 * @return bool
+	 */
+	protected function appliesStandardCascade()
+	{
+		return $this->mpdf->cssMode === CssMode::STANDARD;
 	}
 
 	/**

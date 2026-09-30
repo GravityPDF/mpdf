@@ -54,7 +54,7 @@ abstract class BlockTag extends Tag
 			}
 
 			$cappos = 'T';
-			if (isset($attr['ALIGN']) && strtolower($attr['ALIGN']) === 'bottom') {
+			if (isset($attr['ALIGN']) && strtolower($attr['ALIGN']) === 'bottom' && !$this->appliesStandardCascade()) {
 				$cappos = 'B';
 			} elseif (isset($p['CAPTION-SIDE']) && strtolower($p['CAPTION-SIDE']) === 'bottom') {
 				$cappos = 'B';
@@ -550,7 +550,7 @@ abstract class BlockTag extends Tag
 		}
 
 		// mPDF 6
-		if (!empty($attr['ALIGN'])) {
+		if (!empty($attr['ALIGN']) && !$this->appliesStandardCascade()) {
 			$currblk['block-align'] = $this->getAlign($attr['ALIGN']);
 		}
 

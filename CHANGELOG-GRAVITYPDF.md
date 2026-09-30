@@ -46,6 +46,12 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * Important declarations apply after the inline style: those of the stylesheets by specificity and then order, then those of `style=""`, then those of the default stylesheet (`defaultCssFile`), as a browser's own important declarations beat a page's.
   * A shorthand marked `!important` makes every longhand it sets important, so `border: 1mm solid green !important` beats a `border-top-color` of a more specific rule or of a later declaration in the same block.
   * `@page` rules, `body` rules and the class rules SVG text looks up take an important declaration over a later one of the same selector that is not. An important declaration of a `body` rule beats `<body style>`.
+* **HTML attributes that style an element are read only where HTML defines them**, as a browser reads them, in standard mode. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old reading. [#531] [#641]
+  * `color` applies to `font` and `hr` only, `width` to images, tables, cells, `hr`, `meter` and `progress`, `height` to images, tables, rows, row groups, cells, `meter` and `progress`, `valign` to rows, row groups and cells, `vspace` and `hspace` to images, and `align` to `div`, `p`, headings, table parts, `caption`, `hr` and `img`. So `<a color>`, `<span color>`, `<p color>`, `<td color>`, `<div width>`, `<img valign>` and `<blockquote align>` no longer do anything. mPDF's own tags, such as `<barcode color>`, keep every attribute.
+  * A stylesheet rule beats the attribute everywhere. Before, `align` on a paragraph, div or table cell, `nowrap` on a cell, `border` on a table, `<caption align>`, `<hr width>` in a table cell and `align` on a text field beat any rule for the same property.
+  * `<div align>` passes its alignment on to what it holds, and `<li type>` beats the marker the item inherits from its list.
+  * Attributes mPDF ignored now take effect: `<hr align>`, `<hr size>`, `<img align>` (float left or right, or vertical alignment), `<img border>`, `<thead align>`, and `<table border>` wider than 1.
+  * A table's `border` gives each cell a 1px border of its own, which a rule for the table's border leaves alone. Before, the cells copied the table's border.
 
 New features
 ------------
@@ -800,6 +806,7 @@ These changes do not change output.
 [#526]: https://github.com/GravityPDF/mpdf/issues/526
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
+[#531]: https://github.com/GravityPDF/mpdf/issues/531
 [#532]: https://github.com/GravityPDF/mpdf/issues/532
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
 [#535]: https://github.com/GravityPDF/mpdf/issues/535
@@ -852,8 +859,9 @@ These changes do not change output.
 [#632]: https://github.com/GravityPDF/mpdf/issues/632
 [#633]: https://github.com/GravityPDF/mpdf/pull/633
 [#634]: https://github.com/GravityPDF/mpdf/pull/634
+[#635]: https://github.com/GravityPDF/mpdf/pull/635
 [#636]: https://github.com/GravityPDF/mpdf/issues/636
 [#637]: https://github.com/GravityPDF/mpdf/pull/637
-[#635]: https://github.com/GravityPDF/mpdf/pull/635
-[#639]: https://github.com/GravityPDF/mpdf/pull/639
 [#638]: https://github.com/GravityPDF/mpdf/pull/638
+[#639]: https://github.com/GravityPDF/mpdf/pull/639
+[#641]: https://github.com/GravityPDF/mpdf/pull/641

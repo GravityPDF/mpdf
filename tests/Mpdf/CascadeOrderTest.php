@@ -346,7 +346,7 @@ class CascadeOrderTest extends TestCase
 		return [
 			'collapsed borders of cells, rows and the table' => ['<style>table { border-collapse: collapse; border: 1mm solid #00f; } td { border: 0.5mm solid #f00; } td.x { border-top: 2mm solid #0a0; }</style>'
 				. '<table><tr><td>a</td><td class="x">b</td></tr><tr><td class="x">c</td><td style="border-bottom: 1.5mm dotted #000">d</td></tr></table>'],
-			'a border from a cell rule against one as wide from the border attribute, which the rule wins' => ['<style>td.x { border: 0.264583mm solid #f00; }</style>'
+			'a border from a cell rule against one as wide from the border attribute, which the rule wins' => ['<style>td.x { border: 1px solid #f00; }</style>'
 				. '<table border="1" style="border-collapse: collapse"><tr><td>a</td><td class="x">b</td><td>c</td></tr></table>'],
 			'separate borders and padding' => ['<style>table { border-spacing: 2mm; } td { border: 0.3mm solid #000; padding: 3mm; } th { background-color: #eee; }</style>'
 				. '<table cellpadding="4"><tr><th>h</th></tr><tr><td>a</td></tr></table>'],

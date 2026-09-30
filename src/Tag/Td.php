@@ -222,7 +222,7 @@ class Td extends Tag
 				$c['a'] = $this->getAlign($properties['TEXT-ALIGN']);
 			}
 		}
-		if (!empty($attr['ALIGN'])) {
+		if (!empty($attr['ALIGN']) && !$this->appliesStandardCascade()) {
 			if (strtolower($attr['ALIGN']) === 'char') {
 				if (!empty($attr['CHAR'])) {
 					$char = html_entity_decode($attr['CHAR']);
@@ -402,7 +402,7 @@ class Td extends Tag
 		if (isset($attr['TEXT-ROTATE'])) {
 			$c['R'] = $attr['TEXT-ROTATE'];
 		}
-		if (!empty($attr['NOWRAP'])) {
+		if (!empty($attr['NOWRAP']) && !$this->appliesStandardCascade()) {
 			$c['nowrap'] = 1;
 		}
 

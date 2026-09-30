@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
+use Mpdf\Css\PresentationalHints;
 use Mpdf\Mpdf;
 use Mpdf\Utils\Rotation;
 
@@ -462,7 +463,11 @@ class Table extends Tag
 			$table['cell_padding'] = false;
 		}
 
-		if (isset($attr['BORDER']) && $attr['BORDER'] == '1') {
+		$this->mpdf->table_border_attr_set = 0;
+		if ($this->appliesStandardCascade()) {
+			// The table's border came in the properties. Its cells take a border of their own, below any rule for them
+			$table['cell_border'] = isset($attr['BORDER']) && PresentationalHints::borderWidth('TABLE', $attr['BORDER']) > 0;
+		} elseif (isset($attr['BORDER']) && $attr['BORDER'] == '1') {
 			$this->mpdf->table_border_attr_set = 1;
 			$bord = $this->mpdf->border_details('#000000 1px solid');
 			if ($bord['s']) {
@@ -472,8 +477,6 @@ class Table extends Tag
 				$table['border_details']['T'] = $bord;
 				$table['border_details']['B'] = $bord;
 			}
-		} else {
-			$this->mpdf->table_border_attr_set = 0;
 		}
 
 		if ($w) {

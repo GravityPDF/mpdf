@@ -92,7 +92,7 @@ class Hr extends Tag
 				$properties['WIDTH'] = NumericString::removePercentChar($properties['WIDTH']); // make "90%" become simply "90"
 				$objattr['W-PERCENT'] = $properties['WIDTH'];
 			}
-			if (isset($attr['WIDTH']) && NumericString::containsPercentChar($attr['WIDTH'])) {
+			if (isset($attr['WIDTH']) && NumericString::containsPercentChar($attr['WIDTH']) && !$this->appliesStandardCascade()) {
 				$attr['WIDTH'] = NumericString::removePercentChar($attr['WIDTH']); // make "90%" become simply "90"
 				$objattr['W-PERCENT'] = $attr['WIDTH'];
 			}

@@ -58,6 +58,11 @@ class CssMerger
 	private $borderMerger;
 
 	/**
+	 * @var \Mpdf\Css\PresentationalHints
+	 */
+	private $presentationalHints;
+
+	/**
 	 * @var bool When true, state outside this object will be modified
 	 * @internal self::previewBlockCss() uses this property to look ahead without affecting state
 	 */
@@ -70,7 +75,8 @@ class CssMerger
 		SelectorParser $selectorParser,
 		InlinePropertyConverter $inlinePropertyConverter,
 		ColorConverter $colorConverter,
-		BorderMerger $borderMerger
+		BorderMerger $borderMerger,
+		PresentationalHints $presentationalHints
 	) {
 		$this->mpdf = $mpdf;
 		$this->normalizeProperties = $normalizeProperties;
@@ -79,6 +85,7 @@ class CssMerger
 		$this->inlinePropertyConverter = $inlinePropertyConverter;
 		$this->colorConverter = $colorConverter;
 		$this->borderMerger = $borderMerger;
+		$this->presentationalHints = $presentationalHints;
 	}
 
 	/**
@@ -199,7 +206,7 @@ class CssMerger
 		list($defaultRules, $importantDefaultRules) = $this->cssManager->getDefaultRules()->matchingDeclarations($tag, $id, $classes, $path);
 		$this->mergeEach($defaultRules, $dominance);
 
-		$this->mergeInlineAttributes($tag, $attr);
+		$this->mergePresentationalHints($tag, $attr);
 		$this->mergeTableSpecificCss($tag, $attr);
 
 		if ($tag === 'BODY') {
@@ -496,30 +503,7 @@ class CssMerger
 		}
 
 		if ($tag === 'FONT') {
-			if (!empty($attr['FACE'])) {
-				$this->cssProperties = array_merge($this->cssProperties, $this->normalizeProperties->normalize(['FONT-FAMILY' => $attr['FACE']]));
-			}
-
-			$size = isset($attr['SIZE']) ? $attr['SIZE'] : '';
-			if ($size === '+1') {
-				$this->cssProperties['FONT-SIZE'] = '120%';
-			} elseif ($size === '-1') {
-				$this->cssProperties['FONT-SIZE'] = '86%';
-			} elseif ($size === '1') {
-				$this->cssProperties['FONT-SIZE'] = 'XX-SMALL';
-			} elseif ($size === '2') {
-				$this->cssProperties['FONT-SIZE'] = 'X-SMALL';
-			} elseif ($size === '3') {
-				$this->cssProperties['FONT-SIZE'] = 'SMALL';
-			} elseif ($size === '4') {
-				$this->cssProperties['FONT-SIZE'] = 'MEDIUM';
-			} elseif ($size === '5') {
-				$this->cssProperties['FONT-SIZE'] = 'LARGE';
-			} elseif ($size === '6') {
-				$this->cssProperties['FONT-SIZE'] = 'X-LARGE';
-			} elseif ($size === '7') {
-				$this->cssProperties['FONT-SIZE'] = 'XX-LARGE';
-			}
+			$this->cssProperties = array_merge($this->cssProperties, $this->presentationalHints->ofFont($attr));
 		}
 
 		if (!empty($attr['VALIGN'])) {
@@ -534,6 +518,27 @@ class CssMerger
 		if (!empty($attr['HSPACE'])) {
 			$this->cssProperties['MARGIN-LEFT'] = $attr['HSPACE'];
 			$this->cssProperties['MARGIN-RIGHT'] = $attr['HSPACE'];
+		}
+	}
+
+	/**
+	 * Merges the presentational attributes of an element as the standard cascade reads them: only on the elements
+	 * HTML gives each to. mPDF's own tags take every attribute, as they do under the legacy cascade
+	 *
+	 * @param string $tag HTML tag name
+	 * @param array $attr HTML attributes
+	 * @return void
+	 */
+	private function mergePresentationalHints($tag, array $attr)
+	{
+		if (in_array($tag, PresentationalHints::OWN_TAGS, true)) {
+			$this->mergeInlineAttributes($tag, $attr);
+			return;
+		}
+
+		$hints = $this->presentationalHints->of($tag, $attr);
+		if ($hints) {
+			$this->setMergedCss($hints, false);
 		}
 	}
 
@@ -557,7 +562,7 @@ class CssMerger
 	}
 
 	/**
-	 * Merge table specific CSS (CELLSPACING, CELLPADDING).
+	 * Merge table specific CSS (CELLSPACING, CELLPADDING, and the cells' border of a table with a border attribute).
 	 *
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes
@@ -587,6 +592,12 @@ class CssMerger
 			$this->cssProperties['PADDING-RIGHT'] = $cellPadding;
 			$this->cssProperties['PADDING-TOP'] = $cellPadding;
 			$this->cssProperties['PADDING-BOTTOM'] = $cellPadding;
+		}
+
+		// Only the standard cascade marks a table's cells to take the border its border attribute gives them
+		if (!empty($tableCell['cell_border'])) {
+			$border = $this->presentationalHints->ofCellBorder();
+			$this->setMergedCss($border, false);
 		}
 	}
 

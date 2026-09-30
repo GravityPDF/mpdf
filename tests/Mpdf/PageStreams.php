@@ -271,7 +271,20 @@ trait PageStreams
 	{
 		$pages = $this->pages($this->render($html, $config));
 		$this->assertArrayHasKey($page, $pages);
-		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $pages[$page], $matches, PREG_SET_ORDER);
+
+		return $this->placementsIn($pages[$page]);
+	}
+
+	/**
+	 * Where each image in a page's content stream is placed, keyed w/h/x in millimetres
+	 *
+	 * @param string $stream
+	 *
+	 * @return array[]
+	 */
+	private function placementsIn($stream)
+	{
+		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $stream, $matches, PREG_SET_ORDER);
 
 		return array_map(function ($match) {
 			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $match[2] / Mpdf::SCALE, 'x' => $match[3] / Mpdf::SCALE];

@@ -12,6 +12,7 @@ use Mpdf\Css\CssParser;
 use Mpdf\Css\InlinePropertyConverter;
 use Mpdf\Css\InlineStyleParser;
 use Mpdf\Css\NormalizeProperties;
+use Mpdf\Css\PresentationalHints;
 use Mpdf\Css\SelectorParser;
 use Mpdf\Css\ShadowParser;
 use Mpdf\File\LocalContentLoader;
@@ -115,7 +116,8 @@ class ServiceFactory
 			$selectorParser,
 			$inlinePropertyConverter,
 			$colorConverter,
-			$borderMerger
+			$borderMerger,
+			new PresentationalHints($mpdf, $normalizeProperties)
 		);
 
 		$cssManager = new CssManager($cssParser, $cssMerger);
