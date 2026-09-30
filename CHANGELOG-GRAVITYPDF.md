@@ -151,6 +151,7 @@ Bugfixes
 * `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
 * A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
 * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
+* A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#623]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -162,6 +163,7 @@ Bugfixes
 * When a hyphenation hyphen moved to the next line, its record stayed on the line before. In a bidi paragraph that drew a hyphen in the wrong place and dropped the one that moved. [mpdf/mpdf#1831] [#145]
 * A hyphen inserted at a line break had no bidi direction. It now takes the direction of the word it breaks. [#116] [#137]
 * `$extgstates` had no default, so `count()` on it threw a `TypeError` on PHP 8. [mpdf/mpdf#2135] [#20]
+* `rotate: 90deg` on a positioned block turned it on PHP 5.6 to 7.4 but not on PHP 8, where `"90deg" == 90` is false. The angle is now read as tables read it: whole degrees, with or without `deg`, so `270deg` turns the block as `-90` does. A positioned block also takes `180deg` as it takes `180`. [#579]
 * `background-size` lengths such as `60mm` or `100px` drew the image 2.83 times too small, because they were used as points. [#574]
 * A stylesheet `url()` did not load its image when the path had spaces or parentheses, when there was whitespace inside the parentheses, or when it was an SVG data URI that is not base64, such as Bootstrap's `form-select` arrow. [#573]
 * `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. [#577]
@@ -760,6 +762,7 @@ These changes do not change output.
 [#564]: https://github.com/GravityPDF/mpdf/pull/564
 [#563]: https://github.com/GravityPDF/mpdf/pull/563
 [#565]: https://github.com/GravityPDF/mpdf/pull/565
+[#579]: https://github.com/GravityPDF/mpdf/pull/579
 [#574]: https://github.com/GravityPDF/mpdf/pull/574
 [#573]: https://github.com/GravityPDF/mpdf/pull/573
 [#569]: https://github.com/GravityPDF/mpdf/pull/569
@@ -772,3 +775,4 @@ These changes do not change output.
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
+[#623]: https://github.com/GravityPDF/mpdf/pull/623

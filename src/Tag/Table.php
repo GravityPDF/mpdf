@@ -4,6 +4,7 @@ namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
 use Mpdf\Mpdf;
+use Mpdf\Utils\Rotation;
 
 class Table extends Tag
 {
@@ -225,7 +226,7 @@ class Table extends Tag
 			}
 		}
 		if (!empty($properties['ROTATE']) && $this->mpdf->tableLevel == 1) {
-			$this->mpdf->table_rotate = $this->parseTableRotate($properties['ROTATE']);
+			$this->mpdf->table_rotate = Rotation::angle($properties['ROTATE'], [90, -90]);
 		}
 		if (isset($properties['TOPNTAIL'])) {
 			$table['topntail'] = $properties['TOPNTAIL'];
@@ -509,7 +510,7 @@ class Table extends Tag
 			}
 		}
 		if (isset($attr['ROTATE']) && $this->mpdf->tableLevel == 1) {
-			$this->mpdf->table_rotate = $this->parseTableRotate($attr['ROTATE']);
+			$this->mpdf->table_rotate = Rotation::angle($attr['ROTATE'], [90, -90]);
 		}
 
 		//++++++++++++++++++++++++++++
@@ -1316,30 +1317,5 @@ class Table extends Tag
 		}
 
 		return $ret;
-	}
-
-	/**
-	 * @param string $rotate
-	 * @return int
-	 */
-	private function parseTableRotate($rotate)
-	{
-		if (1 !== preg_match('/^(-?[0-9]+)(?:deg)?$/', $rotate, $matches)) {
-			return 0;
-		}
-
-		$rotationDegrees = (int) $matches[1] % 360;
-		if ($rotationDegrees > 180) {
-			$rotationDegrees -= 360;
-		} elseif ($rotationDegrees < -180) {
-			$rotationDegrees += 360;
-		}
-
-		// Only 90 and -90 are supported
-		if ($rotationDegrees !== 90 && $rotationDegrees !== -90) {
-			$rotationDegrees = 0;
-		}
-
-		return $rotationDegrees;
 	}
 }

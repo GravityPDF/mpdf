@@ -24,6 +24,7 @@ use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 use Mpdf\Utils\Path;
+use Mpdf\Utils\Rotation;
 use Mpdf\Writer\OptionalContentWriter;
 use Psr\Log\NullLogger;
 use Mpdf\Unicode\Ucdn;
@@ -15251,9 +15252,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->Reset();
 			$p = $this->cssManager->MergeCSS('BLOCK', $tag, $attr);
 			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];
-			if (isset($p['ROTATE']) && ($p['ROTATE'] == 90 || $p['ROTATE'] == -90 || $p['ROTATE'] == 180)) {
-				$rotate = $p['ROTATE'];
-			} // mPDF 6
+			if (isset($p['ROTATE'])) {
+				$rotate = Rotation::angle($p['ROTATE'], [90, -90, 180]);
+			}
 			if (isset($p['OVERFLOW'])) {
 				$overflow = strtolower($p['OVERFLOW']);
 			}
@@ -16512,7 +16513,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$spacer = ' ';
 		// IMAGE
 		if ($listitemimage && $listitemimage != 'none') {
-			$listitemimage = trim(preg_replace('/url\(["\']*(.*?)["\']*\)/', '\\1', $listitemimage));
+			$listitemimage = trim(preg_replace('/url\(["\']*(.*?)["\']*\)/i', '\\1', $listitemimage));
 
 			// ? Restrict maximum height/width of list marker??
 			$maxWidth = 100;
@@ -19381,7 +19382,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->blk[$this->blklvl]['list_style_type'] = strtolower($v);
 						break;
 					case 'LIST-STYLE-IMAGE':
-						$this->blk[$this->blklvl]['list_style_image'] = strtolower($v);
+						$this->blk[$this->blklvl]['list_style_image'] = strtolower($v) === 'none' ? 'none' : $v;
 						break;
 					case 'LIST-STYLE-POSITION':
 						$this->blk[$this->blklvl]['list_style_position'] = strtolower($v);
