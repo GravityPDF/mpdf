@@ -2,6 +2,7 @@
 
 namespace Mpdf\Color;
 
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 
 class ColorConverter
@@ -45,7 +46,8 @@ class ColorConverter
 	{
 		$color = strtolower(trim($color));
 
-		if ($color === 'transparent' || $color === 'inherit') {
+		// The standard CSS mode resolves inherit before a colour is converted
+		if ($color === 'transparent' || ($color === 'inherit' && $this->mpdf->cssMode !== CssMode::STANDARD)) {
 			return false;
 		}
 

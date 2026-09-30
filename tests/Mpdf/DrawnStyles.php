@@ -115,6 +115,59 @@ trait DrawnStyles
 	}
 
 	/**
+	 * Everything a document draws, for comparing two documents that should draw the same: the content stream of
+	 * each page, and each piece of text with its colour, font size, font style and box. The sizes and boxes are
+	 * rounded, as a table keeps its font size in millimetres, which comes back a few units in the last place off
+	 *
+	 * @param string $html
+	 * @param array $config Merged over the core-font mode
+	 *
+	 * @return array
+	 */
+	private function drawnPages($html, array $config = [])
+	{
+		$mpdf = $this->drawDocument($html, $config);
+		$mpdf->SetCompression(false);
+
+		preg_match_all('/\d+ 0 obj\s*<<\/Length \d+>>\s*stream\n(.*?)\nendstream/s', $mpdf->Output('', 'S'), $streams);
+
+		$round = function ($number) {
+			return round($number, 6);
+		};
+
+		return [
+			$streams[1],
+			$mpdf->drawnText,
+			$mpdf->drawnColours,
+			array_map($round, $mpdf->drawnFontSize),
+			$mpdf->drawnFontStyles,
+			array_map(function ($box) use ($round) {
+				return array_map($round, $box);
+			}, $mpdf->drawnBoxes),
+		];
+	}
+
+	/**
+	 * Splits cases into one for each CSS mode
+	 *
+	 * @param array[] $rows Each case's arguments, ending with what it expects in the standard mode and in the legacy mode
+	 *
+	 * @return array[] Each case's arguments, led by the mode and ending with what it expects in that mode
+	 */
+	private function bothModes(array $rows)
+	{
+		$cases = [];
+		foreach ($rows as $name => $row) {
+			$legacy = array_pop($row);
+			$standard = array_pop($row);
+			$cases[$name . ' (standard)'] = array_merge([CssMode::STANDARD], $row, [$standard]);
+			$cases[$name . ' (legacy)'] = array_merge([CssMode::LEGACY], $row, [$legacy]);
+		}
+
+		return $cases;
+	}
+
+	/**
 	 * Keys what was recorded of each piece of text a document drew by the text itself, so a test can look a piece up
 	 * by what it says
 	 *

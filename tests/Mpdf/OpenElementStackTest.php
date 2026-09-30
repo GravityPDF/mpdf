@@ -172,12 +172,36 @@ class OpenElementStackTest extends TestCase
 		$this->assertSame(['A', 'B'], $div['classes']);
 		$this->assertSame('de', $div['lang']);
 		$this->assertSame('Box', $div['attr']['TITLE']);
-		$this->assertNull($div['computed']);
 
 		$p = $this->frameAt($mpdf, 'text', 2);
 		$this->assertSame('de', $p['lang']);
 		$this->assertSame('', $p['id']);
 		$this->assertSame(['C'], $p['classes']);
+	}
+
+	/**
+	 * In the standard CSS mode a frame carries the properties merged for its element, with the CSS-wide keywords
+	 * resolved, and the document's frame carries those of body. A tbody the HTML leaves out is never styled. The
+	 * legacy mode keeps none
+	 */
+	public function testAFrameCarriesThePropertiesMergedForItsElement()
+	{
+		$html = '<style>body { background-color: #ff0; } div { padding: 2mm; } p { padding: inherit; }</style>'
+			. '<div><p>text</p><table><tr><td>cell</td></tr></table></div>';
+
+		$mpdf = $this->write($html);
+		$frames = $this->framesAt($mpdf, 'text');
+		$this->assertSame('#ff0', $frames[0]['computed']['BACKGROUND-COLOR']);
+		$this->assertSame('2mm', $frames[1]['computed']['PADDING-LEFT']);
+		$this->assertSame('2mm', $frames[2]['computed']['PADDING-LEFT']);
+		$this->assertNull($this->frameAt($mpdf, 'cell', 3)['computed']);
+		$this->assertSame('TBODY', $this->frameAt($mpdf, 'cell', 3)['tag']);
+
+		$mpdf = $this->mpdfRecording(['cssMode' => CssMode::LEGACY]);
+		$mpdf->WriteHTML($html, HTMLParserMode::DEFAULT_MODE, true, false);
+		foreach ($this->framesAt($mpdf, 'text') as $frame) {
+			$this->assertNull($frame['computed']);
+		}
 	}
 
 	/**

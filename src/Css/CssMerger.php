@@ -42,6 +42,16 @@ class CssMerger
 	];
 
 	/**
+	 * The parts of a border side, in the order its shorthand writes them
+	 */
+	const BORDER_PARTS = ['WIDTH', 'STYLE', 'COLOR'];
+
+	/**
+	 * Matches a border side's shorthand or one of its parts, capturing the side's shorthand and the part
+	 */
+	const BORDER_SIDE_PROPERTY = '/^(BORDER-(?:TOP|RIGHT|BOTTOM|LEFT))(?:-(WIDTH|STYLE|COLOR))?$/';
+
+	/**
 	 * @var \Mpdf\Mpdf
 	 */
 	private $mpdf;
@@ -238,14 +248,20 @@ class CssMerger
 		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
 
 		$this->mergeInheritedBlockProperties($inherit, $tag);
+		$inherited = $this->cssProperties;
 
+		// The built-in defaults and the default stylesheet are merged on their own first, for revert to read
+		$this->cssProperties = [];
 		$this->mergeDefaultCss($tag);
 		list($defaultRules, $importantDefaultRules) = $this->cssManager->getDefaultRules()->matchingDeclarations($tag, $id, $classes, $path);
 		$this->mergeEach($defaultRules, $dominance);
+		$defaults = $this->cssProperties;
+		$this->cssProperties = array_merge($inherited, $defaults);
 
 		$this->mergePresentationalHints($tag, $attr);
 		$this->mergeTableSpecificCss($tag, $attr);
 
+		$html = null;
 		if ($tag === 'BODY') {
 			// Merged outside the document's elements, and written to by Mpdf::SetDefaultBodyCSS() and the like
 			$important = $this->cssManager->getImportantCss();
@@ -253,8 +269,11 @@ class CssMerger
 			$body = isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : [];
 			$this->setMergedCss($body, false);
 			$rules = [];
-			$importantRules = array_merge(isset($important['BODY']) ? [$important['BODY']] : [], $this->mergeDocumentRules());
+			list($importantBody, $html) = $this->mergeDocumentRules();
+			$importantRules = array_merge(isset($important['BODY']) ? [$important['BODY']] : [], $importantBody);
 			$importantDefaultRules = isset($importantDefault['BODY']) ? [$importantDefault['BODY']] : [];
+			// html is body's parent, which a keyword on body reads
+			$inherited = array_merge($inherited, $html);
 		} else {
 			list($rules, $importantRules) = $this->cssManager->getRules()->matchingDeclarations($tag, $id, $classes, $path);
 		}
@@ -262,7 +281,13 @@ class CssMerger
 
 		list($inline, $importantInline) = isset($attr['STYLE']) ? $this->inlineStyleParser->parseByImportance($attr['STYLE']) : [[], []];
 		$this->mergeEach(array_merge([$inline], $importantRules, [$importantInline], $importantDefaultRules), $dominance);
+
+		// Before currentColor, which takes the colour a keyword resolves to
+		$this->resolveWideKeywords($inherited, $defaults, $path, $inherit !== 'INLINE' && $inherit !== '', $html);
 		$this->resolveCurrentColor($inherit);
+		if ($this->sideEffects) {
+			$this->mpdf->recordStyledElementComputed($this->cssProperties);
+		}
 
 		return $this->cssProperties;
 	}
@@ -318,6 +343,82 @@ class CssMerger
 	}
 
 	/**
+	 * Resolves the CSS-wide keywords the cascade left in the element's properties:
+	 * - inherit: for an inherited property, the value the element starts from, which is its parent's. A block, a table
+	 *   and a table part are not handed every inherited value, so failing that they take the value their parent's frame
+	 *   on the stack of open elements holds. Failing both, the property is dropped, and the element keeps the state it
+	 *   is drawn in, as an inline element does. For any other property, the value its parent's frame holds, or failing
+	 *   that the initial value
+	 * - initial: the initial value CssWideKeywords gives, or the document's default font and size
+	 * - unset: inherit for an inherited property, and initial for any other
+	 * - revert and revert-layer: the value of the built-in defaults and the default stylesheet, or failing that unset
+	 *
+	 * A keyword in one part of a border side (its width, style or colour) is resolved into that side's shorthand too.
+	 *
+	 * @param array $inherited The properties the element starts from, before the defaults
+	 * @param array $defaults The properties the built-in defaults and the default stylesheet give the element
+	 * @param callable $path Gives the open elements from the document down to the element, or null for none
+	 * @param bool $fromParent Whether an inherited property the element does not start from is read from its parent's
+	 *                         frame: for a block, a table and a table part
+	 * @param array|null $parentProperties The properties of a parent that has no frame, as html has none for body
+	 * @return void
+	 */
+	private function resolveWideKeywords(array $inherited, array $defaults, callable $path, $fromParent, $parentProperties = null)
+	{
+		$parent = null;
+		$sides = [];
+		foreach ($this->cssProperties as $property => $value) {
+			$keyword = CssWideKeywords::keywordOf($value);
+			if ($keyword === null) {
+				continue;
+			}
+
+			if (preg_match(self::BORDER_SIDE_PROPERTY, $property, $m)) {
+				$sides[$m[1]] = true;
+			}
+
+			if ($keyword === 'revert' || $keyword === 'revert-layer') {
+				$reverted = $this->declaredValue($defaults, $property);
+				if ($reverted !== null) {
+					$this->cssProperties[$property] = $reverted;
+					continue;
+				}
+				$keyword = 'unset';
+			}
+
+			$isInherited = CssWideKeywords::isInherited($property);
+			if ($keyword === 'unset') {
+				$keyword = $isInherited ? 'inherit' : 'initial';
+			}
+
+			$resolved = null;
+			if ($keyword === 'inherit' && $isInherited && isset($inherited[$property])) {
+				$resolved = $inherited[$property];
+			} elseif ($keyword === 'inherit' && (!$isInherited || $fromParent)) {
+				if ($parent === null) {
+					$parent = $parentProperties !== null ? $parentProperties : $this->parentComputed($path);
+				}
+				$resolved = $this->declaredValue($parent, $property);
+				if ($resolved === null && !$isInherited) {
+					$resolved = $this->initialValue($property);
+				}
+			} elseif ($keyword === 'initial') {
+				$resolved = $this->initialValue($property);
+			}
+
+			if ($resolved === null) {
+				unset($this->cssProperties[$property]);
+			} else {
+				$this->cssProperties[$property] = $resolved;
+			}
+		}
+
+		foreach (array_keys($sides) as $side) {
+			$this->resolveBorderSide($side);
+		}
+	}
+
+	/**
 	 * The colour currentColor stands for in the element's merged properties
 	 *
 	 * @param string $inherit Inheritance context
@@ -361,6 +462,83 @@ class CssMerger
 	}
 
 	/**
+	 * Writes a border side's resolved width, style and colour into its shorthand, which the drawing code reads. The
+	 * shorthand, resolved on its own, is the base: a keyword in it replaced the whole side, and a part declared after
+	 * it is still among the element's properties
+	 *
+	 * @param string $key BORDER-TOP, BORDER-RIGHT, BORDER-BOTTOM or BORDER-LEFT
+	 * @return void
+	 */
+	private function resolveBorderSide($key)
+	{
+		$parts = [];
+		foreach (self::BORDER_PARTS as $part) {
+			if (isset($this->cssProperties[$key . '-' . $part])) {
+				$parts[$key . '-' . $part] = $this->cssProperties[$key . '-' . $part];
+			}
+		}
+
+		$this->mergeBorderProperties($parts);
+	}
+
+	/**
+	 * The value a set of properties gives one of them, where a part of a border side left out of it is read from the
+	 * side's shorthand
+	 *
+	 * @param array $properties
+	 * @param string $property
+	 * @return string|null Null when the properties do not give it
+	 */
+	private function declaredValue(array $properties, $property)
+	{
+		if (isset($properties[$property])) {
+			return $properties[$property];
+		}
+
+		if (!preg_match(self::BORDER_SIDE_PROPERTY, $property, $m) || !isset($m[2], $properties[$m[1]])) {
+			return null;
+		}
+
+		// A shorthand of anything but a width, a style and a colour gives no part
+		$border = preg_split('/\s+/', trim($properties[$m[1]]));
+
+		return count($border) === 3 ? $border[array_search($m[2], self::BORDER_PARTS, true)] : null;
+	}
+
+	/**
+	 * @param callable $path Gives the open elements from the document down to the element, or null for none
+	 * @return array The properties merged for the element's parent, or none if it has no parent or they were not kept
+	 */
+	private function parentComputed(callable $path)
+	{
+		$elements = $path();
+		if ($elements === null || count($elements) < 2) {
+			return [];
+		}
+
+		$parent = $elements[count($elements) - 2];
+
+		return $parent['computed'] !== null ? $parent['computed'] : [];
+	}
+
+	/**
+	 * @param string $property Uppercased
+	 * @return string|null The property's initial value, or null to leave the property unset
+	 */
+	private function initialValue($property)
+	{
+		if ($property === 'FONT-FAMILY') {
+			return $this->mpdf->original_default_font;
+		}
+
+		if ($property === 'FONT-SIZE') {
+			return $this->mpdf->original_default_font_size . 'pt';
+		}
+
+		return CssWideKeywords::initialValue($property);
+	}
+
+	/**
 	 * Merges html's rules into body's CSS, and body's own rules again over them. mPDF has no html element: the
 	 * document's frame stands for body, and html is matched as its parent, so html's declarations, its !important
 	 * ones included, reach the text as a parent's would, and lose to body's. Both win over what SetDefaultBodyCSS() and
@@ -369,7 +547,8 @@ class CssMerger
 	 * html's font size, read against the default font size, is the root's, which rem and body's own size are read
 	 * against
 	 *
-	 * @return array[] The !important declarations of body's rules, which apply after body's style
+	 * @return array[] The !important declarations of body's rules, which apply after body's style, and the properties
+	 *                 html's rules give
 	 */
 	private function mergeDocumentRules()
 	{
@@ -378,6 +557,7 @@ class CssMerger
 		$initial = $this->mpdf->initial_font_size;
 		$this->mpdf->root_font_size = $initial;
 
+		$htmlProperties = [];
 		list($html, $importantHtml) = $rules->documentDeclarations(true, $path);
 		foreach (array_merge($html, $importantHtml) as $properties) {
 			if (isset($properties['FONT-SIZE'])) {
@@ -388,12 +568,13 @@ class CssMerger
 				}
 			}
 			$this->setMergedCss($properties, false);
+			$htmlProperties = array_merge($htmlProperties, $properties);
 		}
 
 		list($body, $importantBody) = $rules->documentDeclarations(false, $path);
 		$this->mergeEach($body, false);
 
-		return $importantBody;
+		return [$importantBody, $htmlProperties];
 	}
 
 	/**

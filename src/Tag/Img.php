@@ -129,8 +129,10 @@ class Img extends Tag
 				$objattr['border_right'] = $this->mpdf->border_details($properties['BORDER-RIGHT']);
 			}
 
-			if (isset($properties['VERTICAL-ALIGN'])) {
-				$objattr['vertical-align'] = $this->getAlign($properties['VERTICAL-ALIGN']);
+			// A value mPDF does not read, such as a length or a CSS-wide keyword in the legacy CSS mode, leaves the default
+			$align = isset($properties['VERTICAL-ALIGN']) ? $this->getAlign($properties['VERTICAL-ALIGN']) : '';
+			if ($align !== '') {
+				$objattr['vertical-align'] = $align;
 			}
 			$percent = [];
 			$w = $this->length($properties, $attr, 'WIDTH', 0, $percent, 'w');

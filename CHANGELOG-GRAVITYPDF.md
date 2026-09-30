@@ -56,6 +56,11 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **`rem` is read against the font size of `html`, in standard mode**, as in a browser. It was read against the font size of `body`, and inside a table against the table's. Now `1rem` is the default font size, from the `default_font_size` configuration or `SetDefaultFontSize()`, unless an `html` or `:root` rule sizes `html`: with `html { font-size: 62.5% }`, `1.6rem` is the default size again. A `body { font-size }` rule no longer changes it. To keep the old sizes, give them in `em` or points, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#529] [#642]
 * **A border, `box-shadow` or `text-shadow` that names no colour is drawn in the element's colour**, which is `currentColor`, as in a browser. A border was drawn black and a shadow grey (`#888888`). `div { color: #c00; border: 1px solid; box-shadow: 2mm 2mm }` now draws a red border and a red shadow. This applies to the `border` shorthands and to a border built from `border-style` or `border-width` alone. Name the colour, as in `border: 1px solid #000`, or set `'cssMode' => \Mpdf\CssMode::LEGACY`, to keep black borders and grey shadows. [#540] [#651]
   * `currentColor` written in `background-color`, a gradient stop, `box-shadow`, `text-shadow`, `topntail` or `thead-underline` is read as the element's colour too, and `color: currentColor` as the colour it inherits. Before, the background was not painted, the gradient lost the stop, the shadows were grey, the table lines black, and `color: currentColor` on a block drew black. Legacy mode ignores `currentColor` there as before.
+* **The CSS-wide keywords `inherit`, `initial`, `unset`, `revert` and `revert-layer` are applied**, as in a browser. mPDF read most of them as a value it did not know: `color: inherit` on a block or a cell drew black, `font-size: inherit` the default size, and `border: inherit` no border. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to read them as before. [#546] [#652]
+  * `inherit` takes the parent element's value, for properties that are not inherited too, such as `border`, `padding` and `background`. A cell takes those from its row.
+  * `initial` gives the property's initial value, such as `currentColor` for a border's colour, and the document's default font and size for `font-family` and `font-size`. `unset` is `inherit` for an inherited property and `initial` for any other.
+  * `revert` and `revert-layer` give the value of the built-in defaults and the default stylesheet, such as a heading's size, a list's margin or a cell's padding, and are `unset` where those give none. An HTML attribute such as `cellpadding` counts as an author rule, so `revert` goes past it too.
+  * A shorthand passes the keyword to each of its longhands, so `border: inherit` takes every side's width, style and colour, and `font: initial` resets the size, family, style, weight, line height and variants.
 
 New features
 ------------
@@ -161,6 +166,8 @@ Bugfixes
 * `page-break-before: auto` or `avoid` on a block inside another block closed the outer block and opened it again, so its border was drawn around each part. `page-break-after: auto` or `avoid` on a table started a new page. [#552] [#569]
 * `page-break-before` on a table was ignored. On a top-level table, `always`, `left` and `right` now start it on a new page, inside the blocks around it. [#552] [#622]
 * A table with a `font-size` and a row with `text-rotate` threw a `TypeError` on PHP 8, and raised a warning before it. A cell whose font size was already in force saved its text with an empty size. [#632] [#631]
+* A border colour mPDF cannot read, such as `border-color: initial` in the legacy CSS mode, raised "Trying to access array offset" warnings when the border was drawn. [#546] [#652]
+* An image with a `vertical-align` mPDF does not read, such as a length or, in the legacy CSS mode, `inherit`, raised undefined-key warnings. It now sits as if none were given. [#546] [#652]
 * `background-size: cover` scaled by the wrong ratio when the image came out shorter than the area. [mpdf/mpdf#833] [#22]
 * Only double-quoted attributes were read. Single-quoted, unquoted and bare attributes are now read as well. [mpdf/mpdf#2030] [#24]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
@@ -426,6 +433,7 @@ These changes do not change output.
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
 * **Open elements.** `WriteHTML()` keeps a stack of the elements open in the HTML it reads, so that CSS rules can be matched against an element's parents, ancestors and earlier siblings rather than only the blocks mPDF lays out. Each element carries its position among its siblings and a record of the siblings before it. `Mpdf::getOpenElements()` reads it. [#533]
 * **Compiled selectors.** A rule whose selector the legacy parser cannot read is compiled into its compound selectors, the combinators between them and its specificity, and filed under its rightmost compound for the selector matcher. A selector list is split at the commas outside parentheses, brackets and strings, so `:is(h1, h2)` and `[title="a,b"]` stay whole. [#538] [#619]
+* **Computed values on the open elements.** In the standard CSS mode, each element on the stack of open elements carries the properties merged for it, with the CSS-wide keywords resolved, in the `computed` slot of its frame, and the document's frame carries those of `<body>`. `inherit` reads a parent's from there. [#546] [#652]
 * **nth-child in tables from the open elements.** `tr`, `td` and `th:nth-child()` and `:first-child` take a row's or cell's position among its siblings from the stack of open elements, as the selector matcher does, instead of from mPDF's row and column counters. An element a browser moves out of a table, such as a `<bookmark>` or `<tocentry>` written between two cells, is not counted, and with `allow_html_optional_endtags` off a cell, row or row group with no end tag is closed by the next one, as mPDF lays it out. [#538] [#629]
 
 [mpdf/mpdf#7]: https://github.com/mpdf/mpdf/issues/7
@@ -840,6 +848,7 @@ These changes do not change output.
 [#545]: https://github.com/GravityPDF/mpdf/issues/545
 [#539]: https://github.com/GravityPDF/mpdf/issues/539
 [#540]: https://github.com/GravityPDF/mpdf/issues/540
+[#546]: https://github.com/GravityPDF/mpdf/issues/546
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -900,4 +909,5 @@ These changes do not change output.
 [#647]: https://github.com/GravityPDF/mpdf/pull/647
 [#648]: https://github.com/GravityPDF/mpdf/pull/648
 [#651]: https://github.com/GravityPDF/mpdf/pull/651
+[#652]: https://github.com/GravityPDF/mpdf/pull/652
 [#674]: https://github.com/GravityPDF/mpdf/pull/674
