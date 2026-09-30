@@ -244,6 +244,123 @@ class SelectorMatcherTest extends TestCase
 	}
 
 	/**
+	 * Whether each selector that looks at what follows an element matches the last element of the path below, with
+	 * what is read ahead of each element known:
+	 *
+	 *   <body>                                   (5 children)
+	 *     <h1/> <p class="a"/> <p/>              (closed)
+	 *     <div id="main" class="card">           (open, 3 children)
+	 *       <h2/> <p/>                           (closed; the p is empty)
+	 *       <ul>                                 (open, 3 children)
+	 *         <li/>                              (closed)
+	 *         <li class="x">                     (the element, empty)
+	 *         <li/>                              (still to come)
+	 *     <section/>                             (still to come)
+	 *
+	 * @dataProvider lookAheadSelectors
+	 *
+	 * @param string $selector
+	 * @param bool $expected
+	 */
+	public function testMatchesWhatFollowsTheElement($selector, $expected)
+	{
+		$this->assertSame($expected, $this->matcher->matches($this->compiler->compile($selector), $this->pathReadAhead(true)));
+	}
+
+	/**
+	 * A selector, and whether it matches the element
+	 *
+	 * @return array[]
+	 */
+	public function lookAheadSelectors()
+	{
+		return [
+			'not the last child' => ['li:last-child', false],
+			'second from the end' => ['li:nth-last-child(2)', true],
+			'not third from the end' => ['li:nth-last-child(3)', false],
+			'an odd place from the end' => ['li:nth-last-child(odd)', false],
+			'among the last two' => ['li:nth-last-child(-n + 2)', true],
+			'second of its type from the end' => ['li:nth-last-of-type(2)', true],
+			'not the last of its type' => ['li:last-of-type', false],
+			'not the only child' => ['li:only-child', false],
+			'not the only one of its type' => ['li:only-of-type', false],
+			'empty' => ['li:empty', true],
+			'not last' => ['li:not(:last-child)', true],
+			'both ends counted' => ['li:nth-child(2):nth-last-child(2)', true],
+			'an ancestor that is the last child' => ['ul:last-child > li', true],
+			'an ancestor that is not the last child' => ['div:last-child li', false],
+			'an ancestor second from the end' => ['div:nth-last-child(2) li', true],
+			'an ancestor that is the only one of its type' => ['div:only-of-type li', true],
+			'an ancestor that is not empty' => ['ul:empty li', false],
+			'a closed sibling of an ancestor that is empty' => ['p:empty + ul > li', true],
+			'a closed sibling of an ancestor that is not empty' => ['h2:empty ~ ul li', false],
+			'a closed sibling at its place from the end' => ['li:nth-last-child(3) + li', true],
+			'a closed sibling of an ancestor, last of its type' => ['p:last-of-type + ul li', true],
+			'the document is not a child' => ['body:last-child li', false],
+			'the document is not empty' => ['body:empty li', false],
+		];
+	}
+
+	/**
+	 * Where what follows an element is not known, as for elements still open at the end of a WriteHTML() call that
+	 * leaves them open, a pseudo-class that needs it does not match, and :not() of it does not match either
+	 *
+	 * @dataProvider undecidedSelectors
+	 *
+	 * @param string $selector
+	 * @param bool $expected
+	 */
+	public function testDoesNotMatchWhatFollowsWhereItIsNotKnown($selector, $expected)
+	{
+		$this->assertSame($expected, $this->matcher->matches($this->compiler->compile($selector), $this->pathReadAhead(false)));
+	}
+
+	/**
+	 * A selector, and whether it matches the element with what follows it not known
+	 *
+	 * @return array[]
+	 */
+	public function undecidedSelectors()
+	{
+		return [
+			'last-child' => ['li:last-child', false],
+			'not last-child' => ['li:not(:last-child)', false],
+			'nth-last-child' => ['li:nth-last-child(2)', false],
+			'only-of-type' => ['li:only-of-type', false],
+			'empty' => ['li:empty', false],
+			'not empty' => ['li:not(:empty)', false],
+			'not of a list with something undecided in it' => ['li:not(.y, :last-child)', false],
+			'not of a list with something that matches in it' => ['li:not(.x, :last-child)', false],
+			'is of a list with something that matches in it' => ['li:is(:last-child, .x)', true],
+			'not of not' => ['li:not(:not(:last-child))', false],
+			'not of something known beside it' => ['li:not(:first-child)', true],
+			'a known ancestor' => ['div:nth-last-child(2) li', true],
+			'not on a known ancestor' => ['div:not(:last-child) li', true],
+		];
+	}
+
+	/**
+	 * The path testMatchesWhatFollowsTheElement() describes
+	 *
+	 * @param bool $known Whether what follows the list and the item is known. Only the rest is if not
+	 *
+	 * @return array[]
+	 */
+	private function pathReadAhead($known)
+	{
+		$document = $this->readAhead($this->frame('', 1, 1, [], [['H1', null, false], ['P', 'A', false], ['P', null, false]]), 5, ['H1' => 1, 'P' => 2, 'DIV' => 1, 'SECTION' => 1], false);
+		$div = $this->readAhead($this->frame('DIV', 4, 1, ['ID' => 'MAIN', 'CLASS' => 'CARD'], [['H2', null, false], ['P', null, true]]), 3, ['H2' => 1, 'P' => 1, 'UL' => 1], false);
+		$list = $this->frame('UL', 3, 1, [], [['LI', null, false]]);
+		$item = $this->frame('LI', 2, 2, ['CLASS' => 'X'], []);
+		if ($known) {
+			$list = $this->readAhead($list, 3, ['LI' => 3], false);
+			$item = $this->readAhead($item, 0, [], true);
+		}
+
+		return [$document, $div, $list, $item];
+	}
+
+	/**
 	 * A chain of descendant combinators whose leftmost compound names the nearest ancestor fails without trying every
 	 * combination of ancestors. On a path 50 deep, `.x div div div div div p` has nearly two million of them
 	 */
@@ -309,7 +426,7 @@ class SelectorMatcherTest extends TestCase
 	 * @param int $nthChild
 	 * @param int $nthOfType
 	 * @param string[] $attr
-	 * @param array[] $children Each closed child's tag and, if any, its class
+	 * @param array[] $children Each closed child's tag and, if any, its class (or null) and whether it is empty
 	 *
 	 * @return array
 	 */
@@ -325,6 +442,7 @@ class SelectorMatcherTest extends TestCase
 				'classes' => isset($child[1]) ? [$child[1]] : [],
 				'attr' => isset($child[1]) ? ['CLASS' => $child[1]] : [],
 				'nthOfType' => $childTypes[$child[0]],
+				'empty' => isset($child[2]) ? $child[2] : null,
 			];
 		}
 
@@ -338,7 +456,30 @@ class SelectorMatcherTest extends TestCase
 			'nthOfType' => $nthOfType,
 			'children' => $records,
 			'childTypes' => $childTypes,
+			'key' => '',
+			'childTotal' => null,
+			'childTypeTotals' => null,
+			'empty' => null,
 			'computed' => null,
 		];
+	}
+
+	/**
+	 * A frame given what TracksOpenElements::readAhead() finds of its element
+	 *
+	 * @param array $frame
+	 * @param int|null $childTotal
+	 * @param int[]|null $childTypeTotals
+	 * @param bool|null $empty
+	 *
+	 * @return array
+	 */
+	private function readAhead(array $frame, $childTotal, $childTypeTotals, $empty)
+	{
+		$frame['childTotal'] = $childTotal;
+		$frame['childTypeTotals'] = $childTypeTotals;
+		$frame['empty'] = $empty;
+
+		return $frame;
 	}
 }

@@ -143,6 +143,15 @@ class SelectorCompilerTest extends TestCase
 				[],
 			],
 			'nth-of-type' => ['p:nth-of-type(3)', [['tag' => 'P', 'pseudos' => [['nth-of-type', 0, 3]]]], []],
+			'last-child' => ['li:Last-Child', [['tag' => 'LI', 'pseudos' => [['nth-last-child', 0, 1]]]], []],
+			'last-of-type' => ['p:last-of-type', [['tag' => 'P', 'pseudos' => [['nth-last-of-type', 0, 1]]]], []],
+			'nth-last-child' => ['li:nth-last-child(-n + 3)', [['tag' => 'LI', 'pseudos' => [['nth-last-child', -1, 3]]]], []],
+			'nth-last-of-type' => ['p:nth-last-of-type(even)', [['tag' => 'P', 'pseudos' => [['nth-last-of-type', 2, 0]]]], []],
+			'only-child' => ['li:only-child', [['tag' => 'LI', 'pseudos' => [['only-child']]]], []],
+			'only-of-type' => ['p:only-of-type', [['tag' => 'P', 'pseudos' => [['only-of-type']]]], []],
+			'empty' => ['p:empty', [['tag' => 'P', 'pseudos' => [['empty']]]], []],
+			'first and last together' => ['td:first-child:last-child', [['tag' => 'TD', 'pseudos' => [['nth-child', 0, 1], ['nth-last-child', 0, 1]]]], []],
+			'last-child in not' => [':not(:last-child)', [['pseudos' => [['not', [['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => [['nth-last-child', 0, 1]]]], 'combinators' => [], 'specificity' => [0, 1, 0], 'universal' => false]]]]]], []],
 			'pseudo-class with no type' => [':first-child', [['tag' => null, 'pseudos' => [['nth-child', 0, 1]]]], []],
 			'lang with one range' => [':lang(fr)', [['pseudos' => [['lang', ['fr']]]]], []],
 			'lang with ranges in any case, some quoted' => [
@@ -281,7 +290,12 @@ class SelectorCompilerTest extends TestCase
 			'a pseudo-element' => ['p::before'],
 			'a pseudo-element written with one colon is not a pseudo-class mPDF knows' => ['p:before'],
 			'a pseudo-class with no meaning in a PDF' => ['a:hover'],
-			'a pseudo-class that needs the elements after it' => ['li:last-child'],
+			'a pseudo-class that looks inside the element' => ['li:has(> a)'],
+			'last-child with an argument' => ['li:last-child(2)'],
+			'empty with an argument' => ['p:empty()'],
+			'nth-last-child with no argument' => ['li:nth-last-child'],
+			'nth-last-child with "of" and a selector' => ['li:nth-last-child(2 of .a)'],
+			'nth-last-of-type with an argument it cannot read' => ['p:nth-last-of-type(n2)'],
 			'nth-child with an argument it cannot read' => ['li:nth-child(2n+)'],
 			'nth-child with "of" and a selector' => ['li:nth-child(2 of .a)'],
 			'nth-child left open' => ['li:nth-child(2'],
@@ -356,6 +370,7 @@ class SelectorCompilerTest extends TestCase
 			'where inside is' => [':is(:where(#a), .b)', [0, 1, 0]],
 			'is leaves out what it cannot read from its specificity too' => [':is(.a, #b:hover)', [0, 1, 0]],
 			'nested' => ['li:not(:is(.a, #b)):nth-child(2)', [1, 1, 1]],
+			'each pseudo-class that looks ahead counts as a class' => ['li:last-child:nth-last-child(1):only-child:last-of-type:nth-last-of-type(1):only-of-type:empty', [0, 7, 1]],
 		];
 	}
 

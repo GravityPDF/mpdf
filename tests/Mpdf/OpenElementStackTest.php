@@ -330,6 +330,95 @@ class OpenElementStackTest extends TestCase
 	}
 
 	/**
+	 * Each frame carries what was read ahead of its element: how many children it has in all, of each tag, and
+	 * whether it is empty. The record of a closed child keeps whether it is empty
+	 */
+	public function testAFrameKnowsWhatItsElementHolds()
+	{
+		$mpdf = $this->mpdfRecording();
+		$mpdf->WriteHTML('<div id="a"><p>x</p><p></p><h2>y</h2></div><p>after</p>');
+
+		$div = $this->frameAt($mpdf, 'x', 1);
+		$this->assertSame('.1', $div['key']);
+		$this->assertSame(3, $div['childTotal']);
+		$this->assertSame(['P' => 2, 'H2' => 1], $div['childTypeTotals']);
+		$this->assertFalse($div['empty']);
+
+		$p = $this->frameAt($mpdf, 'x', 2);
+		$this->assertSame('.1.1', $p['key']);
+		$this->assertSame(0, $p['childTotal']);
+		$this->assertSame([], $p['childTypeTotals']);
+		$this->assertFalse($p['empty']);
+
+		$this->assertSame([false, true], array_column($this->frameAt($mpdf, 'y', 1)['children'], 'empty'));
+		$this->assertSame(2, $this->frameAt($mpdf, 'after', 0)['childTotal']);
+	}
+
+	/**
+	 * Rows and cells are counted in the tbody the stack puts a row written straight into a table in, with their end
+	 * tags implied
+	 */
+	public function testWhatARowGroupHoldsIsCountedWithItsImpliedTags()
+	{
+		$mpdf = $this->write('<table><tr><td>a<td>b<tr><td>c</table>');
+
+		$this->assertSame(1, $this->frameAt($mpdf, 'a', 1)['childTotal']);
+		$this->assertSame(2, $this->frameAt($mpdf, 'a', 2)['childTotal']);
+		$this->assertSame(2, $this->frameAt($mpdf, 'a', 3)['childTotal']);
+		$this->assertSame(1, $this->frameAt($mpdf, 'c', 3)['childTotal']);
+	}
+
+	/**
+	 * An element the call leaves open is not known in full: its totals are null, and it is known not to be empty
+	 * only once something is in it. A later call that closes it knows it, and tells its frame
+	 */
+	public function testWhatAnElementHoldsIsKnownOnceItsEndIsRead()
+	{
+		$mpdf = $this->mpdfRecording();
+		$mpdf->WriteHTML('<div class="a"><p>one</p><p>', HTMLParserMode::DEFAULT_MODE, true, false);
+
+		$open = $mpdf->getOpenElements();
+		$this->assertNull($open[0]['childTotal']);
+		$this->assertNull($open[1]['childTotal']);
+		$this->assertNull($open[1]['childTypeTotals']);
+		$this->assertFalse($open[1]['empty'], 'it holds a paragraph');
+		$this->assertNull($open[2]['empty'], 'nothing is in it yet');
+		$this->assertSame(0, $this->frameAt($mpdf, 'one', 2)['childTotal']);
+
+		$mpdf->WriteHTML('two</p><p>three</p></div>', HTMLParserMode::DEFAULT_MODE, false, true);
+
+		$this->assertSame(3, $this->frameAt($mpdf, 'three', 1)['childTotal']);
+		$this->assertSame(1, $this->frameAt($mpdf, 'three', 0)['childTotal']);
+		$this->assertFalse($this->frameAt($mpdf, 'two', 2)['empty']);
+	}
+
+	/**
+	 * A kept block laid out again, a header written as a document of its own, and a positioned block's content
+	 * written after the page all see what was read ahead of their elements
+	 */
+	public function testWhatWasReadAheadHoldsInEveryContext()
+	{
+		$mpdf = $this->write($this->filler(22) . '<div class="kept" style="page-break-inside: avoid">'
+			. str_repeat('<p>Kept</p>', 11) . '<p>last kept</p></div><p>after</p>');
+		$this->assertSame(1, $mpdf->unwinds);
+		$this->assertSame(12, $this->frameAt($mpdf, 'last kept', 1)['childTotal']);
+
+		$mpdf = $this->mpdfRecording();
+		$mpdf->SetHTMLHeader('<div class="head"><span>header</span><b>bold</b></div>');
+		$mpdf->WriteHTML('<p>body</p>');
+		$this->output($mpdf);
+		$this->assertSame(2, $this->frameAt($mpdf, 'header', 1)['childTotal']);
+		$this->assertSame(1, $this->frameAt($mpdf, 'header', 0)['childTotal']);
+
+		$mpdf = $this->mpdfRecording();
+		$mpdf->WriteHTML('<span class="around"><div id="box" style="position: absolute; top: 100mm; left: 20mm; width: 100mm;">'
+			. '<p>first</p><div><p>nested</p></div></div><em>beside</em></span>');
+		$this->assertSame(2, $this->frameAt($mpdf, 'nested', 1)['childTotal']);
+		$this->assertSame(2, $this->frameAt($mpdf, 'nested', 2)['childTotal']);
+		$this->assertSame(1, $this->frameAt($mpdf, 'nested', 3)['childTotal']);
+	}
+
+	/**
 	 * Closing the document closes every element still open, into the record of the document's children
 	 */
 	public function testClosingTheDocumentClosesEveryElement()

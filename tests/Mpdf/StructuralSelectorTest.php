@@ -248,9 +248,9 @@ class StructuralSelectorTest extends TestCase
 				'<div><p>child</p><p>next</p></div>',
 				['child' => self::BLACK, 'next' => self::BLACK],
 			],
-			'a pseudo-class that needs the elements after it is still dropped' => [
-				'li:last-child { color: #f00; }',
-				'<ul><li>one</li><li>last</li></ul>',
+			'a pseudo-class that looks inside the element is still dropped' => [
+				'li:has(> b) { color: #f00; }',
+				'<ul><li>one</li><li><b>bold</b> last</li></ul>',
 				['last' => self::BLACK],
 			],
 		];
