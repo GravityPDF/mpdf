@@ -8,6 +8,7 @@ use Mpdf\Conversion\DecToGreek;
 use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
+use Mpdf\Css\TextDecorations;
 use Mpdf\Mpdf;
 use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
@@ -136,6 +137,7 @@ abstract class BlockTag extends Tag
 
 			$this->mpdf->InlineProperties['BLOCKINTABLE'] = $this->mpdf->saveInlineProperties();
 			$properties = $this->cssManager->MergeCSS('', $tag, $attr);
+			TextDecorations::enter($this->mpdf, $properties);
 			if (!empty($properties)) {
 				$this->mpdf->setCSS($properties, 'INLINE');
 			}
@@ -538,6 +540,7 @@ abstract class BlockTag extends Tag
 			}
 		}
 
+		TextDecorations::enter($this->mpdf, $properties, isset($prevblk['InlineProperties']) ? $prevblk['InlineProperties'] : []);
 		$this->mpdf->setCSS($properties, 'BLOCK', $tag); //name(id/class/style) found in the CSS array!
 		$currblk['InlineProperties'] = $this->mpdf->saveInlineProperties();
 

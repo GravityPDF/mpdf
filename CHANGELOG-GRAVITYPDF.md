@@ -54,6 +54,12 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A table's `border` gives each cell a 1px border of its own, which a rule for the table's border leaves alone. Before, the cells copied the table's border.
 * **`line-height` on an inline element sets the height of its line**, as in a browser. mPDF ignored it, so `<span style="line-height: 30mm">` left its line as it was. Now each inline element's box is as tall as its line-height, and a line grows to hold the tallest box on it, text or image, in blocks and table cells alike. The block's own line height is the least a line can be, so a smaller inline line-height, or `0`, does not shrink it. A percentage in `vertical-align` is taken of the element's own line-height. `line-height` on a `<p>` or `<div>` inside a table cell, which mPDF lays out as inline content, can now make its lines taller than the cell's. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore it as before. [#548] [#646]
 * **`rem` is read against the font size of `html`, in standard mode**, as in a browser. It was read against the font size of `body`, and inside a table against the table's. Now `1rem` is the default font size, from the `default_font_size` configuration or `SetDefaultFontSize()`, unless an `html` or `:root` rule sizes `html`: with `html { font-size: 62.5% }`, `1.6rem` is the default size again. A `body { font-size }` rule no longer changes it. To keep the old sizes, give them in `em` or points, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#529] [#642]
+* **Text decorations propagate to descendants instead of being inherited**, as in a browser. A link styled `a { text-decoration: none }` inside an underlined paragraph now has the paragraph's underline drawn under it. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output, or move the `text-decoration` from the paragraph to the parts of it you want decorated. [#544] [#654]
+  * An underline, overline or line-through is drawn over the text of every descendant in the flow, in the colour and at the size of the element that set it. A child block used to redraw it in its own colour and size, and lost an overline.
+  * `text-decoration: none` on a descendant removes only a decoration of its own. A descendant's own decoration is added to its ancestors': `line-through` inside an underlined block is drawn with both lines.
+  * An element whose `color` is `transparent` adds no decoration of its own, since it would be drawn in that colour.
+  * Floats, positioned blocks and inline blocks no longer take the decorations of the element they are in. Tables never did.
+  * A child block no longer takes its parent's `vertical-align`, which is not inherited.
 
 New features
 ------------
@@ -820,6 +826,7 @@ These changes do not change output.
 [#537]: https://github.com/GravityPDF/mpdf/issues/537
 [#538]: https://github.com/GravityPDF/mpdf/issues/538
 [#539]: https://github.com/GravityPDF/mpdf/issues/539
+[#544]: https://github.com/GravityPDF/mpdf/issues/544
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -877,3 +884,4 @@ These changes do not change output.
 [#643]: https://github.com/GravityPDF/mpdf/pull/643
 [#646]: https://github.com/GravityPDF/mpdf/pull/646
 [#648]: https://github.com/GravityPDF/mpdf/pull/648
+[#654]: https://github.com/GravityPDF/mpdf/pull/654

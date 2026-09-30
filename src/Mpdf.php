@@ -9,6 +9,7 @@ use Mpdf\Css\Border;
 use Mpdf\Css\CommentParser;
 use Mpdf\Css\InheritedProperties;
 use Mpdf\Color\IccProfile;
+use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextVars;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
@@ -20016,7 +20017,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}//end of foreach
 		// mPDF 5.7.3  inline text-decoration parameters
 		// Needs to be set at the end - after vertical-align = super/sub, so that textparam['text-baseline'] is set
-		if (isset($arrayaux['TEXT-DECORATION'])) {
+		if (isset($arrayaux['TEXT-DECORATION']) && TextDecorations::seen($this, $arrayaux)) {
 			$v = $arrayaux['TEXT-DECORATION']; // none underline line-through (strikeout) // Does not support: blink
 			if (stristr($v, 'LINE-THROUGH')) {
 				$this->textvar = ($this->textvar | TextVars::FD_LINETHROUGH);
@@ -20054,7 +20055,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->textparam['o-decoration']['fontsize'] = $this->FontSize;
 				$this->textparam['o-decoration']['color'] = strtoupper($this->TextColor); // change 0 0 0 rg to 0 0 0 RG
 			}
-			if (stristr($v, 'NONE')) {
+			// Under standard the element has no decoration of its own, and those it is in still propagate to it
+			if ($this->cssMode === CssMode::LEGACY && stristr($v, 'NONE')) {
 				$this->textvar = ($this->textvar & ~TextVars::FD_UNDERLINE);
 				$this->textvar = ($this->textvar & ~TextVars::FD_LINETHROUGH);
 				$this->textvar = ($this->textvar & ~TextVars::FD_OVERLINE);
