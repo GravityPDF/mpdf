@@ -269,9 +269,9 @@ class ConfigVariables
 			// screen, print, or any other CSS @media type (except "all")
 			'CSSselectMedia' => 'print',
 
-			// How CSS is read. 'standard' orders the rules that set the same property of an element as a browser
-			// does, by specificity and then by the order they are written in. 'legacy' renders as mPDF did before,
-			// applying rules in a fixed order of selector groups, in which a descendant rule such as "div p" beats an id
+			// standard: apply CSS as a browser does, by specificity and then source order, with the newer selectors
+			// and behaviour
+			// legacy: parse and apply CSS as mPDF v7 did
 			'cssMode' => 'standard',
 
 			// PAGE HEADERS & FOOTERS
