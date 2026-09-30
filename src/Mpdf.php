@@ -2727,15 +2727,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$h = $ch;
 				}
 			} else {
+				// Lengths come from SetBackground() in mm, and everything here is in points
 				if (stristr($size['w'], '%')) {
 					$size['w'] = (float) $size['w'];
 					$size['w'] /= 100;
 					$size['w'] = ($cw * $size['w']);
+				} elseif (is_numeric($size['w'])) {
+					$size['w'] *= Mpdf::SCALE;
 				}
 				if (stristr($size['h'], '%')) {
 					$size['h'] = (float) $size['h'];
 					$size['h'] /= 100;
 					$size['h'] = ($ch * $size['h']);
+				} elseif (is_numeric($size['h'])) {
+					$size['h'] *= Mpdf::SCALE;
 				}
 				if ($size['w'] == 'auto' && $size['h'] == 'auto') {
 					$w = $imw;
