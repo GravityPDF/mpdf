@@ -421,6 +421,18 @@ class CurrentColorTest extends TestCase
 	}
 
 	/**
+	 * currentColor is the colour the element ends up with, an !important one included, over a later or more
+	 * specific rule's colour and the style attribute's
+	 */
+	public function testCurrentColorIsTheImportantColour()
+	{
+		$mpdf = $this->paint('<style>div.b { color: #0a0 !important; border: 0.4mm solid currentColor } #i { color: #c00 }</style>'
+			. '<div class="b" id="i" style="color: #c00">subject</div>', CssMode::STANDARD);
+
+		$this->assertSame([strtoupper(self::GREEN)], array_values(array_unique($mpdf->drawnBorders)));
+	}
+
+	/**
 	 * With no colour anywhere, currentColor is the body's colour, and with none there, black
 	 *
 	 * @dataProvider modes
