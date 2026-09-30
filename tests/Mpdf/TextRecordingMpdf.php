@@ -53,6 +53,12 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 	/** The TextVars bits each of those lines was drawn with, in the same order. */
 	public $drawnTextVars = [];
 
+	/**
+	 * The text decorations each of those lines was drawn with, in the same order: for each of underline, line-through
+	 * and overline drawn, the colour operator, font, font size and baseline shift of the element that set it
+	 */
+	public $drawnDecorations = [];
+
 	/** Whether to record $bufferedStates, which costs a copy of the text state for each piece of text. */
 	public $recordBufferedStates = false;
 
@@ -110,6 +116,7 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 			$this->drawnFontStyles[] = $this->FontStyle;
 			$this->drawnShadows[] = $this->textshadow;
 			$this->drawnTextVars[] = $textvar;
+			$this->drawnDecorations[] = $this->decorationsDrawn($textvar);
 		}
 
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);
@@ -127,6 +134,30 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 		}
 
 		return $this->writingHTMLfooter ? 'footer' : ($this->writingHTMLheader ? 'header' : '');
+	}
+
+	/**
+	 * The text decorations Cell() draws with the TextVars bits given, as it reads them from the text parameters
+	 *
+	 * @param int $textvar
+	 *
+	 * @return array[] Keyed by the decoration's name
+	 */
+	private function decorationsDrawn($textvar)
+	{
+		$decorations = [];
+		$names = [
+			Css\TextVars::FD_UNDERLINE => 'underline',
+			Css\TextVars::FD_LINETHROUGH => 'line-through',
+			Css\TextVars::FD_OVERLINE => 'overline',
+		];
+		foreach (Css\TextDecorations::PARAMETERS as $bit => $parameter) {
+			if ($textvar & $bit) {
+				$decorations[$names[$bit]] = $this->textparam[$parameter];
+			}
+		}
+
+		return $decorations;
 	}
 
 	/**
