@@ -4,6 +4,7 @@ namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
 use Mpdf\Css\PresentationalHints;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Utils\Rotation;
 
@@ -338,7 +339,11 @@ class Table extends Tag
 		if (isset($properties['HYPHENS'])) {
 			$this->mpdf->base_table_properties['HYPHENS'] = $properties['HYPHENS'];
 		}
-		if (isset($properties['LINE-HEIGHT']) && $properties['LINE-HEIGHT'] !== '') {
+		// In cssMode legacy line-height: 0 is skipped, as mPDF v7 did
+		$lineHeightSet = $this->mpdf->cssMode === CssMode::STANDARD
+			? isset($properties['LINE-HEIGHT']) && $properties['LINE-HEIGHT'] !== ''
+			: !empty($properties['LINE-HEIGHT']);
+		if ($lineHeightSet) {
 			$table['cellLineHeight'] = $this->mpdf->fixLineheight($properties['LINE-HEIGHT']);
 		} elseif ($this->mpdf->tableLevel == 1) {
 			$table['cellLineHeight'] = $this->mpdf->blk[$this->mpdf->blklvl]['line_height'];

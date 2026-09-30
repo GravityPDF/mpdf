@@ -12253,13 +12253,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	// Return either a number (factor) - based on current set fontsize (if % or em) - or exact lineheight (with 'mm' after it)
-	// A line height of zero is returned as '0mm', because a factor of 0 is read as no line height set
+	// A line height of zero is returned as '0mm', because a factor of 0 is read as no line height set. In cssMode legacy
+	// it is returned as normal, as mPDF v7 read it on every PHP version: a factor of 0 was taken as normal because
+	// 0 == 'N' held before PHP 8
 	function fixLineheight($v)
 	{
-		if (preg_match('/^[0.]*0(?:[a-z]+|%)?$/i', trim($v))) {
+		if ($this->cssMode === CssMode::STANDARD && preg_match('/^[0.]*0(?:[a-z]+|%)?$/i', trim($v))) {
 			return '0mm';
 		} elseif (preg_match('/^[0-9\.,]*$/', $v) && $v >= 0) {
-			return ($v + 0);
+			return (float) $v === 0.0 ? 'N' : ($v + 0);
 		} elseif (strtoupper($v) == 'NORMAL' || $v == 'N') {
 			return 'N';  // mPDF 6
 		} else {
@@ -12435,10 +12437,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($line_stacking_strategy == 'block-line-height') {
 			$topy = $ypos[-1]['exttop'];
 			$bottomy = $ypos[-1]['extbottom'];
-		} else {
+		} elseif ($this->cssMode === CssMode::STANDARD) {
 			// Start from the baseline, or from the bottom of the block's line height when a line-height below the
 			// font's height leaves it above the baseline
 			$topy = $bottomy = max(0, $ypos[-1]['extbottom']);
+		} else {
+			// In cssMode legacy start from the baseline, as mPDF v7 did, stretching a smaller line-height down to it
+			$topy = $bottomy = 0;
 		}
 
 		// Get text-middle for aligning images/objects
