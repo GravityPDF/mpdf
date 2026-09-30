@@ -150,6 +150,53 @@ class ColorConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		];
 	}
 
+	/**
+	 * Hex colours with an alpha digit or pair, channels and alphas outside their range clamped to it rather than
+	 * wrapped, and rebeccapurple beside the named colour mPDF already knew
+	 *
+	 * @dataProvider colorValuesProvider
+	 *
+	 * @param string $input
+	 * @param string $output
+	 */
+	public function testConvertColorValues($input, $output)
+	{
+		$converter = new ColorConverter($this->mpdf, new ColorModeConverter(), $this->restrictor);
+
+		$this->assertSame($output, $converter->convert($input));
+	}
+
+	/**
+	 * Each colour, and its binary string: the mode, then the channels, then the alpha as a percentage
+	 *
+	 * @return string[][]
+	 */
+	public function colorValuesProvider()
+	{
+		return [
+			['#f008', "5\xff\x00\x005\x00"],
+			['#F00F', "5\xff\x00\x00d\x00"],
+			['#ff000080', "5\xff\x00\x002\x00"],
+			['#ff0000ff', "5\xff\x00\x00d\x00"],
+			['#ff000000', "5\xff\x00\x00\x00\x00"],
+
+			['rgb(255.5, 0, 0)', "3\xff\x00\x00\x00\x00"],
+			['rgb(300, -20, 127.6)', "3\xff\x00\x80\x00\x00"],
+			['rgb(150%, 0%, 0%)', "3\xff\x00\x00\x00\x00"],
+			['rgba(0, 0, 255, 1.5)', "5\x00\x00\xffd\x00"],
+			['rgba(0, 0, 255, -1)', "5\x00\x00\xff\x00\x00"],
+			['rgba(0, 0, 255, 150%)', "5\x00\x00\xffd\x00"],
+			['hsl(120, 150%, 50%)', "3\x00\xff\x00\x00\x00"],
+			['hsl(120, 100%, 150%)', "3\xff\xff\xff\x00\x00"],
+			['cmyk(150, 0, -5, 100)', "4d\x00\x00d\x00"],
+			['cmyka(0, 0, 0, 100, 2)', "6\x00\x00\x00dd"],
+			['300', "1\xff\x00\x00\x00\x00"],
+
+			['rebeccapurple', "3f3\x99\x00\x00"],
+			['violetred', "3\xd0\x20\x90\x00\x00"],
+		];
+	}
+
 	public function testConvertUnknownSpotColor()
 	{
 		$this->expectException(\Mpdf\MpdfException::class);
