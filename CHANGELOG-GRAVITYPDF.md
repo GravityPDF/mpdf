@@ -139,9 +139,9 @@ Bugfixes
 * A descendant rule ending in `:lang()` or `[lang]`, such as `div :lang(fr)`, `div p:lang(fr)` or `table [lang=fr]`, never applied. It now applies in block content and in tables, and a regional language such as `fr-CA` falls back to the rule for `fr`, as the simple lang rules do. [#525] [#559]
 * A rule such as `td:nth-child(2):not(.x)` or `td:nth-child(2 of .x)` was applied to the second cell of every row, as if it were `td:nth-child(2)`. A rule with anything after an nth-child argument, or with an argument that is not a formula, is now dropped. [mpdf/mpdf#83] [#522] [#564]
 * `rgb()` and `hsl()` written with spaces, such as `color: rgb(255 0 0)`, threw a `TypeError` out of `WriteHTML()`, or drew the wrong colour with warnings. They are now read, with a slash before the alpha (`rgb(255 0 0 / 50%)`) and with the hue in `deg`, `grad`, `rad` or `turn`. [#552] [#563]
-* A percentage alpha, as in `rgba(255, 0, 0, 50%)`, gave an opacity above 1, which viewers draw opaque.
-* A fourth argument to `rgb()` or `hsl()` is read as the alpha instead of being dropped.
-* `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
+  * A percentage alpha, as in `rgba(255, 0, 0, 50%)`, gave an opacity above 1, which viewers draw opaque.
+  * A fourth argument to `rgb()` or `hsl()` is read as the alpha instead of being dropped.
+  * `border-color: rgb(255, 0, 0)` or `cmyk(0, 100, 0, 0)`, with spaces after the commas, drew black.
 * A declaration mPDF cannot read replaced the value before it. A `calc()`, `min()`, `max()`, `clamp()` or `var()` length became 0, so `margin: calc(…)` removed the default margins, and a colour mPDF does not know, or one written with `var()`, drew the text black. Such a declaration is now dropped, as a browser drops it, so the earlier declaration, the default or the inherited value applies. [#552] [#565]
 * `vw`, `vh`, `vmin`, `vmax`, `Q` and `ch` were read as pixels, `+5mm` and `1e+1mm` as 0, and `1,5mm` as 1mm. The units are now resolved against the page and the font size, the numbers are read, and `1,5mm` is dropped. [#552] [#565]
 * `line-height: 0` gave lines a normal height. Lines now have no height, as in a browser. A line height well below the font size, such as `0.5` or `1mm`, was stretched down to the baseline; it is now kept. A negative `line-height`, which shrank lines to odd heights, is now ignored. [#552] [#567]
@@ -150,9 +150,9 @@ Bugfixes
 * `@import` ignored its media list, and did not load a URL that does not end in `.css`, such as a Google Fonts stylesheet. [#552] [#575]
 * `td:nth-child()` and `th:nth-child()` counted grid columns, so a `colspan` or `rowspan` before a cell made the rule miss it and reach the cell after. They now count the cells of the row. `:first-child` on a `tr`, `td` or `th` now works, as `:nth-child(1)`. [#528] [#572]
 * Some colour values were read wrongly. [#552] [#570]
-* `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
-* A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
-* `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
+  * `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
+  * A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
+  * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
 * A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#623]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
