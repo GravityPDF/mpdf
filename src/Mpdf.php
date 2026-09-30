@@ -24,6 +24,7 @@ use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 use Mpdf\Utils\Path;
+use Mpdf\Utils\Rotation;
 use Mpdf\Writer\OptionalContentWriter;
 use Psr\Log\NullLogger;
 use Mpdf\Unicode\Ucdn;
@@ -15251,9 +15252,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->Reset();
 			$p = $this->cssManager->MergeCSS('BLOCK', $tag, $attr);
 			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];
-			if (isset($p['ROTATE']) && ($p['ROTATE'] == 90 || $p['ROTATE'] == -90 || $p['ROTATE'] == 180)) {
-				$rotate = $p['ROTATE'];
-			} // mPDF 6
+			if (isset($p['ROTATE'])) {
+				$rotate = Rotation::angle($p['ROTATE'], [90, -90, 180]);
+			}
 			if (isset($p['OVERFLOW'])) {
 				$overflow = strtolower($p['OVERFLOW']);
 			}
