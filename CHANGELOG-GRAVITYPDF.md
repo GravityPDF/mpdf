@@ -840,6 +840,7 @@ These changes do not change output.
 [#539]: https://github.com/GravityPDF/mpdf/issues/539
 [#540]: https://github.com/GravityPDF/mpdf/issues/540
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
+[#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
 [#560]: https://github.com/GravityPDF/mpdf/pull/560
 [#559]: https://github.com/GravityPDF/mpdf/pull/559

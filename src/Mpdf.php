@@ -5857,7 +5857,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$dashoff = 3.5;
 				$dot = 2.5;
 
-				if ($this->drawsBorderSide($this->spanborddet['T'])) {
+				if (Border::drawsSide($this->spanborddet['T'])) {
 					$short = 0;
 
 					if ($this->spanborddet['T']['style'] == 'dashed') {
@@ -5896,7 +5896,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$s .= ' Q ';
 					}
 				}
-				if ($this->drawsBorderSide($this->spanborddet['B'])) {
+				if (Border::drawsSide($this->spanborddet['B'])) {
 
 					$short = 0;
 					if ($this->spanborddet['B']['style'] == 'dashed') {
@@ -5936,7 +5936,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				if ($this->drawsBorderSide($this->spanborddet['L'])) {
+				if (Border::drawsSide($this->spanborddet['L'])) {
 					$short = 0;
 					if ($this->spanborddet['L']['style'] == 'dashed') {
 						$s .= sprintf(' 0 j 0 J [%.3F %.3F] 0 d ', $lbw * $dashon * Mpdf::SCALE, $lbw * $dashoff * Mpdf::SCALE);
@@ -5974,7 +5974,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				if ($this->drawsBorderSide($this->spanborddet['R'])) {
+				if (Border::drawsSide($this->spanborddet['R'])) {
 
 					$short = 0;
 					if ($this->spanborddet['R']['style'] == 'dashed') {
@@ -17902,20 +17902,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
-	/**
-	 * Whether a side of a border, as border_details() reads it, draws anything. A hidden side has no width, and a
-	 * transparent one has false for its colour, which a side packed with a table cell keeps as NUL bytes. A colour
-	 * mPDF cannot read is drawn black, as it was
-	 *
-	 * @param array|null $side
-	 *
-	 * @return bool
-	 */
-	protected function drawsBorderSide($side)
-	{
-		return !empty($side['s']) && !empty($side['w']) && isset($side['c']) && $side['c'] !== false && strpos($side['c'], "\0") !== 0;
-	}
-
 	function _setBorderLine($b, $k = 1)
 	{
 		$this->SetLineWidth($b['w'] / $k);
@@ -18105,7 +18091,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->SetTColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
 			}
 
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -18202,7 +18188,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
 			$tbd = $this->blk[$blvl]['border_bottom'];
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -18266,7 +18252,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->blk[$blvl]['border_left']) {
 			$tbd = $this->blk[$blvl]['border_left'];
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -18327,7 +18313,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if ($this->blk[$blvl]['border_right']) {
 			$tbd = $this->blk[$blvl]['border_right'];
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -19003,7 +18989,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->blk[$blvl]['border_top'] && ($state == 1 || $state == 3)) {
 			$tbd = $this->blk[$blvl]['border_top'];
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				$this->_setBorderLine($tbd);
 				$this->y = $y0 + ($tbd['w'] / 2);
 				if ($tbd['style'] == 'dotted' || $tbd['style'] == 'dashed') {
@@ -19023,7 +19009,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if ($this->blk[$blvl]['border_left']) {
 			$tbd = $this->blk[$blvl]['border_left'];
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				$this->_setBorderLine($tbd);
 				if ($tbd['style'] == 'dotted' || $tbd['style'] == 'dashed') {
 					$this->y = $y0 + ($tbd['w'] / 2);
@@ -19044,7 +19030,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if ($this->blk[$blvl]['border_right']) {
 			$tbd = $this->blk[$blvl]['border_right'];
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				$this->_setBorderLine($tbd);
 				if ($tbd['style'] == 'dotted' || $tbd['style'] == 'dashed') {
 					$this->y = $y0 + ($tbd['w'] / 2);
@@ -19065,7 +19051,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if ($this->blk[$blvl]['border_bottom'] && $state > 1) {
 			$tbd = $this->blk[$blvl]['border_bottom'];
-			if ($this->drawsBorderSide($tbd)) {
+			if (Border::drawsSide($tbd)) {
 				$this->_setBorderLine($tbd);
 				$this->y = $y0 + $h - ($tbd['w'] / 2);
 				if ($tbd['style'] == 'dotted' || $tbd['style'] == 'dashed') {
@@ -19116,7 +19102,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		];
 		foreach ($lines as $side => $line) {
 			$tbd = $objattr['border_' . $side];
-			if (!$this->drawsBorderSide($tbd)) {
+			if (!Border::drawsSide($tbd)) {
 				continue;
 			}
 			$this->_setBorderLine($tbd, $k);
@@ -21941,7 +21927,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($bord == -1) {
 			$this->Rect($x, $y, $w, $h);
 		} elseif ($this->simpleTables && ($cort == 'cell')) {
-			if (!$this->drawsBorderSide($details['L'])) {
+			if (!Border::drawsSide($details['L'])) {
 				return;
 			}
 			$this->SetLineWidth($details['L']['w']);
@@ -22184,7 +22170,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				// Now draw line
-				if ($print && $this->drawsBorderSide($details[$side])) {
+				if ($print && Border::drawsSide($details[$side])) {
 					/* -- TABLES-ADVANCED-BORDERS -- */
 					if ($details[$side]['style'] == 'double') {
 						if (!isset($details[$side]['overlay']) || !$details[$side]['overlay'] || $bSeparate) {

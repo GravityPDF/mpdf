@@ -9,7 +9,7 @@ namespace Mpdf;
 class PaintRecordingMpdf extends TextRecordingMpdf
 {
 
-	/** The colour of each side of a border that is drawn, as the PDF operator that sets it, in the order drawn. */
+	/** The colour of each border path the pages stroke, as the PDF operator that sets it, in the order drawn. */
 	public $drawnBorders = [];
 
 	/** The colour of each box-shadow of a block that is painted, as the PDF operator that sets it. */
@@ -22,20 +22,58 @@ class PaintRecordingMpdf extends TextRecordingMpdf
 	public $drawnVisible = [];
 
 	/**
-	 * Records each side of a border that is drawn, with its colour
-	 *
-	 * @param array|null $side
-	 *
-	 * @return bool
+	 * Closes the document, then records the colour of each border side it strokes
 	 */
-	protected function drawsBorderSide($side)
+	function Close()
 	{
-		$draws = parent::drawsBorderSide($side);
-		if ($draws) {
-			$this->drawnBorders[] = $this->SetDColor($side['c'], true);
+		parent::Close();
+
+		foreach ($this->pages as $page) {
+			$this->drawnBorders = array_merge($this->drawnBorders, $this->strokedColours($page));
+		}
+	}
+
+	/**
+	 * The stroke colour of each path a page's content strokes outside text, in order. Borders are the only paths the
+	 * documents these tests write stroke; text outlines are stroked inside text objects
+	 *
+	 * @param string $content A page's content stream, uncompressed
+	 *
+	 * @return string[] Each colour as the operator that sets it, as SetDColor() writes it
+	 */
+	private function strokedColours($content)
+	{
+		$colours = [];
+		$colour = '';
+		$saved = [];
+		$inText = false;
+		preg_match_all('/((?:-?[\d.]+ ){1,4})(G|RG|K)(?=\s)|(?<=\s|^)(q|Q|BT|ET|S|s|B\*?|b\*?)(?=\s|$)/', $content, $ops, PREG_SET_ORDER);
+		foreach ($ops as $op) {
+			if (!empty($op[2])) {
+				$colour = $op[1] . $op[2];
+				continue;
+			}
+			switch ($op[3]) {
+				case 'q':
+					$saved[] = $colour;
+					break;
+				case 'Q':
+					$colour = array_pop($saved);
+					break;
+				case 'BT':
+					$inText = true;
+					break;
+				case 'ET':
+					$inText = false;
+					break;
+				default:
+					if (!$inText) {
+						$colours[] = $colour;
+					}
+			}
 		}
 
-		return $draws;
+		return $colours;
 	}
 
 	/**
