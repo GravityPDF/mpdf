@@ -89,6 +89,8 @@ class SelectorParser
 			$tag = 'LANG>>' . strtolower($m[1]);
 		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\s*:NTH-CHILD\(([\-+]?\d*N(?:[\-+]\d+)?|[\-+]?\d+|ODD|EVEN)\)$/', $t, $m)) { // the whole argument is a formula, with nothing after it
 			$tag = $m[1] . '>>SELECTORNTHCHILD>>' . $m[2];
+		} elseif (preg_match('/^(TR|TD|TH):FIRST-CHILD$/', $t, $m)) {
+			$tag = $m[1] . '>>SELECTORNTHCHILD>>1';
 		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\[LANG=[\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\]$/', $t, $m)) {
 			$tag = $m[1] . '>>LANG>>' . strtolower($m[2]);
 		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . '):LANG\([\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\)$/', $t, $m)) {  // mPDF 6  Special case for lang as attribute selector

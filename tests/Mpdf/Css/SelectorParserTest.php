@@ -196,6 +196,35 @@ class SelectorParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		];
 	}
 
+	/**
+	 * :first-child on a row or a cell is :nth-child(1). mPDF counts no other element, so on one it is not parsed.
+	 *
+	 * @dataProvider firstChildSelectors
+	 *
+	 * @param string $part
+	 * @param string|null $expected
+	 */
+	public function testParseSimpleSelectorFirstChild($part, $expected)
+	{
+		$this->assertSame($expected, $this->parser->parseSimpleSelector([$part]));
+	}
+
+	/**
+	 * :first-child parts as CssParser hands them over, and their keys, or null for a part mPDF cannot match
+	 *
+	 * @return array[]
+	 */
+	public function firstChildSelectors()
+	{
+		return [
+			'a row' => ['TR:FIRST-CHILD', 'TR>>SELECTORNTHCHILD>>1'],
+			'a cell' => ['TD:FIRST-CHILD', 'TD>>SELECTORNTHCHILD>>1'],
+			'a header cell' => ['TH:FIRST-CHILD', 'TH>>SELECTORNTHCHILD>>1'],
+			'a list item' => ['LI:FIRST-CHILD', null],
+			'a pseudo-class after it' => ['TD:FIRST-CHILD:NOT(.X)', null],
+		];
+	}
+
 	public function testNthchild_WithOdd()
 	{
 		$this->assertTrue($this->parser->matchesNthChild(['ODD'], 0)); // row 1
