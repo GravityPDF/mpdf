@@ -6,6 +6,7 @@ use Mpdf\Config\ConfigVariables;
 use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
+use Mpdf\Css\CommentParser;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextVars;
 use Mpdf\Fonts\Color\ColorFormats;
@@ -28256,15 +28257,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		// Remove javascript code from HTML (should not appear in the PDF file)
-		$html = preg_replace('/<script.*?<\/script>/is', '', $html);
-
-		// Remove special comments
-		$html = preg_replace('/<!--mpdf/i', '', $html);
-		$html = preg_replace('/mpdf-->/i', '', $html);
-
-		// Remove comments from HTML (should not appear in the PDF file)
-		$html = preg_replace('/<!--.*?-->/s', '', $html);
+		// Remove comments, then javascript code, from HTML (neither should appear in the PDF file)
+		$html = (new CommentParser())->removeHtmlComments($html);
+		$html = preg_replace('/' . CommentParser::SCRIPT . '/si', '', $html);
 
 		$html = preg_replace('/\f/', '', $html); // replace formfeed by nothing
 		$html = preg_replace('/\r/', '', $html); // replace carriage return by nothing

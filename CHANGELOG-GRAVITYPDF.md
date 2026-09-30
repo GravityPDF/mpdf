@@ -117,7 +117,7 @@ New features
 * **`:not()`, `:is()` and `:where()`.** Each takes a selector list whose selectors may have combinators, such as `p:not(.note, div > p)` or `:is(h2, h3) + p`. `:is()` and `:where()` leave out a selector they cannot read, as browsers do. `:not()` and `:is()` weigh as their most specific argument, and `:where()` as nothing. Rules using them were dropped before. [#538] [#628]
 * **Pseudo-classes that look at what follows an element.** `:last-child`, `:nth-last-child()`, `:only-child`, `:last-of-type`, `:nth-last-of-type()`, `:only-of-type` and `:empty` match in the flow, in tables, headers and footers, and positioned blocks. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#537] [#634]
   * `WriteHTML()` reads ahead through the HTML it is given to count each element's children. An element still open at the end of a call that leaves it open is not known in full, so these do not match its children in that call, and nor does `:not()` of them.
-  * `:empty` matches as in browsers: an element holding white space is not empty. In the default mode mPDF's CSS reader turns each HTML comment into a space, so an element holding only a comment is not empty either. A table cell holding only white space is empty, as mPDF strips it.
+  * `:empty` matches as in browsers: an element holding white space is not empty, and one holding only a comment is. A table cell holding only white space is empty, as mPDF strips it.
 
 Performance
 -----------
@@ -178,6 +178,9 @@ Bugfixes
   * A byte order mark at the start of a stylesheet, as `WriteHTML(file_get_contents('style.css'), HTMLParserMode::HEADER_CSS)` passes one on, no longer spoils the first rule.
   * An `@import` is loaded only from the stylesheet's own rules, not from a comment, a string or a block.
   * A `style` attribute is split the same way, so `style="font-family: 'a;b', serif; color: red"` applies both, and a value may run over several lines.
+* An HTML comment between two words drew a space: `Book<!-- x -->keeper` read "Book keeper", and `<p><!-- x --></p>` held a space. A comment now leaves nothing in its place, as in a browser and as `HTMLParserMode::HTML_BODY` already had it, in either `cssMode`. A document that relied on the space can put one next to the comment. [#636] [#637]
+  * In the default parser mode, a `<!--` inside a `<script>`, as in `var s = "<!--"`, drew part of the script and lost the text up to the end of the next comment.
+  * In `HTMLParserMode::HTML_BODY`, a `<script>` tag inside a comment lost the text up to the next script's end.
 * `td:nth-child()` and `th:nth-child()` counted grid columns, so a `colspan` or `rowspan` before a cell made the rule miss it and reach the cell after. They now count the cells of the row. `:first-child` on a `tr`, `td` or `th` now works, as `:nth-child(1)`. [#528] [#572]
 * Some colour values were read wrongly. [#552] [#570]
   * `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
@@ -849,6 +852,8 @@ These changes do not change output.
 [#632]: https://github.com/GravityPDF/mpdf/issues/632
 [#633]: https://github.com/GravityPDF/mpdf/pull/633
 [#634]: https://github.com/GravityPDF/mpdf/pull/634
+[#636]: https://github.com/GravityPDF/mpdf/issues/636
+[#637]: https://github.com/GravityPDF/mpdf/pull/637
 [#635]: https://github.com/GravityPDF/mpdf/pull/635
 [#639]: https://github.com/GravityPDF/mpdf/pull/639
 [#638]: https://github.com/GravityPDF/mpdf/pull/638
