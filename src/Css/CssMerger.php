@@ -160,8 +160,10 @@ class CssMerger
 	/**
 	 * Merges an element's CSS as standard mode orders it, in layers, each over the one before: the inherited
 	 * values, the built-in defaults and the default stylesheet's rules, the presentational attributes as author rules
-	 * of zero specificity, the author rules, and the inline style. The rules of each stylesheet apply by specificity,
-	 * then in the order they were written.
+	 * of zero specificity, the author rules, and the inline style; then the !important declarations of the author
+	 * rules, of the inline style, and of the default stylesheet's rules. The rules of each stylesheet apply by
+	 * specificity, then in the order they were written. Each rule that reaches a table cell draws its borders over
+	 * those of its neighbours.
 	 *
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
@@ -189,45 +191,45 @@ class CssMerger
 
 		$id = isset($attr['ID']) ? $attr['ID'] : '';
 		$classes = $this->classesOf($attr);
+		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
 
 		$this->mergeInheritedBlockProperties($inherit, $tag);
 
 		$this->mergeDefaultCss($tag);
-		$this->mergeMatchingRules($this->cssManager->getDefaultRules(), $tag, $id, $classes, $path);
+		list($defaultRules, $importantDefaultRules) = $this->cssManager->getDefaultRules()->matchingDeclarations($tag, $id, $classes, $path);
+		$this->mergeEach($defaultRules, $dominance);
 
 		$this->mergeInlineAttributes($tag, $attr);
 		$this->mergeTableSpecificCss($tag, $attr);
 
 		if ($tag === 'BODY') {
 			// Merged outside the document's elements, and written to by Mpdf::SetDefaultBodyCSS() and the like
-			$body = isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : [];
-			$this->setMergedCss($body, false);
+			$important = $this->cssManager->getImportantCss();
+			$importantDefault = $this->cssManager->getDefaultImportantCss();
+			$rules = [isset($this->cssManager->CSS['BODY']) ? $this->cssManager->CSS['BODY'] : []];
+			$importantRules = isset($important['BODY']) ? [$important['BODY']] : [];
+			$importantDefaultRules = isset($importantDefault['BODY']) ? [$importantDefault['BODY']] : [];
 		} else {
-			$this->mergeMatchingRules($this->cssManager->getRules(), $tag, $id, $classes, $path);
+			list($rules, $importantRules) = $this->cssManager->getRules()->matchingDeclarations($tag, $id, $classes, $path);
 		}
+		$this->mergeEach($rules, $dominance);
 
-		$this->mergeInlineStyle($tag, $attr);
+		list($inline, $importantInline) = isset($attr['STYLE']) ? $this->inlineStyleParser->parseByImportance($attr['STYLE']) : [[], []];
+		$this->mergeEach(array_merge([$inline], $importantRules, [$importantInline], $importantDefaultRules), $dominance);
 
 		return $this->cssProperties;
 	}
 
 	/**
-	 * Merges the declarations of the rules in a rule set that an element matches, in the order they apply: by
-	 * specificity, then by their position in the stylesheets. Each rule that reaches a table cell draws its borders
-	 * over those of its neighbours
+	 * Merges sets of properties, each over those before it
 	 *
-	 * @param RuleSet $rules
-	 * @param string $tag HTML tag name, uppercased
-	 * @param string $id Uppercased, or empty for none
-	 * @param string[] $classes Uppercased
-	 * @param callable $path Gives the open elements from the document down to the element, or null for none
+	 * @param array[] $sets
+	 * @param int|false $dominance The border dominance each set's borders take in a table cell, or false outside one
 	 * @return void
 	 */
-	private function mergeMatchingRules(RuleSet $rules, $tag, $id, array $classes, callable $path)
+	private function mergeEach(array $sets, $dominance)
 	{
-		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
-
-		foreach ($rules->matchingDeclarations($tag, $id, $classes, $path) as $properties) {
+		foreach ($sets as $properties) {
 			$this->setMergedCss($properties, false, $dominance);
 		}
 	}

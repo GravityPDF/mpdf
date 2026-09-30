@@ -1,0 +1,13 @@
+/* A default stylesheet with !important declarations, which beat the document's own under the standard cascade */
+
+body {
+	font-size: 9pt !important;
+}
+
+p.ua {
+	color: #008000 !important;
+}
+
+p.plain {
+	color: #f00;
+}
