@@ -10,7 +10,6 @@ class TFoot extends Tag
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$this->mpdf->lastoptionaltag = 'TFOOT'; // Save current HTML specified optional endtag
-		$this->startRowGroup();
 		$this->cssManager->tbCSSlvl++;
 		$this->mpdf->tabletfoot = 1;
 		$this->mpdf->tablethead = 0;
@@ -46,7 +45,6 @@ class TFoot extends Tag
 	public function close(&$ahtml, &$ihtml)
 	{
 		$this->mpdf->lastoptionaltag = '';
-		$this->startRowGroup();
 		unset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl]);
 		$this->cssManager->tbCSSlvl--;
 		$this->mpdf->tabletfoot = 0;

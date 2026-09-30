@@ -67,6 +67,39 @@ class OpenElementStackTest extends TestCase
 	}
 
 	/**
+	 * mPDF lays out a cell, row or row group opened without the end tag of the one before as the next one with
+	 * allow_html_optional_endtags off too, and the stack closes the one before as it does with the option on. A
+	 * paragraph is still opened inside the one before
+	 */
+	public function testTableEndTagsLeftOutAreImpliedWhenOptionalEndTagsAreOff()
+	{
+		$mpdf = $this->mpdfRecording(['allow_html_optional_endtags' => false]);
+		$mpdf->WriteHTML('<table><thead><tr><th>head<tbody><tr><td>a<td><p>b<p>c<tr><td>d</table>', HTMLParserMode::DEFAULT_MODE, true, false);
+
+		$this->assertSame('TABLE:1/1 > THEAD:1/1 > TR:1/1 > TH:1/1', $this->pathAt($mpdf, 'head'));
+		$this->assertSame('TABLE:1/1 > TBODY:2/1 > TR:1/1 > TD:2/2 > P:1/1 > P:1/1', $this->pathAt($mpdf, 'c'));
+		$this->assertSame('TABLE:1/1 > TBODY:2/1 > TR:2/2 > TD:1/1', $this->pathAt($mpdf, 'd'));
+	}
+
+	/**
+	 * An element a browser moves out of a table, such as mPDF's own tags written between cells or rows, is not counted
+	 * among the cells of the row or the rows of the row group
+	 */
+	public function testElementsWrittenStraightIntoATablePartAreNotItsChildren()
+	{
+		$mpdf = $this->write('<table><bookmark content="b" />'
+			. '<tr><tocentry content="t" /><td>a</td><span>span</span><td>b</td></tr>'
+			. '<indexentry content="i" /><tr><td>c</td></tr></table><p>after</p>');
+
+		$this->assertSame('TABLE:1/1 > TBODY:1/1 > TR:1/1 > TD:2/2', $this->pathAt($mpdf, 'b'));
+		$this->assertSame('TABLE:1/1 > TBODY:1/1 > TR:2/2 > TD:1/1', $this->pathAt($mpdf, 'c'));
+		$this->assertSame([], $this->childTags($this->frameAt($mpdf, 'b', 1)));
+		$this->assertSame(['TD'], $this->childTags($this->frameAt($mpdf, 'b', 3)));
+		$this->assertSame(['TR'], $this->childTags($this->frameAt($mpdf, 'c', 2)));
+		$this->assertSame('P:2/1', $this->pathAt($mpdf, 'after'));
+	}
+
+	/**
 	 * An end tag with no element of its name open is ignored, and so is one inside a table cell for an element
 	 * outside the table
 	 */

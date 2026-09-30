@@ -212,6 +212,12 @@ class StructuralSelectorTest extends TestCase
 				'<table><tr><td colspan="2">wide</td><td>second cell</td></tr></table>',
 				['wide' => self::BLACK, 'second cell' => self::RED],
 			],
+			"mPDF's own tags between cells and rows are not their siblings" => [
+				'td + td { color: #f00; } tr + tr > td:nth-of-type(1) { color: #00f; }',
+				'<table><tr><td>first</td><bookmark content="b" /><td>second</td></tr>'
+				. '<tocentry content="t" /><tr><td>next row</td></tr></table>',
+				['first' => self::BLACK, 'second' => self::RED, 'next row' => self::BLUE],
+			],
 			'a row written straight into a table sits in a tbody' => [
 				'table > tbody > tr > td { color: #f00; } table > tr > td { color: #00f; }',
 				'<table><tr><td>cell</td></tr></table>',

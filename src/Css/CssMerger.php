@@ -901,8 +901,11 @@ class CssMerger
 	 * The nth-child rules in a node of the stylesheet that match the row or cell being opened.
 	 *
 	 * Only the nth-child keys CssManager::readCss() recorded are looked up, each directly in the node, so a node must
-	 * come from the stylesheet it read. Where several match, a later rule overrides an earlier one, so they are returned
-	 * in the order the node holds them.
+	 * come from the stylesheet it read. The row or cell is counted by its place among its element siblings on the
+	 * stack of open elements: a row within its thead, tbody or tfoot, or the tbody a row written straight into the
+	 * table is put in, and a cell among the cells of its row, whatever grid columns a colspan or a rowspan takes up.
+	 * Where several rules match, a later rule overrides an earlier one, so they are returned in the order the node
+	 * holds them.
 	 *
 	 * @param array $node CssManager::$CSS, or a level of the descendant rules
 	 * @param string $tag TR, TD or TH
@@ -910,51 +913,25 @@ class CssMerger
 	 */
 	private function matchingNthChildRules($node, $tag)
 	{
+		$formulas = array_intersect_key($this->cssManager->getNthChildFormulas($tag), $node);
+		if (!$formulas) {
+			return [];
+		}
+
+		$nthChild = $this->mpdf->getStyledElementNthChild();
+		if ($nthChild === null) {
+			return [];
+		}
+
 		$rules = [];
-		$index = null;
-		foreach ($this->cssManager->getNthChildFormulas($tag) as $key => $parts) {
-			if (!isset($node[$key])) {
-				continue;
-			}
-
-			if ($index === null) {
-				$index = $this->nthChildIndex($tag);
-			}
-
-			if ($this->selectorParser->matchesNthChild($parts, $index)) {
+		foreach ($formulas as $key => $parts) {
+			if ($this->selectorParser->matchesNthChild($parts, $nthChild - 1)) {
 				$rules[$key] = $node[$key];
 			}
 		}
 
 		// The index holds the keys in the order the whole stylesheet first used them, which need not be this node's
 		return count($rules) > 1 ? array_intersect_key($node, $rules) : $rules;
-	}
-
-	/**
-	 * The index, from 0, that nth-child matches the row or cell being opened against.
-	 *
-	 * A row is counted among the rows of its row group: the thead, a tbody, the tfoot, or the rows written straight into
-	 * the table. A cell is counted among the cells opened in its row, so the grid columns a colspan or a rowspan takes
-	 * up before it do not count.
-	 *
-	 * @param string $tag TR, TD or TH
-	 * @return int
-	 */
-	private function nthChildIndex($tag)
-	{
-		if ($tag !== 'TR') {
-			// The cell being opened is not in the grid yet, so this counts the cells before it. A grid column that a
-			// colspan or a rowspan takes up holds 0, not a cell.
-			$cells = isset($this->mpdf->cell[$this->mpdf->row]) ? $this->mpdf->cell[$this->mpdf->row] : [];
-
-			return count(array_filter($cells, 'is_array'));
-		}
-
-		// A table starts with the rows written straight into it, until a row group opens
-		$level = $this->mpdf->tableLevel;
-		$start = isset($this->mpdf->tbctr[$level], $this->mpdf->table[$level][$this->mpdf->tbctr[$level]]['rowgroupstart']) ? $this->mpdf->table[$level][$this->mpdf->tbctr[$level]]['rowgroupstart'] : 0;
-
-		return $this->mpdf->row - $start;
 	}
 
 	/**

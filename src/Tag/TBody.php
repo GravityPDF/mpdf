@@ -10,7 +10,6 @@ class TBody extends Tag
 		$this->mpdf->tablethead = 0;
 		$this->mpdf->tabletfoot = 0;
 		$this->mpdf->lastoptionaltag = 'TBODY'; // Save current HTML specified optional endtag
-		$this->startRowGroup();
 		$this->cssManager->tbCSSlvl++;
 		$this->cssManager->MergeCSS('TABLE', 'TBODY', $attr);
 	}
@@ -18,7 +17,6 @@ class TBody extends Tag
 	public function close(&$ahtml, &$ihtml)
 	{
 		$this->mpdf->lastoptionaltag = '';
-		$this->startRowGroup();
 		unset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl]);
 		$this->cssManager->tbCSSlvl--;
 	}
