@@ -20,7 +20,8 @@ class CascadeContextTest extends TestCase
 
 	/**
 	 * Each subject is drawn in the colour the rules that win leave it in: the element the heavier or later rule
-	 * matches, and a near miss that only the other rule matches
+	 * matches, and a near miss that only the other rule matches. The document is closed, so its header and footer are
+	 * drawn on the page, and each subject is checked to be drawn in the context the case names
 	 *
 	 * @dataProvider casesInContexts
 	 *
@@ -37,7 +38,11 @@ class CascadeContextTest extends TestCase
 			}
 		}
 
-		$this->assertDrawnInColours($expected, $this->drawnColours($this->document($context, $css, $groups), ['cssMode' => CssMode::STANDARD]));
+		$mpdf = $this->drawDocument($this->document($context, $css, $groups), ['cssMode' => CssMode::STANDARD]);
+		$mpdf->OutputBinaryData();
+
+		$this->assertDrawnInColours($expected, $this->keyedByText($mpdf, $mpdf->drawnColours));
+		$this->assertDrawnInContext($context, $mpdf, array_keys($expected));
 	}
 
 	/**
@@ -175,21 +180,6 @@ class CascadeContextTest extends TestCase
 
 		// A table cell and an inline element are the subjects' own tags, in the flow
 		return $style . ($context === 'table cell' ? $html : $this->inContext($context, $html));
-	}
-
-	/**
-	 * The kept-block context does lay its block out twice: it starts on the first page, runs over, and is laid out
-	 * again from the top of the second
-	 */
-	public function testTheKeptBlockMovesToTheNextPage()
-	{
-		$mpdf = $this->drawDocument($this->document('kept block', '.c { color: #f00; }', [[[''], ['kept subject' => ['class="c"'], 'second' => [''], 'third' => ['']]]]), ['cssMode' => CssMode::STANDARD]);
-		$pages = $this->keyedByText($mpdf, array_map(function ($box) {
-			return $box[0];
-		}, $mpdf->drawnBoxes));
-
-		$this->assertSame(2, $pages['kept']);
-		$this->assertSame(2, $pages['kept subject']);
 	}
 
 	/**

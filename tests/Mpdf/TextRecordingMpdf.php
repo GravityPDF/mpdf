@@ -11,8 +11,11 @@ namespace Mpdf;
  * Cell() writes them from, and telling those apart from the same bytes occurring inside an embedded
  * font. The signature is restated in full because a variadic tail only absorbs the parameters it
  * replaces from PHP 8.0, and warns about the declaration on every version before that.
+ *
+ * It counts the page-break-inside: avoid blocks put back as well, for a test that needs to know a block was laid out
+ * twice.
  */
-class TextRecordingMpdf extends Mpdf
+class TextRecordingMpdf extends UnwindCountingMpdf
 {
 
 	public $drawnText = [];
@@ -35,6 +38,12 @@ class TextRecordingMpdf extends Mpdf
 	/** The text colour each of those lines was drawn in, as the PDF operator that sets it, in the same order. */
 	public $drawnColours = [];
 
+	/**
+	 * Where each of those lines was drawn, in the same order: in an HTML 'header' or 'footer', in a 'positioned' block
+	 * WriteFixedPosHTML() writes, or '' in the flow
+	 */
+	public $drawnIn = [];
+
 	function Cell($w, $h = 0, $txt = '', $border = 0, $ln = 0, $align = '', $fill = 0, $link = '', $currentx = 0, $lcpaddingL = 0, $lcpaddingR = 0, $valign = 'M', $spanfill = 0, $exactWidth = false, $OTLdata = false, $textvar = 0, $lineBox = false)
 	{
 		if (is_string($txt) && trim($txt) !== '') {
@@ -45,9 +54,24 @@ class TextRecordingMpdf extends Mpdf
 			$this->drawnBoxes[] = [$this->page, $this->x, $this->x + $w, $this->y];
 			$this->drawnY[] = $this->y;
 			$this->drawnColours[] = $this->TextColor;
+			$this->drawnIn[] = $this->whereDrawing();
 		}
 
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);
+	}
+
+	/**
+	 * WriteFixedPosHTML() raises the flags for a header and a footer both, to keep page breaks out of a positioned block
+	 *
+	 * @return string Where the line being drawn is: 'header', 'footer', 'positioned' or '' in the flow
+	 */
+	private function whereDrawing()
+	{
+		if ($this->writingHTMLheader && $this->writingHTMLfooter) {
+			return 'positioned';
+		}
+
+		return $this->writingHTMLfooter ? 'footer' : ($this->writingHTMLheader ? 'header' : '');
 	}
 
 	/**

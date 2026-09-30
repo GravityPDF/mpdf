@@ -80,14 +80,37 @@ trait DrawnStyles
 				return '<div style="position: absolute; top: 60mm; left: 20mm; width: 150mm;">' . $html . '</div>';
 
 			case 'kept block':
-				// Too little of the first page is left for the block, which is laid out again on the second
-				return str_repeat('<p>filler</p>', 44) . '<div style="page-break-inside: avoid"><p>kept</p>' . $html . '</div>';
+				// The block starts on the first page, runs over it, and is put back and laid out again on the second
+				return '<div style="height: 200mm">filler</div><div style="page-break-inside: avoid"><p>kept</p>' . $html
+					. '<div style="height: 60mm"></div></div>';
 
 			case 'forced page break':
 				return '<div class="w"><p>before the break</p><pagebreak />' . $html . '</div>';
 
 			default:
 				return $html;
+		}
+	}
+
+	/**
+	 * Pieces of text put in a context by inContext() are drawn where it puts them, so that a context cannot quietly
+	 * stop testing what it is named for: in the header, the footer or the positioned block, and on the second page
+	 * after the forced page break or once the kept block has been put back and laid out again
+	 *
+	 * @param string $context As inContext() takes it
+	 * @param TextRecordingMpdf $mpdf The document, written and closed
+	 * @param string[] $texts The pieces of text
+	 */
+	private function assertDrawnInContext($context, TextRecordingMpdf $mpdf, array $texts)
+	{
+		$this->assertSame($context === 'kept block' ? 1 : 0, $mpdf->unwinds, 'How often a kept block is put back');
+
+		$boxes = $this->keyedByText($mpdf, $mpdf->drawnBoxes);
+		$drawnIn = $this->keyedByText($mpdf, $mpdf->drawnIn);
+		$where = ['header' => 'header', 'footer' => 'footer', 'positioned block' => 'positioned'];
+		foreach ($texts as $text) {
+			$this->assertSame(isset($where[$context]) ? $where[$context] : '', $drawnIn[$text], $text);
+			$this->assertSame(in_array($context, ['kept block', 'forced page break'], true) ? 2 : 1, $boxes[$text][0], $text);
 		}
 	}
 

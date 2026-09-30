@@ -82,7 +82,7 @@ class LegacyCssModeTest extends TestCase
 
 	/**
 	 * Each selector only the matcher reads, in each context: standard mode colours the target, legacy mode leaves it
-	 * as it is with no stylesheet
+	 * as it is with no stylesheet. The document is closed, so its header and footer are drawn on the page
 	 *
 	 * @dataProvider selectorsInContexts
 	 *
@@ -94,8 +94,13 @@ class LegacyCssModeTest extends TestCase
 	{
 		$document = '<style>' . $selector . ' { color: #f00; }</style>' . $this->inContext($context, $html);
 
-		$this->assertSame(self::RED, $this->drawnColours($document, ['cssMode' => CssMode::STANDARD])['target']);
-		$this->assertSame(self::BLACK, $this->drawnColours($document, ['cssMode' => CssMode::LEGACY])['target']);
+		foreach ([CssMode::STANDARD => self::RED, CssMode::LEGACY => self::BLACK] as $mode => $colour) {
+			$mpdf = $this->drawDocument($document, ['cssMode' => $mode]);
+			$mpdf->OutputBinaryData();
+
+			$this->assertSame($colour, $this->keyedByText($mpdf, $mpdf->drawnColours)['target'], $mode);
+			$this->assertDrawnInContext($context, $mpdf, ['target']);
+		}
 	}
 
 	/**
