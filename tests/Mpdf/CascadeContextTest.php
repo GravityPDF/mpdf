@@ -37,7 +37,7 @@ class CascadeContextTest extends TestCase
 			}
 		}
 
-		$this->assertDrawnInColours($expected, $this->drawnColours($this->document($context, $css, $groups), ['cssMode' => 'standard']));
+		$this->assertDrawnInColours($expected, $this->drawnColours($this->document($context, $css, $groups), ['cssMode' => CssMode::STANDARD]));
 	}
 
 	/**
@@ -201,7 +201,7 @@ class CascadeContextTest extends TestCase
 	 */
 	public function testTheKeptBlockMovesToTheNextPage()
 	{
-		$mpdf = $this->drawDocument($this->document('kept block', '.c { color: #f00; }', [[[''], ['kept subject' => ['class="c"'], 'second' => [''], 'third' => ['']]]]), ['cssMode' => 'standard']);
+		$mpdf = $this->drawDocument($this->document('kept block', '.c { color: #f00; }', [[[''], ['kept subject' => ['class="c"'], 'second' => [''], 'third' => ['']]]]), ['cssMode' => CssMode::STANDARD]);
 		$pages = $this->keyedByText($mpdf, array_map(function ($box) {
 			return $box[0];
 		}, $mpdf->drawnBoxes));
@@ -217,7 +217,7 @@ class CascadeContextTest extends TestCase
 	public function testARuleThroughABlockOpenedAgainAfterAForcedPageBreak()
 	{
 		$colours = $this->drawnColours('<style>.w p { color: #008000; } div p { color: #f00; }</style>'
-			. '<div class="w"><p>before</p><pagebreak /><div><p>after the break</p></div></div><div><p>outside</p></div>', ['cssMode' => 'standard']);
+			. '<div class="w"><p>before</p><pagebreak /><div><p>after the break</p></div></div><div><p>outside</p></div>', ['cssMode' => CssMode::STANDARD]);
 
 		$this->assertSame(self::GREEN, $colours['before']);
 		$this->assertSame(self::GREEN, $colours['after the break']);

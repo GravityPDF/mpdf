@@ -15,7 +15,7 @@ class FrameworkCascadeLegacySnapshotTest extends FrameworkCascadeSnapshot
 	 */
 	protected function cascade()
 	{
-		return 'legacy';
+		return \Mpdf\CssMode::LEGACY;
 	}
 
 }

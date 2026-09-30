@@ -4,6 +4,7 @@ namespace Mpdf\Css;
 
 use Mpdf\Utils\Arrays;
 use Mpdf\Utils\Path;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Cache;
 use Mpdf\SizeConverter;
@@ -317,7 +318,7 @@ class CssParser
 		$tag = $level === 1 ? $this->selectorParser->parseSimpleSelector($tags) : null;
 		$simple = $tag !== null && $this->isLegacySelector([$tag]);
 
-		if ($this->mpdf->cssMode === 'standard') {
+		if ($this->mpdf->cssMode === CssMode::STANDARD) {
 			$this->compileRule($written, $classProperties);
 
 			// Simple rules are still stored by key, for what reads CssManager::$CSS directly: BODY, and SVG's classes

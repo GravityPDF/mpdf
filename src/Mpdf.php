@@ -235,7 +235,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $CSSselectMedia;
 
 	/**
-	 * @var string 'standard' or 'legacy'. See ConfigVariables
+	 * @var string A CssMode constant. See ConfigVariables
 	 */
 	var $cssMode;
 
@@ -1176,8 +1176,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$originalConfig = $config;
 		$config = $this->initConfig($originalConfig);
 
-		if (!in_array($this->cssMode, ['legacy', 'standard'], true)) {
-			throw new \Mpdf\MpdfException(sprintf('cssMode (%s) is not valid. (Use: legacy or standard)', $this->cssMode));
+		if (!in_array($this->cssMode, [CssMode::STANDARD, CssMode::LEGACY], true)) {
+			throw new \Mpdf\MpdfException(sprintf('cssMode (%s) is not valid. (Use: %s or %s)', $this->cssMode, CssMode::STANDARD, CssMode::LEGACY));
 		}
 
 		if ($this->isPdfx4() && version_compare($this->pdf_version, '1.6', '<')) {
@@ -1599,7 +1599,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if (file_exists($this->defaultCssFile)) {
 			$css = file_get_contents($this->defaultCssFile);
-			$this->cssManager->ReadCSS('<style> ' . $css . ' </style>', $this->cssMode === 'standard');
+			$this->cssManager->ReadCSS('<style> ' . $css . ' </style>', $this->cssMode === CssMode::STANDARD);
 		} else {
 			throw new \Mpdf\MpdfException(sprintf('Unable to read default CSS file "%s"', $this->defaultCssFile));
 		}

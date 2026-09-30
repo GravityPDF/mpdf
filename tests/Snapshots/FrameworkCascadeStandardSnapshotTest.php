@@ -15,7 +15,7 @@ class FrameworkCascadeStandardSnapshotTest extends FrameworkCascadeSnapshot
 	 */
 	protected function cascade()
 	{
-		return 'standard';
+		return \Mpdf\CssMode::STANDARD;
 	}
 
 }

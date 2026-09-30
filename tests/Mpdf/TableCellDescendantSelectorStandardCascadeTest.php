@@ -15,6 +15,6 @@ class TableCellDescendantSelectorStandardCascadeTest extends TableCellDescendant
 	 */
 	protected function config()
 	{
-		return ['cssMode' => 'standard'];
+		return ['cssMode' => CssMode::STANDARD];
 	}
 }

@@ -15,6 +15,6 @@ class PositionedBlockSelectorStandardCascadeTest extends PositionedBlockSelector
 	 */
 	protected function config()
 	{
-		return ['cssMode' => 'standard'];
+		return ['cssMode' => CssMode::STANDARD];
 	}
 }

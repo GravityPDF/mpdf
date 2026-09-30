@@ -45,8 +45,8 @@ class CascadeOrderTest extends TestCase
 		$cases = [];
 		foreach ($this->precedenceTable() as $name => $row) {
 			list($css, $html, $legacy, $standard) = $row;
-			$cases[$name . ' (legacy)'] = ['legacy', $css, $html, $legacy];
-			$cases[$name . ' (standard)'] = ['standard', $css, $html, $standard];
+			$cases[$name . ' (legacy)'] = [CssMode::LEGACY, $css, $html, $legacy];
+			$cases[$name . ' (standard)'] = [CssMode::STANDARD, $css, $html, $standard];
 		}
 
 		return $cases;
@@ -171,7 +171,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testAStylesheetWrittenLaterComesLater()
 	{
-		$mpdf = $this->drawDocument('<style>.b { color: #008000; }</style>', ['cssMode' => 'standard']);
+		$mpdf = $this->drawDocument('<style>.b { color: #008000; }</style>', ['cssMode' => CssMode::STANDARD]);
 		$mpdf->WriteHTML('<style>.a { color: #f00; }</style><p class="a b">both</p>');
 
 		$this->assertSame(self::RED, $mpdf->drawnColours[0]);
@@ -203,8 +203,8 @@ class CascadeOrderTest extends TestCase
 	public function cascades()
 	{
 		return [
-			'legacy' => ['legacy', false],
-			'standard' => ['standard', true],
+			CssMode::LEGACY => [CssMode::LEGACY, false],
+			CssMode::STANDARD => [CssMode::STANDARD, true],
 		];
 	}
 
@@ -238,10 +238,10 @@ class CascadeOrderTest extends TestCase
 		$blue = '0.000 0.000 1.000 RG';
 
 		return [
-			'legacy: the default beats the attribute' => ['legacy', '<hr color="#ff0000" />', $grey],
-			'legacy: a rule beats the attribute' => ['legacy', '<style>hr { color: #00f; }</style><hr color="#ff0000" />', $blue],
-			'standard: the attribute beats the default' => ['standard', '<hr color="#ff0000" />', $red],
-			'standard: a rule beats the attribute' => ['standard', '<style>hr { color: #00f; }</style><hr color="#ff0000" />', $blue],
+			'legacy: the default beats the attribute' => [CssMode::LEGACY, '<hr color="#ff0000" />', $grey],
+			'legacy: a rule beats the attribute' => [CssMode::LEGACY, '<style>hr { color: #00f; }</style><hr color="#ff0000" />', $blue],
+			'standard: the attribute beats the default' => [CssMode::STANDARD, '<hr color="#ff0000" />', $red],
+			'standard: a rule beats the attribute' => [CssMode::STANDARD, '<style>hr { color: #00f; }</style><hr color="#ff0000" />', $blue],
 		];
 	}
 
@@ -251,8 +251,8 @@ class CascadeOrderTest extends TestCase
 	public function testVspaceBeatsTheDefaultMarginOfAnImage()
 	{
 		$html = '<img src="' . __DIR__ . '/../data/img/tiger.jpg" width="20" vspace="30" /><p>after</p>';
-		$legacy = $this->drawDocument($html, ['cssMode' => 'legacy']);
-		$standard = $this->drawDocument($html, ['cssMode' => 'standard']);
+		$legacy = $this->drawDocument($html, ['cssMode' => CssMode::LEGACY]);
+		$standard = $this->drawDocument($html, ['cssMode' => CssMode::STANDARD]);
 
 		$this->assertEqualsWithDelta(2 * 30 * 25.4 / 96, $standard->drawnY[0] - $legacy->drawnY[0], 0.1);
 	}
@@ -262,7 +262,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testTheBodyTakesWhatTheApiWritesForIt()
 	{
-		$mpdf = new TextRecordingMpdf(['mode' => 'c', 'cssMode' => 'standard']);
+		$mpdf = new TextRecordingMpdf(['mode' => 'c', 'cssMode' => CssMode::STANDARD]);
 		$mpdf->SetDefaultBodyCSS('color', '#008000');
 		$mpdf->WriteHTML('<p>body text</p>');
 
@@ -275,7 +275,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testBodyRulesStyleTheDocument()
 	{
-		$mpdf = $this->drawDocument('<style>body { font-size: 20pt; } body > p.c { color: #008000; }</style><p>plain</p><p class="c">classed</p>', ['cssMode' => 'standard']);
+		$mpdf = $this->drawDocument('<style>body { font-size: 20pt; } body > p.c { color: #008000; }</style><p>plain</p><p class="c">classed</p>', ['cssMode' => CssMode::STANDARD]);
 		$sizes = $this->keyedByText($mpdf, $mpdf->drawnFontSize);
 		$colours = $this->keyedByText($mpdf, $mpdf->drawnColours);
 
@@ -291,8 +291,8 @@ class CascadeOrderTest extends TestCase
 	public function testTheDefaultStylesheetApplies()
 	{
 		$html = '<ul><li>outer<ul><li>inner</li></ul></li><li>next</li></ul>';
-		$legacy = $this->drawDocument($html, ['cssMode' => 'legacy']);
-		$standard = $this->drawDocument($html, ['cssMode' => 'standard']);
+		$legacy = $this->drawDocument($html, ['cssMode' => CssMode::LEGACY]);
+		$standard = $this->drawDocument($html, ['cssMode' => CssMode::STANDARD]);
 
 		$this->assertSame($legacy->drawnY, $standard->drawnY);
 	}
@@ -306,7 +306,7 @@ class CascadeOrderTest extends TestCase
 		$svg = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="20"><text class="t" x="0" y="15">Hi</text></svg>';
 		$html = '<style>.t { fill: #00ff00; }</style><img src="data:image/svg+xml;base64,' . base64_encode($svg) . '" />';
 
-		$this->assertStringContainsString('0.000 1.000 0.000 rg', $this->render($html, ['cssMode' => 'standard', 'svgClasses' => true]));
+		$this->assertStringContainsString('0.000 1.000 0.000 rg', $this->render($html, ['cssMode' => CssMode::STANDARD, 'svgClasses' => true]));
 	}
 
 	/**
@@ -314,7 +314,7 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testPageRulesStillApply()
 	{
-		$mpdf = $this->drawDocument('<style>@page { margin-left: 50mm; }</style><p>text</p>', ['cssMode' => 'standard']);
+		$mpdf = $this->drawDocument('<style>@page { margin-left: 50mm; }</style><p>text</p>', ['cssMode' => CssMode::STANDARD]);
 
 		$this->assertEqualsWithDelta(50, $mpdf->drawnBoxes[0][1], 0.01);
 	}
@@ -329,8 +329,8 @@ class CascadeOrderTest extends TestCase
 	 */
 	public function testADocumentWhoseRulesDoNotCompeteIsDrawnAlike($html)
 	{
-		$legacy = $this->pages($this->render($html, ['cssMode' => 'legacy']));
-		$standard = $this->pages($this->render($html, ['cssMode' => 'standard']));
+		$legacy = $this->pages($this->render($html, ['cssMode' => CssMode::LEGACY]));
+		$standard = $this->pages($this->render($html, ['cssMode' => CssMode::STANDARD]));
 
 		$this->assertSame($legacy, $standard);
 	}
@@ -362,7 +362,7 @@ class CascadeOrderTest extends TestCase
 	public function testRefusesAnUnknownCascade()
 	{
 		$this->expectException(MpdfException::class);
-		$this->expectExceptionMessage('cssMode (browser) is not valid. (Use: legacy or standard)');
+		$this->expectExceptionMessage('cssMode (browser) is not valid. (Use: standard or legacy)');
 
 		new Mpdf(['cssMode' => 'browser']);
 	}

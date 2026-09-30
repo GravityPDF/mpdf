@@ -3,6 +3,7 @@
 namespace Mpdf\Css;
 
 use Mpdf\Color\ColorConverter;
+use Mpdf\CssMode;
 use Mpdf\CssManager;
 use Mpdf\Exception\InvalidArgumentException;
 use Mpdf\Mpdf;
@@ -112,7 +113,7 @@ class CssMerger
 
 		$attr = is_array($attr) ? $attr : [];
 
-		if ($this->mpdf->cssMode === 'standard') {
+		if ($this->mpdf->cssMode === CssMode::STANDARD) {
 			return $this->mergeInCascadeOrder($inherit, $tag, $attr);
 		}
 
