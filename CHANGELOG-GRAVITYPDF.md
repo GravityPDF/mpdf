@@ -54,6 +54,11 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A table's `border` gives each cell a 1px border of its own, which a rule for the table's border leaves alone. Before, the cells copied the table's border.
 * **`line-height` on an inline element sets the height of its line**, as in a browser. mPDF ignored it, so `<span style="line-height: 30mm">` left its line as it was. Now each inline element's box is as tall as its line-height, and a line grows to hold the tallest box on it, text or image, in blocks and table cells alike. The block's own line height is the least a line can be, so a smaller inline line-height, or `0`, does not shrink it. A percentage in `vertical-align` is taken of the element's own line-height. `line-height` on a `<p>` or `<div>` inside a table cell, which mPDF lays out as inline content, can now make its lines taller than the cell's. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore it as before. [#548] [#646]
 * **`rem` is read against the font size of `html`, in standard mode**, as in a browser. It was read against the font size of `body`, and inside a table against the table's. Now `1rem` is the default font size, from the `default_font_size` configuration or `SetDefaultFontSize()`, unless an `html` or `:root` rule sizes `html`: with `html { font-size: 62.5% }`, `1.6rem` is the default size again. A `body { font-size }` rule no longer changes it. To keep the old sizes, give them in `em` or points, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#529] [#642]
+* **A table inherits from the block around it**, as in a browser, under the standard `cssMode`. It used to start from the document's defaults, so `<div style="color: red; font-family: monospace">` around a table left its cells black and in the body's font. Now a table takes every inherited property from the block, list item, header or positioned block it is in, and a nested table takes its cell's `text-align` and `line-height` too. [#543] [#656]
+  * `table { font-size: 80% }` is taken of the block's size, not the document's.
+  * The built-in default style no longer gives a table `hyphens: manual` and `font-kerning: auto`, which a browser's does not, so a table inherits them. It keeps the table's `line-height: 1.2` where the block's is `normal`, as tables have always been drawn.
+  * A `th` in a table in a right-aligned block is aligned right, since it inherits an alignment.
+  * Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep tables starting from the document's defaults.
 
 New features
 ------------
@@ -880,3 +885,5 @@ These changes do not change output.
 [#648]: https://github.com/GravityPDF/mpdf/pull/648
 [#542]: https://github.com/GravityPDF/mpdf/issues/542
 [#655]: https://github.com/GravityPDF/mpdf/pull/655
+[#543]: https://github.com/GravityPDF/mpdf/issues/543
+[#656]: https://github.com/GravityPDF/mpdf/pull/656

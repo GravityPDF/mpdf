@@ -244,7 +244,7 @@ class StringWidthDecodingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function drawnLines($html)
 	{
 		$mpdf = new TextRecordingMpdf(['mode' => 'utf-8', 'format' => [120, 400]]);
-		$mpdf->WriteHTML('<div style="font-family: dejavusans; font-size: 8pt">' . $html . '</div>');
+		$mpdf->WriteHTML($html);
 		$lines = $mpdf->drawnText;
 		$mpdf->cleanup();
 
