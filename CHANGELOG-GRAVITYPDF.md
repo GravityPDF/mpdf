@@ -155,6 +155,7 @@ Bugfixes
   * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
 * A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#623]
 * `tr:nth-child()` counted the rows of the whole table less its header and footer rows, so a second `<tbody>` carried on the count of the first, and `tr:first-child` missed the first footer row when `<tfoot>` came after the body. Rows are now counted within their `<thead>`, `<tbody>` or `<tfoot>`, or within the run of rows written straight into the table. [#528] [#582]
+* `font: small-caps 14pt serif` drew the text in full-size capitals, as `text-transform: uppercase` does. It is now drawn in small capitals, as `font-variant: small-caps` draws it. The `font` shorthand also kept a `line-height` and a `font-variant` it inherited; like the style and weight, they are now reset to `normal` when the shorthand does not name them, as in a browser. To keep a line height, give it in the shorthand, as in `font: 14pt/1.5 serif`, or declare `line-height` after it. A `font` shorthand with a negative line height, such as `font: 12pt/-1 serif`, is dropped whole. `font-variant: normal` now resets `font-variant-position` as well. [#552] [#581]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -346,6 +347,7 @@ These changes do not change output.
 * **Annotation objects.** Annotation object numbers are given once instead of being predicted in `PageWriter`. [#360]
 * **ToUnicode.** The byte-subset ToUnicode map is built in one place. [#372]
 * **UTF-8 decoding.** A valid UTF-8 string is decoded with mbstring. [#364]
+* **Glyph outline numbers.** A glyph outline's coordinates are written through `NumericString::decimal()`, as the colour glyphs and SVG paths write theirs. [#625]
 * **Snapshot tests.** Snapshot tests compare bytes first, then PDF objects, then pixels. Snapshot documents carry nothing of the machine that made them. [#72]
 * **Data scripts.** Composer scripts regenerate the Unicode, emoji, joining, language system, font cache, subset, shaping and grey profile data, and update snapshots.
 * **CI.** [#5] [#310] [#317] [#376] [#377] [#615]
@@ -780,6 +782,8 @@ These changes do not change output.
 [#578]: https://github.com/GravityPDF/mpdf/pull/578
 [#580]: https://github.com/GravityPDF/mpdf/pull/580
 [#582]: https://github.com/GravityPDF/mpdf/pull/582
+[#581]: https://github.com/GravityPDF/mpdf/pull/581
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
 [#622]: https://github.com/GravityPDF/mpdf/pull/622
 [#623]: https://github.com/GravityPDF/mpdf/pull/623
+[#625]: https://github.com/GravityPDF/mpdf/pull/625

@@ -237,7 +237,9 @@ class NormalizeProperties
 	 * Process FONT shorthand property.
 	 *
 	 * Expands the CSS font shorthand into individual components:
-	 * font-family, font-size, line-height, font-style, font-weight, text-transform.
+	 * font-family, font-size, line-height, font-style, font-weight and the font-variant longhands.
+	 * A component the value does not name is reset to normal. A value with no size and family,
+	 * such as a system font keyword (caption, menu), is dropped.
 	 *
 	 * @param string $value Font property value
 	 * @return void
@@ -253,12 +255,15 @@ class NormalizeProperties
 
 		list(, $keywords, $size, $lineHeight, $family) = $m;
 
+		// A negative line-height makes the whole value invalid
+		if ((float) $lineHeight < 0) {
+			return;
+		}
+
 		$this->processFontFamilyProperty('FONT-FAMILY', $family);
 
 		$this->properties['FONT-SIZE'] = $size;
-		if ($lineHeight !== '') {
-			$this->properties['LINE-HEIGHT'] = $lineHeight;
-		}
+		$this->properties['LINE-HEIGHT'] = $lineHeight !== '' ? $lineHeight : 'normal';
 
 		// Check for font-style
 		if (preg_match('/(italic|oblique)/i', $keywords)) {
@@ -274,9 +279,10 @@ class NormalizeProperties
 			$this->properties['FONT-WEIGHT'] = 'normal';
 		}
 
-		// Check for small-caps
+		// Check for small-caps, the only font-variant value the shorthand can name
+		$this->processFontVariantProperty('normal');
 		if (stripos($keywords, 'small-caps') !== false) {
-			$this->properties['TEXT-TRANSFORM'] = 'uppercase';
+			$this->properties['FONT-VARIANT-CAPS'] = 'small-caps';
 		}
 	}
 
@@ -293,6 +299,7 @@ class NormalizeProperties
 			$this->properties['FONT-VARIANT-CAPS'] = $m[1];
 			$this->properties['FONT-VARIANT-NUMERIC'] = $m[1];
 			$this->properties['FONT-VARIANT-ALTERNATES'] = $m[1];
+			$this->properties['FONT-VARIANT-POSITION'] = 'normal';
 
 			return;
 		}
