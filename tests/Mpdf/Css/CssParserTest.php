@@ -115,4 +115,52 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals('blue', $properties['COLOR']);
 		$this->assertEquals(3, $properties['depth']);
 	}
+
+	/**
+	 * The class depth is the most classes one compound selector of a stored rule names, not the most in a whole selector
+	 *
+	 * @dataProvider classDepths
+	 *
+	 * @param string $css
+	 * @param int $expected
+	 */
+	public function testMaxClassDepthIsCountedPerCompound($css, $expected)
+	{
+		$this->parser->parse('<style>' . $css . '</style>');
+
+		$this->assertSame($expected, $this->parser->getMaxClassDepth());
+	}
+
+	/**
+	 * Stylesheets and their class depth
+	 *
+	 * @return array[]
+	 */
+	public function classDepths()
+	{
+		return [
+			'no classes' => ['p { color: red; }', 1],
+			'one class in each of three compounds' => ['.a .b .c p { color: red; }', 1],
+			'two classes on one element' => ['p.a.b { color: red; }', 2],
+			'two classes on one ancestor' => ['div .a.b p { color: red; }', 2],
+			'three classes in a rule that is dropped' => ['div > .a.b.c { color: red; }', 1],
+		];
+	}
+
+	/**
+	 * The nth-child keys of stored rules are recorded for each of TR, TD and TH, and those of dropped rules are not
+	 */
+	public function testNthChildKeysOfStoredRulesAreRecorded()
+	{
+		$this->parser->parse('<style>
+			tr:nth-child(odd) { color: red; }
+			table td:nth-child(2n + 1) { color: red; }
+			td:first-child, td:nth-child(2n+1) { color: red; }
+			th:nth-child(3):not(.x) { color: red; }
+		</style>');
+
+		$this->assertSame(['TR>>SELECTORNTHCHILD>>ODD'], array_keys($this->parser->getNthChildFormulas('TR')));
+		$this->assertSame(['TD>>SELECTORNTHCHILD>>2N+1', 'TD>>SELECTORNTHCHILD>>1'], array_keys($this->parser->getNthChildFormulas('TD')));
+		$this->assertSame([], $this->parser->getNthChildFormulas('TH'));
+	}
 }

@@ -104,9 +104,16 @@ class CssParser
 	private $usedClassNames = [];
 
 	/**
-	 * @var int Maximum number of classes found in a single selector
+	 * @var int Maximum number of classes found in a single compound selector of a stored rule, e.g. 2 for .a.b
 	 */
 	private $maxClassDepth = 1;
+
+	/**
+	 * @var array[] The nth-child keys of stored rules by tag (TR, TD or TH), e.g. TD>>SELECTORNTHCHILD>>2N+1, each mapped
+	 *              to its formula split as SelectorParser::matchesNthChild() takes it. The merger looks each key up
+	 *              directly in a node of the stylesheet.
+	 */
+	private $nthChildFormulas = ['TR' => [], 'TD' => [], 'TH' => []];
 
 	public function __construct(
 		Mpdf $mpdf,
@@ -217,6 +224,18 @@ class CssParser
 	}
 
 	/**
+	 * The nth-child keys of stored rules for a tag
+	 *
+	 * @param string $tag TR, TD or TH
+	 * @return array[] Each key, e.g. TD>>SELECTORNTHCHILD>>2N+1, mapped to its formula's parts for
+	 *                 SelectorParser::matchesNthChild()
+	 */
+	public function getNthChildFormulas($tag)
+	{
+		return $this->nthChildFormulas[$tag];
+	}
+
+	/**
 	 * @param string $css
 	 * @return void
 	 */
@@ -249,11 +268,6 @@ class CssParser
 			foreach ($matches[1] as $className) {
 				$this->usedClassNames[$className] = true;
 			}
-
-			$classCount = count($matches[1]);
-			if ($classCount > $this->maxClassDepth) {
-				$this->maxClassDepth = $classCount;
-			}
 		}
 
 		// Close up each nth-child argument, e.g. (2N + 1), so the selector still splits into its parts on whitespace
@@ -281,6 +295,11 @@ class CssParser
 			} elseif ($tag) {
 				$this->css[$tag] = $classProperties;
 			}
+
+			if ($tag) {
+				$this->indexStoredKey($tag);
+			}
+
 			return;
 		}
 
@@ -292,10 +311,31 @@ class CssParser
 		$cascadeCSS = &$this->cascadeCSS;
 		foreach ($cascade as $tag) {
 			$cascadeCSS = &$cascadeCSS[$tag];
+			$this->indexStoredKey($tag);
 		}
 
 		$cascadeCSS = Arrays::uniqueRecursiveMerge($cascadeCSS, $classProperties);
 		$cascadeCSS['depth'] = $level;
+	}
+
+	/**
+	 * Record what the merger needs to know about the key of one compound selector of a stored rule: how many classes
+	 * it names, and its nth-child formula.
+	 *
+	 * @param string $key A key SelectorParser::parseSimpleSelector() made, e.g. P>>CLASS>>A.B or TD>>SELECTORNTHCHILD>>2N+1
+	 * @return void
+	 */
+	private function indexStoredKey($key)
+	{
+		$classes = strpos($key, 'CLASS>>');
+		if ($classes !== false) {
+			$this->maxClassDepth = max($this->maxClassDepth, substr_count($key, '.', $classes) + 1);
+		}
+
+		if (preg_match('/^(TR|TD|TH)>>SELECTORNTHCHILD>>(.*)$/', $key, $m) && !isset($this->nthChildFormulas[$m[1]][$key])) {
+			preg_match('/^' . SelectorParser::NTH_CHILD_FORMULA . '$/', $m[2], $parts);
+			$this->nthChildFormulas[$m[1]][$key] = $parts;
+		}
 	}
 
 	/**

@@ -109,6 +109,7 @@ Performance
 * **CJK output.** The subset fonts of a CJK document are written without rereading the font for each one. [#311]
 * **Image metadata.** JPEG and PNG metadata is read from the file's structure instead of by scanning the whole file, and PNG chunks are read from a chunk index. [#47] [#48]
 * **GD memory.** GD asks for less memory when it re-encodes an image. [#49]
+* **nth-child rules in tables.** Each row and cell looks up the nth-child rules the stylesheet uses by their keys, instead of running a regex over every rule. A 2,000-cell table under 1,000 rules is written in about 540 ms instead of 745 ms. Class combinations are built only up to the most classes one compound selector names, not one whole selector. [#526] [#580]
 
 Bugfixes
 --------
@@ -120,6 +121,7 @@ Bugfixes
 * `@page { size: A4 }`, or a `size` of two lengths with no `margin`, gave 63 pages with one character on each. A page-size name such as `A4`, `letter` or `A5 landscape` now sets the sheet, as a browser sets the paper, and the space around a page box given as two lengths is no longer counted twice. [mpdf/mpdf#1220] [#552] [#562]
 * `@page { size: landscape }`, or a page box wider than it is tall, left the first page portrait, and `size: portrait` left a landscape document landscape. The first page now turns. A page box and percentage margins are measured on the turned sheet, so `size: 250mm 150mm` on A4 is no longer cut to 210 mm wide. [#552] [#562]
 * `page-break-before: auto` or `avoid` on a block inside another block closed the outer block and opened it again, so its border was drawn around each part. `page-break-after: auto` or `avoid` on a table started a new page. [#552] [#569]
+* `page-break-before` on a table was ignored. On a top-level table, `always`, `left` and `right` now start it on a new page, inside the blocks around it. [#552] [#622]
 * `background-size: cover` scaled by the wrong ratio when the image came out shorter than the area. [mpdf/mpdf#833] [#22]
 * Only double-quoted attributes were read. Single-quoted, unquoted and bare attributes are now read as well. [mpdf/mpdf#2030] [#24]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
@@ -151,6 +153,7 @@ Bugfixes
 * `#rgba` was read from the wrong digits: `#f008` drew `rgb(240, 8, 0)`. `#rrggbbaa` dropped its alpha. Both are now read with their alpha.
 * A channel outside its range wrapped instead of being clamped: `rgb(255.5, 0, 0)` drew black and `rgb(300, 0, 0)` dark red. Channels, alphas, and `hsl()` saturation and lightness are now clamped, as CSS does.
 * `rebeccapurple` was missing. mPDF's `violetred`, which is not a CSS colour, is kept.
+* A `list-style-image` whose URL had capitals, such as `url(img/List-Bullet.png)`, drew no marker on a case-sensitive disk or server, because the URL was lowercased before the image was fetched. The URL now keeps its case. [#552] [#623]
 * A percentage `width`, `min-width` or `max-width` on an image in a table cell was resolved against the block around the table, not the cell. In a 60mm cell, `max-width: 20%` came out as 36mm. [#223] [#505]
 * An `@page :left` or `@page :right` rule was ignored unless the style sheet also had a plain `@page` rule. With one, the margins of a `:right` rule were applied to left pages too. [#555] [#556]
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
@@ -744,6 +747,7 @@ These changes do not change output.
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#561]: https://github.com/GravityPDF/mpdf/pull/561
 [#525]: https://github.com/GravityPDF/mpdf/issues/525
+[#526]: https://github.com/GravityPDF/mpdf/issues/526
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
@@ -773,4 +777,7 @@ These changes do not change output.
 [#572]: https://github.com/GravityPDF/mpdf/pull/572
 [#570]: https://github.com/GravityPDF/mpdf/pull/570
 [#578]: https://github.com/GravityPDF/mpdf/pull/578
+[#580]: https://github.com/GravityPDF/mpdf/pull/580
 [#615]: https://github.com/GravityPDF/mpdf/pull/615
+[#622]: https://github.com/GravityPDF/mpdf/pull/622
+[#623]: https://github.com/GravityPDF/mpdf/pull/623

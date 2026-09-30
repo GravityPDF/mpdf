@@ -13,6 +13,12 @@ class SelectorParser
 	const NAME = '[A-Za-z0-9_\-\x80-\xFF]+';
 
 	/**
+	 * An nth-child argument with its spaces taken out: an+b, a number, ODD or EVEN. Its groups split it into the parts
+	 * self::matchesNthChild() takes.
+	 */
+	const NTH_CHILD_FORMULA = '(([\-+]?\d*)?N([\-+]\d+)?|[\-+]?\d+|ODD|EVEN)';
+
+	/**
 	 * @var Mpdf
 	 */
 	private $mpdf;
@@ -87,7 +93,7 @@ class SelectorParser
 			$tag = 'LANG>>' . strtolower($m[1]);
 		} elseif (preg_match('/^:LANG\([\'\"]{0,1}([A-Z\-]{2,11})[\'\"]{0,1}\)$/', $t, $m)) { // mPDF 6  Special case for lang as attribute selector
 			$tag = 'LANG>>' . strtolower($m[1]);
-		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\s*:NTH-CHILD\(([\-+]?\d*N(?:[\-+]\d+)?|[\-+]?\d+|ODD|EVEN)\)$/', $t, $m)) { // the whole argument is a formula, with nothing after it
+		} elseif (preg_match('/^(' . $this->mpdf->allowedCSStags . ')\s*:NTH-CHILD\(' . self::NTH_CHILD_FORMULA . '\)$/', $t, $m)) { // the whole argument is a formula, with nothing after it
 			$tag = $m[1] . '>>SELECTORNTHCHILD>>' . $m[2];
 		} elseif (preg_match('/^(TR|TD|TH):FIRST-CHILD$/', $t, $m)) {
 			$tag = $m[1] . '>>SELECTORNTHCHILD>>1';
