@@ -80,7 +80,7 @@ class Input extends Tag
 		$objattr['fontfamily'] = $this->mpdf->FontFamily;
 		$objattr['fontsize'] = $this->mpdf->FontSizePt;
 		if ($this->mpdf->activeForms()) {
-			if (isset($attr['ALIGN'])) {
+			if (isset($attr['ALIGN']) && !($this->appliesStandardCascade() && isset($properties['TEXT-ALIGN']))) {
 				$objattr['text_align'] = $this->getAlign($attr['ALIGN']);
 			} elseif (isset($properties['TEXT-ALIGN'])) {
 				$objattr['text_align'] = $this->getAlign($properties['TEXT-ALIGN']);

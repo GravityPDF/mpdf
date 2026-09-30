@@ -2,13 +2,21 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\CssMode;
+
 class StandardBlockTagsTest extends BaseTagTestCase
 {
 	/**
+	 * Opens each block tag, which the legacy cascade aligns by its align attribute whatever the tag
+	 *
 	 * @dataProvider blockTagsProvider
+	 *
+	 * @param string $tagName
+	 * @param string $className
 	 */
 	public function testOpenAndClose_BlockTags($tagName, $className)
 	{
+		$this->mpdf->cssMode = CssMode::LEGACY;
 		$tag = $this->createTag($className);
 
 		$attr = ['ALIGN' => 'center'];
@@ -32,6 +40,27 @@ class StandardBlockTagsTest extends BaseTagTestCase
 		
 		// Verify InlineProperties are saved for the new block
 		$this->assertArrayHasKey('InlineProperties', $this->mpdf->blk[$this->mpdf->blklvl]);
+	}
+
+	/**
+	 * The standard cascade reads align as the text alignment of a div, and of no other of these tags
+	 *
+	 * @dataProvider blockTagsProvider
+	 *
+	 * @param string $tagName
+	 * @param string $className
+	 */
+	public function testAlignIsTheTextAlignmentOfADivOnly($tagName, $className)
+	{
+		$attr = ['ALIGN' => 'center'];
+		$ahtml = [];
+		$ihtml = 0;
+
+		$this->createTag($className)->open($attr, $ahtml, $ihtml);
+
+		$block = $this->mpdf->blk[$this->mpdf->blklvl];
+		$this->assertSame($tagName === 'DIV' ? 'C' : null, isset($block['align']) ? $block['align'] : null);
+		$this->assertFalse($block['block-align']);
 	}
 
 	public function blockTagsProvider()
