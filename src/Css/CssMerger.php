@@ -241,7 +241,7 @@ class CssMerger
 	 * Merges html's rules into body's CSS, and body's own rules again over them. mPDF has no html element: the
 	 * document's frame stands for body, and html is matched as its parent, so html's declarations, its !important
 	 * ones included, reach the text as a parent's would, and lose to body's. Both win over what SetDefaultBodyCSS() and
-	 * the like set.
+	 * the like set. The rules for any element, such as *, are among the rules of each.
 	 *
 	 * html's font size, read against the default font size, is the root's, which rem and body's own size are read
 	 * against

@@ -337,9 +337,9 @@ class Td extends Tag
 			$table['border'] = $table['simple']['border'];
 		}
 
-		// Border set on TR (if collapsed only)
-		if (!$table['borders_separate'] && !$this->mpdf->simpleTables && isset($table['trborder-left'][$this->mpdf->row])) {
-			if ($this->mpdf->col == 0) {
+		// Border set on TR (if collapsed only), on each side it sets
+		if (!$table['borders_separate'] && !$this->mpdf->simpleTables) {
+			if ($this->mpdf->col == 0 && isset($table['trborder-left'][$this->mpdf->row])) {
 				$left = $this->mpdf->border_details($table['trborder-left'][$this->mpdf->row]);
 				$c['border_details']['L'] = $left;
 				$this->mpdf->setBorder($c['border'], Border::LEFT, $c['border_details']['L']['s']);

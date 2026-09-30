@@ -243,10 +243,10 @@ class StructuralSelectorTest extends TestCase
 				'<div><p>child</p></div><p>top</p>',
 				['child' => self::RED, 'top' => self::BLUE],
 			],
-			'a rule naming the universal selector waits for #530' => [
-				'div > * { color: #f00; } * + p { color: #f00; }',
-				'<div><p>child</p><p>next</p></div>',
-				['child' => self::BLACK, 'next' => self::BLACK],
+			'the universal selector on either side of a combinator' => [
+				'div > * { color: #f00; } * + p { color: #00f; }',
+				'<div><p>child</p><p>next</p></div><section><p>first in a section</p></section>',
+				['child' => self::RED, 'next' => self::BLUE, 'first in a section' => self::BLACK],
 			],
 			'a pseudo-class that looks inside the element is still dropped' => [
 				'li:has(> b) { color: #f00; }',

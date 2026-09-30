@@ -88,6 +88,12 @@ class RuleSetTest extends TestCase
 			'a class written twice' => ['DIV', '', ['B', 'B'], [2, 3]],
 			'a span' => ['SPAN', '', [], [3, 4]],
 			'a tag no rule names' => ['LI', '', [], [3]],
+			'the document, matched as body' => ['', '', [], [3]],
+			"mPDF's barcode" => ['BARCODE', '', [], []],
+			"mPDF's dot tab" => ['DOTTAB', '', [], []],
+			"mPDF's text circle" => ['TEXTCIRCLE', '', [], []],
+			"mPDF's barcode with a class a rule is filed under" => ['BARCODE', '', ['B'], [2]],
+			"mPDF's barcode with an id a rule is filed under" => ['BARCODE', 'MAIN', [], [1]],
 		];
 	}
 
@@ -156,6 +162,30 @@ class RuleSetTest extends TestCase
 				[['FONT-SIZE' => 'first tag'], ['FONT-SIZE' => 'second tag'], ['FONT-SIZE' => 'id']],
 			],
 			$rules->matchingDeclarations('P', '', [], $path)
+		);
+	}
+
+	/**
+	 * html and body are matched by the rules filed for any element too: the universal selector and the other rules
+	 * whose subject names no tag, id or class, when they match there. html is body's parent and has no parent, and
+	 * neither has siblings
+	 */
+	public function testMatchesHtmlAndBodyWithTheRulesForAnyElement()
+	{
+		$rules = new RuleSet();
+		foreach (['*', 'body', '* > *', ':not(p)', ':not(body)', '*:first-child', '*.a', '*:lang(fr)', '* + *'] as $position => $selector) {
+			$rules->add($this->compiler->compile($selector), ['COLOR' => 'rule ' . $position]);
+		}
+
+		$document = [$this->path()[0]];
+
+		$this->assertSame(
+			[[['COLOR' => 'rule 0'], ['COLOR' => 'rule 3'], ['COLOR' => 'rule 4']], []],
+			$rules->documentDeclarations(true, $document)
+		);
+		$this->assertSame(
+			[[['COLOR' => 'rule 0'], ['COLOR' => 'rule 2'], ['COLOR' => 'rule 1'], ['COLOR' => 'rule 3']], []],
+			$rules->documentDeclarations(false, $document)
 		);
 	}
 

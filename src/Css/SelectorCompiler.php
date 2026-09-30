@@ -15,7 +15,6 @@ use Mpdf\Utils\UtfString;
  *   Mpdf::WriteHTML() leaves an element's tag, id and classes.
  * - combinators: the combinator after each compound but the last, one of ' ', '>', '+' and '~'
  * - specificity: [ids, classes and attributes and pseudo-classes, tags]
- * - universal: whether it names the universal selector *
  * - never: whether one of its compounds holds a pseudo-class that no element in a PDF matches, so that it matches
  *   nothing
  *
@@ -150,11 +149,10 @@ class SelectorCompiler
 		$compounds = [];
 		$combinators = [];
 		$specificity = [0, 0, 0];
-		$universal = false;
 		$never = false;
 
 		while (true) {
-			$compound = $this->parseCompound($text, $pos, $specificity, $universal);
+			$compound = $this->parseCompound($text, $pos, $specificity);
 			if ($compound === null) {
 				return null;
 			}
@@ -181,7 +179,6 @@ class SelectorCompiler
 			'compounds' => $compounds,
 			'combinators' => $combinators,
 			'specificity' => $specificity,
-			'universal' => $universal,
 			'never' => $never,
 		];
 	}
@@ -193,18 +190,16 @@ class SelectorCompiler
 	 * @param string $text
 	 * @param int $pos
 	 * @param int[] $specificity Added to for what is read
-	 * @param bool $universal Set when the compound names *
 	 *
 	 * @return array|null
 	 */
-	private function parseCompound($text, &$pos, array &$specificity, &$universal)
+	private function parseCompound($text, &$pos, array &$specificity)
 	{
 		$length = strlen($text);
 		$compound = ['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => []];
 		$start = $pos;
 
 		if ($pos < $length && $text[$pos] === '*') {
-			$universal = true;
 			$pos++;
 		} elseif ($this->startsIdentifier($text, $pos)) {
 			$compound['tag'] = strtoupper($this->readName($text, $pos));
@@ -241,7 +236,7 @@ class SelectorCompiler
 				$specificity[1]++;
 			} elseif ($c === ':') {
 				$pos++;
-				$pseudo = $this->parsePseudoClass($text, $pos, $specificity, $universal);
+				$pseudo = $this->parsePseudoClass($text, $pos, $specificity);
 				if ($pseudo === null) {
 					return null;
 				}
@@ -261,11 +256,10 @@ class SelectorCompiler
 	 * @param string $text
 	 * @param int $pos
 	 * @param int[] $specificity Added to for the pseudo-class
-	 * @param bool $universal Set when an argument names *
 	 *
 	 * @return array|null As the class describes, or null for a pseudo-element or a pseudo-class mPDF cannot match
 	 */
-	private function parsePseudoClass($text, &$pos, array &$specificity, &$universal)
+	private function parsePseudoClass($text, &$pos, array &$specificity)
 	{
 		if (!$this->startsIdentifier($text, $pos)) {
 			return null;
@@ -291,7 +285,7 @@ class SelectorCompiler
 		}
 
 		if ($name === 'not' || $name === 'is' || $name === 'where') {
-			return $this->parseSelectorArgument($name, $argument, $specificity, $universal);
+			return $this->parseSelectorArgument($name, $argument, $specificity);
 		}
 
 		if ($name === 'lang') {
@@ -316,11 +310,10 @@ class SelectorCompiler
 	 * @param string $name not, is or where
 	 * @param string $argument
 	 * @param int[] $specificity Added to for the most specific selector, except for :where()
-	 * @param bool $universal Set when a selector names *
 	 *
 	 * @return array|null
 	 */
-	private function parseSelectorArgument($name, $argument, array &$specificity, &$universal)
+	private function parseSelectorArgument($name, $argument, array &$specificity)
 	{
 		$selectors = [];
 		$heaviest = [0, 0, 0];
@@ -334,7 +327,6 @@ class SelectorCompiler
 			}
 
 			$selectors[] = $compiled;
-			$universal = $universal || $compiled['universal'];
 			if ($compiled['specificity'] > $heaviest) {
 				$heaviest = $compiled['specificity'];
 			}

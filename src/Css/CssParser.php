@@ -468,9 +468,7 @@ class CssParser
 		}
 
 		$compiled = $this->selectorCompiler->compile($selector);
-
-		// The universal selector changes which elements existing documents style, so it waits for #530
-		if ($compiled !== null && !$compiled['universal'] && !$compiled['never']) {
+		if ($compiled !== null && !$compiled['never']) {
 			$this->compiledRules[] = [$compiled, $classProperties, $important];
 		}
 	}
