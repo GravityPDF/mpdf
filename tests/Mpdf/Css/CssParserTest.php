@@ -200,7 +200,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		return [
 			'type' => ['p', false],
 			'class on a type' => ['p.a', false],
-			'lang' => ['p:lang(fr)', false],
+			'lang attribute' => ['p[lang=fr]', false],
 			'row nth-child' => ['tr:nth-child(2n)', false],
 			'child' => ['div > p', true],
 			'child with no spaces' => ['div>p', true],
@@ -210,6 +210,10 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'nth-child on an element outside a table' => ['li:nth-child(2n)', true],
 			'nth-child outside a table as an ancestor' => ['li:nth-child(2) p', true],
 			'first-of-type' => ['p:first-of-type', true],
+			'attribute presence' => ['[data-x]', true],
+			'attribute value on a type' => ['a[href^="http"]', true],
+			'lang attribute with a hyphen match' => ['p[lang|=fr]', true],
+			'lang pseudo-class in a combinator chain' => ['div > :lang(fr)', true],
 		];
 	}
 
@@ -244,7 +248,24 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'a class as the ancestor' => ['.x b'],
 			'three levels' => ['div .x b'],
 			'a cell nth-child' => ['table td:nth-child(odd)'],
+			'lang' => ['div :lang(fr)'],
+			'a lang attribute' => ['[lang=fr] b'],
 		];
+	}
+
+	/**
+	 * A simple :lang() rule the legacy parser reads is compiled too, for the matcher to apply to an element that
+	 * inherits its language rather than having its own lang attribute
+	 */
+	public function testCompilesALegacyLangRuleToMatchAnInheritedLanguage()
+	{
+		$this->parser->parse('<style>p:lang(fr) { color: blue; } p[lang=fr] { color: red; }</style>');
+
+		$rules = $this->parser->getCompiledRules();
+		$this->assertCount(1, $rules);
+		$this->assertSame([['lang', ['fr']]], $rules[0][0]['compounds'][0]['pseudos']);
+		$this->assertTrue($rules[0][2]);
+		$this->assertArrayHasKey('P>>LANG>>fr', $this->parser->getCss());
 	}
 
 	/**

@@ -21,6 +21,9 @@ namespace Mpdf;
 trait TracksOpenElements
 {
 
+	/** @var string The language the <html> or <body> tag gives the document, which the document's frame carries */
+	private $documentLang = '';
+
 	/** @var array[]|null The open elements as they stood inside the positioned block being written, for its content */
 	private $fixedPosBlockElements;
 
@@ -149,13 +152,14 @@ trait TracksOpenElements
 	/**
 	 * Makes the stack a document starts from: a single frame standing for the document, with nothing written into it
 	 * yet. The constructor starts from one, and so does a WriteHTML() call that starts a new document, such as the one
-	 * InsertIndex() makes for the index, and a header or footer written apart from the flow
+	 * InsertIndex() makes for the index, and a header or footer written apart from the flow. The frame carries the
+	 * language of the <html> or <body> tag, so that :lang() matches an element that inherits it
 	 *
 	 * @return array[] A stack holding only the frame for a document with nothing written into it yet
 	 */
 	private function newOpenElementStack()
 	{
-		$document = $this->newElementFrame('', [], '', 1, 1);
+		$document = $this->newElementFrame('', [], $this->documentLang, 1, 1);
 		$document['level'] = true;
 
 		return [$document];

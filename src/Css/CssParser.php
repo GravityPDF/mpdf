@@ -222,7 +222,7 @@ class CssParser
 
 	/**
 	 * The rules of the last CSS parsed for the matcher: those whose selector the legacy parser cannot read, and the
-	 * descendant rules it stores, which the matcher applies through the ancestors the legacy engine does not look at
+	 * descendant and :lang() rules it stores, which the matcher applies where the legacy engine cannot match them
 	 *
 	 * @return array[] Each [compiled selector, declarations, whether the legacy parser stores it too], in the order
 	 *                 they were written
@@ -318,6 +318,11 @@ class CssParser
 			if (!$this->isLegacySelector($tag === null ? [] : [$tag])) {
 				$this->compileRule($written, $classProperties);
 				return;
+			}
+
+			// The legacy engine only matches :lang() against an element's own lang attribute, not one it inherits
+			if (strpos($selector, ':LANG(') !== false) {
+				$this->compileRule($written, $classProperties, true);
 			}
 
 			if (isset($this->css[$tag])) {

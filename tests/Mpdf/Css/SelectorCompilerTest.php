@@ -144,6 +144,67 @@ class SelectorCompilerTest extends TestCase
 			],
 			'nth-of-type' => ['p:nth-of-type(3)', [['tag' => 'P', 'pseudos' => [['nth-of-type', 0, 3]]]], []],
 			'pseudo-class with no type' => [':first-child', [['tag' => null, 'pseudos' => [['nth-child', 0, 1]]]], []],
+			'lang with one range' => [':lang(fr)', [['pseudos' => [['lang', ['fr']]]]], []],
+			'lang with ranges in any case, some quoted' => [
+				'p:lang(FR, "de-AT" , en)',
+				[['tag' => 'P', 'pseudos' => [['lang', ['fr', 'de-at', 'en']]]]],
+				[],
+			],
+			'attribute in a chain' => [
+				'div[data-role="card"] > a[href]',
+				[['tag' => 'DIV', 'attributes' => [['DATA-ROLE', '=', 'card', false]]], ['tag' => 'A', 'attributes' => [['HREF', '', '', false]]]],
+				['>'],
+			],
+		];
+	}
+
+	/**
+	 * An attribute selector is read into its name, operator, value and whether the value is compared
+	 * case-insensitively
+	 *
+	 * @dataProvider attributeSelectors
+	 *
+	 * @param string $selector
+	 * @param array $expected
+	 */
+	public function testReadsAnAttributeSelector($selector, array $expected)
+	{
+		$compiled = $this->compiler->compile($selector);
+
+		$this->assertNotNull($compiled);
+		$this->assertSame([$expected], $compiled['compounds'][0]['attributes']);
+	}
+
+	/**
+	 * An attribute selector, and what it is read into
+	 *
+	 * @return array[]
+	 */
+	public function attributeSelectors()
+	{
+		return [
+			'presence' => ['[data-x]', ['DATA-X', '', '', false]],
+			'presence with spaces inside the brackets' => ['[ data-x ]', ['DATA-X', '', '', false]],
+			'name in any case' => ['[Data-X]', ['DATA-X', '', '', false]],
+			'equals an identifier' => ['[data-x=Card]', ['DATA-X', '=', 'Card', false]],
+			'equals a double-quoted string with a comma and a space' => ['[title="a, b"]', ['TITLE', '=', 'a, b', false]],
+			'equals a single-quoted string' => ["[title='it is']", ['TITLE', '=', 'it is', false]],
+			'a string with an escaped quote' => ['[title="say \\"hi\\""]', ['TITLE', '=', 'say "hi"', false]],
+			'a string with a hex escape' => ['[title="caf\\e9"]', ['TITLE', '=', 'café', false]],
+			'spaces around the operator' => ['[data-x = "y"]', ['DATA-X', '=', 'y', false]],
+			'one of a list' => ['[rel~=nofollow]', ['REL', '~=', 'nofollow', true]],
+			'a language and its subtags' => ['[lang|=en]', ['LANG', '|=', 'en', true]],
+			'starts with' => ['[href^="http"]', ['HREF', '^=', 'http', false]],
+			'ends with' => ['[href$=".pdf"]', ['HREF', '$=', '.pdf', false]],
+			'contains' => ['[title*=draft]', ['TITLE', '*=', 'draft', false]],
+			'an attribute HTML compares case-insensitively' => ['[type=checkbox]', ['TYPE', '=', 'checkbox', true]],
+			'the i flag' => ['[data-x="y" i]', ['DATA-X', '=', 'y', true]],
+			'the I flag with no space before it' => ['[data-x="y"I]', ['DATA-X', '=', 'y', true]],
+			'a value compared case-insensitively, held lowercased' => ['[type=Text]', ['TYPE', '=', 'text', true]],
+			'a value with the i flag, held lowercased' => ['[data-x="Yes" i]', ['DATA-X', '=', 'yes', true]],
+			'the s flag' => ['[type="text" s]', ['TYPE', '=', 'text', false]],
+			'the s flag on a class, whose value the tokenizer uppercases' => ['[class="a" s]', ['CLASS', '=', 'a', true]],
+			'an id' => ['[id=main]', ['ID', '=', 'main', true]],
 		];
 	}
 
@@ -188,6 +249,17 @@ class SelectorCompilerTest extends TestCase
 			'a brace left from a nested at-rule' => ['} p'],
 			'an at-rule' => ['@font-face'],
 			'a percentage from a keyframes block' => ['50%'],
+			'an attribute left open' => ['[data-x'],
+			'an attribute with no name' => ['[]'],
+			'an attribute with an operator mPDF does not know' => ['[data-x!=y]'],
+			'an attribute with no value after its operator' => ['[data-x=]'],
+			'an attribute value that is a number' => ['[data-x=1]'],
+			'an attribute with a flag mPDF does not know' => ['[data-x=y q]'],
+			'an attribute string left open' => ['[data-x="y]'],
+			'an attribute with a namespace' => ['[xml|lang]'],
+			'lang with no range' => [':lang()'],
+			'lang with an empty range between commas' => [':lang(fr,,de)'],
+			'lang with no parentheses' => [':lang'],
 		];
 	}
 
@@ -221,6 +293,10 @@ class SelectorCompilerTest extends TestCase
 			'every kind' => ['div#i.a.b p:first-child', [1, 3, 2]],
 			'pseudo-class on the universal selector' => ['*:nth-of-type(2)', [0, 1, 0]],
 			'two ids' => ['#a #b', [2, 0, 0]],
+			'attribute' => ['[data-x]', [0, 1, 0]],
+			'attribute on a type' => ['a[href^="http"]', [0, 1, 1]],
+			'lang' => ['p:lang(fr)', [0, 1, 1]],
+			'attributes, classes and pseudo-classes together' => ['li.a[data-x]:first-child:lang(en)', [0, 4, 1]],
 		];
 	}
 
