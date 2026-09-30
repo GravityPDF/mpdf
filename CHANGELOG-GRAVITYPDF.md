@@ -127,6 +127,9 @@ New features
   * `WriteHTML()` reads ahead through the HTML it is given to count each element's children. An element still open at the end of a call that leaves it open is not known in full, so these do not match its children in that call, and nor does `:not()` of them.
   * `:empty` matches as in browsers: an element holding white space is not empty, and one holding only a comment is. A table cell holding only white space is empty, as mPDF strips it.
 * **`:root`, `html`, `:link` and `:any-link`, in standard mode.** `a:link` and `:any-link` match a link with an `href`. mPDF has no `html` element, so `html` and `:root` match it as the parent of `body`: their rules reach the text as a parent's would, and rules for `body` win over them. `:visited`, `:hover`, `:focus`, `:active`, `:focus-within`, `:focus-visible` and `:target` never match, as a PDF is never visited or hovered, so `:not(:hover)` always does. Rules using them were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [#529] [#642]
+* **The universal selector.** `*` matches every element: alone, with a class, an id, an attribute or a pseudo-class, on either side of a combinator, and inside `:is()`, `:where()` and `:not()`. It weighs nothing, so any rule naming a tag, class, id, attribute or pseudo-class beats it. It reaches `html` and `body` too, so `* { color: … }` colours text written straight into the body, and `* { font-size: … }` sets the size `rem` is read against. Rules using it were dropped before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep dropping them. [mpdf/mpdf#312] [mpdf/mpdf#1168] [mpdf/mpdf#1838] [#530] [#644]
+  * A reset such as `* { margin: 0; padding: 0 }` now takes away the default margins of paragraphs, headings and lists, a list's indent and a cell's padding, as in a browser. It reaches the lines of the table of contents and the index as well, which are the document's elements, so their levels are no longer indented. Style `div.mpdf_toc_level_1` and the like to indent them again.
+  * mPDF's own `<barcode>`, `<dottab>` and `<textcircle>` are not HTML elements. A rule reaches them only by naming their tag, or an id or class they carry, so `*`, and `:empty`, `[attr]` or `:not()` alone, leave them as they are: `:empty { display: none }` does not hide a barcode.
 
 Performance
 -----------
@@ -218,6 +221,7 @@ Bugfixes
 * `background-size` lengths such as `60mm` or `100px` drew the image 2.83 times too small, because they were used as points. [#574]
 * A stylesheet `url()` did not load its image when the path had spaces or parentheses, when there was whitespace inside the parentheses, or when it was an SVG data URI that is not base64, such as Bootstrap's `form-select` arrow. [#573]
 * `linear-gradient(to bottom, …)` and `to top` were drawn upside down, and so was the vertical half of `to bottom right` and the other corners. Angles ran counter-clockwise from pointing right, so `90deg` drew bottom to top. A gradient now runs as CSS Images gives: `0deg` points up and angles turn clockwise, `turn` is read, and a corner keyword leaves the other two corners halfway along. `-moz-`, `-webkit-` and `-o-` gradients keep their legacy angles, and their side keyword, such as `left`, names the side the gradient starts from. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the directions mPDF v7 drew, prefixed or not. [#577] [#639]
+* In a table with collapsed borders, a row with a `border-color` and no border style, or a border of no width, took the borders of its cells away. A reset such as `* { border-color: #dee2e6 }` or `* { border: 0 solid }` gives every row a border like that. A row border that draws nothing now leaves the cells' borders; `hidden` still takes them away. A row's `border-top` or `border-bottom` was drawn only when the row also set `border-left`; each side is now drawn on its own. [#644]
 * Characters mPDF moved into a substitute font (`useSubstitutions`, and the fonts for supplementary planes) were wrapped in a `<span>` that stylesheet rules reached, so `span { border: 1px solid }` drew a box around them, and the span counted among its siblings for `:nth-child()`. In the standard CSS mode no rule reaches that span and it is not counted, as a browser has no such element. The legacy mode styles it as before. [#634]
 
 ### Images and SVG
@@ -414,12 +418,14 @@ These changes do not change output.
 [mpdf/mpdf#7]: https://github.com/mpdf/mpdf/issues/7
 [mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
 [mpdf/mpdf#134]: https://github.com/mpdf/mpdf/issues/134
+[mpdf/mpdf#312]: https://github.com/mpdf/mpdf/issues/312
 [mpdf/mpdf#318]: https://github.com/mpdf/mpdf/issues/318
 [mpdf/mpdf#747]: https://github.com/mpdf/mpdf/issues/747
 [mpdf/mpdf#830]: https://github.com/mpdf/mpdf/issues/830
 [mpdf/mpdf#833]: https://github.com/mpdf/mpdf/issues/833
 [mpdf/mpdf#1010]: https://github.com/mpdf/mpdf/issues/1010
 [mpdf/mpdf#1089]: https://github.com/mpdf/mpdf/issues/1089
+[mpdf/mpdf#1168]: https://github.com/mpdf/mpdf/issues/1168
 [mpdf/mpdf#1220]: https://github.com/mpdf/mpdf/issues/1220
 [mpdf/mpdf#1334]: https://github.com/mpdf/mpdf/issues/1334
 [mpdf/mpdf#1368]: https://github.com/mpdf/mpdf/issues/1368
@@ -810,6 +816,7 @@ These changes do not change output.
 [#527]: https://github.com/GravityPDF/mpdf/issues/527
 [#528]: https://github.com/GravityPDF/mpdf/issues/528
 [#529]: https://github.com/GravityPDF/mpdf/issues/529
+[#530]: https://github.com/GravityPDF/mpdf/issues/530
 [#531]: https://github.com/GravityPDF/mpdf/issues/531
 [#532]: https://github.com/GravityPDF/mpdf/issues/532
 [#533]: https://github.com/GravityPDF/mpdf/issues/533
@@ -871,5 +878,6 @@ These changes do not change output.
 [#639]: https://github.com/GravityPDF/mpdf/pull/639
 [#641]: https://github.com/GravityPDF/mpdf/pull/641
 [#646]: https://github.com/GravityPDF/mpdf/pull/646
-[#643]: https://github.com/GravityPDF/mpdf/pull/643
 [#642]: https://github.com/GravityPDF/mpdf/pull/642
+[#643]: https://github.com/GravityPDF/mpdf/pull/643
+[#644]: https://github.com/GravityPDF/mpdf/pull/644

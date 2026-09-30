@@ -277,6 +277,13 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'link' => ['a:link', true],
 			'any-link' => [':any-link', true],
 			'not hover' => ['p:not(:hover)', true],
+			'universal' => ['*', true],
+			'universal with a class' => ['*.a', true],
+			'universal with an id' => ['*#i', true],
+			'universal as a descendant' => ['div *', true],
+			'universal as an ancestor' => ['* p', true],
+			'universal as a sibling' => ['* + p', true],
+			'universal in not' => ['p:not(*)', true],
 		];
 	}
 
@@ -315,8 +322,6 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'first-line and first-letter' => ['p::first-line, p:first-letter'],
 			'has' => ['li:has(> a)'],
 			'a tag outside allowedCSStags' => ['div > sup'],
-			'the universal selector, which waits for #530' => ['div > *'],
-			'the universal selector as an ancestor' => ['* + p'],
 		];
 	}
 

@@ -131,10 +131,10 @@ class LogicalSelectorTest extends TestCase
 				'<p>plain</p>',
 				['plain' => self::BLACK],
 			],
-			'the universal selector as an argument waits for #530' => [
+			'the universal selector as an argument' => [
 				'p:not(*) { color: #f00; } :is(*) + p { color: #f00; }',
 				'<p>one</p><p>two</p>',
-				['one' => self::BLACK, 'two' => self::BLACK],
+				['one' => self::BLACK, 'two' => self::RED],
 			],
 		];
 	}

@@ -30,17 +30,12 @@ class Tr extends Tag
 
 		if (!$this->mpdf->simpleTables && (!isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['borders_separate'])
 				|| !$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['borders_separate'])) {
-			if (!empty($properties['BORDER-LEFT'])) {
-				$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trborder-left'][$this->mpdf->row] = $properties['BORDER-LEFT'];
-			}
-			if (!empty($properties['BORDER-RIGHT'])) {
-				$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trborder-right'][$this->mpdf->row] = $properties['BORDER-RIGHT'];
-			}
-			if (!empty($properties['BORDER-TOP'])) {
-				$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trborder-top'][$this->mpdf->row] = $properties['BORDER-TOP'];
-			}
-			if (!empty($properties['BORDER-BOTTOM'])) {
-				$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trborder-bottom'][$this->mpdf->row] = $properties['BORDER-BOTTOM'];
+			// Kept only for a side the row draws, or hides with hidden: a border that draws nothing, such as a
+			// border-color alone, leaves the cells' borders
+			foreach (['LEFT', 'RIGHT', 'TOP', 'BOTTOM'] as $side) {
+				if (!empty($properties['BORDER-' . $side]) && $this->mpdf->border_details($properties['BORDER-' . $side])['s']) {
+					$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trborder-' . strtolower($side)][$this->mpdf->row] = $properties['BORDER-' . $side];
+				}
 			}
 		}
 

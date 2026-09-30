@@ -112,6 +112,7 @@ class SelectorCompilerTest extends TestCase
 		$tag = function ($tag) {
 			return ['tag' => $tag, 'ids' => [], 'classes' => [], 'pseudos' => []];
 		};
+		$any = ['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => []]], 'combinators' => [], 'specificity' => [0, 0, 0]];
 
 		return [
 			'type' => ['p', [$tag('P')], []],
@@ -151,7 +152,7 @@ class SelectorCompilerTest extends TestCase
 			'only-of-type' => ['p:only-of-type', [['tag' => 'P', 'pseudos' => [['only-of-type']]]], []],
 			'empty' => ['p:empty', [['tag' => 'P', 'pseudos' => [['empty']]]], []],
 			'first and last together' => ['td:first-child:last-child', [['tag' => 'TD', 'pseudos' => [['nth-child', 0, 1], ['nth-last-child', 0, 1]]]], []],
-			'last-child in not' => [':not(:last-child)', [['pseudos' => [['not', [['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => [['nth-last-child', 0, 1]]]], 'combinators' => [], 'specificity' => [0, 1, 0], 'universal' => false, 'never' => false]]]]]], []],
+			'last-child in not' => [':not(:last-child)', [['pseudos' => [['not', [['compounds' => [['tag' => null, 'ids' => [], 'classes' => [], 'attributes' => [], 'pseudos' => [['nth-last-child', 0, 1]]]], 'combinators' => [], 'specificity' => [0, 1, 0], 'never' => false]]]]]], []],
 			'root' => [':root', [['tag' => null, 'pseudos' => [['root']]]], []],
 			'html' => ['HTML > body', [$tag('HTML'), $tag('BODY')], ['>']],
 			'link' => ['a:link', [['tag' => 'A', 'pseudos' => [['link']]]], []],
@@ -164,6 +165,23 @@ class SelectorCompilerTest extends TestCase
 				'p:lang(FR, "de-AT" , en)',
 				[['tag' => 'P', 'pseudos' => [['lang', ['fr', 'de-at', 'en']]]]],
 				[],
+			],
+			'universal' => ['*', [$tag(null)], []],
+			'universal with a class' => ['*.note', [['tag' => null, 'classes' => ['NOTE']]], []],
+			'universal with an id' => ['*#main', [['tag' => null, 'ids' => ['MAIN']]], []],
+			'universal with an attribute' => ['*[title]', [['tag' => null, 'attributes' => [['TITLE', '', '', false]]]], []],
+			'universal as the subject of a descendant' => ['div *', [$tag('DIV'), $tag(null)], [' ']],
+			'universal as an ancestor' => ['* p', [$tag(null), $tag('P')], [' ']],
+			'universal as the subject of a child' => ['div>*', [$tag('DIV'), $tag(null)], ['>']],
+			'universal as a sibling' => ['* + p', [$tag(null), $tag('P')], ['+']],
+			'universal on both sides' => ['* ~ *', [$tag(null), $tag(null)], ['~']],
+			'universal in is and not' => [
+				':is(*) + p:not(*)',
+				[
+					['tag' => null, 'pseudos' => [['is', [$any]]]],
+					['tag' => 'P', 'pseudos' => [['not', [$any]]]],
+				],
+				['+'],
 			],
 			'attribute in a chain' => [
 				'div[data-role="card"] > a[href]',
@@ -362,6 +380,10 @@ class SelectorCompilerTest extends TestCase
 			'id' => ['#i', [1, 0, 0]],
 			'every kind' => ['div#i.a.b p:first-child', [1, 3, 2]],
 			'pseudo-class on the universal selector' => ['*:nth-of-type(2)', [0, 1, 0]],
+			'class on the universal selector' => ['*.a', [0, 1, 0]],
+			'universal selectors around a type' => ['* > p + *', [0, 0, 1]],
+			'not of the universal selector' => ['p:not(*)', [0, 0, 1]],
+			'is of the universal selector and a class' => [':is(*, .a)', [0, 1, 0]],
 			'two ids' => ['#a #b', [2, 0, 0]],
 			'attribute' => ['[data-x]', [0, 1, 0]],
 			'attribute on a type' => ['a[href^="http"]', [0, 1, 1]],
@@ -418,20 +440,6 @@ class SelectorCompilerTest extends TestCase
 			'root' => [':root', false],
 			'a type' => ['p', false],
 		];
-	}
-
-	/**
-	 * Whether a selector names the universal selector, which waits for #530
-	 */
-	public function testMarksASelectorThatNamesTheUniversalSelector()
-	{
-		$this->assertTrue($this->compiler->compile('*')['universal']);
-		$this->assertTrue($this->compiler->compile('div > *')['universal']);
-		$this->assertTrue($this->compiler->compile('* + p')['universal']);
-		$this->assertFalse($this->compiler->compile('div > :first-child')['universal']);
-		$this->assertTrue($this->compiler->compile('p:not(*)')['universal']);
-		$this->assertTrue($this->compiler->compile(':is(h1, *) + p')['universal']);
-		$this->assertFalse($this->compiler->compile(':is(h1, h2) + p')['universal']);
 	}
 
 	/**

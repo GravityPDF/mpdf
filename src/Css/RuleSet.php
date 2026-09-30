@@ -11,6 +11,13 @@ class RuleSet
 {
 
 	/**
+	 * @var array<string, true> The tags mPDF adds to HTML that take CSS. They are not HTML elements, and draw what
+	 *                          their attributes describe, so a rule reaches one only by naming its tag, or an id or a
+	 *                          class it has: *, :empty or [title] alone does not
+	 */
+	private static $ownTags = ['BARCODE' => true, 'DOTTAB' => true, 'TEXTCIRCLE' => true];
+
+	/**
 	 * @var array[] Each rule, by its position in the stylesheets read: [compiled selector, declarations, the ancestors
 	 *              it requires as requiredAncestors() gives them, !important declarations]
 	 */
@@ -54,7 +61,7 @@ class RuleSet
 	 * The rules an element could match, going by the rightmost compound of each. The rest of each selector is still
 	 * to be matched
 	 *
-	 * @param string $tag Uppercased
+	 * @param string $tag Uppercased, or empty for the document itself, which is matched as body
 	 * @param string $id Uppercased, or empty for none
 	 * @param string[] $classes Uppercased
 	 *
@@ -69,7 +76,7 @@ class RuleSet
 	 * The declarations of the rules an element matches, in the order they apply: by specificity, then by position.
 	 * The normal declarations and the !important ones are given apart, as they apply in different layers
 	 *
-	 * @param string $tag Uppercased
+	 * @param string $tag Uppercased, or empty for the document itself, which is matched as body
 	 * @param string $id Uppercased, or empty for none
 	 * @param string[] $classes Uppercased
 	 * @param callable $path Gives the open elements from the document down to the element, or null for none. Only
@@ -204,7 +211,7 @@ class RuleSet
 	 */
 	private static function collect(array $index, $tag, $id, array $classes)
 	{
-		$positions = $index['any'];
+		$positions = isset(self::$ownTags[$tag]) ? [] : $index['any'];
 		if (isset($index['tag'][$tag])) {
 			$positions = array_merge($positions, $index['tag'][$tag]);
 		}

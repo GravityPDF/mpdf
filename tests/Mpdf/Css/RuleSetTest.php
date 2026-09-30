@@ -88,6 +88,12 @@ class RuleSetTest extends TestCase
 			'a class written twice' => ['DIV', '', ['B', 'B'], [2, 3]],
 			'a span' => ['SPAN', '', [], [3, 4]],
 			'a tag no rule names' => ['LI', '', [], [3]],
+			'the document, matched as body' => ['', '', [], [3]],
+			"mPDF's barcode" => ['BARCODE', '', [], []],
+			"mPDF's dot tab" => ['DOTTAB', '', [], []],
+			"mPDF's text circle" => ['TEXTCIRCLE', '', [], []],
+			"mPDF's barcode with a class a rule is filed under" => ['BARCODE', '', ['B'], [2]],
+			"mPDF's barcode with an id a rule is filed under" => ['BARCODE', 'MAIN', [], [1]],
 		];
 	}
 
@@ -157,6 +163,24 @@ class RuleSetTest extends TestCase
 			],
 			$rules->matchingDeclarations('P', '', [], $path)
 		);
+	}
+
+	/**
+	 * The document's own frame is matched as body, by the rules filed for any element alone: the universal selector
+	 * and the other rules whose subject names no tag, id or class, when they match the root
+	 */
+	public function testMatchesTheDocumentAsBodyWithTheRulesForAnyElement()
+	{
+		$rules = new RuleSet();
+		foreach (['*', 'body', '* > *', ':not(p)', ':not(body)', '*:first-child', '*.a', '*:lang(fr)'] as $position => $selector) {
+			$rules->add($this->compiler->compile($selector), ['COLOR' => 'rule ' . $position]);
+		}
+
+		$path = function () {
+			return array_slice($this->path(), 0, 1);
+		};
+
+		$this->assertSame([['COLOR' => 'rule 0'], ['COLOR' => 'rule 3']], $rules->matchingDeclarations('', '', [], $path));
 	}
 
 	/**
