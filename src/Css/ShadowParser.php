@@ -159,7 +159,7 @@ class ShadowParser
 			);
 		}
 
-		if (array_key_exists('col', $boxShadow) && !$boxShadow['col']) {
+		if (isset($boxShadow['col']) && $boxShadow['col'] === false) {
 			// A transparent shadow draws nothing
 			return null;
 		}
@@ -268,7 +268,7 @@ class ShadowParser
 			);
 		}
 
-		if (array_key_exists('col', $textShadow) && !$textShadow['col']) {
+		if (isset($textShadow['col']) && $textShadow['col'] === false) {
 			return null;
 		}
 

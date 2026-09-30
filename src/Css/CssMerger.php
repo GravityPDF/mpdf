@@ -14,12 +14,9 @@ class CssMerger
 {
 
 	/**
-	 * The properties mPDF reads a colour from, other than color itself, that can name currentColor. A background image
-	 * names it in the stops of a gradient
+	 * The properties that resolve currentColor in both modes. Legacy mode raised warnings for it in each
 	 */
 	const CURRENT_COLOR_PROPERTIES = [
-		'BACKGROUND-COLOR',
-		'BACKGROUND-IMAGE',
 		'BORDER-TOP',
 		'BORDER-RIGHT',
 		'BORDER-BOTTOM',
@@ -28,9 +25,18 @@ class CssMerger
 		'BORDER-RIGHT-COLOR',
 		'BORDER-BOTTOM-COLOR',
 		'BORDER-LEFT-COLOR',
+		'TEXT-OUTLINE-COLOR',
+	];
+
+	/**
+	 * The other properties mPDF reads a colour from that can name currentColor, which legacy mode ignores in them. A
+	 * background image names it in the stops of a gradient
+	 */
+	const STANDARD_CURRENT_COLOR_PROPERTIES = [
+		'BACKGROUND-COLOR',
+		'BACKGROUND-IMAGE',
 		'BOX-SHADOW',
 		'TEXT-SHADOW',
-		'TEXT-OUTLINE-COLOR',
 		'TOPNTAIL',
 		'THEAD-UNDERLINE',
 	];
@@ -263,33 +269,37 @@ class CssMerger
 
 	/**
 	 * Replaces currentColor in the merged properties with the element's colour, which is its own color, or the one it
-	 * inherits. color: currentColor is the colour the element inherits. In standard mode a shadow that names no colour
-	 * takes currentColor, as a border does
+	 * inherits. In standard mode, color: currentColor is the colour the element inherits, and a shadow that names no
+	 * colour takes currentColor, as a border does. Legacy mode resolves it only where it raised warnings
 	 *
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE, or empty)
 	 * @return void
 	 */
 	private function resolveCurrentColor($inherit)
 	{
+		$properties = self::CURRENT_COLOR_PROPERTIES;
+
 		if ($this->mpdf->cssMode === CssMode::STANDARD) {
+			$properties = array_merge($properties, self::STANDARD_CURRENT_COLOR_PROPERTIES);
+
 			foreach (['BOX-SHADOW', 'TEXT-SHADOW'] as $property) {
 				if (isset($this->cssProperties[$property])) {
 					$this->cssProperties[$property] = ShadowParser::withColor($this->cssProperties[$property], 'currentcolor');
 				}
 			}
-		}
 
-		if (isset($this->cssProperties['COLOR']) && strtolower($this->cssProperties['COLOR']) === 'currentcolor') {
-			$inherited = $this->inheritedColor($inherit);
-			if ($inherited === null) {
-				unset($this->cssProperties['COLOR']);
-			} else {
-				$this->cssProperties['COLOR'] = $inherited;
+			if (isset($this->cssProperties['COLOR']) && strtolower($this->cssProperties['COLOR']) === 'currentcolor') {
+				$inherited = $this->inheritedColor($inherit);
+				if ($inherited === null) {
+					unset($this->cssProperties['COLOR']);
+				} else {
+					$this->cssProperties['COLOR'] = $inherited;
+				}
 			}
 		}
 
 		$color = null;
-		foreach (self::CURRENT_COLOR_PROPERTIES as $property) {
+		foreach ($properties as $property) {
 			if (!isset($this->cssProperties[$property]) || stripos($this->cssProperties[$property], 'currentcolor') === false) {
 				continue;
 			}

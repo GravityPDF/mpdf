@@ -17903,8 +17903,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Whether a side of a border, as border_details() reads it, draws anything. A hidden side has no width and a
-	 * transparent one no colour, which a side packed with a table cell keeps as NUL bytes
+	 * Whether a side of a border, as border_details() reads it, draws anything. A hidden side has no width, and a
+	 * transparent one has false for its colour, which a side packed with a table cell keeps as NUL bytes. A colour
+	 * mPDF cannot read is drawn black, as it was
 	 *
 	 * @param array|null $side
 	 *
@@ -17912,7 +17913,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	protected function drawsBorderSide($side)
 	{
-		return !empty($side['s']) && !empty($side['w']) && !empty($side['c']) && $side['c'][0] !== "\0";
+		return !empty($side['s']) && !empty($side['w']) && isset($side['c']) && $side['c'] !== false && strpos($side['c'], "\0") !== 0;
 	}
 
 	function _setBorderLine($b, $k = 1)
@@ -21944,7 +21945,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				return;
 			}
 			$this->SetLineWidth($details['L']['w']);
-			$this->SetDColor($details['L']['c']);
+			if ($details['L']['c']) {
+				$this->SetDColor($details['L']['c']);
+			} else {
+				$this->SetDColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+			}
 			$this->SetLineJoin(0);
 			$this->Rect($x, $y, $w, $h);
 		} elseif ($bord) {
@@ -22183,7 +22188,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- TABLES-ADVANCED-BORDERS -- */
 					if ($details[$side]['style'] == 'double') {
 						if (!isset($details[$side]['overlay']) || !$details[$side]['overlay'] || $bSeparate) {
-							$this->SetDColor($details[$side]['c']);
+							if ($details[$side]['c']) {
+								$this->SetDColor($details[$side]['c']);
+							} else {
+								$this->SetDColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+							}
 							$this->Line($lx1 + $xadj, $ly1 + $yadj, $lx2 - $xadj2, $ly2 - $yadj2);
 						}
 						if ((isset($details[$side]['overlay']) && $details[$side]['overlay']) || $bSeparate) {
@@ -22255,7 +22264,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 					} elseif (isset($details[$side]['style']) && ($details[$side]['style'] == 'ridge' || $details[$side]['style'] == 'groove' || $details[$side]['style'] == 'inset' || $details[$side]['style'] == 'outset')) {
 						if (!isset($details[$side]['overlay']) || !$details[$side]['overlay'] || $bSeparate) {
-							$this->SetDColor($details[$side]['c']);
+							if ($details[$side]['c']) {
+								$this->SetDColor($details[$side]['c']);
+							} else {
+								$this->SetDColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+							}
 							if ($details[$side]['style'] == 'outset' || $details[$side]['style'] == 'groove') {
 								$nc = $this->colorConverter->darken($details[$side]['c']);
 								$this->SetDColor($nc);
@@ -22266,7 +22279,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->Line($lx1 + $xadj, $ly1 + $yadj, $lx2 - $xadj2, $ly2 - $yadj2);
 						}
 						if ((isset($details[$side]['overlay']) && $details[$side]['overlay']) || $bSeparate) {
-							$this->SetDColor($details[$side]['c']);
+							if ($details[$side]['c']) {
+								$this->SetDColor($details[$side]['c']);
+							} else {
+								$this->SetDColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+							}
 							$doubleadj = ($this->LineWidth) / 3;
 							$this->SetLineWidth($this->LineWidth / 2);
 							$xadj3 = $yadj3 = $wadj3 = $hadj3 = 0;
@@ -22418,7 +22435,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->SetLineCap(1);
 							$this->SetDash(0.001, ($this->LineWidth * 2));
 						}
-						$this->SetDColor($details[$side]['c']);
+						if ($details[$side]['c']) {
+							$this->SetDColor($details[$side]['c']);
+						} else {
+							$this->SetDColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+						}
 						$this->Line($lx1 + $xadj, $ly1 + $yadj, $lx2 - $xadj2, $ly2 - $yadj2);
 						/* -- TABLES-ADVANCED-BORDERS -- */
 					}

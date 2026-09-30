@@ -27,6 +27,16 @@ class CurrentColorTest extends TestCase
 	/** A shadow's colour in legacy mode when it names none: #888888 */
 	const GREY = '0.533 0.533 0.533 rg';
 
+	/** Every colour property of an inline element in currentColor, with the element's own colour */
+	const EVERY_CURRENT_COLOR = 'color: #0a0; background-color: currentColor; border-top: 1mm solid currentColor; border-right-color: currentColor;'
+		. ' box-shadow: 1mm 1mm currentColor, inset 1mm 1mm rgb(0 0 255); text-shadow: 1mm 1mm currentColor; text-outline: 0.1mm currentColor';
+
+	/** A gradient with a stop in currentColor */
+	const GRADIENT = 'color: #0a0; background-image: linear-gradient(to right, CurrentColor 20%, #c00)';
+
+	/** mPDF's lines above and below a table's header, in currentColor */
+	const TABLE_LINES = 'color: rgb(0, 170, 0); topntail: 0.5mm solid currentColor; thead-underline: 0.5mm solid currentColor';
+
 	/** Where a subject is put: those that pass their colour on differently, and those that are laid out apart */
 	const CONTEXTS = [
 		'block',
@@ -125,7 +135,8 @@ class CurrentColorTest extends TestCase
 	}
 
 	/**
-	 * color: currentColor is the colour the element inherits. With none to inherit, the text keeps the default
+	 * color: currentColor is the colour the element inherits. With none to inherit, the text keeps the default. Legacy
+	 * mode ignores it as mPDF v7 did: an inline element keeps the colour around it, and anything else is black
 	 *
 	 * @dataProvider colorCurrentColorInContexts
 	 *
@@ -148,10 +159,15 @@ class CurrentColorTest extends TestCase
 	 */
 	public function colorCurrentColorInContexts()
 	{
-		return $this->inModesAndContexts(self::CONTEXTS, [
-			'under a colour' => ['color: #0a0', self::GREEN, self::GREEN],
+		$data = $this->inModesAndContexts(self::CONTEXTS, [
+			'under a colour' => ['color: #0a0', self::GREEN, '0.000 g'],
 			'under none' => ['', '0.000 g', '0.000 g'],
 		]);
+
+		// An inline element keeps the colour around it in legacy mode too
+		$data['legacy, inline, under a colour'][3] = self::GREEN;
+
+		return $data;
 	}
 
 	/**
@@ -253,8 +269,8 @@ class CurrentColorTest extends TestCase
 	}
 
 	/**
-	 * A text-shadow is drawn in the colour it names, in currentColor when it names that, and in standard mode in
-	 * currentColor when it names none. A transparent one draws nothing
+	 * A text-shadow is drawn in the colour it names, and in standard mode in currentColor when it
+	 * names that or none. Legacy mode draws both grey, as mPDF v7 did. A transparent one draws nothing
 	 *
 	 * @dataProvider textShadowsInContexts
 	 *
@@ -278,7 +294,7 @@ class CurrentColorTest extends TestCase
 	public function textShadowsInContexts()
 	{
 		return $this->inModesAndContexts(self::CONTEXTS, [
-			'currentColor' => ['0.5mm 0.5mm currentColor', [self::GREEN], [self::GREEN]],
+			'currentColor' => ['0.5mm 0.5mm currentColor', [self::GREEN], [self::GREY]],
 			'no colour' => ['0.5mm 0.5mm', [self::GREEN], [self::GREY]],
 			'no colour, with a blur' => ['0.5mm 0.5mm 1mm', [self::GREEN], [self::GREY]],
 			'two, one with no colour' => ['0.5mm 0.5mm #c00, 1mm 1mm', [self::GREEN, self::RED], [self::GREY, self::RED]],
@@ -288,8 +304,8 @@ class CurrentColorTest extends TestCase
 	}
 
 	/**
-	 * A block's box-shadow is painted in the colour it names, in currentColor when it names that, and in standard mode
-	 * in currentColor when it names none. A transparent one paints nothing
+	 * A block's box-shadow is painted in the colour it names, and in standard mode in currentColor when it names
+	 * that or none. Legacy mode paints both grey, as mPDF v7 did. A transparent one paints nothing
 	 *
 	 * @dataProvider boxShadows
 	 *
@@ -313,7 +329,7 @@ class CurrentColorTest extends TestCase
 	public function boxShadows()
 	{
 		return $this->inModesAndContexts(['block', 'list item', 'positioned block', 'kept block', 'forced page break'], [
-			'currentColor' => ['1mm 1mm currentColor', [self::GREEN], [self::GREEN]],
+			'currentColor' => ['1mm 1mm currentColor', [self::GREEN], [self::GREY]],
 			'no colour' => ['1mm 1mm', [self::GREEN], [self::GREY]],
 			'inset, no colour' => ['inset 1mm 1mm', [self::GREEN], [self::GREY]],
 			'transparent' => ['1mm 1mm transparent', [], []],
@@ -322,18 +338,12 @@ class CurrentColorTest extends TestCase
 	}
 
 	/**
-	 * Every property mPDF reads a colour from resolves currentColor to the element's colour when its properties are
-	 * merged, in both modes, in a value with other parts and in a gradient, and not in an image's address
-	 *
-	 * @dataProvider modes
-	 *
-	 * @param string $mode
+	 * In standard mode every property mPDF reads a colour from resolves currentColor to the element's colour when its
+	 * properties are merged, in a value with other parts and in a gradient, and not in an image's address
 	 */
-	public function testEveryColourPropertyResolvesCurrentColor($mode)
+	public function testEveryColourPropertyResolvesCurrentColor()
 	{
-		$properties = $this->merged('INLINE', 'SPAN', 'color: #0a0; background-color: currentColor; border-top: 1mm solid currentColor;'
-			. ' border-right-color: currentColor; box-shadow: 1mm 1mm currentColor, inset 1mm 1mm rgb(0 0 255);'
-			. ' text-shadow: 1mm 1mm currentColor; text-outline: 0.1mm currentColor', $mode);
+		$properties = $this->merged('INLINE', 'SPAN', self::EVERY_CURRENT_COLOR, CssMode::STANDARD);
 
 		$this->assertSame('#0a0', $properties['BACKGROUND-COLOR']);
 		$this->assertSame('1mm solid #0a0', $properties['BORDER-TOP']);
@@ -343,16 +353,42 @@ class CurrentColorTest extends TestCase
 		$this->assertSame('1mm 1mm #0a0', $properties['TEXT-SHADOW']);
 		$this->assertSame('#0a0', $properties['TEXT-OUTLINE-COLOR']);
 
-		$gradient = $this->merged('BLOCK', 'DIV', 'color: #0a0; background-image: linear-gradient(to right, CurrentColor 20%, #c00)', $mode);
-		$url = $this->merged('BLOCK', 'DIV', 'color: #0a0; background-image: url(currentcolor.png)', $mode);
+		$gradient = $this->merged('BLOCK', 'DIV', self::GRADIENT, CssMode::STANDARD);
+		$url = $this->merged('BLOCK', 'DIV', 'color: #0a0; background-image: url(currentcolor.png)', CssMode::STANDARD);
 
 		$this->assertSame('linear-gradient(to right, #0a0 20%, #c00)', $gradient['BACKGROUND-IMAGE']);
 		$this->assertStringContainsString('currentcolor.png', $url['BACKGROUND-IMAGE']);
 
-		$table = $this->merged('TABLE', 'TABLE', 'color: rgb(0, 170, 0); topntail: 0.5mm solid currentColor; thead-underline: 0.5mm solid currentColor', $mode);
+		$table = $this->merged('TABLE', 'TABLE', self::TABLE_LINES, CssMode::STANDARD);
 
 		$this->assertSame('0.5mm solid rgb(0,170,0)', $table['TOPNTAIL']);
 		$this->assertSame('0.5mm solid rgb(0,170,0)', $table['THEAD-UNDERLINE']);
+	}
+
+	/**
+	 * Legacy mode resolves currentColor only in a border and a text outline, which raised warnings for it. Everywhere
+	 * else it leaves the keyword, which it ignores as mPDF v7 did, and color: currentColor stays as written
+	 */
+	public function testLegacyModeResolvesCurrentColorOnlyWhereItRaisedWarnings()
+	{
+		$properties = $this->merged('INLINE', 'SPAN', self::EVERY_CURRENT_COLOR, CssMode::LEGACY);
+
+		$this->assertSame('1mm solid #0a0', $properties['BORDER-TOP']);
+		$this->assertSame('#0a0', $properties['BORDER-RIGHT-COLOR']);
+		$this->assertStringEndsWith(' #0a0', $properties['BORDER-RIGHT']);
+		$this->assertSame('#0a0', $properties['TEXT-OUTLINE-COLOR']);
+		$this->assertSame('currentcolor', $properties['BACKGROUND-COLOR']);
+		$this->assertSame('1mm 1mm currentcolor, inset 1mm 1mm rgb(0,0,255)', $properties['BOX-SHADOW']);
+		$this->assertSame('1mm 1mm currentcolor', $properties['TEXT-SHADOW']);
+
+		$this->assertSame('linear-gradient(to right, CurrentColor 20%, #c00)', $this->merged('BLOCK', 'DIV', self::GRADIENT, CssMode::LEGACY)['BACKGROUND-IMAGE']);
+
+		$table = $this->merged('TABLE', 'TABLE', self::TABLE_LINES, CssMode::LEGACY);
+
+		$this->assertSame('0.5mm solid currentcolor', $table['TOPNTAIL']);
+		$this->assertSame('0.5mm solid currentcolor', $table['THEAD-UNDERLINE']);
+
+		$this->assertSame('currentcolor', $this->merged('BLOCK', 'P', 'color: currentColor', CssMode::LEGACY)['COLOR']);
 	}
 
 	/**
