@@ -29,6 +29,26 @@ class StyledElementPathTest extends TestCase
 	}
 
 	/**
+	 * The position of the element being styled, which the legacy tr, td and th:nth-child rules read without making the
+	 * path, is the one its frame on the path has
+	 *
+	 * @dataProvider documents
+	 *
+	 * @param string $html
+	 */
+	public function testGivesThePositionTheElementHasOnItsPath($html)
+	{
+		$mpdf = new StyledPathRecordingMpdf(['mode' => 'c']);
+		$mpdf->WriteHTML($html . '<style>tr > td, tbody > tr { font-weight: bold; }</style>'
+			. '<table><tr><td>a</td><td>b</td></tr></table><table><tbody><tr><td>c</td></tr></tbody><tr><td>d</td></tr></table>');
+
+		$this->assertGreaterThan(5, count($mpdf->nthChildren));
+		foreach ($mpdf->nthChildren as $nthChild) {
+			$this->assertSame($nthChild[0], $nthChild[1]);
+		}
+	}
+
+	/**
 	 * A document with rules the matcher reads, and the paths asked for while it is written
 	 *
 	 * @return array[]

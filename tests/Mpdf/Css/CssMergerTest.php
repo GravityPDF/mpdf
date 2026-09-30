@@ -227,13 +227,30 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEquals('underline', $t['text-decoration']);
 	}
 
+	/**
+	 * Makes the element being styled a row opened after $before rows in its tbody, as WriteHTML() does while the row's
+	 * start tag is read
+	 *
+	 * @param int $before
+	 */
+	private function styleRowAfter($before)
+	{
+		$tbody = [
+			'tag' => 'TBODY',
+			'lang' => '',
+			'children' => array_fill(0, $before, ['tag' => 'TR']),
+			'childTypes' => $before ? ['TR' => $before] : [],
+		];
+
+		$reflection = new \ReflectionClass($this->mpdf);
+		$property = $reflection->getProperty('styledElement');
+		$property->setAccessible(true);
+		$property->setValue($this->mpdf, ['path' => [$tbody], 'tag' => 'TR', 'attr' => [], 'level' => false]);
+	}
+
 	public function testMergeFullCSS_WithTRTag_NthChildOdd()
 	{
-		// Set up for TR tag with nth-child selector using reflection for private properties
-		$this->mpdf->row        = 0; // First row (will be evaluated as row 1 after +1)
-		$this->mpdf->table      = [];
-		$this->mpdf->tableLevel = 0;
-		$this->mpdf->tbctr      = [0];
+		$this->styleRowAfter(0);
 
 		// The merger looks up the nth-child formulas the stylesheet uses
 		$this->cssManager->readCss('<style>tr:nth-child(odd) { color: red; }</style>');
@@ -250,12 +267,7 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	public function testMergeFullCSS_WithTRTag_NthChildEven()
 	{
-
-		// Set up for TR tag with nth-child selector, row 2 (even)
-		$this->mpdf->row        = 1; // Second row (will be evaluated as row 2 after +1)
-		$this->mpdf->table      = [];
-		$this->mpdf->tableLevel = 0;
-		$this->mpdf->tbctr      = [0];
+		$this->styleRowAfter(1);
 
 		// The merger looks up the nth-child formulas the stylesheet uses
 		$this->cssManager->readCss('<style>tr:nth-child(even) { color: red; }</style>');
@@ -272,11 +284,7 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	public function testMergeFullCSS_WithTRTag_NthChild2nPlus1()
 	{
-		// Set up for TR tag with nth-child selector 2n+1
-		$this->mpdf->row        = 2; // Third row (will be evaluated as row 3 after +1)
-		$this->mpdf->table      = [];
-		$this->mpdf->tableLevel = 0;
-		$this->mpdf->tbctr      = [0];
+		$this->styleRowAfter(2);
 
 		// The merger looks up the nth-child formulas the stylesheet uses
 		$this->cssManager->readCss('<style>tr:nth-child(2n+1) { color: red; }</style>');

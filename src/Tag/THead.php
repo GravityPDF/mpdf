@@ -8,7 +8,6 @@ class THead extends Tag
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$this->mpdf->lastoptionaltag = 'THEAD'; // Save current HTML specified optional endtag
-		$this->startRowGroup();
 		$this->cssManager->tbCSSlvl++;
 		$this->mpdf->tablethead = 1;
 		$this->mpdf->tabletfoot = 0;
@@ -44,7 +43,6 @@ class THead extends Tag
 	public function close(&$ahtml, &$ihtml)
 	{
 		$this->mpdf->lastoptionaltag = '';
-		$this->startRowGroup();
 		unset($this->cssManager->tablecascadeCSS[$this->cssManager->tbCSSlvl]);
 		$this->cssManager->tbCSSlvl--;
 		$this->mpdf->tablethead = 0;

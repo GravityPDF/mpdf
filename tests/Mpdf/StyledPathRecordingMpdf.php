@@ -13,6 +13,12 @@ class StyledPathRecordingMpdf extends Mpdf
 	public $styledPaths = [];
 
 	/**
+	 * @var array[] Each time the path was asked for while an element was being styled: the nthChild of the path's last
+	 * frame, and what getStyledElementNthChild() gave then
+	 */
+	public $nthChildren = [];
+
+	/**
 	 * Records the path before handing it back
 	 *
 	 * @return array[]|null
@@ -21,6 +27,9 @@ class StyledPathRecordingMpdf extends Mpdf
 	{
 		$path = parent::getStyledElementPath();
 		$this->styledPaths[] = $path === null ? null : implode('>', array_column($path, 'tag'));
+		if ($path !== null) {
+			$this->nthChildren[] = [$path[count($path) - 1]['nthChild'], $this->getStyledElementNthChild()];
+		}
 
 		return $path;
 	}

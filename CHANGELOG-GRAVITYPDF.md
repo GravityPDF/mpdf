@@ -376,6 +376,7 @@ These changes do not change output.
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
 * **Open elements.** `WriteHTML()` keeps a stack of the elements open in the HTML it reads, so that CSS rules can be matched against an element's parents, ancestors and earlier siblings rather than only the blocks mPDF lays out. Each element carries its position among its siblings and a record of the siblings before it. `Mpdf::getOpenElements()` reads it. [#533]
 * **Compiled selectors.** A rule whose selector the legacy parser cannot read is compiled into its compound selectors, the combinators between them and its specificity, and filed under its rightmost compound for the selector matcher. A selector list is split at the commas outside parentheses, brackets and strings, so `:is(h1, h2)` and `[title="a,b"]` stay whole. [#538] [#619]
+* **nth-child in tables from the open elements.** `tr`, `td` and `th:nth-child()` and `:first-child` take a row's or cell's position among its siblings from the stack of open elements, as the selector matcher does, instead of from mPDF's row and column counters. An element a browser moves out of a table, such as a `<bookmark>` or `<tocentry>` written between two cells, is not counted, and with `allow_html_optional_endtags` off a cell, row or row group with no end tag is closed by the next one, as mPDF lays it out. [#538] [#629]
 
 [mpdf/mpdf#7]: https://github.com/mpdf/mpdf/issues/7
 [mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
@@ -818,3 +819,4 @@ These changes do not change output.
 [#625]: https://github.com/GravityPDF/mpdf/pull/625
 [#627]: https://github.com/GravityPDF/mpdf/pull/627
 [#628]: https://github.com/GravityPDF/mpdf/pull/628
+[#629]: https://github.com/GravityPDF/mpdf/pull/629

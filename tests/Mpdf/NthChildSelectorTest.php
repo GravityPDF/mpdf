@@ -11,6 +11,7 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 class NthChildSelectorTest extends TestCase
 {
 
+	use DrawnStyles;
 	use PageStreams;
 
 	const FILL = '0.000 1.000 0.000 rg';
@@ -169,6 +170,37 @@ class NthChildSelectorTest extends TestCase
 				'<table><tr><td colspan="2">a</td><td><table><tr><td>i</td><td>j</td><td>X</td></tr></table></td><td>Y</td></tr></table>',
 				['X', 'Y'],
 			],
+			'header cells count among the cells' => [
+				'td:nth-child(2), th:nth-child(3)',
+				'<table><tr><th>h</th><td>X</td><th>Y</th><td>d</td></tr></table>',
+				['X', 'Y'],
+			],
+			'no td is the first cell of a row that starts with a th' => [
+				'td:nth-child(1)',
+				'<table><tr><th>h</th><td>a</td></tr><tr><td>X</td><th>b</th></tr></table>',
+				['X'],
+			],
+			'no th is the first cell of a row that starts with a td' => [
+				'th:first-child',
+				'<table><tr><td>a</td><th>b</th></tr><tr><th>X</th><td>c</td></tr></table>',
+				['X'],
+			],
+			'cells whose end tags are left out' => [
+				'td:nth-child(2)',
+				'<table><tr><td>a<td>X<td>b<tr><td>c<td>Y</table>',
+				['X', 'Y'],
+			],
+			"mPDF's own tags written between the cells" => [
+				'td:nth-child(2)',
+				'<table><tr><bookmark content="b" /><td>a</td><annotation content="n" /><td>X</td>'
+				. '<tocentry content="t" /><indexentry content="i" /><td>b</td></tr></table>',
+				['X'],
+			],
+			"mPDF's own tag written before the first cell" => [
+				'td:first-child',
+				'<table><tr><bookmark content="b" /><td>X</td><td>a</td></tr></table>',
+				['X'],
+			],
 		];
 	}
 
@@ -241,6 +273,26 @@ class NthChildSelectorTest extends TestCase
 				. '<tr><th>H2</th></tr></thead>' . $body . '</table>',
 				['I2', 'H2', 'B2'],
 			],
+			'rows written straight into the table' => [
+				'tr:nth-child(2)',
+				'<table><tr><td>A1</td></tr><tr><td>A2</td></tr><tr><td>A3</td></tr></table>',
+				['A2'],
+			],
+			'no third row in a table of two' => [
+				'tr:nth-child(3)',
+				'<table><tr><td>A1</td></tr><tr><td>A2</td></tr></table>',
+				[],
+			],
+			"mPDF's own tag written between the rows" => [
+				'tr:nth-child(2)',
+				'<table><tr><td>A1</td></tr><bookmark content="b" /><tr><td>A2</td></tr><tr><td>A3</td></tr></table>',
+				['A2'],
+			],
+			'each table counts its own rows' => [
+				'tr:nth-child(2)',
+				'<table><tr><td>A1</td></tr><tr><td>A2</td></tr></table><table><tr><td>B1</td></tr><tr><td>B2</td></tr></table>',
+				['A2', 'B2'],
+			],
 		];
 	}
 
@@ -265,6 +317,111 @@ class NthChildSelectorTest extends TestCase
 		for ($page = 1; $page < count($pages); $page++) {
 			$this->assertSame(1, substr_count($pages[$page], self::FILL), 'Page ' . ($page + 1));
 		}
+	}
+
+	/**
+	 * A row opened without the end tag of the one before is the next row, and is shaded as it is when the end tags are
+	 * written
+	 */
+	public function testARowWithNoEndTagBeforeIt()
+	{
+		$css = '<style>tr:nth-child(2) { background-color: #00ff00; }</style>';
+		$closed = $this->pages($this->render($css . '<table><tr><td>A1</td></tr><tr><td>B1</td><td>B2</td></tr><tr><td>C1</td><td>C2</td><td>C3</td></tr></table>'));
+		$open = $this->pages($this->render($css . '<table><tr><td>A1<tr><td>B1<td>B2<tr><td>C1<td>C2<td>C3</table>'));
+
+		$this->assertSame(3, substr_count($closed[0], self::FILL), 'The second row is shaded across the three columns');
+		$this->assertSame($closed, $open);
+	}
+
+	/**
+	 * The rows of a table that runs onto further pages are counted as they are written, not as they fall on a page
+	 */
+	public function testARowOnALaterPageKeepsItsCount()
+	{
+		$rows = '';
+		for ($row = 1; $row <= 70; $row++) {
+			$rows .= '<tr><td>Row ' . $row . '</td></tr>';
+		}
+
+		$red = $this->redText($this->drawDocument('<style>tr:nth-child(20n) td { color: #ff0000; }</style><table>' . $rows . '</table>'));
+
+		$this->assertSame(['Row 20', 'Row 40', 'Row 60'], $red);
+	}
+
+	/**
+	 * A table counts its rows and cells the same wherever it is written, and the table after it counts its own
+	 *
+	 * @dataProvider contexts
+	 *
+	 * @param string $before What comes before the table
+	 * @param string $after What comes after the table, closing what $before opens
+	 * @param int $pages How many pages the document takes: a page-break-inside: avoid block that does not fit is put
+	 *                   back and laid out again on the next page
+	 */
+	public function testATableCountsItsRowsWhereverItIsWritten($before, $after, $pages)
+	{
+		$table = '<table><tr><td>A1</td><td>A2</td></tr><tr><td>B1</td><td>B2</td></tr><tr><td>C1</td><td>C2</td></tr></table>';
+
+		$mpdf = $this->drawDocument(
+			'<style>tr:nth-child(2) td:first-child, td:nth-child(3) { color: #ff0000; }</style>'
+			. $before . $table . $after
+			. '<table><tr><td>Y1</td></tr><tr><td>Z1</td><td>Z2</td></tr></table>'
+		);
+
+		$red = $this->redText($mpdf);
+		sort($red);
+		$this->assertSame(['B1', 'Z1'], $red);
+		$this->assertCount($pages, $mpdf->pages);
+	}
+
+	/**
+	 * Markup around a table, before and after it
+	 *
+	 * @return array[]
+	 */
+	public function contexts()
+	{
+		return [
+			'the flow' => ['', '', 1],
+			'a page header' => ['<htmlpageheader name="h">', '</htmlpageheader><sethtmlpageheader name="h" value="on" show-this-page="1" />', 1],
+			'a page footer' => ['<htmlpagefooter name="f">', '</htmlpagefooter><sethtmlpagefooter name="f" value="on" />', 1],
+			'an absolutely positioned block' => ['<div style="position: absolute; top: 150mm; left: 20mm; width: 80mm">', '</div>', 1],
+			'a fixed block' => ['<div style="position: fixed; top: 150mm; left: 20mm; width: 80mm">', '</div>', 1],
+			'a page-break-inside: avoid block put back and laid out again' => [
+				$this->filler(26) . '<div style="page-break-inside: avoid">' . str_repeat('<p>Kept</p>', 3),
+				'</div>',
+				2,
+			],
+			'a cell of another table' => ['<table><tr><td>', '</td></tr></table>', 1],
+			'a list item' => ['<ul><li>', '</li></ul>', 1],
+			'columns' => ['<columns column-count="2" />', '<columns column-count="1" />', 1],
+		];
+	}
+
+	/**
+	 * mPDF lays out a cell or row opened without the end tag of the one before as the next one, even with
+	 * allow_html_optional_endtags off, and the rules count it so
+	 */
+	public function testCellsAndRowsWithNoEndTagWhenOptionalEndTagsAreOff()
+	{
+		$red = $this->redText($this->drawDocument(
+			'<style>td:nth-child(2) { color: #ff0000; }</style><table><tr><td>a<td>X<td>b<tr><td>c<td>Y</table>',
+			['allow_html_optional_endtags' => false]
+		));
+
+		$this->assertSame(['X', 'Y'], $red);
+	}
+
+	/**
+	 * The text a document drew in red, in the order it was drawn
+	 *
+	 * @param TextRecordingMpdf $mpdf A document, written
+	 *
+	 * @return string[]
+	 */
+	private function redText(TextRecordingMpdf $mpdf)
+	{
+		return array_keys($this->keyedByText($mpdf, $mpdf->drawnColours), self::RED, true);
 	}
 
 }

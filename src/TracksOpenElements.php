@@ -43,20 +43,42 @@ trait TracksOpenElements
 	private $styledElement;
 
 	/**
-	 * @var array[] For each start tag that ends an open element with no end tag of its own: the tags it ends the nearest
-	 * of, and the tags of the elements the search for one stops at
+	 * @var array[] For each start tag that ends an open element with no end tag of its own, when
+	 * allow_html_optional_endtags is on: the tags it ends the nearest of, and the tags of the elements the search for
+	 * one stops at
 	 */
 	private static $impliedEndTags = [
 		'LI' => [['LI'], ['UL', 'OL', 'CAPTION', 'TD', 'TH', 'TABLE']],
 		'DT' => [['DT', 'DD'], ['DL', 'CAPTION', 'TD', 'TH', 'TABLE']],
 		'DD' => [['DT', 'DD'], ['DL', 'CAPTION', 'TD', 'TH', 'TABLE']],
 		'OPTION' => [['OPTION'], ['SELECT']],
+	];
+
+	/**
+	 * @var array[] As $impliedEndTags, for the start tags that end an open cell, row or row group whatever
+	 * allow_html_optional_endtags says: mPDF lays each cell, row and row group out after the one before it, never
+	 * inside it
+	 */
+	private static $tableImpliedEndTags = [
 		'TD' => [['TD', 'TH'], ['TR', 'TABLE']],
 		'TH' => [['TD', 'TH'], ['TR', 'TABLE']],
 		'TR' => [['TR'], ['THEAD', 'TBODY', 'TFOOT', 'TABLE']],
 		'THEAD' => [['THEAD', 'TBODY', 'TFOOT'], ['TABLE']],
 		'TBODY' => [['THEAD', 'TBODY', 'TFOOT'], ['TABLE']],
 		'TFOOT' => [['THEAD', 'TBODY', 'TFOOT'], ['TABLE']],
+	];
+
+	/**
+	 * @var array[] The elements a browser keeps in each part of a table, by tag. Any other element written straight
+	 * into one, such as mPDF's <bookmark> or <tocentry> between two cells, is moved out in front of the table, so it
+	 * is not counted among the part's children. It is still opened inside the part, as mPDF reads it there
+	 */
+	private static $tableChildren = [
+		'TABLE' => ['CAPTION' => true, 'THEAD' => true, 'TBODY' => true, 'TFOOT' => true],
+		'THEAD' => ['TR' => true],
+		'TBODY' => ['TR' => true],
+		'TFOOT' => ['TR' => true],
+		'TR' => ['TD' => true, 'TH' => true],
 	];
 
 	/** @var array<string, true> The tags mPDF wraps substituted characters in, which are not the document's elements */
@@ -134,6 +156,27 @@ trait TracksOpenElements
 		$path[] = $this->newChildFrame($path[$parent], $tag, $this->styledElement['attr']);
 
 		return $path;
+	}
+
+	/**
+	 * The position of the element whose CSS is being merged among its element siblings: the nthChild of the last frame
+	 * getStyledElementPath() gives, found without making that path. The legacy tr, td and th:nth-child rules read it
+	 *
+	 * @return int|null From 1. Null when no element of the document is being styled
+	 */
+	public function getStyledElementNthChild()
+	{
+		if ($this->styledElement === null) {
+			return null;
+		}
+
+		$path = $this->styledElement['path'];
+		$parent = $path[count($path) - 1];
+		if ($this->styledElement['tag'] === null) {
+			return $parent['nthChild'];
+		}
+
+		return self::impliesTbody($this->styledElement['tag'], $parent) ? 1 : count($parent['children']) + 1;
 	}
 
 	/**
@@ -342,7 +385,8 @@ trait TracksOpenElements
 	/**
 	 * Records a closed element among its parent's children, which is what sibling selectors and the nth counts of
 	 * later siblings read. The parent is the frame now at the top of the stack. A span mPDF wraps a run of another
-	 * script in is left out, as it is not the document's
+	 * script in is left out, as it is not the document's, and so is an element a browser moves out of the table part
+	 * it is written in
 	 *
 	 * @param array $frame The closed element's frame
 	 */
@@ -353,6 +397,11 @@ trait TracksOpenElements
 		}
 
 		$parent = count($this->openElements) - 1;
+		$parentTag = $this->openElements[$parent]['tag'];
+		if (isset(self::$tableChildren[$parentTag]) && !isset(self::$tableChildren[$parentTag][$frame['tag']])) {
+			return;
+		}
+
 		$this->openElements[$parent]['children'][] = [
 			'tag' => $frame['tag'],
 			'id' => $frame['id'],
@@ -423,7 +472,8 @@ trait TracksOpenElements
 
 	/**
 	 * Closes the elements whose end tag HTML lets be left out before this start tag, as Tag::OpenTag() does for the
-	 * blocks it lays out. WriteHTML() calls it for each start tag, before handling it
+	 * blocks it lays out. With allow_html_optional_endtags off, only a cell, row or row group is closed, as mPDF's
+	 * tables never nest them. WriteHTML() calls it for each start tag, before handling it
 	 *
 	 * @param string $tag The start tag's name, uppercased
 	 * @param int $floor How many frames at the foot of the stack are not for the HTML being written to close: the
@@ -431,6 +481,10 @@ trait TracksOpenElements
 	 */
 	private function closeElementsImpliedBy($tag, $floor)
 	{
+		if (isset(self::$tableImpliedEndTags[$tag])) {
+			$this->closeNearestElement(self::$tableImpliedEndTags[$tag][0], self::$tableImpliedEndTags[$tag][1], $floor);
+		}
+
 		if (!$this->allow_html_optional_endtags) {
 			return;
 		}
