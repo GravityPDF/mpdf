@@ -421,12 +421,13 @@ These changes do not change output.
 * **Glyph outline numbers.** A glyph outline's coordinates are written through `NumericString::decimal()`, as the colour glyphs and SVG paths write theirs. [#625]
 * **Snapshot tests.** Snapshot tests compare bytes first, then PDF objects, then pixels. Snapshot documents carry nothing of the machine that made them. [#72]
 * **Data scripts.** Composer scripts regenerate the Unicode, emoji, joining, language system, font cache, subset, shaping and grey profile data, and update snapshots.
-* **CI.** [#5] [#310] [#317] [#376] [#377] [#615]
+* **CI.** [#5] [#310] [#317] [#376] [#377] [#615] [#674]
   * CI runs on the `gravitypdf` branch, caches Composer downloads and uses current action versions.
   * It checks PDF/A and PDF/X-4 output with veraPDF, and tests e-invoices against the XML packages `composer.json` suggests.
   * The test suite runs under a 512M memory limit.
   * Pull requests run 6 of the 24 PHP and OS test jobs unless labelled `full-ci`. Pushes to `gravitypdf`, a nightly run and a manual run get all 24. A newer push to a pull request cancels the run it replaces.
   * Every workflow, code coverage included, also runs nightly on `gravitypdf` and can be run by hand.
+  * The Windows test jobs no longer spend minutes on HTTP requests to localhost. A test left `$_SERVER['HTTP_HOST']` set, so every later test fetched each missing stylesheet or image from `http://localhost`, and on Windows each refused connection takes about two seconds. [#674]
   * The coding standard and PHPStan run as one Lint workflow. The e-invoice and PDF/X-4 checks run on a pull request only when it changes the code they cover.
 * **PHPStan.** Fixes for newer PHP versions and PHPStan 2.2.15. [#6] [#295] [#319] [#451]
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
@@ -909,3 +910,4 @@ These changes do not change output.
 [#648]: https://github.com/GravityPDF/mpdf/pull/648
 [#651]: https://github.com/GravityPDF/mpdf/pull/651
 [#652]: https://github.com/GravityPDF/mpdf/pull/652
+[#674]: https://github.com/GravityPDF/mpdf/pull/674
