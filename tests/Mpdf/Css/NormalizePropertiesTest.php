@@ -307,6 +307,22 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'spaces around the slash' => ['12pt / 2 serif', ['FONT-FAMILY' => 'serif', 'FONT-SIZE' => '12pt', 'LINE-HEIGHT' => '2']],
 			'numeric weight before the size' => ['italic 700 12pt serif', ['FONT-FAMILY' => 'serif', 'FONT-SIZE' => '12pt', 'FONT-STYLE' => 'italic']],
 			'keyword inside a family name' => ['12pt "Bold Italic Sans", serif', ['FONT-FAMILY' => 'serif', 'FONT-STYLE' => 'normal', 'FONT-WEIGHT' => 'normal']],
+			'small-caps' => ['small-caps 12pt serif', ['FONT-VARIANT-CAPS' => 'small-caps', 'TEXT-TRANSFORM' => null]],
+			'parts not named are reset' => [
+				'12pt serif',
+				[
+					'LINE-HEIGHT' => 'normal',
+					'FONT-STYLE' => 'normal',
+					'FONT-WEIGHT' => 'normal',
+					'FONT-VARIANT-CAPS' => 'normal',
+					'FONT-VARIANT-LIGATURES' => 'normal',
+					'FONT-VARIANT-NUMERIC' => 'normal',
+					'FONT-VARIANT-ALTERNATES' => 'normal',
+					'FONT-VARIANT-POSITION' => 'normal',
+				],
+			],
+			'negative line-height' => ['12pt/-1 serif', ['FONT-FAMILY' => null, 'FONT-SIZE' => null, 'LINE-HEIGHT' => null, 'FONT-STYLE' => null]],
+			'system font' => ['caption', ['FONT-FAMILY' => null, 'FONT-SIZE' => null, 'LINE-HEIGHT' => null, 'FONT-STYLE' => null]],
 		];
 	}
 
@@ -502,6 +518,15 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('1mm', $result['MARGIN-TOP']);
 		$this->assertSame('-2mm', $result['MARGIN-RIGHT']);
 		$this->assertSame('1.5', $result['LINE-HEIGHT']);
+	}
+
+	/**
+	 * font-variant: normal resets font-variant-position with the other longhands
+	 */
+	public function testFontVariantNormalResetsPosition()
+	{
+		$result = $this->normalizeProperties->normalize(['FONT-VARIANT' => 'normal']);
+		$this->assertSame('normal', $result['FONT-VARIANT-POSITION']);
 	}
 
 }
