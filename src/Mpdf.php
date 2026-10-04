@@ -20058,7 +20058,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}//end of foreach
 		// mPDF 5.7.3  inline text-decoration parameters
 		// Needs to be set at the end - after vertical-align = super/sub, so that textparam['text-baseline'] is set
-		if (isset($arrayaux['TEXT-DECORATION']) && TextDecorations::seen($this, $arrayaux)) {
+		if (isset($arrayaux['TEXT-DECORATION']) && TextDecorations::seen($this)) {
 			$v = $arrayaux['TEXT-DECORATION']; // none underline line-through (strikeout) // Does not support: blink
 			if (stristr($v, 'LINE-THROUGH')) {
 				$this->textvar = ($this->textvar | TextVars::FD_LINETHROUGH);

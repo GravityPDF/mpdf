@@ -249,6 +249,25 @@ class TextDecorationPropagationTest extends TestCase
 	}
 
 	/**
+	 * A block inside an underlined inline element takes its underline under standard, as it takes the element's other
+	 * text properties (#541), and the text after the block is underlined again. Under legacy the block starts from an
+	 * empty text state, so neither is underlined
+	 */
+	public function testABlockInsideAnInlineElementTakesItsDecorations()
+	{
+		$html = '<div><span style="color: #f00; text-decoration: underline">zz<div style="color: #00f">qq</div>yy</span> xx</div>';
+
+		$standard = $this->drawnDecorations($html, CssMode::STANDARD);
+		$this->assertSame(['underline' => [self::RED, self::ANCESTOR_SIZE]], $standard['qq']);
+		$this->assertSame(['underline' => [self::RED, self::ANCESTOR_SIZE]], $standard['yy']);
+		$this->assertSame([], $standard['xx']);
+
+		$legacy = $this->drawnDecorations($html, CssMode::LEGACY);
+		$this->assertSame([], $legacy['qq']);
+		$this->assertSame([], $legacy['yy']);
+	}
+
+	/**
 	 * Under standard an element whose colour is transparent draws its own decoration unseen, so none is added for it,
 	 * and the decorations of the elements it is in are drawn over its text in their colour. Under legacy the element's
 	 * own decoration is drawn in the colour its text had before
@@ -297,6 +316,16 @@ class TextDecorationPropagationTest extends TestCase
 			'a block under an underline' => [
 				'<div style="color: #f00; text-decoration: underline"><p style="color: transparent">qq</p></div>',
 				$underlined,
+				$blackUnderline,
+			],
+			'an inline element inside a transparent one' => [
+				'<p style="color: #f00; text-decoration: line-through"><span style="color: transparent">zz <b style="text-decoration: underline">qq</b></span></p>',
+				$struck,
+				$underlined + $struck,
+			],
+			'a block inside a transparent one' => [
+				'<div style="color: #f00; text-decoration: line-through"><div style="color: transparent"><p style="text-decoration: underline">qq</p></div></div>',
+				$struck,
 				$blackUnderline,
 			],
 		];

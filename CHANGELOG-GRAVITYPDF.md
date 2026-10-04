@@ -70,7 +70,8 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **Text decorations propagate to descendants instead of being inherited**, as in a browser. A link styled `a { text-decoration: none }` inside an underlined paragraph now has the paragraph's underline drawn under it. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output, or move the `text-decoration` from the paragraph to the parts of it you want decorated. [#544] [#654]
   * An underline, overline or line-through is drawn over the text of every descendant in the flow, in the colour and at the size of the element that set it. A child block used to redraw it in its own colour and size, and lost an overline.
   * `text-decoration: none` on a descendant removes only a decoration of its own. A descendant's own decoration is added to its ancestors': `line-through` inside an underlined block is drawn with both lines.
-  * An element whose `color` is `transparent` adds no decoration of its own, since it would be drawn in that colour.
+  * An element whose `color` is `transparent`, set or inherited, adds no decoration of its own, since it would be drawn in that colour.
+  * A block inside an underlined inline element, as in `<span style="text-decoration: underline">…<div>…</div>…</span>`, is underlined too, as is the text after it up to the element's end tag.
   * Floats, positioned blocks and inline blocks no longer take the decorations of the element they are in. Tables never did.
   * A child block no longer takes its parent's `vertical-align`, which is not inherited.
 

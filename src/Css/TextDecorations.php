@@ -66,19 +66,16 @@ final class TextDecorations
 
 	/**
 	 * Whether the decorations an element sets are seen. Under CssMode::STANDARD a decoration is drawn in the colour of
-	 * the element that sets it, so an element whose color is transparent draws its own unseen, and the decorations it
-	 * is in stay drawn over its text.
+	 * the element that sets it, so an element whose color is transparent, set or inherited, draws its own unseen, and
+	 * the decorations it is in stay drawn over its text. Call it once Mpdf::setCSS() has applied the element's color.
 	 *
 	 * @param Mpdf $mpdf
-	 * @param array $properties The element's merged CSS
 	 *
 	 * @return bool
 	 */
-	public static function seen(Mpdf $mpdf, array $properties)
+	public static function seen(Mpdf $mpdf)
 	{
-		return $mpdf->cssMode === CssMode::LEGACY
-			|| !isset($properties['COLOR'])
-			|| strtolower(trim($properties['COLOR'])) !== 'transparent';
+		return $mpdf->cssMode === CssMode::LEGACY || empty($mpdf->textparam['transparent']);
 	}
 
 	/**
