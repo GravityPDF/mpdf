@@ -318,4 +318,50 @@ abstract class Tag
 
 	abstract public function close(&$ahtml, &$ihtml);
 
+	/**
+	 * Sets aside the inline elements a block or table opens inside, under CssMode::STANDARD: their saved states and the
+	 * text state they set go on the enclosing block. The block or table inherits that text state, and
+	 * restoreBlockTextState() puts both back when it closes, so the text after it is drawn in their style and their end tags restore what was there before them.
+	 *
+	 * A block opened a second time, as a kept block laid out again or a block reopened after a forced page break, finds
+	 * them already set aside and keeps them, as by then the text state has changed
+	 */
+	protected function setOpenInlineElementsAside()
+	{
+		$block = &$this->mpdf->blk[$this->mpdf->blklvl];
+
+		if (!isset($block['openInline']) && array_filter($this->mpdf->InlineProperties)) {
+			$block['openInline'] = [
+				'properties' => $this->mpdf->InlineProperties,
+				'state' => $this->mpdf->saveInlineProperties(),
+			];
+
+			// The line before the block or table is printed next, and its text with no colour or link of its own is drawn in the
+			// current state
+			if (isset($block['InlineProperties'])) {
+				$this->mpdf->restoreInlineProperties($block['InlineProperties']);
+			}
+		}
+
+		$this->mpdf->InlineProperties = [];
+	}
+
+	/**
+	 * Restores, when a block or table closes, the text state of the block that is current again: that of the inline
+	 * elements setOpenInlineElementsAside() set aside on it, which are put back, or else the block's own
+	 */
+	protected function restoreBlockTextState()
+	{
+		$state = InheritedProperties::blockTextState($this->mpdf->blk, $this->mpdf->blklvl);
+		if ($state !== null) {
+			$this->mpdf->restoreInlineProperties($state);
+		}
+
+		$block = &$this->mpdf->blk[$this->mpdf->blklvl];
+		if (isset($block['openInline'])) {
+			$this->mpdf->InlineProperties = $block['openInline']['properties'];
+			unset($block['openInline']);
+		}
+	}
+
 }

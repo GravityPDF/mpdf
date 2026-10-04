@@ -10,8 +10,9 @@ namespace Mpdf\Css;
  *
  * - a block to its child blocks: CssMerger::mergeInheritedBlockProperties() reads TEXT back from the block's saved
  *   text state through InlinePropertyConverter, and BLOCK from the block's level of the block stack;
- * - inline elements to a block opened inside them: BlockTag sets their text state aside on the enclosing block, and
- *   blockTextState() gives it to mergeInheritedBlockProperties() in place of the enclosing block's own;
+ * - inline elements to a block or table opened inside them: BlockTag and Table set their text state aside on the
+ *   enclosing block, and blockTextState() gives it to mergeInheritedBlockProperties() in place of the enclosing
+ *   block's own;
  * - a positioned block to its content: Mpdf::WriteFixedPosHTML() puts TEXT and BLOCK from the block's merged CSS on
  *   the <div> that stands in for the block;
  * - a block to a table in it: CssMerger::mergeInheritedBlockProperties() gives the table TEXT and BLOCK from the block,
@@ -134,8 +135,9 @@ final class InheritedProperties
 	}
 
 	/**
-	 * The text state a block opened inside the block at a level inherits: that of the inline elements it opened in,
-	 * which BlockTag sets aside on the enclosing block under CssMode::STANDARD, or else the enclosing block's own
+	 * The text state a block or table opened inside the block at a level inherits: that of the inline elements it
+	 * opened in, which BlockTag and Table set aside on the enclosing block under CssMode::STANDARD, or else the
+	 * enclosing block's own
 	 *
 	 * @param array $blocks The block stack, as Mpdf::$blk
 	 * @param int $level

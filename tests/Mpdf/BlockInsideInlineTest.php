@@ -5,9 +5,9 @@ namespace Mpdf;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
- * A block opened inside inline elements inherits their state, and the text after the block is read in their state
- * again, until their end tags. A link around a block covers the block's text. Under legacy the block starts from the
- * enclosing block's state, and so does the text after it (#541).
+ * A block or table opened inside inline elements inherits their state, and the text after it is read in their state
+ * again, until their end tags. A link around a block covers the block's text. Under legacy the block or table starts
+ * from the enclosing block's state, and so does the text after it (#541, #543).
  */
 class BlockInsideInlineTest extends TestCase
 {
@@ -187,6 +187,35 @@ class BlockInsideInlineTest extends TestCase
 			],
 			'the block in a span breaks the page before it' => [
 				'<span class="a">xx<div style="page-break-before: always">qq</div>yy</span>zz',
+				$inherits,
+				$loses,
+				['xx' => 1, 'qq' => 2],
+			],
+			'a table in a span' => [
+				'<span class="a">xx<table><tr><td>qq</td></tr></table>yy</span>zz',
+				$inherits,
+				$loses,
+			],
+			'a table in a span in a block' => [
+				'<div class="o"><span class="a">xx<table><tr><td>qq</td></tr></table>yy</span>zz</div>',
+				['xx' => $g, 'qq' => $g, 'yy' => $g, 'zz' => $b],
+				// Legacy starts the table from the document's defaults
+				['xx' => $g, 'qq' => $p, 'yy' => $b, 'zz' => $b],
+			],
+			'a table in a span in a cell' => [
+				$this->inContext('table cell', '<span class="a">xx<table><tr><td>qq</td></tr></table>yy</span>zz'),
+				$inherits,
+				// Legacy: the nested table takes the cell's colour but not its weight
+				['xx' => $g, 'qq' => ['0.000 1.000 0.000 rg', ''], 'yy' => $g, 'zz' => $g],
+			],
+			'a table in a span in a kept block that is laid out again on the next page' => [
+				self::FILLER . '<div style="page-break-inside: avoid"><p>ww</p><span class="a">xx<table><tr><td>qq</td></tr></table>yy</span>zz</div>',
+				$inherits,
+				$loses,
+				['ww' => 2, 'qq' => 2],
+			],
+			'the table in a span breaks the page before it' => [
+				'<span class="a">xx<table style="page-break-before: always"><tr><td>qq</td></tr></table>yy</span>zz',
 				$inherits,
 				$loses,
 				['xx' => 1, 'qq' => 2],

@@ -146,6 +146,7 @@ class TableInheritsFromBlockTest extends TestCase
 			'ems of the block' => ['<div style="font-size: 20pt"><table style="font-size: 1.5em"><tr><td>qq</td></tr></table></div>', 30.0, 16.5],
 			'a percentage of the list item' => ['<ul><li style="font-size: 20pt"><table style="font-size: 50%"><tr><td>qq</td></tr></table></li></ul>', 10.0, 5.5],
 			'a percentage of the cell' => ['<table><tr><td style="font-size: 20pt"><table style="font-size: 50%"><tr><td>qq</td></tr></table></td></tr></table>', 10.0, 5.5],
+			'a percentage of a span' => ['<span style="font-size: 20pt">zz<table style="font-size: 50%"><tr><td>qq</td></tr></table></span>', 10.0, 5.5],
 			'the block\'s size, inherited' => ['<div style="font-size: 20pt"><table><tr><td>qq</td></tr></table></div>', 20.0, 11.0],
 			'rem in a cell of a sized table' => ['<table style="font-size: 20pt"><tr><td style="font-size: 1.5rem">qq</td></tr></table>', 16.5, 30.0],
 			'rem in a table in a sized block' => ['<div style="font-size: 20pt"><table><tr><td style="font-size: 1rem">qq</td></tr></table></div>', 11.0, 11.0],
