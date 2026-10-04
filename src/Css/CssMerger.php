@@ -158,16 +158,17 @@ class CssMerger
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes including CLASS, ID, STYLE
+	 * @param array $inherited Under the standard cascade, what the element inherits, under everything else merged
 	 * @return array Merged CSS properties array
 	 */
-	public function merge($inherit, $tag, $attr)
+	public function merge($inherit, $tag, $attr, array $inherited = [])
 	{
 		$this->cssProperties = [];
 
 		$attr = is_array($attr) ? $attr : [];
 
 		if ($this->mpdf->cssMode === CssMode::STANDARD) {
-			return $this->mergeInCascadeOrder($inherit, $tag, $attr);
+			return $this->mergeInCascadeOrder($inherit, $tag, $attr, $inherited);
 		}
 
 		$classes = [];
@@ -222,9 +223,10 @@ class CssMerger
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes, as the tag handler was given them
+	 * @param array $inherited What the element inherits, besides what a block takes from its parent block
 	 * @return array Merged CSS properties array
 	 */
-	private function mergeInCascadeOrder($inherit, $tag, array $attr)
+	private function mergeInCascadeOrder($inherit, $tag, array $attr, array $inherited)
 	{
 		// Found once, when a rule set first has a rule filed under the element. previewBlockCss() looks at an element
 		// that is not being written, so it is put in the innermost open element, and nothing is recorded
@@ -247,6 +249,7 @@ class CssMerger
 		$classes = $this->classesOf($attr);
 		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
 
+		$this->cssProperties = $inherited;
 		$this->mergeInheritedBlockProperties($inherit, $tag);
 		$inherited = $this->cssProperties;
 
@@ -256,6 +259,10 @@ class CssMerger
 		list($defaultRules, $importantDefaultRules) = $this->cssManager->getDefaultRules()->matchingDeclarations($tag, $id, $classes, $path);
 		$this->mergeEach($defaultRules, $dominance);
 		$defaults = $this->cssProperties;
+		// HTML's rendering rules centre a th only when the text-align it inherits is the initial value
+		if ($tag === 'TH' && isset($inherited['TEXT-ALIGN'])) {
+			$defaults['TEXT-ALIGN'] = $inherited['TEXT-ALIGN'];
+		}
 		$this->cssProperties = array_merge($inherited, $defaults);
 
 		$this->mergePresentationalHints($tag, $attr);
@@ -284,7 +291,7 @@ class CssMerger
 
 		// Before currentColor, which takes the colour a keyword resolves to
 		$this->resolveWideKeywords($inherited, $defaults, $path, $inherit !== 'INLINE' && $inherit !== '', $html);
-		$this->resolveCurrentColor($inherit);
+		$this->resolveCurrentColor($inherit, $inherited);
 		if ($this->sideEffects) {
 			$this->mpdf->recordStyledElementComputed($this->cssProperties);
 		}
@@ -298,9 +305,10 @@ class CssMerger
 	 * colour takes currentColor, as a border does. Legacy mode resolves it only where it raised warnings
 	 *
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE, or empty)
+	 * @param array $inherited Under the standard cascade, what the element inherits
 	 * @return void
 	 */
-	private function resolveCurrentColor($inherit)
+	private function resolveCurrentColor($inherit, array $inherited = [])
 	{
 		$properties = self::CURRENT_COLOR_PROPERTIES;
 
@@ -314,11 +322,11 @@ class CssMerger
 			}
 
 			if (isset($this->cssProperties['COLOR']) && strtolower($this->cssProperties['COLOR']) === 'currentcolor') {
-				$inherited = $this->inheritedColor($inherit);
-				if ($inherited === null) {
+				$color = $this->inheritedColor($inherit, $inherited);
+				if ($color === null) {
 					unset($this->cssProperties['COLOR']);
 				} else {
-					$this->cssProperties['COLOR'] = $inherited;
+					$this->cssProperties['COLOR'] = $color;
 				}
 			}
 		}
@@ -440,15 +448,20 @@ class CssMerger
 
 	/**
 	 * The colour an element takes when it sets none, as mPDF passes it on in each context: a block takes the colour of
-	 * the block or inline elements it is opened in, a table and its parts the table's, and anything else the colour of
-	 * the text around it
+	 * the block or inline elements it is opened in, a table's parts their row's, row group's or table's, and anything
+	 * else the colour of the text around it
 	 *
 	 * @param string $inherit Inheritance context
+	 * @param array $inherited Under the standard cascade, what the element inherits
 	 * @return string|null Null for the document's default colour
 	 */
-	private function inheritedColor($inherit)
+	private function inheritedColor($inherit, array $inherited = [])
 	{
 		if ($inherit === 'TABLE' || $inherit === 'TOPTABLE') {
+			if (isset($inherited['COLOR'])) {
+				return $inherited['COLOR'];
+			}
+
 			return isset($this->mpdf->base_table_properties['COLOR']) ? $this->mpdf->base_table_properties['COLOR'] : null;
 		}
 
@@ -613,8 +626,34 @@ class CssMerger
 	 */
 	public function previewBlockCss($tag, $attr)
 	{
+		return $this->preview('BLOCK', $tag, $attr);
+	}
+
+	/**
+	 * The CSS an element of a table would be given if it were opened now in the innermost open element, without
+	 * opening it. Tr reads it for the tbody that a row written straight into a table is put in
+	 *
+	 * @param string $tag HTML tag name
+	 * @param array $attr HTML attributes array
+	 * @return array CSS properties that would be applied
+	 */
+	public function previewTableCss($tag, $attr)
+	{
+		return $this->preview('TABLE', $tag, $attr);
+	}
+
+	/**
+	 * Merges an element's CSS without changing any state outside this object
+	 *
+	 * @param string $inherit Inheritance context (BLOCK, TABLE)
+	 * @param string $tag HTML tag name
+	 * @param array $attr HTML attributes array
+	 * @return array CSS properties that would be applied
+	 */
+	private function preview($inherit, $tag, $attr)
+	{
 		$this->sideEffects = false;
-		$results = $this->merge('BLOCK', $tag, $attr);
+		$results = $this->merge($inherit, $tag, $attr);
 		$this->sideEffects = true;
 
 		return $results;

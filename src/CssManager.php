@@ -248,11 +248,12 @@ class CssManager
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes including CLASS, ID, STYLE
+	 * @param array $inherited Under the standard cascade, what the element inherits, under everything else merged
 	 * @return array Merged CSS properties array
 	 */
-	public function mergeCss($inherit, $tag, $attr)
+	public function mergeCss($inherit, $tag, $attr, array $inherited = [])
 	{
-		return $this->cssMerger->merge($inherit, $tag, $attr);
+		return $this->cssMerger->merge($inherit, $tag, $attr, $inherited);
 	}
 
 	/**
@@ -268,6 +269,18 @@ class CssManager
 	public function previewBlockCss($tag, $attr)
 	{
 		return $this->cssMerger->previewBlockCss($tag, $attr);
+	}
+
+	/**
+	 * The CSS an element of a table would be given if it were opened now, without opening it
+	 *
+	 * @param string $tag HTML tag name
+	 * @param array $attr HTML attributes array
+	 * @return array CSS properties that would be applied
+	 */
+	public function previewTableCss($tag, $attr)
+	{
+		return $this->cssMerger->previewTableCss($tag, $attr);
 	}
 
 	public function getUsedClassNames()

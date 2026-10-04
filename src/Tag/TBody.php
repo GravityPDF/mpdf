@@ -11,7 +11,8 @@ class TBody extends Tag
 		$this->mpdf->tabletfoot = 0;
 		$this->mpdf->lastoptionaltag = 'TBODY'; // Save current HTML specified optional endtag
 		$this->cssManager->tbCSSlvl++;
-		$this->cssManager->MergeCSS('TABLE', 'TBODY', $attr);
+		$properties = $this->cssManager->MergeCSS('TABLE', 'TBODY', $attr);
+		$this->inheritRowGroup($properties);
 	}
 
 	public function close(&$ahtml, &$ihtml)

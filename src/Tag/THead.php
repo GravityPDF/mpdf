@@ -12,6 +12,7 @@ class THead extends Tag
 		$this->mpdf->tablethead = 1;
 		$this->mpdf->tabletfoot = 0;
 		$properties = $this->cssManager->MergeCSS('TABLE', 'THEAD', $attr);
+		$this->inheritRowGroup($properties);
 		if (isset($properties['FONT-WEIGHT'])) {
 			$this->mpdf->thead_font_weight = '';
 			if (strtoupper($properties['FONT-WEIGHT']) === 'BOLD') {

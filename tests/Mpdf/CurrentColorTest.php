@@ -421,6 +421,79 @@ class CurrentColorTest extends TestCase
 	}
 
 	/**
+	 * In standard mode a cell's currentColor is the colour it inherits from its row or row group, over the table's,
+	 * for color: currentColor and for a border that names it
+	 *
+	 * @dataProvider rowParts
+	 *
+	 * @param string $html A table with a cell styled "%s", under a part set to #0a0 in a table set to #c00
+	 */
+	public function testACellsCurrentColorIsItsRowsColour($html)
+	{
+		foreach (['color: currentColor', 'border: 0.4mm solid currentColor'] as $style) {
+			$mpdf = $this->paint(sprintf($html, $style), CssMode::STANDARD);
+
+			$this->assertSame(self::GREEN, $this->keyedByText($mpdf, $mpdf->drawnColours)['subject'], $style);
+		}
+
+		$this->assertSame([strtoupper(self::GREEN)], array_values(array_unique($mpdf->drawnBorders)));
+	}
+
+	/**
+	 * In standard mode a row's currentColor is the colour it inherits from its row group, over the table's, for
+	 * color: currentColor, which its cells then take, and for a border it draws
+	 *
+	 * @dataProvider rowGroups
+	 *
+	 * @param string $html A collapsed table set to #c00, with a row styled "%s" under a row group set to #0a0
+	 */
+	public function testARowsCurrentColorIsItsRowGroupsColour($html)
+	{
+		$mpdf = $this->paint(sprintf($html, 'color: currentColor'), CssMode::STANDARD);
+
+		$this->assertSame(self::GREEN, $this->keyedByText($mpdf, $mpdf->drawnColours)['subject']);
+
+		$mpdf = $this->paint(sprintf($html, 'border: 0.4mm solid currentColor'), CssMode::STANDARD);
+
+		$this->assertSame([strtoupper(self::GREEN)], array_values(array_unique($mpdf->drawnBorders)));
+	}
+
+	/**
+	 * A row under a coloured tbody, thead, and tbody rule over rows written straight into the table
+	 *
+	 * @return string[][]
+	 */
+	public function rowGroups()
+	{
+		$table = '<table style="border-collapse: collapse; color: #c00">%s</table>';
+		$row = '<tr style="%s"><td>subject</td></tr>';
+
+		return [
+			'tbody' => [sprintf($table, '<tbody style="color: #0a0">' . $row . '</tbody>')],
+			'thead' => [sprintf($table, '<thead style="color: #0a0">' . $row . '</thead>')],
+			'implied tbody' => ['<style>tbody { color: #0a0 }</style>' . sprintf($table, $row)],
+		];
+	}
+
+	/**
+	 * A cell under a coloured row, row group, and tbody rule over rows written straight into the table
+	 *
+	 * @return string[][]
+	 */
+	public function rowParts()
+	{
+		$table = '<table style="color: #c00">%s</table>';
+		$cell = '<td style="%s">subject</td>';
+
+		return [
+			'row' => [sprintf($table, '<tr style="color: #0a0">' . $cell . '</tr>')],
+			'tbody' => [sprintf($table, '<tbody style="color: #0a0"><tr>' . $cell . '</tr></tbody>')],
+			'thead' => [sprintf($table, '<thead style="color: #0a0"><tr>' . $cell . '</tr></thead>')],
+			'implied tbody' => ['<style>tbody { color: #0a0 }</style>' . sprintf($table, '<tr>' . $cell . '</tr>')],
+		];
+	}
+
+	/**
 	 * currentColor is the colour the element ends up with, an !important one included, over a later or more
 	 * specific rule's colour and the style attribute's
 	 */
