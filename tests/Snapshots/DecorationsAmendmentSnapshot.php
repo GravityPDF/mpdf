@@ -36,6 +36,7 @@ abstract class DecorationsAmendmentSnapshot extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body { font-family: serif; font-size: 10pt; color: #2b2b2b; }
 			h1 { font-size: 16pt; margin: 0 0 1mm 0; }
 			h2 { font-size: 12pt; margin: 6mm 0 1mm 0; color: #34495e; text-decoration: overline; }
