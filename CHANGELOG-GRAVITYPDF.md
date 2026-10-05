@@ -67,6 +67,13 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * The built-in default style no longer gives a table `line-height: 1.2`, `hyphens: manual` and `font-kerning: auto`, which a browser's does not, so a table inherits them. A table in a block with no `line-height` of its own now takes `normal`, and its rows are drawn as far apart as a paragraph's lines, at `normalLineheight`, instead of at 1.2. To keep the old spacing, add `table { line-height: 1.2; }` to the stylesheet.
   * A `th` in a table in a right-aligned block is aligned right, since it inherits an alignment.
   * Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep tables starting from the document's defaults.
+* **Text decorations propagate to descendants instead of being inherited**, as in a browser. A link styled `a { text-decoration: none }` inside an underlined paragraph now has the paragraph's underline drawn under it. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output, or move the `text-decoration` from the paragraph to the parts of it you want decorated. [#544] [#654]
+  * An underline, overline or line-through is drawn over the text of every descendant in the flow, in the colour and at the size of the element that set it. A child block used to redraw it in its own colour and size, and lost an overline.
+  * `text-decoration: none` on a descendant removes only a decoration of its own. A descendant's own decoration is added to its ancestors': `line-through` inside an underlined block is drawn with both lines.
+  * An element whose `color` is `transparent`, set or inherited, adds no decoration of its own, since it would be drawn in that colour.
+  * A block inside an underlined inline element, as in `<span style="text-decoration: underline">…<div>…</div>…</span>`, is underlined too, as is the text after it up to the element's end tag.
+  * Floats, positioned blocks and inline blocks no longer take the decorations of the element they are in. Tables never did.
+  * A child block no longer takes its parent's `vertical-align`, which is not inherited.
 
 New features
 ------------
@@ -857,6 +864,7 @@ These changes do not change output.
 [#539]: https://github.com/GravityPDF/mpdf/issues/539
 [#540]: https://github.com/GravityPDF/mpdf/issues/540
 [#546]: https://github.com/GravityPDF/mpdf/issues/546
+[#544]: https://github.com/GravityPDF/mpdf/issues/544
 [#548]: https://github.com/GravityPDF/mpdf/issues/548
 [#549]: https://github.com/GravityPDF/mpdf/pull/549
 [#552]: https://github.com/GravityPDF/mpdf/issues/552
@@ -926,3 +934,4 @@ These changes do not change output.
 [#655]: https://github.com/GravityPDF/mpdf/pull/655
 [#543]: https://github.com/GravityPDF/mpdf/issues/543
 [#656]: https://github.com/GravityPDF/mpdf/pull/656
+[#654]: https://github.com/GravityPDF/mpdf/pull/654

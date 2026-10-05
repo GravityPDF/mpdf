@@ -2,6 +2,7 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Css\TextDecorations;
 use Mpdf\Mpdf;
 use Mpdf\Utils\UtfString;
 
@@ -53,6 +54,7 @@ abstract class InlineTag extends Tag
 		} // *ANNOTATIONS*
 
 		$properties = $this->cssManager->MergeCSS('INLINE', $tag, $attr);
+		TextDecorations::enter($this->mpdf, $properties);
 		if (!empty($properties)) {
 			$this->mpdf->setCSS($properties, 'INLINE');
 		}
