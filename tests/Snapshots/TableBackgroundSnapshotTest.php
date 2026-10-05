@@ -21,6 +21,7 @@ class TableBackgroundSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			p { margin: 0 0 3mm 0; }
 
 			table.panel { border-collapse: collapse; width: 100%; margin-bottom: 4mm; }

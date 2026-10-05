@@ -31,7 +31,7 @@ class EmptyButtonCaptionSnapshotTest extends Snapshot
 			'value="0"' => ' value="0"',
 		];
 
-		$html = '<style>td, th { border: 0.2mm solid #808080; padding: 2mm; }</style>'
+		$html = '<style>table { line-height: 1.2; } td, th { border: 0.2mm solid #808080; padding: 2mm; }</style>'
 			. '<h2>Active push buttons</h2>'
 			. '<p>A button with an empty value has no caption. Its field name is never shown.</p>'
 			. '<form><table><tr><th></th>';

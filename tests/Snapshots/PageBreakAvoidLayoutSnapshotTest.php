@@ -21,6 +21,7 @@ class PageBreakAvoidLayoutSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			p { margin: 0 0 2mm 0; }
 			h3 { margin: 0 0 2mm 0; }
 			div.kept { page-break-inside: avoid; }

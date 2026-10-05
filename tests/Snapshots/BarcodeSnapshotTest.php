@@ -27,6 +27,7 @@ class BarcodeSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body {font-family: sans-serif;
 				font-size: 9pt;
 			}

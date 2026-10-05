@@ -53,7 +53,7 @@ abstract class InvoiceSnapshot extends Snapshot
 	public function generatePdf()
 	{
 		$this->mpdf = $this->createMpdf();
-		$this->mpdf->WriteHTML($this->getWriter()->write($this->getXml()));
+		$this->mpdf->WriteHTML('<style>table { line-height: 1.2; }</style>' . $this->getWriter()->write($this->getXml()));
 	}
 
 }

@@ -31,6 +31,7 @@ class CoreFontZeroWidthSpaceSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			p.note { color: #606060; }
 			.box { border: 0.2mm solid #b0b0b0; padding: 1mm; margin-bottom: 2mm; }
 			td { border: 0.2mm solid #808080; padding: 1mm; vertical-align: top; }

@@ -27,6 +27,7 @@ class ExifOrientationGreyscaleSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			table.samples { border-collapse: collapse; }
 			table.samples td { padding: 3mm; border: 0.2mm solid #000000; text-align: center; vertical-align: top; }
 			td.label { font-weight: bold; width: 30mm; }

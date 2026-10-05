@@ -35,6 +35,7 @@ class LookAheadStylesheetSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			/* Base */
 			body { font-family: sans-serif; font-size: 9pt; color: #212529; }
 			h1 { font-size: 15pt; margin: 0 0 1mm 0; }

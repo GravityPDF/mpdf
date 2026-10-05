@@ -30,6 +30,7 @@ class TableCellDescendantSelectorSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			table { border-collapse: collapse; margin-bottom: 2mm; }
 			td, th { border: 0.2mm solid #999999; padding: 1mm; vertical-align: top; }
 			h2 { margin: 5mm 0 1mm 0; font-size: 11pt; }

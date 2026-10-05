@@ -17,6 +17,7 @@ class ImageBorderRadiusSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			table.grid { border-collapse: collapse; }
 			table.grid td { width: 60mm; height: 40mm; padding: 0; text-align: center; vertical-align: middle; border: 0.2mm solid #c0c0c0; }
 			table.grid td p { margin: 3mm 0 0 0; font-size: 8pt; color: #606060; }

@@ -37,6 +37,7 @@ abstract class InlineLineHeightArticleSnapshot extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body { font-family: sans-serif; font-size: 10pt; color: #1f2933; }
 			h1 { font-size: 18pt; margin: 0 0 1mm 0; }
 			h2 { font-size: 12pt; margin: 5mm 0 1mm 0; }

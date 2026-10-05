@@ -10,17 +10,21 @@ namespace Mpdf\Css;
  *
  * - a block to its child blocks: CssMerger::mergeInheritedBlockProperties() reads TEXT back from the block's saved
  *   text state through InlinePropertyConverter, and BLOCK from the block's level of the block stack;
- * - inline elements to a block opened inside them: BlockTag sets their text state aside on the enclosing block, and
- *   blockTextState() gives it to mergeInheritedBlockProperties() in place of the enclosing block's own;
+ * - inline elements to a block or table opened inside them: BlockTag and Table set their text state aside on the
+ *   enclosing block, and blockTextState() gives it to mergeInheritedBlockProperties() in place of the enclosing
+ *   block's own;
  * - a positioned block to its content: Mpdf::WriteFixedPosHTML() puts TEXT and BLOCK from the block's merged CSS on
  *   the <div> that stands in for the block;
+ * - a block to a table in it: CssMerger::mergeInheritedBlockProperties() gives the table TEXT and BLOCK from the block,
+ *   as it does a child block;
  * - a table to its cells: Table::open() puts TEXT and text-align from the table's merged CSS in
  *   base_table_properties, which each cell merges under its own CSS. The table also hands on text-align,
  *   line-height, the line stacking and direction through its own fields;
  * - a row group and a row to their cells: THead, TBody, TFoot and Tr put TEXT and BLOCK from their merged CSS over
  *   base_table_properties, and each cell merges what its row holds under its own CSS;
  * - a table cell to a table nested in it: Table::open() starts the nested table's base_table_properties and default
- *   font from the cell's text state, read back through InlinePropertyConverter.
+ *   font from the cell's text state, read back through InlinePropertyConverter, and merges the table's CSS over the
+ *   cell's line-height and text-align.
  *
  * To carry another property, add it to TEXT when it lives in the text state that Mpdf::saveInlineProperties() saves,
  * and make InlinePropertyConverter::convert() read it back. Otherwise add it to BLOCK, and carry it on the block stack
@@ -131,8 +135,9 @@ final class InheritedProperties
 	}
 
 	/**
-	 * The text state a block opened inside the block at a level inherits: that of the inline elements it opened in,
-	 * which BlockTag sets aside on the enclosing block under CssMode::STANDARD, or else the enclosing block's own
+	 * The text state a block or table opened inside the block at a level inherits: that of the inline elements it
+	 * opened in, which BlockTag and Table set aside on the enclosing block under CssMode::STANDARD, or else the
+	 * enclosing block's own
 	 *
 	 * @param array $blocks The block stack, as Mpdf::$blk
 	 * @param int $level

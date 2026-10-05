@@ -57,6 +57,7 @@ mattis commodo. Nam ipsum sem, ultricies at, rutrum sit amet, posuere nec, velit
 
 		$html = '
 <style>
+table { line-height: 1.2; }
 div.mpdf_toc_level_0 {
 	padding-right: 2em;	/* match the outdent specified for ToC */
 }

@@ -37,6 +37,7 @@ class FormFieldsTrimmedShapedSnapshotTest extends Snapshot
 		$this->mpdf = $this->createMpdf(['mode' => 'utf-8']);
 		$this->mpdf->WriteHTML('
 			<style>
+				table { line-height: 1.2; }
 				table.fields { border-collapse: collapse; width: 100%; }
 				table.fields td { padding: 2mm; border-bottom: 0.3mm solid #cccccc; vertical-align: top; }
 				td.label { font-weight: bold; width: 30mm; }

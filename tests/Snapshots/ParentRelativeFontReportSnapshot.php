@@ -35,6 +35,7 @@ abstract class ParentRelativeFontReportSnapshot extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body { font-family: sans-serif; font-size: 9pt; color: #212529; }
 			h1 { font-size: 16pt; font-weight: 700; margin: 0 0 1mm 0; }
 			h1 small { font-size: smaller; font-weight: lighter; color: #6c757d; }

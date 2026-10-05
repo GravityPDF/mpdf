@@ -21,6 +21,7 @@ class PageBreakAvoidFormsSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			p { margin: 0 0 2mm 0; }
 			div.kept { page-break-inside: avoid; border: 0.3mm dashed #808080; padding: 3mm; margin-bottom: 4mm; }
 			table.fields { width: 100%; margin-bottom: 2mm; }

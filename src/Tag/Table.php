@@ -23,8 +23,13 @@ class Table extends Tag
 			$this->mpdf->colvAlign = '';
 		} // *COLUMNS*
 
-		// The page break comes first, so the blocks it opens again on the new page are started below
 		if (!$this->mpdf->tableLevel) {
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				// It inherits the inline elements it is opened in, as a block does, set aside before the page break
+				$this->setOpenInlineElementsAside();
+			}
+
+			// The page break comes first, so the blocks it opens again on the new page are started below
 			$preview = $this->cssManager->PreviewBlockCSS('TABLE', $attr);
 			if ($this->forcesPageBreak($preview, 'PAGE-BREAK-BEFORE')) {
 				$this->forcePageBreak(strtoupper($preview['PAGE-BREAK-BEFORE']));
@@ -53,6 +58,10 @@ class Table extends Tag
 		if ($this->mpdf->tableLevel) { // i.e. now a nested table coming...
 			// Save current level table
 			$this->mpdf->cell['PARENTCELL'] = $this->mpdf->saveInlineProperties();
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				// The inline elements open in the cell, whose end tags after the nested table restore what was before them
+				$this->mpdf->cell['PARENTINLINE'] = $this->mpdf->InlineProperties;
+			}
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['baseProperties'] = $this->mpdf->base_table_properties;
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['cells'] = $this->mpdf->cell;
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['currrow'] = $this->mpdf->row;
@@ -61,6 +70,7 @@ class Table extends Tag
 		$this->mpdf->tableLevel++;
 		$this->cssManager->tbCSSlvl++;
 
+		$cellInherited = [];
 		if ($this->mpdf->tableLevel > 1) { // inherit table properties from cell in which nested
 			if ($this->mpdf->cssMode === CssMode::LEGACY) {
 				//$this->mpdf->base_table_properties['FONT-KERNING'] = ($this->mpdf->textvar & TextVars::FC_KERNING);	// mPDF 6
@@ -75,6 +85,14 @@ class Table extends Tag
 			$cellLineHeight = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineHeight'];
 			$cellLineStackingStrategy = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineStackingStrategy'];
 			$cellLineStackingShift = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineStackingShift'];
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				// It inherits the cell's line-height and text-align through its merged CSS too
+				$outerTable = $this->mpdf->table[$this->mpdf->tableLevel - 1][$this->mpdf->tbctr[$this->mpdf->tableLevel - 1]];
+				$cellInherited = array_filter([
+					'LINE-HEIGHT' => $cellLineHeight,
+					'TEXT-ALIGN' => isset($outerTable['cellTextAlign']) ? $outerTable['cellTextAlign'] : '',
+				]);
+			}
 		}
 
 		if (isset($this->mpdf->tbctr[$this->mpdf->tableLevel])) {
@@ -171,7 +189,7 @@ class Table extends Tag
 		if ($this->cssManager->tbCSSlvl == 1) {
 			$properties = $this->cssManager->MergeCSS('TOPTABLE', 'TABLE', $attr);
 		} else {
-			$properties = $this->cssManager->MergeCSS('TABLE', 'TABLE', $attr);
+			$properties = $this->cssManager->MergeCSS('TABLE', 'TABLE', $attr, $cellInherited);
 		}
 
 		$w = '';
@@ -307,9 +325,15 @@ class Table extends Tag
 		$this->mpdf->base_table_properties['FONT-FAMILY'] = $this->mpdf->FontFamily;
 
 		if (isset($properties['FONT-SIZE'])) {
-			$parentSize = $this->mpdf->tableLevel > 1
-				? $this->sizeConverter->convert($this->mpdf->base_table_properties['FONT-SIZE'])
-				: $this->mpdf->default_font_size / Mpdf::SCALE;
+			$inheritedState = InheritedProperties::blockTextState($this->mpdf->blk, $this->mpdf->blklvl);
+			if ($this->mpdf->tableLevel > 1) {
+				$parentSize = $this->sizeConverter->convert($this->mpdf->base_table_properties['FONT-SIZE']);
+			} elseif ($this->mpdf->cssMode === CssMode::STANDARD && isset($inheritedState['size'])) {
+				// Its size is relative to the size it inherits, the block's or the inline elements' it is opened in
+				$parentSize = $inheritedState['size'];
+			} else {
+				$parentSize = $this->mpdf->default_font_size / Mpdf::SCALE;
+			}
 			$mmsize = $this->sizeConverter->convertFontSizeToMm($properties['FONT-SIZE'], $parentSize);
 			if ($mmsize) {
 				$this->mpdf->default_font_size = $mmsize * Mpdf::SCALE;
@@ -727,6 +751,10 @@ class Table extends Tag
 					$this->mpdf->restoreInlineProperties($this->mpdf->cell['PARENTCELL']);
 				}
 				unset($this->mpdf->cell['PARENTCELL']);
+			}
+			if (isset($this->mpdf->cell['PARENTINLINE'])) {
+				$this->mpdf->InlineProperties = $this->mpdf->cell['PARENTINLINE'];
+				unset($this->mpdf->cell['PARENTINLINE']);
 			}
 			$this->mpdf->row = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['currrow'];
 			$this->mpdf->col = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['currcol'];
@@ -1246,9 +1274,7 @@ class Table extends Tag
 		$this->mpdf->SetFont($this->mpdf->default_font, '', 0, false);
 		$this->mpdf->SetLineHeight();
 
-		if (isset($this->mpdf->blk[$this->mpdf->blklvl]['InlineProperties'])) {
-			$this->mpdf->restoreInlineProperties($this->mpdf->blk[$this->mpdf->blklvl]['InlineProperties']);
-		}
+		$this->restoreBlockTextState();
 
 		if ($page_break_after) {
 			$this->forcePageBreak($page_break_after);

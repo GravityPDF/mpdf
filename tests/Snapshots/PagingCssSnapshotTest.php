@@ -561,6 +561,7 @@ class PagingCssSnapshotTest extends Snapshot
 		rutrum sit amet, posuere nec, velit. Sed molestie mollis dui. </p>
 
 		<style>
+			table { line-height: 1.2; }
 			@page {
 				size: 15cm 17cm;    /* width height  <length>{1,2} | auto | portrait | landscape NB 'em' and 'ex' % are not allowed */
 				margin: 10%;    /* % of page-box width for LR, height for TB */

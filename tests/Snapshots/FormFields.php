@@ -47,7 +47,7 @@ trait FormFields
 			'Arabic' => '<input type="text" name="arabic" value="مرحبا بالعالم" size="24" style="font-family: dejavusans" />',
 		];
 
-		$html = '<style>table.fields td { padding: 1mm 2mm 1mm 0; vertical-align: top; } td.label { width: 32mm; font-weight: bold; }</style>'
+		$html = '<style>table { line-height: 1.2; } table.fields td { padding: 1mm 2mm 1mm 0; vertical-align: top; } td.label { width: 32mm; font-weight: bold; }</style>'
 			. '<h2>Form fields</h2><form action="https://example.com/submit" method="post"><table class="fields">';
 		foreach ($rows as $label => $field) {
 			$html .= '<tr><td class="label">' . $label . '</td><td>' . $field . '</td></tr>';

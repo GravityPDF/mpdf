@@ -35,6 +35,7 @@ abstract class RootTypographySnapshot extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			/* Reboot */
 			:root { --brand: #0d6efd; color: #212529; }
 			html { font-size: 62.5%; font-family: sans-serif; }

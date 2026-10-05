@@ -27,6 +27,7 @@ class EmptyTextAreaSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			td { border: 0.2mm solid #808080; padding: 2mm; vertical-align: top; }
 			p.note { color: #606060; }
 		</style>

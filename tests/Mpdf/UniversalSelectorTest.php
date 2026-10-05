@@ -317,11 +317,12 @@ class UniversalSelectorTest extends TestCase
 	 * A reset that zeroes every margin and padding reaches the default margins of paragraphs, headings, lists and
 	 * blockquotes, a list's indent and a cell's padding, as in a browser: the text is drawn where it is drawn with the
 	 * same declarations written on each element. In the legacy mode it is dropped, and the text is drawn where it is
-	 * with no stylesheet
+	 * with no stylesheet. The table sets the line-height the legacy mode gives it, which the standard mode would take
+	 * from body
 	 */
 	public function testAResetReachesTheDefaultMarginsAndPadding()
 	{
-		$html = '<h1%1$s>Heading</h1><p%1$s>First paragraph</p><p%1$s>Second paragraph</p>'
+		$html = '<style>table { line-height: 1.2; }</style><h1%1$s>Heading</h1><p%1$s>First paragraph</p><p%1$s>Second paragraph</p>'
 			. '<ul%1$s><li%1$s>Bullet</li></ul><ol%1$s><li%1$s>Number</li></ol>'
 			. '<dl%1$s><dt%1$s>Term</dt><dd%1$s>Description</dd></dl><blockquote%1$s>Quote</blockquote>'
 			. '<table%1$s><tr%1$s><td%1$s>Cell</td></tr></table><p%1$s>Last paragraph</p>';

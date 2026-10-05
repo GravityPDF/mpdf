@@ -28,6 +28,7 @@ class PositionedBlockSelectorSnapshotTest extends Snapshot
 		$this->mpdf = $this->createMpdf();
 
 		$this->mpdf->WriteHTML('<style>
+			table { line-height: 1.2; }
 			.card { color: #1f3a93; border: 0.3mm solid #1f3a93; padding: 3mm; width: 80mm; }
 			.card h4 { color: #ffffff; background-color: #1f3a93; margin: 0 0 2mm 0; padding: 1mm 2mm; }
 			.card p { color: #0a7d32; font-style: italic; }

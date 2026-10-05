@@ -23,7 +23,7 @@ abstract class FacturXSnapshot extends InvoiceSnapshot
 		$xml = $this->getXml();
 
 		$this->mpdf = $this->createMpdf(['PDFA' => true, 'PDFAauto' => true, 'PDFAversion' => '3-B']);
-		$this->mpdf->WriteHTML($this->getWriter()->write($xml));
+		$this->mpdf->WriteHTML('<style>table { line-height: 1.2; }</style>' . $this->getWriter()->write($xml));
 		$this->mpdf->SetEmbeddedInvoice(new FacturX($xml));
 	}
 
