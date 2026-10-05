@@ -99,20 +99,30 @@ class TableInheritsFromBlockTest extends TestCase
 	}
 
 	/**
-	 * A table in a block that sets line-height: normal is laid out as one in a block that sets none, with the table's
+	 * A table in a block that sets line-height: normal, or sets none, is laid out in the standard mode as one whose
+	 * cells set normal, which is drawn as a paragraph's is, from normalLineheight. A positioned block that sets none
+	 * hands its content normal as that number, as it does its paragraphs. In the legacy mode the table keeps its own
 	 * line-height of 1.2
 	 */
-	public function testALineHeightOfNormalKeepsTheTablesOwn()
+	public function testALineHeightOfNormalIsDrawnAsAParagraphsInTheStandardMode()
 	{
-		foreach ([CssMode::STANDARD, CssMode::LEGACY] as $mode) {
+		$lineHeights = [CssMode::STANDARD => 'line-height: normal', CssMode::LEGACY => 'line-height: 1.2'];
+		foreach ($lineHeights as $mode => $lineHeight) {
 			foreach (['block', 'list item', 'positioned block', 'cell'] as $context) {
-				$this->assertEquals(
-					$this->drawnBoxes($mode, $context, '', 'line-height: 1.2'),
-					$this->drawnBoxes($mode, $context, 'line-height: normal', ''),
-					$mode . ': ' . $context
-				);
+				$expected = $this->drawnBoxes($mode, $context, '', $lineHeight);
+				$this->assertEquals($expected, $this->drawnBoxes($mode, $context, 'line-height: normal', ''), $mode . ': ' . $context);
+				if ($mode === CssMode::STANDARD && $context === 'positioned block') {
+					$expected = $this->drawnBoxes($mode, $context, '', 'line-height: 1.33');
+				}
+				$this->assertEquals($expected, $this->drawnBoxes($mode, $context, '', ''), $mode . ': ' . $context . ', setting none');
 			}
 		}
+
+		$this->assertNotEquals(
+			$this->drawnBoxes(CssMode::STANDARD, 'block', '', 'line-height: 1.2'),
+			$this->drawnBoxes(CssMode::STANDARD, 'block', '', ''),
+			'A table should no longer be drawn at 1.2'
+		);
 	}
 
 	/**

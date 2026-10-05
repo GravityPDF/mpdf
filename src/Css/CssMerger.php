@@ -54,7 +54,7 @@ class CssMerger
 	/**
 	 * The inherited properties the built-in default style (DefaultCss) sets on a table, with their values. A browser's
 	 * default style sets none, so under the standard cascade a table takes them from what it is in. A value changed
-	 * through the defaultCSS option still applies. See standardTableDefaults()
+	 * through the defaultCSS option still applies
 	 */
 	const TABLE_INHERITED_DEFAULTS = ['LINE-HEIGHT' => '1.2', 'HYPHENS' => 'manual', 'FONT-KERNING' => 'auto'];
 
@@ -262,7 +262,7 @@ class CssMerger
 
 		// The built-in defaults and the default stylesheet are merged on their own first, for revert to read
 		$this->cssProperties = [];
-		$this->mergeDefaultCss($tag, $inherited);
+		$this->mergeDefaultCss($tag);
 		list($defaultRules, $importantDefaultRules) = $this->cssManager->getDefaultRules()->matchingDeclarations($tag, $id, $classes, $path);
 		$this->mergeEach($defaultRules, $dominance);
 		$defaults = $this->cssProperties;
@@ -961,10 +961,9 @@ class CssMerger
 	 * Merge default CSS for the tag.
 	 *
 	 * @param string $tag HTML tag name
-	 * @param array $inherited What the element inherits, under the standard cascade, which a table's defaults read
 	 * @return void
 	 */
-	protected function mergeDefaultCss($tag, array $inherited = [])
+	protected function mergeDefaultCss($tag)
 	{
 		if (!isset($this->mpdf->defaultCSS[$tag])) {
 			return;
@@ -972,7 +971,7 @@ class CssMerger
 
 		$defaults = $this->mpdf->defaultCSS[$tag];
 		if ($tag === 'TABLE' && $this->mpdf->cssMode === CssMode::STANDARD) {
-			$defaults = $this->standardTableDefaults($defaults, $inherited);
+			$defaults = array_diff_assoc($defaults, self::TABLE_INHERITED_DEFAULTS);
 		}
 
 		$zp = $this->normalizeProperties->normalize($defaults);
@@ -980,27 +979,6 @@ class CssMerger
 			$this->cssProperties = array_merge($this->cssProperties, $zp);  // !! Note other way round !!
 			$this->mergeBorderProperties($zp);
 		}
-	}
-
-	/**
-	 * A table's defaults under the standard cascade, without the built-in ones that stop it inheriting hyphens,
-	 * font-kerning and line-height. The built-in line-height of 1.2 stays for a table that inherits normal, or
-	 * nothing, since mPDF draws a table's normal line-height at 1.2 and a block's at normal_lineheight
-	 *
-	 * @param array $defaults The table's entry in Mpdf::$defaultCSS
-	 * @param array $inherited What the table inherits
-	 * @return array
-	 */
-	private function standardTableDefaults(array $defaults, array $inherited)
-	{
-		$inheritable = self::TABLE_INHERITED_DEFAULTS;
-		$lineHeight = isset($inherited['LINE-HEIGHT']) ? $inherited['LINE-HEIGHT'] : 'N';
-		// The content of a positioned block is handed normal as the number it stands for
-		if (in_array(strtoupper($lineHeight), ['N', 'NORMAL'], true) || $lineHeight == $this->mpdf->normalLineheight) {
-			unset($inheritable['LINE-HEIGHT']);
-		}
-
-		return array_diff_assoc($defaults, $inheritable);
 	}
 
 	/**

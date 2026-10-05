@@ -1007,83 +1007,83 @@ q 0.376 0.376 0.376 rg  0 Tr BT 42.520 388.097 Td  (would be wider than the page
 /GS1 gs
  
 0.502 0.502 0.502 RG
-44.303 370.736 m 44.303 338.100 l S
+44.303 370.736 m 44.303 336.510 l S
 44.303 370.736 m 479.392 370.736 l S
-479.392 370.736 m 479.392 338.100 l S
-44.303 338.100 m 479.392 338.100 l S
+479.392 370.736 m 479.392 336.510 l S
+44.303 336.510 m 479.392 336.510 l S
 0.000 G
-q 0.000 g  0 Tr BT 47.421 357.278 Td  (abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij) Tj ET Q
-q 0.000 g  0 Tr BT 47.421 344.078 Td  (abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij) Tj ET Q
+q 0.000 g  0 Tr BT 47.421 356.881 Td  (abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij) Tj ET Q
+q 0.000 g  0 Tr BT 47.421 342.886 Td  (abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij) Tj ET Q
 /GS1 gs
 0.502 0.502 0.502 RG
-481.459 370.736 m 481.459 338.100 l S
+481.459 370.736 m 481.459 336.510 l S
 481.459 370.736 m 550.977 370.736 l S
-550.977 370.736 m 550.977 338.100 l S
-481.459 338.100 m 550.977 338.100 l S
+550.977 370.736 m 550.977 336.510 l S
+481.459 336.510 m 550.977 336.510 l S
 0.000 G
-q 0.000 g  0 Tr BT 484.577 357.278 Td  (Eleven point) Tj ET Q
-q 0.000 g  0 Tr BT 484.577 344.078 Td  (text beside it) Tj ET Q
+q 0.000 g  0 Tr BT 484.577 356.881 Td  (Eleven point) Tj ET Q
+q 0.000 g  0 Tr BT 484.577 342.886 Td  (text beside it) Tj ET Q
 /GS1 gs
 BT /F2 12.870 Tf ET
-q 0.000 g  0 Tr BT 42.520 312.562 Td  (In a list) Tj ET Q
+q 0.000 g  0 Tr BT 42.520 310.973 Td  (In a list) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-q 0.000 g  0 Tr BT 72.520 287.298 Td  (alphabetagammadelta) Tj ET Q
+q 0.000 g  0 Tr BT 72.520 285.709 Td  (alphabetagammadelta) Tj ET Q
 BT /F1 3.881 Tf ET
 BT /F1 11.000 Tf ET
 q 0.000 G 0.000 g
 0 j 0 J [] 0 d
-67.020 290.392 m 67.020 291.386 66.214 292.192 65.220 292.192 c
-64.226 292.192 63.420 291.386 63.420 290.392 c
-63.420 289.398 64.226 288.592 65.220 288.592 c
-66.214 288.592 67.020 289.398 67.020 290.392 c f
+67.020 288.803 m 67.020 289.797 66.214 290.603 65.220 290.603 c
+64.226 290.603 63.420 289.797 63.420 288.803 c
+63.420 287.809 64.226 287.003 65.220 287.003 c
+66.214 287.003 67.020 287.809 67.020 288.803 c f
 Q
-q 0.000 g  0 Tr BT 72.520 273.304 Td  (epsilonzetaetatheta) Tj ET Q
+q 0.000 g  0 Tr BT 72.520 271.714 Td  (epsilonzetaetatheta) Tj ET Q
 /GS1 gs
-q 0.000 g  0 Tr BT 72.520 259.309 Td  (iotakappalambdamunuxi) Tj ET Q
+q 0.000 g  0 Tr BT 72.520 257.720 Td  (iotakappalambdamunuxi) Tj ET Q
 BT /F1 3.881 Tf ET
 BT /F1 11.000 Tf ET
 q 0.000 G 0.000 g
 0 j 0 J [] 0 d
-67.020 262.403 m 67.020 263.397 66.214 264.203 65.220 264.203 c
-64.226 264.203 63.420 263.397 63.420 262.403 c
-63.420 261.409 64.226 260.603 65.220 260.603 c
-66.214 260.603 67.020 261.409 67.020 262.403 c f
+67.020 260.813 m 67.020 261.808 66.214 262.613 65.220 262.613 c
+64.226 262.613 63.420 261.808 63.420 260.813 c
+63.420 259.819 64.226 259.013 65.220 259.013 c
+66.214 259.013 67.020 259.819 67.020 260.813 c f
 Q
-q 0.000 g  0 Tr BT 72.520 245.314 Td  (omicronpi) Tj ET Q
+q 0.000 g  0 Tr BT 72.520 243.725 Td  (omicronpi) Tj ET Q
 /GS1 gs
 BT /F2 12.870 Tf ET
-q 0.000 g  0 Tr BT 42.520 218.303 Td  (Heading) Tj ET Q
+q 0.000 g  0 Tr BT 42.520 216.713 Td  (Heading) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-q 0.376 0.376 0.376 rg  0 Tr BT 42.520 191.401 Td  (The heading above holds a zero-width space. Its bookmark reads "Heading", with nothing between the two halves.) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 189.812 Td  (The heading above holds a zero-width space. Its bookmark reads "Heading", with nothing between the two halves.) Tj ET Q
 /GS1 gs
 BT /F2 12.870 Tf ET
-q 0.000 g  0 Tr BT 42.520 162.751 Td  (A unit separator in the source) Tj ET Q
+q 0.000 g  0 Tr BT 42.520 161.162 Td  (A unit separator in the source) Tj ET Q
 /GS1 gs
 BT /F1 11.000 Tf ET
 /GS1 gs
-q 0.376 0.376 0.376 rg  0 Tr BT 42.520 135.850 Td  (A U+001F is not the zero-width space that core-font text carries in its place: it is dropped, so it neither draws nor) Tj ET Q
-q 0.376 0.376 0.376 rg  0 Tr BT 42.520 121.855 Td  (gives the line somewhere to break. The box is too narrow for the word, which is cut where the line runs out.) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 134.260 Td  (A U+001F is not the zero-width space that core-font text carries in its place: it is dropped, so it neither draws nor) Tj ET Q
+q 0.376 0.376 0.376 rg  0 Tr BT 42.520 120.266 Td  (gives the line somewhere to break. The box is too narrow for the word, which is cut where the line runs out.) Tj ET Q
 /GS1 gs
-q 0.000 g  0 Tr BT 45.921 92.139 Td  (aaaabb) Tj ET Q
-q 0.000 g  0 Tr BT 45.921 78.144 Td  (bb) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 90.550 Td  (aaaabb) Tj ET Q
+q 0.000 g  0 Tr BT 45.921 76.555 Td  (bb) Tj ET Q
 /GS1 gs
 q
 0.000 w
-42.520 106.278 m 
-43.087 105.711 l 
-82.772 105.711 l 
-83.339 106.278 l 
+42.520 104.688 m 
+43.087 104.122 l 
+82.772 104.122 l 
+83.339 104.688 l 
  h W n 
 0.567 w
 0.690 0.690 0.690 RG
 0 j
 0 J
-83.339 105.994 m 
-42.520 105.994 l 
+83.339 104.405 m 
+42.520 104.405 l 
 S
 
 Q
@@ -1093,17 +1093,17 @@ Q
 2 J
 q
 0.000 w
-42.520 71.485 m 
-43.087 72.052 l 
-82.772 72.052 l 
-83.339 71.485 l 
+42.520 69.896 m 
+43.087 70.463 l 
+82.772 70.463 l 
+83.339 69.896 l 
  h W n 
 0.567 w
 0.690 0.690 0.690 RG
 0 j
 0 J
-42.520 71.769 m 
-83.339 71.769 l 
+42.520 70.180 m 
+83.339 70.180 l 
 S
 
 Q
@@ -1113,17 +1113,17 @@ Q
 2 J
 q
 0.000 w
-42.520 106.278 m 
-43.087 105.711 l 
-43.087 72.052 l 
-42.520 71.485 l 
+42.520 104.688 m 
+43.087 104.122 l 
+43.087 70.463 l 
+42.520 69.896 l 
  h W n 
 0.567 w
 0.690 0.690 0.690 RG
 0 j
 0 J
-42.803 106.278 m 
-42.803 71.485 l 
+42.803 104.688 m 
+42.803 69.896 l 
 S
 
 Q
@@ -1133,17 +1133,17 @@ Q
 2 J
 q
 0.000 w
-83.339 106.278 m 
-82.772 105.711 l 
-82.772 72.052 l 
-83.339 71.485 l 
+83.339 104.688 m 
+82.772 104.122 l 
+82.772 70.463 l 
+83.339 69.896 l 
  h W n 
 0.567 w
 0.690 0.690 0.690 RG
 0 j
 0 J
-83.055 71.485 m 
-83.055 106.278 l 
+83.055 69.896 m 
+83.055 104.688 l 
 S
 
 Q
@@ -1491,7 +1491,7 @@ endobj
 /Parent 21 0 R
 /Prev 27 0 R
 /Next 29 0 R
-/Dest [5 0 R /XYZ 0 325.432 null]
+/Dest [5 0 R /XYZ 0 323.843 null]
 /Count 0>>
 endobj
 29 0 obj
@@ -1499,7 +1499,7 @@ endobj
 /Parent 21 0 R
 /Prev 28 0 R
 /Next 30 0 R
-/Dest [5 0 R /XYZ 0 231.173 null]
+/Dest [5 0 R /XYZ 0 229.583 null]
 /Count 0>>
 endobj
 30 0 obj
@@ -1507,7 +1507,7 @@ endobj
 /Parent 21 0 R
 /Prev 29 0 R
 /Next 31 0 R
-/Dest [5 0 R /XYZ 0 175.621 null]
+/Dest [5 0 R /XYZ 0 174.032 null]
 /Count 0>>
 endobj
 31 0 obj
@@ -1589,7 +1589,7 @@ trailer
 /Size 36
 /Root 35 0 R
 /Info 34 0 R
-/ID [<97ca16c183abe582b350e3f0f236585e> <97ca16c183abe582b350e3f0f236585e>]
+/ID [<81926290028ba80d0bb7c1eccc0c6bf7> <81926290028ba80d0bb7c1eccc0c6bf7>]
 >>
 startxref
 28180
