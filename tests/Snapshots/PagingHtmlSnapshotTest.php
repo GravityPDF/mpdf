@@ -26,6 +26,7 @@ class PagingHtmlSnapshotTest extends Snapshot
 	{
 		ob_start();
 		?>
+		<style>table { line-height: 1.2; }</style>
 		<pageheader name="myHeaderNoNum" content-left="My Book Title" content-center="myHeader1" content-right="" header-style="font-family:sans-serif; font-size:8pt; color:#880000;" header-style-right="font-size:12pt; font-weight:bold; font-style:italic; color:#088000;" line="on" />
 
 		<pageheader name="myHeaderNoNumEven" content-left="" content-center="myHeader1Even" content-right="{nbpg}" header-style="font-family:sans-serif; font-size:8pt; color:#000088;" header-style-left="font-weight:bold; " line="on" />

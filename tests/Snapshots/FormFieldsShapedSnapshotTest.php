@@ -46,6 +46,7 @@ class FormFieldsShapedSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			table.fields { border-collapse: collapse; width: 100%; }
 			table.fields td { padding: 2mm; border-bottom: 0.3mm solid #cccccc; vertical-align: top; }
 			td.label { font-weight: bold; width: 35mm; }

@@ -36,6 +36,7 @@ class ImagePercentageInRotatedTableSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			table { border-collapse: collapse; }
 			td { border: 0.2mm solid #999; padding: 0; vertical-align: top; font-size: 8pt; color: #606060; }
 			td.shaded { background-color: #eef; }

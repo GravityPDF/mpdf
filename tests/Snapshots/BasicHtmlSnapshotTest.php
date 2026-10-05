@@ -26,6 +26,7 @@ class BasicHtmlSnapshotTest extends Snapshot
 	{
 		ob_start();
 		?>
+		<style>table { line-height: 1.2; }</style>
 		<h1><a name="top"></a>mPDF</h1>
 		<h2>Basic HTML Example</h2>
 		This file demonstrates most of the HTML elements.

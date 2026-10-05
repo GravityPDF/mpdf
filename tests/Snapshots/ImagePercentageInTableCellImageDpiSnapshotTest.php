@@ -29,6 +29,7 @@ class ImagePercentageInTableCellImageDpiSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			table { border-collapse: collapse; margin-bottom: 2mm; }
 			table.full { width: 100%; }
 			td { border: 0.2mm solid #999; padding: 0; vertical-align: top; font-size: 8pt; color: #606060; }

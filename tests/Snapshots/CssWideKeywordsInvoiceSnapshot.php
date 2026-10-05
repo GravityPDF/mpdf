@@ -36,6 +36,7 @@ abstract class CssWideKeywordsInvoiceSnapshot extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			/* Reset */
 			h1, h2 { font-size: 9pt; margin: 0; }
 			a { color: inherit; text-decoration: inherit; }

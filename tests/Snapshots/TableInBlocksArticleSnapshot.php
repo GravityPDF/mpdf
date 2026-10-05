@@ -59,7 +59,7 @@ abstract class TableInBlocksArticleSnapshot extends Snapshot
 		<p class="caption">The callout is a dark block that sets pale sans-serif text spaced 0.2mm. Standard: the table in it has pale, spaced, sans-serif cells too. Legacy: its cells are in the body's dark serif, hard to read on the dark background.</p>
 		<div class="callout">
 			<p>Three firings this month, all to cone 6.</p>
-			<table>
+			<table style="line-height: 1.2">
 				<tr><td>Bisque</td><td>1,000 &deg;C</td><td>9 hours</td></tr>
 				<tr><td>Glaze</td><td>1,222 &deg;C</td><td>11 hours</td></tr>
 			</table>
@@ -70,7 +70,7 @@ abstract class TableInBlocksArticleSnapshot extends Snapshot
 		<ol class="steps">
 			<li>Stack the shelves on three posts.</li>
 			<li>Space the pots by size:
-				<table>
+				<table style="line-height: 1.2">
 					<tr><td>Mugs</td><td>1 cm apart</td></tr>
 					<tr><td>Bowls</td><td>2 cm apart</td></tr>
 				</table>
@@ -89,7 +89,7 @@ abstract class TableInBlocksArticleSnapshot extends Snapshot
 
 		<h2>Panel</h2>
 		<p class="caption">The panel cell sets slate monospace text aligned right, 2 apart, and holds a nested table. Standard: the nested cells are slate monospace, aligned right and 2 apart, and its th is aligned right. Legacy: they are in the body's dark serif, aligned right and 1.2 apart, and its th is centred.</p>
-		<table>
+		<table style="line-height: 1.2">
 			<tr><td class="panel">Cone chart
 				<table>
 					<tr><th style="width: 40mm">Cone</th><th style="width: 40mm">Temperature</th></tr>

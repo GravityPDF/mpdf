@@ -27,6 +27,7 @@ class ListStyleTypeSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body { font-size: 10pt; }
 			h1 { font-size: 18pt; color: #222; }
 			h2 { font-size: 14pt; color: #333; border-bottom: 1px solid #ccc; margin-top: 10pt; }

@@ -66,6 +66,7 @@ class NestedAdvanceSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			h2 { font-size: 12pt; margin-bottom: 1mm; }
 			p.note { font-size: 9pt; color: #606060; margin-top: 0; }
 			td.label { font-size: 9pt; color: #606060; width: 60mm; }

@@ -23,6 +23,7 @@ class PageBreakAvoidReferencesSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			p { margin: 0 0 2mm 0; }
 			div.kept { page-break-inside: avoid; border: 0.3mm dashed #808080; padding: 3mm; margin-bottom: 4mm; }
 			div.gradient { background-image: linear-gradient(#f4c7c7, #c7d4f4); padding: 2mm; margin-bottom: 2mm; }

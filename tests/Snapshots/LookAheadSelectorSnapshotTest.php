@@ -29,6 +29,7 @@ class LookAheadSelectorSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body { font-size: 9pt; }
 			h1 { font-size: 15pt; margin: 0 0 2mm 0; }
 			p.caption { margin: 3mm 0 1mm 0; font-size: 8pt; color: #606060; }

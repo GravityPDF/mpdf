@@ -29,6 +29,7 @@ class FixedPseudoClassSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			html { color: #1f3a93; }
 			body { font-size: 9pt; }
 			h1 { font-size: 15pt; margin: 0 0 2mm 0; }

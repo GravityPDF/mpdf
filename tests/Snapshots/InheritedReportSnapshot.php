@@ -35,6 +35,7 @@ abstract class InheritedReportSnapshot extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body { font-family: sans-serif; font-size: 9pt; color: #243447; }
 			h1 { font-size: 16pt; margin: 0 0 1mm 0; color: #1e5f74; }
 			h2 { font-size: 11pt; margin: 5mm 0 1mm 0; text-transform: uppercase; color: #1e5f74; }

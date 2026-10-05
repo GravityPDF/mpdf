@@ -29,7 +29,7 @@ trait EmojiTable
 
 		$this->mpdf->WriteHTML(
 			'<h3>' . $heading . '</h3>'
-			. '<table style="font-size: 9pt; border-collapse: collapse" cellpadding="3">' . $rows . '</table>'
+			. '<table style="font-size: 9pt; line-height: 1.2; border-collapse: collapse" cellpadding="3">' . $rows . '</table>'
 			. '<p style="font-size: 28pt">Emoji ' . $emoji . ' end</p>'
 			. '<p style="font-size: 11pt; text-align: justify">' . str_repeat('Text with emoji ' . $emoji . ' in it. ', 4) . '</p>'
 			. '<p style="font-size: 16pt; color: #c00">Red text keeps its emoji in colour: ' . $emoji . '</p>'

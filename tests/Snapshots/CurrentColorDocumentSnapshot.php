@@ -35,6 +35,7 @@ abstract class CurrentColorDocumentSnapshot extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			body { font-family: sans-serif; font-size: 9pt; color: #212529; }
 			h1 { font-size: 15pt; margin: 0 0 1mm 0; }
 			h2 { font-size: 11pt; margin: 4mm 0 1mm 0; color: #0d6efd; text-shadow: 0.3mm 0.3mm; }

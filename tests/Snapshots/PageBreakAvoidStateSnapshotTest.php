@@ -23,6 +23,7 @@ class PageBreakAvoidStateSnapshotTest extends Snapshot
 		ob_start();
 		?>
 		<style>
+			table { line-height: 1.2; }
 			@page { background-color: #dfe8f5; footer: html_std; }
 			@page :first { background-color: #fbe9e9; footer: html_first; }
 
