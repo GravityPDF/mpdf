@@ -10,6 +10,8 @@ namespace Mpdf;
 class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
+	use DrawnStyles;
+
 	/** A page area 150mm wide on a right page and 170mm on a left page, for a float to run over. */
 	const WIDER_LEFT_PAGES = '@page { margin-left: 30mm; margin-right: 30mm; } @page :left { margin-left: 20mm; margin-right: 20mm; }';
 
@@ -90,14 +92,7 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$mpdf = $this->write($css, $html . $this->story(30));
 
-		$firstLines = [];
-		foreach ($mpdf->drawnBoxes as $box) {
-			if (!isset($firstLines[$box[0]])) {
-				$firstLines[$box[0]] = round($box[3], 1);
-			}
-		}
-
-		$this->assertSame($tops, array_slice($firstLines, 0, 3, true));
+		$this->assertSame($tops, array_slice($this->firstLineTops($mpdf->drawnBoxes), 0, 3, true));
 	}
 
 	/**
@@ -441,38 +436,6 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		return $this->spans($boxes);
-	}
-
-	/**
-	 * The narrowest left edge and widest right edge of the boxes under each key, rounded to a tenth of a millimetre
-	 *
-	 * @param array[] $boxes Each a key, such as the page, then a left and right edge
-	 *
-	 * @return array[] By key, in the order the keys first appear
-	 */
-	private function spans($boxes)
-	{
-		$spans = [];
-		foreach ($boxes as $box) {
-			list($key, $left, $right) = $box;
-			$spans[$key] = isset($spans[$key]) ? [min($spans[$key][0], $left), max($spans[$key][1], $right)] : [$left, $right];
-		}
-
-		return array_map(static function ($span) {
-			return [round($span[0], 1), round($span[1], 1)];
-		}, $spans);
-	}
-
-	/**
-	 * Justified paragraphs of text
-	 *
-	 * @param int $paragraphs
-	 *
-	 * @return string
-	 */
-	private function story($paragraphs)
-	{
-		return str_repeat('<p>' . str_repeat('Lorem ipsum dolor sit amet, consectetur adipiscing elit. ', 8) . '</p>', $paragraphs);
 	}
 
 }

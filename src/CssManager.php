@@ -157,8 +157,9 @@ class CssManager
 	 * Parse the CSS in HTML content into the stores readCss() describes, and file its compiled rules in a rule set
 	 *
 	 * The !important declarations of the rules stored by key are kept apart as well, and laid again over $CSS after
-	 * each read, those of the default stylesheet last, so that what reads $CSS directly (@page, BODY, SVG's classes)
-	 * finds them over any declaration that is not important.
+	 * each read, those of the default stylesheet last, so that what reads one key of $CSS directly, such as SVG's
+	 * classes, finds them over any declaration that is not important. What merges several keys lays the stores over
+	 * the merged rules itself: pageProperties() for the @page rules, the merger for BODY.
 	 *
 	 * @param string $html
 	 * @param RuleSet $rules
@@ -381,14 +382,9 @@ class CssManager
 	 */
 	public function pseudoPagesSetSideMargins($name)
 	{
-		$prefixes = ['@PAGE>>'];
-		if ($name) {
-			$prefixes[] = '@PAGE>>NAMED>>' . strtoupper($name) . '>>';
-		}
-
-		foreach ($prefixes as $prefix) {
+		foreach ($this->pageRuleKeys($name) as $key) {
 			foreach (['FIRST', 'LEFT', 'RIGHT'] as $pseudo) {
-				$rule = $prefix . 'PSEUDO>>' . $pseudo;
+				$rule = $key . '>>PSEUDO>>' . $pseudo;
 				if (isset($this->CSS[$rule]['MARGIN-LEFT']) || isset($this->CSS[$rule]['MARGIN-RIGHT'])) {
 					return true;
 				}
@@ -396,6 +392,64 @@ class CssManager
 		}
 
 		return false;
+	}
+
+	/**
+	 * The properties the @page rules set on a page: the plain rule's, then the named page's, each followed by those
+	 * of its :right, :left and :first pages that apply
+	 *
+	 * The rules are merged one over the other whatever their importance, so the !important declarations of each are
+	 * then laid over them in the same order, and the default stylesheet's last. Legacy mode reads a declaration marked
+	 * !important as any other, so there those stores are empty.
+	 *
+	 * A rule's odd-header-name or even-header-name, whichever the page's parity takes, becomes its header before the
+	 * next rule is merged, so that a later rule's header beats it, and the footer names likewise.
+	 *
+	 * @param string $name The named page, or '' for none
+	 * @param string $side 'R' or 'L', or '' for the defaults of every page
+	 * @param bool $first Whether this is the first page
+	 * @param string $oddEven 'E' for an even page when margins are mirrored, 'O' for any other page, or '' for the
+	 *                        defaults of every page
+	 * @return array
+	 */
+	public function pageProperties($name, $side, $first, $oddEven)
+	{
+		$parity = $oddEven == 'E' ? 'EVEN-' : 'ODD-';
+		$properties = [];
+		foreach ([$this->CSS, $this->importantCss, $this->defaultImportantCss] as $css) {
+			foreach ($this->pageRuleKeys($name) as $key) {
+				if (!empty($css[$key])) {
+					$properties = array_merge($properties, $css[$key]);
+				}
+
+				foreach (['HEADER', 'FOOTER'] as $part) {
+					if (isset($properties[$parity . $part . '-NAME'])) {
+						$properties[$part] = $properties[$parity . $part . '-NAME'];
+						unset($properties[$parity . $part . '-NAME']);
+					}
+				}
+
+				$properties = array_merge($properties, $this->pseudoPagePropertiesIn($css, $key . '>>', $side, $first, $oddEven));
+			}
+		}
+
+		return $properties;
+	}
+
+	/**
+	 * The keys of the plain @page rule and, when a page is named, of the named page's rule
+	 *
+	 * @param string|null $name The named page, or '' or null for none
+	 * @return string[]
+	 */
+	private function pageRuleKeys($name)
+	{
+		$keys = ['@PAGE'];
+		if ($name) {
+			$keys[] = '@PAGE>>NAMED>>' . strtoupper($name);
+		}
+
+		return $keys;
 	}
 
 	/**
@@ -429,13 +483,28 @@ class CssManager
 	 */
 	public function pseudoPageProperties($prefix, $side, $first, $oddEven)
 	{
+		return $this->pseudoPagePropertiesIn($this->CSS, $prefix, $side, $first, $oddEven);
+	}
+
+	/**
+	 * The properties pseudoPageProperties() reads, from the rules given rather than $CSS
+	 *
+	 * @param array[] $css Rules under the keys of $CSS, such as those of getImportantCss()
+	 * @param string $prefix
+	 * @param string $side
+	 * @param bool $first
+	 * @param string $oddEven
+	 * @return array
+	 */
+	private function pseudoPagePropertiesIn(array $css, $prefix, $side, $first, $oddEven)
+	{
 		$properties = [];
 		foreach (['RIGHT' => $side == 'R', 'LEFT' => $side == 'L', 'FIRST' => $first] as $pseudo => $applies) {
-			if (!$applies || !isset($this->CSS[$prefix . 'PSEUDO>>' . $pseudo])) {
+			if (!$applies || !isset($css[$prefix . 'PSEUDO>>' . $pseudo])) {
 				continue;
 			}
 
-			$rule = $this->CSS[$prefix . 'PSEUDO>>' . $pseudo];
+			$rule = $css[$prefix . 'PSEUDO>>' . $pseudo];
 			unset($rule['SIZE'], $rule['SHEET-SIZE']);
 
 			if ($oddEven === 'E') {

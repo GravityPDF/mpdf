@@ -3,8 +3,8 @@
 namespace Mpdf;
 
 /**
- * Writes a document through TextRecordingMpdf, to read the colour and style each piece of text is drawn in, or
- * matches a selector against the elements a document leaves open
+ * Writes a document through TextRecordingMpdf, to read the colour and style each piece of text is drawn in, or where
+ * on the page it lies, or matches a selector against the elements a document leaves open
  */
 trait DrawnStyles
 {
@@ -209,5 +209,56 @@ trait DrawnStyles
 		$matcher = new Css\SelectorMatcher();
 
 		return $matcher->matches($compiler->compile($selector), $mpdf->getOpenElements());
+	}
+
+	/**
+	 * Justified paragraphs of text
+	 *
+	 * @param int $paragraphs
+	 *
+	 * @return string
+	 */
+	private function story($paragraphs)
+	{
+		return str_repeat('<p>' . str_repeat('Lorem ipsum dolor sit amet, consectetur adipiscing elit. ', 8) . '</p>', $paragraphs);
+	}
+
+	/**
+	 * The narrowest left edge and widest right edge of the boxes under each key, rounded to a tenth of a millimetre
+	 *
+	 * @param array[] $boxes Each a key, such as the page, then a left and right edge, as TextRecordingMpdf records them
+	 *
+	 * @return array[] By key, in the order the keys first appear
+	 */
+	private function spans(array $boxes)
+	{
+		$spans = [];
+		foreach ($boxes as $box) {
+			list($key, $left, $right) = $box;
+			$spans[$key] = isset($spans[$key]) ? [min($spans[$key][0], $left), max($spans[$key][1], $right)] : [$left, $right];
+		}
+
+		return array_map(static function ($span) {
+			return [round($span[0], 1), round($span[1], 1)];
+		}, $spans);
+	}
+
+	/**
+	 * The top of the first line drawn on each page, rounded to a tenth of a millimetre
+	 *
+	 * @param array[] $boxes As TextRecordingMpdf records them
+	 *
+	 * @return float[] By page number, in the order the pages were drawn
+	 */
+	private function firstLineTops(array $boxes)
+	{
+		$tops = [];
+		foreach ($boxes as $box) {
+			if (!isset($tops[$box[0]])) {
+				$tops[$box[0]] = round($box[3], 1);
+			}
+		}
+
+		return $tops;
 	}
 }
