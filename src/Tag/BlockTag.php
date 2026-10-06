@@ -9,6 +9,7 @@ use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
 use Mpdf\Css\TextDecorations;
+use Mpdf\Css\WidthConstraints;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Shaper\OtlData;
@@ -603,6 +604,10 @@ abstract class BlockTag extends Tag
 		$pdr = $currblk['padding_right'];
 		$pdl = $currblk['padding_left'];
 
+		if ($this->mpdf->cssMode === CssMode::STANDARD) {
+			$this->constrainWidth($currblk, $properties, $container_w, $bdl + $pdl + $bdr + $pdr);
+		}
+
 		$setwidth = 0;
 		if (isset($currblk['css_set_width'])) {
 			$setwidth = $currblk['css_set_width'];
@@ -1122,6 +1127,28 @@ abstract class BlockTag extends Tag
 			}
 			$this->mpdf->biDirectional = true;
 			$currblk['bidicode'] = $popd;
+		}
+	}
+
+	/**
+	 * Holds the block's width within its min-width and max-width. A width the limits change is set on the block as
+	 * a width would be, so that its auto margins, float or direction place the box. A block without a width starts
+	 * from the width its container leaves it.
+	 *
+	 * @param array $blk The block being opened
+	 * @param array $properties Its merged CSS
+	 * @param float $containerWidth The inner width of the containing block
+	 * @param float $edges The block's left and right borders and padding
+	 */
+	private function constrainWidth(array &$blk, array $properties, $containerWidth, $edges)
+	{
+		$constraints = new WidthConstraints($this->sizeConverter, $properties, $containerWidth, $this->mpdf->FontSize);
+		$width = isset($blk['css_set_width'])
+			? $blk['css_set_width']
+			: $containerWidth - $blk['margin_left'] - $blk['margin_right'] - $edges;
+		$clamped = $constraints->clamp($width);
+		if ($clamped != $width) {
+			$blk['css_set_width'] = $clamped;
 		}
 	}
 
