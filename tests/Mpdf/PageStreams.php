@@ -340,6 +340,23 @@ trait PageStreams
 	}
 
 	/**
+	 * The rectangles a page gives an operator, in the order written
+	 *
+	 * @param string $stream
+	 * @param string $operator 're f' for a fill, 're W n' for a clip
+	 *
+	 * @return float[][] Each as [x, y, w, h] in points; h is negative, as mPDF writes a box from its top
+	 */
+	private function rectangles($stream, $operator)
+	{
+		preg_match_all('/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) ' . preg_quote($operator, '/') . '/', $stream, $matches, PREG_SET_ORDER);
+
+		return array_map(function ($match) {
+			return array_map('floatval', array_slice($match, 1));
+		}, $matches);
+	}
+
+	/**
 	 * The text drawn on a page, joined up: a linked index list is written a piece at a time
 	 */
 	private function drawnText($stream)

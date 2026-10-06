@@ -13,6 +13,7 @@ use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
+use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 
 abstract class BlockTag extends Tag
@@ -568,20 +569,12 @@ abstract class BlockTag extends Tag
 		}
 
 
-		if (isset($properties['HEIGHT'])) {
-			$currblk['css_set_height'] = $this->sizeConverter->convert(
-				$properties['HEIGHT'],
-				$this->mpdf->h - $this->mpdf->tMargin - $this->mpdf->bMargin,
-				$this->mpdf->FontSize,
-				false
-			);
-			if (($currblk['css_set_height'] + $this->mpdf->y) > $this->mpdf->PageBreakTrigger
-				&& $this->mpdf->y > $this->mpdf->tMargin + 5
-				&& $currblk['css_set_height'] < ($this->mpdf->h - ($this->mpdf->tMargin + $this->mpdf->bMargin))) {
-				$this->mpdf->AddPage($this->mpdf->CurOrientation);
-			}
-		} else {
-			$currblk['css_set_height'] = false;
+		$currblk['css_set_height'] = isset($properties['HEIGHT']) ? $this->resolveHeight($properties['HEIGHT'], $prevblk) : false;
+		if ($currblk['css_set_height'] !== false
+			&& ($currblk['css_set_height'] + $this->mpdf->y) > $this->mpdf->PageBreakTrigger
+			&& $this->mpdf->y > $this->mpdf->tMargin + 5
+			&& $currblk['css_set_height'] < ($this->mpdf->h - ($this->mpdf->tMargin + $this->mpdf->bMargin))) {
+			$this->mpdf->AddPage($this->mpdf->CurOrientation);
 		}
 
 
@@ -967,6 +960,10 @@ abstract class BlockTag extends Tag
 		$currblk['startpage'] = $this->mpdf->page; // mPDF 6
 		$this->mpdf->oldy = $this->mpdf->y;
 
+		if ($this->clipsOverflow($currblk, $properties)) {
+			$this->openOverflowClip($currblk);
+		}
+
 		$this->mpdf->lastblocklevelchange = 1;
 
 		// mPDF 6  Lists
@@ -1247,6 +1244,8 @@ abstract class BlockTag extends Tag
 		/* -- END CSS-FLOAT -- */
 
 
+		$backgrounds = isset($this->mpdf->pageBackgrounds[$this->mpdf->blklvl]) ? count($this->mpdf->pageBackgrounds[$this->mpdf->blklvl]) : 0;
+
 		//Print content
 		$blockstate = 0;
 		if ($this->mpdf->lastblocklevelchange == 1) {
@@ -1313,6 +1312,11 @@ abstract class BlockTag extends Tag
 		/* -- CSS-IMAGE-FLOAT -- */
 		$this->mpdf->printfloatbuffer();
 		/* -- END CSS-IMAGE-FLOAT -- */
+
+		$this->clipBackgroundsToAncestors($backgrounds);
+		if (isset($this->mpdf->blk[$this->mpdf->blklvl]['overflow_clip'])) {
+			$this->closeOverflowClip($this->mpdf->blk[$this->mpdf->blklvl]);
+		}
 
 		if ($tag === 'PRE') {
 			$this->mpdf->ispre = false;
@@ -1431,6 +1435,136 @@ abstract class BlockTag extends Tag
 					$this->mpdf->_saveTextBuffer($blockpre);
 				}
 			}
+		}
+	}
+
+	/**
+	 * The content height the block's height declaration sets, or false for auto
+	 *
+	 * A percentage is taken of the enclosing block's set height, and is auto when it has none, as in CSS. The legacy
+	 * CSS mode takes it of the page area, as mPDF v7 did
+	 *
+	 * @param string $height
+	 * @param array $prevblk The enclosing block
+	 *
+	 * @return float|false
+	 */
+	private function resolveHeight($height, array $prevblk)
+	{
+		$pageArea = $this->mpdf->h - $this->mpdf->tMargin - $this->mpdf->bMargin;
+		if ($this->mpdf->cssMode === CssMode::LEGACY) {
+			return $this->sizeConverter->convert($height, $pageArea, $this->mpdf->FontSize, false);
+		}
+
+		if (NumericString::containsPercentChar($height)) {
+			if (empty($prevblk['css_set_height'])) {
+				return false;
+			}
+
+			return $this->sizeConverter->convert($height, $prevblk['css_set_height'], $this->mpdf->FontSize, false);
+		}
+
+		return $this->sizeConverter->isLength($height) ? $this->sizeConverter->convert($height, $pageArea, $this->mpdf->FontSize, false) : false;
+	}
+
+	/**
+	 * Whether the block clips its content to its box: it has a set height and an overflow other than visible. Nothing
+	 * scrolls on paper, so scroll and auto clip as hidden does. Not in columns or a keep-with-table block, whose content
+	 * BaseWriter::endPage() routes to a buffer that is repositioned later, where close() could not find the placeholder
+	 *
+	 * @param array $blk
+	 * @param array $properties
+	 *
+	 * @return bool
+	 */
+	private function clipsOverflow(array $blk, array $properties)
+	{
+		if ($this->mpdf->cssMode !== CssMode::STANDARD || $blk['css_set_height'] === false || !isset($properties['OVERFLOW'])) {
+			return false;
+		}
+		if ($this->mpdf->ColActive || $this->mpdf->kwt) {
+			return false;
+		}
+
+		return in_array(strtolower($properties['OVERFLOW']), ['hidden', 'clip', 'auto', 'scroll'], true);
+	}
+
+	/**
+	 * Opens the clip of a block that clips its content. Its rectangle is not known until the block closes, since the
+	 * top of the box moves with the collapsed top margin, so a placeholder holds its place in the page until then.
+	 * Mpdf::_out() is the one public route to the writer
+	 *
+	 * @param array $blk
+	 */
+	private function openOverflowClip(array &$blk)
+	{
+		$id = $this->mpdf->uniqstr . '_' . $this->mpdf->blklvl . '___';
+		$blk['overflow_clip'] = ['open' => '___OVERFLOWq___' . $id, 'rect' => '___OVERFLOW___' . $id, 'closed' => false];
+		$this->mpdf->_out($blk['overflow_clip']['open']);
+	}
+
+	/**
+	 * Resolves the placeholders of a block's clip. finishFlowingBlock() closed the clip when the block ended on the page
+	 * it began on: the placeholders then become the padding box. When the block ran onto another page its content
+	 * continues unclipped, and they go away
+	 *
+	 * @param array $blk
+	 */
+	private function closeOverflowClip(array $blk)
+	{
+		$clip = $blk['overflow_clip'];
+		$rect = '';
+		if ($clip['closed']) {
+			$x = $blk['x0'] + $blk['border_left']['w'];
+			$y = $blk['y0'] + $blk['border_top']['w'];
+			$w = $blk['width'] - $blk['border_left']['w'] - $blk['border_right']['w'];
+			$h = $blk['y1'] - $blk['border_bottom']['w'] - $y;
+			$rect = sprintf('%.3F %.3F %.3F %.3F re W n', $x * Mpdf::SCALE, ($this->mpdf->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE);
+		}
+
+		$search = [$clip['open'], $clip['rect']];
+		$replace = [$rect === '' ? '' : 'q ' . $rect, $rect];
+		if ($this->mpdf->bufferoutput) {
+			$this->mpdf->headerbuffer = str_replace($search, $replace, $this->mpdf->headerbuffer);
+		} else {
+			$this->mpdf->pages[$blk['startpage']] = str_replace($search, $replace, $this->mpdf->pages[$blk['startpage']]);
+		}
+
+		// Backgrounds of the blocks inside it that the page has not been given yet
+		foreach ($this->mpdf->pageBackgrounds as $level => &$entries) {
+			if ($level <= $this->mpdf->blklvl) {
+				continue;
+			}
+			foreach ($entries as &$entry) {
+				$entry['clippath'] = str_replace($clip['rect'], $rect, $entry['clippath']);
+			}
+		}
+		unset($entries, $entry);
+	}
+
+	/**
+	 * Clips the backgrounds the closing block registered to the boxes of the blocks around it that clip their content.
+	 * Backgrounds are painted at the top of the page, outside the clip the content is drawn in, so each takes the
+	 * placeholders of those clips into its own clip path
+	 *
+	 * @param int $from How many backgrounds the block's level held before the block was drawn
+	 */
+	private function clipBackgroundsToAncestors($from)
+	{
+		$rects = '';
+		for ($level = 1; $level < $this->mpdf->blklvl; $level++) {
+			if (isset($this->mpdf->blk[$level]['overflow_clip']) && $this->mpdf->blk[$level]['startpage'] == $this->mpdf->page) {
+				$rects .= "\n" . $this->mpdf->blk[$level]['overflow_clip']['rect'];
+			}
+		}
+		if ($rects === '' || !isset($this->mpdf->pageBackgrounds[$this->mpdf->blklvl])) {
+			return;
+		}
+
+		// A clippath leaves one q open, which PrintPageBackgrounds() closes; a further W n intersects the clip
+		$entries = &$this->mpdf->pageBackgrounds[$this->mpdf->blklvl];
+		for ($i = $from; $i < count($entries); $i++) {
+			$entries[$i]['clippath'] = ($entries[$i]['clippath'] === '' ? 'q' : $entries[$i]['clippath']) . $rects;
 		}
 	}
 
