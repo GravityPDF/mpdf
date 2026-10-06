@@ -25,8 +25,13 @@ class CssMerger
 		'BORDER-RIGHT-COLOR',
 		'BORDER-BOTTOM-COLOR',
 		'BORDER-LEFT-COLOR',
-		'TEXT-OUTLINE-COLOR',
 	];
+
+	/**
+	 * The properties that resolve currentColor in legacy mode only. Standard mode keeps the keyword in them because
+	 * they are inherited: each descendant draws it in its own colour, as the default of an outline with no colour
+	 */
+	const LEGACY_CURRENT_COLOR_PROPERTIES = ['TEXT-OUTLINE-COLOR'];
 
 	/**
 	 * The other properties mPDF reads a colour from that can name currentColor, which legacy mode ignores in them. A
@@ -417,11 +422,10 @@ class CssMerger
 	 */
 	private function resolveCurrentColor($inherit, array $inherited = [])
 	{
-		$properties = self::CURRENT_COLOR_PROPERTIES;
+		$standard = $this->mpdf->cssMode === CssMode::STANDARD;
+		$properties = array_merge(self::CURRENT_COLOR_PROPERTIES, $standard ? self::STANDARD_CURRENT_COLOR_PROPERTIES : self::LEGACY_CURRENT_COLOR_PROPERTIES);
 
-		if ($this->mpdf->cssMode === CssMode::STANDARD) {
-			$properties = array_merge($properties, self::STANDARD_CURRENT_COLOR_PROPERTIES);
-
+		if ($standard) {
 			foreach (['BOX-SHADOW', 'TEXT-SHADOW'] as $property) {
 				if (isset($this->cssProperties[$property])) {
 					$this->cssProperties[$property] = ShadowParser::withColor($this->cssProperties[$property], 'currentcolor');

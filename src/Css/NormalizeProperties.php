@@ -1174,7 +1174,8 @@ class NormalizeProperties
 	/**
 	 * Process text outline CSS properties.
 	 *
-	 * Handles TEXT-OUTLINE shorthand.
+	 * Handles TEXT-OUTLINE shorthand. In standard mode a width alone sets the colour to its initial value, currentColor;
+	 * legacy mode ignores it.
 	 *
 	 * @param string $v Property value
 	 * @return void
@@ -1182,15 +1183,16 @@ class NormalizeProperties
 	protected function processTextOutlineProperty($v)
 	{
 		$prop = preg_split('/\s+/', trim($v));
+		$count = count($prop);
 
 		if (strtolower(trim($v)) === 'none') {
 			$this->properties['TEXT-OUTLINE'] = 'none';
-		} elseif (count($prop) === 2) {
+		} elseif ($count === 2 || $count === 3) {
 			$this->properties['TEXT-OUTLINE-WIDTH'] = $prop[0];
-			$this->properties['TEXT-OUTLINE-COLOR'] = $prop[1];
-		} elseif (count($prop) === 3) {
+			$this->properties['TEXT-OUTLINE-COLOR'] = end($prop);
+		} elseif ($count === 1 && $this->resetsOmittedParts()) {
 			$this->properties['TEXT-OUTLINE-WIDTH'] = $prop[0];
-			$this->properties['TEXT-OUTLINE-COLOR'] = $prop[2];
+			$this->properties['TEXT-OUTLINE-COLOR'] = 'currentcolor';
 		}
 	}
 

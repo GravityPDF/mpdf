@@ -24,6 +24,18 @@ class CurrentColorTest extends TestCase
 	/** A border's colour in legacy mode when it names none */
 	const BLACK = '0.000 0.000 0.000 rg';
 
+	/** A text outline stroked in #0a0 */
+	const GREEN_OUTLINE = '0.000 0.667 0.000 RG  2 Tr BT';
+
+	/** A text outline stroked in #c00 */
+	const RED_OUTLINE = '0.800 0.000 0.000 RG  2 Tr BT';
+
+	/** A text outline stroked in #00f */
+	const BLUE_OUTLINE = '0.000 0.000 1.000 RG  2 Tr BT';
+
+	/** A text outline stroked in black, as legacy mode strokes one that names no colour */
+	const BLACK_OUTLINE = 'w  0.000 G  2 Tr BT';
+
 	/** A shadow's colour in legacy mode when it names none: #888888 */
 	const GREY = '0.533 0.533 0.533 rg';
 
@@ -339,7 +351,8 @@ class CurrentColorTest extends TestCase
 
 	/**
 	 * In standard mode every property mPDF reads a colour from resolves currentColor to the element's colour when its
-	 * properties are merged, in a value with other parts and in a gradient, and not in an image's address
+	 * properties are merged, in a value with other parts and in a gradient, and not in an image's address. A text
+	 * outline keeps the keyword, which is drawn in the colour of each piece of text
 	 */
 	public function testEveryColourPropertyResolvesCurrentColor()
 	{
@@ -351,7 +364,7 @@ class CurrentColorTest extends TestCase
 		$this->assertStringEndsWith(' #0a0', $properties['BORDER-RIGHT']);
 		$this->assertSame('1mm 1mm #0a0, inset 1mm 1mm rgb(0,0,255)', $properties['BOX-SHADOW']);
 		$this->assertSame('1mm 1mm #0a0', $properties['TEXT-SHADOW']);
-		$this->assertSame('#0a0', $properties['TEXT-OUTLINE-COLOR']);
+		$this->assertSame('currentcolor', strtolower($properties['TEXT-OUTLINE-COLOR']));
 
 		$gradient = $this->merged('BLOCK', 'DIV', self::GRADIENT, CssMode::STANDARD);
 		$url = $this->merged('BLOCK', 'DIV', 'color: #0a0; background-image: url(currentcolor.png)', CssMode::STANDARD);
@@ -402,7 +415,7 @@ class CurrentColorTest extends TestCase
 	{
 		$pdf = $this->uncompressed('<p style="color: #0a0; text-outline: 0.1mm currentColor">subject</p>', $mode);
 
-		$this->assertStringContainsString('0.000 0.667 0.000 RG  2 Tr BT', $pdf);
+		$this->assertStringContainsString(self::GREEN_OUTLINE, $pdf);
 	}
 
 	/**
@@ -559,6 +572,105 @@ class CurrentColorTest extends TestCase
 		}
 
 		return $data;
+	}
+
+	/**
+	 * The issue's document: a text outline with no colour, and none for the text, is drawn in black with no warning
+	 * (#650)
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param string $mode
+	 */
+	public function testATextOutlineWithNoColourIsDrawnWithoutAWarning($mode)
+	{
+		$pdf = $this->uncompressed('<p style="text-outline-width: 0.2mm">subject</p>', $mode);
+
+		$this->assertStringContainsString(self::BLACK_OUTLINE, $pdf);
+	}
+
+	/**
+	 * In standard mode a text outline with no colour is drawn in the colour of the text, which it inherits here.
+	 * Legacy mode keeps the black it drew before
+	 *
+	 * @dataProvider outlinesWithNoColourInContexts
+	 *
+	 * @param string $mode
+	 * @param string $context
+	 * @param string $style
+	 * @param string $expected
+	 */
+	public function testATextOutlineWithNoColourTakesTheTextsColour($mode, $context, $style, $expected)
+	{
+		$pdf = $this->uncompressed($this->subject($context, $style, 'color: #0a0'), $mode);
+
+		$this->assertStringContainsString($expected, $pdf);
+	}
+
+	/**
+	 * A text outline with no colour in each context, with the stroke each mode draws it in
+	 *
+	 * @return array[]
+	 */
+	public function outlinesWithNoColourInContexts()
+	{
+		return $this->inModesAndContexts(self::CONTEXTS, ['no colour' => ['text-outline-width: 0.2mm', self::GREEN_OUTLINE, self::BLACK_OUTLINE]]);
+	}
+
+	/**
+	 * In standard mode a text outline in currentColor, written or by default, strokes each piece of text in that
+	 * piece's colour, as currentColor is inherited as the keyword
+	 *
+	 * @dataProvider outlinesInCurrentColor
+	 *
+	 * @param string $style
+	 */
+	public function testATextOutlineInCurrentColorFollowsEachPieceOfText($style)
+	{
+		$pdf = $this->uncompressed('<p style="color: #0a0; ' . $style . '">before <span style="color: #00f">inside</span> after</p>', CssMode::STANDARD);
+
+		$this->assertSame(2, substr_count($pdf, self::GREEN_OUTLINE));
+		$this->assertSame(1, substr_count($pdf, self::BLUE_OUTLINE));
+	}
+
+	/**
+	 * Text outlines in currentColor: with no colour, the shorthand with a width alone, which resets a colour given
+	 * before it, and the colour written
+	 *
+	 * @return string[][]
+	 */
+	public function outlinesInCurrentColor()
+	{
+		return [
+			'no colour' => ['text-outline-width: 0.2mm'],
+			'shorthand with a width alone' => ['text-outline: 0.2mm'],
+			'shorthand after a colour' => ['text-outline-color: #c00; text-outline: 0.2mm'],
+			'currentColor' => ['text-outline-width: 0.2mm; text-outline-color: currentColor'],
+		];
+	}
+
+	/**
+	 * Legacy mode ignores the text-outline shorthand with a width alone, as it did
+	 */
+	public function testLegacyModeIgnoresTheTextOutlineShorthandWithAWidthAlone()
+	{
+		$pdf = $this->uncompressed('<p style="color: #0a0; text-outline: 0.2mm">subject</p>', CssMode::LEGACY);
+
+		$this->assertStringNotContainsString('2 Tr BT', $pdf);
+	}
+
+	/**
+	 * An outline colour inherited from a parent is kept by a child that sets only a width
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param string $mode
+	 */
+	public function testAnInheritedTextOutlineColourIsKept($mode)
+	{
+		$pdf = $this->uncompressed('<p style="color: #0a0; text-outline-color: #c00">before <span style="text-outline-width: 0.2mm">inside</span></p>', $mode);
+
+		$this->assertStringContainsString(self::RED_OUTLINE, $pdf);
 	}
 
 	/**
