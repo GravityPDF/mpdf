@@ -658,24 +658,10 @@ class Gradient
 		for ($i = 0; $i < count($bgr); $i++) {
 			$bgr[$i] = preg_replace('/@/', ',', $bgr[$i]);
 		}
-		// Is first part $bgr[0] a valid point/angle?
 		$first = preg_split('/\s+/', trim($bgr[0]));
-		// mPDF v7 did not read turn, so a first stop whose colour name holds it, such as a spot colour, stays a stop
-		$units = $legacy ? 'deg|grad|rad' : 'deg|grad|rad|turn';
-		if (preg_match('/(left|center|right|bottom|top|' . $units . ')/i', $bgr[0]) && !preg_match('/(<#|rgb|rgba|hsl|hsla)/i', $bgr[0])) {
-			$startStops = 1;
-		} elseif (trim($first[count($first) - 1]) === '0') {
-			$startStops = 1;
-		} else {
-			$check = $this->colorConverter->convert($first[0], $this->mpdf->PDFAXwarnings);
-			$startStops = 1;
-			if ($check) {
-				$startStops = 0;
-			}
-		}
+		$startStops = $this->isStop($first) ? 0 : 1;
 
-		// first part a valid point/angle?
-		if ($startStops === 1) { // default values
+		if ($startStops === 1) {
 
 			if ($legacy) {
 				list($angle, $startx, $starty, $endx, $endy) = $this->readLegacyDirection($bgr[0], $first);
@@ -890,26 +876,20 @@ class Gradient
 			$bgr[$i] = preg_replace('/@/', ',', $bgr[$i]);
 		}
 
-		// Is first part $bgr[0] a valid point/angle?
 		$startStops = 0;
 		$pos_angle = false;
 		$shape_size = false;
 		$first = preg_split('/\s+/', trim($bgr[0]));
-		$checkCol = $this->colorConverter->convert($first[0], $this->mpdf->PDFAXwarnings);
-		if (preg_match('/(left|center|right|bottom|top|deg|grad|rad)/i', $bgr[0]) && !preg_match('/(<#|rgb|rgba|hsl|hsla)/i', $bgr[0])) {
+		if (!$this->isStop($first)) {
 			$startStops = 1;
-			$pos_angle = $bgr[0];
-		} elseif (trim($first[count($first) - 1]) === '0') {
-			$startStops = 1;
-			$pos_angle = $bgr[0];
-		} elseif (preg_match('/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i', $bgr[0])) {
-			$startStops = 1;
-			$shape_size = $bgr[0];
-		} elseif (!$checkCol) {
-			$startStops = 1;
-			$pos_angle = $bgr[0];
+			if (preg_match('/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i', $bgr[0])
+				&& !preg_match('/(left|center|right|bottom|top|deg|grad|rad)/i', $bgr[0])) {
+				$shape_size = $bgr[0];
+			} else {
+				$pos_angle = $bgr[0];
+			}
 		}
-		if (preg_match('/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i', $bgr[1])) {
+		if (isset($bgr[1]) && preg_match('/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i', $bgr[1])) {
 			$startStops = 2;
 			$shape_size = $bgr[1];
 		}
@@ -1011,6 +991,20 @@ class Gradient
 			$g['stops'][] = $this->getStop($col, $el);
 		}
 		return $g;
+	}
+
+	/**
+	 * Whether the first argument of a gradient is a colour stop rather than a direction, point, shape or size: its
+	 * first word is a colour. A bare 0 is the unitless angle CSS allows, not the grey mPDF reads an integer as, so
+	 * linear-gradient(0, red, blue) points up while linear-gradient(red 0, blue) starts red.
+	 *
+	 * @param string[] $words The first argument split at whitespace
+	 *
+	 * @return bool
+	 */
+	private function isStop(array $words)
+	{
+		return $words[0] !== '0' && $this->colorConverter->isColor($words[0]);
 	}
 
 	private function getStop($col, $el, $convertOffset = false)
