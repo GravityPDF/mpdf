@@ -16333,65 +16333,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$p['MARGIN-HEADER'] = strval($this->orig_hMargin - $outerTB) . 'mm';
 		$p['MARGIN-FOOTER'] = strval($this->orig_fMargin - $outerTB) . 'mm';
 
-		// Basic page + selector
-		if (isset($this->cssManager->CSS['@PAGE'])) {
-			$zp = $this->cssManager->CSS['@PAGE'];
-		} else {
-			$zp = [];
-		}
-		if (is_array($zp) && !empty($zp)) {
-			$p = array_merge($p, $zp);
-		}
-
-		if (isset($p['EVEN-HEADER-NAME']) && $oddEven == 'E') {
-			$p['HEADER'] = $p['EVEN-HEADER-NAME'];
-			unset($p['EVEN-HEADER-NAME']);
-		}
-		if (isset($p['ODD-HEADER-NAME']) && $oddEven != 'E') {
-			$p['HEADER'] = $p['ODD-HEADER-NAME'];
-			unset($p['ODD-HEADER-NAME']);
-		}
-		if (isset($p['EVEN-FOOTER-NAME']) && $oddEven == 'E') {
-			$p['FOOTER'] = $p['EVEN-FOOTER-NAME'];
-			unset($p['EVEN-FOOTER-NAME']);
-		}
-		if (isset($p['ODD-FOOTER-NAME']) && $oddEven != 'E') {
-			$p['FOOTER'] = $p['ODD-FOOTER-NAME'];
-			unset($p['ODD-FOOTER-NAME']);
-		}
-
-		$p = array_merge($p, $this->cssManager->pseudoPageProperties('@PAGE>>', $side, $first, $oddEven));
-
-		// If named page
-		if ($name) {
-			if (isset($this->cssManager->CSS['@PAGE>>NAMED>>' . $name])) {
-				$zp = $this->cssManager->CSS['@PAGE>>NAMED>>' . $name];
-			} else {
-				$zp = [];
-			}
-			if (is_array($zp) && !empty($zp)) {
-				$p = array_merge($p, $zp);
-			}
-
-			if (isset($p['EVEN-HEADER-NAME']) && $oddEven == 'E') {
-				$p['HEADER'] = $p['EVEN-HEADER-NAME'];
-				unset($p['EVEN-HEADER-NAME']);
-			}
-			if (isset($p['ODD-HEADER-NAME']) && $oddEven != 'E') {
-				$p['HEADER'] = $p['ODD-HEADER-NAME'];
-				unset($p['ODD-HEADER-NAME']);
-			}
-			if (isset($p['EVEN-FOOTER-NAME']) && $oddEven == 'E') {
-				$p['FOOTER'] = $p['EVEN-FOOTER-NAME'];
-				unset($p['EVEN-FOOTER-NAME']);
-			}
-			if (isset($p['ODD-FOOTER-NAME']) && $oddEven != 'E') {
-				$p['FOOTER'] = $p['ODD-FOOTER-NAME'];
-				unset($p['ODD-FOOTER-NAME']);
-			}
-
-			$p = array_merge($p, $this->cssManager->pseudoPageProperties('@PAGE>>NAMED>>' . $name . '>>', $side, $first, $oddEven));
-		}
+		$p = array_merge($p, $this->cssManager->pageProperties($name, $side, $first, $oddEven));
 
 		$orientation = $mgl = $mgr = $mgt = $mgb = $mgh = $mgf = '';
 		$header = $footer = '';

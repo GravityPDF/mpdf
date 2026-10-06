@@ -1,0 +1,5 @@
+/* A default stylesheet whose important @page declaration beats every one of the document's under the standard cascade */
+
+@page {
+	margin-top: 40mm !important;
+}
