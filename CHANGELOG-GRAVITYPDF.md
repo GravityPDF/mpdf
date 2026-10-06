@@ -273,7 +273,7 @@ Bugfixes
 * Arabic in an SVG was not given an Arabic font. [#281]
 * An RGB image converted to CMYK truncated its inks, so full ink fell short of 255. [#349] [#354]
 * An image's `/SMask` pointed at whichever object came before it, which is only its mask if nothing was added in between. An image and its soft mask are now registered together. [#373]
-* A `<textcircle>` with no `font-size` from its tag or the CSS raised three `Undefined array key "fontsize"` warnings. It is now drawn at the size of the text around it, as though that size were set on it. [#645]
+* A `<textcircle>` with no `font-size` from its tag or the CSS raised three `Undefined array key "fontsize"` warnings. It is now drawn at the size of the text around it, as though that size were set on it. [#645] [#678]
 
 ### Forms
 
@@ -937,3 +937,4 @@ These changes do not change output.
 [#656]: https://github.com/GravityPDF/mpdf/pull/656
 [#654]: https://github.com/GravityPDF/mpdf/pull/654
 [#645]: https://github.com/GravityPDF/mpdf/issues/645
+[#678]: https://github.com/GravityPDF/mpdf/pull/678
