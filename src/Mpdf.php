@@ -10173,6 +10173,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// NB $x is only used when paint=true
 		// Lmargin not used
+		if ($type == 'image' && !$is_table && isset($objattr['block'])) {
+			$objattr = ImageSizing::placeBlock($objattr, $maxWidth);
+		}
 		$w = 0;
 		if (isset($objattr['width'])) {
 			$w = $objattr['width'] / $k;

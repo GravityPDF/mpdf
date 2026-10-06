@@ -2,6 +2,7 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\CssMode;
 use Mpdf\Image\ImageSizing;
 use Mpdf\Mpdf;
 use Mpdf\Utils\NumericString;
@@ -66,17 +67,17 @@ class Img extends Tag
 					false
 				);
 			}
-			if (isset($properties['MARGIN-LEFT'])) {
-				$objattr['margin_left'] = $this->sizeConverter->convert(
-					$properties['MARGIN-LEFT'],
-					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
-					$this->mpdf->FontSize,
-					false
-				);
-			}
-			if (isset($properties['MARGIN-RIGHT'])) {
-				$objattr['margin_right'] = $this->sizeConverter->convert(
-					$properties['MARGIN-RIGHT'],
+			$autoMargins = [];
+			foreach (['MARGIN-LEFT' => 'margin_left', 'MARGIN-RIGHT' => 'margin_right'] as $property => $key) {
+				if (!isset($properties[$property])) {
+					continue;
+				}
+				if (strtolower($properties[$property]) === 'auto') {
+					$autoMargins[$key] = true;
+					continue;
+				}
+				$objattr[$key] = $this->sizeConverter->convert(
+					$properties[$property],
 					$this->mpdf->blk[$this->mpdf->blklvl]['inner_width'],
 					$this->mpdf->FontSize,
 					false
@@ -336,6 +337,14 @@ class Img extends Tag
 				}
 			}
 			/* -- END CSS-IMAGE-FLOAT -- */
+			$block = $this->isBlock($properties) && !isset($objattr['float']);
+			if ($block) {
+				$objattr['block'] = [
+					'auto_left' => isset($autoMargins['margin_left']),
+					'auto_right' => isset($autoMargins['margin_right']),
+					'rtl' => isset($this->mpdf->blk[$this->mpdf->blklvl]['direction']) && $this->mpdf->blk[$this->mpdf->blklvl]['direction'] === 'rtl',
+				];
+			}
 			// mPDF 5.7.3 TRANSFORMS
 			if (isset($properties['TRANSFORM']) && !$this->mpdf->ColActive && !$this->mpdf->kwt) {
 				$objattr['transform'] = $properties['TRANSFORM'];
@@ -351,6 +360,8 @@ class Img extends Tag
 			} else {
 				/* -- END TABLES -- */
 				$this->mpdf->_saveTextBuffer($e, $this->mpdf->HREF);
+				// Whitespace after a block-level image belongs to no line, as after a <br>
+				$this->mpdf->ignorefollowingspaces = $block;
 			} // *TABLES*
 			/* -- ANNOTATIONS -- */
 			if ($this->mpdf->title2annots && isset($attr['TITLE'])) {
@@ -417,6 +428,22 @@ class Img extends Tag
 		}
 
 		return $this->sizeConverter->convert($value, $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
+	}
+
+	/**
+	 * Whether the image is laid out as a block, on a line of its own placed by its margins: display: block in the
+	 * standard CSS mode, outside a table and outside columns, which keep their own paths for an image
+	 *
+	 * @param array $properties The image's merged CSS
+	 *
+	 * @return bool
+	 */
+	private function isBlock(array $properties)
+	{
+		return $this->mpdf->cssMode === CssMode::STANDARD
+			&& isset($properties['DISPLAY']) && strtolower($properties['DISPLAY']) === 'block'
+			&& !$this->mpdf->tableLevel
+			&& !$this->mpdf->ColActive;
 	}
 
 	/**

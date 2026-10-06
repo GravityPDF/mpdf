@@ -131,6 +131,44 @@ class ImageSizing
 	}
 
 	/**
+	 * A block-level image placed across the width it has to itself. An auto margin on each side centres it and an
+	 * auto margin on one side pushes it to the other; otherwise the margin the block's direction does not honour takes
+	 * what is left, as CSS resolves an over-constrained block. The outer width then equals $available, so the image
+	 * fills its line and text-align cannot move it. An image wider than $available is left as it is.
+	 *
+	 * @param array $objattr The image, with 'block' => ['auto_left' => bool, 'auto_right' => bool, 'rtl' => bool]
+	 * @param float $available The width of the line, in millimetres
+	 *
+	 * @return array The image, with its margins resolved
+	 */
+	public static function placeBlock(array $objattr, $available)
+	{
+		$block = $objattr['block'];
+		$left = $objattr['margin_left'];
+		$right = $objattr['margin_right'];
+		$box = $objattr['width'] - $left - $right;
+		$free = $available - $box;
+
+		if ($free < 0) {
+			return $objattr;
+		}
+
+		if ($block['auto_left'] && $block['auto_right']) {
+			$left = $right = $free / 2;
+		} elseif ($block['auto_left'] || (!$block['auto_right'] && $block['rtl'])) {
+			$left = $free - $right;
+		} else {
+			$right = $free - $left;
+		}
+
+		$objattr['margin_left'] = $left;
+		$objattr['margin_right'] = $right;
+		$objattr['width'] = $box + $left + $right;
+
+		return $objattr;
+	}
+
+	/**
 	 * Whether a table column can narrow the image, which a percentage width or max-width lets it do
 	 *
 	 * @param array $sizing
