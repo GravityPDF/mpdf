@@ -158,6 +158,9 @@ abstract class Tag
 	 */
 	protected function forcePageBreak($pageBreak)
 	{
+		// A forced break parts a block kept with its next from it
+		$this->mpdf->keepWithNext->drop();
+
 		$save_blklvl = $this->mpdf->blklvl;
 		$save_blk = $this->mpdf->blk;
 		$save_silp = $this->mpdf->saveInlineProperties();

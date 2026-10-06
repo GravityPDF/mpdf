@@ -981,6 +981,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private $form;
 
 	/**
+	 * Keeps a block with page-break-after: avoid on the page of what follows it. Public: the tag classes drive it
+	 *
+	 * @var \Mpdf\KeepWithNext
+	 */
+	public $keepWithNext;
+
+	/**
 	 * @var \Mpdf\DirectWrite
 	 */
 	private $directWrite;
@@ -14666,6 +14673,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$parseonly = false;
 		$this->bufferoutput = false;
+		if ($mode != HTMLParserMode::HTML_HEADER_BUFFER) {
+			// A block kept with its next is unwound to a token of the call that read it
+			$this->keepWithNext->drop();
+		}
 		if ($mode == HTMLParserMode::HTML_PARSE_NO_WRITE) {
 			$parseonly = true;
 			// Close any open block tags
@@ -15234,6 +15245,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($close) {
 			$this->closeElementsDownTo($floor);
+
+			// Nothing follows the blocks left open, and there is no loop left to parse a rewound token
+			$this->keepWithNext->drop();
 
 			// Close any open block tags
 			for ($b = $this->blklvl; $b > 0; $b--) {
@@ -28868,6 +28882,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
+		$snapshot['keepWithNext'] = $this->keepWithNext->getStateSnapshot();
 
 		return $snapshot;
 	}
@@ -28885,7 +28900,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->form->restoreStateSnapshot($snapshot['form']);
 		$this->tableOfContents->restoreStateSnapshot($snapshot['tableOfContents']);
-		unset($snapshot['form'], $snapshot['tableOfContents']);
+		$this->keepWithNext->restoreStateSnapshot($snapshot['keepWithNext']);
+		unset($snapshot['form'], $snapshot['tableOfContents'], $snapshot['keepWithNext']);
 
 		$this->restoreOwnState($snapshot);
 

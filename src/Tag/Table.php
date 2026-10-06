@@ -1160,7 +1160,21 @@ class Table extends Tag
 			}
 
 			// Recursively writes all tables starting at top level
+			$landed = $this->mpdf->page;
 			$this->mpdf->_tableWrite($this->mpdf->table[1][1]);
+
+			// A block kept with its next before the table is kept with the whole table where that was placed whole, and
+			// with its first row where it was not. _tableWrite() may itself start the first row on a fresh page, which
+			// shows as the whole table, less its margins, standing on the page after the one it was given
+			$table = $this->mpdf->table[1][1];
+			$onPageAfter = $this->mpdf->y - $this->mpdf->tMargin;
+			if ($this->mpdf->page == $landed + 1 && $onPageAfter >= $table['h'] - $table['margin']['T'] - $table['margin']['B'] - 0.01) {
+				$landed++;
+			}
+			$height = $this->mpdf->page == $landed ? $onPageAfter : (isset($table['hr'][0]) ? $table['hr'][0] : $this->mpdf->lineheight);
+			if ($this->mpdf->keepWithNext->settle($landed, $height, $this->mpdf->blklvl + 1, $ahtml, $ihtml)) {
+				return;
+			}
 
 			if ($this->mpdf->table_rotate && $this->mpdf->tablebuffer) {
 				$this->mpdf->PageBreakTrigger = $this->mpdf->h - $this->mpdf->bMargin;

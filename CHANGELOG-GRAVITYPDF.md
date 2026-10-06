@@ -79,6 +79,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * The content of a positioned block draws `line-height: normal` as the rest of the document does. It used to be drawn at a fixed 1.33, which with DejaVu Sans or Times sets the lines a little further apart. To keep the old spacing, add `line-height: 1.33` to the positioned block.
   * A bidirectional embedding, as in `<span dir="rtl">…<div>…</div>…</span>`, is opened again for the inline element's text after the block.
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
+* **A block with `page-break-after: avoid` moves to the next page with what follows it**, as in a browser, under the standard `cssMode`. mPDF only asked for room for one more line as tall as the block's own, so a heading was left at the foot of a page when the table, `page-break-inside: avoid` block or paragraph with a top margin after it moved to the next page, and was moved when its own line would not fit twice though the line after it would have. Now the block and the first line after it, or the whole of a table or block kept together, are laid out as one unit, the way `page-break-inside: avoid` lays out a block, and blocks with `page-break-after: avoid` in a row move together. Headings have `page-break-after: avoid` by default, so page breaks around headings can fall differently in existing documents. A unit that would not fit a fresh page either is left split, and a forced break still parts it. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the one-line look-ahead. [#592] [mpdf/mpdf#1801]
 
 New features
 ------------
@@ -956,3 +957,5 @@ These changes do not change output.
 [#681]: https://github.com/GravityPDF/mpdf/pull/681
 [#630]: https://github.com/GravityPDF/mpdf/issues/630
 [#682]: https://github.com/GravityPDF/mpdf/pull/682
+[#592]: https://github.com/GravityPDF/mpdf/issues/592
+[mpdf/mpdf#1801]: https://github.com/mpdf/mpdf/issues/1801

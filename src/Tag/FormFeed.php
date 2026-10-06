@@ -9,6 +9,8 @@ class FormFeed extends Tag
 	public function open($attr, &$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
+		// A forced break parts a block kept with its next from it
+		$this->mpdf->keepWithNext->drop();
 		if (isset($attr['SHEET-SIZE'])) {
 			// Convert to same types as accepted in initial mPDF() A4, A4-L, or array(w,h)
 			$prop = preg_split('/\s+/', trim($attr['SHEET-SIZE']));

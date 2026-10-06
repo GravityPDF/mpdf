@@ -74,6 +74,7 @@ class ServiceFactory
 		$colorConverter = new ColorConverter($mpdf, $colorModeConverter, $colorSpaceRestrictor);
 
 		$tableOfContents = new TableOfContents($mpdf, $sizeConverter);
+		$keepWithNext = new KeepWithNext($mpdf);
 
 		$cacheBasePath = $config['tempDir'] . '/mpdf';
 
@@ -208,6 +209,7 @@ class ServiceFactory
 			'gradient' => $gradient,
 			'roundedBox' => $roundedBox,
 			'tableOfContents' => $tableOfContents,
+			'keepWithNext' => $keepWithNext,
 			'tag' => $tag,
 			'wmf' => $wmf,
 			'sizeConverter' => $sizeConverter,
@@ -254,6 +256,7 @@ class ServiceFactory
 			'gradient',
 			'roundedBox',
 			'tableOfContents',
+			'keepWithNext',
 			'tag',
 			'wmf',
 			'sizeConverter',
