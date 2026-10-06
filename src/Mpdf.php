@@ -93,6 +93,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const VISIBILITY_GROUPS = ['printonly' => 'OC1', 'screenonly' => 'OC2', 'hidden' => 'OC3'];
 
 	/**
+	 * The collaborators whose state a document snapshot carries alongside the document's own (see getStateSnapshot())
+	 */
+	const SNAPSHOT_COLLABORATORS = ['form', 'tableOfContents', 'keepWithNext'];
+
+	/**
 	 * The output intent profile a PDF/X-4 document embeds where ICCProfile names none: U.S. web-coated
 	 * (SWOP) grade 3, a printer profile, as ISO 15930-7 asks of the output intent
 	 */
@@ -3498,6 +3503,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// mPDF 6 pagebreaktype
 	function _preForcedPagebreak($pagebreaktype)
 	{
+		// A forced break parts a block kept with its next from it
+		$this->keepWithNext->drop();
+
 		if ($pagebreaktype == 'cloneall') {
 			// Close any open block tags
 			$arr = [];
@@ -14674,7 +14682,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$parseonly = false;
 		$this->bufferoutput = false;
 		if ($mode != HTMLParserMode::HTML_HEADER_BUFFER) {
-			// A block kept with its next is unwound to a token of the call that read it
+			// A block kept with its next is unwound to a token of the call that read it: not of a later call, nor of one
+			// made from inside it to write an index or a table of contents
 			$this->keepWithNext->drop();
 		}
 		if ($mode == HTMLParserMode::HTML_PARSE_NO_WRITE) {
@@ -15245,9 +15254,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($close) {
 			$this->closeElementsDownTo($floor);
-
-			// Nothing follows the blocks left open, and there is no loop left to parse a rewound token
-			$this->keepWithNext->drop();
 
 			// Close any open block tags
 			for ($b = $this->blklvl; $b > 0; $b--) {
@@ -23701,6 +23707,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					// Set the Page & Column where table actually starts
 					if ($i == 0 && $j == 0 && $level == 1) {
+						$table['startpage'] = $this->page; // read by Tag\Table::close() for a block kept with the table
 						if (($this->mirrorMargins) && (($this->page) % 2 == 0)) {    // EVEN
 							$tablestartpage = 'EVEN';
 						} elseif (($this->mirrorMargins) && (($this->page) % 2 == 1)) {    // ODD
@@ -28880,9 +28887,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// entry. So does the counter that numbers fonts alongside them, and the reference into one of them
 		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont']);
 
-		$snapshot['form'] = $this->form->getStateSnapshot();
-		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
-		$snapshot['keepWithNext'] = $this->keepWithNext->getStateSnapshot();
+		foreach (self::SNAPSHOT_COLLABORATORS as $collaborator) {
+			$snapshot[$collaborator] = $this->{$collaborator}->getStateSnapshot();
+		}
 
 		return $snapshot;
 	}
@@ -28898,10 +28905,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function restoreStateSnapshot(array $snapshot)
 	{
-		$this->form->restoreStateSnapshot($snapshot['form']);
-		$this->tableOfContents->restoreStateSnapshot($snapshot['tableOfContents']);
-		$this->keepWithNext->restoreStateSnapshot($snapshot['keepWithNext']);
-		unset($snapshot['form'], $snapshot['tableOfContents'], $snapshot['keepWithNext']);
+		foreach (self::SNAPSHOT_COLLABORATORS as $collaborator) {
+			$this->{$collaborator}->restoreStateSnapshot($snapshot[$collaborator]);
+			unset($snapshot[$collaborator]);
+		}
 
 		$this->restoreOwnState($snapshot);
 

@@ -401,8 +401,6 @@ abstract class BlockTag extends Tag
 		// mPDF 6 (uses $p - preview of properties so blklvl can be incremented after page-break)
 		if (!$this->mpdf->tableLevel && (($pagesel && (!$this->mpdf->page_box['current'] || $pagesel != $this->mpdf->page_box['current']))
 				|| $this->forcesPageBreak($p, 'PAGE-BREAK-BEFORE'))) {
-			// A forced break parts a block kept with its next from it
-			$this->mpdf->keepWithNext->drop();
 			// mPDF 6 pagebreaktype
 			$startpage = $this->mpdf->page;
 			$pagebreaktype = $this->mpdf->defaultPagebreakType;
@@ -1260,6 +1258,7 @@ abstract class BlockTag extends Tag
 
 
 		//Print content
+		$hasLine = count($this->mpdf->textbuffer) > 0;
 		$blockstate = 0;
 		if ($this->mpdf->lastblocklevelchange == 1) {
 			$blockstate = 3;
@@ -1406,7 +1405,7 @@ abstract class BlockTag extends Tag
 
 			// The move parts the block from a block kept with its next just before it, so that one moves too, where
 			// both fit the fresh page; the parser is then rewound to it instead
-			if ($movepage && $this->mpdf->keepWithNext->settle($this->mpdf->page + 1, $height, $this->mpdf->blklvl + 1, $ahtml, $ihtml)) {
+			if ($movepage && $this->mpdf->keepWithNext->settle($this->mpdf->page + 1, $height, $ahtml, $ihtml)) {
 				return;
 			}
 			$ahtml[$i] .= ' pagebreakavoidchecked="true";'; // so open() does not measure it again
@@ -1420,12 +1419,15 @@ abstract class BlockTag extends Tag
 		if ($blk['keep_block_together']) {
 			$this->mpdf->keep_block_together = false;
 			// The kept block stayed on the page it opened on, so a unit before it is kept with it
-			$this->mpdf->keepWithNext->settle($blk['kt_state']['page'], $this->mpdf->y - $blk['kt_state']['y'], $this->mpdf->blklvl, $ahtml, $ihtml);
-		} elseif (!$this->mpdf->keep_block_together && $this->mpdf->keepWithNext->settleAfter($blk, $this->mpdf->blklvl, $ahtml, $ihtml)) {
-			// Not while a kept block is measured: that block settles the unit whole, above
+			if ($this->mpdf->keepWithNext->settle($blk['kt_state']['page'], $this->mpdf->y - $blk['kt_state']['y'], $ahtml, $ihtml)) {
+				return;
+			}
+		} elseif ($hasLine && !$this->mpdf->keep_block_together && $this->mpdf->keepWithNext->settleAfter($blk, $ahtml, $ihtml)) {
+			// A block that drew a line of its own settles a unit before it by that line. Not while a kept block is
+			// measured: that block settles the unit whole, above
 			return;
 		}
-		if (isset($blk['keepWithNext']) && $this->mpdf->keepWithNext->closes($blk, (bool) $page_break_after, $this->mpdf->blklvl, $ahtml, $ihtml)) {
+		if (isset($blk['keepWithNext']) && $this->mpdf->keepWithNext->closes($blk, (bool) $page_break_after, $ahtml, $ihtml)) {
 			return;
 		}
 

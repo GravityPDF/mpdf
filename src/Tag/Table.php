@@ -767,6 +767,7 @@ class Table extends Tag
 		$this->mpdf->cellPaddingT = 0;
 		$this->mpdf->cellPaddingB = 0;
 
+		$startpage = $this->mpdf->page;
 		if (isset($this->mpdf->table[1][1]['overflow']) && $this->mpdf->table[1][1]['overflow'] === 'visible') {
 			if ($this->mpdf->kwt || $this->mpdf->table_rotate || $this->mpdf->table_keep_together || $this->mpdf->ColActive) {
 				$this->mpdf->kwt = false;
@@ -1159,22 +1160,25 @@ class Table extends Tag
 				$this->mpdf->kwt_saved = false;
 			}
 
-			// Recursively writes all tables starting at top level
-			$landed = $this->mpdf->page;
-			$this->mpdf->_tableWrite($this->mpdf->table[1][1]);
-
-			// A block kept with its next before the table is kept with the whole table where that was placed whole, and
-			// with its first row where it was not. _tableWrite() may itself start the first row on a fresh page, which
-			// shows as the whole table, less its margins, standing on the page after the one it was given
-			$table = $this->mpdf->table[1][1];
-			$onPageAfter = $this->mpdf->y - $this->mpdf->tMargin;
-			if ($this->mpdf->page == $landed + 1 && $onPageAfter >= $table['h'] - $table['margin']['T'] - $table['margin']['B'] - 0.01) {
-				$landed++;
-			}
-			$height = $this->mpdf->page == $landed ? $onPageAfter : (isset($table['hr'][0]) ? $table['hr'][0] : $this->mpdf->lineheight);
-			if ($this->mpdf->keepWithNext->settle($landed, $height, $this->mpdf->blklvl + 1, $ahtml, $ihtml)) {
+			// A block kept with its next before the table is kept with the whole table where that is placed whole, and
+			// with its first row where it is not. Where the table was moved to a fresh page above, that is settled before
+			// it is written; where _tableWrite() itself starts the first row on a fresh page, after
+			$table = &$this->mpdf->table[1][1];
+			$firstRow = isset($table['hr'][0]) ? $table['hr'][0] : $this->mpdf->lineheight;
+			if ($this->mpdf->page != $startpage
+				&& $this->mpdf->keepWithNext->settle($this->mpdf->page, $this->mpdf->table_keep_together ? $table['h'] : $firstRow, $ahtml, $ihtml)) {
 				return;
 			}
+
+			// Recursively writes all tables starting at top level
+			$this->mpdf->_tableWrite($table);
+
+			$landed = isset($table['startpage']) ? $table['startpage'] : $startpage;
+			$height = $this->mpdf->page == $landed ? $this->mpdf->y - $this->mpdf->tMargin : $firstRow;
+			if ($this->mpdf->keepWithNext->settle($landed, $height, $ahtml, $ihtml)) {
+				return;
+			}
+			unset($table);
 
 			if ($this->mpdf->table_rotate && $this->mpdf->tablebuffer) {
 				$this->mpdf->PageBreakTrigger = $this->mpdf->h - $this->mpdf->bMargin;

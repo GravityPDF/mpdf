@@ -10,6 +10,7 @@ namespace Mpdf;
 class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 	use PageStreams;
+	use DrawnStyles;
 
 	const HEAD = '<h2 style="page-break-after: avoid">HEAD</h2>';
 	const KEPT_TABLE = '<table style="page-break-inside: avoid"><tr><td>R1</td></tr><tr><td>R2</td></tr><tr><td>R3</td></tr><tr><td>R4</td></tr></table>';
@@ -39,8 +40,7 @@ class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function drawn($html, array $config = [])
 	{
-		$mpdf = new TextRecordingMpdf($config + ['mode' => 'c']);
-		$mpdf->WriteHTML($html);
+		$mpdf = $this->drawDocument($html, $config);
 
 		return [$this->pagesDrawn($mpdf), $mpdf];
 	}
@@ -52,13 +52,8 @@ class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function pagesDrawn(TextRecordingMpdf $mpdf)
 	{
-		$pages = [];
-		foreach ($mpdf->drawnText as $i => $text) {
-			$text = trim($text);
-			if ($text !== '' && $text !== 'Filler') {
-				$pages[$text] = $mpdf->drawnBoxes[$i][0];
-			}
-		}
+		$pages = $this->keyedByText($mpdf, array_column($mpdf->drawnBoxes, 0));
+		unset($pages['Filler'], $pages['']);
 
 		return $pages;
 	}
@@ -164,7 +159,7 @@ class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAKeptBlockTooTallToShareAPageWithTheHeadingMovesAlone()
 	{
-		list($pages, $mpdf) = $this->drawn($this->lines(50) . self::HEAD . '<div style="page-break-inside: avoid">' . str_repeat('<p>Kept</p>', 27) . '</div>');
+		list($pages, $mpdf) = $this->drawn($this->lines(50) . self::HEAD . $this->keptBlock(27));
 
 		$this->assertSame(['HEAD' => 1, 'Kept' => 2], $pages);
 		$this->assertSame(1, $mpdf->unwinds);
@@ -193,7 +188,8 @@ class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The first line after the heading may be nested in blocks of its own, or be a list item
+	 * The first line after the heading is the next line drawn, wherever the blocks put it: nested in blocks of its own,
+	 * in a list item, outside the block the heading ends, or past an empty block
 	 */
 	public function testTheLineAfterTheHeadingMayBeNested()
 	{
@@ -202,6 +198,12 @@ class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		list($pages) = $this->drawn($this->lines(50) . self::HEAD . '<ul><li>I1</li><li>I2</li></ul>');
 		$this->assertSame(['HEAD' => 2, 'I1' => 2, 'I2' => 2], $pages);
+
+		list($pages) = $this->drawn($this->lines(50) . '<div>' . self::HEAD . '</div><p>T1</p>');
+		$this->assertSame(['HEAD' => 2, 'T1' => 2], $pages);
+
+		list($pages) = $this->drawn($this->lines(50) . self::HEAD . '<div></div><p>T1</p>');
+		$this->assertSame(['HEAD' => 2, 'T1' => 2], $pages);
 	}
 
 	/**
@@ -258,11 +260,9 @@ class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testWhatTheFirstPassRegistersIsRegisteredOnceOnTheUnitsPage()
 	{
-		$mpdf = $this->mpdf();
-		$mpdf->WriteHTML($this->lines(50)
+		$pdf = $this->render($this->lines(50)
 			. '<h2 style="page-break-after: avoid"><bookmark content="Marked" /><a name="target">HEAD</a><indexentry content="Term" /></h2>'
 			. '<p><a href="#target">T1</a> <a href="https://example.com/kept">Link</a></p><pagebreak /><indexinsert />');
-		$pdf = $this->output($mpdf);
 		$pages = $this->pages($pdf);
 		$second = $this->pageObjects($pdf)[1];
 
