@@ -652,6 +652,20 @@ class Table extends Tag
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trbackground-images'] = $temptrbgi;
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trgradients'] = $temptrbgg;
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['bgcolor'] = $temptrbgc;
+			// [pagebreak-before] is keyed by the row it breaks before. The footer rows' own markers are dropped: the
+			// footer never breaks the page
+			if (isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'])) {
+				$temppb = [];
+				$moved = 0;
+				for ($k = 0; $k < $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['nr']; $k++) {
+					if (in_array($k, $tfrows)) {
+						$moved++;
+					} elseif (isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'][$k])) {
+						$temppb[$k - $moved] = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'][$k];
+					}
+				}
+				$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'] = $temppb;
+			}
 			// Should Update all other arays set on row number, but cell properties have been set so not needed
 			// [bgcolor] [trborder-left] [trborder-right] [trborder-top] [trborder-bottom]
 		}

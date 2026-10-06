@@ -17,15 +17,9 @@ class Tr extends Tag
 		$this->mpdf->col = -1;
 		$properties = $this->cssManager->MergeCSS('TABLE', 'TR', $attr);
 
-		// write pagebreak markers into row list, so _tableWrite can respect it
-		if (isset($properties['PAGE-BREAK-BEFORE']) && strtoupper($properties['PAGE-BREAK-BEFORE']) === 'AVOID'
-			&& !$this->mpdf->ColActive) {
-			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'][$this->mpdf->row] = 'avoid';
-		}
-
-		if (isset($properties['PAGE-BREAK-AFTER']) && strtoupper($properties['PAGE-BREAK-AFTER']) === 'AVOID'
-			&& !$this->mpdf->ColActive) {
-			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'][$this->mpdf->row + 1] = 'avoid';
+		if (!$this->mpdf->ColActive) {
+			$this->markRowBreak($this->mpdf->row, $this->rowBreak($properties, 'PAGE-BREAK-BEFORE'));
+			$this->markRowBreak($this->mpdf->row + 1, $this->rowBreak($properties, 'PAGE-BREAK-AFTER'));
 		}
 
 		if (!$this->mpdf->simpleTables && (!isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['borders_separate'])
@@ -74,6 +68,46 @@ class Tr extends Tag
 		if ($this->mpdf->tabletfoot) {
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['is_tfoot'][$this->mpdf->row] = true;
 		}
+	}
+
+	/**
+	 * The marker a row's page-break-before or page-break-after leaves in the table's row list: 'always' for a forced
+	 * break, which left and right are read as, 'avoid' to keep the row with its neighbour, or null for none
+	 *
+	 * @param array $properties
+	 * @param string $property PAGE-BREAK-BEFORE or PAGE-BREAK-AFTER
+	 * @return string|null
+	 */
+	private function rowBreak(array $properties, $property)
+	{
+		if (!isset($properties[$property])) {
+			return null;
+		}
+
+		$value = strtolower($properties[$property]);
+		if ($value === 'avoid') {
+			return 'avoid';
+		}
+
+		return in_array($value, ['always', 'left', 'right'], true) ? 'always' : null;
+	}
+
+	/**
+	 * Records a break before a row in the table's row list, which _tableWrite() reads; a page-break-after is kept as
+	 * a break before the row after it. A forced break stands against the avoid of the row on its other side.
+	 *
+	 * @param int $row
+	 * @param string|null $break
+	 */
+	private function markRowBreak($row, $break)
+	{
+		$table = &$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]];
+
+		if ($break === null || ($break === 'avoid' && isset($table['pagebreak-before'][$row]) && $table['pagebreak-before'][$row] === 'always')) {
+			return;
+		}
+
+		$table['pagebreak-before'][$row] = $break;
 	}
 
 	public function close(&$ahtml, &$ihtml)
