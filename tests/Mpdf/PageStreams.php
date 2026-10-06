@@ -329,7 +329,24 @@ trait PageStreams
 	}
 
 	/**
-	 * The rectangles a page fills, in the order they are painted, in millimetres from the page's top left corner
+	 * The content stream of the first page of a document that has only one
+	 *
+	 * @param string $html
+	 * @param array $config
+	 *
+	 * @return string
+	 */
+	private function firstPage($html, $config = [])
+	{
+		$pages = $this->pages($this->render($html, $config));
+		$this->assertCount(1, $pages);
+
+		return $pages[0];
+	}
+
+	/**
+	 * The rectangles a page fills, in the order they are painted, in millimetres from the top left corner of the A4
+	 * page mpdf() makes
 	 *
 	 * @param string $stream
 	 *
@@ -345,7 +362,42 @@ trait PageStreams
 	}
 
 	/**
-	 * Where a page draws each piece of text: its left edge and baseline, in millimetres from the page's top left corner
+	 * The one rectangle a page fills
+	 *
+	 * @param string $stream
+	 *
+	 * @return array Its x, top, w and h
+	 */
+	private function onlyBox($stream)
+	{
+		$boxes = $this->filledBoxes($stream);
+		$this->assertCount(1, $boxes);
+
+		return $boxes[0];
+	}
+
+	/**
+	 * The first rectangle a page fills that is $width millimetres wide
+	 *
+	 * @param string $stream
+	 * @param float $width
+	 *
+	 * @return array Its x, top, w and h
+	 */
+	private function boxOfWidth($stream, $width)
+	{
+		foreach ($this->filledBoxes($stream) as $box) {
+			if (abs($box['w'] - $width) < 0.01) {
+				return $box;
+			}
+		}
+
+		$this->fail("A box {$width}mm wide should be painted on the page");
+	}
+
+	/**
+	 * Where a page draws each piece of text: its left edge and baseline, in millimetres from the top left corner of
+	 * the A4 page mpdf() makes
 	 *
 	 * @param string $stream
 	 *

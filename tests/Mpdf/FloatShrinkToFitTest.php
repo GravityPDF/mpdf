@@ -14,37 +14,6 @@ class FloatShrinkToFitTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * The first page of a document
-	 *
-	 * @param string $html
-	 * @param array $config
-	 *
-	 * @return string Its content stream
-	 */
-	private function firstPage($html, $config = [])
-	{
-		$pages = $this->pages($this->render($html, $config));
-		$this->assertCount(1, $pages);
-
-		return $pages[0];
-	}
-
-	/**
-	 * The one rectangle a page fills
-	 *
-	 * @param string $page
-	 *
-	 * @return array Its x, top, w and h
-	 */
-	private function onlyBox($page)
-	{
-		$boxes = $this->filledBoxes($page);
-		$this->assertCount(1, $boxes);
-
-		return $boxes[0];
-	}
-
-	/**
 	 * A left float holding one short word is as wide as that word, and the paragraph after it starts beside it on
 	 * the same line
 	 */
@@ -208,16 +177,35 @@ class FloatShrinkToFitTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A float with a width is laid out once
+	 * A float with a width is laid out once, and so is a float with no width whose text wraps: its measuring pass is
+	 * already its layout at the whole width
+	 *
+	 * @dataProvider laidOutOnceProvider
+	 *
+	 * @param string $html
 	 */
-	public function testAFloatWithAWidthIsNotMeasured()
+	public function testAFloatThatKeepsItsWidthIsLaidOutOnce($html)
 	{
 		$mpdf = new UnwindCountingMpdf(['mode' => 'c']);
-		$mpdf->WriteHTML('<div style="float: left; width: 40mm">aa</div><p>bb</p>');
+		$mpdf->WriteHTML($html);
 
 		$this->assertSame(0, $mpdf->unwinds);
+		$this->assertCount(1, $mpdf->floatDivs);
 
 		$mpdf->cleanup();
+	}
+
+	/**
+	 * Floats whose first layout is their layout
+	 *
+	 * @return string[][]
+	 */
+	public function laidOutOnceProvider()
+	{
+		return [
+			'a width' => ['<div style="float: left; width: 40mm">aa</div><p>bb</p>'],
+			'no width, wrapping' => ['<div style="float: left">' . str_repeat('Lorem ipsum dolor sit amet. ', 20) . '</div><p>bb</p>'],
+		];
 	}
 
 	/**

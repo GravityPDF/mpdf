@@ -18,22 +18,6 @@ class FloatContainmentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	const FLOAT = '<div style="float: left; width: 40mm; height: 30mm">aa</div>';
 
 	/**
-	 * The first page of a document
-	 *
-	 * @param string $html
-	 * @param array $config
-	 *
-	 * @return string Its content stream
-	 */
-	private function firstPage($html, $config = [])
-	{
-		$pages = $this->pages($this->render($html, $config));
-		$this->assertCount(1, $pages);
-
-		return $pages[0];
-	}
-
-	/**
 	 * The rectangle filled across the whole content width: the parent's background
 	 *
 	 * @param string $page
@@ -42,13 +26,7 @@ class FloatContainmentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function parentBox($page)
 	{
-		foreach ($this->filledBoxes($page) as $box) {
-			if (abs($box['w'] - 180) < 0.01) {
-				return $box;
-			}
-		}
-
-		$this->fail('The parent should paint its background');
+		return $this->boxOfWidth($page, 180);
 	}
 
 	/**
@@ -144,14 +122,7 @@ class FloatContainmentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$page = $this->firstPage('<div style="position: absolute; top: 50mm; left: 20mm; width: 100mm; background: #ff0">' . self::FLOAT . '</div><p>body</p>');
 
-		$positioned = null;
-		foreach ($this->filledBoxes($page) as $box) {
-			if (abs($box['w'] - 100) < 0.01) {
-				$positioned = $box;
-			}
-		}
-		$this->assertNotNull($positioned, 'The positioned block should paint its background');
-		$this->assertEqualsWithDelta(30, $positioned['h'], 0.01);
+		$this->assertEqualsWithDelta(30, $this->boxOfWidth($page, 100)['h'], 0.01);
 	}
 
 	/**

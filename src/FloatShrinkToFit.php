@@ -12,8 +12,8 @@ namespace Mpdf;
  * float out again from that token.
  *
  * The result is min(max-content, available): a line that wrapped means the content wants more than there was, so
- * the float keeps the width it had. The min-content lower bound is not applied, as mPDF has no notion of it for a
- * block and would break a long word the same either way.
+ * the float keeps the width it had, and the measuring pass stands as its layout. The min-content lower bound is not
+ * applied, as mPDF has no notion of it for a block and would break a long word the same either way.
  */
 class FloatShrinkToFit
 {
@@ -32,6 +32,13 @@ class FloatShrinkToFit
 	 * @var \Mpdf\Mpdf
 	 */
 	private $mpdf;
+
+	/**
+	 * How many floats are being measured, so that a document with none pays nothing per line
+	 *
+	 * @var int
+	 */
+	private $measuring = 0;
 
 	/**
 	 * @param \Mpdf\Mpdf $mpdf
@@ -53,16 +60,7 @@ class FloatShrinkToFit
 	public function start($blklvl, array $snapshot, $token)
 	{
 		$this->mpdf->blk[$blklvl]['float_measure'] = ['state' => $snapshot, 'token' => $token, 'width' => 0, 'wrapped' => false];
-	}
-
-	/**
-	 * @param int $blklvl
-	 *
-	 * @return bool Whether the block at $blklvl is a float being measured
-	 */
-	public function isMeasuring($blklvl)
-	{
-		return isset($this->mpdf->blk[$blklvl]['float_measure']);
+		$this->measuring++;
 	}
 
 	/**
@@ -75,7 +73,9 @@ class FloatShrinkToFit
 	 */
 	public function recordLine($width, $wrapped = false)
 	{
-		$this->record($this->mpdf->blklvl, $width, $wrapped);
+		if ($this->measuring) {
+			$this->record($this->mpdf->blklvl, $width, $wrapped);
+		}
 	}
 
 	/**
@@ -87,46 +87,52 @@ class FloatShrinkToFit
 	 */
 	public function recordBlock($blklvl)
 	{
+		if (!$this->measuring) {
+			return;
+		}
+
 		$blk = $this->mpdf->blk[$blklvl];
-		$box = $blk['border_left']['w'] + $blk['padding_left'] + $blk['css_set_width'] + $blk['padding_right'] + $blk['border_right']['w'];
 		if ($blk['float']) {
-			// A float's margin on its other side has already been set to what is left over
+			// Its margin on the other side has been set to what is left over
 			$box = $blk['float_width'];
 		} else {
-			$box += $blk['margin_left'] + $blk['margin_right'];
+			$box = $blk['margin_left'] + $blk['border_left']['w'] + $blk['padding_left'] + $blk['css_set_width']
+				+ $blk['padding_right'] + $blk['border_right']['w'] + $blk['margin_right'];
 		}
 
 		$this->record($blklvl - 1, $box, false);
 	}
 
 	/**
-	 * Ends the measuring pass of the float at $blklvl. When its start tag is among $tokens, the document is put back
-	 * as it was before the float opened, for the float to be laid out again from that tag. A forced page break closes
-	 * a block with no tokens to come back to; the float then keeps the width it was measured at
+	 * Ends the measuring pass of the float at $blklvl, if it is one. When its content wants less than the width it
+	 * was laid out at and its start tag is among $tokens, the document is put back as it was before the float opened,
+	 * for the float to be laid out again from that tag. Otherwise the pass stands as the float's layout: a forced page
+	 * break closes a block with no tokens to come back to, and a float whose text wrapped has its width already
 	 *
 	 * @param int $blklvl
-	 * @param float $available The width the float was measured at
 	 * @param array $tokens The parser's tokens, as handed to BlockTag::close()
 	 *
-	 * @return array|null The index of the float's start tag and the width to lay it out at, in millimetres
+	 * @return array|null The snapshot, the index of the float's start tag and the width to lay it out at, or null
 	 */
-	public function finish($blklvl, $available, array $tokens)
+	public function finish($blklvl, array $tokens)
 	{
+		if (!isset($this->mpdf->blk[$blklvl]['float_measure'])) {
+			return null;
+		}
+
 		$measure = $this->mpdf->blk[$blklvl]['float_measure'];
-		if (!isset($tokens[$measure['token']])) {
+		$available = $this->mpdf->blk[$blklvl]['css_set_width'];
+		$this->measuring--;
+
+		$width = $measure['wrapped'] || $measure['width'] <= 0 ? $available : min($measure['width'] + self::SLACK, $available);
+		if ($width >= $available || !isset($tokens[$measure['token']])) {
 			unset($this->mpdf->blk[$blklvl]['float_measure']);
+			$this->recordBlock($blklvl);
 
 			return null;
 		}
 
-		$width = $available;
-		if (!$measure['wrapped'] && $measure['width'] > 0) {
-			$width = min($measure['width'] + self::SLACK, $available);
-		}
-
-		$this->mpdf->restoreStateSnapshot($measure['state']);
-
-		return [$measure['token'], $width];
+		return [$measure['state'], $measure['token'], $width];
 	}
 
 	/**
