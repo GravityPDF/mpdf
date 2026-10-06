@@ -319,7 +319,8 @@ class PseudoPageAreaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		return [
 			'block running past the float' => ['<div style="background: #0f0">' . $float . $this->story(20) . '</div>', $areas],
-			'block ending beside the float' => ['<div style="background: #0f0">' . $float . $this->story(2) . '</div>' . $this->story(10), $areas],
+			// The block does not contain the float, so it ends with its own text on page 3, before the float does
+			'block ending beside the float' => ['<div style="background: #0f0">' . $float . $this->story(2) . '</div>' . $this->story(10), array_slice($areas, 0, 3, true)],
 			'float' => [
 				'<div>' . $paintedFloat . $this->story(20) . '</div>',
 				[1 => [120.0, 180.0], 2 => [130.0, 190.0], 3 => [120.0, 180.0], 4 => [130.0, 190.0]],

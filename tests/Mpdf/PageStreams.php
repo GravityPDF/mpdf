@@ -329,6 +329,109 @@ trait PageStreams
 	}
 
 	/**
+	 * The content stream of the first page of a document that has only one
+	 *
+	 * @param string $html
+	 * @param array $config
+	 *
+	 * @return string
+	 */
+	private function firstPage($html, $config = [])
+	{
+		$pages = $this->pages($this->render($html, $config));
+		$this->assertCount(1, $pages);
+
+		return $pages[0];
+	}
+
+	/**
+	 * The rectangles a page fills, in the order they are painted, in millimetres from the top left corner of the A4
+	 * page mpdf() makes
+	 *
+	 * @param string $stream
+	 *
+	 * @return array[] Each with its x, top, w and h
+	 */
+	private function filledBoxes($stream)
+	{
+		preg_match_all('/([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) re f\b/', $stream, $boxes, PREG_SET_ORDER);
+
+		return array_map(function ($box) {
+			return ['x' => $box[1] / Mpdf::SCALE, 'top' => 297 - $box[2] / Mpdf::SCALE, 'w' => $box[3] / Mpdf::SCALE, 'h' => -$box[4] / Mpdf::SCALE];
+		}, $boxes);
+	}
+
+	/**
+	 * The one rectangle a page fills
+	 *
+	 * @param string $stream
+	 *
+	 * @return array Its x, top, w and h
+	 */
+	private function onlyBox($stream)
+	{
+		$boxes = $this->filledBoxes($stream);
+		$this->assertCount(1, $boxes);
+
+		return $boxes[0];
+	}
+
+	/**
+	 * The first rectangle a page fills that is $width millimetres wide
+	 *
+	 * @param string $stream
+	 * @param float $width
+	 *
+	 * @return array Its x, top, w and h
+	 */
+	private function boxOfWidth($stream, $width)
+	{
+		foreach ($this->filledBoxes($stream) as $box) {
+			if (abs($box['w'] - $width) < 0.01) {
+				return $box;
+			}
+		}
+
+		$this->fail("A box {$width}mm wide should be painted on the page");
+	}
+
+	/**
+	 * Where a page draws each piece of text: its left edge and baseline, in millimetres from the top left corner of
+	 * the A4 page mpdf() makes
+	 *
+	 * @param string $stream
+	 *
+	 * @return array[] Each with its text, x and y
+	 */
+	private function drawnTextPositions($stream)
+	{
+		preg_match_all('/BT ([\d.]+) ([\d.]+) Td.*?\((.*?)\) Tj/s', $stream, $drawn, PREG_SET_ORDER);
+
+		return array_map(function ($text) {
+			return ['text' => $text[3], 'x' => $text[1] / Mpdf::SCALE, 'y' => 297 - $text[2] / Mpdf::SCALE];
+		}, $drawn);
+	}
+
+	/**
+	 * Where a page draws the first piece of text that starts with $text
+	 *
+	 * @param string $text
+	 * @param string $stream
+	 *
+	 * @return array Its x and y
+	 */
+	private function positionOf($text, $stream)
+	{
+		foreach ($this->drawnTextPositions($stream) as $drawn) {
+			if (strpos($drawn['text'], $text) === 0) {
+				return $drawn;
+			}
+		}
+
+		$this->fail("'$text' should be drawn on the page");
+	}
+
+	/**
 	 * $needle appears $count times in the string for page $page and not at all in the others
 	 */
 	private function assertOnlyOnPage($page, $count, $needle, array $strings, $what)

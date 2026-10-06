@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Mpdf\Css\TextDecorations;
+use Mpdf\Tag\BlockTag;
 
 /**
  * Keeps the tree of elements in the HTML WriteHTML() reads, so that each CSS rule can be applied to the elements its
@@ -611,9 +612,12 @@ trait TracksOpenElements
 	 */
 	private function newChildFrame(array $parent, $tag, array $attr)
 	{
-		// Marks a page-break-inside: avoid block laid out a second time. unset() would copy the array even without it
-		if (isset($attr['PAGEBREAKAVOIDCHECKED'])) {
-			unset($attr['PAGEBREAKAVOIDCHECKED']);
+		// The markers of a block laid out a second time are not the element's. unset() would copy the array even
+		// without them
+		foreach (BlockTag::LOOK_AHEAD_MARKERS as $marker) {
+			if (isset($attr[$marker])) {
+				unset($attr[$marker]);
+			}
 		}
 
 		$nthChild = count($parent['children']) + 1;

@@ -777,6 +777,7 @@ class Table extends Tag
 			}
 			$this->mpdf->_tableColumnWidth($this->mpdf->table[1][1], true);
 			$this->mpdf->_tableWidth($this->mpdf->table[1][1]);
+			$this->recordWidthForFloat();
 		} else {
 			if (!$this->mpdf->kwt_saved) {
 				$this->mpdf->kwt_height = 0;
@@ -834,6 +835,7 @@ class Table extends Tag
 
 			// Top level table
 			$this->mpdf->_tableWidth($this->mpdf->table[1][1]);
+			$this->recordWidthForFloat();
 		}
 
 		// Now work through any nested tables setting child table[w'] = parent cell['w']
@@ -1347,5 +1349,16 @@ class Table extends Tag
 		}
 
 		return $ret;
+	}
+
+	/**
+	 * Records the top-level table's width for a float with no width that is being measured around it
+	 *
+	 * @return void
+	 */
+	private function recordWidthForFloat()
+	{
+		$table = $this->mpdf->table[1][1];
+		$this->floatShrinkToFit->recordLine(isset($table['w']) ? $table['w'] : $this->mpdf->blk[$this->mpdf->blklvl]['inner_width']);
 	}
 }

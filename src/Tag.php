@@ -4,6 +4,7 @@ namespace Mpdf;
 
 use Mpdf\Strict;
 use Mpdf\Color\ColorConverter;
+use Mpdf\FloatShrinkToFit;
 use Mpdf\Image\ImageProcessor;
 use Mpdf\Language\LanguageToFontInterface;
 
@@ -79,6 +80,11 @@ class Tag
 	private $languageToFont;
 
 	/**
+	 * @var \Mpdf\FloatShrinkToFit
+	 */
+	private $floatShrinkToFit;
+
+	/**
 	 * @param \Mpdf\Mpdf $mpdf
 	 * @param \Mpdf\Cache $cache
 	 * @param \Mpdf\CssManager $cssManager
@@ -89,6 +95,7 @@ class Tag
 	 * @param \Mpdf\Color\ColorConverter $colorConverter
 	 * @param \Mpdf\Image\ImageProcessor $imageProcessor
 	 * @param \Mpdf\Language\LanguageToFontInterface $languageToFont
+	 * @param \Mpdf\FloatShrinkToFit $floatShrinkToFit
 	 */
 	public function __construct(
 		Mpdf $mpdf,
@@ -100,7 +107,8 @@ class Tag
 		SizeConverter $sizeConverter,
 		ColorConverter $colorConverter,
 		ImageProcessor $imageProcessor,
-		LanguageToFontInterface $languageToFont
+		LanguageToFontInterface $languageToFont,
+		FloatShrinkToFit $floatShrinkToFit
 	) {
 
 		$this->mpdf = $mpdf;
@@ -113,6 +121,7 @@ class Tag
 		$this->colorConverter = $colorConverter;
 		$this->imageProcessor = $imageProcessor;
 		$this->languageToFont = $languageToFont;
+		$this->floatShrinkToFit = $floatShrinkToFit;
 	}
 
 	/**
@@ -133,7 +142,8 @@ class Tag
 				$this->sizeConverter,
 				$this->colorConverter,
 				$this->imageProcessor,
-				$this->languageToFont
+				$this->languageToFont,
+				$this->floatShrinkToFit
 			);
 		}
 	}
