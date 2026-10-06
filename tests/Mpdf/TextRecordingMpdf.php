@@ -53,6 +53,9 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 	/** The TextVars bits each of those lines was drawn with, in the same order. */
 	public $drawnTextVars = [];
 
+	/** How far each of those lines was raised off the baseline, in mm, negative for lowered, in the same order. */
+	public $drawnBaselineShifts = [];
+
 	/**
 	 * The text decorations each of those lines was drawn with, in the same order: for each of underline, line-through
 	 * and overline drawn, the colour operator, font, font size and baseline shift of the element that set it
@@ -116,6 +119,7 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 			$this->drawnFontStyles[] = $this->FontStyle;
 			$this->drawnShadows[] = $this->textshadow;
 			$this->drawnTextVars[] = $textvar;
+			$this->drawnBaselineShifts[] = $this->baselineShiftDrawn($textvar);
 			$this->drawnDecorations[] = $this->decorationsDrawn($textvar);
 		}
 
@@ -134,6 +138,23 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 		}
 
 		return $this->writingHTMLfooter ? 'footer' : ($this->writingHTMLheader ? 'header' : '');
+	}
+
+	/**
+	 * How far Cell() moves text off the baseline with the TextVars bits given, as it reads the shift from the text
+	 * parameters
+	 *
+	 * @param int $textvar
+	 *
+	 * @return float In mm
+	 */
+	private function baselineShiftDrawn($textvar)
+	{
+		if ($textvar & (Css\TextVars::FA_SUPERSCRIPT | Css\TextVars::FA_SUBSCRIPT)) {
+			return $this->textparam['text-baseline'];
+		}
+
+		return 0;
 	}
 
 	/**

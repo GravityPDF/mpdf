@@ -78,6 +78,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A length given in `em`, `ex`, `ch` or `rem` is inherited as the length it came to, not as the unit read again at the child's size. `letter-spacing: 0.1em` on a 20pt block spaces the letters of a 10pt paragraph in it 2pt apart, not 1pt. `inherit` on a length that is not inherited, such as `padding-left: inherit`, takes it in the same way.
   * The content of a positioned block draws `line-height: normal` as the rest of the document does. It used to be drawn at a fixed 1.33, which with DejaVu Sans or Times sets the lines a little further apart. To keep the old spacing, add `line-height: 1.33` to the positioned block.
   * A bidirectional embedding, as in `<span dir="rtl">…<div>…</div>…</span>`, is opened again for the inline element's text after the block.
+* **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
 
 New features
 ------------
@@ -947,3 +948,5 @@ These changes do not change output.
 [#683]: https://github.com/GravityPDF/mpdf/pull/683
 [#640]: https://github.com/GravityPDF/mpdf/issues/640
 [#679]: https://github.com/GravityPDF/mpdf/pull/679
+[#649]: https://github.com/GravityPDF/mpdf/issues/649
+[#680]: https://github.com/GravityPDF/mpdf/pull/680

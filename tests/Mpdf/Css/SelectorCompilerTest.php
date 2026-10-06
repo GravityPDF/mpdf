@@ -309,8 +309,8 @@ class SelectorCompilerTest extends TestCase
 			'a combinator at the end' => ['div >'],
 			'a combinator at the start' => ['> p'],
 			'two combinators together' => ['div > + p'],
-			'a tag mPDF does not style' => ['sup'],
-			'a tag mPDF does not style as an ancestor' => ['sup > b'],
+			'a tag mPDF does not style' => ['ruby'],
+			'a tag mPDF does not style as an ancestor' => ['ruby > b'],
 			'a pseudo-element' => ['p::before'],
 			'a pseudo-element written with one colon is not a pseudo-class mPDF knows' => ['p:before'],
 			'a pseudo-class that looks inside the element' => ['li:has(> a)'],
@@ -483,10 +483,10 @@ class SelectorCompilerTest extends TestCase
 	 */
 	public function testFollowsTheAllowedTagsWhenTheyChange()
 	{
-		$this->assertNull($this->compiler->compile('sup'));
+		$this->assertNull($this->compiler->compile('ruby'));
 
-		$this->mpdf->allowedCSStags .= '|SUP';
+		$this->mpdf->allowedCSStags .= '|RUBY';
 
-		$this->assertNotNull($this->compiler->compile('sup'));
+		$this->assertNotNull($this->compiler->compile('ruby'));
 	}
 }

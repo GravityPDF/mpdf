@@ -321,7 +321,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'marker, selection and placeholder' => ['li::marker, p::selection, input::placeholder'],
 			'first-line and first-letter' => ['p::first-line, p:first-letter'],
 			'has' => ['li:has(> a)'],
-			'a tag outside allowedCSStags' => ['div > sup'],
+			'a tag outside allowedCSStags' => ['div > ruby'],
 		];
 	}
 
