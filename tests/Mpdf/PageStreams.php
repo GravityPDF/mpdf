@@ -329,6 +329,57 @@ trait PageStreams
 	}
 
 	/**
+	 * The rectangles a page fills, in the order they are painted, in millimetres from the page's top left corner
+	 *
+	 * @param string $stream
+	 *
+	 * @return array[] Each with its x, top, w and h
+	 */
+	private function filledBoxes($stream)
+	{
+		preg_match_all('/([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) re f\b/', $stream, $boxes, PREG_SET_ORDER);
+
+		return array_map(function ($box) {
+			return ['x' => $box[1] / Mpdf::SCALE, 'top' => 297 - $box[2] / Mpdf::SCALE, 'w' => $box[3] / Mpdf::SCALE, 'h' => -$box[4] / Mpdf::SCALE];
+		}, $boxes);
+	}
+
+	/**
+	 * Where a page draws each piece of text: its left edge and baseline, in millimetres from the page's top left corner
+	 *
+	 * @param string $stream
+	 *
+	 * @return array[] Each with its text, x and y
+	 */
+	private function drawnTextPositions($stream)
+	{
+		preg_match_all('/BT ([\d.]+) ([\d.]+) Td.*?\((.*?)\) Tj/s', $stream, $drawn, PREG_SET_ORDER);
+
+		return array_map(function ($text) {
+			return ['text' => $text[3], 'x' => $text[1] / Mpdf::SCALE, 'y' => 297 - $text[2] / Mpdf::SCALE];
+		}, $drawn);
+	}
+
+	/**
+	 * Where a page draws the first piece of text that starts with $text
+	 *
+	 * @param string $text
+	 * @param string $stream
+	 *
+	 * @return array Its x and y
+	 */
+	private function positionOf($text, $stream)
+	{
+		foreach ($this->drawnTextPositions($stream) as $drawn) {
+			if (strpos($drawn['text'], $text) === 0) {
+				return $drawn;
+			}
+		}
+
+		$this->fail("'$text' should be drawn on the page");
+	}
+
+	/**
 	 * $needle appears $count times in the string for page $page and not at all in the others
 	 */
 	private function assertOnlyOnPage($page, $count, $needle, array $strings, $what)

@@ -10,6 +10,7 @@ use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
 use Mpdf\Css\TextDecorations;
 use Mpdf\CssMode;
+use Mpdf\FloatShrinkToFit;
 use Mpdf\Mpdf;
 use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
@@ -486,6 +487,13 @@ abstract class BlockTag extends Tag
 			$snapshot = $this->mpdf->getStateSnapshot();
 		}
 
+		// A float with no width is laid out the same way: once to measure its content, then again at that width
+		// (FloatShrinkToFit). Not when a forced page break opens it again, which hands over no tokens to come back to
+		$measure = null;
+		if ($this->shrinksToFit($p, $attr) && isset($ahtml[$ihtml])) {
+			$measure = $snapshot === null ? $this->mpdf->getStateSnapshot() : $snapshot;
+		}
+
 		// mPDF 6 pagebreaktype - moved after pagebreak
 		$this->mpdf->blklvl++;
 		$currblk = & $this->mpdf->blk[$this->mpdf->blklvl];
@@ -603,6 +611,11 @@ abstract class BlockTag extends Tag
 		$pdr = $currblk['padding_right'];
 		$pdl = $currblk['padding_left'];
 
+		// The width the measuring pass found for a float with no width of its own
+		if (isset($attr[FloatShrinkToFit::ATTRIBUTE]) && !isset($currblk['css_set_width']) && $this->mpdf->cssMode === CssMode::STANDARD) {
+			$currblk['css_set_width'] = (float) $attr[FloatShrinkToFit::ATTRIBUTE];
+		}
+
 		$setwidth = 0;
 		if (isset($currblk['css_set_width'])) {
 			$setwidth = $currblk['css_set_width'];
@@ -643,11 +656,14 @@ abstract class BlockTag extends Tag
 			$currblk['float_start_y'] = $this->mpdf->y;
 
 			if (isset($currblk['css_set_width'])) {
+				if (isset($attr[FloatShrinkToFit::ATTRIBUTE])) {
+					$setwidth = $currblk['css_set_width'] = min($setwidth, $container_w - ($currblk['margin_left'] + $currblk['margin_right'] + $bdl + $pdl + $bdr + $pdr));
+				}
 				$currblk['margin_left'] = $container_w - ($setwidth + $bdl + $pdl + $bdr + $pdr + $currblk['margin_right']);
 				$currblk['float_width'] = ($setwidth + $bdl + $pdl + $bdr + $pdr + $currblk['margin_right']);
 			} else {
-				// *** If no width set - would need to buffer and keep track of max width, then Right-align if not full width
-				// and do borders and backgrounds - For now - just set to maximum width left
+				// No width: the whole width left. In standard mode that is the measuring pass, and the float is laid
+				// out again at the width of its content
 
 				if ($l_exists) {
 					$currblk['margin_left'] += $l_width;
@@ -655,6 +671,10 @@ abstract class BlockTag extends Tag
 				$currblk['css_set_width'] = $container_w - ($currblk['margin_left'] + $currblk['margin_right'] + $bdl + $pdl + $bdr + $pdr);
 
 				$currblk['float_width'] = ($currblk['css_set_width'] + $bdl + $pdl + $bdr + $pdr + $currblk['margin_right']);
+
+				if ($measure !== null) {
+					$this->floatShrinkToFit->start($this->mpdf->blklvl, $measure, $ihtml);
+				}
 			}
 
 		} elseif ($float === 'LEFT' && !$this->mpdf->ColActive) {
@@ -688,11 +708,14 @@ abstract class BlockTag extends Tag
 			$currblk['float'] = 'L';
 			$currblk['float_start_y'] = $this->mpdf->y;
 			if ($setwidth) {
+				if (isset($attr[FloatShrinkToFit::ATTRIBUTE])) {
+					$setwidth = $currblk['css_set_width'] = min($setwidth, $container_w - ($currblk['margin_left'] + $currblk['margin_right'] + $bdl + $pdl + $bdr + $pdr));
+				}
 				$currblk['margin_right'] = $container_w - ($setwidth + $bdl + $pdl + $bdr + $pdr + $currblk['margin_left']);
 				$currblk['float_width'] = ($setwidth + $bdl + $pdl + $bdr + $pdr + $currblk['margin_left']);
 			} else {
-				// *** If no width set - would need to buffer and keep track of max width, then Right-align if not full width
-				// and do borders and backgrounds - For now - just set to maximum width left
+				// No width: the whole width left. In standard mode that is the measuring pass, and the float is laid
+				// out again at the width of its content
 
 				if ($r_exists) {
 					$currblk['margin_right'] += $r_width;
@@ -700,6 +723,10 @@ abstract class BlockTag extends Tag
 				$currblk['css_set_width'] = $container_w - ($currblk['margin_left'] + $currblk['margin_right'] + $bdl + $pdl + $bdr + $pdr);
 
 				$currblk['float_width'] = ($currblk['css_set_width'] + $bdl + $pdl + $bdr + $pdr + $currblk['margin_left']);
+
+				if ($measure !== null) {
+					$this->floatShrinkToFit->start($this->mpdf->blklvl, $measure, $ihtml);
+				}
 			}
 		} else {
 			// Don't allow overlap - if floats present - adjust padding to avoid overlap with Floats
@@ -729,6 +756,13 @@ abstract class BlockTag extends Tag
 			}
 			if ($l_exists) {
 				$currblk['padding_left'] = max($l_width - $currblk['margin_left'] - $bdl, $pdl);
+			}
+
+			// A block that starts a block formatting context contains its floats, and its floats reach nothing outside
+			if ($this->mpdf->cssMode === CssMode::STANDARD && $this->startsBlockFormattingContext($properties)) {
+				$currblk['float_container'] = true;
+				$this->mpdf->blockContext++;
+				$currblk['blockContext'] = $this->mpdf->blockContext;
 			}
 		}
 		/* -- END CSS-FLOAT -- */
@@ -841,6 +875,10 @@ abstract class BlockTag extends Tag
 		}
 
 		if (isset($currblk['css_set_width'])) {
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				$this->floatShrinkToFit->recordBlock($this->mpdf->blklvl);
+			}
+
 			if (isset($properties['MARGIN-LEFT'], $properties['MARGIN-RIGHT'])
 				&& strtolower($properties['MARGIN-LEFT']) === 'auto' && strtolower($properties['MARGIN-RIGHT']) === 'auto') {
 				// Try to reduce margins to accomodate - if still too wide, set margin-right/left=0 (reduces width)
@@ -910,9 +948,9 @@ abstract class BlockTag extends Tag
 		$currblk['inner_width'] = $currblk['width']
 			- ($currblk['border_left']['w'] + $currblk['padding_left'] + $currblk['border_right']['w'] + $currblk['padding_right']);
 
-		// Check DIV is not now too narrow to fit text
+		// Check DIV is not now too narrow to fit text. A float sized to its content is as narrow as that content
 		$mw = 2 * $this->mpdf->GetCharWidth('W', false);
-		if ($currblk['inner_width'] < $mw) {
+		if ($currblk['inner_width'] < $mw && !isset($attr[FloatShrinkToFit::ATTRIBUTE])) {
 			$currblk['padding_left'] = 0;
 			$currblk['padding_right'] = 0;
 			$currblk['border_left']['w'] = 0.2;
@@ -1318,6 +1356,18 @@ abstract class BlockTag extends Tag
 			$this->mpdf->ispre = false;
 		}
 
+		// A float with no width has been laid out to measure its content. The document goes back to before it
+		// opened, the width goes into its start tag, and the float is laid out again from that token
+		if ($this->floatShrinkToFit->isMeasuring($this->mpdf->blklvl)) {
+			$measured = $this->floatShrinkToFit->finish($this->mpdf->blklvl, $this->mpdf->blk[$this->mpdf->blklvl]['css_set_width'], $ahtml);
+			if ($measured !== null) {
+				list($i, $width) = $measured;
+				$ahtml[$i] .= sprintf(' %s="%.6F"', strtolower(FloatShrinkToFit::ATTRIBUTE), $width);
+				$ihtml = $i - 1; // the parser advances onto the same token
+				return;
+			}
+		}
+
 		/* -- CSS-FLOAT -- */
 		// A page-break-inside:avoid block that ran onto another page is unwound below, its own float close included:
 		// skipping it here also leaves the position where the float ended for the check
@@ -1333,11 +1383,20 @@ abstract class BlockTag extends Tag
 			$this->mpdf->Reset();
 			$this->mpdf->pageoutput[$this->mpdf->page] = [];
 
+			// Where the float ends, for each ancestor to extend its bottom to. In standard mode only the nearest ancestor
+			// that starts a block formatting context contains the float, as in CSS; legacy mode has every ancestor do
+			$standard = $this->mpdf->cssMode === CssMode::STANDARD;
 			for ($i = ($this->mpdf->blklvl - 1); $i >= 0; $i--) {
+				if ($standard && !$this->containsFloats($this->mpdf->blk[$i], $i)) {
+					continue;
+				}
 				if (isset($this->mpdf->blk[$i]['float_endpos'])) {
 					$this->mpdf->blk[$i]['float_endpos'] = max($this->mpdf->blk[$i]['float_endpos'], $this->mpdf->page * 1000 + $this->mpdf->y);
 				} else {
 					$this->mpdf->blk[$i]['float_endpos'] = $this->mpdf->page * 1000 + $this->mpdf->y;
+				}
+				if ($standard) {
+					break;
 				}
 			}
 
@@ -1401,6 +1460,16 @@ abstract class BlockTag extends Tag
 			$this->mpdf->keep_block_together = false;
 		}
 
+		// A float this block did not contain sticks out of it, so for the blocks that follow it counts as one of their
+		// siblings and they flow beside it
+		if ($this->mpdf->cssMode === CssMode::STANDARD && isset($blk['blockContext']) && !$this->containsFloats($blk, $this->mpdf->blklvl)) {
+			foreach ($this->mpdf->floatDivs as $k => $f) {
+				if ($f['blockContext'] == $blk['blockContext'] && $f['blklvl'] > $this->mpdf->blklvl) {
+					$this->mpdf->floatDivs[$k]['blklvl'] = $this->mpdf->blklvl;
+				}
+			}
+		}
+
 		if ($this->mpdf->blklvl > 0) { // ==0 SHOULDN'T HAPPEN - NOT XHTML
 			if ($this->mpdf->blk[$this->mpdf->blklvl]['tag'] == $tag) {
 				unset($this->mpdf->blk[$this->mpdf->blklvl]);
@@ -1432,6 +1501,58 @@ abstract class BlockTag extends Tag
 				}
 			}
 		}
+	}
+
+	/**
+	 * Whether this block is a float with no width whose content is to be measured, so that it can be laid out at the
+	 * width of its content. Only in standard mode: legacy mode gives it the whole width left on the line
+	 *
+	 * @param array $p The block's properties, as PreviewBlockCSS() reads them
+	 * @param array $attr
+	 *
+	 * @return bool
+	 */
+	private function shrinksToFit(array $p, array $attr)
+	{
+		return $this->mpdf->cssMode === CssMode::STANDARD
+			&& !$this->mpdf->ColActive
+			&& isset($p['FLOAT']) && in_array(strtoupper($p['FLOAT']), ['LEFT', 'RIGHT'], true)
+			&& (!isset($p['WIDTH']) || strtolower($p['WIDTH']) === 'auto')
+			&& !isset($attr[FloatShrinkToFit::ATTRIBUTE]);
+	}
+
+	/**
+	 * Whether a block that is not itself a float starts a block formatting context: `overflow` other than visible,
+	 * `display: flow-root`, or the <div> standing in for a positioned block
+	 *
+	 * @param array $properties
+	 *
+	 * @return bool
+	 */
+	private function startsBlockFormattingContext(array $properties)
+	{
+		if (isset($properties['OVERFLOW']) && strtolower($properties['OVERFLOW']) !== 'visible') {
+			return true;
+		}
+		if (isset($properties['DISPLAY']) && strtolower($properties['DISPLAY']) === 'flow-root') {
+			return true;
+		}
+
+		return $this->mpdf->blklvl == 1 && $this->mpdf->fixedPosBlockCascadeCSS !== null;
+	}
+
+	/**
+	 * Whether the block contains the floats inside it, extending its bottom to theirs: the body, a float, or a block
+	 * that starts a block formatting context
+	 *
+	 * @param array $blk
+	 * @param int $level Its level on the block stack
+	 *
+	 * @return bool
+	 */
+	private function containsFloats(array $blk, $level)
+	{
+		return $level == 0 || !empty($blk['float']) || !empty($blk['float_container']);
 	}
 
 }

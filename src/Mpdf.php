@@ -961,6 +961,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private $roundedBox;
 
 	/**
+	 * @var \Mpdf\FloatShrinkToFit
+	 */
+	private $floatShrinkToFit;
+
+	/**
 	 * @var \Mpdf\Image\Bmp
 	 */
 	private $bmp;
@@ -7587,6 +7592,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$WidthCorrection = ($ti * Mpdf::SCALE);
 		}
 
+		if (!$is_table) {
+			$this->floatShrinkToFit->recordLine($fpaddingL + ($WidthCorrection + $contentWidth) / Mpdf::SCALE);
+		}
 
 		// PADDING and BORDER spacing/fill
 		if (($newblock) && ($blockstate == 1 || $blockstate == 3) && (($this->blk[$this->blklvl]['padding_top']) || ($this->blk[$this->blklvl]['border_top'])) && ($lineCount == 0) && (!$is_table)) {
@@ -9373,8 +9381,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$lastitalic = 0;
 				}
 
-
-
+				if (!$is_table) {
+					$this->floatShrinkToFit->recordLine($fpaddingL + ($WidthCorrection + $contentWidth) / Mpdf::SCALE, true);
+				}
 
 				// NOW FORMAT THE LINE TO OUTPUT
 				if (!$table_draft) {

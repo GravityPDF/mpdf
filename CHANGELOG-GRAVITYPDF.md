@@ -79,6 +79,9 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * The content of a positioned block draws `line-height: normal` as the rest of the document does. It used to be drawn at a fixed 1.33, which with DejaVu Sans or Times sets the lines a little further apart. To keep the old spacing, add `line-height: 1.33` to the positioned block.
   * A bidirectional embedding, as in `<span dir="rtl">…<div>…</div>…</span>`, is opened again for the inline element's text after the block.
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
+* **A float with no `width` is as wide as its content, and only a block that starts a block formatting context contains its floats**, as in a browser, under the standard `cssMode`. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old layout, or give the float a `width` and its parent `overflow: hidden`. [#552] [#590] [#694]
+  * A float without a `width` took the whole width left on the line, so nothing flowed beside it. It is now as wide as the widest line, table or block of set width inside it, up to the width available, and the text after it flows beside it. A float whose text wraps still takes the whole width. The float is laid out twice to find that width, as a `page-break-inside: avoid` block is.
+  * Every ancestor of a float grew to the float's bottom, and whatever followed the ancestor went below the float. Now only the body, a float, a positioned block, and a block with `overflow` other than `visible` or with `display: flow-root` contain their floats. A float sticks out of any other parent, and the blocks after that parent flow beside it. A `<div style="clear: both"></div>` at the end of the parent still makes it contain the float, as a clearfix does, and a `clear` inside a block that starts a block formatting context no longer moves below the floats outside it.
 
 New features
 ------------
@@ -956,3 +959,5 @@ These changes do not change output.
 [#681]: https://github.com/GravityPDF/mpdf/pull/681
 [#630]: https://github.com/GravityPDF/mpdf/issues/630
 [#682]: https://github.com/GravityPDF/mpdf/pull/682
+[#590]: https://github.com/GravityPDF/mpdf/issues/590
+[#694]: https://github.com/GravityPDF/mpdf/pull/694
