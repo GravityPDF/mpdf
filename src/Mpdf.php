@@ -14,6 +14,7 @@ use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextVars;
+use Mpdf\Css\WidthConstraints;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
@@ -15594,6 +15595,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($checkinnerhtml == '' && $inner_w === 'auto') {
 				$inner_w = 2 * $this->GetCharWidth('W', false);
 			}
+			// A width that min-width or max-width changes goes through the algorithm below as a set width
+			$widthConstraints = new WidthConstraints($this->sizeConverter, $this->cssMode === CssMode::STANDARD ? $p : [], $cont_w, $this->FontSize);
+			if ($inner_w !== 'auto') {
+				$inner_w = $widthConstraints->clamp($inner_w);
+			} elseif ($bbox_left !== 'auto' && $bbox_right !== 'auto') {
+				$available = $cont_w - $bbox_left - $bbox_right - $bbox_bl - $bbox_pl - $bbox_pr - $bbox_br
+					- ($bbox_ml === 'auto' ? 0 : $bbox_ml) - ($bbox_mr === 'auto' ? 0 : $bbox_mr);
+				$clamped = $widthConstraints->clamp($available);
+				if ($clamped != $available) {
+					$inner_w = $clamped;
+				}
+			}
 			// ================================================================
 			// Algorithm from CSS2.1  See http://www.w3.org/TR/CSS21/visudet.html#abs-non-replaced-height
 			// mPD 5.3.14
@@ -15768,7 +15781,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->maxPosR = 0;
 				$this->maxPosL = $this->w; // For RTL
 				$this->WriteHTML($html, HTMLParserMode::HTML_HEADER_BUFFER);
-				$inner_w = $this->maxPosR - $this->lMargin;
+				$inner_w = $widthConstraints->clamp($this->maxPosR - $this->lMargin);
 				if ($bbox_right_auto) {
 					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml;
 				} elseif ($bbox_left_auto) {

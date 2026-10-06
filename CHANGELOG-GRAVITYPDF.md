@@ -79,6 +79,8 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * The content of a positioned block draws `line-height: normal` as the rest of the document does. It used to be drawn at a fixed 1.33, which with DejaVu Sans or Times sets the lines a little further apart. To keep the old spacing, add `line-height: 1.33` to the positioned block.
   * A bidirectional embedding, as in `<span dir="rtl">…<div>…</div>…</span>`, is opened again for the inline element's text after the block.
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
+* **`min-width` and `max-width` hold the width of a block**, as in a browser, in standard mode. mPDF never read them on a block, so `max-width: 100mm; margin: 0 auto`, the usual centred container, filled the page, `width: 150mm; max-width: 100mm` was 150mm wide, and `width: 50mm; min-width: 80mm` was 50mm. Now the width is held within the two, `max-width` first, then `min-width`, a percentage taken of the container's inner width as `width` is, and the block's auto margins, direction or float place the narrowed box. Floats and positioned blocks take the same limits. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore the two properties as before. [#588] [#691]
+  * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
 
 New features
 ------------
@@ -957,5 +959,7 @@ These changes do not change output.
 [#681]: https://github.com/GravityPDF/mpdf/pull/681
 [#630]: https://github.com/GravityPDF/mpdf/issues/630
 [#682]: https://github.com/GravityPDF/mpdf/pull/682
+[#588]: https://github.com/GravityPDF/mpdf/issues/588
+[#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
