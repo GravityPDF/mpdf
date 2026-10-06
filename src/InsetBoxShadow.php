@@ -2,6 +2,8 @@
 
 namespace Mpdf;
 
+use Mpdf\Color\ColorConverter;
+
 /**
  * An inset box-shadow as PDF operators. The shadow is clipped to the padding box and fills it in from the padding
  * edge to the shape offset and shrunk by the spread. A blur fades it out across a ring around that shape, drawn as
@@ -69,34 +71,30 @@ class InsetBoxShadow
 		$w = $box['x1'] - $x0;
 		$h = $box['y1'] - $y0;
 		$blur = $shadow['blur'];
-		$spread = $shadow['spread'];
-
-		// The clear shape keeps a size, as the outer shadow's solid shape does
-		if ($spread + $blur / 2 > min($w, $h) / 2) {
-			$spread = min($w, $h) / 2 - $blur / 2 - 0.01;
-		}
-		$solidEdge = $spread - $blur / 2;
+		$solidEdge = $shadow['spread'] - $blur / 2;
 
 		$s = ' q 0 w ' . $this->roundedBox->path($pageHeight, $x0, $y0, $box['x1'], $box['y1'], $box['radii']) . ' W n' . "\n";
 		if ($shadow['x'] || $shadow['y']) {
-			$s .= sprintf(' q 1 0 0 1 %.4F %.4F cm', $shadow['x'] * $k, -$shadow['y'] * $k) . "\n";
+			$s .= sprintf('1 0 0 1 %.4F %.4F cm', $shadow['x'] * $k, -$shadow['y'] * $k) . "\n";
 		}
-		$s .= ' q 0 w ' . $this->mpdf->SetFColor($colour, true) . "\n" . $this->alpha($colour);
+		$s .= ' q ' . $this->mpdf->SetFColor($colour, true) . "\n" . $this->alpha($colour);
 
-		$ring = $this->ring($x0 + $solidEdge, $y0 + $solidEdge, $w - 2 * $solidEdge, $h - 2 * $solidEdge, $blur, $this->shrunk($box['radii'], $solidEdge));
-
-		// Whatever the clip lets through outside the solid edge, however far the shape is offset
+		// Whatever the clip lets through, however far the shape is offset
 		$dx = abs($shadow['x']);
 		$dy = abs($shadow['y']);
 		$s .= sprintf('%.3F %.3F %.3F %.3F re ', ($x0 - $dx) * $k, ($pageHeight - $y0 + $dy) * $k, ($w + 2 * $dx) * $k, -($h + 2 * $dy) * $k);
+
+		if ($w <= 2 * $solidEdge || $h <= 2 * $solidEdge) {
+			// The spread has closed the shape, and the shadow is solid throughout
+			return $s . 'f Q' . "\n" . ' Q' . "\n";
+		}
+
+		$sides = ['top' => $solidEdge, 'right' => $solidEdge, 'bottom' => $solidEdge, 'left' => $solidEdge];
+		$ring = $this->ring($x0 + $solidEdge, $y0 + $solidEdge, $w - 2 * $solidEdge, $h - 2 * $solidEdge, $blur, $this->roundedBox->inset($box['radii'], $sides));
 		$s .= $this->outerEdge($ring) . 'h f* Q' . "\n";
 
 		if ($blur) {
 			$s .= $this->gradient->CoonsPatchMesh($ring['x'], $ring['y'], $ring['w'], $ring['h'], $this->patches($ring, $colour, $faded), $ring['x'], $ring['x'] + $ring['w'], $ring['y'], $ring['y'] + $ring['h'], $colspace, true);
-		}
-
-		if ($shadow['x'] || $shadow['y']) {
-			$s .= ' Q' . "\n";
 		}
 
 		return $s . ' Q' . "\n";
@@ -111,40 +109,15 @@ class InsetBoxShadow
 	 */
 	private function alpha($colour)
 	{
-		$opacity = 100;
-		if ($colour[0] === '5') {
-			$opacity = ord($colour[4]);
-		} elseif ($colour[0] === '6') {
-			$opacity = ord($colour[5]);
-		} elseif ($colour[0] === '1' && $colour[2] === '1') {
-			$opacity = ord($colour[3]);
-		}
+		$alpha = ColorConverter::alpha($colour);
 
-		return $opacity < 100 ? $this->mpdf->SetAlpha($opacity / 100, 'Normal', true, 'F') . "\n" : '';
-	}
-
-	/**
-	 * Radii moved in by $d on every side, stopping at square
-	 *
-	 * @param array $radii
-	 * @param float $d
-	 *
-	 * @return array
-	 */
-	private function shrunk($radii, $d)
-	{
-		foreach ($radii as $corner => $r) {
-			$radii[$corner] = [max(0, $r[0] - $d), max(0, $r[1] - $d)];
-		}
-
-		return $radii;
+		return $alpha !== null && $alpha < 1 ? $this->mpdf->SetAlpha($alpha, 'Normal', true, 'F') . "\n" : '';
 	}
 
 	/**
 	 * The ring of width $width inside the rounded rectangle given, as its box and the points of its four corners. A
-	 * corner rounder than the ring is wide keeps a concentric arc on the inner edge; a tighter one comes to a point
-	 * there, with the outer edge curving round the point at the ring's width, as an outer shadow's blur does round a
-	 * square corner.
+	 * corner tighter than the ring is wide is widened to it on the outer edge and comes to a point on the inner one,
+	 * as an outer shadow's blur rounds a square corner. A ring wider than half the box is only as wide as that.
 	 *
 	 * @param float $x
 	 * @param float $y
@@ -155,14 +128,13 @@ class InsetBoxShadow
 	 *
 	 * @return array Keyed x, y, w, h and corners; each corner has its outer arc's start and end (outer), the control
 	 * points between them (outerControls), the inner arc's start and end (inner) and its control points
-	 * (innerControls), all in the order the edges are run clockwise
+	 * (innerControls), all in the order the edges are run clockwise, and the name of the corner after it (next)
 	 */
 	private function ring($x, $y, $w, $h, $width, $radii)
 	{
+		$width = min($width, $w / 2, $h / 2);
 		foreach ($radii as $corner => $r) {
-			if ($width && min($r) < $width) {
-				$radii[$corner] = [$width, $width];
-			}
+			$radii[$corner] = [max($r[0], $width), max($r[1], $width)];
 		}
 		$radii = $this->roundedBox->fit($w, $h, $radii, ['top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0]);
 
@@ -173,9 +145,10 @@ class InsetBoxShadow
 			'TL' => [$x + $radii['TL'][0], $y + $radii['TL'][1]],
 		];
 
+		$names = array_keys(self::CORNERS);
 		$corners = [];
-		foreach (self::CORNERS as $corner => $axes) {
-			list($u, $v) = $axes;
+		foreach ($names as $i => $corner) {
+			list($u, $v) = self::CORNERS[$corner];
 			$centre = $centres[$corner];
 			$ru = $radii[$corner][$u[0] ? 0 : 1];
 			$rv = $radii[$corner][$v[0] ? 0 : 1];
@@ -188,6 +161,7 @@ class InsetBoxShadow
 				'outerControls' => [$this->along($outer[0], $v, $rv * self::MAG), $this->along($outer[1], $u, $ru * self::MAG)],
 				'inner' => $inner,
 				'innerControls' => [$this->along($inner[0], $v, $iv * self::MAG), $this->along($inner[1], $u, $iu * self::MAG)],
+				'next' => $names[($i + 1) % 4],
 			];
 		}
 
@@ -209,17 +183,20 @@ class InsetBoxShadow
 	}
 
 	/**
-	 * The point $t of the way from $a to $b
+	 * The points a third and two thirds of the way from $a to $b: the control points that run a straight patch edge
+	 * at an even pace
 	 *
 	 * @param float[] $a
 	 * @param float[] $b
-	 * @param float $t
 	 *
-	 * @return float[]
+	 * @return float[][]
 	 */
-	private function between($a, $b, $t)
+	private function thirds($a, $b)
 	{
-		return [$a[0] + ($b[0] - $a[0]) * $t, $a[1] + ($b[1] - $a[1]) * $t];
+		$dx = ($b[0] - $a[0]) / 3;
+		$dy = ($b[1] - $a[1]) / 3;
+
+		return [[$a[0] + $dx, $a[1] + $dy], [$b[0] - $dx, $b[1] - $dy]];
 	}
 
 	/**
@@ -232,15 +209,12 @@ class InsetBoxShadow
 	 */
 	private function outerEdge($ring)
 	{
-		$names = array_keys(self::CORNERS);
 		$s = $this->point($ring['corners']['TR']['outer'][0]) . ' m ';
-		foreach ($names as $i => $name) {
-			$corner = $ring['corners'][$name];
+		foreach ($ring['corners'] as $corner) {
 			if ($corner['outer'][0] !== $corner['outer'][1]) {
 				$s .= $this->point($corner['outerControls'][0]) . ' ' . $this->point($corner['outerControls'][1]) . ' ' . $this->point($corner['outer'][1]) . ' c ';
 			}
-			$next = $ring['corners'][$names[($i + 1) % 4]];
-			$s .= $this->point($next['outer'][0]) . ' l ';
+			$s .= $this->point($ring['corners'][$corner['next']]['outer'][0]) . ' l ';
 		}
 
 		return $s;
@@ -270,11 +244,9 @@ class InsetBoxShadow
 	 */
 	private function patches($ring, $outer, $inner)
 	{
-		$names = array_keys(self::CORNERS);
 		$patches = [];
-		foreach ($names as $i => $name) {
-			$corner = $ring['corners'][$name];
-			$next = $ring['corners'][$names[($i + 1) % 4]];
+		foreach ($ring['corners'] as $corner) {
+			$next = $ring['corners'][$corner['next']];
 			$patches[] = $this->patch(
 				$corner['inner'][0],
 				$corner['outer'][0],
@@ -285,15 +257,13 @@ class InsetBoxShadow
 				$outer,
 				$inner
 			);
-			$side = [$corner['outer'][1], $next['outer'][0]];
-			$sideInner = [$next['inner'][0], $corner['inner'][1]];
 			$patches[] = $this->patch(
 				$corner['inner'][1],
-				$side[0],
-				[$this->between($side[0], $side[1], 1 / 3), $this->between($side[0], $side[1], 2 / 3)],
-				$side[1],
+				$corner['outer'][1],
+				$this->thirds($corner['outer'][1], $next['outer'][0]),
+				$next['outer'][0],
 				$next['inner'][0],
-				[$this->between($sideInner[0], $sideInner[1], 1 / 3), $this->between($sideInner[0], $sideInner[1], 2 / 3)],
+				$this->thirds($next['inner'][0], $corner['inner'][1]),
 				$outer,
 				$inner
 			);
@@ -319,27 +289,17 @@ class InsetBoxShadow
 	 */
 	private function patch($innerStart, $outerStart, $outerControls, $outerEnd, $innerEnd, $innerControls, $outer, $inner)
 	{
-		$points = [
-			$innerStart,
-			$this->between($innerStart, $outerStart, 1 / 3),
-			$this->between($innerStart, $outerStart, 2 / 3),
-			$outerStart,
-			$outerControls[0],
-			$outerControls[1],
-			$outerEnd,
-			$this->between($outerEnd, $innerEnd, 1 / 3),
-			$this->between($outerEnd, $innerEnd, 2 / 3),
-			$innerEnd,
-			$innerControls[0],
-			$innerControls[1],
-		];
+		$points = array_merge(
+			[$innerStart],
+			$this->thirds($innerStart, $outerStart),
+			[$outerStart],
+			$outerControls,
+			[$outerEnd],
+			$this->thirds($outerEnd, $innerEnd),
+			[$innerEnd],
+			$innerControls
+		);
 
-		$flat = [];
-		foreach ($points as $point) {
-			$flat[] = $point[0];
-			$flat[] = $point[1];
-		}
-
-		return ['f' => 0, 'points' => $flat, 'colors' => [$inner, $outer, $outer, $inner]];
+		return ['f' => 0, 'points' => call_user_func_array('array_merge', $points), 'colors' => [$inner, $outer, $outer, $inner]];
 	}
 }

@@ -17,6 +17,11 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	const RED = '0.800 0.000 0.000 rg';
 
 	/**
+	 * @var RoundedBox
+	 */
+	private $roundedBox;
+
+	/**
 	 * @var float The height of the page the block was drawn on, in millimetres
 	 */
 	private $pageHeight;
@@ -27,9 +32,14 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private $pageWidth;
 
 	/**
-	 * @var string The document the block was drawn in
+	 * Holds the geometry the expected operators are built from
 	 */
-	private $pdf;
+	protected function set_up()
+	{
+		parent::set_up();
+
+		$this->roundedBox = new RoundedBox();
+	}
 
 	/**
 	 * The first page's content stream for a 60 x 30 mm block at 10 mm from the top left of the page, styled as given
@@ -45,8 +55,7 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->WriteHTML('<div style="width: 60mm; height: 30mm; ' . $style . '">x</div>');
 		$this->pageHeight = $mpdf->h;
 		$this->pageWidth = $mpdf->w;
-		$this->pdf = $this->output($mpdf);
-		$pages = $this->pageContents($this->pdf);
+		$pages = $this->pageContents($this->output($mpdf));
 
 		return $pages[0];
 	}
@@ -92,8 +101,8 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The clip an inset shadow opens with: the padding box given, clipped to with the nonzero rule, and the state the
-	 * shadow is then drawn in opened. The background's own clip to a borderless box is the same path, followed by a
+	 * The clip an inset shadow opens with: the padding box given, clipped to with the nonzero rule, and the start of
+	 * what the shadow draws inside it. The background's own clip to a borderless box is the same path, followed by a
 	 * space.
 	 *
 	 * @param float $x0
@@ -106,7 +115,7 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function insetClip($x0, $y0, $x1, $y1, $radii)
 	{
-		return ' q 0 w ' . (new RoundedBox())->path($this->pageHeight, $x0, $y0, $x1, $y1, $radii) . ' W n' . "\n q ";
+		return ' q 0 w ' . $this->roundedBox->path($this->pageHeight, $x0, $y0, $x1, $y1, $radii) . ' W n' . "\n";
 	}
 
 	/**
@@ -132,7 +141,7 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		list($x0, $y0, $x1, $y1) = $shape;
 
-		return call_user_func_array([$this, 'rect'], $rect)
+		return $this->rect(...$rect)
 			. $this->point($x1, $y0) . ' m ' . $this->point($x1, $y1) . ' l ' . $this->point($x0, $y1) . ' l '
 			. $this->point($x0, $y0) . ' l ' . $this->point($x1, $y0) . ' l h f* Q';
 	}
@@ -154,16 +163,33 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The two CSS modes: an inset shadow drawn outside the box is a misread value, so both draw it inside
+	 *
+	 * @return array[]
+	 */
+	public function modes()
+	{
+		return [
+			'standard' => [[]],
+			'legacy' => [['cssMode' => CssMode::LEGACY]],
+		];
+	}
+
+	/**
 	 * An inset shadow with an offset is clipped to the padding box, not to the page outside it, and fills the box
 	 * from its edges to the box moved by the offset
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param array $config
 	 */
-	public function testAnInsetShadowIsDrawnInsideThePaddingBox()
+	public function testAnInsetShadowIsDrawnInsideThePaddingBox($config)
 	{
-		$stream = $this->stream('box-shadow: inset 2mm 2mm #c00');
+		$stream = $this->stream('box-shadow: inset 2mm 2mm #c00', $config);
 
 		$this->assertStringContainsString($this->insetClip(10, 10, 70, 40, $this->radii()), $stream);
 		$this->assertStringNotContainsString($this->outerClip(), $stream);
-		$this->assertStringContainsString(' q 1 0 0 1 5.6693 -5.6693 cm', $stream);
+		$this->assertStringContainsString('1 0 0 1 5.6693 -5.6693 cm', $stream);
 		$this->assertStringContainsString(self::RED, $stream);
 		$this->assertStringContainsString($this->squareFill([8, 8, 64, 34], [10, 10, 70, 40]), $stream);
 	}
@@ -192,7 +218,6 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString($this->roundedCorner(72, 8, 4), $stream);
 		$this->assertStringContainsString(' q  ' . $this->rect(8, 8, 64, 34) . 'W n ', $stream);
 		$this->assertGreaterThan($clip, strpos($stream, '/TGS1 gs /Sh1 sh'));
-		$this->assertStringContainsString('/ShadingType 6', $this->pdf);
 	}
 
 	/**
@@ -250,28 +275,13 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * An inset shadow drawn outside the box is a misread value, so legacy mode draws it inside too
-	 */
-	public function testLegacyModeDrawsTheInsetShadowInsideToo()
-	{
-		$stream = $this->stream('box-shadow: inset 2mm 2mm #c00', ['cssMode' => CssMode::LEGACY]);
-
-		$this->assertStringContainsString($this->insetClip(10, 10, 70, 40, $this->radii()), $stream);
-		$this->assertStringNotContainsString($this->outerClip(), $stream);
-		$this->assertStringContainsString(' q 1 0 0 1 5.6693 -5.6693 cm', $stream);
-	}
-
-	/**
-	 * A spread wider than the box closes the shape, and the shadow fills the box without a warning
+	 * A spread wider than the box closes the shape, and the shadow fills the box with nothing to fade to
 	 */
 	public function testASpreadWiderThanTheBoxFillsIt()
 	{
-		$pdf = $this->assertDrawsSilently(function (Mpdf $mpdf) {
-			$mpdf->WriteHTML('<div style="width: 60mm; height: 30mm; box-shadow: inset 0 0 2mm 20mm #c00">x</div>');
-		});
-		$pages = $this->pageContents($pdf);
+		$stream = $this->stream('box-shadow: inset 0 0 2mm 20mm #c00');
 
-		$this->assertStringContainsString(self::RED, $pages[0]);
-		$this->assertStringContainsString('/Sh1 sh', $pages[0]);
+		$this->assertStringContainsString(self::RED . "\n" . $this->rect(10, 10, 60, 30) . 'f Q', $stream);
+		$this->assertStringNotContainsString(' sh', $stream);
 	}
 }

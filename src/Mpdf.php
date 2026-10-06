@@ -3054,7 +3054,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			/* -- BACKGROUNDS -- */
 			foreach ($pbs as $pb) {
 
-				if ((isset($pb['gradient']) && $pb['gradient']) || (isset($pb['image_id']) && $pb['image_id']) || isset($pb['inset'])) {
+				$layered = (isset($pb['gradient']) && $pb['gradient']) || (isset($pb['image_id']) && $pb['image_id']) || isset($pb['inset']);
+				if ($layered) {
 
 					if ($pb['z-index'] > 0) {
 						$this->current_layer = $pb['z-index'];
@@ -3233,10 +3234,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$s .= 'Q' . "\n";
 					}
 				} elseif (isset($pb['inset'])) { // An inset box-shadow, over every background of its block
-					$s .= $pb['shadow'] . "\n";
+					$s .= $pb['inset'] . "\n";
 				}
 
-				if ((isset($pb['gradient']) && $pb['gradient']) || (isset($pb['image_id']) && $pb['image_id']) || isset($pb['inset'])) {
+				if ($layered) {
 					if ($pb['visibility'] != 'visible') {
 						$s .= 'EMC' . "\n";
 					}
@@ -18955,11 +18956,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		/* -- END BACKGROUNDS -- */
 
-		// An inset shadow lies over every background and under the content
+		// An inset shadow lies over every background and under the content. Like a shadowonly entry, this one carries
+		// ready operators rather than something to paint.
 		if ($insetShadow) {
 			$this->pageBackgrounds[$blvl][] = [
-				'inset' => true,
-				'shadow' => $insetShadow,
+				'inset' => $insetShadow,
 				'visibility' => $this->visibility,
 				'z-index' => $this->current_layer,
 			];
