@@ -13,6 +13,7 @@ use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
+use Mpdf\Utils\NumericString;
 use Mpdf\Utils\UtfString;
 
 abstract class BlockTag extends Tag
@@ -568,7 +569,7 @@ abstract class BlockTag extends Tag
 		}
 
 
-		$currblk['css_set_height'] = isset($properties['HEIGHT']) ? $this->setHeight($properties['HEIGHT'], $prevblk) : false;
+		$currblk['css_set_height'] = isset($properties['HEIGHT']) ? $this->resolveHeight($properties['HEIGHT'], $prevblk) : false;
 		if ($currblk['css_set_height'] !== false
 			&& ($currblk['css_set_height'] + $this->mpdf->y) > $this->mpdf->PageBreakTrigger
 			&& $this->mpdf->y > $this->mpdf->tMargin + 5
@@ -1448,15 +1449,14 @@ abstract class BlockTag extends Tag
 	 *
 	 * @return float|false
 	 */
-	private function setHeight($height, array $prevblk)
+	private function resolveHeight($height, array $prevblk)
 	{
 		$pageArea = $this->mpdf->h - $this->mpdf->tMargin - $this->mpdf->bMargin;
 		if ($this->mpdf->cssMode === CssMode::LEGACY) {
 			return $this->sizeConverter->convert($height, $pageArea, $this->mpdf->FontSize, false);
 		}
 
-		$height = trim($height);
-		if (substr($height, -1) === '%') {
+		if (NumericString::containsPercentChar($height)) {
 			if (empty($prevblk['css_set_height'])) {
 				return false;
 			}
@@ -1469,8 +1469,8 @@ abstract class BlockTag extends Tag
 
 	/**
 	 * Whether the block clips its content to its box: it has a set height and an overflow other than visible. Nothing
-	 * scrolls on paper, so scroll and auto clip as hidden does. Columns and keep-with-table reposition their content
-	 * after it is written, so the clip is not applied there
+	 * scrolls on paper, so scroll and auto clip as hidden does. Not in columns or a keep-with-table block, whose content
+	 * BaseWriter::endPage() routes to a buffer that is repositioned later, where close() could not find the placeholder
 	 *
 	 * @param array $blk
 	 * @param array $properties
@@ -1491,7 +1491,8 @@ abstract class BlockTag extends Tag
 
 	/**
 	 * Opens the clip of a block that clips its content. Its rectangle is not known until the block closes, since the
-	 * top of the box moves with the collapsed top margin, so a placeholder holds its place in the page until then
+	 * top of the box moves with the collapsed top margin, so a placeholder holds its place in the page until then.
+	 * Mpdf::_out() is the one public route to the writer
 	 *
 	 * @param array $blk
 	 */
@@ -1530,13 +1531,15 @@ abstract class BlockTag extends Tag
 		}
 
 		// Backgrounds of the blocks inside it that the page has not been given yet
-		foreach ($this->mpdf->pageBackgrounds as $level => $entries) {
-			foreach ($entries as $i => $entry) {
-				if (isset($entry['clippath']) && strpos($entry['clippath'], $clip['rect']) !== false) {
-					$this->mpdf->pageBackgrounds[$level][$i]['clippath'] = str_replace($clip['rect'], $rect, $entry['clippath']);
-				}
+		foreach ($this->mpdf->pageBackgrounds as $level => &$entries) {
+			if ($level <= $this->mpdf->blklvl) {
+				continue;
+			}
+			foreach ($entries as &$entry) {
+				$entry['clippath'] = str_replace($clip['rect'], $rect, $entry['clippath']);
 			}
 		}
+		unset($entries, $entry);
 	}
 
 	/**
@@ -1558,6 +1561,7 @@ abstract class BlockTag extends Tag
 			return;
 		}
 
+		// A clippath leaves one q open, which PrintPageBackgrounds() closes; a further W n intersects the clip
 		$entries = &$this->mpdf->pageBackgrounds[$this->mpdf->blklvl];
 		for ($i = $from; $i < count($entries); $i++) {
 			$entries[$i]['clippath'] = ($entries[$i]['clippath'] === '' ? 'q' : $entries[$i]['clippath']) . $rects;

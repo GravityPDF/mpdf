@@ -20,18 +20,13 @@ class BlockHeightTest extends TestCase
 	const SIX_LINES = '<div>line</div><div>line</div><div>line</div><div>line</div><div>line</div><div>line</div>';
 
 	/**
-	 * A clipped block for the HTML header, whose content is written to a buffer rather than to the page
-	 */
-	const HEADER = '<div style="height:8mm;overflow:hidden;background:#ddd"><p>head</p><p>more</p></div>';
-
-	/**
 	 * A percentage is taken of the parent's set height: 50% of 40mm is 20mm, and the parent stays 40mm
 	 */
 	public function testAPercentageHeightIsTakenOfTheParentsHeight()
 	{
 		$page = $this->page('<div style="height:40mm;background:#eee"><div style="height:50%;background:#f00">aa</div></div><div>next</div>');
 
-		$fills = $this->rects($page, 're f');
+		$fills = $this->rectangles($page, 're f');
 		$this->assertCount(2, $fills);
 		$this->assertEqualsWithDelta($this->pt(40), -$fills[0][3], 0.01, 'The outer box should be 40mm tall');
 		$this->assertEqualsWithDelta($this->pt(20), -$fills[1][3], 0.01, 'The inner box should be 20mm tall');
@@ -63,24 +58,24 @@ class BlockHeightTest extends TestCase
 	}
 
 	/**
-	 * Content shorter than the height leaves the box at its height, padding and borders, whatever the overflow
-	 *
-	 * @dataProvider overflows
+	 * Content shorter than the height leaves the box at its height, padding and borders. A hidden overflow clips to
+	 * the padding box; a visible one clips nothing
 	 */
-	public function testShorterContentLeavesTheBoxAtItsHeight($overflow)
+	public function testShorterContentLeavesTheBoxAtItsHeight()
 	{
-		$page = $this->page('<div style="height:30mm;padding:2mm;border:1pt solid #000;overflow:' . $overflow . '">aa</div><div>next</div>');
+		$box = '<div style="height:30mm;padding:2mm;border:1pt solid #000;overflow:%s">aa</div><div>next</div>';
+		$page = $this->page(sprintf($box, 'hidden'));
 
 		// The text sits 2mm and 1pt inside the top; next sits on the bottom edge
 		$this->assertEqualsWithDelta($this->pt(32) + 1, $this->y($page, 'aa') - $this->y($page, 'next'), 0.01);
-		$clips = $this->rects($page, 're W n');
-		if ($overflow === 'visible') {
-			$this->assertSame([], $clips);
-		} else {
-			$this->assertCount(1, $clips);
-			$this->assertEqualsWithDelta($this->pt(34), -$clips[0][3], 0.01, 'The clip should be the padding box');
-			$this->assertEqualsWithDelta($this->pt(180) - 2, $clips[0][2], 0.01, 'The clip should be the padding box');
-		}
+		$clips = $this->rectangles($page, 're W n');
+		$this->assertCount(1, $clips);
+		$this->assertEqualsWithDelta($this->pt(34), -$clips[0][3], 0.01, 'The clip should be the padding box');
+		$this->assertEqualsWithDelta($this->pt(180) - 2, $clips[0][2], 0.01, 'The clip should be the padding box');
+
+		$visible = $this->page(sprintf($box, 'visible'));
+		$this->assertSame([], $this->rectangles($visible, 're W n'));
+		$this->assertSame($this->y($page, 'next'), $this->y($visible, 'next'));
 	}
 
 	/**
@@ -91,10 +86,11 @@ class BlockHeightTest extends TestCase
 	{
 		$page = $this->page('<div style="height:10mm">' . self::SIX_LINES . '</div><div>next</div>');
 		$unsized = $this->page('<div>' . self::SIX_LINES . '</div><div>next</div>');
+		$lines = $this->ys($page, 'line');
 
-		$this->assertSame($this->ys($unsized, 'line'), $this->ys($page, 'line'));
-		$this->assertSame([], $this->rects($page, 're W n'));
-		$this->assertEqualsWithDelta($this->pt(10), $this->ys($page, 'line')[0] - $this->y($page, 'next'), 0.01);
+		$this->assertSame($this->ys($unsized, 'line'), $lines);
+		$this->assertSame([], $this->rectangles($page, 're W n'));
+		$this->assertEqualsWithDelta($this->pt(10), $lines[0] - $this->y($page, 'next'), 0.01);
 	}
 
 	/**
@@ -106,18 +102,19 @@ class BlockHeightTest extends TestCase
 	public function testTallerContentIsClippedByAHiddenBox($overflow)
 	{
 		$page = $this->page('<div style="height:10mm;border:1pt solid #000;overflow:' . $overflow . '">' . self::SIX_LINES . '</div><div>next</div>');
+		$lines = $this->ys($page, 'line');
 
-		$clips = $this->rects($page, 're W n');
+		$clips = $this->rectangles($page, 're W n');
 		$this->assertCount(1, $clips);
 		$this->assertEqualsWithDelta($this->pt(10), -$clips[0][3], 0.01);
-		$this->assertCount(6, $this->ys($page, 'line'), 'Every line is drawn; the clip hides the ones past the box');
+		$this->assertCount(6, $lines, 'Every line is drawn; the clip hides the ones past the box');
 
-		$open = strpos($page, 're W n');
+		$firstLine = strpos($page, '(line) Tj');
 		$close = strpos($page, "\nQ\n", strrpos($page, '(line) Tj'));
-		$this->assertLessThan(strpos($page, '(line) Tj'), $open, 'The clip should open before the first line');
+		$this->assertLessThan($firstLine, strpos($page, 're W n'), 'The clip should open before the first line');
 		$this->assertNotFalse($close, 'The clip should close after the last line');
 		$this->assertGreaterThan($close, strpos($page, '0.000 0.000 0.000 RG'), 'The border should be drawn outside the clip');
-		$this->assertEqualsWithDelta($this->pt(10) + 1, $this->ys($page, 'line')[0] - $this->y($page, 'next'), 0.01);
+		$this->assertEqualsWithDelta($this->pt(10) + 1, $lines[0] - $this->y($page, 'next'), 0.01);
 	}
 
 	/**
@@ -142,11 +139,12 @@ class BlockHeightTest extends TestCase
 		$pages = $this->pages($this->render('<div style="height:20mm;overflow:hidden">' . str_repeat('<p>line</p>', 40) . '</div><div>next</div>'));
 
 		$this->assertCount(2, $pages);
-		$this->assertCount(40, array_merge($this->ys($pages[0], 'line'), $this->ys($pages[1], 'line')));
-		$this->assertSame([], $this->rects($pages[0], 're W n'));
-		$this->assertSame([], $this->rects($pages[1], 're W n'));
+		$second = $this->ys($pages[1], 'line');
+		$this->assertCount(40, array_merge($this->ys($pages[0], 'line'), $second));
+		$this->assertSame([], $this->rectangles($pages[0], 're W n'));
+		$this->assertSame([], $this->rectangles($pages[1], 're W n'));
 		$this->assertOnlyOnPage(1, 1, '(next)', $pages, 'the text after it');
-		$this->assertLessThan(min($this->ys($pages[1], 'line')), $this->y($pages[1], 'next'));
+		$this->assertLessThan(min($second), $this->y($pages[1], 'next'));
 		foreach ($pages as $page) {
 			$this->assertStringNotContainsString('___OVERFLOW', $page);
 		}
@@ -161,10 +159,10 @@ class BlockHeightTest extends TestCase
 		$pages = $this->pages($this->render($this->filler(27) . '<div style="page-break-inside:avoid;height:10mm;overflow:hidden;background:#eee">' . self::SIX_LINES . '</div><div>next</div>'));
 
 		$this->assertCount(2, $pages);
-		$this->assertSame([], $this->rects($pages[0], 're W n'));
+		$this->assertSame([], $this->rectangles($pages[0], 're W n'));
 		$this->assertStringNotContainsString('___OVERFLOW', $pages[0]);
 		$this->assertOnlyOnPage(1, 6, '(line)', $pages, 'a line of the block');
-		$this->assertCount(1, $this->rects($pages[1], 're W n'));
+		$this->assertCount(1, $this->rectangles($pages[1], 're W n'));
 		$this->assertEqualsWithDelta($this->pt(10), $this->ys($pages[1], 'line')[0] - $this->y($pages[1], 'next'), 0.01);
 	}
 
@@ -176,7 +174,7 @@ class BlockHeightTest extends TestCase
 	{
 		$page = $this->page('<div style="height:20mm;overflow:hidden;background:#eee"><div style="height:50mm;background:#f00;border:1pt solid #00f">aa</div></div><div>next</div>');
 
-		$fills = $this->rects($page, 're f');
+		$fills = $this->rectangles($page, 're f');
 		$this->assertCount(2, $fills);
 		$this->assertEqualsWithDelta($this->pt(20), -$fills[0][3], 0.01, 'The outer background is its box');
 		$this->assertEqualsWithDelta($this->pt(50) + 2, -$fills[1][3], 0.01, 'The inner background is its own box');
@@ -184,10 +182,11 @@ class BlockHeightTest extends TestCase
 		$outer = sprintf('%.3F %.3F %.3F %.3F re W n', $fills[0][0], $fills[0][1], $fills[0][2], $fills[0][3]);
 		$this->assertSame(2, substr_count($page, $outer), 'The outer box clips the inner background and the content');
 		$this->assertLessThan(strpos($page, '1.000 0.000 0.000 rg'), strpos($page, $outer), 'The inner background is painted inside the clip');
-
 		$this->assertGreaterThan(strrpos($page, $outer), strpos($page, '0.000 0.000 1.000 RG'), 'The inner border is drawn inside the content clip');
+
 		// After the last border stroke, its own Q and then the clip's close
-		$tail = substr($page, strrpos($page, "\nS\n"), strpos($page, '(next)') - strrpos($page, "\nS\n"));
+		$lastStroke = strrpos($page, "\nS\n");
+		$tail = substr($page, $lastStroke, strpos($page, '(next)') - $lastStroke);
 		$this->assertSame(2, substr_count($tail, "\nQ\n"), 'The clip closes after the inner border, before the text that follows');
 		$this->assertEqualsWithDelta($this->pt(20), $this->y($page, 'aa') + 1 - $this->y($page, 'next'), 0.01);
 	}
@@ -199,7 +198,7 @@ class BlockHeightTest extends TestCase
 	{
 		$page = $this->page('<div style="height:0;overflow:hidden">hidden</div><div>next</div>');
 
-		$clips = $this->rects($page, 're W n');
+		$clips = $this->rectangles($page, 're W n');
 		$this->assertCount(1, $clips);
 		$this->assertSame(0.0, $clips[0][3]);
 		$this->assertSame($this->y($page, 'hidden'), $this->y($page, 'next'));
@@ -211,11 +210,11 @@ class BlockHeightTest extends TestCase
 	public function testAClippedBlockInAHeaderIsClipped()
 	{
 		$mpdf = $this->mpdf();
-		$mpdf->SetHTMLHeader(self::HEADER);
+		$mpdf->SetHTMLHeader('<div style="height:8mm;overflow:hidden;background:#ddd"><p>head</p><p>more</p></div>');
 		$mpdf->WriteHTML('<p>body</p>');
 		$page = $this->pages($this->output($mpdf))[0];
 
-		$clips = $this->rects($page, 're W n');
+		$clips = $this->rectangles($page, 're W n');
 		$this->assertCount(1, $clips);
 		$this->assertEqualsWithDelta($this->pt(8), -$clips[0][3], 0.01);
 		$this->assertStringNotContainsString('___OVERFLOW', $page);
@@ -232,17 +231,18 @@ class BlockHeightTest extends TestCase
 		$legacy = ['cssMode' => CssMode::LEGACY];
 
 		$page = $this->page('<div style="height:40mm;background:#eee"><div style="height:50%;background:#f00">aa</div></div>', $legacy);
-		$fills = $this->rects($page, 're f');
+		$fills = $this->rectangles($page, 're f');
 		$this->assertEqualsWithDelta($this->pt(132.5), -$fills[1][3], 0.01, 'The inner box is half the page area');
 		$this->assertEqualsWithDelta($this->pt(132.5), -$fills[0][3], 0.01, 'The outer box grows to hold it');
 
 		$page = $this->page('<div style="height:50%;background:#f00">aa</div>', $legacy);
-		$this->assertEqualsWithDelta($this->pt(132.5), -$this->rects($page, 're f')[0][3], 0.01);
+		$this->assertEqualsWithDelta($this->pt(132.5), -$this->rectangles($page, 're f')[0][3], 0.01);
 
 		$page = $this->page('<div style="height:10mm;overflow:hidden">' . self::SIX_LINES . '</div><div>next</div>', $legacy);
-		$this->assertSame([], $this->rects($page, 're W n'));
-		$this->assertCount(6, $this->ys($page, 'line'));
-		$this->assertLessThan(min($this->ys($page, 'line')), $this->y($page, 'next'), 'next follows the sixth line');
+		$lines = $this->ys($page, 'line');
+		$this->assertSame([], $this->rectangles($page, 're W n'));
+		$this->assertCount(6, $lines);
+		$this->assertLessThan(min($lines), $this->y($page, 'next'), 'next follows the sixth line');
 	}
 
 	/**
@@ -253,17 +253,6 @@ class BlockHeightTest extends TestCase
 		return [
 			'standard' => [[]],
 			'legacy' => [['cssMode' => CssMode::LEGACY]],
-		];
-	}
-
-	/**
-	 * @return array[]
-	 */
-	public function overflows()
-	{
-		return [
-			'visible' => ['visible'],
-			'hidden' => ['hidden'],
 		];
 	}
 
@@ -306,23 +295,6 @@ class BlockHeightTest extends TestCase
 	private function pt($mm)
 	{
 		return $mm * Mpdf::SCALE;
-	}
-
-	/**
-	 * The rectangles given to an operator, in the order written
-	 *
-	 * @param string $stream
-	 * @param string $operator 're f' for a fill, 're W n' for a clip
-	 *
-	 * @return float[][] Each as [x, y, w, h], in points; h is negative, as mPDF writes boxes from their top
-	 */
-	private function rects($stream, $operator)
-	{
-		preg_match_all('/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) ' . preg_quote($operator, '/') . '/', $stream, $matches, PREG_SET_ORDER);
-
-		return array_map(function ($match) {
-			return array_map('floatval', array_slice($match, 1));
-		}, $matches);
 	}
 
 	/**

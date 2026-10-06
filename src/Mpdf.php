@@ -7948,11 +7948,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		/* -- END CSS-IMAGE-FLOAT -- */
 
 
-		// A set height in the standard CSS mode fixes the box: shorter content leaves space, taller content overflows. Not
-		// when the block ran onto another page, where the box ends with its content
-		$fixedHeight = $endofblock && $blockstate > 1 && !$is_table && $this->cssMode === CssMode::STANDARD
-			&& isset($this->blk[$this->blklvl]['css_set_height']) && $this->blk[$this->blklvl]['css_set_height'] !== false
-			&& $this->blk[$this->blklvl]['startpage'] == $this->page;
+		// In the standard CSS mode a set height fixes the box, unless the block ran onto another page
+		$fixedHeight = $this->cssMode === CssMode::STANDARD && isset($this->blk[$this->blklvl]['css_set_height'])
+			&& $this->blk[$this->blklvl]['css_set_height'] !== false && $this->blk[$this->blklvl]['startpage'] == $this->page;
 
 		// PADDING and BORDER spacing/fill
 		if ($endofblock && ($blockstate > 1) && ($this->blk[$this->blklvl]['padding_bottom'] || $this->blk[$this->blklvl]['border_bottom'] || $this->blk[$this->blklvl]['css_set_height'] || $fixedHeight) && (!$is_table)) {
@@ -7964,7 +7962,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					+ $this->blk[$this->blklvl]['css_set_height'] + $this->blk[$this->blklvl]['padding_bottom'] + $this->blk[$this->blklvl]['border_bottom']['w'];
 				$extra = min($bottom, $this->PageBreakTrigger) - ($this->y + $this->blk[$this->blklvl]['padding_bottom'] + $this->blk[$this->blklvl]['border_bottom']['w']);
 				if ($extra < 0 && ($this->ColActive || $this->kwt)) {
-					// DivLn() paints the backgrounds of columns and kept blocks as it moves, and cannot move back up
+					// DivLn() paints as it moves there, and cannot move back up
 					$extra = 0;
 				}
 			} elseif (isset($this->blk[$this->blklvl]['css_set_height']) && $this->blk[$this->blklvl]['css_set_height'] && $this->blk[$this->blklvl]['startpage'] == $this->page) {
@@ -7983,7 +7981,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->x = $currentx;
 
 			if ($fixedHeight && !empty($this->blk[$this->blklvl]['overflow_clip'])) {
-				// The content is drawn; the border is drawn after this, outside the clip
+				// Before PaintDivBB() draws the border, which stays outside the clip
 				$this->writer->write('Q');
 				$this->blk[$this->blklvl]['overflow_clip']['closed'] = true;
 			}
