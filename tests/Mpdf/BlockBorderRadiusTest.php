@@ -45,6 +45,19 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The background path of a block styled with the given CSS, on the first page
+	 *
+	 * @param string $css
+	 * @param array $config
+	 *
+	 * @return string
+	 */
+	private function firstPath($css, $config = [])
+	{
+		return $this->backgroundPath($this->pagesOf($css, '&nbsp;', $config)[0]);
+	}
+
+	/**
 	 * The radius of each rounded corner of a path, keyed TL/TR/BR/BL as [horizontal, vertical] in millimetres. A corner
 	 * is a run of curves; its radii are how far the run travels along each axis. Square corners are left out.
 	 *
@@ -62,7 +75,6 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$arcStart = null;
 		foreach ($ops as $op) {
 			$numbers = array_map('floatval', explode(' ', trim($op[1])));
-			$end = array_slice($numbers, -2);
 			if ($op[2] === 'c') {
 				if ($arcStart === null) {
 					$arcStart = $point;
@@ -74,7 +86,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			if ($op[2] === 'l') {
 				$corner++;
 			}
-			$point = $end;
+			$point = array_slice($numbers, -2);
 		}
 
 		return $radii;
@@ -105,7 +117,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$radii = $this->radii($path);
 
-		$this->assertSame(['TL', 'BL', 'BR', 'TR'], array_keys($radii), 'four rounded corners');
+		$this->assertSame(self::CORNERS, array_keys($radii), 'four rounded corners');
 		foreach ($radii as $corner => $radius) {
 			$this->assertEqualsWithDelta($expected, $radius, 0.01, $corner);
 		}
@@ -116,7 +128,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testHalfOfABoxThatIsNotSquareIsAnEllipse()
 	{
-		$path = $this->backgroundPath($this->pagesOf('height: 12mm; border-radius: 50%')[0]);
+		$path = $this->firstPath('height: 12mm; border-radius: 50%');
 
 		$this->assertEqualsWithDelta(12, $this->heightOf($path), 0.01);
 		$this->assertEveryCorner([20, 6], $path);
@@ -127,7 +139,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testATenthIsATenthOfEachSide()
 	{
-		$this->assertEveryCorner([4, 1.2], $this->backgroundPath($this->pagesOf('height: 12mm; border-radius: 10%')[0]));
+		$this->assertEveryCorner([4, 1.2], $this->firstPath('height: 12mm; border-radius: 10%'));
 	}
 
 	/**
@@ -135,7 +147,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testHalfOfASquareIsACircle()
 	{
-		$this->assertEveryCorner([20, 20], $this->backgroundPath($this->pagesOf('height: 40mm; border-radius: 50%')[0]));
+		$this->assertEveryCorner([20, 20], $this->firstPath('height: 40mm; border-radius: 50%'));
 	}
 
 	/**
@@ -143,7 +155,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheSlashFormResolvesEachHalfAgainstItsOwnAxis()
 	{
-		$this->assertEveryCorner([20, 1.2], $this->backgroundPath($this->pagesOf('height: 12mm; border-radius: 50% / 10%')[0]));
+		$this->assertEveryCorner([20, 1.2], $this->firstPath('height: 12mm; border-radius: 50% / 10%'));
 	}
 
 	/**
@@ -151,7 +163,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testACornerLonghandWithTwoPercentagesRoundsThatCornerAlone()
 	{
-		$radii = $this->radii($this->backgroundPath($this->pagesOf('height: 12mm; border-top-left-radius: 50% 10%')[0]));
+		$radii = $this->radii($this->firstPath('height: 12mm; border-top-left-radius: 50% 10%'));
 
 		$this->assertSame(['TL'], array_keys($radii));
 		$this->assertEqualsWithDelta([20, 1.2], $radii['TL'], 0.01);
@@ -162,7 +174,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testALengthIsNotOfTheBox()
 	{
-		$this->assertEveryCorner([3, 3], $this->backgroundPath($this->pagesOf('height: 12mm; border-radius: 3mm')[0]));
+		$this->assertEveryCorner([3, 3], $this->firstPath('height: 12mm; border-radius: 3mm'));
 	}
 
 	/**
@@ -170,7 +182,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheLegacyModeResolvesAgainstTheBoxToo()
 	{
-		$this->assertEveryCorner([20, 6], $this->backgroundPath($this->pagesOf('height: 12mm; border-radius: 50%', '&nbsp;', ['cssMode' => CssMode::LEGACY])[0]));
+		$this->assertEveryCorner([20, 6], $this->firstPath('height: 12mm; border-radius: 50%', ['cssMode' => CssMode::LEGACY]));
 	}
 
 	/**
@@ -179,7 +191,7 @@ class BlockBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testAPartOfABlockSplitAcrossPagesResolvesAgainstItsOwnHeight()
 	{
-		$pages = $this->pagesOf('border-radius: 50%', str_repeat('<p>Filler</p>', 40));
+		$pages = $this->pagesOf('border-radius: 50%', $this->filler(40));
 
 		$this->assertCount(2, $pages);
 

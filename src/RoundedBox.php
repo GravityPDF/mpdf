@@ -18,6 +18,11 @@ class RoundedBox
 	const CORNER_SIDES = ['TL' => ['left', 'top'], 'TR' => ['right', 'top'], 'BR' => ['right', 'bottom'], 'BL' => ['left', 'bottom']];
 
 	/**
+	 * The radii of a box with no rounding
+	 */
+	const SQUARE = ['TL' => [0, 0], 'TR' => [0, 0], 'BR' => [0, 0], 'BL' => [0, 0]];
+
+	/**
 	 * The quarter of an ellipse each corner is, counting anticlockwise from the top right
 	 */
 	const SEGMENT = ['TR' => 1, 'TL' => 2, 'BL' => 3, 'BR' => 4];
@@ -166,7 +171,7 @@ class RoundedBox
 			$paddings[$side] = $objattr['padding_' . $side] / $k;
 		}
 
-		$radii = ['TL' => [0, 0], 'TR' => [0, 0], 'BR' => [0, 0], 'BL' => [0, 0]];
+		$radii = self::SQUARE;
 		foreach ($objattr['border_radius'] as $corner => $r) {
 			$radii[$corner] = [$r[0] / $k, $r[1] / $k];
 		}
