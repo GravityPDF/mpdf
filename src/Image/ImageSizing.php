@@ -131,6 +131,37 @@ class ImageSizing
 	}
 
 	/**
+	 * A block-level image placed across the width it has to itself: the margin on the side away from the image gives
+	 * way to what is left of the line, or both margins share it to centre the image. The outer width then equals
+	 * $available, so the image fills its line and text-align cannot move it. An image that does not fit the line even
+	 * so is left as it is, and narrowed to the line as any image is.
+	 *
+	 * @param array $objattr The image, with 'block' the side it sits on: L, C or R
+	 * @param float $available The width of the line, in millimetres
+	 *
+	 * @return array The image, with its margins resolved
+	 */
+	public static function placeBlock(array $objattr, $available)
+	{
+		$gives = $objattr['block'] === 'L' ? 'margin_right' : 'margin_left';
+		$free = $available - ($objattr['width'] - $objattr[$gives]);
+
+		if ($free < 0) {
+			return $objattr;
+		}
+
+		if ($objattr['block'] === 'C') {
+			$objattr['margin_left'] = $objattr['margin_right'] = $free / 2;
+		} else {
+			$objattr[$gives] = $free;
+		}
+
+		$objattr['width'] = $available;
+
+		return $objattr;
+	}
+
+	/**
 	 * Whether a table column can narrow the image, which a percentage width or max-width lets it do
 	 *
 	 * @param array $sizing

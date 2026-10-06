@@ -79,6 +79,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * The content of a positioned block draws `line-height: normal` as the rest of the document does. It used to be drawn at a fixed 1.33, which with DejaVu Sans or Times sets the lines a little further apart. To keep the old spacing, add `line-height: 1.33` to the positioned block.
   * A bidirectional embedding, as in `<span dir="rtl">…<div>…</div>…</span>`, is opened again for the inline element's text after the block.
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
+* **An image with `display: block` has a line of its own and is placed by its margins**, as in a browser, in standard mode. mPDF kept the image inline and read an `auto` margin as 0, so `img { display: block; margin: 0 auto }`, the usual way to centre an image, did nothing. Now the line ends before and after the image, `margin: 0 auto` centres it, `margin-left: auto` pushes it to the right edge, and in a right-to-left block an image with no auto margin sits at the right. `text-align` does not move a block-level image, and `justify` leaves the line before it unstretched. Text that followed such an image on its line moves down a line. Floats, images in table cells and images inside `<columns>` are placed as before. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the image inline with margins of 0. [#589] [#693]
 
 New features
 ------------
@@ -956,3 +957,5 @@ These changes do not change output.
 [#681]: https://github.com/GravityPDF/mpdf/pull/681
 [#630]: https://github.com/GravityPDF/mpdf/issues/630
 [#682]: https://github.com/GravityPDF/mpdf/pull/682
+[#589]: https://github.com/GravityPDF/mpdf/issues/589
+[#693]: https://github.com/GravityPDF/mpdf/pull/693

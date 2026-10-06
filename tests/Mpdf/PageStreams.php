@@ -276,7 +276,8 @@ trait PageStreams
 	}
 
 	/**
-	 * Where each image in a page's content stream is placed, keyed w/h/x in millimetres
+	 * Where each image in a page's content stream is placed, keyed w/h/x/y in millimetres, y being the bottom edge
+	 * measured up from the page's bottom
 	 *
 	 * @param string $stream
 	 *
@@ -284,10 +285,10 @@ trait PageStreams
 	 */
 	private function placementsIn($stream)
 	{
-		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) [-\d.]+ cm \/I\d+ Do/', $stream, $matches, PREG_SET_ORDER);
+		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) ([-\d.]+) cm \/I\d+ Do/', $stream, $matches, PREG_SET_ORDER);
 
 		return array_map(function ($match) {
-			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $match[2] / Mpdf::SCALE, 'x' => $match[3] / Mpdf::SCALE];
+			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $match[2] / Mpdf::SCALE, 'x' => $match[3] / Mpdf::SCALE, 'y' => $match[4] / Mpdf::SCALE];
 		}, $matches);
 	}
 
