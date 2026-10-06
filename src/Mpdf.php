@@ -23273,6 +23273,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// Get Maximum row/cell height in row - including rowspan>1 + 1 overlapping
 			$maxrowheight = $this->_tableGetMaxRowHeight($table, $i);
 
+			// page-break-before: always on a row restarts the table on a new page as an overflowing row does, so the
+			// header and footer rows repeat. Not before the first body row, nor on the row a split table resumes at,
+			// nor in a nested table, whose breaks the outer table makes
+			$forcedbreak = $level == 1 && $i > $startrow && $i > $table['headernrows']
+				&& isset($table['pagebreak-before'][$i]) && $table['pagebreak-before'][$i] == 'always';
+
 			$skippage = false;
 			$newpagestarted = false;
 			for ($j = $startcol; $j < $numcols; $j++) { // Columns
@@ -23323,7 +23329,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$pagebreaklookaheadheight = $h;
 					}
 					// if we exceed page boundaries: restart table on next page before printing the line
-					if ($j == $startcol && ((($y + $pagebreaklookaheadheight + $extra ) > ($pagetrigger + 0.001)) || (($this->keepColumns || !$this->ColActive) && !empty($tablefooter) && ($y + $maxrowheight + $tablefooterrowheight + $extra) > $pagetrigger) && ($this->tableLevel == 1 && $i < ($numrows - $table['headernrows']))) && ($y0 > 0 || $x0 > 0) && !$this->InFooter && $this->autoPageBreak) {
+					if ($j == $startcol && ($forcedbreak || (($y + $pagebreaklookaheadheight + $extra ) > ($pagetrigger + 0.001)) || (($this->keepColumns || !$this->ColActive) && !empty($tablefooter) && ($y + $maxrowheight + $tablefooterrowheight + $extra) > $pagetrigger) && ($this->tableLevel == 1 && $i < ($numrows - $table['headernrows']))) && ($y0 > 0 || $x0 > 0) && !$this->InFooter && $this->autoPageBreak) {
 						if (!$skippage) {
 							$finalSpread = true;
 							$firstSpread = true;
