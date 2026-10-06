@@ -20,7 +20,8 @@ class InlinePropertyConverter
 	 * Convert inline properties back to CSS.
 	 *
 	 * Transforms internal inline property format (used in TextVars) back into
-	 * CSS property array. Used for property inheritance and cascading.
+	 * CSS property array. The legacy CSS mode hands a block's saved text state on to its child blocks through it; the
+	 * standard mode reads the parent's frame instead.
 	 *
 	 * @param array $properties Inline properties array
 	 * @return array Converted CSS properties

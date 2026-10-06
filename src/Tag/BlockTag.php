@@ -8,7 +8,6 @@ use Mpdf\Conversion\DecToGreek;
 use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
-use Mpdf\Css\InheritedProperties;
 use Mpdf\Css\TextDecorations;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
@@ -113,13 +112,13 @@ abstract class BlockTag extends Tag
 		$this->mpdf->blockjustfinished = false;
 
 
-		$this->mpdf->InlineBDF = []; // mPDF 6
-		$this->mpdf->InlineBDFctr = 0; // mPDF 6
 		if ($this->mpdf->cssMode === CssMode::LEGACY) {
 			$this->mpdf->InlineProperties = [];
 		} elseif (!$this->mpdf->tableLevel) {
 			$this->setOpenInlineElementsAside();
 		}
+		$this->mpdf->InlineBDF = []; // mPDF 6
+		$this->mpdf->InlineBDFctr = 0; // mPDF 6
 		$this->mpdf->divbegin = true;
 
 		$this->mpdf->linebreakjustfinished = false;
@@ -546,13 +545,12 @@ abstract class BlockTag extends Tag
 			}
 		}
 
-		// The text state it inherits, the parent block's or the inline elements' it is opened in
-		$inherited = InheritedProperties::blockTextState($this->mpdf->blk, $this->mpdf->blklvl - 1);
-		TextDecorations::enter($this->mpdf, $properties, $inherited !== null ? $inherited : []);
+		$parent = $this->mpdf->cssMode === CssMode::LEGACY ? null : $this->mpdf->getParentFrame();
+		TextDecorations::enter($this->mpdf, $properties, $parent === null ? [] : $parent['decorations']);
 		$this->mpdf->setCSS($properties, 'BLOCK', $tag); //name(id/class/style) found in the CSS array!
-		if ($this->mpdf->cssMode !== CssMode::LEGACY) {
+		if ($parent !== null) {
 			// A link around the block covers its text
-			$this->mpdf->HREF = isset($inherited['HREF']) ? $inherited['HREF'] : '';
+			$this->mpdf->HREF = $parent['href'];
 		}
 		$currblk['InlineProperties'] = $this->mpdf->saveInlineProperties();
 

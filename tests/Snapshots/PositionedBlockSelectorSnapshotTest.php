@@ -54,23 +54,23 @@ class PositionedBlockSelectorSnapshotTest extends Snapshot
 
 		// The same card in normal flow and positioned absolutely beside it
 		$this->mpdf->WriteHTML('<div class="card">' . $card . '</div>');
-		$this->mpdf->WriteHTML('<div class="card" style="position: absolute; top: 16mm; left: 110mm;">' . $card . '</div>');
+		$this->mpdf->WriteHTML('<div class="card" style="position: absolute; line-height: 1.33; top: 16mm; left: 110mm;">' . $card . '</div>');
 
 		// An id rule inside a fixed block
-		$this->mpdf->WriteHTML('<div id="side" style="position: fixed; top: 110mm; left: 10mm; width: 70mm; border: 0.3mm dashed #8e44ad; padding: 2mm;">'
+		$this->mpdf->WriteHTML('<div id="side" style="position: fixed; line-height: 1.33; top: 110mm; left: 10mm; width: 70mm; border: 0.3mm dashed #8e44ad; padding: 2mm;">'
 			. '<p>Fixed paragraph</p><table><tr><td>Fixed cell</td></tr></table></div>');
 
 		// A rule with an element between the block and the paragraph matches only the nested paragraph
-		$this->mpdf->WriteHTML('<div class="nest" style="position: absolute; top: 126mm; left: 110mm; width: 80mm; border: 0.3mm dashed #d35400; padding: 2mm;">'
+		$this->mpdf->WriteHTML('<div class="nest" style="position: absolute; line-height: 1.33; top: 126mm; left: 110mm; width: 80mm; border: 0.3mm dashed #d35400; padding: 2mm;">'
 			. '<p>Directly in the box, plain</p><div><p>Nested in a div, orange</p></div></div>');
 
 		// A rotated positioned block
-		$this->mpdf->WriteHTML('<div class="turned" style="position: absolute; top: 170mm; left: 10mm; width: 60mm; rotate: 90; border: 0.3mm solid #16a085; padding: 2mm;">'
+		$this->mpdf->WriteHTML('<div class="turned" style="position: absolute; line-height: 1.33; top: 170mm; left: 10mm; width: 60mm; rotate: 90; border: 0.3mm solid #16a085; padding: 2mm;">'
 			. '<p>Rotated paragraph</p></div>');
 
 		// Neighbouring positioned blocks: the card rules stay in the card
-		$this->mpdf->WriteHTML('<div class="card" style="position: absolute; top: 200mm; left: 60mm;"><h4>Card</h4><p>Card paragraph</p></div>');
-		$this->mpdf->WriteHTML('<div style="position: absolute; top: 240mm; left: 60mm; width: 80mm; border: 0.3mm solid #999999; padding: 3mm;">'
+		$this->mpdf->WriteHTML('<div class="card" style="position: absolute; line-height: 1.33; top: 200mm; left: 60mm;"><h4>Card</h4><p>Card paragraph</p></div>');
+		$this->mpdf->WriteHTML('<div style="position: absolute; line-height: 1.33; top: 240mm; left: 60mm; width: 80mm; border: 0.3mm solid #999999; padding: 3mm;">'
 			. '<h4>Plain heading</h4><p>Plain paragraph, not a card</p></div>');
 	}
 

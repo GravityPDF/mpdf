@@ -338,8 +338,9 @@ class UniversalSelectorTest extends TestCase
 		$this->assertSame($inline->drawnText, $universal->drawnText);
 		$this->assertEquals($inline->drawnBoxes, $universal->drawnBoxes);
 		$this->assertEquals($inline->drawnY, $universal->drawnY);
-		$this->assertEquals($plain->drawnBoxes, $legacy->drawnBoxes);
-		$this->assertEquals($plain->drawnY, $legacy->drawnY);
+		// The standard mode computes the cell's lengths in another order, which can differ in the last bits
+		$this->assertEqualsWithDelta($plain->drawnBoxes, $legacy->drawnBoxes, 1e-9);
+		$this->assertEqualsWithDelta($plain->drawnY, $legacy->drawnY, 1e-9);
 	}
 
 	/**

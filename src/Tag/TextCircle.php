@@ -2,6 +2,8 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Css\RelativeFontValues;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Utils\UtfString;
 
@@ -100,10 +102,8 @@ class TextCircle extends Tag
 		}
 
 		$objattr['fontstyle'] = '';
-		if (isset($properties['FONT-WEIGHT'])) {
-			if (strtoupper($properties['FONT-WEIGHT']) === 'BOLD') {
-				$objattr['fontstyle'] .= 'B';
-			}
+		if (isset($properties['FONT-WEIGHT']) && $this->isBoldWeight($properties['FONT-WEIGHT'])) {
+			$objattr['fontstyle'] .= 'B';
 		}
 		if (isset($properties['FONT-STYLE'])) {
 			if (strtoupper($properties['FONT-STYLE']) === 'ITALIC') {
@@ -246,5 +246,22 @@ class TextCircle extends Tag
 
 	public function close(&$ahtml, &$ihtml)
 	{
+	}
+
+	/**
+	 * Whether a font-weight in the circle's merged CSS is drawn bold. The standard CSS mode merges the computed
+	 * weight, a number, and the legacy mode reads only bold
+	 *
+	 * @param string $weight
+	 *
+	 * @return bool
+	 */
+	private function isBoldWeight($weight)
+	{
+		if ($this->mpdf->cssMode === CssMode::STANDARD && is_numeric($weight)) {
+			return RelativeFontValues::isBold($weight);
+		}
+
+		return strtoupper($weight) === 'BOLD';
 	}
 }

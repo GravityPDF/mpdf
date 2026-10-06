@@ -53,7 +53,7 @@ abstract class InheritedReportSnapshot extends Snapshot
 			td.panel { color: #1e5f74; font-weight: bold; font-family: monospace; font-size: 10pt; vertical-align: top; }
 			td.notes { vertical-align: top; }
 
-			.stamp { position: absolute; top: 12mm; left: 140mm; width: 55mm; border: 0.5mm solid #b33939; color: #b33939; font-size: 12pt; word-spacing: 4mm; text-align: center; }
+			.stamp { position: absolute; line-height: 1.33; top: 12mm; left: 140mm; width: 55mm; border: 0.5mm solid #b33939; color: #b33939; font-size: 12pt; word-spacing: 4mm; text-align: center; }
 		</style>
 
 		<div class="stamp"><p>DRAFT FOR REVIEW</p></div>

@@ -3,7 +3,6 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
-use Mpdf\CssMode;
 
 class Tr extends Tag
 {
@@ -16,9 +15,7 @@ class Tr extends Tag
 		$this->mpdf->row++;
 		$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['nr'] ++;
 		$this->mpdf->col = -1;
-		$rowGroup = $this->rowGroupInherited();
-		$properties = $this->cssManager->MergeCSS('TABLE', 'TR', $attr, $rowGroup);
-		$this->inheritRow($properties, $rowGroup);
+		$properties = $this->cssManager->MergeCSS('TABLE', 'TR', $attr);
 
 		// write pagebreak markers into row list, so _tableWrite can respect it
 		if (isset($properties['PAGE-BREAK-BEFORE']) && strtoupper($properties['PAGE-BREAK-BEFORE']) === 'AVOID'
@@ -111,37 +108,4 @@ class Tr extends Tag
 		}
 	}
 
-	/**
-	 * Under the standard cascade, what the row inherits from its row group. A row written straight into the table is
-	 * in a tbody that the HTML leaves out, which the tbody rules style as they would one that is written
-	 *
-	 * @return string[] Empty under legacy
-	 */
-	private function rowGroupInherited()
-	{
-		if ($this->mpdf->cssMode !== CssMode::STANDARD) {
-			return [];
-		}
-
-		if ($this->mpdf->opensInImpliedTbody('TR')) {
-			$this->inheritRowGroup($this->cssManager->previewTableCss('TBODY', []));
-		}
-
-		$table = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]];
-
-		return isset($table['rowGroupInherited']) ? $table['rowGroupInherited'] : $this->mpdf->base_table_properties;
-	}
-
-	/**
-	 * Under the standard cascade, keeps what the row hands its cells, over what its row group does
-	 *
-	 * @param string[] $properties The row's merged CSS
-	 * @param string[] $rowGroup What the row group hands it
-	 */
-	private function inheritRow(array $properties, array $rowGroup)
-	{
-		if ($this->mpdf->cssMode === CssMode::STANDARD) {
-			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['rowInherited'] = $this->inheritedByTablePart($properties, $rowGroup);
-		}
-	}
 }

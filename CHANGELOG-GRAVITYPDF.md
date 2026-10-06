@@ -74,6 +74,10 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A block inside an underlined inline element, as in `<span style="text-decoration: underline">…<div>…</div>…</span>`, is underlined too, as is the text after it up to the element's end tag.
   * Floats, positioned blocks and inline blocks no longer take the decorations of the element they are in. Tables never did.
   * A child block no longer takes its parent's `vertical-align`, which is not inherited.
+* **Every element inherits its parent's computed values**, as in a browser, under the standard `cssMode`. The separate ways mPDF handed styles from a block to its children, from an inline element to a block in it, from a table to its cells and from a positioned block to its content each carried their own set of properties and values. They are replaced by one: each open element keeps the computed values of the inherited properties, and its children start from them. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old output. [#547] [#683]
+  * A length given in `em`, `ex`, `ch` or `rem` is inherited as the length it came to, not as the unit read again at the child's size. `letter-spacing: 0.1em` on a 20pt block spaces the letters of a 10pt paragraph in it 2pt apart, not 1pt. `inherit` on a length that is not inherited, such as `padding-left: inherit`, takes it in the same way.
+  * The content of a positioned block draws `line-height: normal` as the rest of the document does. It used to be drawn at a fixed 1.33, which with DejaVu Sans or Times sets the lines a little further apart. To keep the old spacing, add `line-height: 1.33` to the positioned block.
+  * A bidirectional embedding, as in `<span dir="rtl">…<div>…</div>…</span>`, is opened again for the inline element's text after the block.
 
 New features
 ------------
@@ -278,7 +282,7 @@ Bugfixes
 ### Forms
 
 * A `<select>` with a bare `disabled` attribute was not disabled. [#429]
-* `font-size: larger` or `smaller` on an `<input>`, `<select>`, `<textarea>` or `<textcircle>` drew its text at 0pt, so it could not be seen. In the legacy CSS mode the value is now ignored and the element keeps the size around it; in the standard mode it is 1.2 times the document's size, or that divided by 1.2. [#545] [#647]
+* `font-size: larger` or `smaller` on an `<input>`, `<select>`, `<textarea>` or `<textcircle>` drew its text at 0pt, so it could not be seen. In the legacy CSS mode the value is now ignored and the element keeps the size around it; in the standard mode it is 1.2 times the size of the element it is in, or that divided by 1.2. [#545] [#647]
 * A button with no `name` raised warnings under `useActiveForms`. Unnamed buttons are now named `Submit_<n>`, `Reset_<n>` or `Button_<n>`. [#438]
 * Text wider than its field was cut off. It is now drawn in a smaller font, both on the page and in an active field's appearance. [#433] [#441]
 * A shaped value too long for its field is cut to the longest start that fits, and only between whole clusters. [#460] [#492]
@@ -938,3 +942,5 @@ These changes do not change output.
 [#654]: https://github.com/GravityPDF/mpdf/pull/654
 [#645]: https://github.com/GravityPDF/mpdf/issues/645
 [#678]: https://github.com/GravityPDF/mpdf/pull/678
+[#547]: https://github.com/GravityPDF/mpdf/issues/547
+[#683]: https://github.com/GravityPDF/mpdf/pull/683

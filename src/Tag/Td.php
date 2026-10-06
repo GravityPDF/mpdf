@@ -174,12 +174,8 @@ class Td extends Tag
 		$this->cssManager->setBorderDominance('T', 0);
 		$this->cssManager->setBorderDominance('B', 0);
 
-		if ($this->mpdf->cssMode === CssMode::STANDARD) {
-			$properties = $this->mergeInheritedCss($tag, $attr, isset($table['rowInherited']) ? $table['rowInherited'] : $this->mpdf->base_table_properties);
-			// For a table nested in the cell, which inherits it
-			$table['cellTextAlign'] = isset($properties['TEXT-ALIGN']) ? $properties['TEXT-ALIGN'] : '';
-		} else {
-			$properties = $this->cssManager->MergeCSS('TABLE', $tag, $attr);
+		$properties = $this->cssManager->MergeCSS('TABLE', $tag, $attr);
+		if ($this->mpdf->cssMode === CssMode::LEGACY) {
 			$properties = Arrays::uniqueRecursiveMerge($this->mpdf->base_table_properties, $properties);
 		}
 
@@ -493,26 +489,5 @@ class Td extends Tag
 			}
 			$this->mpdf->Reset();
 		}
-	}
-
-	/**
-	 * The cell's CSS, over what it inherits from its row, its row group and the table. setCSS() reads a font size
-	 * relative to the table's, so the cell's own is resolved here against its row's
-	 *
-	 * @param string $tag TD or TH
-	 * @param array $attr
-	 * @param string[] $row What the cell's row hands it, with what its row group and the table do
-	 *
-	 * @return array
-	 */
-	private function mergeInheritedCss($tag, array $attr, array $row)
-	{
-		$properties = $this->cssManager->MergeCSS('TABLE', $tag, $attr, $row);
-
-		if (isset($row['FONT-SIZE']) && $properties['FONT-SIZE'] !== $row['FONT-SIZE']) {
-			$properties['FONT-SIZE'] = $this->relativeFontSize($properties['FONT-SIZE'], $row['FONT-SIZE']);
-		}
-
-		return $properties;
 	}
 }

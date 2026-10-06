@@ -29,13 +29,13 @@ class ParentRelativeFontValuesTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 	}
 
 	/**
-	 * A text circle reads larger and smaller against the document's size, as a form field does, and in the legacy mode
+	 * A text circle reads larger and smaller against its parent's size, as a form field does, and in the legacy mode
 	 * ignores them, keeping the paragraph's size rather than being drawn at 0pt
 	 */
-	public function testATextCircleReadsLargerAgainstTheDocumentSize()
+	public function testATextCircleReadsLargerAgainstItsParentsSize()
 	{
 		$html = '<p style="font-size: 14pt"><textcircle r="30mm" top-text="Circular" style="font-size: larger" /></p>';
-		foreach ([CssMode::STANDARD => '13.200', CssMode::LEGACY => '14.000'] as $mode => $size) {
+		foreach ([CssMode::STANDARD => '16.800', CssMode::LEGACY => '14.000'] as $mode => $size) {
 			$mpdf = new Mpdf(['mode' => 'c', 'cssMode' => $mode]);
 			$mpdf->SetCompression(false);
 			$mpdf->WriteHTML($html);
@@ -194,8 +194,8 @@ class ParentRelativeFontValuesTest extends \Yoast\PHPUnitPolyfills\TestCases\Tes
 			],
 			'larger and smaller form fields' => [
 				'<p style="font-size: 14pt"><input type="text" style="font-size: larger" value="aa" /> <select style="font-size: smaller"><option>bb</option></select> <textarea style="font-size: larger">cc</textarea></p>',
-				// From the document's 11pt, as a field's other sizes are
-				['aa' => ['', 13.2], 'bb' => ['', 9.17], 'cc' => ['', 13.2]],
+				// From the paragraph's 14pt, as each font size is computed from the parent's
+				['aa' => ['', 16.8], 'bb' => ['', 11.67], 'cc' => ['', 16.8]],
 				// Ignored rather than drawn at 0pt, so each field keeps the paragraph's size, as an ignored size does elsewhere
 				['aa' => ['', 14.0], 'bb' => ['', 14.0], 'cc' => ['', 14.0]],
 			],

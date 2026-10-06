@@ -7,8 +7,10 @@ use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
 use Mpdf\Css\CommentParser;
+use Mpdf\Css\ComputedValues;
 use Mpdf\Css\InheritedProperties;
 use Mpdf\Css\RelativeFontValues;
+use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextVars;
@@ -7200,18 +7202,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->textparam = $saved['textparam'];
 		$this->inlineDisplayOff = $saved['display_off'];
 
-		$this->lSpacingCSS = $saved['lSpacingCSS'];
-		if (($this->lSpacingCSS || $this->lSpacingCSS === '0') && strtoupper($this->lSpacingCSS) != 'NORMAL') {
-			$this->fixedlSpacing = $this->sizeConverter->convert($this->lSpacingCSS, $this->FontSize);
-		} else {
-			$this->fixedlSpacing = false;
-		}
-		$this->wSpacingCSS = $saved['wSpacingCSS'];
-		if ($this->wSpacingCSS && strtoupper($this->wSpacingCSS) != 'NORMAL') {
-			$this->minwSpacing = $this->sizeConverter->convert($this->wSpacingCSS, $this->FontSize);
-		} else {
-			$this->minwSpacing = 0;
-		}
+		TextSpacing::set($this, $this->sizeConverter, $saved['lSpacingCSS'], $saved['wSpacingCSS']);
 
 		$this->SetFont($FontFamily, $saved['style'], $saved['sizePt'], false);
 
@@ -12294,7 +12285,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// 0 == 'N' held before PHP 8
 	function fixLineheight($v)
 	{
-		if ($this->cssMode === CssMode::STANDARD && preg_match('/^[0.]*0(?:[a-z]+|%)?$/i', trim($v))) {
+		if ($this->cssMode === CssMode::STANDARD && preg_match(ComputedValues::ZERO_LINE_HEIGHT, trim($v))) {
 			return '0mm';
 		} elseif (preg_match('/^[0-9\.,]*$/', $v) && $v >= 0) {
 			return (float) $v === 0.0 ? 'N' : ($v + 0);
@@ -14593,7 +14584,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$properties = Arrays::uniqueRecursiveMerge($properties, $zproperties);
 		}
 		if ($this->cssMode === CssMode::STANDARD) {
-			$this->setDocumentComputed($properties);
+			$this->setDocumentComputed($this->cssManager->computeValues($properties, []));
 		}
 
 		if (isset($properties['DIRECTION']) && $properties['DIRECTION']) {
@@ -14606,6 +14597,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$this->setCSS($properties, '', 'BODY');
+		if ($this->cssMode === CssMode::STANDARD) {
+			$this->setDocumentDrawnState();
+		}
 
 		$this->blk[0]['InlineProperties'] = $this->saveInlineProperties();
 
@@ -15226,6 +15220,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if ($i === $token) {
 						if ($standIn) {
 							$standIn = false;
+							if ($this->cssMode === CssMode::STANDARD) {
+								// The positioned block's content is drawn over the <div> that stands in for it
+								$this->recordDrawnState($this->openElements[count($this->openElements) - 1]);
+							}
 						} else {
 							$this->startElement($tag, $attr, $selfClosing, $this->styledElement === null ? null : $this->styledElement['computed']);
 						}
@@ -15419,7 +15417,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$p = $this->cssManager->MergeCSS('BLOCK', $tag, $attr);
 			$this->styledElement = $outerElement;
 			if ($this->cssMode === CssMode::STANDARD) {
-				$this->setFixedPosBlockComputed($p);
+				$this->setFixedPosBlockComputed($this->cssManager->getLastComputed());
 			}
 			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];
 			if (isset($p['ROTATE'])) {
@@ -15444,8 +15442,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($this->cssMode === CssMode::LEGACY) {
 				$carried = InheritedProperties::LEGACY_POSITIONED;
 			} else {
-				// Text decorations and the stacking order are not inherited, but the <div> stands in for the block
-				$carried = array_merge(InheritedProperties::names(), ['TEXT-DECORATION', 'Z-INDEX']);
+				// Its content inherits from its frame. Text decorations and the stacking order are not inherited, but
+				// the <div> stands in for the block
+				$carried = ['TEXT-DECORATION', 'Z-INDEX'];
 			}
 			$css = '';
 			foreach (InheritedProperties::of($p, $carried) as $property => $value) {
@@ -17304,6 +17303,30 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				} else {
 					$lastspanborder = false;
 				}
+			}
+		}
+
+		if ($this->cssMode === CssMode::STANDARD) {
+			// Each piece of text is drawn in the state it was buffered with, over the block's own, and not over whatever
+			// is open when the buffer is drawn, such as an inline element the block opened in. Nothing here writes to
+			// the page
+			$this->SetTColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
+			$this->colorarray = '';
+			$this->spanbgcolorarray = '';
+			$this->spanbgcolor = false;
+			$this->spanborder = false;
+			$this->spanborddet = [];
+			$this->HREF = '';
+			$this->textshadow = '';
+			$saved = isset($this->blk[$this->blklvl]['InlineProperties']) ? $this->blk[$this->blklvl]['InlineProperties'] : [];
+			TextSpacing::set(
+				$this,
+				$this->sizeConverter,
+				isset($saved['lSpacingCSS']) ? $saved['lSpacingCSS'] : '',
+				isset($saved['wSpacingCSS']) ? $saved['wSpacingCSS'] : ''
+			);
+			if ($this->B || $this->I) {
+				$this->ResetStyles();
 			}
 		}
 
@@ -19254,6 +19277,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
+	/**
+	 * The font autoLangToFont chooses for a language: the one setCSS() draws an element with that lang in, and the one
+	 * its computed values hand on
+	 *
+	 * @param string $lang
+	 *
+	 * @return string|null The font, or null where the language chooses none
+	 */
+	public function fontForLanguage($lang)
+	{
+		if (!$lang || !$this->autoLangToFont || $this->usingCoreFont || $lang == $this->default_lang || $lang === 'UTF-8') {
+			return null;
+		}
+
+		list(, $font) = $this->languageToFont->getLanguageOptions($lang, $this->useAdobeCJK);
+
+		return $font ? $font : null;
+	}
+
 	function setCSS($arrayaux, $type = '', $tag = '')
 	{
 	// type= INLINE | BLOCK | TABLECELL // tag= BODY
@@ -19294,16 +19336,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// mPDF 6
 		if (isset($arrayaux['LANG']) && $arrayaux['LANG']) {
-			if ($this->autoLangToFont && !$this->usingCoreFont) {
-				if ($arrayaux['LANG'] != $this->default_lang && $arrayaux['LANG'] != 'UTF-8') {
-					list ($coreSuitable, $mpdf_pdf_unifont) = $this->languageToFont->getLanguageOptions($arrayaux['LANG'], $this->useAdobeCJK);
-					if ($mpdf_pdf_unifont) {
-						$arrayaux['FONT-FAMILY'] = $mpdf_pdf_unifont;
-					}
-					if ($tag == 'BODY') {
-						$this->default_lang = $arrayaux['LANG'];
-					}
-				}
+			$font = $this->fontForLanguage($arrayaux['LANG']);
+			if ($font !== null) {
+				$arrayaux['FONT-FAMILY'] = $font;
+			}
+			if ($tag == 'BODY' && $this->autoLangToFont && !$this->usingCoreFont && $arrayaux['LANG'] != 'UTF-8') {
+				$this->default_lang = $arrayaux['LANG'];
 			}
 			$this->currentLang = $arrayaux['LANG'];
 		}

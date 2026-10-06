@@ -98,7 +98,7 @@ class NthChildTableContextsSnapshotTest extends Snapshot
 		</table>
 
 		<p class="caption">An absolutely positioned block at the foot of the page holds a table whose td:nth-child(2) is purple: Second is purple.</p>
-		<div style="position: absolute; bottom: 20mm; left: 20mm; width: 80mm;">
+		<div style="position: absolute; line-height: 1.33; bottom: 20mm; left: 20mm; width: 80mm;">
 			<table class="positioned"><tr><td>First</td><td>Second</td><td>Third</td></tr></table>
 		</div>
 

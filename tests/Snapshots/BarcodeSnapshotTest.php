@@ -442,7 +442,7 @@ class BarcodeSnapshotTest extends Snapshot
 
 		</div>
 
-		<div style="position:fixed; right: 50mm; top: 60mm; border: 0.2mm solid #000000; text-align: center; padding: 0.5mm; padding-top: 2mm;">
+		<div style="position:fixed; line-height: 1.33; right: 50mm; top: 60mm; border: 0.2mm solid #000000; text-align: center; padding: 0.5mm; padding-top: 2mm;">
 			<barcode code="00034698735346987355" type="EAN128C" /><br />
 			<div style="font-family: ocrb;">(00) 0346987 35346987 355</div>
 		</div>

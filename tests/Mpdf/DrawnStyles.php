@@ -168,6 +168,16 @@ trait DrawnStyles
 	}
 
 	/**
+	 * Each CSS mode, for a test that expects the same of both
+	 *
+	 * @return array[] Each mode, keyed by its name
+	 */
+	public function modes()
+	{
+		return [CssMode::STANDARD => [CssMode::STANDARD], CssMode::LEGACY => [CssMode::LEGACY]];
+	}
+
+	/**
 	 * Keys what was recorded of each piece of text a document drew by the text itself, so a test can look a piece up
 	 * by what it says
 	 *
