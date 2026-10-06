@@ -2,6 +2,7 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Css\BorderRadius;
 use Mpdf\Image\ImageSizing;
 use Mpdf\Mpdf;
 use Mpdf\Utils\NumericString;
@@ -295,25 +296,9 @@ class Img extends Tag
 			$objattr['image_width'] = $w;
 
 			/* -- BORDER-RADIUS -- */
-			// A percentage is of the border box, horizontal radii of its width and vertical of its height, resolved now as a
-			// block's are: a picture later narrowed to what is left of its line keeps the radius it was given.
-			// ImageSizing::sizeInCell() resolves them again for a picture sized against its cell.
-			$radii = [];
-			$radiusPercent = [];
-			foreach (['TL' => 'TOP-LEFT', 'TR' => 'TOP-RIGHT', 'BR' => 'BOTTOM-RIGHT', 'BL' => 'BOTTOM-LEFT'] as $corner => $name) {
-				if (!isset($properties['BORDER-' . $name . '-RADIUS-H'], $properties['BORDER-' . $name . '-RADIUS-V'])) {
-					continue;
-				}
-				foreach ([$properties['BORDER-' . $name . '-RADIUS-H'], $properties['BORDER-' . $name . '-RADIUS-V']] as $axis => $value) {
-					$share = $this->percentage($value);
-					if ($share === null) {
-						$radii[$corner][$axis] = $this->sizeConverter->convert($value, 0, $this->mpdf->FontSize, false);
-					} else {
-						$radii[$corner][$axis] = 0;
-						$radiusPercent[$corner][$axis] = $share;
-					}
-				}
-			}
+			// A percentage is resolved now, so a picture later narrowed to what is left of its line keeps the radius it
+			// was given. ImageSizing::sizeInCell() resolves it again for a picture sized against its cell.
+			list($radii, $radiusPercent) = BorderRadius::parse($properties, $this->sizeConverter, $this->mpdf->FontSize);
 			$radii = ImageSizing::radii($objattr, $radii, $radiusPercent);
 			$sizing['radius_percent'] = array_intersect_key($radiusPercent, $radii);
 			if ($radii) {
