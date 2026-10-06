@@ -15078,33 +15078,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							}
 						}
 						/* -- TABLES -- */
-						// Check for Table tags where HTML specifies optional end tags,
-						if ($endtag == 'TABLE') {
-							if ($this->lastoptionaltag == 'THEAD' || $this->lastoptionaltag == 'TBODY' || $this->lastoptionaltag == 'TFOOT') {
-								$this->tag->CloseTag($this->lastoptionaltag, $a, $i);
-							}
-							if ($this->lastoptionaltag == 'TR') {
-								$this->tag->CloseTag('TR', $a, $i);
-							}
-							if ($this->lastoptionaltag == 'TD' || $this->lastoptionaltag == 'TH') {
-								$this->tag->CloseTag($this->lastoptionaltag, $a, $i);
-								$this->tag->CloseTag('TR', $a, $i);
-							}
-						}
-						if ($endtag == 'THEAD' || $endtag == 'TBODY' || $endtag == 'TFOOT') {
-							if ($this->lastoptionaltag == 'TR') {
-								$this->tag->CloseTag('TR', $a, $i);
-							}
-							if ($this->lastoptionaltag == 'TD' || $this->lastoptionaltag == 'TH') {
-								$this->tag->CloseTag($this->lastoptionaltag, $a, $i);
-								$this->tag->CloseTag('TR', $a, $i);
-							}
-						}
-						if ($endtag == 'TR') {
-							if ($this->lastoptionaltag == 'TD' || $this->lastoptionaltag == 'TH') {
-								$this->tag->CloseTag($this->lastoptionaltag, $a, $i);
-							}
-						}
+						$this->tag->closeTablePartsInside($endtag, $a, $i);
 						/* -- END TABLES -- */
 					}
 
