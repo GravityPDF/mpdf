@@ -74,6 +74,7 @@ class TextCircle extends Tag
 				$objattr['visibility'] = $v;
 			}
 		}
+		$objattr['fontsize'] = $this->mpdf->FontSizePt;
 		if (isset($properties['FONT-SIZE'])) {
 			if (strtolower($properties['FONT-SIZE']) === 'auto') {
 				if ($objattr['top-text'] && $objattr['bottom-text']) {
