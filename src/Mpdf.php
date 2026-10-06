@@ -7948,12 +7948,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		/* -- END CSS-IMAGE-FLOAT -- */
 
 
+		// A set height in the standard CSS mode fixes the box: shorter content leaves space, taller content overflows. Not
+		// when the block ran onto another page, where the box ends with its content
+		$fixedHeight = $endofblock && $blockstate > 1 && !$is_table && $this->cssMode === CssMode::STANDARD
+			&& isset($this->blk[$this->blklvl]['css_set_height']) && $this->blk[$this->blklvl]['css_set_height'] !== false
+			&& $this->blk[$this->blklvl]['startpage'] == $this->page;
+
 		// PADDING and BORDER spacing/fill
-		if ($endofblock && ($blockstate > 1) && ($this->blk[$this->blklvl]['padding_bottom'] || $this->blk[$this->blklvl]['border_bottom'] || $this->blk[$this->blklvl]['css_set_height']) && (!$is_table)) {
+		if ($endofblock && ($blockstate > 1) && ($this->blk[$this->blklvl]['padding_bottom'] || $this->blk[$this->blklvl]['border_bottom'] || $this->blk[$this->blklvl]['css_set_height'] || $fixedHeight) && (!$is_table)) {
 			// If CSS height set, extend bottom - if on same page as block started, and CSS HEIGHT > actual height,
 			// and does not force pagebreak
 			$extra = 0;
-			if (isset($this->blk[$this->blklvl]['css_set_height']) && $this->blk[$this->blklvl]['css_set_height'] && $this->blk[$this->blklvl]['startpage'] == $this->page) {
+			if ($fixedHeight) {
+				$bottom = $this->blk[$this->blklvl]['y0'] + $this->blk[$this->blklvl]['border_top']['w'] + $this->blk[$this->blklvl]['padding_top']
+					+ $this->blk[$this->blklvl]['css_set_height'] + $this->blk[$this->blklvl]['padding_bottom'] + $this->blk[$this->blklvl]['border_bottom']['w'];
+				$extra = min($bottom, $this->PageBreakTrigger) - ($this->y + $this->blk[$this->blklvl]['padding_bottom'] + $this->blk[$this->blklvl]['border_bottom']['w']);
+				if ($extra < 0 && ($this->ColActive || $this->kwt)) {
+					// DivLn() paints the backgrounds of columns and kept blocks as it moves, and cannot move back up
+					$extra = 0;
+				}
+			} elseif (isset($this->blk[$this->blklvl]['css_set_height']) && $this->blk[$this->blklvl]['css_set_height'] && $this->blk[$this->blklvl]['startpage'] == $this->page) {
 				// predicted height
 				$h1 = ($this->y - $this->blk[$this->blklvl]['y0']) + $this->blk[$this->blklvl]['padding_bottom'] + $this->blk[$this->blklvl]['border_bottom']['w'];
 				if ($h1 < ($this->blk[$this->blklvl]['css_set_height'] + $this->blk[$this->blklvl]['padding_bottom'] + $this->blk[$this->blklvl]['padding_top'])) {
@@ -7967,6 +7981,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// $state = 0 normal; 1 top; 2 bottom; 3 top and bottom
 			$this->DivLn($this->blk[$this->blklvl]['padding_bottom'] + $this->blk[$this->blklvl]['border_bottom']['w'] + $extra, -3, true, false, 2);
 			$this->x = $currentx;
+
+			if ($fixedHeight && !empty($this->blk[$this->blklvl]['overflow_clip'])) {
+				// The content is drawn; the border is drawn after this, outside the clip
+				$this->writer->write('Q');
+				$this->blk[$this->blklvl]['overflow_clip']['closed'] = true;
+			}
 
 			if ($this->ColActive) {
 				$this->breakpoints[$this->CurrCol][] = $this->y;
