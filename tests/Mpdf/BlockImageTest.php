@@ -12,7 +12,7 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
-	 * A 50mm-wide image, styled as given
+	 * A 50mm-wide image, styled as given; a width in $style replaces the 50mm
 	 *
 	 * @param string $style
 	 *
@@ -24,57 +24,57 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The x of the only image on the first page, in millimetres
-	 *
-	 * @param string $html
-	 * @param array $config
-	 *
-	 * @return float
-	 */
-	private function imageX($html, $config = [])
-	{
-		$placements = $this->imagePlacements($html, 0, $config);
-		$this->assertCount(1, $placements);
-
-		return $placements[0]['x'];
-	}
-
-	/**
-	 * The baseline of each piece of text on the first page, in points from the page's bottom, keyed by the text, and
-	 * the bottom edge of each image under 'image'
+	 * The placement of the only image on the first page, keyed w/h/x/y in millimetres
 	 *
 	 * @param string $html
 	 * @param array $config
 	 *
 	 * @return float[]
 	 */
-	private function baselines($html, $config = [])
+	private function placement($html, $config = [])
+	{
+		$placements = $this->imagePlacements($html, 0, $config);
+		$this->assertCount(1, $placements);
+
+		return $placements[0];
+	}
+
+	/**
+	 * The bottom edge of each piece of text on the first page, in millimetres up from the page's bottom, keyed by the
+	 * text, and the bottom edge of the only image under 'image'
+	 *
+	 * @param string $html
+	 * @param array $config
+	 *
+	 * @return float[]
+	 */
+	private function bottoms($html, $config = [])
 	{
 		$page = $this->pages($this->render($html, $config))[0];
-		preg_match_all('/BT [-\d.]+ ([-\d.]+) Td\s+\((.*?)\) Tj|[-\d.]+ 0 0 [-\d.]+ [-\d.]+ ([-\d.]+) cm \/I\d+ Do/', $page, $drawn, PREG_SET_ORDER);
+		preg_match_all('/BT [-\d.]+ ([-\d.]+) Td\s+\((.*?)\) Tj/', $page, $drawn, PREG_SET_ORDER);
 
-		$baselines = [];
-		foreach ($drawn as $operator) {
-			if (isset($operator[3])) {
-				$baselines['image'] = (float) $operator[3];
-			} else {
-				$baselines[$operator[2]] = (float) $operator[1];
-			}
+		$bottoms = [];
+		foreach ($drawn as $text) {
+			$bottoms[$text[2]] = $text[1] / Mpdf::SCALE;
 		}
+		$placements = $this->placementsIn($page);
+		$this->assertCount(1, $placements);
+		$bottoms['image'] = $placements[0]['y'];
 
-		return $baselines;
+		return $bottoms;
 	}
 
 	/**
 	 * @dataProvider marginProvider
 	 */
-	public function testAutoMarginsPlaceABlockImage($style, $x)
+	public function testTheMarginsPlaceABlockImage($style, $x, $config = [])
 	{
-		$this->assertEqualsWithDelta($x, $this->imageX($this->image($style)), 0.01);
+		$this->assertEqualsWithDelta($x, $this->placement($this->image($style), $config)['x'], 0.01);
 	}
 
 	/**
-	 * Each margin combination of the issue's table, with where a browser puts the 50mm image
+	 * Each margin combination of the issue's table, with where a browser puts the 50mm image, and legacy mode's inline
+	 * image
 	 *
 	 * @return array[]
 	 */
@@ -86,36 +86,73 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'right auto keeps left' => ['display: block; margin-right: auto', 15],
 			'no auto margin keeps left' => ['display: block', 15],
 			'a length beside an auto margin' => ['display: block; margin-left: auto; margin-right: 10mm', 135],
-			'a length on each side is kept' => ['display: block; margin-left: 20mm; margin-right: 200mm', 35],
+			'a length on each side keeps the left one' => ['display: block; margin-left: 20mm; margin-right: 200mm', 35],
+			'legacy mode reads auto as 0' => ['display: block; margin: 0 auto', 15, ['cssMode' => CssMode::LEGACY]],
 		];
 	}
 
 	public function testABlockImageBreaksTheLineBeforeAndAfterIt()
 	{
-		$baselines = $this->baselines('<p>before ' . $this->image('display: block; margin: 0 auto') . ' after</p>');
+		$bottoms = $this->bottoms('<p>before ' . $this->image('display: block; margin: 0 auto') . ' after</p>');
 
-		$this->assertSame(['before', 'image', 'after'], array_keys($baselines));
-		$this->assertGreaterThan($baselines['image'], $baselines['before'], 'before is on a line above the image');
-		$this->assertGreaterThan($baselines['after'], $baselines['image'], 'after is on a line below the image');
+		$this->assertSame(['before', 'after', 'image'], array_keys($bottoms));
+		$this->assertGreaterThan($bottoms['image'], $bottoms['before'], 'before is on a line above the image');
+		$this->assertGreaterThan($bottoms['after'], $bottoms['image'], 'after is on a line below the image');
 	}
 
-	public function testAnInlineImageStaysOnTheLineWithItsText()
+	/**
+	 * @dataProvider inlineProvider
+	 */
+	public function testAnInlineImageStaysOnTheLineWithItsText($style, $config)
 	{
-		$baselines = $this->baselines('<p>before ' . $this->image('margin: 0 auto') . ' after</p>');
+		$bottoms = $this->bottoms('<p>before ' . $this->image($style) . ' after</p>', $config);
 
-		$this->assertEqualsWithDelta($baselines['before '], $baselines[' after'], 0.01);
-		$this->assertEqualsWithDelta($baselines['before '], $baselines['image'], 0.01);
+		$this->assertEqualsWithDelta($bottoms['before '], $bottoms[' after'], 0.01);
+		$this->assertEqualsWithDelta($bottoms['before '], $bottoms['image'], 0.01);
+	}
+
+	/**
+	 * An image without display: block, and a block one in legacy mode
+	 *
+	 * @return array[]
+	 */
+	public function inlineProvider()
+	{
+		return [
+			'inline' => ['margin: 0 auto', []],
+			'legacy block' => ['display: block; margin: 0 auto', ['cssMode' => CssMode::LEGACY]],
+		];
 	}
 
 	public function testTextAlignCentresAnInlineImage()
 	{
-		$this->assertEqualsWithDelta(80, $this->imageX('<div style="text-align: center">' . $this->image('') . '</div>'), 0.01);
+		$this->assertEqualsWithDelta(80, $this->placement('<div style="text-align: center">' . $this->image('') . '</div>')['x'], 0.01);
 	}
 
-	public function testTextAlignDoesNotMoveABlockImage()
+	/**
+	 * @dataProvider textAlignProvider
+	 */
+	public function testTextAlignDoesNotMoveABlockImage($align)
 	{
-		$this->assertEqualsWithDelta(15, $this->imageX('<div style="text-align: right">' . $this->image('display: block') . '</div>'), 0.01);
-		$this->assertEqualsWithDelta(15, $this->imageX('<div style="text-align: center">' . $this->image('display: block') . '</div>'), 0.01);
+		$this->assertEqualsWithDelta(15, $this->placement('<div style="text-align: ' . $align . '">' . $this->image('display: block') . '</div>')['x'], 0.01);
+	}
+
+	/**
+	 * @return array[]
+	 */
+	public function textAlignProvider()
+	{
+		return [['right'], ['center'], ['justify']];
+	}
+
+	/**
+	 * The last line of a block is not justified, and the line before a block-level image is one
+	 */
+	public function testTheLineBeforeABlockImageIsNotJustified()
+	{
+		$page = $this->pages($this->render('<div style="text-align: justify">before the image ' . $this->image('display: block; margin: 0 auto') . ' after</div>'))[0];
+
+		$this->assertDoesNotMatchRegularExpression('/BT [1-9][\d.]* Tw ET/', $page, 'no word spacing is set');
 	}
 
 	/**
@@ -124,10 +161,10 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testThePaddingAndBorderAreInsideTheMargins()
 	{
-		$html = $this->image('display: block; margin: 0 auto; padding: 5mm; border: 2mm solid red');
+		$placement = $this->placement($this->image('display: block; margin: 0 auto; padding: 5mm; border: 2mm solid red'));
 
-		$this->assertEqualsWithDelta(80, $this->imageX($html), 0.01);
-		$this->assertEqualsWithDelta(50, $this->drawnWidth($html), 0.01);
+		$this->assertEqualsWithDelta(80, $placement['x'], 0.01);
+		$this->assertEqualsWithDelta(50, $placement['w'], 0.01);
 	}
 
 	/**
@@ -135,7 +172,7 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testARightToLeftBlockPlacesTheImageFromItsRightEdge($style, $x)
 	{
-		$this->assertEqualsWithDelta($x, $this->imageX('<div dir="rtl">' . $this->image($style) . '</div>'), 0.01);
+		$this->assertEqualsWithDelta($x, $this->placement('<div dir="rtl">' . $this->image($style) . '</div>')['x'], 0.01);
 	}
 
 	/**
@@ -162,9 +199,10 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	public function testABlockImageIsCentredInTheRoomBesideAFloat()
 	{
-		$placements = $this->imagePlacements('<div><img src="' . $this->pngImage() . '" style="float: left; width: 40mm">' . $this->image('display: block; margin: 0 auto') . '</div>');
+		$placements = $this->imagePlacements('<div>' . $this->image('float: left; width: 40mm') . $this->image('display: block; margin: 0 auto') . '</div>');
 
 		$this->assertCount(2, $placements);
+		$this->assertEqualsWithDelta(40, $placements[1]['w'], 0.01, 'the float');
 		$this->assertEqualsWithDelta(100, $placements[0]['x'], 0.01, '(180 - 40 - 50) / 2 = 45mm in from the float');
 	}
 
@@ -175,16 +213,6 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertCount(2, $placements);
 		$this->assertEqualsWithDelta(80, $placements[0]['x'], 0.01);
 		$this->assertEqualsWithDelta(145, $placements[1]['x'], 0.01);
-	}
-
-	public function testLegacyModeKeepsTheImageInlineWithZeroMargins()
-	{
-		$legacy = ['cssMode' => CssMode::LEGACY];
-
-		$this->assertEqualsWithDelta(15, $this->imageX($this->image('display: block; margin: 0 auto'), $legacy), 0.01);
-
-		$baselines = $this->baselines('<p>before ' . $this->image('display: block; margin: 0 auto') . ' after</p>', $legacy);
-		$this->assertEqualsWithDelta($baselines['before '], $baselines[' after'], 0.01);
-		$this->assertEqualsWithDelta($baselines['before '], $baselines['image'], 0.01);
+		$this->assertGreaterThan($placements[1]['y'], $placements[0]['y'], 'the second is below the first');
 	}
 }

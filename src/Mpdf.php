@@ -10173,7 +10173,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// NB $x is only used when paint=true
 		// Lmargin not used
-		if ($type == 'image' && !$is_table && isset($objattr['block'])) {
+		if (isset($objattr['block'])) {
 			$objattr = ImageSizing::placeBlock($objattr, $maxWidth);
 		}
 		$w = 0;
@@ -17474,7 +17474,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$oldpage = $this->page;
 					$oldcol = $this->CurrCol;
 					if (($skipln == 1 || $skipln == -2) && !isset($objattr['float'])) {
-						$this->finishFlowingBlock(false, $objattr['type']);
+						// The line before a block-level image is a block's last line, which justification leaves alone
+						$this->finishFlowingBlock(false, isset($objattr['block']) ? 'block' : $objattr['type']);
 						$this->newFlowingBlock($this->divwidth, $this->divheight, $align, $is_table, $blockstate, false, $blockdir, $table_draft);
 					}
 

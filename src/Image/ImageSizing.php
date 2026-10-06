@@ -131,39 +131,32 @@ class ImageSizing
 	}
 
 	/**
-	 * A block-level image placed across the width it has to itself. An auto margin on each side centres it and an
-	 * auto margin on one side pushes it to the other; otherwise the margin the block's direction does not honour takes
-	 * what is left, as CSS resolves an over-constrained block. The outer width then equals $available, so the image
-	 * fills its line and text-align cannot move it. An image wider than $available is left as it is.
+	 * A block-level image placed across the width it has to itself: the margin on the side away from the image gives
+	 * way to what is left of the line, or both margins share it to centre the image. The outer width then equals
+	 * $available, so the image fills its line and text-align cannot move it. An image that does not fit the line even
+	 * so is left as it is, and narrowed to the line as any image is.
 	 *
-	 * @param array $objattr The image, with 'block' => ['auto_left' => bool, 'auto_right' => bool, 'rtl' => bool]
+	 * @param array $objattr The image, with 'block' the side it sits on: L, C or R
 	 * @param float $available The width of the line, in millimetres
 	 *
 	 * @return array The image, with its margins resolved
 	 */
 	public static function placeBlock(array $objattr, $available)
 	{
-		$block = $objattr['block'];
-		$left = $objattr['margin_left'];
-		$right = $objattr['margin_right'];
-		$box = $objattr['width'] - $left - $right;
-		$free = $available - $box;
+		$gives = $objattr['block'] === 'L' ? 'margin_right' : 'margin_left';
+		$free = $available - ($objattr['width'] - $objattr[$gives]);
 
 		if ($free < 0) {
 			return $objattr;
 		}
 
-		if ($block['auto_left'] && $block['auto_right']) {
-			$left = $right = $free / 2;
-		} elseif ($block['auto_left'] || (!$block['auto_right'] && $block['rtl'])) {
-			$left = $free - $right;
+		if ($objattr['block'] === 'C') {
+			$objattr['margin_left'] = $objattr['margin_right'] = $free / 2;
 		} else {
-			$right = $free - $left;
+			$objattr[$gives] = $free;
 		}
 
-		$objattr['margin_left'] = $left;
-		$objattr['margin_right'] = $right;
-		$objattr['width'] = $box + $left + $right;
+		$objattr['width'] = $available;
 
 		return $objattr;
 	}
