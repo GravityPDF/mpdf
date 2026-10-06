@@ -17,7 +17,8 @@ class Tr extends Tag
 		$this->mpdf->col = -1;
 		$properties = $this->cssManager->MergeCSS('TABLE', 'TR', $attr);
 
-		if (!$this->mpdf->ColActive) {
+		// The footer repeats at the page breaks the body makes, so its own breaks mean nothing
+		if (!$this->mpdf->ColActive && !$this->mpdf->tabletfoot) {
 			$this->markRowBreak($this->mpdf->row, $this->rowBreak($properties, 'PAGE-BREAK-BEFORE'));
 			$this->markRowBreak($this->mpdf->row + 1, $this->rowBreak($properties, 'PAGE-BREAK-AFTER'));
 		}
@@ -80,16 +81,11 @@ class Tr extends Tag
 	 */
 	private function rowBreak(array $properties, $property)
 	{
-		if (!isset($properties[$property])) {
-			return null;
+		if ($this->forcesPageBreak($properties, $property)) {
+			return 'always';
 		}
 
-		$value = strtolower($properties[$property]);
-		if ($value === 'avoid') {
-			return 'avoid';
-		}
-
-		return in_array($value, ['always', 'left', 'right'], true) ? 'always' : null;
+		return isset($properties[$property]) && strtoupper($properties[$property]) === 'AVOID' ? 'avoid' : null;
 	}
 
 	/**

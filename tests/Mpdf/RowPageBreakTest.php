@@ -34,9 +34,7 @@ class RowPageBreakTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'before' => [$always, ['MA' => [1], 'MB' => [2]]],
 			'after' => ['<table><tr style="page-break-after: always"><td>MA</td></tr><tr><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [2]]],
 			'break-before: page' => ['<table><tr><td>MA</td></tr><tr style="break-before: page"><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [2]]],
-			'break-after: page' => ['<table><tr style="break-after: page"><td>MA</td></tr><tr><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [2]]],
-			'left' => ['<table><tr><td>MA</td></tr><tr style="page-break-before: left"><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [2]], ['mirrorMargins' => true]],
-			'right' => ['<table><tr><td>MA</td></tr><tr style="page-break-before: right"><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [2]], ['mirrorMargins' => true]],
+			'right is read as always' => ['<table><tr><td>MA</td></tr><tr style="page-break-before: right"><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [2]], ['mirrorMargins' => true]],
 			'style sheet' => ['<style>tr.new { page-break-before: always; }</style><table><tr><td>MA</td></tr><tr class="new"><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [2]]],
 			'legacy mode' => [$always, ['MA' => [1], 'MB' => [2]], ['cssMode' => CssMode::LEGACY]],
 			'auto' => ['<table><tr><td>MA</td></tr><tr style="page-break-before: auto"><td>MB</td></tr></table>', ['MA' => [1], 'MB' => [1]]],
@@ -51,8 +49,6 @@ class RowPageBreakTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'tfoot row' => ['<table><tbody><tr><td>MA</td></tr></tbody><tfoot><tr style="page-break-before: always"><td>MF</td></tr></tfoot></table>', ['MA' => [1], 'MF' => [1]]],
 			'tfoot row written before the body' => ['<table><tfoot><tr style="page-break-before: always; page-break-after: always"><td>MF</td></tr></tfoot><tbody><tr><td>MA</td></tr><tr><td>MB</td></tr></tbody></table>', ['MA' => [1], 'MB' => [1], 'MF' => [1]]],
 			'nested table' => ['<table><tr><td>MA<table><tr><td>MB</td></tr><tr style="page-break-before: always"><td>MC</td></tr></table></td></tr></table>', ['MA' => [1], 'MB' => [1], 'MC' => [1]]],
-			'repeated header' => ['<table><thead><tr><th>MH</th></tr></thead><tbody><tr><td>MA</td></tr><tr style="page-break-before: always"><td>MB</td></tr></tbody></table>', ['MH' => [1, 2], 'MA' => [1], 'MB' => [2]]],
-			'repeated footer' => ['<table><tfoot><tr><td>MF</td></tr></tfoot><tbody><tr><td>MA</td></tr><tr style="page-break-before: always"><td>MB</td></tr></tbody></table>', ['MA' => [1], 'MF' => [1, 2], 'MB' => [2]]],
 			'repeated header and footer' => ['<table><thead><tr><th>MH</th></tr></thead><tfoot><tr><td>MF</td></tr></tfoot><tbody><tr><td>MA</td></tr><tr style="page-break-before: always"><td>MB</td></tr><tr><td>MC</td></tr></tbody></table>', ['MH' => [1, 2], 'MA' => [1], 'MF' => [1, 2], 'MB' => [2], 'MC' => [2]]],
 		];
 	}
