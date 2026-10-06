@@ -2,6 +2,8 @@
 
 namespace Mpdf;
 
+use Mpdf\Css\TextVars;
+
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
@@ -180,27 +182,73 @@ class OpenElementStackTest extends TestCase
 	}
 
 	/**
-	 * In the standard CSS mode a frame carries the properties merged for its element, with the CSS-wide keywords
-	 * resolved, and the document's frame carries those of body. A tbody the HTML leaves out is never styled. The
-	 * legacy mode keeps none
+	 * In the standard CSS mode a frame carries its element's computed values, with the CSS-wide keywords resolved, and
+	 * the document's frame carries those of body. A font size and an em length are absolute, so that a descendant
+	 * taking them, by inheriting them or through inherit, gets the length. A tbody the HTML leaves out carries what it
+	 * inherits from its table. The legacy mode keeps none
 	 */
-	public function testAFrameCarriesThePropertiesMergedForItsElement()
+	public function testAFrameCarriesItsElementsComputedValues()
 	{
-		$html = '<style>body { background-color: #ff0; } div { padding: 2mm; } p { padding: inherit; }</style>'
+		$html = '<style>body { background-color: #ff0; } div { font-size: 20pt; padding: 1em; letter-spacing: 0.1em; }'
+			. ' p { font-size: 50%; padding: inherit; } table { color: #00f; padding: 3mm; }</style>'
 			. '<div><p>text</p><table><tr><td>cell</td></tr></table></div>';
 
 		$mpdf = $this->write($html);
 		$frames = $this->framesAt($mpdf, 'text');
 		$this->assertSame('#ff0', $frames[0]['computed']['BACKGROUND-COLOR']);
-		$this->assertSame('2mm', $frames[1]['computed']['PADDING-LEFT']);
-		$this->assertSame('2mm', $frames[2]['computed']['PADDING-LEFT']);
-		$this->assertNull($this->frameAt($mpdf, 'cell', 3)['computed']);
-		$this->assertSame('TBODY', $this->frameAt($mpdf, 'cell', 3)['tag']);
+		$this->assertSame('20pt', $frames[1]['computed']['FONT-SIZE']);
+		$this->assertStringEndsWith('mm', $frames[1]['computed']['PADDING-LEFT']);
+		$this->assertEqualsWithDelta(20 / Mpdf::SCALE, (float) $frames[1]['computed']['PADDING-LEFT'], 1e-9);
+		$this->assertStringEndsWith('pt', $frames[2]['computed']['FONT-SIZE']);
+		$this->assertEqualsWithDelta(10, (float) $frames[2]['computed']['FONT-SIZE'], 1e-9);
+		$this->assertSame($frames[1]['computed']['PADDING-LEFT'], $frames[2]['computed']['PADDING-LEFT']);
+		$this->assertSame($frames[1]['computed']['LETTER-SPACING'], $frames[2]['computed']['LETTER-SPACING']);
+
+		$tbody = $this->frameAt($mpdf, 'cell', 3);
+		$this->assertSame('TBODY', $tbody['tag']);
+		$this->assertSame('#00f', $tbody['computed']['COLOR']);
+		$this->assertSame('20pt', $tbody['computed']['FONT-SIZE']);
+		$this->assertArrayNotHasKey('PADDING-LEFT', $tbody['computed']);
 
 		$mpdf = $this->mpdfRecording(['cssMode' => CssMode::LEGACY]);
 		$mpdf->WriteHTML($html, HTMLParserMode::DEFAULT_MODE, true, false);
-		foreach ($this->framesAt($mpdf, 'text') as $frame) {
+		foreach (array_merge($this->framesAt($mpdf, 'text'), $this->framesAt($mpdf, 'cell')) as $frame) {
 			$this->assertNull($frame['computed']);
+		}
+	}
+
+	/**
+	 * In the standard CSS mode a frame carries the link and the text decorations its element's content is drawn in:
+	 * those of the element itself, and none for a positioned block, which is out of the flow. The legacy mode keeps
+	 * none
+	 */
+	public function testAFrameCarriesTheLinkAndTheDecorationsOfItsContent()
+	{
+		$html = '<body style="text-decoration: underline"><div><a href="https://example.com/">link<span>text</span></a>'
+			. '</div><a href="https://example.com/"><div style="position: absolute; top: 50mm; left: 20mm; width: 50mm">'
+			. '<p>positioned</p></div></a></body>';
+
+		$mpdf = $this->mpdfRecording();
+		$mpdf->WriteHTML($html);
+		$frames = $this->framesAt($mpdf, 'text');
+		$this->assertSame(TextVars::FD_UNDERLINE, $frames[0]['decorations']['textvar']);
+		$this->assertSame('', $frames[1]['href']);
+		$this->assertSame(TextVars::FD_UNDERLINE, $frames[1]['decorations']['textvar']);
+		$this->assertSame('https://example.com/', $frames[2]['href']);
+		$this->assertSame('https://example.com/', $frames[3]['href']);
+		$this->assertSame(TextVars::FD_UNDERLINE, $frames[3]['decorations']['textvar'] & TextVars::FD_UNDERLINE);
+
+		$positioned = $this->framesAt($mpdf, 'positioned');
+		$this->assertSame('DIV', $positioned[2]['tag']);
+		$this->assertSame('', $positioned[2]['href']);
+		$this->assertSame(0, $positioned[2]['decorations']['textvar']);
+		$this->assertSame('', $positioned[3]['href']);
+
+		$mpdf = $this->mpdfRecording(['cssMode' => CssMode::LEGACY]);
+		$mpdf->WriteHTML($html);
+		foreach (array_merge($this->framesAt($mpdf, 'text'), $this->framesAt($mpdf, 'positioned')) as $frame) {
+			$this->assertSame('', $frame['href']);
+			$this->assertSame([], $frame['decorations']);
 		}
 	}
 

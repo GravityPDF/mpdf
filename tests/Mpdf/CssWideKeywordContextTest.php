@@ -99,14 +99,6 @@ class CssWideKeywordContextTest extends TestCase
 	}
 
 	/**
-	 * @return string[][] Each CSS mode
-	 */
-	public function modes()
-	{
-		return [CssMode::STANDARD => [CssMode::STANDARD], CssMode::LEGACY => [CssMode::LEGACY]];
-	}
-
-	/**
 	 * Every keyword, for each property, in every context, under each mode
 	 *
 	 * @return array[] Each [mode, context, property, keyword, the value it should draw as]

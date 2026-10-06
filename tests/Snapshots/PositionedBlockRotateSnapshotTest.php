@@ -37,8 +37,8 @@ class PositionedBlockRotateSnapshotTest extends Snapshot
 		$html = '<style>
 			body { font-size: 9pt; }
 			h1 { font-size: 15pt; margin: 0; }
-			div.caption { position: absolute; left: 20mm; width: 90mm; font-size: 8pt; color: #606060; }
-			div.turned { position: absolute; left: 130mm; width: 34mm; border: 0.3mm solid #1f3a93; background: #d6eaf8; padding: 1mm; }
+			div.caption { position: absolute; line-height: 1.33; left: 20mm; width: 90mm; font-size: 8pt; color: #606060; }
+			div.turned { position: absolute; line-height: 1.33; left: 130mm; width: 34mm; border: 0.3mm solid #1f3a93; background: #d6eaf8; padding: 1mm; }
 		</style>
 		<h1>rotate on a positioned block</h1>';
 

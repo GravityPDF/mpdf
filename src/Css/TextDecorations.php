@@ -65,6 +65,24 @@ final class TextDecorations
 	}
 
 	/**
+	 * @param Mpdf $mpdf
+	 *
+	 * @return array The decorations of the current text state, in the shape enter() takes a parent's
+	 */
+	public static function of(Mpdf $mpdf)
+	{
+		$decorations = ['textvar' => 0, 'textparam' => []];
+		foreach (self::PARAMETERS as $bit => $parameter) {
+			if (($mpdf->textvar & $bit) && isset($mpdf->textparam[$parameter])) {
+				$decorations['textvar'] |= $bit;
+				$decorations['textparam'][$parameter] = $mpdf->textparam[$parameter];
+			}
+		}
+
+		return $decorations;
+	}
+
+	/**
 	 * Whether the decorations an element sets are seen. Under CssMode::STANDARD a decoration is drawn in the colour of
 	 * the element that sets it, so an element whose color is transparent, set or inherited, draws its own unseen, and
 	 * the decorations it is in stay drawn over its text. Call it once Mpdf::setCSS() has applied the element's color.

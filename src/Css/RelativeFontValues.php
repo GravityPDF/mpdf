@@ -128,7 +128,8 @@ final class RelativeFontValues
 	/**
 	 * @param array $tableProperties The properties the table being written hands its cells, as Mpdf::$base_table_properties
 	 *
-	 * @return int|float The computed font-weight of the table, which its cells inherit
+	 * @return int|float The computed font-weight of the table, which a cell's bolder or lighter steps from under the
+	 *                   legacy CSS mode. The standard mode merges a cell's weight from its parent's frame
 	 */
 	public static function tableWeight(array $tableProperties)
 	{

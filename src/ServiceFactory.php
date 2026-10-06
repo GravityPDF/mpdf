@@ -9,6 +9,7 @@ use Mpdf\Color\OutputIntent;
 use Mpdf\Css\BorderMerger;
 use Mpdf\Css\CssMerger;
 use Mpdf\Css\CssParser;
+use Mpdf\Css\ComputedValues;
 use Mpdf\Css\InlinePropertyConverter;
 use Mpdf\Css\InlineStyleParser;
 use Mpdf\Css\NormalizeProperties;
@@ -118,7 +119,8 @@ class ServiceFactory
 			$colorConverter,
 			$borderMerger,
 			new PresentationalHints($mpdf, $normalizeProperties),
-			$sizeConverter
+			$sizeConverter,
+			new ComputedValues($mpdf, $sizeConverter)
 		);
 
 		$cssManager = new CssManager($cssParser, $cssMerger);

@@ -209,6 +209,32 @@ abstract class Tag
 	}
 
 	/**
+	 * Keeps the bold, italic and small caps a row group's CSS gives its cells, as the legacy cascade hands them on.
+	 * Under the standard cascade the cells inherit the row group's font from its frame
+	 *
+	 * @param array $properties The row group's merged CSS
+	 * @param string $prefix thead or tfoot, naming the Mpdf fields that hold them
+	 */
+	protected function keepLegacyRowGroupFont(array $properties, $prefix)
+	{
+		if ($this->appliesStandardCascade()) {
+			return;
+		}
+
+		$fonts = [
+			'FONT-WEIGHT' => ['_font_weight', 'BOLD', 'B'],
+			'FONT-STYLE' => ['_font_style', 'ITALIC', 'I'],
+			'FONT-VARIANT' => ['_font_smCaps', 'SMALL-CAPS', 'S'],
+		];
+		foreach ($fonts as $property => $font) {
+			if (isset($properties[$property])) {
+				list($field, $value, $flag) = $font;
+				$this->mpdf->{$prefix . $field} = strtoupper($properties[$property]) === $value ? $flag : '';
+			}
+		}
+	}
+
+	/**
 	 * Sets the font size a font-size gives a form field or text circle, read against the document's size. larger and
 	 * smaller leave it as it is in the legacy CSS mode, which ignores them
 	 *
@@ -263,65 +289,15 @@ abstract class Tag
 		return $style;
 	}
 
-	/**
-	 * Under the standard cascade, keeps what a row group opened in the innermost table hands the cells of its rows.
-	 * Tr reads it back
-	 *
-	 * @param string[] $properties The row group's merged CSS
-	 */
-	protected function inheritRowGroup(array $properties)
-	{
-		if ($this->mpdf->cssMode === CssMode::STANDARD && $this->mpdf->tableLevel) {
-			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['rowGroupInherited'] = $this->inheritedByTablePart($properties, $this->mpdf->base_table_properties);
-		}
-	}
-
-	/**
-	 * The inherited properties a row group or a row hands its cells under the standard cascade: its own, over those
-	 * of the table or row group it is in. Its font size is resolved against theirs
-	 *
-	 * @param string[] $properties Its merged CSS
-	 * @param string[] $parent What the table or row group it is in hands its cells, with a font size in mm
-	 *
-	 * @return string[]
-	 */
-	protected function inheritedByTablePart(array $properties, array $parent)
-	{
-		$inherited = array_merge($parent, InheritedProperties::of($properties, InheritedProperties::names()));
-
-		if (isset($properties['FONT-SIZE'])) {
-			$inherited['FONT-SIZE'] = $this->relativeFontSize($properties['FONT-SIZE'], $parent['FONT-SIZE']);
-		}
-
-		return $inherited;
-	}
-
-	/**
-	 * A font size given as a number, in any unit, resolved against the size it is relative to. Keywords such as small
-	 * are kept, since setCSS() reads them against the default size whatever the parent's
-	 *
-	 * @param string $size
-	 * @param string $parentSize With a unit
-	 *
-	 * @return string
-	 */
-	protected function relativeFontSize($size, $parentSize)
-	{
-		if (!$this->sizeConverter->isLength($size)) {
-			return $size;
-		}
-
-		return $this->sizeConverter->convert($size, $this->sizeConverter->convert($parentSize)) . 'mm';
-	}
-
 	abstract public function open($attr, &$ahtml, &$ihtml);
 
 	abstract public function close(&$ahtml, &$ihtml);
 
 	/**
-	 * Sets aside the inline elements a block or table opens inside, under CssMode::STANDARD: their saved states and the
-	 * text state they set go on the enclosing block. The block or table inherits that text state, and
-	 * restoreBlockTextState() puts both back when it closes, so the text after it is drawn in their style and their end tags restore what was there before them.
+	 * Sets aside the inline elements a block or table opens inside, under CssMode::STANDARD: their saved states, the
+	 * text state they set and their bidirectional embeddings go on the enclosing block. restoreBlockTextState() puts
+	 * them back when it closes, so the text after it is drawn in their style and their end tags restore what was there
+	 * before them.
 	 *
 	 * A block opened a second time, as a kept block laid out again or a block reopened after a forced page break, finds
 	 * them already set aside and keeps them, as by then the text state has changed
@@ -334,13 +310,9 @@ abstract class Tag
 			$block['openInline'] = [
 				'properties' => $this->mpdf->InlineProperties,
 				'state' => $this->mpdf->saveInlineProperties(),
+				'bidi' => $this->mpdf->InlineBDF,
+				'bidiCount' => $this->mpdf->InlineBDFctr,
 			];
-
-			// The line before the block or table is printed next, and its text with no colour or link of its own is drawn in the
-			// current state
-			if (isset($block['InlineProperties'])) {
-				$this->mpdf->restoreInlineProperties($block['InlineProperties']);
-			}
 		}
 
 		$this->mpdf->InlineProperties = [];
@@ -360,7 +332,40 @@ abstract class Tag
 		$block = &$this->mpdf->blk[$this->mpdf->blklvl];
 		if (isset($block['openInline'])) {
 			$this->mpdf->InlineProperties = $block['openInline']['properties'];
+			$this->reopenBidiEmbeddings($block['openInline']['bidi'], $block['openInline']['bidiCount']);
 			unset($block['openInline']);
+		}
+	}
+
+	/**
+	 * Puts back the bidirectional embeddings of the inline elements a block or table opened in. It ended the paragraph
+	 * they were in, so they are opened again for the text after it, in the order they were opened, and their end tags
+	 * close them
+	 *
+	 * @param array $embeddings As Mpdf::$InlineBDF holds them
+	 * @param int $count As Mpdf::$InlineBDFctr holds it
+	 */
+	private function reopenBidiEmbeddings(array $embeddings, $count)
+	{
+		$this->mpdf->InlineBDF = $embeddings;
+		$this->mpdf->InlineBDFctr = $count;
+
+		$open = [];
+		foreach ($embeddings as $element) {
+			foreach ($element as $embedding) {
+				$open[$embedding[1]] = $embedding[0];
+			}
+		}
+		ksort($open);
+
+		$codes = '';
+		foreach ($open as $popd) {
+			$codes .= $this->mpdf->_setBidiCodes('start', $popd);
+		}
+		if ($codes !== '') {
+			$this->mpdf->OTLdata = [];
+			$this->mpdf->_saveTextBuffer($codes);
+			$this->mpdf->biDirectional = true;
 		}
 	}
 

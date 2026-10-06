@@ -91,7 +91,7 @@ class FixedPseudoClassSnapshotTest extends Snapshot
 		<table><tr><td>One</td><td>Two</td><td>Three</td></tr></table>
 
 		<p class="caption">In the page header, the link is red. In the positioned box at the foot of the page, :root div.box p makes the text red.</p>
-		<div class="box" style="position: absolute; bottom: 1mm; left: 20mm; width: 120mm; border: 0.2mm solid #999999; padding: 2mm;"><p>Positioned box: red</p></div>
+		<div class="box" style="position: absolute; line-height: 1.33; bottom: 1mm; left: 20mm; width: 120mm; border: 0.2mm solid #999999; padding: 2mm;"><p>Positioned box: red</p></div>
 		<?php
 		$html = ob_get_clean();
 

@@ -128,7 +128,7 @@ class TableCellDescendantSelectorSnapshotTest extends Snapshot
 
 		<h2>A table in a positioned block</h2>
 		<p class="caption">White on teal words from #side td span, in the block positioned at the bottom right of this page.</p>
-		<div id="side" style="position: absolute; bottom: 20mm; right: 15mm; width: 70mm; border: 0.3mm dashed #16a085; padding: 2mm;">
+		<div id="side" style="position: absolute; line-height: 1.33; bottom: 20mm; right: 15mm; width: 70mm; border: 0.3mm dashed #16a085; padding: 2mm;">
 			<table><tr><td>Fixed <span>cell text</span></td></tr></table>
 		</div>
 		<?php

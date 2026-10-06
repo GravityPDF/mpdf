@@ -4,9 +4,6 @@ namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
 use Mpdf\Css\PresentationalHints;
-use Mpdf\Css\InheritedProperties;
-use Mpdf\Css\InlinePropertyConverter;
-use Mpdf\Css\RelativeFontValues;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
 use Mpdf\Utils\Rotation;
@@ -70,14 +67,11 @@ class Table extends Tag
 		$this->mpdf->tableLevel++;
 		$this->cssManager->tbCSSlvl++;
 
-		$cellInherited = [];
 		if ($this->mpdf->tableLevel > 1) { // inherit table properties from cell in which nested
 			if ($this->mpdf->cssMode === CssMode::LEGACY) {
 				//$this->mpdf->base_table_properties['FONT-KERNING'] = ($this->mpdf->textvar & TextVars::FC_KERNING);	// mPDF 6
 				$this->mpdf->base_table_properties['LETTER-SPACING'] = $this->mpdf->lSpacingCSS;
 				$this->mpdf->base_table_properties['WORD-SPACING'] = $this->mpdf->wSpacingCSS;
-			} else {
-				$this->inheritFromParentCell($this->mpdf->cell['PARENTCELL']);
 			}
 			// mPDF 6
 			$direction = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['direction'];
@@ -85,14 +79,6 @@ class Table extends Tag
 			$cellLineHeight = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineHeight'];
 			$cellLineStackingStrategy = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineStackingStrategy'];
 			$cellLineStackingShift = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['cellLineStackingShift'];
-			if ($this->mpdf->cssMode === CssMode::STANDARD) {
-				// It inherits the cell's line-height and text-align through its merged CSS too
-				$outerTable = $this->mpdf->table[$this->mpdf->tableLevel - 1][$this->mpdf->tbctr[$this->mpdf->tableLevel - 1]];
-				$cellInherited = array_filter([
-					'LINE-HEIGHT' => $cellLineHeight,
-					'TEXT-ALIGN' => isset($outerTable['cellTextAlign']) ? $outerTable['cellTextAlign'] : '',
-				]);
-			}
 		}
 
 		if (isset($this->mpdf->tbctr[$this->mpdf->tableLevel])) {
@@ -189,7 +175,7 @@ class Table extends Tag
 		if ($this->cssManager->tbCSSlvl == 1) {
 			$properties = $this->cssManager->MergeCSS('TOPTABLE', 'TABLE', $attr);
 		} else {
-			$properties = $this->cssManager->MergeCSS('TABLE', 'TABLE', $attr, $cellInherited);
+			$properties = $this->cssManager->MergeCSS('TABLE', 'TABLE', $attr);
 		}
 
 		$w = '';
@@ -306,13 +292,9 @@ class Table extends Tag
 
 		// mPDF 6
 		if (!empty($properties['LANG'])) {
-			if ($this->mpdf->autoLangToFont && !$this->mpdf->usingCoreFont) {
-				if ($properties['LANG'] != $this->mpdf->default_lang && $properties['LANG'] !== 'UTF-8') {
-					list ($coreSuitable, $mpdf_pdf_unifont) = $this->languageToFont->getLanguageOptions($properties['LANG'], $this->mpdf->useAdobeCJK);
-					if ($mpdf_pdf_unifont) {
-						$properties['FONT-FAMILY'] = $mpdf_pdf_unifont;
-					}
-				}
+			$font = $this->mpdf->fontForLanguage($properties['LANG']);
+			if ($font !== null) {
+				$properties['FONT-FAMILY'] = $font;
 			}
 			$this->mpdf->currentLang = $properties['LANG'];
 		}
@@ -325,12 +307,8 @@ class Table extends Tag
 		$this->mpdf->base_table_properties['FONT-FAMILY'] = $this->mpdf->FontFamily;
 
 		if (isset($properties['FONT-SIZE'])) {
-			$inheritedState = InheritedProperties::blockTextState($this->mpdf->blk, $this->mpdf->blklvl);
 			if ($this->mpdf->tableLevel > 1) {
 				$parentSize = $this->sizeConverter->convert($this->mpdf->base_table_properties['FONT-SIZE']);
-			} elseif ($this->mpdf->cssMode === CssMode::STANDARD && isset($inheritedState['size'])) {
-				// Its size is relative to the size it inherits, the block's or the inline elements' it is opened in
-				$parentSize = $inheritedState['size'];
 			} else {
 				$parentSize = $this->mpdf->default_font_size / Mpdf::SCALE;
 			}
@@ -344,19 +322,6 @@ class Table extends Tag
 
 		if ($this->mpdf->cssMode === CssMode::LEGACY) {
 			$this->setLegacyBaseProperties($properties);
-		} else {
-			// The font family and size are resolved above, and the weight is computed from the enclosing table's. A th in the
-			// table is centred unless it inherits a text-align
-			$inherited = InheritedProperties::of($properties, array_merge(array_diff(InheritedProperties::TEXT, ['FONT-FAMILY', 'FONT-SIZE']), ['TEXT-ALIGN']));
-			if (isset($inherited['FONT-WEIGHT'])) {
-				$weight = RelativeFontValues::weight($inherited['FONT-WEIGHT'], RelativeFontValues::tableWeight($this->mpdf->base_table_properties));
-				if ($weight === null) {
-					unset($inherited['FONT-WEIGHT']);
-				} else {
-					$inherited['FONT-WEIGHT'] = (string) $weight;
-				}
-			}
-			$this->mpdf->base_table_properties = array_merge($this->mpdf->base_table_properties, $inherited);
 		}
 		// In cssMode legacy line-height: 0 is skipped, as mPDF v7 did
 		$lineHeightSet = $this->mpdf->cssMode === CssMode::STANDARD
@@ -1279,22 +1244,6 @@ class Table extends Tag
 		if ($page_break_after) {
 			$this->forcePageBreak($page_break_after);
 		}
-	}
-
-	/**
-	 * Start a nested table from the text state of the cell it is in: its cells inherit the cell's inherited text
-	 * properties, and its font and font size become the default its cells are reset to. close() puts the outer
-	 * table's back.
-	 *
-	 * @param array $parentCell The cell's text state, as Mpdf::saveInlineProperties() saved it
-	 */
-	private function inheritFromParentCell(array $parentCell)
-	{
-		$converter = new InlinePropertyConverter($this->colorConverter);
-
-		$this->mpdf->base_table_properties = InheritedProperties::of($converter->convert($parentCell), InheritedProperties::TEXT);
-		$this->mpdf->default_font = $parentCell['family'];
-		$this->mpdf->default_font_size = $parentCell['sizePt'];
 	}
 
 	/**

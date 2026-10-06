@@ -5,33 +5,16 @@ namespace Mpdf\Css;
 /**
  * The inherited CSS properties mPDF supports, by the names the merged CSS uses for them.
  *
- * An element takes these from its parent unless it sets them itself. Under CssMode::STANDARD each channel that hands
- * them on takes them from here:
+ * An element takes these from its parent unless it sets them itself. Under CssMode::STANDARD each frame on the stack of
+ * open elements keeps its element's computed values of names(), and a child starts from its parent's frame
+ * (ComputedValues). TEXT lists those held in the text state that Mpdf::saveInlineProperties() saves, and BLOCK those a
+ * block, table or cell keeps in its own fields.
  *
- * - a block to its child blocks: CssMerger::mergeInheritedBlockProperties() reads TEXT back from the block's saved
- *   text state through InlinePropertyConverter, and BLOCK from the block's level of the block stack;
- * - inline elements to a block or table opened inside them: BlockTag and Table set their text state aside on the
- *   enclosing block, and blockTextState() gives it to mergeInheritedBlockProperties() in place of the enclosing
- *   block's own;
- * - a positioned block to its content: Mpdf::WriteFixedPosHTML() puts TEXT and BLOCK from the block's merged CSS on
- *   the <div> that stands in for the block;
- * - a block to a table in it: CssMerger::mergeInheritedBlockProperties() gives the table TEXT and BLOCK from the block,
- *   as it does a child block;
- * - a table to its cells: Table::open() puts TEXT and text-align from the table's merged CSS in
- *   base_table_properties, which each cell merges under its own CSS. The table also hands on text-align,
- *   line-height, the line stacking and direction through its own fields;
- * - a row group and a row to their cells: THead, TBody, TFoot and Tr put TEXT and BLOCK from their merged CSS over
- *   base_table_properties, and each cell merges what its row holds under its own CSS;
- * - a table cell to a table nested in it: Table::open() starts the nested table's base_table_properties and default
- *   font from the cell's text state, read back through InlinePropertyConverter, and merges the table's CSS over the
- *   cell's line-height and text-align.
+ * Under CssMode::LEGACY the channels mPDF v7 used hand them on, each carrying the list it did: a block's saved text
+ * state and fields to its child blocks, base_table_properties to a table's cells, and the <div> that stands in for a
+ * positioned block to its content.
  *
- * To carry another property, add it to TEXT when it lives in the text state that Mpdf::saveInlineProperties() saves,
- * and make InlinePropertyConverter::convert() read it back. Otherwise add it to BLOCK, and carry it on the block stack
- * in mergeInheritedBlockProperties().
- * InheritedPropertiesTest checks that each channel carries each TEXT property.
- *
- * Under CssMode::LEGACY the channels carry the lists mPDF v7 did.
+ * InheritedPropertiesTest checks that each TEXT property reaches a descendant's text everywhere it is handed on.
  */
 final class InheritedProperties
 {
@@ -111,7 +94,12 @@ final class InheritedProperties
 	 */
 	public static function names()
 	{
-		return array_merge(self::TEXT, self::BLOCK);
+		static $names = null;
+		if ($names === null) {
+			$names = array_merge(self::TEXT, self::BLOCK);
+		}
+
+		return $names;
 	}
 
 	/**

@@ -2,6 +2,8 @@
 
 namespace Mpdf;
 
+use Mpdf\Css\TextDecorations;
+
 /**
  * Keeps the tree of elements in the HTML WriteHTML() reads, so that each CSS rule can be applied to the elements its
  * selector matches, as in a browser. Selectors that name a parent, an ancestor or an earlier sibling, such as
@@ -26,6 +28,12 @@ trait TracksOpenElements
 
 	/** @var array|null The properties merged for <body>, which the document's frame carries as its computed values */
 	private $documentComputed;
+
+	/** @var array The text decorations <body> is drawn in, which the document's frame carries */
+	private $documentDecorations = [];
+
+	/** @var array|null The computed values of the tbody a browser adds around a row written straight into a table */
+	private $impliedTbodyComputed;
 
 	/** @var array[]|null The open elements as they stood inside the positioned block being written, for its content */
 	private $fixedPosBlockElements;
@@ -93,6 +101,9 @@ trait TracksOpenElements
 		'TR' => ['TD' => true, 'TH' => true],
 	];
 
+	/** @var array<string, true> The elements of a table, which draw no text of their own outside their cells */
+	private static $tableParts = ['TABLE' => true, 'THEAD' => true, 'TBODY' => true, 'TFOOT' => true, 'TR' => true, 'TD' => true, 'TH' => true];
+
 	/** @var array<string, true> The tags mPDF wraps substituted characters in, which are not the document's elements */
 	private static $substitutionTags = ['TTA' => true, 'TTS' => true, 'TTZ' => true];
 
@@ -134,11 +145,15 @@ trait TracksOpenElements
 	 *   found. Null when that is not known, as for an element still open at the end of a WriteHTML() call that
 	 *   leaves it open, and in the legacy CSS mode, which reads nothing ahead
 	 * - empty: whether it has no children and no text, white space included. Null when that is not known
-	 * - computed: under the standard CSS mode, the properties CssMerger merged for it, with the CSS-wide keywords
-	 *   resolved, keyed by the uppercased longhands the normalised declarations name. The document's frame carries
-	 *   those of <body>. Null for an element whose CSS was not merged, such as the tbody a table's rows are put in
-	 *   when the HTML leaves it out, and under the legacy mode. `inherit` on a property that is not inherited reads
-	 *   the parent's
+	 * - computed: under the standard CSS mode, its computed values, as ComputedValues makes them from the properties
+	 *   CssMerger merged for it, with the CSS-wide keywords resolved, keyed by the uppercased longhands the normalised
+	 *   declarations name. A property left out has its initial value. The document's frame carries those of <body>, and
+	 *   the tbody a table's rows are put in when the HTML leaves it out carries what the tbody rules give it. Its
+	 *   children start from the inherited ones, and `inherit` on a property that is not inherited reads the rest.
+	 *   Null for an element whose CSS was not merged, such as a void element, and under the legacy mode
+	 * - href and decorations: under the standard CSS mode, the link its content is drawn in and the text decorations
+	 *   that propagate to its content, as TextDecorations::of() gives them. A block opened in it starts from them.
+	 *   Empty for a positioned block, a table and its parts, and under the legacy mode
 	 *
 	 * @return array[]
 	 */
@@ -218,19 +233,6 @@ trait TracksOpenElements
 	}
 
 	/**
-	 * Whether an element opened now in the innermost open element would be put in a tbody that the HTML leaves out,
-	 * as a row written straight into a table is
-	 *
-	 * @param string $tag Uppercased
-	 *
-	 * @return bool
-	 */
-	public function opensInImpliedTbody($tag)
-	{
-		return self::impliesTbody($tag, $this->openElements[count($this->openElements) - 1]);
-	}
-
-	/**
 	 * A path with a frame added for an element opened in its last element, after the children that element has so
 	 * far, and put under the tbody the stack gives a row written straight into a table
 	 *
@@ -267,6 +269,110 @@ trait TracksOpenElements
 	}
 
 	/**
+	 * The computed values an element whose CSS is being merged inherits from, under the standard CSS mode: those on
+	 * its parent's frame, or, where its parent's CSS was never merged, as for the tbody the HTML leaves out, on the
+	 * nearest ancestor's that holds some
+	 *
+	 * @internal
+	 *
+	 * @return array
+	 */
+	public function getInheritedComputed()
+	{
+		list($path, $i) = $this->styledParentPosition();
+
+		for (; $i >= 0; $i--) {
+			if ($path[$i]['computed'] !== null) {
+				return $path[$i]['computed'];
+			}
+		}
+
+		return [];
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @return array The frame of the parent of the element whose CSS is being merged, or the innermost open element's
+	 *               when none is
+	 */
+	public function getParentFrame()
+	{
+		list($path, $i) = $this->styledParentPosition();
+
+		return $path[$i];
+	}
+
+	/**
+	 * Where the parent of the element whose CSS is being merged is on its path: the frame before the element's own, or
+	 * the last when the element has not opened yet. With no element being merged, the innermost open element
+	 *
+	 * @return array The path of open elements and the parent's index in it
+	 */
+	private function styledParentPosition()
+	{
+		if ($this->styledElement === null) {
+			return [$this->openElements, count($this->openElements) - 1];
+		}
+
+		$path = $this->styledElement['path'];
+
+		return [$path, count($path) - ($this->styledElement['tag'] === null ? 2 : 1)];
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @return bool Whether the element whose start tag is being read goes in a tbody the HTML leaves out, which the
+	 *              stack adds when the element is taken in
+	 */
+	public function styledElementOpensInImpliedTbody()
+	{
+		if ($this->styledElement === null || $this->styledElement['tag'] === null) {
+			return false;
+		}
+
+		$path = $this->styledElement['path'];
+
+		return self::impliesTbody($this->styledElement['tag'], $path[count($path) - 1]);
+	}
+
+	/**
+	 * Keeps the computed values of the tbody a browser adds around the row whose start tag is being read, for the
+	 * frame startElement() makes for it
+	 *
+	 * @internal
+	 *
+	 * @param array $computed
+	 */
+	public function setImpliedTbodyComputed(array $computed)
+	{
+		$this->impliedTbodyComputed = $computed;
+	}
+
+	/**
+	 * Keeps on a frame the parts of the text state its content is drawn over that are not inherited properties: the
+	 * link it is in and the text decorations that propagate to it. Its handler has just drawn it in them
+	 *
+	 * @param array $frame
+	 */
+	private function recordDrawnState(array &$frame)
+	{
+		$frame['href'] = $this->HREF;
+		$frame['decorations'] = TextDecorations::of($this);
+	}
+
+	/**
+	 * Keeps the text decorations of <body> on the document's frame and on each a header, footer or new document starts
+	 * from, once WriteHTML() has drawn <body> in them
+	 */
+	private function setDocumentDrawnState()
+	{
+		$this->documentDecorations = TextDecorations::of($this);
+		$this->openElements[0]['decorations'] = $this->documentDecorations;
+	}
+
+	/**
 	 * Keeps the properties merged for <body>, which the document's frame carries as its computed values, in the
 	 * stack being written and in each stack a header, footer or new document starts from. WriteHTML() calls it under
 	 * the standard CSS mode when it merges them
@@ -280,16 +386,20 @@ trait TracksOpenElements
 	}
 
 	/**
-	 * Keeps the properties merged for the positioned block being written, for the frame its content is written in.
-	 * Its start tag in the flow only previews its CSS, so WriteFixedPosHTML() calls it under the standard CSS mode
-	 * once it merges them
+	 * Keeps the computed values of the positioned block being written, for the frame its content is written in. Its
+	 * start tag in the flow only previews its CSS, so WriteFixedPosHTML() calls it under the standard CSS mode once
+	 * it merges them. Out of the flow, the block takes none of the decorations or the link it is in; the <div> that
+	 * stands in for it records its own when it opens
 	 *
-	 * @param array $properties
+	 * @param array $computed
 	 */
-	private function setFixedPosBlockComputed(array $properties)
+	private function setFixedPosBlockComputed(array $computed)
 	{
 		if ($this->fixedPosBlockElements !== null) {
-			$this->fixedPosBlockElements[count($this->fixedPosBlockElements) - 1]['computed'] = $properties;
+			$block = &$this->fixedPosBlockElements[count($this->fixedPosBlockElements) - 1];
+			$block['computed'] = $computed;
+			$block['href'] = '';
+			$block['decorations'] = [];
 		}
 	}
 
@@ -305,6 +415,7 @@ trait TracksOpenElements
 	{
 		$document = $this->newElementFrame('', [], $this->documentLang, 1, 1, '');
 		$document['computed'] = $this->documentComputed;
+		$document['decorations'] = $this->documentDecorations;
 
 		return [$document];
 	}
@@ -338,6 +449,8 @@ trait TracksOpenElements
 			'childTypeTotals' => null,
 			'empty' => null,
 			'computed' => null,
+			'href' => '',
+			'decorations' => [],
 		];
 
 		return isset($this->lookAhead[$key]) ? $this->lookAhead[$key] + $frame : $frame;
@@ -362,12 +475,18 @@ trait TracksOpenElements
 
 		$parent = count($this->openElements) - 1;
 		if (self::impliesTbody($tag, $this->openElements[$parent])) {
-			$this->startElement('TBODY', [], false);
+			$this->startElement('TBODY', [], false, $this->impliedTbodyComputed);
+			$this->impliedTbodyComputed = null;
 			$parent++;
 		}
 
 		$frame = $this->newChildFrame($this->openElements[$parent], $tag, $attr);
 		$frame['computed'] = $computed;
+		// Only the content of a block or an inline element reads it: a table's content starts from a text state of its
+		// own, and a void element has none
+		if ($this->cssMode === CssMode::STANDARD && !isset(self::$tableParts[$tag]) && !isset(self::$voidTags[$tag])) {
+			$this->recordDrawnState($frame);
+		}
 
 		if ($selfClosing || isset(self::$voidTags[$tag])) {
 			$this->recordClosedElement($frame);

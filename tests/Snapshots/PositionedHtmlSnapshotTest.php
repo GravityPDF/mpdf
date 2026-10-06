@@ -47,7 +47,7 @@ class PositionedHtmlSnapshotTest extends Snapshot
 			}
 
 			.myfixed1 {
-				position: absolute;
+				position: absolute; line-height: 1.33;
 				overflow: visible;
 				left: 0;
 				bottom: 0;
@@ -60,7 +60,7 @@ class PositionedHtmlSnapshotTest extends Snapshot
 			}
 
 			.myfixed2 {
-				position: fixed;
+				position: fixed; line-height: 1.33;
 				overflow: auto;
 				right: 0;
 				bottom: 0mm;
@@ -129,7 +129,7 @@ class PositionedHtmlSnapshotTest extends Snapshot
 
 		<pagebreak />
 
-		<div style="position:fixed; left: 0; right: 0; bottom: 0; top: 0;">
+		<div style="position:fixed; line-height: 1.33; left: 0; right: 0; bottom: 0; top: 0;">
 			<h1>mPDF</h1>
 			<h4>Fixed-position block element with Autofit</h4>
 			<div>Using the CSS properties position and overflow:auto it is possible to fit text to a single page:</div>

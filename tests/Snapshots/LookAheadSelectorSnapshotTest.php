@@ -91,7 +91,7 @@ class LookAheadSelectorSnapshotTest extends Snapshot
 		<ul class="not-last"><li>First item</li><li>Second item</li><li>Last item</li></ul>
 
 		<p class="caption">In the page header, the second line is red. In the positioned box at the foot of the page, its last line is red.</p>
-		<div class="box" style="position: absolute; bottom: 1mm; left: 20mm; width: 120mm; border: 0.2mm solid #999999; padding: 2mm;"><p>Positioned box, first line</p><p>Positioned box, last line: red</p></div>
+		<div class="box" style="position: absolute; line-height: 1.33; bottom: 1mm; left: 20mm; width: 120mm; border: 0.2mm solid #999999; padding: 2mm;"><p>Positioned box, first line</p><p>Positioned box, last line: red</p></div>
 		<?php
 		$html = ob_get_clean();
 

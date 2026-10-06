@@ -656,7 +656,7 @@ class ListStyleTypeSnapshotTest extends Snapshot
 
 		<p>The following lists are rendered inside fixed-position containers.</p>
 
-		<div style="position: fixed; top: 50mm; left: 15mm; width: 80mm; border: 1px solid #999; padding: 5px;">
+		<div style="position: fixed; line-height: 1.33; top: 50mm; left: 15mm; width: 80mm; border: 1px solid #999; padding: 5px;">
 			<h4>Fixed top-left: decimal</h4>
 			<ol style="list-style-type: decimal;">
 				<li>Fixed One</li><li>Fixed Two</li><li>Fixed Three</li>
@@ -673,7 +673,7 @@ class ListStyleTypeSnapshotTest extends Snapshot
 			</ul>
 		</div>
 
-		<div style="position: fixed; top: 50mm; right: 15mm; width: 80mm; border: 1px solid #999; padding: 5px;">
+		<div style="position: fixed; line-height: 1.33; top: 50mm; right: 15mm; width: 80mm; border: 1px solid #999; padding: 5px;">
 			<h4>Fixed top-right: lower-roman</h4>
 			<ol style="list-style-type: lower-roman;">
 				<li>Fixed One</li><li>Fixed Two</li><li>Fixed Three</li>
@@ -690,7 +690,7 @@ class ListStyleTypeSnapshotTest extends Snapshot
 			</ol>
 		</div>
 
-		<div style="position: fixed; bottom: 20mm; left: 50mm; width: 100mm; border: 1px solid #999; padding: 5px;">
+		<div style="position: fixed; line-height: 1.33; bottom: 20mm; left: 50mm; width: 100mm; border: 1px solid #999; padding: 5px;">
 			<h4>Fixed bottom: hebrew</h4>
 			<ol style="list-style-type: hebrew; font-family: taameydavidclm;">
 				<li>Fixed One</li><li>Fixed Two</li><li>Fixed Three</li>

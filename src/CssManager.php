@@ -248,12 +248,11 @@ class CssManager
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes including CLASS, ID, STYLE
-	 * @param array $inherited Under the standard cascade, what the element inherits, under everything else merged
 	 * @return array Merged CSS properties array
 	 */
-	public function mergeCss($inherit, $tag, $attr, array $inherited = [])
+	public function mergeCss($inherit, $tag, $attr)
 	{
-		return $this->cssMerger->merge($inherit, $tag, $attr, $inherited);
+		return $this->cssMerger->merge($inherit, $tag, $attr);
 	}
 
 	/**
@@ -281,6 +280,24 @@ class CssManager
 	public function previewTableCss($tag, $attr)
 	{
 		return $this->cssMerger->previewTableCss($tag, $attr);
+	}
+
+	/**
+	 * @return array Under the standard CSS mode, the computed values of the element merged last
+	 */
+	public function getLastComputed()
+	{
+		return $this->cssMerger->getLastComputed();
+	}
+
+	/**
+	 * @param array $properties Properties that no stylesheet was merged into
+	 * @param array $parent The computed values they are taken against
+	 * @return array Their computed values
+	 */
+	public function computeValues(array $properties, array $parent)
+	{
+		return $this->cssMerger->compute($properties, $parent);
 	}
 
 	public function getUsedClassNames()

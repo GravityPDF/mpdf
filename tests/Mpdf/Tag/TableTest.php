@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
+use Mpdf\CssMode;
 use Mpdf\Mpdf;
 
 class TableTest extends BaseTagTestCase
@@ -67,6 +68,9 @@ class TableTest extends BaseTagTestCase
 		$this->assertEquals([0, 0, 1], $table['nestedpos']);
 	}
 
+	/**
+	 * Under the legacy CSS mode a table hands its cells its text properties through base_table_properties
+	 */
 	public function testCssProperties()
 	{
 		$attr = [
@@ -75,17 +79,36 @@ class TableTest extends BaseTagTestCase
 		$ahtml = [];
 		$ihtml = 0;
 
+		$this->mpdf->cssMode = CssMode::LEGACY;
 		$this->tag->open($attr, $ahtml, $ihtml);
 		$table = $this->mpdf->table[$this->mpdf->tableLevel][1];
 
 		$this->assertEquals('rtl', $table['direction']);
 		$this->assertEquals('#ff0000', $table['bgcolor'][-1]);
 		$this->assertEquals(Border::ALL, $table['border']);
-		$this->assertSame('700', $this->mpdf->base_table_properties['FONT-WEIGHT']); // the computed weight
+		$this->assertEqualsIgnoringCase('BOLD', $this->mpdf->base_table_properties['FONT-WEIGHT']);
 		$this->assertEqualsIgnoringCase('ITALIC', $this->mpdf->base_table_properties['FONT-STYLE']);
 		$this->assertEquals('blue', $this->mpdf->base_table_properties['COLOR']);
 		$this->assertEquals('2px', $this->mpdf->base_table_properties['LETTER-SPACING']);
 		$this->assertEquals('5px', $this->mpdf->base_table_properties['WORD-SPACING']);
+	}
+
+	/**
+	 * Under the standard CSS mode a table's cells inherit from its frame, and base_table_properties keeps only the
+	 * font and size a nested table's end puts back
+	 */
+	public function testStandardCssPropertiesAreNotHandedOnThroughBaseProperties()
+	{
+		$attr = ['STYLE' => 'direction: rtl; font-family: serif; font-size: 14pt; font-weight: bold; color: blue;'];
+		$ahtml = [];
+		$ihtml = 0;
+
+		$this->tag->open($attr, $ahtml, $ihtml);
+		$table = $this->mpdf->table[$this->mpdf->tableLevel][1];
+
+		$this->assertEquals('rtl', $table['direction']);
+		$this->assertSame(['FONT-FAMILY', 'FONT-SIZE'], array_keys($this->mpdf->base_table_properties));
+		$this->assertEqualsWithDelta(14 / Mpdf::SCALE, (float) $this->mpdf->base_table_properties['FONT-SIZE'], 1e-9);
 	}
 
 	public function testAttributes()

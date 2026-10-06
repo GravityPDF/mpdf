@@ -99,6 +99,16 @@ class CssMerger
 	private $cssProperties = [];
 
 	/**
+	 * @var array Under the standard cascade, the computed values of the element merged last
+	 */
+	private $lastComputed = [];
+
+	/**
+	 * @var ComputedValues
+	 */
+	private $computedValues;
+
+	/**
 	 * @var \Mpdf\Css\BorderMerger
 	 */
 	private $borderMerger;
@@ -128,7 +138,8 @@ class CssMerger
 		ColorConverter $colorConverter,
 		BorderMerger $borderMerger,
 		PresentationalHints $presentationalHints,
-		SizeConverter $sizeConverter
+		SizeConverter $sizeConverter,
+		ComputedValues $computedValues
 	) {
 		$this->mpdf = $mpdf;
 		$this->normalizeProperties = $normalizeProperties;
@@ -139,6 +150,7 @@ class CssMerger
 		$this->borderMerger = $borderMerger;
 		$this->presentationalHints = $presentationalHints;
 		$this->sizeConverter = $sizeConverter;
+		$this->computedValues = $computedValues;
 	}
 
 	/**
@@ -165,17 +177,16 @@ class CssMerger
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes including CLASS, ID, STYLE
-	 * @param array $inherited Under the standard cascade, what the element inherits, under everything else merged
 	 * @return array Merged CSS properties array
 	 */
-	public function merge($inherit, $tag, $attr, array $inherited = [])
+	public function merge($inherit, $tag, $attr)
 	{
 		$this->cssProperties = [];
 
 		$attr = is_array($attr) ? $attr : [];
 
 		if ($this->mpdf->cssMode === CssMode::STANDARD) {
-			return $this->mergeInCascadeOrder($inherit, $tag, $attr, $inherited);
+			return $this->mergeInCascadeOrder($inherit, $tag, $attr);
 		}
 
 		$classes = [];
@@ -220,20 +231,20 @@ class CssMerger
 	}
 
 	/**
-	 * Merges an element's CSS as standard mode orders it, in layers, each over the one before: the inherited
-	 * values, the built-in defaults and the default stylesheet's rules, the presentational attributes as author rules
-	 * of zero specificity, the author rules, and the inline style; then the !important declarations of the author
-	 * rules, of the inline style, and of the default stylesheet's rules. The rules of each stylesheet apply by
-	 * specificity, then in the order they were written. Each rule that reaches a table cell draws its borders over
-	 * those of its neighbours.
+	 * Merges an element's CSS as standard mode orders it, in layers, each over the one before: the computed values
+	 * it inherits from its parent's frame, the built-in defaults and the default stylesheet's rules, the presentational
+	 * attributes as author rules of zero specificity, the author rules, and the inline style; then the !important
+	 * declarations of the author rules, of the inline style, and of the default stylesheet's rules. The rules of each
+	 * stylesheet apply by specificity, then in the order they were written. Each rule that reaches a table cell draws
+	 * its borders over those of its neighbours. The CSS-wide keywords and currentColor are then resolved, and the
+	 * element's computed values kept on its frame.
 	 *
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE)
 	 * @param string $tag HTML tag name
 	 * @param array $attr HTML attributes, as the tag handler was given them
-	 * @param array $inherited What the element inherits, besides what a block takes from its parent block
-	 * @return array Merged CSS properties array
+	 * @return array Merged CSS properties array. For an inline element, and a block in a table cell, only its own
 	 */
-	private function mergeInCascadeOrder($inherit, $tag, array $attr, array $inherited)
+	private function mergeInCascadeOrder($inherit, $tag, array $attr)
 	{
 		// Found once, when a rule set first has a rule filed under the element. previewBlockCss() looks at an element
 		// that is not being written, so it is put in the innermost open element, and nothing is recorded
@@ -256,8 +267,18 @@ class CssMerger
 		$classes = $this->classesOf($attr);
 		$dominance = $tag === 'TD' || $tag === 'TH' ? 9 : false;
 
-		$this->cssProperties = $inherited;
-		$this->mergeInheritedBlockProperties($inherit, $tag);
+		// What the element starts from: the computed values of the inherited properties on its parent's frame
+		$parent = $this->parentFrameComputed($tag);
+		$this->cssProperties = $this->computedValues->inheritedFrom($parent);
+		if ($inherit === 'BLOCK') {
+			$this->mergeBlockExtras($tag);
+		}
+		// What inherit reads
+		$inheritable = $this->cssProperties;
+		if ($tag === 'UL' || $tag === 'OL') {
+			// A list starts its items' markers afresh, as a browser's default style gives each list its own
+			unset($this->cssProperties['LIST-STYLE-TYPE']);
+		}
 		$inherited = $this->cssProperties;
 
 		// The built-in defaults and the default stylesheet are merged on their own first, for revert to read
@@ -270,7 +291,7 @@ class CssMerger
 		if ($tag === 'TH' && isset($inherited['TEXT-ALIGN'])) {
 			$defaults['TEXT-ALIGN'] = $inherited['TEXT-ALIGN'];
 		}
-		$this->cssProperties = array_merge($inherited, $defaults);
+		$this->cssProperties = $defaults;
 
 		$this->mergePresentationalHints($tag, $attr);
 		$this->mergeTableSpecificCss($tag, $attr);
@@ -286,8 +307,9 @@ class CssMerger
 			list($importantBody, $html) = $this->mergeDocumentRules();
 			$importantRules = array_merge(isset($important['BODY']) ? [$important['BODY']] : [], $importantBody);
 			$importantDefaultRules = isset($importantDefault['BODY']) ? [$importantDefault['BODY']] : [];
-			// html is body's parent, which a keyword on body reads
-			$inherited = array_merge($inherited, $html);
+			// html is body's parent, which a keyword on body reads, and whose font size body's is taken of
+			$inheritable = array_merge($inheritable, $html);
+			$parent = ['FONT-SIZE' => $this->mpdf->root_font_size . 'pt'];
 		} else {
 			list($rules, $importantRules) = $this->cssManager->getRules()->matchingDeclarations($tag, $id, $classes, $path);
 		}
@@ -296,14 +318,92 @@ class CssMerger
 		list($inline, $importantInline) = isset($attr['STYLE']) ? $this->inlineStyleParser->parseByImportance($attr['STYLE']) : [[], []];
 		$this->mergeEach(array_merge([$inline], $importantRules, [$importantInline], $importantDefaultRules), $dominance);
 
+		$own = $this->cssProperties;
+		$this->cssProperties = array_merge($inherited, $own);
 		// Before currentColor, which takes the colour a keyword resolves to
-		$this->resolveWideKeywords($inherited, $defaults, $path, $inherit !== 'INLINE' && $inherit !== '', $html);
-		$this->resolveCurrentColor($inherit, $inherited);
+		$this->resolveWideKeywords($inheritable, $defaults, $html !== null ? $html : $parent);
+		$this->resolveCurrentColor($inherit, $inheritable);
+		// The default font size is body's, and a keyword on body is taken of the one html starts from
+		$computed = $this->computedValues->compute($this->cssProperties, $parent, $own, $tag === 'BODY' ? $this->mpdf->initial_font_size : null);
+		$this->lastComputed = $computed;
 		if ($this->sideEffects) {
-			$this->mpdf->recordStyledElementComputed($this->cssProperties);
+			$this->mpdf->recordStyledElementComputed($computed);
 		}
 
-		return $this->cssProperties;
+		// The handler draws the inherited properties in their computed values, and the rest as merged, since setCSS()
+		// reads those against the element's font size. Not through inheritedFrom(), whose last answer serves the
+		// element's siblings
+		$properties = array_merge($this->cssProperties, InheritedProperties::of($computed, InheritedProperties::names()));
+
+		// An inline element, and a block in a table cell, is drawn over the state of what it is in, which already
+		// holds what it inherits
+		return $inherit === 'INLINE' || $inherit === '' ? array_intersect_key($properties, $own) : $properties;
+	}
+
+	/**
+	 * @param string $tag The element's tag, uppercased
+	 * @return array The computed values an element being merged inherits from: its parent's, or, where the parent
+	 *               was not merged, the nearest ancestor's. A row written straight into a table inherits from the
+	 *               tbody a browser adds, whose CSS is previewed here
+	 */
+	private function parentFrameComputed($tag)
+	{
+		if ($tag === 'BODY') {
+			return [];
+		}
+
+		if ($this->sideEffects && $this->mpdf->styledElementOpensInImpliedTbody()) {
+			$this->previewTableCss('TBODY', []);
+			$this->mpdf->setImpliedTbodyComputed($this->lastComputed);
+
+			return $this->lastComputed;
+		}
+
+		return $this->mpdf->getInheritedComputed();
+	}
+
+	/**
+	 * @return array Under the standard cascade, the computed values of the element merged last
+	 */
+	public function getLastComputed()
+	{
+		return $this->lastComputed;
+	}
+
+	/**
+	 * @param array $properties Properties that no stylesheet was merged into
+	 * @param array $parent The computed values they are taken against
+	 * @return array Their computed values
+	 */
+	public function compute(array $properties, array $parent)
+	{
+		return $this->computedValues->compute($properties, $parent);
+	}
+
+	/**
+	 * The properties mPDF passes from a block to its child blocks besides the inherited ones: the custom
+	 * margin-collapse, the background of a block in columns, and to a list item the marker its list draws, which
+	 * the list's handler chooses where no rule does
+	 *
+	 * @param string $tag
+	 * @return void
+	 */
+	private function mergeBlockExtras($tag)
+	{
+		$previousBlockLevel = $this->getBlockLevel('BLOCK');
+		$previousBlock = isset($this->mpdf->blk[$previousBlockLevel]) ? $this->mpdf->blk[$previousBlockLevel] : [];
+
+		if (!empty($previousBlock['margin_collapse'])) {
+			$this->cssProperties['MARGIN-COLLAPSE'] = 'COLLAPSE';
+		}
+
+		if (!empty($previousBlock['bgcolorarray']) && $this->mpdf->ColActive) {
+			$this->cssProperties['BACKGROUND-COLOR'] = $this->colorConverter->colAtoString($previousBlock['bgcolorarray']);
+		}
+
+		if ($tag === 'LI' && !empty($previousBlock['list_style_type'])) {
+			$this->cssProperties['LIST-STYLE-TYPE'] = $previousBlock['list_style_type'];
+		}
 	}
 
 	/**
@@ -350,7 +450,7 @@ class CssMerger
 			}
 
 			if ($color === null) {
-				$color = $this->elementColor($inherit);
+				$color = $this->elementColor($inherit, $inherited);
 			}
 
 			$this->cssProperties[$property] = str_ireplace('currentcolor', $color, $this->cssProperties[$property]);
@@ -359,11 +459,10 @@ class CssMerger
 
 	/**
 	 * Resolves the CSS-wide keywords the cascade left in the element's properties:
-	 * - inherit: for an inherited property, the value the element starts from, which is its parent's. A block, a table
-	 *   and a table part are not handed every inherited value, so failing that they take the value their parent's frame
-	 *   on the stack of open elements holds. Failing both, the property is dropped, and the element keeps the state it
-	 *   is drawn in, as an inline element does. For any other property, the value its parent's frame holds, or failing
-	 *   that the initial value
+	 * - inherit: for an inherited property, the value the element starts from, which is its parent's computed value.
+	 *   Where it starts from none, the parent has the initial value, and the property is dropped so the element is
+	 *   drawn in its initial state. For any other property, the value its parent's frame holds, or failing that the
+	 *   initial value
 	 * - initial: the initial value CssWideKeywords gives, or the document's default font and size
 	 * - unset: inherit for an inherited property, and initial for any other
 	 * - revert and revert-layer: the value of the built-in defaults and the default stylesheet, or failing that unset
@@ -372,15 +471,11 @@ class CssMerger
 	 *
 	 * @param array $inherited The properties the element starts from, before the defaults
 	 * @param array $defaults The properties the built-in defaults and the default stylesheet give the element
-	 * @param callable $path Gives the open elements from the document down to the element, or null for none
-	 * @param bool $fromParent Whether an inherited property the element does not start from is read from its parent's
-	 *                         frame: for a block, a table and a table part
-	 * @param array|null $parentProperties The properties of a parent that has no frame, as html has none for body
+	 * @param array $parent The computed values on the parent's frame, or html's properties for body
 	 * @return void
 	 */
-	private function resolveWideKeywords(array $inherited, array $defaults, callable $path, $fromParent, $parentProperties = null)
+	private function resolveWideKeywords(array $inherited, array $defaults, array $parent)
 	{
-		$parent = null;
 		$sides = [];
 		foreach ($this->cssProperties as $property => $value) {
 			$keyword = CssWideKeywords::keywordOf($value);
@@ -407,14 +502,13 @@ class CssMerger
 			}
 
 			$resolved = null;
-			if ($keyword === 'inherit' && $isInherited && isset($inherited[$property])) {
-				$resolved = $inherited[$property];
-			} elseif ($keyword === 'inherit' && (!$isInherited || $fromParent)) {
-				if ($parent === null) {
-					$parent = $parentProperties !== null ? $parentProperties : $this->parentComputed($path);
-				}
+			if ($keyword === 'inherit' && $isInherited) {
+				// What the element starts from holds each inherited value of its parent's that is not the initial one,
+				// and one left out is drawn in its initial state
+				$resolved = isset($inherited[$property]) ? $inherited[$property] : null;
+			} elseif ($keyword === 'inherit') {
 				$resolved = $this->declaredValue($parent, $property);
-				if ($resolved === null && !$isInherited) {
+				if ($resolved === null) {
 					$resolved = $this->initialValue($property);
 				}
 			} elseif ($keyword === 'initial') {
@@ -437,13 +531,14 @@ class CssMerger
 	 * The colour currentColor stands for in the element's merged properties
 	 *
 	 * @param string $inherit Inheritance context
+	 * @param array $inherited Under the standard cascade, what the element inherits
 	 * @return string A colour with no spaces, which a border or shadow value keeps as one component
 	 */
-	private function elementColor($inherit)
+	private function elementColor($inherit, array $inherited)
 	{
 		$color = isset($this->cssProperties['COLOR']) ? $this->cssProperties['COLOR'] : '';
 		if (!$this->colorConverter->isColor($color) && strtolower($color) !== 'transparent') {
-			$color = $this->inheritedColor($inherit);
+			$color = $this->inheritedColor($inherit, $inherited);
 		}
 
 		if ($color === null) {
@@ -454,21 +549,21 @@ class CssMerger
 	}
 
 	/**
-	 * The colour an element takes when it sets none, as mPDF passes it on in each context: a block takes the colour of
-	 * the block or inline elements it is opened in, a table's parts their row's, row group's or table's, and anything
-	 * else the colour of the text around it
+	 * The colour an element takes when it sets none. Under the standard cascade it is its parent's computed colour.
+	 * The legacy cascade passes it on in each context: a block takes the colour of the block it is opened in, a
+	 * table's parts the table's, and anything else the colour of the text around it
 	 *
 	 * @param string $inherit Inheritance context
 	 * @param array $inherited Under the standard cascade, what the element inherits
 	 * @return string|null Null for the document's default colour
 	 */
-	private function inheritedColor($inherit, array $inherited = [])
+	private function inheritedColor($inherit, array $inherited)
 	{
-		if ($inherit === 'TABLE' || $inherit === 'TOPTABLE') {
-			if (isset($inherited['COLOR'])) {
-				return $inherited['COLOR'];
-			}
+		if ($this->mpdf->cssMode === CssMode::STANDARD) {
+			return isset($inherited['COLOR']) ? $inherited['COLOR'] : null;
+		}
 
+		if ($inherit === 'TABLE' || $inherit === 'TOPTABLE') {
 			return isset($this->mpdf->base_table_properties['COLOR']) ? $this->mpdf->base_table_properties['COLOR'] : null;
 		}
 
@@ -524,22 +619,6 @@ class CssMerger
 		$border = preg_split('/\s+/', trim($properties[$m[1]]));
 
 		return count($border) === 3 ? $border[array_search($m[2], self::BORDER_PARTS, true)] : null;
-	}
-
-	/**
-	 * @param callable $path Gives the open elements from the document down to the element, or null for none
-	 * @return array The properties merged for the element's parent, or none if it has no parent or they were not kept
-	 */
-	private function parentComputed(callable $path)
-	{
-		$elements = $path();
-		if ($elements === null || count($elements) < 2) {
-			return [];
-		}
-
-		$parent = $elements[count($elements) - 2];
-
-		return $parent['computed'] !== null ? $parent['computed'] : [];
 	}
 
 	/**
@@ -779,8 +858,9 @@ class CssMerger
 	}
 
 	/**
-	 * Merge the properties a block inherits from the block it is opened in. Under the standard cascade, a table that
-	 * is not in a cell inherits from the block it is opened in too.
+	 * Merge the properties a block inherits from the block it is opened in, as the legacy cascade hands them on: from
+	 * the block's fields and its saved text state, after the extras both cascades pass on. The standard cascade reads
+	 * the parent's frame instead
 	 *
 	 * @param string $inherit Inheritance type (TOPTABLE, TABLE, BLOCK)
 	 * @param string $tag HTML tag name
@@ -788,18 +868,14 @@ class CssMerger
 	 */
 	protected function mergeInheritedBlockProperties($inherit, $tag)
 	{
-		$table = $inherit === 'TOPTABLE' && $this->mpdf->cssMode === CssMode::STANDARD;
-		if ($inherit !== 'BLOCK' && !$table) {
+		if ($inherit !== 'BLOCK') {
 			return;
 		}
 
+		$this->mergeBlockExtras($tag);
+
 		$previousBlockLevel = $this->getBlockLevel($inherit);
 		$previousBlock = isset($this->mpdf->blk[$previousBlockLevel]) ? $this->mpdf->blk[$previousBlockLevel] : [];
-
-		// Block properties which are inherited
-		if (!empty($previousBlock['margin_collapse'])) {
-			$this->cssProperties['MARGIN-COLLAPSE'] = 'COLLAPSE';
-		}
 
 		// custom tag, but follows CSS principle that border-collapse is inherited
 		if (!empty($previousBlock['line_height'])) {
@@ -817,11 +893,6 @@ class CssMerger
 
 		if (!empty($previousBlock['direction'])) {
 			$this->cssProperties['DIRECTION'] = $previousBlock['direction'];
-		}
-
-		// mPDF 6  Lists
-		if ($tag === 'LI' && !empty($previousBlock['list_style_type'])) {
-			$this->cssProperties['LIST-STYLE-TYPE'] = $previousBlock['list_style_type'];
 		}
 
 		if (!empty($previousBlock['list_style_image'])) {
@@ -852,32 +923,15 @@ class CssMerger
 			}
 		}
 
-		if (!empty($previousBlock['bgcolorarray']) && $this->mpdf->ColActive) {
-			// Doesn't officially inherit, but default value is transparent (?=inherited)
-			$cor = $previousBlock['bgcolorarray'];
-			$this->cssProperties['BACKGROUND-COLOR'] = $this->colorConverter->colAtoString($cor);
-		}
-
 		if (isset($previousBlock['text_indent'])) {
 			$this->cssProperties['TEXT-INDENT'] = $previousBlock['text_indent'];
 		}
 
-		$saved = InheritedProperties::blockTextState($this->mpdf->blk, $previousBlockLevel);
-		if ($saved !== null) {
-			if ($this->mpdf->cssMode === CssMode::LEGACY) {
-				// mPDF v7 did not hand a block's text shadow on to its child blocks
-				unset($saved['textshadow']);
-				$converted = $this->inlinePropertyConverter->convert($saved);
-			} else {
-				// Text decorations propagate as a set of their own (TextDecorations), and vertical-align is not inherited
-				$converted = InheritedProperties::of($this->inlinePropertyConverter->convert($saved), InheritedProperties::TEXT);
-			}
-			$this->cssProperties = array_merge($this->cssProperties, $converted); // mPDF 5.7.1
-		}
-
-		if ($table) {
-			// Not the margin collapse, column background, text decoration or vertical-align a child block takes
-			$this->cssProperties = InheritedProperties::of($this->cssProperties, InheritedProperties::names());
+		if (isset($previousBlock['InlineProperties'])) {
+			$saved = $previousBlock['InlineProperties'];
+			// mPDF v7 did not hand a block's text shadow on to its child blocks
+			unset($saved['textshadow']);
+			$this->cssProperties = array_merge($this->cssProperties, $this->inlinePropertyConverter->convert($saved)); // mPDF 5.7.1
 		}
 	}
 
