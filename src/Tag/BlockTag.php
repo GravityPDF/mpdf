@@ -1131,7 +1131,7 @@ abstract class BlockTag extends Tag
 	}
 
 	/**
-	 * Holds the block's width within its min-width and max-width. A narrowed or widened width is set on the block as
+	 * Holds the block's width within its min-width and max-width. A width the limits change is set on the block as
 	 * a width would be, so that its auto margins, float or direction place the box. A block without a width starts
 	 * from the width its container leaves it.
 	 *
@@ -1143,10 +1143,6 @@ abstract class BlockTag extends Tag
 	private function constrainWidth(array &$blk, array $properties, $containerWidth, $edges)
 	{
 		$constraints = new WidthConstraints($this->sizeConverter, $properties, $containerWidth, $this->mpdf->FontSize);
-		if (!$constraints->any()) {
-			return;
-		}
-
 		$width = isset($blk['css_set_width'])
 			? $blk['css_set_width']
 			: $containerWidth - $blk['margin_left'] - $blk['margin_right'] - $edges;

@@ -13,12 +13,12 @@ final class WidthConstraints
 	/**
 	 * @var float
 	 */
-	private $min = 0.0;
+	private $min;
 
 	/**
 	 * @var float|null None where max-width is not set
 	 */
-	private $max = null;
+	private $max;
 
 	/**
 	 * @param SizeConverter $sizeConverter
@@ -28,24 +28,8 @@ final class WidthConstraints
 	 */
 	public function __construct(SizeConverter $sizeConverter, array $properties, $containerWidth, $fontSize)
 	{
-		$max = $this->length($sizeConverter, $properties, 'MAX-WIDTH', $containerWidth, $fontSize);
-		if ($max !== null) {
-			$this->max = $max;
-		}
-		$min = $this->length($sizeConverter, $properties, 'MIN-WIDTH', $containerWidth, $fontSize);
-		if ($min !== null) {
-			$this->min = $min;
-		}
-	}
-
-	/**
-	 * Whether either limit is set
-	 *
-	 * @return bool
-	 */
-	public function any()
-	{
-		return $this->max !== null || $this->min > 0;
+		$this->max = $this->length($sizeConverter, $properties, 'MAX-WIDTH', $containerWidth, $fontSize);
+		$this->min = (float) $this->length($sizeConverter, $properties, 'MIN-WIDTH', $containerWidth, $fontSize);
 	}
 
 	/**
@@ -80,7 +64,7 @@ final class WidthConstraints
 	 */
 	private function length(SizeConverter $sizeConverter, array $properties, $property, $containerWidth, $fontSize)
 	{
-		if (!isset($properties[$property]) || !preg_match('/^[\d.]/', trim($properties[$property]))) {
+		if (!isset($properties[$property]) || !$sizeConverter->isLength($properties[$property])) {
 			return null;
 		}
 

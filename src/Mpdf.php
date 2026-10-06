@@ -15595,16 +15595,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($checkinnerhtml == '' && $inner_w === 'auto') {
 				$inner_w = 2 * $this->GetCharWidth('W', false);
 			}
-			// min-width and max-width hold a set width, or the width left and right leave, which the algorithm below then
-			// places as a set width
+			// A width that min-width or max-width changes goes through the algorithm below as a set width
 			$widthConstraints = new WidthConstraints($this->sizeConverter, $this->cssMode === CssMode::STANDARD ? $p : [], $cont_w, $this->FontSize);
 			if ($inner_w !== 'auto') {
 				$inner_w = $widthConstraints->clamp($inner_w);
-			} elseif ($widthConstraints->any() && $bbox_left !== 'auto' && $bbox_right !== 'auto') {
+			} elseif ($bbox_left !== 'auto' && $bbox_right !== 'auto') {
 				$available = $cont_w - $bbox_left - $bbox_right - $bbox_bl - $bbox_pl - $bbox_pr - $bbox_br
 					- ($bbox_ml === 'auto' ? 0 : $bbox_ml) - ($bbox_mr === 'auto' ? 0 : $bbox_mr);
-				if ($widthConstraints->clamp($available) != $available) {
-					$inner_w = $widthConstraints->clamp($available);
+				$clamped = $widthConstraints->clamp($available);
+				if ($clamped != $available) {
+					$inner_w = $clamped;
 				}
 			}
 			// ================================================================
