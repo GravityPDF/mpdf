@@ -961,6 +961,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private $roundedBox;
 
 	/**
+	 * @var \Mpdf\InsetBoxShadow
+	 */
+	private $insetBoxShadow;
+
+	/**
 	 * @var \Mpdf\Image\Bmp
 	 */
 	private $bmp;
@@ -3001,7 +3006,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			foreach ($pbs as $pb) {
 
-				if ((!isset($pb['image_id']) && !isset($pb['gradient'])) || isset($pb['shadowonly'])) { // Background colour or boxshadow
+				if (((!isset($pb['image_id']) && !isset($pb['gradient'])) || isset($pb['shadowonly'])) && !isset($pb['inset'])) { // Background colour or boxshadow
 
 					if ($pb['z-index'] > 0) {
 						$this->current_layer = $pb['z-index'];
@@ -3049,7 +3054,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			/* -- BACKGROUNDS -- */
 			foreach ($pbs as $pb) {
 
-				if ((isset($pb['gradient']) && $pb['gradient']) || (isset($pb['image_id']) && $pb['image_id'])) {
+				if ((isset($pb['gradient']) && $pb['gradient']) || (isset($pb['image_id']) && $pb['image_id']) || isset($pb['inset'])) {
 
 					if ($pb['z-index'] > 0) {
 						$this->current_layer = $pb['z-index'];
@@ -3227,9 +3232,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					if (isset($pb['clippath']) && $pb['clippath']) {
 						$s .= 'Q' . "\n";
 					}
+				} elseif (isset($pb['inset'])) { // An inset box-shadow, over every background of its block
+					$s .= $pb['shadow'] . "\n";
 				}
 
-				if ((isset($pb['gradient']) && $pb['gradient']) || (isset($pb['image_id']) && $pb['image_id'])) {
+				if ((isset($pb['gradient']) && $pb['gradient']) || (isset($pb['image_id']) && $pb['image_id']) || isset($pb['inset'])) {
 					if ($pb['visibility'] != 'visible') {
 						$s .= 'EMC' . "\n";
 					}
@@ -18388,7 +18395,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$s .= $this->roundedBox->path($this->h, $bgx0, $bgy0, $bgx1, $bgy1, $brbg);
 		// Box Shadow
 		$shadow = '';
+		$insetShadow = '';
 		if (isset($this->blk[$blvl]['box_shadow']) && $this->blk[$blvl]['box_shadow'] && $h > 0) {
+			$paddingBox = [
+				'x0' => $x0 + $border_left,
+				'y0' => $y0 + $border_top,
+				'x1' => $x1 - $border_right,
+				'y1' => $y1 - $border_bottom,
+				'radii' => $this->roundedBox->inset($radii, ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left]),
+			];
 			foreach ($this->blk[$blvl]['box_shadow'] as $sh) {
 				// Colors
 				if ($sh['col'][0] == 1) {
@@ -18417,18 +18432,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$col2 = '5' . $sh['col'][1] . $sh['col'][2] . $sh['col'][3] . chr(0);
 				}
 
-				// Use clipping path as set above (and rectangle around page) to clip area outside box
-				$shadow .= $s; // Use the clipping path with W*
-				$shadow .= sprintf('0 %.3F m %.3F %.3F l ', $this->h * Mpdf::SCALE, $this->w * Mpdf::SCALE, $this->h * Mpdf::SCALE);
-				$shadow .= sprintf('%.3F 0 l 0 0 l 0 %.3F l ', $this->w * Mpdf::SCALE, $this->h * Mpdf::SCALE);
-				$shadow .= 'W n' . "\n";
-
 				$sh['blur'] = abs($sh['blur']); // cannot have negative blur value
 				// A blur fades out through a soft mask, so without transparency the shadow keeps the hard edge at the blur's midpoint
 				if ($sh['blur'] && !$this->transparencyAllowed()) {
 					$this->pdfaxWarning('A box-shadow cannot be blurred without transparency (Shadow drawn without blur)');
 					$sh['blur'] = 0;
 				}
+
+				if (!empty($sh['inset'])) {
+					$insetShadow .= $this->insetBoxShadow->operators($paddingBox, $sh, $col1, $col2, $colspace);
+					continue;
+				}
+
+				// Use clipping path as set above (and rectangle around page) to clip area outside box
+				$shadow .= $s; // Use the clipping path with W*
+				$shadow .= sprintf('0 %.3F m %.3F %.3F l ', $this->h * Mpdf::SCALE, $this->w * Mpdf::SCALE, $this->h * Mpdf::SCALE);
+				$shadow .= sprintf('%.3F 0 l 0 0 l 0 %.3F l ', $this->w * Mpdf::SCALE, $this->h * Mpdf::SCALE);
+				$shadow .= 'W n' . "\n";
+
 				// Ensure spread/blur do not make effective shadow width/height < 0
 				// Could do more complex things but this just adjusts spread value
 				if (-$sh['spread'] + $sh['blur'] / 2 > min($w / 2, $h / 2)) {
@@ -18933,6 +18954,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 		/* -- END BACKGROUNDS -- */
+
+		// An inset shadow lies over every background and under the content
+		if ($insetShadow) {
+			$this->pageBackgrounds[$blvl][] = [
+				'inset' => true,
+				'shadow' => $insetShadow,
+				'visibility' => $this->visibility,
+				'z-index' => $this->current_layer,
+			];
+		}
 
 		// Float DIV
 		$this->blk[$blvl]['bb_painted'][$this->page] = true;
