@@ -9880,11 +9880,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->pageoutput[$this->page]['TextRendering'] = $tr;
 	}
 
-	function SetTextOutline($params = [])
+	/**
+	 * Sets the line width, stroke colour and rendering mode text is drawn with: stroked for a text outline, or else
+	 * filled, with the width and stroke colour reset
+	 *
+	 * @param array $params The text parameters, which name the outline's width and colour
+	 * @param array|string|null $textColor The colour of the text, which an outline with no colour takes in standard
+	 *                                     mode, as text-outline-color is currentColor by default. Null for black
+	 * @return void
+	 */
+	function SetTextOutline($params = [], $textColor = null)
 	{
 		if (isset($params['outline-s']) && $params['outline-s']) {
 			$this->SetLineWidth($params['outline-WIDTH']);
-			$this->SetDColor($params['outline-COLOR']);
+			if (isset($params['outline-COLOR'])) {
+				$this->SetDColor($params['outline-COLOR']);
+			} elseif ($this->cssMode === CssMode::STANDARD) {
+				$this->SetDColor($textColor ?: $this->colorConverter->convert(0, $this->PDFAXwarnings));
+			}
+			// Legacy mode strokes an outline with no colour in the stroke colour already set, as mPDF v7 did
 			$tr = ('2 Tr');
 			if ($this->page > 0 && ((isset($this->pageoutput[$this->page]['TextRendering']) && $this->pageoutput[$this->page]['TextRendering'] != $tr) || !isset($this->pageoutput[$this->page]['TextRendering']))) {
 				$this->writer->write($tr);
@@ -17333,7 +17347,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			if (isset($vetor[9]) and ! empty($vetor[9])) { // Text parameters - Outline + hyphens
 				$this->textparam = $vetor[9];
-				$this->SetTextOutline($this->textparam);
+				$this->SetTextOutline($this->textparam, isset($vetor[3]) ? $vetor[3] : null);
 				// mPDF 5.7.3  inline text-decoration parameters
 				if ($is_table && $this->shrin_k) {
 					if (isset($this->textparam['text-baseline'])) {
@@ -20009,7 +20023,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					break;
 
 				case 'TEXT-OUTLINE-COLOR':
-					if (strtoupper($v) == 'INVERT') {
+					if (strtolower($v) === 'currentcolor') {
+						// Left unset, the outline is drawn in the colour of each piece of text
+						unset($this->textparam['outline-COLOR']);
+					} elseif (strtoupper($v) == 'INVERT') {
 						if ($this->colorarray) {
 							$cor = $this->colorarray;
 							$this->textparam['outline-COLOR'] = $this->colorConverter->invert($cor);
