@@ -23,6 +23,12 @@ class Tag
 	];
 
 	/**
+	 * @var array<string, int> How deep in a table each of its parts is: a row group, a row, a cell. Keep in step with
+	 * TracksOpenElements::$tableImpliedEndTags, which closes the same parts on the stack of open elements
+	 */
+	private static $tablePartDepths = ['THEAD' => 1, 'TBODY' => 1, 'TFOOT' => 1, 'TR' => 2, 'TD' => 3, 'TH' => 3];
+
+	/**
 	 * @var \Mpdf\Mpdf
 	 */
 	private $mpdf;
@@ -224,35 +230,17 @@ class Tag
 					$this->CloseTag('OPTION', $ahtml, $ihtml);
 					$closed = true;
 				}
-				// Table elements - see also WriteHTML()
-				if (!$closed && ($tag == 'TD' || $tag == 'TH') && $this->mpdf->lastoptionaltag == 'TD') {
-					$this->CloseTag($this->mpdf->lastoptionaltag, $ahtml, $ihtml);
-					$closed = true;
-				} // *TABLES*
-				if (!$closed && ($tag == 'TD' || $tag == 'TH') && $this->mpdf->lastoptionaltag == 'TH') {
-					$this->CloseTag($this->mpdf->lastoptionaltag, $ahtml, $ihtml);
-					$closed = true;
-				} // *TABLES*
-				if (!$closed && $tag == 'TR' && $this->mpdf->lastoptionaltag == 'TR') {
-					$this->CloseTag($this->mpdf->lastoptionaltag, $ahtml, $ihtml);
-					$closed = true;
-				} // *TABLES*
-				if (!$closed && $tag == 'TR' && $this->mpdf->lastoptionaltag == 'TD') {
-					$this->CloseTag($this->mpdf->lastoptionaltag, $ahtml, $ihtml);
-					$this->CloseTag('TR', $ahtml, $ihtml);
-					$this->CloseTag('THEAD', $ahtml, $ihtml);
-					$closed = true;
-				} // *TABLES*
-				if (!$closed && $tag == 'TR' && $this->mpdf->lastoptionaltag == 'TH') {
-					$this->CloseTag($this->mpdf->lastoptionaltag, $ahtml, $ihtml);
-					$this->CloseTag('TR', $ahtml, $ihtml);
-					$this->CloseTag('THEAD', $ahtml, $ihtml);
-					$closed = true;
-				} // *TABLES*
+			}
+
+			// A cell, row or row group ends the open ones as deep in the table as it is, or deeper (see also WriteHTML())
+			if (isset(self::$tablePartDepths[$tag])) {
+				$this->closeTableParts(self::$tablePartDepths[$tag], $ahtml, $ihtml);
 			}
 		}
 
 		if ($object = $this->getTagInstance($tag)) {
+			$this->trackTablePart($tag, true);
+
 			return $object->open($attr, $ahtml, $ihtml);
 		}
 	}
@@ -260,7 +248,82 @@ class Tag
 	public function CloseTag($tag, &$ahtml, &$ihtml)
 	{
 		if ($object = $this->getTagInstance($tag)) {
+			$this->trackTablePart($tag, false);
+
 			return $object->close($ahtml, $ihtml);
 		}
+	}
+
+	/**
+	 * Closes the cells, rows and row groups open inside a table part, or a table, whose end tag is being read: the
+	 * parts whose end tags HTML lets be left out. WriteHTML() calls it before closing the part itself
+	 *
+	 * @param string $tag The end tag's name, uppercased
+	 * @param string[] $ahtml
+	 * @param int $ihtml
+	 */
+	public function closeTablePartsInside($tag, &$ahtml, &$ihtml)
+	{
+		if ($tag === 'TABLE') {
+			$this->closeTableParts(1, $ahtml, $ihtml);
+		} elseif (isset(self::$tablePartDepths[$tag])) {
+			$this->closeTableParts(self::$tablePartDepths[$tag] + 1, $ahtml, $ihtml);
+		}
+	}
+
+	/**
+	 * Closes, innermost first, the innermost table's open cells, rows and row groups at least $depth deep. They come
+	 * from a list of the open parts, not the part last opened: a block in a cell, or a row closed by its own end tag,
+	 * would hide the cell or row group still open around it
+	 *
+	 * @param int $depth As in $tablePartDepths
+	 * @param string[] $ahtml
+	 * @param int $ihtml
+	 */
+	private function closeTableParts($depth, &$ahtml, &$ihtml)
+	{
+		foreach (array_reverse($this->openTableParts()) as $part) {
+			if (self::$tablePartDepths[$part] < $depth) {
+				return;
+			}
+			$this->CloseTag($part, $ahtml, $ihtml);
+		}
+	}
+
+	/**
+	 * Keeps the list of the innermost table's open cells, rows and row groups, outermost first, as one opens or closes.
+	 * Only the closes allow_html_optional_endtags turns on read it
+	 *
+	 * @param string $tag The tag being opened or closed, uppercased
+	 * @param bool $opening
+	 */
+	private function trackTablePart($tag, $opening)
+	{
+		if (!isset(self::$tablePartDepths[$tag]) || !$this->mpdf->tableLevel || !$this->mpdf->allow_html_optional_endtags) {
+			return;
+		}
+
+		$parts = &$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['openParts'];
+		if ($opening) {
+			$parts[] = $tag;
+		} elseif ($parts && self::$tablePartDepths[end($parts)] === self::$tablePartDepths[$tag]) {
+			array_pop($parts);
+		}
+	}
+
+	/**
+	 * The innermost table's open cells, rows and row groups, outermost first
+	 *
+	 * @return string[] Their tags
+	 */
+	private function openTableParts()
+	{
+		if (!$this->mpdf->tableLevel) {
+			return [];
+		}
+
+		$table = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]];
+
+		return isset($table['openParts']) ? $table['openParts'] : [];
 	}
 }

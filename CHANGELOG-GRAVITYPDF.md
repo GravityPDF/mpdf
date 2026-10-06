@@ -234,6 +234,7 @@ Bugfixes
   * With several layers, mPDF still draws only the first, now over the colour given in the last.
 * A `border` or `background` shorthand with a part that is none of its parts, such as `border: 1px solid bogus`, is dropped, as a browser drops it, so the value it would have replaced still applies. `border: 1px solid bogus` used to draw a black border. [#552] [#583]
 * `tr:nth-child()` counted the rows of the whole table less its header and footer rows, so a second `<tbody>` carried on the count of the first, and `tr:first-child` missed the first footer row when `<tfoot>` came after the body. Rows are now counted within their `<thead>`, `<tbody>` or `<tfoot>`, or within the run of rows written straight into the table. [#528] [#582]
+* Under the legacy `cssMode`, a table cell, row or row group whose end tag was left out passed the descendant rules it matched on to the parts after it. With `tr:nth-child(2) td { color: red }`, every row after the second of `<tr><td>A<tr><td>B<tr><td>C` was red too, and a `.totals td` rule for a `<tbody class="totals">` with no `</tbody>` coloured the next row group's cells. A `<td>` or `<tr>` now closes the open cell and row, and a `<thead>`, `<tbody>` or `<tfoot>` the open row group, whether the table is written straight into the body or into a block, and whether or not the cell holds a block such as a `<p>`. A `</table>` closes a row group left open too, which in a nested table let its rules reach the outer table's rows. In both modes, the rows after the first of a `<thead>` written without end tags inside a block were left out of the header that repeats on each page. [#630] [#682]
 * `currentColor` in a border raised two "Uninitialized string offset" warnings for each side and drew it black, and in `text-outline` it raised an undefined-key warning and drew black. Both are now drawn in the element's colour, set or inherited. [#540] [#651]
 * Colours that convert to nothing were drawn black or grey instead of drawing nothing. [#552] [#540] [#651]
   * A `transparent` side of a border, as in Bootstrap's `border: 1px solid transparent`, was drawn black, with warnings on a block. It now takes its width and draws nothing, on blocks, inline elements, table cells and images.
@@ -953,3 +954,5 @@ These changes do not change output.
 [#680]: https://github.com/GravityPDF/mpdf/pull/680
 [#650]: https://github.com/GravityPDF/mpdf/issues/650
 [#681]: https://github.com/GravityPDF/mpdf/pull/681
+[#630]: https://github.com/GravityPDF/mpdf/issues/630
+[#682]: https://github.com/GravityPDF/mpdf/pull/682
