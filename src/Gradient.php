@@ -880,16 +880,16 @@ class Gradient
 		$pos_angle = false;
 		$shape_size = false;
 		$first = preg_split('/\s+/', trim($bgr[0]));
+		$shapeOrSize = '/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i';
 		if (!$this->isStop($first)) {
 			$startStops = 1;
-			if (preg_match('/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i', $bgr[0])
-				&& !preg_match('/(left|center|right|bottom|top|deg|grad|rad)/i', $bgr[0])) {
+			if (preg_match($shapeOrSize, $bgr[0]) && !preg_match('/(left|center|right|bottom|top|deg|grad|rad)/i', $bgr[0])) {
 				$shape_size = $bgr[0];
 			} else {
 				$pos_angle = $bgr[0];
 			}
 		}
-		if (isset($bgr[1]) && preg_match('/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i', $bgr[1])) {
+		if (isset($bgr[1]) && preg_match($shapeOrSize, $bgr[1])) {
 			$startStops = 2;
 			$shape_size = $bgr[1];
 		}

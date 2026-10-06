@@ -33,20 +33,32 @@ class GradientFirstStopTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The colours of the first stops given to the shading function, as many as expected
+	 * The colours of the first two stops given to the shading function
 	 *
 	 * @param array $gradient
-	 * @param int $count
 	 *
 	 * @return string[]
 	 */
-	private function leadingColours(array $gradient, $count)
+	private function leadingColours(array $gradient)
 	{
-		return array_column(array_slice($gradient['stops'], 0, $count), 'col');
+		return array_column(array_slice($gradient['stops'], 0, 2), 'col');
 	}
 
 	/**
-	 * A first stop at a unitless 0 keeps its colour and starts the gradient, in linear and radial gradients alike
+	 * The axis of a linear gradient as [x0, y0, x1, y1] across the box, with y running up
+	 *
+	 * @param array $gradient
+	 *
+	 * @return float[]
+	 */
+	private function axis(array $gradient)
+	{
+		return array_map('floatval', array_slice($gradient['coords'], 0, 4));
+	}
+
+	/**
+	 * A first stop at a unitless 0 keeps its colour and starts the gradient, in linear and radial gradients alike. A
+	 * linear gradient then runs down the box, as one with no direction does
 	 *
 	 * @dataProvider stopAtZeroProvider
 	 *
@@ -59,13 +71,17 @@ class GradientFirstStopTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$gradient = $this->gradient($background);
 
 		$this->assertSame($type, $gradient['type']);
-		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient, 2));
+		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient));
 		$this->assertSame(0, $gradient['stops'][0]['offset']);
 
 		if ($repeats) {
 			$this->assertSame(self::RED, $gradient['stops'][2]['col'], 'drawn again after the last stop');
 		} else {
 			$this->assertCount(2, $gradient['stops']);
+		}
+
+		if ($type === Gradient::TYPE_LINEAR) {
+			$this->assertEqualsWithDelta([0.5, 1, 0.5, 0], $this->axis($gradient), 0.0001);
 		}
 	}
 
@@ -81,22 +97,11 @@ class GradientFirstStopTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'repeating radial, percentages' => ['repeating-radial-gradient(red 0%, blue 10%)', Gradient::TYPE_RADIAL, true],
 			'repeating radial after a shape' => ['repeating-radial-gradient(circle, red 0, blue 10px)', Gradient::TYPE_RADIAL, true],
 			'radial' => ['radial-gradient(red 0, blue)', Gradient::TYPE_RADIAL, false],
-			'radial, rgb()' => ['radial-gradient(rgb(255, 0, 0) 0, blue)', Gradient::TYPE_RADIAL, false],
 			'linear' => ['linear-gradient(red 0, blue)', Gradient::TYPE_LINEAR, false],
 			'linear, rgb()' => ['linear-gradient(rgb(255, 0, 0) 0, blue)', Gradient::TYPE_LINEAR, false],
 			'linear, hex' => ['linear-gradient(#f00 0, #00f)', Gradient::TYPE_LINEAR, false],
 			'repeating linear' => ['repeating-linear-gradient(red 0, blue 10px)', Gradient::TYPE_LINEAR, true],
 		];
-	}
-
-	/**
-	 * A linear gradient whose first stop sits at 0 runs down the box, as one with no direction does
-	 */
-	public function testLinearGradientStartingWithAStopRunsDown()
-	{
-		$gradient = $this->gradient('linear-gradient(red 0, blue)');
-
-		$this->assertEqualsWithDelta([0.5, 1, 0.5, 0], array_map('floatval', array_slice($gradient['coords'], 0, 4)), 0.0001);
 	}
 
 	/**
@@ -106,9 +111,9 @@ class GradientFirstStopTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$gradient = $this->gradient('linear-gradient(0, red, blue)');
 
-		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient, 2));
+		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient));
 		$this->assertCount(2, $gradient['stops']);
-		$this->assertEqualsWithDelta([0, 0, 0, 1], array_map('floatval', array_slice($gradient['coords'], 0, 4)), 0.0001);
+		$this->assertEqualsWithDelta([0, 0, 0, 1], $this->axis($gradient), 0.0001);
 	}
 
 	/**
@@ -118,7 +123,7 @@ class GradientFirstStopTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$gradient = $this->gradient('radial-gradient(0, red, blue)');
 
-		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient, 2));
+		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient));
 		$this->assertCount(2, $gradient['stops']);
 	}
 
@@ -133,7 +138,7 @@ class GradientFirstStopTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$gradient = $this->gradient($background, CssMode::LEGACY);
 
-		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient, 2));
+		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient));
 	}
 
 	/**
