@@ -341,7 +341,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/**
 	 * @var array|null The outline of the inline element Cell() is drawing a piece of text of, with the sides it is
-	 * left open on, as inlineOutline() gives it
+	 * left open on, as inlinePiece() gives it
 	 */
 	var $spanOutline;
 
@@ -349,6 +349,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * @var int How many inline elements with an outline the document has opened
 	 */
 	var $inlineOutlines = 0;
+
+	/**
+	 * @var array|null The border-radius of the inline element Cell() is drawing a piece of text of, with the sides it
+	 * is left open on, as inlinePiece() gives it
+	 */
+	var $spanRadius;
+
+	/**
+	 * @var int How many inline elements with a border-radius the document has opened
+	 */
+	var $inlineRadii = 0;
 
 	/**
 	 * @var string The outlines of the inline elements on the line being drawn, as operators
@@ -5874,26 +5885,28 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$lbw = $this->spanborddet['L']['w'];
 			$rbw = $this->spanborddet['R']['w'];
 		}
+		$spanBox = [$this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw];
+		$spanWidths = ['top' => $tbw, 'right' => $rbw, 'bottom' => $bbw, 'left' => $lbw];
+		$spanRadii = $this->spanRadii($spanBox, $spanWidths);
 
 		if ($fill == 1 || $border == 1 || !empty($this->spanborddet)) {
 
 			if (!empty($this->spanborddet)) {
 
-				if ($fill == 1) {
+				if ($fill == 1 && $spanRadii) {
+					$s .= $this->roundedBox->path($this->h, $this->x - $lbw, $bg_boxtop - $tbw, $this->x + $w + $rbw, $bg_boxbottom + $bbw, $spanRadii) . 'h f ';
+				} elseif ($fill == 1) {
 					$s .= sprintf('%.3F %.3F %.3F %.3F re f ', ($this->x - $lbw) * Mpdf::SCALE, ($this->h - $bg_boxtop + $tbw) * Mpdf::SCALE, ($w + $lbw + $rbw) * Mpdf::SCALE, (-$bg_boxheight - $tbw - $bbw) * Mpdf::SCALE);
 				}
-
-				$spanBox = [$this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw];
-				$spanWidths = ['top' => $tbw, 'right' => $rbw, 'bottom' => $bbw, 'left' => $lbw];
 
 				$s.= ' q ';
 				$dashon = 3;
 				$dashoff = 3.5;
 				$dot = 2.5;
 
-				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'top', $this->spanborddet['T']);
-				if ($threeD !== '') {
-					$s .= $threeD . ' ';
+				$drawn = $this->spanBorderSide($spanBox, $spanRadii, $spanWidths, 'top', $this->spanborddet['T']);
+				if ($drawn !== '') {
+					$s .= $drawn . ' ';
 				} elseif (Border::drawsSide($this->spanborddet['T'])) {
 					$short = 0;
 
@@ -5933,9 +5946,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$s .= ' Q ';
 					}
 				}
-				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'bottom', $this->spanborddet['B']);
-				if ($threeD !== '') {
-					$s .= $threeD . ' ';
+				$drawn = $this->spanBorderSide($spanBox, $spanRadii, $spanWidths, 'bottom', $this->spanborddet['B']);
+				if ($drawn !== '') {
+					$s .= $drawn . ' ';
 				} elseif (Border::drawsSide($this->spanborddet['B'])) {
 
 					$short = 0;
@@ -5976,9 +5989,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'left', $this->spanborddet['L']);
-				if ($threeD !== '') {
-					$s .= $threeD . ' ';
+				$drawn = $this->spanBorderSide($spanBox, $spanRadii, $spanWidths, 'left', $this->spanborddet['L']);
+				if ($drawn !== '') {
+					$s .= $drawn . ' ';
 				} elseif (Border::drawsSide($this->spanborddet['L'])) {
 					$short = 0;
 					if ($this->spanborddet['L']['style'] == 'dashed') {
@@ -6017,9 +6030,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'right', $this->spanborddet['R']);
-				if ($threeD !== '') {
-					$s .= $threeD . ' ';
+				$drawn = $this->spanBorderSide($spanBox, $spanRadii, $spanWidths, 'right', $this->spanborddet['R']);
+				if ($drawn !== '') {
+					$s .= $drawn . ' ';
 				} elseif (Border::drawsSide($this->spanborddet['R'])) {
 
 					$short = 0;
@@ -6069,7 +6082,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$op = 'S';
 				}
 
-				$s .= sprintf('%.3F %.3F %.3F %.3F re %s ', $this->x * Mpdf::SCALE, ($this->h - $bg_boxtop) * Mpdf::SCALE, $w * Mpdf::SCALE, -$bg_boxheight * Mpdf::SCALE, $op);
+				if ($spanRadii && $op === 'f') {
+					$s .= $this->roundedBox->path($this->h, $this->x, $bg_boxtop, $this->x + $w, $bg_boxbottom, $spanRadii) . 'h f ';
+				} else {
+					$s .= sprintf('%.3F %.3F %.3F %.3F re %s ', $this->x * Mpdf::SCALE, ($this->h - $bg_boxtop) * Mpdf::SCALE, $w * Mpdf::SCALE, -$bg_boxheight * Mpdf::SCALE, $op);
+				}
 			}
 		}
 
@@ -6367,7 +6384,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// Written once the line is drawn, so the text and backgrounds after this piece do not cover it
 			if ($this->spanOutline) {
-				$this->lineOutlines .= ' ' . $this->boxOutline->draw($this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw, RoundedBox::SQUARE, $this->spanOutline);
+				$this->lineOutlines .= ' ' . $this->boxOutline->draw($spanBox[0], $spanBox[1], $spanBox[2], $spanBox[3], $spanRadii ?: RoundedBox::SQUARE, $this->spanOutline);
 			}
 		}
 		if ($s) {
@@ -7900,7 +7917,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->spanborddet['R']['s'] = $this->spanborddet['R']['w'] = 0;
 					}
 				}
-				$this->spanOutline = isset($this->objectbuffer[$k]) ? null : $this->inlineOutline(isset($contentB[$k]) ? $contentB[$k] : '');
+				$this->startSpanPiece($k, $contentB);
 				// WORD SPACING
 				// mPDF 5.7.1
 				$widthChunk = $this->aliasReplaceForWidth($chunk);
@@ -7951,7 +7968,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->x += $this->spanborddet['R']['w'];
 					}
 				}
-				$this->spanOutline = null;
+				$this->spanOutline = $this->spanRadius = null;
 				// *********** SPAN BACKGROUND COLOR OFF - RESET BLOCK BGCOLOR ***************** //
 				if (isset($spanfill) && $spanfill) {
 					$fill = $save_fill;
@@ -9656,7 +9673,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$this->spanborddet['R']['s'] = $this->spanborddet['R']['w'] = 0;
 							}
 						}
-						$this->spanOutline = isset($this->objectbuffer[$k]) ? null : $this->inlineOutline(isset($contentB[$k]) ? $contentB[$k] : '');
+						$this->startSpanPiece($k, $contentB);
 
 						// WORD SPACING
 						// StringWidth this time includes any kashida spacing
@@ -9704,7 +9721,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$this->x += $this->spanborddet['R']['w'];
 							}
 						}
-						$this->spanOutline = null;
+						$this->spanOutline = $this->spanRadius = null;
 						// *********** SPAN BACKGROUND COLOR OFF - RESET BLOCK BGCOLOR ***************** //
 						if (isset($spanfill) && $spanfill) {
 							$fill = $save_fill;
@@ -17309,7 +17326,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		$this->joinInlineOutlines($arrayaux);
+		if ($this->inlineOutlines) {
+			$this->joinInlinePieces($arrayaux, 'box-outline');
+		}
+		if ($this->inlineRadii) {
+			$this->joinInlinePieces($arrayaux, 'box-radius');
+		}
 
 		if ($this->cssMode === CssMode::STANDARD) {
 			// Each piece of text is drawn in the state it was buffered with, over the block's own, and not over whatever
@@ -19112,6 +19134,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $this->boxOutline->borderSide($box, $radii, $widths, $side, $border);
 	}
 
+	/**
+	 * The operators that draw one side of an inline element's border: round its corners, in any style, where the
+	 * element has a border-radius, or as threeDBorderSide() draws it where it has none
+	 *
+	 * @param array $box The piece's border box: x0, y0, x1, y1
+	 * @param array|null $radii Its corners, as spanRadii() gives them, or null where the element is not rounded
+	 * @param array $widths Its border widths, keyed top/right/bottom/left
+	 * @param string $side top, right, bottom or left
+	 * @param array $border The side's border
+	 *
+	 * @return string The operators, or an empty string where the side is drawn as before
+	 */
+	private function spanBorderSide(array $box, $radii, array $widths, $side, array $border)
+	{
+		if ($radii === null) {
+			return $this->threeDBorderSide($box, RoundedBox::SQUARE, $widths, $side, $border);
+		}
+
+		return Border::drawsSide($border) ? $this->boxOutline->roundedBorderSide($box, $radii, $widths, $side, $border) : '';
+	}
+
 	function PaintImgBorder($objattr, $is_table, $box = null)
 	{
 		// Borders are disabled in columns - messes up the repositioning in printcolumnbuffer
@@ -19178,55 +19221,96 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Marks the pieces of text that each inline element with an outline is drawn in: its outline is open on the
-	 * left of each piece but its first, and on the right of each but its last
+	 * Marks the pieces of text that each inline element with an outline or a border-radius is drawn in: its outline
+	 * is open, and its corners square, on the left of each piece but its first and on the right of each but its last
 	 *
 	 * @param array $arrayaux The text buffer
+	 * @param string $key box-outline or box-radius, where the text's parameters keep the element's, numbered
 	 */
-	private function joinInlineOutlines(array &$arrayaux)
+	private function joinInlinePieces(array &$arrayaux, $key)
 	{
-		if (!$this->inlineOutlines) {
-			return;
-		}
-
 		$last = null;
 		foreach (array_keys($arrayaux) as $i) {
-			if (!isset($arrayaux[$i][9]['box-outline'])) {
+			if (!isset($arrayaux[$i][9][$key])) {
 				$last = null;
 				continue;
 			}
-			$outline = &$arrayaux[$i][9]['box-outline'];
-			$outline['L'] = $outline['R'] = true;
-			if ($last !== null && $arrayaux[$last][9]['box-outline']['id'] === $outline['id']) {
-				$outline['L'] = false;
-				$arrayaux[$last][9]['box-outline']['R'] = false;
+			$piece = &$arrayaux[$i][9][$key];
+			$piece['L'] = $piece['R'] = true;
+			if ($last !== null && $arrayaux[$last][9][$key]['id'] === $piece['id']) {
+				$piece['L'] = false;
+				$arrayaux[$last][9][$key]['R'] = false;
 			}
-			unset($outline);
+			unset($piece);
 			$last = $i;
 		}
 	}
 
 	/**
-	 * The outline to draw around a piece of an inline element's text, with the sides it is left open on: those where
-	 * the element goes on in another piece, or on another line
+	 * The outline or border-radius of the inline element a piece of text is drawn in, with the sides the piece is left
+	 * open on: those where the element goes on in another piece, or on another line
 	 *
+	 * @param string $key box-outline or box-radius
 	 * @param string $markers L where the piece starts the text it was buffered with, R where it ends it
 	 *
 	 * @return array|null
 	 */
-	private function inlineOutline($markers)
+	private function inlinePiece($key, $markers)
 	{
-		if (!isset($this->textparam['box-outline'])) {
+		if (!isset($this->textparam[$key])) {
 			return null;
 		}
 
-		$outline = $this->textparam['box-outline'];
-		$outline['open'] = [
-			'left' => empty($outline['L']) || strpos($markers, 'L') === false,
-			'right' => empty($outline['R']) || strpos($markers, 'R') === false,
+		$piece = $this->textparam[$key];
+		$piece['open'] = [
+			'left' => empty($piece['L']) || strpos($markers, 'L') === false,
+			'right' => empty($piece['R']) || strpos($markers, 'R') === false,
 		];
 
-		return $outline;
+		return $piece;
+	}
+
+	/**
+	 * Sets the outline and border-radius of the inline element whose piece of text Cell() draws next, with the sides
+	 * the piece is left open on. An object in the text, such as an image, has neither
+	 *
+	 * @param int $k The piece's place in the line
+	 * @param array $contentB Each piece's L and R markers, as inlinePiece() reads them
+	 */
+	private function startSpanPiece($k, array $contentB)
+	{
+		$markers = isset($contentB[$k]) ? $contentB[$k] : '';
+		$isObject = isset($this->objectbuffer[$k]);
+		$this->spanOutline = $isObject ? null : $this->inlinePiece('box-outline', $markers);
+		$this->spanRadius = $isObject ? null : $this->inlinePiece('box-radius', $markers);
+	}
+
+	/**
+	 * The corners of the piece of an inline element's box Cell() is drawing, fitted to it: those on a side where the
+	 * element goes on in another piece are square, as with box-decoration-break: slice. A percentage is of the piece.
+	 * Every piece of a rounded element gets its corners, square or not, so all its pieces are drawn alike
+	 *
+	 * @param array $box The piece's border box: x0, y0, x1, y1
+	 * @param array $widths Its border widths, keyed top/right/bottom/left
+	 *
+	 * @return array|null Null where the element has no border-radius
+	 */
+	private function spanRadii(array $box, array $widths)
+	{
+		if (!$this->spanRadius) {
+			return null;
+		}
+
+		$width = $box[2] - $box[0];
+		$height = $box[3] - $box[1];
+		$radii = BorderRadius::resolve($this->spanRadius['radii'], $this->spanRadius['percent'], $width, $height);
+		foreach (['left' => ['TL', 'BL'], 'right' => ['TR', 'BR']] as $side => $corners) {
+			if ($this->spanRadius['open'][$side]) {
+				$radii[$corners[0]] = $radii[$corners[1]] = [0, 0];
+			}
+		}
+
+		return $this->roundedBox->fit($width, $height, $radii, $widths);
 	}
 
 	/**
@@ -20254,6 +20338,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 		}
+		if ($type == 'INLINE' && $this->cssMode === CssMode::STANDARD) {
+			list($radii, $percent) = BorderRadius::parse($arrayaux, $this->sizeConverter, $this->FontSize);
+			if ($radii) {
+				// Numbered, so the pieces of text it rounds are told from those of a neighbour rounded alike
+				$this->textparam['box-radius'] = ['id' => ++$this->inlineRadii, 'radii' => array_merge(RoundedBox::SQUARE, $radii), 'percent' => $percent];
+			} elseif ($spanbordset) {
+				// A border of its own is a box of its own, which the radius of an element around it does not round
+				unset($this->textparam['box-radius']);
+			}
+		}
+
 		// mPDF 6
 		if ($spanbordset) { // BORDER has been set on this INLINE element
 			if (isset($this->textparam['text-baseline'])) {

@@ -107,13 +107,7 @@ class BoxOutline
 		switch ($style) {
 			case 'dotted':
 			case 'dashed':
-				$s .= $this->stroke($c) . sprintf(' %.3F w ', $w * Mpdf::SCALE);
-				if ($style === 'dotted') {
-					$s .= sprintf('1 J 1 j [0 %.3F] 0 d ', 2 * $w * Mpdf::SCALE);
-				} else {
-					$s .= sprintf('0 J 0 j [%.3F %.3F] 0 d ', 3 * $w * Mpdf::SCALE, 3 * $w * Mpdf::SCALE);
-				}
-				$s .= $this->grown($box, $radii, $offset + $w / 2) . 'h S ';
+				$s .= $this->dashedStroke($style, $c, $w) . $this->grown($box, $radii, $offset + $w / 2) . 'h S ';
 				break;
 
 			case 'double':
@@ -189,16 +183,88 @@ class BoxOutline
 			return '';
 		}
 
+		return $this->filledSide($box, $radii, $widths, $side, $this->threeDRings($border['style'], $border['c']));
+	}
+
+	/**
+	 * The operators that draw one side of a border in any style, following the box's rounded corners: a solid or
+	 * double border as rings filled between the border and padding edges, a dashed or dotted one stroked along the
+	 * middle of the border, and the two-tone styles as borderSide() draws them, solid where the colour cannot be
+	 * shaded
+	 *
+	 * @param array $box The border box: x0, y0, x1, y1
+	 * @param array $radii The border box's corners, fitted to it, keyed TL/TR/BR/BL
+	 * @param array $widths The border widths, keyed top/right/bottom/left
+	 * @param string $side top, right, bottom or left
+	 * @param array $border The side's border, with its style and colour
+	 *
+	 * @return string
+	 */
+	public function roundedBorderSide(array $box, array $radii, array $widths, $side, array $border)
+	{
+		$style = $border['style'];
+		$c = $border['c'];
+
+		if ($style === 'dashed' || $style === 'dotted') {
+			$sideBox = ['x0' => $box[0], 'y0' => $box[1], 'x1' => $box[2], 'y1' => $box[3], 'radii' => $radii];
+
+			return 'q ' . $this->dashedStroke($style, $c, $widths[$side])
+				. $this->roundedBox->side($this->mpdf->h, $side, $sideBox, $widths[$side]) . 'S Q';
+		}
+
+		$s = $this->borderSide($box, $radii, $widths, $side, $border);
+		if ($s !== '') {
+			return $s;
+		}
+
+		$rings = $style === 'double' ? [[2 / 3, 1, $c, $c], [0, 1 / 3, $c, $c]] : [[0, 1, $c, $c]];
+
+		return $this->filledSide($box, $radii, $widths, $side, $rings);
+	}
+
+	/**
+	 * One side of a border filled as rings, clipped to the side's part of the box
+	 *
+	 * @param array $box x0, y0, x1, y1
+	 * @param array $radii
+	 * @param array $widths keyed top/right/bottom/left
+	 * @param string $side
+	 * @param array $rings As threeDRings() gives them
+	 *
+	 * @return string
+	 */
+	private function filledSide(array $box, array $radii, array $widths, $side, array $rings)
+	{
 		// Each ring is [from, to, top and left tone, bottom and right tone]
 		$tone = in_array($side, ['top', 'left'], true) ? 2 : 3;
 		$s = 'q ' . $this->sideRegion($box, $widths, $side) . 'W n ';
-		$rings = $this->runPastBorderlessSides($box, $radii, $widths);
-		foreach ($this->threeDRings($border['style'], $border['c']) as $ring) {
-			$s .= $this->fill($ring[$tone]) . ' ' . $this->insetPath($rings, $radii, $widths, 1 - $ring[1])
-				. $this->insetPath($rings, $radii, $widths, 1 - $ring[0]) . 'f* ';
+		$ringBox = $this->runPastBorderlessSides($box, $radii, $widths);
+		foreach ($rings as $ring) {
+			$s .= $this->fill($ring[$tone]) . ' ' . $this->insetPath($ringBox, $radii, $widths, 1 - $ring[1])
+				. $this->insetPath($ringBox, $radii, $widths, 1 - $ring[0]) . 'f* ';
 		}
 
 		return $s . 'Q';
+	}
+
+	/**
+	 * The operators that set up a stroke dashed or dotted along a line of the given width: dashes three widths long,
+	 * or round dots two widths apart
+	 *
+	 * @param string $style dashed or dotted
+	 * @param string $c A colour as ColorConverter gives it
+	 * @param float $w
+	 *
+	 * @return string
+	 */
+	private function dashedStroke($style, $c, $w)
+	{
+		$s = $this->stroke($c) . sprintf(' %.3F w ', $w * Mpdf::SCALE);
+		if ($style === 'dotted') {
+			return $s . sprintf('1 J 1 j [0 %.3F] 0 d ', 2 * $w * Mpdf::SCALE);
+		}
+
+		return $s . sprintf('0 J 0 j [%.3F %.3F] 0 d ', 3 * $w * Mpdf::SCALE, 3 * $w * Mpdf::SCALE);
 	}
 
 	/**
