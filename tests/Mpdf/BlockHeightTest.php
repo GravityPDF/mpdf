@@ -192,6 +192,97 @@ class BlockHeightTest extends TestCase
 	}
 
 	/**
+	 * The shadow of a block inside one that clips is painted at the top of the page with its background, and is clipped
+	 * to the outer box as the background is (#704)
+	 */
+	public function testANestedShadowIsClippedToTheBoxAroundIt()
+	{
+		$page = $this->page('<div style="height:20mm;overflow:hidden;background:#eee"><div style="height:10mm;background:#f00;box-shadow:5mm 30mm 0 #00f">aa</div></div><div>next</div>');
+
+		$fills = $this->rectangles($page, 're f');
+		$outer = sprintf('%.3F %.3F %.3F %.3F re W n', $fills[0][0], $fills[0][1], $fills[0][2], $fills[0][3]);
+		$shadow = strpos($page, '0.000 0.000 1.000 rg');
+		$this->assertNotFalse($shadow);
+		$this->assertSame(3, substr_count($page, $outer), 'The outer box clips the inner shadow, the inner background and the content');
+
+		$opened = strpos($page, "q\n" . $outer);
+		$this->assertNotFalse($opened);
+		$this->assertLessThan($shadow, $opened, 'The shadow is painted inside the clip');
+		$this->assertLessThan(strpos($page, '1.000 0.000 0.000 rg'), $shadow, 'The shadow is painted under the background');
+	}
+
+	/**
+	 * The shadow of the clipping block itself lies outside its box, and is not clipped to it
+	 */
+	public function testTheShadowOfTheClippingBlockIsNotClipped()
+	{
+		$page = $this->page('<div style="height:20mm;overflow:hidden;background:#eee;box-shadow:5mm 5mm 0 #00f">' . self::SIX_LINES . '</div><div>next</div>');
+
+		$this->assertCount(1, $this->rectangles($page, 're W n'));
+		$this->assertLessThan(strpos($page, 're W n'), strpos($page, '0.000 0.000 1.000 rg'));
+	}
+
+	/**
+	 * A block with border-radius clips to its padding box with the corners rounded: the curves are the outer radii less
+	 * the borders, 4mm for a 5mm radius and a 1mm border. A background inside that reaches the corners is clipped to the
+	 * same path (#704)
+	 */
+	public function testARoundedBlockClipsToItsRoundedPaddingBox()
+	{
+		$page = $this->page('<div style="height:20mm;overflow:hidden;border:1mm solid #000;border-radius:5mm"><div style="height:30mm;background:#f00">aa</div></div><div>next</div>');
+
+		$this->assertSame([], $this->rectangles($page, 're W n'));
+		$this->assertSame(1, preg_match('/q ([\d. mlc]+ h W n)/', $page, $match), 'The content is clipped to a path');
+		$clip = $match[1];
+		$this->assertSame(2, substr_count($page, $clip), 'The inner background and the content are clipped to it');
+		$this->assertStringStartsWith(sprintf('%.3F %.3F m ', $this->pt(15 + 1 + 4), $this->pt(297 - 16 - 1)), $clip, 'The path starts where the top left curve ends');
+		$this->assertSame(8 * 2, substr_count($clip, ' c '), 'Each corner is a quarter ellipse of four curves');
+		$this->assertLessThan(strpos($page, '1.000 0.000 0.000 rg'), strpos($page, $clip), 'The inner background is painted inside the clip');
+	}
+
+	/**
+	 * A percentage on a radius is of the border box, and the clip follows it: 50% of a 40mm x 20mm box less a 1mm
+	 * border gives corners 19mm across and 9mm tall
+	 */
+	public function testAPercentageRadiusIsClippedAsItIsDrawn()
+	{
+		$page = $this->page('<div style="width:38mm;height:18mm;overflow:hidden;border:1mm solid #000;border-radius:50%">aa</div>');
+
+		$this->assertSame(1, preg_match('/q ([\d.]+) ([\d.]+) m [\d. mlc]+ h W n/', $page, $match));
+		$this->assertEqualsWithDelta($this->pt(15 + 1 + 19), (float) $match[1], 0.01, 'The path starts where the top left curve ends');
+		$this->assertEqualsWithDelta($this->pt(297 - 16 - 1), (float) $match[2], 0.01);
+	}
+
+	/**
+	 * A percentage height inside a positioned block is taken of its height, set directly or by its top and bottom (#704)
+	 *
+	 * @dataProvider positionedHeights
+	 */
+	public function testAPercentageHeightInsideAPositionedBlockIsTakenOfItsHeight($style, $outer)
+	{
+		$page = $this->page('<div style="position:absolute;left:20mm;width:80mm;background:#eee;' . $style . '"><div style="height:50%;background:#f00">aa</div></div>');
+
+		$fills = $this->rectangles($page, 're f');
+		$this->assertCount(2, $fills);
+		$this->assertEqualsWithDelta($this->pt($outer), -$fills[0][3], 0.01, 'The positioned block');
+		$this->assertEqualsWithDelta($this->pt($outer / 2), -$fills[1][3], 0.01, 'The block inside is half of it');
+	}
+
+	/**
+	 * A positioned block with no height has none to take a percentage of, so the block inside is as tall as its content.
+	 * Legacy mode takes the percentage of the page area, as before
+	 */
+	public function testAPercentageHeightInsideAPositionedBlockWithNoHeight()
+	{
+		$html = '<div style="position:absolute;top:20mm;left:20mm;width:80mm;%s"><div style="height:50%%;background:#f00">aa</div></div>';
+
+		$this->assertSame($this->page(sprintf($html, '')), $this->page(str_replace('height:50%;', '', sprintf($html, ''))));
+
+		$page = $this->page(sprintf($html, 'height:100mm'), ['cssMode' => CssMode::LEGACY]);
+		$this->assertEqualsWithDelta($this->pt(132.5), -$this->rectangles($page, 're f')[0][3], 0.01);
+	}
+
+	/**
 	 * A zero height with hidden overflow hides the content and takes no room
 	 */
 	public function testAZeroHeightHidesTheContent()
@@ -268,6 +359,19 @@ class BlockHeightTest extends TestCase
 			'clip' => ['clip'],
 			'auto' => ['auto'],
 			'scroll' => ['scroll'],
+		];
+	}
+
+	/**
+	 * The heights of a positioned block on an A4 page: set directly, or left between its top and bottom
+	 *
+	 * @return array[]
+	 */
+	public function positionedHeights()
+	{
+		return [
+			'height' => ['top:20mm;height:100mm', 100],
+			'top and bottom' => ['top:20mm;bottom:20mm', 257],
 		];
 	}
 
