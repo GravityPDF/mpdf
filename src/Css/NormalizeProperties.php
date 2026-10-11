@@ -143,6 +143,7 @@ class NormalizeProperties
 		'BREAK-BEFORE' => ['PAGE-BREAK-BEFORE'],
 		'BREAK-AFTER' => ['PAGE-BREAK-AFTER'],
 		'BREAK-INSIDE' => ['PAGE-BREAK-INSIDE'],
+		'WORD-WRAP' => ['OVERFLOW-WRAP'],
 	];
 
 	public function __construct(Mpdf $mpdf, SizeConverter $sizeConverter, ColorConverter $colorConverter)
@@ -234,6 +235,8 @@ class NormalizeProperties
 				$this->processPageSizeProperty($k, $v);
 			} elseif ($k === 'BREAK-BEFORE' || $k === 'BREAK-AFTER' || $k === 'BREAK-INSIDE') {
 				$this->processBreakProperty($k, $v);
+			} elseif ($standard && ($k === 'WORD-BREAK' || $k === 'OVERFLOW-WRAP' || $k === 'WORD-WRAP')) {
+				$this->processWordBreakProperty($k, $v);
 			} elseif (in_array($k, ['BACKGROUND', 'BACKGROUND-IMAGE', 'BACKGROUND-REPEAT', 'BACKGROUND-POSITION'], true)) {
 				$this->processBackgroundProperty($k, $v);
 			} elseif ($k === 'IMAGE-ORIENTATION') {
@@ -1290,6 +1293,26 @@ class NormalizeProperties
 	{
 		if (array_key_exists($value, self::PAGE_BREAK_VALUES)) {
 			$this->properties['PAGE-' . $property] = self::PAGE_BREAK_VALUES[$value];
+		}
+	}
+
+	/**
+	 * Keeps word-break and overflow-wrap when the value is one they take, as a browser drops an invalid declaration.
+	 * word-wrap is the old name of overflow-wrap
+	 *
+	 * @param string $property WORD-BREAK, OVERFLOW-WRAP or WORD-WRAP
+	 * @param string $value
+	 * @return void
+	 */
+	private function processWordBreakProperty($property, $value)
+	{
+		if ($property === 'WORD-WRAP') {
+			$property = 'OVERFLOW-WRAP';
+		}
+
+		$value = trim($value);
+		if (WordBreak::isValid($property, $value)) {
+			$this->properties[$property] = $value;
 		}
 	}
 

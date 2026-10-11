@@ -114,6 +114,7 @@ final class CssWideKeywords
 		'MARGIN-TOP' => '0',
 		'OPACITY' => '1',
 		'OVERFLOW' => 'visible',
+		'OVERFLOW-WRAP' => 'normal',
 		'PADDING-BOTTOM' => '0',
 		'PADDING-LEFT' => '0',
 		'PADDING-RIGHT' => '0',
@@ -131,6 +132,7 @@ final class CssWideKeywords
 		'VERTICAL-ALIGN' => 'baseline',
 		'VISIBILITY' => 'visible',
 		'WHITE-SPACE' => 'normal',
+		'WORD-BREAK' => 'normal',
 		'WORD-SPACING' => 'normal',
 		'Z-INDEX' => 'auto',
 	];

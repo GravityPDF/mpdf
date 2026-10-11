@@ -17,6 +17,7 @@ use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextIndent;
 use Mpdf\Css\TextVars;
 use Mpdf\Css\WidthConstraints;
+use Mpdf\Css\WordBreak;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
@@ -7355,6 +7356,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->flowingBlockAttr['newblock'] = $newblock;
 		$this->flowingBlockAttr['forcedBreak'] = false;
+		$this->flowingBlockAttr['overflowing'] = false;
 		$this->flowingBlockAttr['valign'] = 'M';
 		$this->flowingBlockAttr['blockdir'] = $blockdir;
 		$this->flowingBlockAttr['cOTLdata'] = []; // mPDF 5.7.1
@@ -7784,7 +7786,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			} else {
 				$CJKoverflow = false;
 			}
-			if ((((($contentWidth + $lastitalic) > $maxWidth) && ($content[(count($chunkorder) - 1)] != ' ') ) ||
+			$overflowing = $this->flowingBlockAttr['overflowing'];
+			$this->flowingBlockAttr['overflowing'] = false;
+			if ($overflowing) {
+				// A line a word overflows is not squeezed to fit
+			} elseif ((((($contentWidth + $lastitalic) > $maxWidth) && ($content[(count($chunkorder) - 1)] != ' ') ) ||
 				(!$endofblock && $align == 'J' && ($next == 'image' || $next == 'select' || $next == 'input' || $next == 'textarea' || ($next == 'br' && $this->justifyB4br)))) && !($CJKoverflow && $this->allowCJKoverflow)) {
 				// WORD SPACING
 				list($jcharspacing, $jws, $jkashida) = $this->GetJspacing($nb_carac, $nb_spaces, ($maxWidth - $lastitalic - $contentWidth - $WidthCorrection - (($this->cMarginL + $this->cMarginR) * Mpdf::SCALE) - ($paddingL + $paddingR + (($fpaddingL + $fpaddingR) * Mpdf::SCALE) )), $inclCursive, $cOTLdata);
@@ -7839,7 +7845,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			} // false -> don't advance y
 
 			$this->x = $currentx + $this->cMarginL + $ipaddingL + $fpaddingL;
-			if ($dottab !== false && $blockdir == 'rtl') {
+			if ($overflowing) {
+				if ($blockdir == 'rtl') {
+					$this->x += $empty;
+				}
+			} elseif ($dottab !== false && $blockdir == 'rtl') {
 				$this->x -= $dottab;
 			} elseif ($align == 'R') {
 				$this->x += $empty;
@@ -8855,6 +8865,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$Oikomi = false; // mPDF 6
 		$hanger = '';
 
+		$keepAll = WordBreak::keepsAll($this->textparam);
+		$breakAll = WordBreak::breaksAll($this->textparam);
+		$breaksLongWords = WordBreak::breaksLongWords($this->textparam);
+
 		// COLS
 		$oldcolumn = $this->CurrCol;
 		if ($this->ColActive && !$is_table) {
@@ -9107,7 +9121,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$contentWidth += $cw;
 						$CJKoverflow = true; // Set flag
 						continue;
-					} elseif (preg_match("/[" . $this->pregCJKchars . "]/u", $checkchar) && $this->allowCJKorphans &&
+					} elseif (!$keepAll && preg_match("/[" . $this->pregCJKchars . "]/u", $checkchar) && $this->allowCJKorphans &&
 							(preg_match("/[" . $this->CJKleading . "]/u", $followingchar) || preg_match("/[" . $this->CJKfollowing . "]/u", $checkchar)) &&
 							!preg_match("/[" . $this->CJKleading . "]/u", $checkchar) && !preg_match("/[" . $this->CJKfollowing . "]/u", $followingchar) &&
 							!(preg_match("/[0-9\x{ff10}-\x{ff19}]/u", $followingchar) && preg_match("/[0-9\x{ff10}-\x{ff19}]/u", $checkchar))) {
@@ -9122,6 +9136,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 				/* -- END CJK-FONTS -- */
+
+				// With word-break: break-all the line breaks where it is full, inside a word as anywhere else
+				if (!$breakfound && $prevchar !== false && $prevchar !== ' ' && $breakAll) {
+					$breakfound = true;
+				}
+
 				/* -- HYPHENATION -- */
 
 				// AUTOMATIC HYPHENATION
@@ -9161,10 +9181,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				// Search backwards to find first line-break opportunity
 				$zeroWidthSpace = $this->zeroWidthSpace();
+				$lineEnd = [$contentctr, $charctr];
+				// While a word overflows, the line up to its last character has been searched already
+				$searched = $this->flowingBlockAttr['overflowing'] ? $this->flowingBlockAttr['overflowSearched'] : [-1, 0];
 				while ($breakfound == false && $prevchar !== false) {
 					$cutcontentctr = $contentctr;
 					$cutcharctr = $charctr;
 					$prevchar = $this->_moveToPrevChar($contentctr, $charctr, $content);
+					if ($contentctr < $searched[0] || ($contentctr == $searched[0] && $charctr < $searched[1])) {
+						break;
+					}
 					/////////////////////
 					// 3) Break at SPACE
 					/////////////////////
@@ -9217,6 +9243,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/////////////////////
 					elseif (!$this->usingCoreFont && $this->checkCJK && preg_match("/[" . $this->pregCJKchars . "]/u", $checkchar) &&
 						!preg_match("/[" . $this->CJKfollowing . "]/u", $checkchar) && !preg_match("/[" . $this->CJKleading . "]/u", $prevchar) &&
+						(!$keepAll || preg_match(WordBreak::CJK_PUNCTUATION, $prevchar . $checkchar)) &&
 						!(preg_match("/[0-9\x{ff10}-\x{ff19}]/u", $prevchar) && preg_match("/[0-9\x{ff10}-\x{ff19}]/u", $checkchar))) {
 						$breakfound = [$cutcontentctr, $cutcharctr, $cutcontentctr, $cutcharctr, 'cut'];
 					}
@@ -9230,6 +9257,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 
 					$checkchar = $prevchar;
+				}
+
+				// A word with nowhere to break overflows the line, unless word-break or overflow-wrap lets it break
+				if ($breakfound === false && !$breaksLongWords) {
+					$lineCount--;
+					$this->flowingBlockAttr['overflowing'] = true;
+					$this->flowingBlockAttr['overflowSearched'] = $lineEnd;
+					$currContent .= $c;
+					$contentWidth += $cw;
+					continue;
 				}
 
 				// If a line-break opportunity found:
@@ -9491,7 +9528,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$nb_spaces = 0;
 					$jkashida = 0;
 					// if it's justified, we need to find the char/word spacing (or if hanger $this->CJKforceend)
-					if (($align == 'J' && !$CJKoverflow) || (($contentWidth + $lastitalic > $maxWidth - $WidthCorrection - (($this->cMarginL + $this->cMarginR) * Mpdf::SCALE) - ($paddingL + $paddingR + (($fpaddingL + $fpaddingR) * Mpdf::SCALE) ) + 0.001) && (!$CJKoverflow || ($CJKoverflow && !$this->allowCJKoverflow))) || $CJKoverflow && $align == 'J' && $this->allowCJKoverflow && $hanger && $this->CJKforceend) {   // 0.001 is to correct for deviations converting mm=>pts
+					// A line a word overflows is not squeezed to fit, nor justified
+					$overflowing = $this->flowingBlockAttr['overflowing'];
+					if (!$overflowing && (($align == 'J' && !$CJKoverflow) || (($contentWidth + $lastitalic > $maxWidth - $WidthCorrection - (($this->cMarginL + $this->cMarginR) * Mpdf::SCALE) - ($paddingL + $paddingR + (($fpaddingL + $fpaddingR) * Mpdf::SCALE) ) + 0.001) && (!$CJKoverflow || ($CJKoverflow && !$this->allowCJKoverflow))) || $CJKoverflow && $align == 'J' && $this->allowCJKoverflow && $hanger && $this->CJKforceend)) {   // 0.001 is to correct for deviations converting mm=>pts
 						// JUSTIFY J (Use character spacing)
 						// WORD SPACING
 						// mPDF 5.7
@@ -9596,7 +9635,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					} // false -> don't advance y
 
 					$this->x = $currentx + $this->cMarginL + $ipaddingL + $fpaddingL;
-					if ($align == 'R') {
+					if ($overflowing) {
+						// An overflowing line is aligned to its start, and runs out of the block at its end
+						if ($blockdir == 'rtl') {
+							$this->x += $empty;
+						}
+					} elseif ($align == 'R') {
 						$this->x += $empty;
 					} elseif ($align == 'C') {
 						$this->x += ($empty / 2);
@@ -9760,6 +9804,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				// Reset lineheight
 				$stackHeight = $this->divheight;
 				$valign = 'M';
+				$this->flowingBlockAttr['overflowing'] = false;
 
 				$font = [];
 				$content = [];
@@ -20118,6 +20163,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					break;
 
+				case 'WORD-BREAK':
+				case 'OVERFLOW-WRAP':
+					if ($this->cssMode === CssMode::STANDARD) {
+						$this->textparam[strtolower($k)] = $v;
+					}
+					break;
+
 				case 'TEXT-OUTLINE':
 					if (strtoupper($v) == 'NONE') {
 						$this->textparam['outline-s'] = false;
@@ -20445,7 +20497,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// mPDF 6
 			// If overflow==wrap ($checkletter) OR (No word breaks and contains CJK)
-			if ($checkletter || (!preg_match('/(' . self::ZERO_WIDTH_SPACE_UTF8 . '| )/', trim($line)) && preg_match("/([" . $this->pregCJKchars . "])/u", $line) )) {
+			$textparam = isset($chunk[9]) ? $chunk[9] : null;
+			$breaksLetters = WordBreak::narrowsMinContent($textparam);
+			if ($breaksLetters) {
+				// The chunk's letters do not join a word the chunk before it ends with
+				$acclength = 0;
+			}
+			if ($checkletter || $breaksLetters || (!WordBreak::keepsAll($textparam) && !preg_match('/(' . self::ZERO_WIDTH_SPACE_UTF8 . '| )/', trim($line)) && preg_match("/([" . $this->pregCJKchars . "])/u", $line) )) {
 				if (preg_match("/([" . $this->pregCJKchars . "])/u", $line)) {
 					$checkCJK = true;
 				} else {
