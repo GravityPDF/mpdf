@@ -7595,7 +7595,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if (!$is_table) {
-			$this->floatShrinkToFit->recordLine($fpaddingL + ($WidthCorrection + $contentWidth) / Mpdf::SCALE);
+			$this->floatShrinkToFit->recordLine($fpaddingL + ($WidthCorrection + $contentWidth) / Mpdf::SCALE + $fpaddingR);
 		}
 
 		// PADDING and BORDER spacing/fill
@@ -9384,7 +9384,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				if (!$is_table) {
-					$this->floatShrinkToFit->recordLine($fpaddingL + ($WidthCorrection + $contentWidth) / Mpdf::SCALE, true);
+					$this->floatShrinkToFit->recordLine($fpaddingL + ($WidthCorrection + $contentWidth) / Mpdf::SCALE + $fpaddingR, true);
 				}
 
 				// NOW FORMAT THE LINE TO OUTPUT
@@ -17607,6 +17607,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$objattr['OUTER-HEIGHT'] = $h;
 						$objattr['OUTER-X'] = $fx;
 						$objattr['OUTER-Y'] = $fy;
+						$buffered = count($this->floatbuffer);
 						if ($objattr['float'] == 'R') {
 							// If R float already exists at this level
 							$this->floatmargins['R']['skipline'] = false;
@@ -17678,6 +17679,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								}
 								$this->floatbuffer[] = $objattr;
 							}
+						}
+						if (count($this->floatbuffer) > $buffered) {
+							$this->floatShrinkToFit->recordFloatedImage($objattr['float'], $w, $fy);
 						}
 					} else {
 						/* -- END CSS-IMAGE-FLOAT -- */

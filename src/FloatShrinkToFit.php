@@ -12,8 +12,14 @@ namespace Mpdf;
  * float out again from that token.
  *
  * The result is min(max-content, available): a line that wrapped means the content wants more than there was, so
- * the float keeps the width it had, and the measuring pass stands as its layout. The min-content lower bound is not
- * applied, as mPDF has no notion of it for a block and would break a long word the same either way.
+ * the float keeps the width it had, and the measuring pass stands as its layout. CSS takes the larger of that and
+ * min-content, which only tells when min-content is wider than the space available; a browser lets the float overflow
+ * then, where mPDF breaks the long word and keeps the float within its container. A float with nothing that records
+ * a width, only empty blocks say, is as narrow as its padding and borders.
+ *
+ * A forced page break closes the float with no tokens to come back to and opens it again on the next page. The
+ * measurement is put by when it closes and taken up again when it opens, so the float is measured on both pages and
+ * laid out again from its start tag when it closes for good.
  */
 class FloatShrinkToFit
 {
@@ -41,6 +47,13 @@ class FloatShrinkToFit
 	private $measuring = 0;
 
 	/**
+	 * Measurements put by when a forced page break closed their float, by block level, until it is opened again
+	 *
+	 * @var array[]
+	 */
+	private $suspended = [];
+
+	/**
 	 * @param \Mpdf\Mpdf $mpdf
 	 */
 	public function __construct(Mpdf $mpdf)
@@ -59,7 +72,26 @@ class FloatShrinkToFit
 	 */
 	public function start($blklvl, array $snapshot, $token)
 	{
+		unset($this->suspended[$blklvl]);
 		$this->mpdf->blk[$blklvl]['float_measure'] = ['state' => $snapshot, 'token' => $token, 'width' => 0, 'wrapped' => false];
+		$this->measuring++;
+	}
+
+	/**
+	 * Takes up again the measurement of the float at $blklvl that a forced page break closed, if there is one
+	 *
+	 * @param int $blklvl
+	 *
+	 * @return void
+	 */
+	public function resume($blklvl)
+	{
+		if (!isset($this->suspended[$blklvl])) {
+			return;
+		}
+
+		$this->mpdf->blk[$blklvl]['float_measure'] = $this->suspended[$blklvl];
+		unset($this->suspended[$blklvl]);
 		$this->measuring++;
 	}
 
@@ -79,6 +111,29 @@ class FloatShrinkToFit
 	}
 
 	/**
+	 * Records an image floated in the current block, with an image floated to the other side beside it
+	 *
+	 * @param string $side L or R
+	 * @param float $width The image's width with its margins and borders
+	 * @param float $y Its top
+	 *
+	 * @return void
+	 */
+	public function recordFloatedImage($side, $width, $y)
+	{
+		if (!$this->measuring) {
+			return;
+		}
+
+		$other = $side === 'L' ? 'R' : 'L';
+		if (isset($this->mpdf->floatmargins[$other]['y1']) && $y >= $this->mpdf->floatmargins[$other]['y0'] && $y < $this->mpdf->floatmargins[$other]['y1']) {
+			$width += $this->mpdf->floatmargins[$other]['w'];
+		}
+
+		$this->record($this->mpdf->blklvl, $width, false);
+	}
+
+	/**
 	 * Records a block of set width that opens at $blklvl, before its margins take up the slack
 	 *
 	 * @param int $blklvl
@@ -93,8 +148,8 @@ class FloatShrinkToFit
 
 		$blk = $this->mpdf->blk[$blklvl];
 		if ($blk['float']) {
-			// Its margin on the other side has been set to what is left over
-			$box = $blk['float_width'];
+			// Its margin on the other side has been set to what is left over, so its own is added back
+			$box = $blk['float_width'] + $blk['float_far_margin'];
 		} else {
 			$box = $blk['margin_left'] + $blk['border_left']['w'] + $blk['padding_left'] + $blk['css_set_width']
 				+ $blk['padding_right'] + $blk['border_right']['w'] + $blk['margin_right'];
@@ -105,9 +160,9 @@ class FloatShrinkToFit
 
 	/**
 	 * Ends the measuring pass of the float at $blklvl, if it is one. When its content wants less than the width it
-	 * was laid out at and its start tag is among $tokens, the document is put back as it was before the float opened,
-	 * for the float to be laid out again from that tag. Otherwise the pass stands as the float's layout: a forced page
-	 * break closes a block with no tokens to come back to, and a float whose text wrapped has its width already
+	 * was laid out at, the document is put back as it was before the float opened, for the float to be laid out again
+	 * from its start tag. Otherwise the pass stands as the float's layout, as a float whose text wrapped has its width
+	 * already. A forced page break closes the float with no tokens: the measurement is put by for resume()
 	 *
 	 * @param int $blklvl
 	 * @param array $tokens The parser's tokens, as handed to BlockTag::close()
@@ -124,8 +179,15 @@ class FloatShrinkToFit
 		$available = $this->mpdf->blk[$blklvl]['css_set_width'];
 		$this->measuring--;
 
-		$width = $measure['wrapped'] || $measure['width'] <= 0 ? $available : min($measure['width'] + self::SLACK, $available);
-		if ($width >= $available || !isset($tokens[$measure['token']])) {
+		if (!isset($tokens[$measure['token']])) {
+			$this->suspended[$blklvl] = $measure;
+			unset($this->mpdf->blk[$blklvl]['float_measure']);
+
+			return null;
+		}
+
+		$width = $measure['wrapped'] ? $available : min($measure['width'] + self::SLACK, $available);
+		if ($width >= $available) {
 			unset($this->mpdf->blk[$blklvl]['float_measure']);
 			$this->recordBlock($blklvl);
 
@@ -148,6 +210,10 @@ class FloatShrinkToFit
 	{
 		for ($f = $level; $f > 0; $f--) {
 			if (!isset($this->mpdf->blk[$f]['float_measure'])) {
+				if (isset($this->mpdf->blk[$f]['css_set_width'])) {
+					// A block of set width recorded its box as it opened, and what it holds does not reach past it
+					return;
+				}
 				continue;
 			}
 

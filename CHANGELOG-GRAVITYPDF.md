@@ -83,6 +83,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
 * **A float with no `width` is as wide as its content, and only a block that starts a block formatting context contains its floats**, as in a browser, under the standard `cssMode`. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the old layout, or give the float a `width` and its parent `overflow: hidden`. [#552] [#590] [#696]
   * A float without a `width` took the whole width left on the line, so nothing flowed beside it. It is now as wide as the widest line, table or block of set width inside it, up to the width available, and the text after it flows beside it. A float whose text wraps still takes the whole width. The float is laid out twice to find that width, as a `page-break-inside: avoid` block is.
+  * A float holding only a floated image, or only empty blocks, kept the whole width, and so did a float with a forced page break inside it. A floated image now counts as content, and so does an image floated right beside a line of text; empty blocks leave the float as narrow as its padding; a float with `page-break-before: always` inside it is measured on both pages. A float of set width inside it counts with its `margin-left` or `margin-right`, and the text inside a block of set width no longer widens the float past that block. [#705]
   * Every ancestor of a float grew to the float's bottom, and whatever followed the ancestor went below the float. Now only the body, a float, a positioned block, and a block with `overflow` other than `visible` or with `display: flow-root` contain their floats. A float sticks out of any other parent, and the blocks after that parent flow beside it. A `<div style="clear: both"></div>` at the end of the parent still makes it contain the float, as a clearfix does, and a `clear` inside a block that starts a block formatting context no longer moves below the floats outside it.
 
 New features
@@ -970,3 +971,4 @@ These changes do not change output.
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
 [#590]: https://github.com/GravityPDF/mpdf/issues/590
 [#696]: https://github.com/GravityPDF/mpdf/pull/696
+[#705]: https://github.com/GravityPDF/mpdf/issues/705

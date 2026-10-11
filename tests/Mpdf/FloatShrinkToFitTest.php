@@ -14,6 +14,11 @@ class FloatShrinkToFitTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	use PageStreams;
 
 	/**
+	 * A JPEG, embedded as it is
+	 */
+	const IMAGE = __DIR__ . '/../data/img/bayeux2.jpg';
+
+	/**
 	 * A left float holding one short word is as wide as that word, and the paragraph after it starts beside it on
 	 * the same line
 	 */
@@ -209,20 +214,155 @@ class FloatShrinkToFitTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A forced page break closes the open blocks without any tokens to come back to, so a float with no width it
-	 * closes keeps the width it was measured at, and nothing is lost or warned about
+	 * A float with a forced page break inside it is measured on both pages, and is as wide as its longer word on
+	 * each, with the paragraph after it beside it on the second
 	 */
-	public function testAForcedPageBreakInsideAFloatWithNoWidthLeavesItAtTheWholeWidth()
+	public function testAFloatWithNoWidthAndAForcedPageBreakInsideIsAsWideAsItsContentOnBothPages()
 	{
-		$pages = $this->pages($this->assertDrawsSilently(function (Mpdf $mpdf) {
-			$mpdf->WriteHTML('<div style="float: left; background: #0f0">before<div style="page-break-before: always">after</div></div><p>bb</p>');
-		}));
+		$html = '<div style="float: left; background: #0f0">before<div style="page-break-before: always">after</div></div><p>bb</p>';
+		$this->assertDrawsSilently(function (Mpdf $mpdf) use ($html) {
+			$mpdf->WriteHTML($html);
+		});
 
+		$pages = $this->pages($this->render($html));
 		$this->assertCount(2, $pages);
 		$this->assertTextCount(1, 'before', $pages[0]);
 		$this->assertTextCount(1, 'after', $pages[1]);
 		$this->assertTextCount(1, 'bb', $pages[1]);
-		$this->assertEqualsWithDelta(180, $this->onlyBox($pages[1])['w'], 0.01);
+
+		$first = $this->onlyBox($pages[0]);
+		$second = $this->onlyBox($pages[1]);
+		$this->assertGreaterThan(5, $first['w']);
+		$this->assertLessThan(15, $first['w']);
+		$this->assertEqualsWithDelta($first['w'], $second['w'], 0.01);
+		$this->assertEqualsWithDelta(15 + $second['w'], $this->positionOf('bb', $pages[1])['x'], 0.01);
+	}
+
+	/**
+	 * The float with a forced page break inside it is laid out again once, from its start tag on the first page
+	 */
+	public function testAFloatWithAForcedPageBreakInsideIsUnwoundOnce()
+	{
+		$mpdf = new UnwindCountingMpdf(['mode' => 'c']);
+		$mpdf->WriteHTML('<div style="float: left">before<div style="page-break-before: always">after</div></div><p>bb</p>');
+
+		$this->assertSame(1, $mpdf->unwinds);
+		$this->assertSame(2, $mpdf->page);
+
+		$mpdf->cleanup();
+	}
+
+	/**
+	 * A float whose text wraps keeps the whole width available, as in a browser, rather than the width of its
+	 * longest wrapped line: shrink-to-fit only comes in under the space available when max-content does
+	 */
+	public function testAFloatWithNoWidthWhoseTextWrapsKeepsTheWholeWidth()
+	{
+		$page = $this->firstPage('<div style="float: left; background: #0f0">' . str_repeat('Lorem ipsum dolor sit amet. ', 20) . '<br>short</div><p>bb</p>');
+
+		$this->assertEqualsWithDelta(180, $this->onlyBox($page)['w'], 0.01);
+	}
+
+	/**
+	 * A word wider than the line puts min-content past the space available. mPDF keeps the float within its
+	 * container and breaks the word, where a browser would let the float overflow
+	 */
+	public function testAFloatWithNoWidthHoldingAWordWiderThanTheLineKeepsTheWholeWidth()
+	{
+		$page = $this->firstPage('<div style="float: left; background: #0f0">' . str_repeat('a', 150) . '</div><p>bb</p>');
+
+		$this->assertEqualsWithDelta(180, $this->onlyBox($page)['w'], 0.01);
+	}
+
+	/**
+	 * A float holding only a floated image is as wide as the image, and the paragraph after it starts beside it
+	 *
+	 * @dataProvider sideProvider
+	 *
+	 * @param string $side
+	 */
+	public function testAFloatWithNoWidthHoldingAFloatedImageIsAsWideAsTheImage($side)
+	{
+		$page = $this->firstPage('<div style="float: left; background: #0f0"><img src="' . self::IMAGE . '" style="float: ' . $side . '; width: 30mm"></div><p>bb</p>');
+
+		$float = $this->onlyBox($page);
+		$this->assertEqualsWithDelta(30, $float['w'], 0.1);
+		$this->assertEqualsWithDelta(15 + $float['w'], $this->positionOf('bb', $page)['x'], 0.01);
+	}
+
+	/**
+	 * Text beside an image floated right makes the float as wide as both together, so the text stays beside the image
+	 */
+	public function testAFloatWithNoWidthIsAsWideAsItsTextAndARightFloatedImageBesideIt()
+	{
+		$page = $this->firstPage('<div style="float: left; background: #0f0"><img src="' . self::IMAGE . '" style="float: right; width: 30mm">aa</div><p>bb</p>');
+
+		$float = $this->onlyBox($page);
+		$this->assertGreaterThan(32, $float['w']);
+		$this->assertLessThan(36, $float['w']);
+		$this->assertEqualsWithDelta(15, $this->positionOf('aa', $page)['x'], 0.01);
+		$this->assertEqualsWithDelta(15 + $float['w'], $this->positionOf('bb', $page)['x'], 0.01);
+	}
+
+	/**
+	 * A float holding only empty blocks has no content to be as wide as, so it is as narrow as its padding
+	 */
+	public function testAFloatWithNoWidthHoldingOnlyEmptyBlocksIsAsNarrowAsItsPadding()
+	{
+		$page = $this->firstPage('<div style="float: left; padding: 2mm; background: #0f0"><div></div><div></div></div><p>bb</p>');
+
+		$float = $this->onlyBox($page);
+		$this->assertEqualsWithDelta(4, $float['w'], 0.1);
+		$this->assertEqualsWithDelta(15 + $float['w'], $this->positionOf('bb', $page)['x'], 0.01);
+	}
+
+	/**
+	 * Floats of set width with a margin on the side away from where they float, which mPDF gives over to the space
+	 * left beside them, each in a float to the other side, with where the inner float should start
+	 *
+	 * @return array[]
+	 */
+	public function nestedFloatProvider()
+	{
+		return [
+			'right float with margin-left' => ['left', 'float: right; margin-left: 10mm', 25],
+			'left float with margin-right' => ['right', 'float: left; margin-right: 10mm', 165],
+		];
+	}
+
+	/**
+	 * A float holding a float of set width is as wide as that float's margin box, and the float inside sits against
+	 * the side it floats to
+	 *
+	 * @dataProvider nestedFloatProvider
+	 *
+	 * @param string $side
+	 * @param string $inner
+	 * @param float $innerX
+	 */
+	public function testAFloatWithNoWidthCountsTheMarginOfAFloatInsideIt($side, $inner, $innerX)
+	{
+		$page = $this->firstPage('<div style="float: ' . $side . '; background: #0f0"><div style="' . $inner . '; width: 20mm; background: #f00">x</div></div><p>bb</p>');
+
+		$boxes = $this->filledBoxes($page);
+		$this->assertCount(2, $boxes);
+		$this->assertEqualsWithDelta(30, $boxes[0]['w'], 0.1);
+		$this->assertEqualsWithDelta(20, $boxes[1]['w'], 0.01);
+		$this->assertEqualsWithDelta($innerX, $boxes[1]['x'], 0.1);
+	}
+
+	/**
+	 * Text inside a block of set width counts only through that block, so a block whose text wraps leaves the float
+	 * as wide as the block, not the whole width
+	 */
+	public function testTextInsideABlockOfSetWidthDoesNotWidenTheFloat()
+	{
+		$page = $this->firstPage('<div style="float: left; background: #0f0"><div style="width: 40mm; background: #f00">' . str_repeat('word ', 30) . '</div></div><p>bb</p>');
+
+		$boxes = $this->filledBoxes($page);
+		$this->assertCount(2, $boxes);
+		$this->assertEqualsWithDelta(40, $boxes[0]['w'], 0.1);
+		$this->assertEqualsWithDelta(15 + $boxes[0]['w'], $this->positionOf('bb', $page)['x'], 0.01);
 	}
 
 	/**
