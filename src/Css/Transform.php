@@ -2,6 +2,7 @@
 
 namespace Mpdf\Css;
 
+use Mpdf\Fonts\Color\Geometry;
 use Mpdf\SizeConverter;
 
 /**
@@ -53,64 +54,27 @@ final class Transform
 			return null;
 		}
 
-		if (!preg_match_all('/([a-z]+)\(([^)]*)\)\s*/i', $transform, $functions, PREG_SET_ORDER)) {
+		if (!preg_match('/^(?:[a-z]+\([^)]*\)\s*)+$/i', $transform)) {
 			return null;
 		}
 
-		$matched = '';
-		$m = [1, 0, 0, 1, 0, 0];
+		preg_match_all('/([a-z]+)\(([^)]*)\)/i', $transform, $functions, PREG_SET_ORDER);
+
+		// The last function in the list is applied first
+		$m = Geometry::IDENTITY;
 		foreach ($functions as $function) {
-			$matched .= $function[0];
 			$step = $this->step(strtolower($function[1]), preg_split('/\s*,\s*|\s+/', trim($function[2])), $w, $h);
 			if ($step === null) {
 				return null;
 			}
-			$m = self::multiply($m, $step);
-		}
-
-		if (strlen($matched) !== strlen($transform)) {
-			return null;
+			$m = Geometry::multiply($step, $m);
 		}
 
 		list($ox, $oy) = $this->origin($origin, $w, $h);
 		$ox += $x;
 		$oy += $y;
 
-		return self::multiply(self::multiply([1, 0, 0, 1, $ox, $oy], $m), [1, 0, 0, 1, -$ox, -$oy]);
-	}
-
-	/**
-	 * The point (x, y) taken through $m
-	 *
-	 * @param float[] $m
-	 * @param float $x
-	 * @param float $y
-	 *
-	 * @return float[]
-	 */
-	public static function apply(array $m, $x, $y)
-	{
-		return [$m[0] * $x + $m[2] * $y + $m[4], $m[1] * $x + $m[3] * $y + $m[5]];
-	}
-
-	/**
-	 * The matrix that applies $n, then $m
-	 *
-	 * @param float[] $m
-	 * @param float[] $n
-	 *
-	 * @return float[]
-	 */
-	public static function multiply(array $m, array $n)
-	{
-		return [
-			$m[0] * $n[0] + $m[2] * $n[1],
-			$m[1] * $n[0] + $m[3] * $n[1],
-			$m[0] * $n[2] + $m[2] * $n[3],
-			$m[1] * $n[2] + $m[3] * $n[3],
-			$m[0] * $n[4] + $m[2] * $n[5] + $m[4],
-			$m[1] * $n[4] + $m[3] * $n[5] + $m[5],
-		];
+		return Geometry::multiply(Geometry::multiply([1, 0, 0, 1, -$ox, -$oy], $m), [1, 0, 0, 1, $ox, $oy]);
 	}
 
 	/**
@@ -241,12 +205,12 @@ final class Transform
 		}
 
 		$unit = isset($m[2]) ? strtolower($m[2]) : '';
-		$turns = ['deg' => 360, 'grad' => 400, 'turn' => 1];
+		$perTurn = ['deg' => 360, 'grad' => 400, 'rad' => 2 * M_PI, 'turn' => 1];
 
 		if ($unit === '') {
 			return (float) $m[1] == 0 ? 0.0 : null;
 		}
 
-		return $unit === 'rad' ? (float) $m[1] : (float) $m[1] / $turns[$unit] * 2 * M_PI;
+		return (float) $m[1] / $perTurn[$unit] * 2 * M_PI;
 	}
 }

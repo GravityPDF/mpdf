@@ -16,6 +16,7 @@ use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextVars;
 use Mpdf\Css\Transform;
+use Mpdf\Fonts\Color\Geometry;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
@@ -2644,11 +2645,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$opacity = isset($properties['OPACITY']) ? $this->opacityValue($properties['OPACITY']) : 1;
-		if ($opacity < 1 && !$this->transparencyAllowed()) {
-			$this->pdfaxWarning('Opacity must be 100% (Opacity changed to 100%)');
-			$opacity = 1;
-		}
-
 		$transform = isset($properties['TRANSFORM']) ? trim($properties['TRANSFORM']) : '';
 		if (strtolower($transform) === 'none') {
 			$transform = '';
@@ -2663,29 +2659,34 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'transform' => $transform,
 			'origin' => isset($properties['TRANSFORM-ORIGIN']) ? $properties['TRANSFORM-ORIGIN'] : '',
 			'fontSize' => $this->FontSize,
-			'marker' => null,
 		];
 		$this->openBlockEffect($this->blklvl);
 	}
 
 	/**
-	 * The opacity a CSS value gives, a number or a percentage, held between 0 and 1
+	 * The opacity a CSS value gives, a number or a percentage held between 0 and 1. A document that may not use
+	 * transparency draws it opaque, and says so.
 	 *
 	 * @param string $value
 	 *
 	 * @return float
 	 */
-	public function opacityValue($value)
+	private function opacityValue($value)
 	{
 		$value = trim($value);
-		$opacity = substr($value, -1) === '%' ? (float) $value / 100 : (float) $value;
+		$opacity = max(0, min(1, substr($value, -1) === '%' ? (float) $value / 100 : (float) $value));
 
-		return max(0, min(1, $opacity));
+		if ($opacity < 1 && !$this->transparencyAllowed()) {
+			$this->pdfaxWarning('Opacity must be 100% (Opacity changed to 100%)');
+			return 1;
+		}
+
+		return $opacity;
 	}
 
 	/**
-	 * Set the opacity of the inline element the next run of text is in, which a document that may not use transparency
-	 * draws opaque. A run overlaps nothing but itself, so it needs no group of its own.
+	 * Set the opacity of the inline element the next run of text is in. A run overlaps nothing but itself, so it
+	 * needs no group of its own.
 	 *
 	 * @return float The opacity set, 1 where none was
 	 */
@@ -2695,14 +2696,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return 1;
 		}
 
-		if (!$this->transparencyAllowed()) {
-			$this->pdfaxWarning('Opacity must be 100% (Opacity changed to 100%)');
-			return 1;
-		}
-
 		$this->SetAlpha($this->textparam['opacity']);
 
 		return $this->textparam['opacity'];
+	}
+
+	/**
+	 * The marker a block's group is written between, with the number the group was given
+	 *
+	 * @param string $kind EFFECT___ where the group starts until it is closed, then GROUP___START and GROUP___END
+	 * @param int $id
+	 *
+	 * @return string
+	 */
+	private function effectMarker($kind, $id)
+	{
+		return '___' . $kind . $id . '___' . $this->uniqstr;
 	}
 
 	/**
@@ -2713,11 +2722,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function openBlockEffect($blvl)
 	{
-		$marker = '___EFFECT___' . (++$this->blockGroupCount) . '___' . $this->uniqstr;
-		$this->writer->write($marker);
+		$id = ++$this->blockGroupCount;
+		$this->writer->write($this->effectMarker('EFFECT___', $id));
 
-		$this->blk[$blvl]['effect']['marker'] = $marker;
-		$this->blk[$blvl]['effect']['id'] = $this->blockGroupCount;
+		$this->blk[$blvl]['effect']['id'] = $id;
 		$this->blk[$blvl]['effect']['backgrounds'] = array_map('count', $this->pageBackgrounds);
 		$this->blk[$blvl]['effect']['links'] = isset($this->PageLinks[$this->page]) ? count($this->PageLinks[$this->page]) : 0;
 	}
@@ -2733,15 +2741,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function closeBlockEffect($blvl, $bottom, $resume)
 	{
-		if (empty($this->blk[$blvl]['effect']['marker'])) {
+		if (empty($this->blk[$blvl]['effect']['id'])) {
 			return;
 		}
 
 		$effect = $this->blk[$blvl]['effect'];
-		$this->blk[$blvl]['effect']['marker'] = null;
+		$this->blk[$blvl]['effect']['id'] = null;
 
+		$marker = $this->effectMarker('EFFECT___', $effect['id']);
 		$page = $this->pages[$this->page];
-		$pos = strrpos($page, $effect['marker']);
+		$pos = strrpos($page, $marker);
 		if ($pos === false) {
 			return;
 		}
@@ -2756,7 +2765,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 		$this->pageBackgrounds = $own;
-		$content = $this->PrintPageBackgrounds() . "\n" . substr($page, $pos + strlen($effect['marker']));
+		$content = $this->PrintPageBackgrounds() . "\n" . substr($page, $pos + strlen($marker));
 		$this->pageBackgrounds = $rest;
 
 		$wrapper = 'q';
@@ -2775,9 +2784,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$wrapper .= ' ' . $this->SetAlpha($effect['opacity'], 'Normal', true);
 		}
 
-		$id = $effect['id'] . '___' . $this->uniqstr;
-		$this->pages[$this->page] = substr($page, 0, $pos) . $wrapper . "\n___GROUP___START" . $id . "\n" . $content
-			. "\n___GROUP___END" . $id . "\nQ\n";
+		$this->pages[$this->page] = substr($page, 0, $pos) . $wrapper . "\n" . $this->effectMarker('GROUP___START', $effect['id'])
+			. "\n" . $content . "\n" . $this->effectMarker('GROUP___END', $effect['id']) . "\nQ\n";
 
 		if ($resume) {
 			$this->resumeAfterDroppedContent();
@@ -2787,19 +2795,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/**
 	 * Draw the borders of the blocks open at a page break at the foot of the page, closing the group of each with an
 	 * opacity or transform after its own border and before its parent's: innermost first. With no group open they
-	 * are drawn outermost first, as they always were.
+	 * are drawn outermost first, so a document without one is drawn byte for byte the same.
 	 *
 	 * @param int $toplvl The innermost block whose border is drawn on this page
 	 * @param callable $paint Draws a block's border at the foot of the page, given its level
 	 */
 	private function paintBlocksAtPageBreak($toplvl, $paint)
 	{
-		$grouped = false;
-		for ($bl = 1; $bl <= $this->blklvl; $bl++) {
-			$grouped = $grouped || !empty($this->blk[$bl]['effect']['marker']);
-		}
-
-		if (!$grouped) {
+		if (!$this->hasOpenBlockEffect()) {
 			for ($bl = 1; $bl <= $toplvl; $bl++) {
 				$paint($bl);
 			}
@@ -2813,6 +2816,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			$this->closeBlockEffect($bl, $bottom, false);
 		}
+	}
+
+	/**
+	 * Whether a block still open has a group open on this page
+	 *
+	 * @return bool
+	 */
+	private function hasOpenBlockEffect()
+	{
+		for ($bl = 1; $bl <= $this->blklvl; $bl++) {
+			if (!empty($this->blk[$bl]['effect']['id'])) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -2838,7 +2857,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$k = Mpdf::SCALE;
 
-		return Transform::multiply(Transform::multiply([$k, 0, 0, -$k, 0, $this->h * $k], $m), [1 / $k, 0, 0, -1 / $k, 0, $this->h]);
+		return Geometry::multiply(Geometry::multiply([1 / $k, 0, 0, -1 / $k, 0, $this->h], $m), [$k, 0, 0, -$k, 0, $this->h * $k]);
 	}
 
 	/**
@@ -2857,14 +2876,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$links = count($this->PageLinks[$this->page]);
 		for ($i = $from; $i < $links; $i++) {
 			$l = $this->PageLinks[$this->page][$i];
-			$xs = $ys = [];
-			foreach ([[$l[0], $l[1]], [$l[0] + $l[2], $l[1]], [$l[0], $l[1] - $l[3]], [$l[0] + $l[2], $l[1] - $l[3]]] as $corner) {
-				list($xs[], $ys[]) = Transform::apply($m, $corner[0], $corner[1]);
-			}
-			$this->PageLinks[$this->page][$i][0] = min($xs);
-			$this->PageLinks[$this->page][$i][1] = max($ys);
-			$this->PageLinks[$this->page][$i][2] = max($xs) - min($xs);
-			$this->PageLinks[$this->page][$i][3] = max($ys) - min($ys);
+			$box = Geometry::bounds($m, [$l[0], $l[1] - $l[3], $l[0] + $l[2], $l[1]]);
+			$this->PageLinks[$this->page][$i] = array_replace($l, [$box[0], $box[3], $box[2] - $box[0], $box[3] - $box[1]]);
 		}
 	}
 
@@ -19791,7 +19804,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 						break;
 					case 'OPACITY':
-						// Each run of the element's text is drawn with it, the opacity of any element around it included
+						// An inline element inside another multiplies their opacities, as their groups would
 						if ($this->cssMode === CssMode::STANDARD) {
 							$outer = isset($this->textparam['opacity']) ? $this->textparam['opacity'] : 1;
 							$this->textparam['opacity'] = $outer * $this->opacityValue($v);

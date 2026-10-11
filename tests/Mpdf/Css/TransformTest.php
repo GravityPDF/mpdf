@@ -33,8 +33,8 @@ class TransformTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$m = $this->transform->matrix($transform, $origin, 10, 30, 40, 20);
 
-		$this->assertPoint($topLeft, Transform::apply($m, 10, 30));
-		$this->assertPoint($bottomRight, Transform::apply($m, 50, 50));
+		$this->assertPoint($topLeft, $this->apply($m, 10, 30));
+		$this->assertPoint($bottomRight, $this->apply($m, 50, 50));
 	}
 
 	/**
@@ -106,7 +106,21 @@ class TransformTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testUnitlessZeroAngle()
 	{
-		$this->assertPoint([10, 30], Transform::apply($this->transform->matrix('rotate(0)', '', 10, 30, 40, 20), 10, 30));
+		$this->assertPoint([10, 30], $this->apply($this->transform->matrix('rotate(0)', '', 10, 30, 40, 20), 10, 30));
+	}
+
+	/**
+	 * The point (x, y) taken through $m
+	 *
+	 * @param float[] $m
+	 * @param float $x
+	 * @param float $y
+	 *
+	 * @return float[]
+	 */
+	private function apply(array $m, $x, $y)
+	{
+		return [$m[0] * $x + $m[2] * $y + $m[4], $m[1] * $x + $m[3] * $y + $m[5]];
 	}
 
 	/**

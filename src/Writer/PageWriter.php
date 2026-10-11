@@ -260,6 +260,10 @@ final class PageWriter
 	 */
 	private function transformedLast($content)
 	{
+		if (strpos($content, '% BTR') === false) {
+			return $content;
+		}
+
 		// mPDF 5.7.3 TRANSFORMS
 		while (preg_match('/(\% BTR(.*?)\% ETR)/is', $content, $m)) {
 			$content = preg_replace('/(\% BTR.*?\% ETR)/is', '', $content, 1) . "\n" . $m[2];
