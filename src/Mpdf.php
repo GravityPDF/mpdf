@@ -18369,15 +18369,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				'radii' => $this->roundedBox->inset($radii, ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left]),
 			];
 			// box-decoration-break: slice shadows the whole box, so a part of it split across pages has none at the break
-			$split = [];
-			if ($this->cssMode === CssMode::STANDARD && (!isset($this->blk[$blvl]['box_decoration_break']) || $this->blk[$blvl]['box_decoration_break'] !== 'clone')) {
-				if ($divider == 'pagetop' || $continuingpage) {
-					$split[] = 'top';
-				}
-				if ($blockstate == 1 || $divider == 'pagebottom') {
-					$split[] = 'bottom';
-				}
-			}
+			$sliced = $this->cssMode === CssMode::STANDARD && (!isset($this->blk[$blvl]['box_decoration_break']) || $this->blk[$blvl]['box_decoration_break'] !== 'clone');
+			$split = [
+				'top' => $sliced && ($divider == 'pagetop' || $continuingpage),
+				'bottom' => $sliced && ($blockstate == 1 || $divider == 'pagebottom'),
+			];
 			foreach ($this->blk[$blvl]['box_shadow'] as $sh) {
 				// Colors
 				if ($sh['col'][0] == 1) {

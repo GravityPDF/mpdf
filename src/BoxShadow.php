@@ -60,7 +60,7 @@ class BoxShadow
 	 * @param string $colour The shadow's colour in mPDF's internal form
 	 * @param string $faded The same colour with its alpha at 0, for the far side of the blur
 	 * @param string $colspace RGB, CMYK or Gray, the colour space of the mesh
-	 * @param string[] $split The sides, top and bottom, where the block breaks across pages and the shadow is cut off
+	 * @param bool[] $split Keyed top and bottom: whether the block breaks across pages there, and the shadow is cut off
 	 *
 	 * @return string
 	 */
@@ -68,14 +68,14 @@ class BoxShadow
 	{
 		$k = Mpdf::SCALE;
 		$band = '';
-		if ($split) {
+		if (!empty($split['top']) || !empty($split['bottom'])) {
 			// Cut at the break, as the whole box's shadow would be, and with nothing of its edge on that side
-			$top = in_array('top', $split, true) ? $box['y0'] : 0;
-			$bottom = in_array('bottom', $split, true) ? $box['y1'] : $this->mpdf->h;
+			$top = !empty($split['top']) ? $box['y0'] : 0;
+			$bottom = !empty($split['bottom']) ? $box['y1'] : $this->mpdf->h;
 			$band = sprintf('0.000 %.3F %.3F %.3F re W n ', ($this->mpdf->h - $top) * $k, $this->mpdf->w * $k, ($top - $bottom) * $k);
-			$clip = $this->pastBreaks($clip, $shadow, $split);
-			$box = $this->pastBreaks($box, $shadow, $split);
 		}
+		$clip = $this->pastBreaks($clip, $shadow, $split);
+		$box = $this->pastBreaks($box, $shadow, $split);
 		$w = $box['x1'] - $box['x0'];
 		$h = $box['y1'] - $box['y0'];
 		$blur = $shadow['blur'];
@@ -103,7 +103,7 @@ class BoxShadow
 	 * @param string $colour The shadow's colour in mPDF's internal form
 	 * @param string $faded The same colour with its alpha at 0, for the far side of the blur
 	 * @param string $colspace RGB, CMYK or Gray, the colour space of the mesh
-	 * @param string[] $split The sides, top and bottom, where the block breaks across pages and the shadow is cut off
+	 * @param bool[] $split Keyed top and bottom: whether the block breaks across pages there, and the shadow is cut off
 	 *
 	 * @return string
 	 */
@@ -142,17 +142,17 @@ class BoxShadow
 	 *
 	 * @param array $box Keyed x0, y0, x1, y1 and radii
 	 * @param array $shadow
-	 * @param string[] $split top, bottom or both
+	 * @param bool[] $split Keyed top and bottom
 	 *
 	 * @return array
 	 */
 	private function pastBreaks($box, $shadow, $split)
 	{
 		$reach = abs($shadow['y']) + abs($shadow['spread']) + $shadow['blur'] + 1;
-		if (in_array('top', $split, true)) {
+		if (!empty($split['top'])) {
 			$box['y0'] = min($box['y0'], 0) - $reach;
 		}
-		if (in_array('bottom', $split, true)) {
+		if (!empty($split['bottom'])) {
 			$box['y1'] = max($box['y1'], $this->mpdf->h) + $reach;
 		}
 
