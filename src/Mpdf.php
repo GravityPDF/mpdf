@@ -12,6 +12,7 @@ use Mpdf\Css\ComputedValues;
 use Mpdf\Css\InheritedProperties;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\Css\TextSpacing;
+use Mpdf\Color\ColorConverter;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextVars;
@@ -5672,6 +5673,56 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
+	 * Whether a text-shadow is drawn blurred. The blur is built from translucent layers, so where transparency is not
+	 * allowed the shadow is drawn sharp, with one warning for the document rather than one per run of text.
+	 *
+	 * @param array $shadow A text shadow as ShadowParser reads it
+	 *
+	 * @return bool
+	 */
+	private function textShadowBlurs(array $shadow)
+	{
+		if ($this->cssMode !== CssMode::STANDARD || $shadow['blur'] <= 0) {
+			return false;
+		}
+
+		if ($this->transparencyAllowed()) {
+			return true;
+		}
+
+		$warning = 'A text-shadow cannot be blurred without transparency (Shadow drawn without blur)';
+		if (!in_array($warning, $this->PDFAXwarnings, true)) {
+			$this->pdfaxWarning($warning);
+		}
+
+		return false;
+	}
+
+	/**
+	 * The content stream that draws a blurred text-shadow: the text repeated once per TextShadowBlur layer, filled and
+	 * stroked in the shadow colour at the layer's width and alpha, offset by the shadow's offset. Expects the text
+	 * colour already set to the shadow colour, inside a saved graphics state.
+	 *
+	 * @param array $shadow A text shadow as ShadowParser reads it
+	 * @param string $text The content stream that draws the text
+	 *
+	 * @return string
+	 */
+	private function blurredTextShadow(array $shadow, $text)
+	{
+		$alpha = ColorConverter::alpha($shadow['col']);
+
+		$s = $this->SetDColor($shadow['col'], true) . " 2 Tr 1 j 1 J\n";
+		$s .= sprintf(' 1 0 0 1 %.4F %.4F cm', $shadow['x'] * Mpdf::SCALE, -$shadow['y'] * Mpdf::SCALE) . "\n";
+		foreach (TextShadowBlur::layers($shadow['blur'], $alpha === null ? 1 : min($alpha, 1)) as $layer) {
+			$s .= $this->SetAlpha($layer['alpha'], 'Normal', true, 'B');
+			$s .= sprintf(' %.3F w ', $layer['width'] * Mpdf::SCALE) . $text . "\n";
+		}
+
+		return $s;
+	}
+
+	/**
 	 * Output a cell
 	 *
 	 * Expects input to be mb_encoded if necessary and RTL reversed
@@ -6294,6 +6345,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				foreach ($this->textshadow as $ts) {
 					$s .= ' q ';
 					$s .= $this->SetTColor($ts['col'], true) . "\n";
+					if ($this->textShadowBlurs($ts)) {
+						$s .= $this->blurredTextShadow($ts, $sub);
+						$s .= ' Q ';
+						continue;
+					}
 					if ($ts['col'][0] == 5 && ord($ts['col'][4]) < 100) { // RGBa
 						$s .= $this->SetAlpha(ord($ts['col'][4]) / 100, 'Normal', true, 'F') . "\n";
 					} elseif ($ts['col'][0] == 6 && ord($ts['col'][5]) < 100) { // CMYKa
