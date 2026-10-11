@@ -10,6 +10,7 @@ use Mpdf\Css\BorderMerger;
 use Mpdf\Css\InheritedProperties;
 use Mpdf\CssManager;
 use Mpdf\CssMode;
+use Mpdf\FloatShrinkToFit;
 use Mpdf\Form;
 use Mpdf\Image\ImageProcessor;
 use Mpdf\Language\LanguageToFontInterface;
@@ -73,6 +74,11 @@ abstract class Tag
 	 */
 	protected $languageToFont;
 
+	/**
+	 * @var \Mpdf\FloatShrinkToFit
+	 */
+	protected $floatShrinkToFit;
+
 	const ALIGN = [
 		'left' => 'L',
 		'center' => 'C',
@@ -96,7 +102,8 @@ abstract class Tag
 		SizeConverter $sizeConverter,
 		ColorConverter $colorConverter,
 		ImageProcessor $imageProcessor,
-		LanguageToFontInterface $languageToFont
+		LanguageToFontInterface $languageToFont,
+		FloatShrinkToFit $floatShrinkToFit
 	) {
 
 		$this->mpdf = $mpdf;
@@ -109,6 +116,7 @@ abstract class Tag
 		$this->colorConverter = $colorConverter;
 		$this->imageProcessor = $imageProcessor;
 		$this->languageToFont = $languageToFont;
+		$this->floatShrinkToFit = $floatShrinkToFit;
 	}
 
 	public function getTagName()

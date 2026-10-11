@@ -17,6 +17,7 @@ use Mpdf\Css\PresentationalHints;
 use Mpdf\Css\SelectorParser;
 use Mpdf\Css\ShadowParser;
 use Mpdf\File\LocalContentLoader;
+use Mpdf\FloatShrinkToFit;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\FontFileFinder;
 use Mpdf\Fonts\FontSubstitution;
@@ -135,6 +136,8 @@ class ServiceFactory
 
 		$roundedBox = new RoundedBox();
 
+		$floatShrinkToFit = new FloatShrinkToFit($mpdf);
+
 		$formWriter = new FormWriter($mpdf, $writer);
 
 		$form = new Form($mpdf, $otl, $colorConverter, $writer, $formWriter);
@@ -165,7 +168,8 @@ class ServiceFactory
 			$sizeConverter,
 			$colorConverter,
 			$imageProcessor,
-			$languageToFont
+			$languageToFont,
+			$floatShrinkToFit
 		);
 
 		$fontWriter = new FontWriter($mpdf, $writer, $fontCache, $fontDescriptor, $logger);
@@ -207,6 +211,7 @@ class ServiceFactory
 			'form' => $form,
 			'gradient' => $gradient,
 			'roundedBox' => $roundedBox,
+			'floatShrinkToFit' => $floatShrinkToFit,
 			'tableOfContents' => $tableOfContents,
 			'tag' => $tag,
 			'wmf' => $wmf,
@@ -253,6 +258,7 @@ class ServiceFactory
 			'form',
 			'gradient',
 			'roundedBox',
+			'floatShrinkToFit',
 			'tableOfContents',
 			'tag',
 			'wmf',
