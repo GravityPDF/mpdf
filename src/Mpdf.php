@@ -3256,6 +3256,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		foreach ($this->tableBackgrounds as $bl => $pbs) {
 			foreach ($pbs as $pb) {
 				if ((!isset($pb['gradient']) || !$pb['gradient']) && (!isset($pb['image_id']) || !$pb['image_id'])) {
+					if (!empty($pb['clippath'])) {
+						$s .= $pb['clippath'] . "\n";
+					}
 					$s .= 'q ' . $this->SetFColor($pb['col'], true) . "\n";
 					if ($pb['col'][0] == 5) { // RGBa
 						$s .= $this->SetAlpha(ord($pb['col'][4]) / 100, 'Normal', true, 'F') . "\n";
@@ -3263,6 +3266,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$s .= $this->SetAlpha(ord($pb['col'][5]) / 100, 'Normal', true, 'F') . "\n";
 					}
 					$s .= sprintf('%.3F %.3F %.3F %.3F re %s Q', $pb['x'] * Mpdf::SCALE, ($this->h - $pb['y']) * Mpdf::SCALE, $pb['w'] * Mpdf::SCALE, -$pb['h'] * Mpdf::SCALE, 'f') . "\n";
+					if (!empty($pb['clippath'])) {
+						$s .= 'Q' . "\n";
+					}
 				}
 				if (isset($pb['gradient']) && $pb['gradient']) {
 					if (isset($pb['clippath']) && $pb['clippath']) {
@@ -13239,6 +13245,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->y += $h - $mih;
 					}
 
+					$cellBox = $paintcell ? $this->roundedCellBox(Arrays::get($tablehf, 'border_radius', null), $table, $x, $y, $w, $h, $border_details) : null;
+					if ($cellBox) {
+						$cellBackgrounds = $this->countTableBackgrounds($level);
+					}
 
 					// TABLE ROW OR CELL FILL BGCOLOR
 					$fill = 0;
@@ -13345,7 +13355,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/* -- END BACKGROUNDS -- */
 
 					// Cell Border
-					if ($table['borders_separate'] && $paintcell && $border) {
+					if ($cellBox && $border) {
+						$this->paintRoundedCellBorder($cellBox, $border, $border_details);
+					} elseif ($table['borders_separate'] && $paintcell && $border) {
 						$this->_tableRect($x + ($table['border_spacing_H'] / 2) + ($border_details['L']['w'] / 2), $y + ($table['border_spacing_V'] / 2) + ($border_details['T']['w'] / 2), $w - $table['border_spacing_H'] - ($border_details['L']['w'] / 2) - ($border_details['R']['w'] / 2), $h - $table['border_spacing_V'] - ($border_details['T']['w'] / 2) - ($border_details['B']['w'] / 2), $border, $border_details, false, $table['borders_separate']);
 					} elseif ($paintcell && $border) {
 						$this->_tableRect($x, $y, $w, $h, $border, $border_details, true, $table['borders_separate']);   // true causes buffer
@@ -13529,6 +13541,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 					}
 					/* -- END BACKGROUNDS -- */
+
+					if ($cellBox) {
+						$this->clipRoundedCellBackgrounds($cellBox, $cellBackgrounds);
+					}
 
 					// TABLE BORDER - if separate OR collapsed and only table border
 					if (($table['borders_separate'] || ($this->simpleTables && !$table['simple']['border'])) && $table['border']) {
@@ -21855,6 +21871,153 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	// CHANGED TO ALLOW TABLE BORDER TO BE SPECIFIED CORRECTLY - added border_details
+	/**
+	 * The rounded border box of a table cell, or null for a square one. Only the separated borders model rounds a
+	 * cell, as in CSS. Simple tables draw every cell with the table's border, and columns move what is drawn by the
+	 * first coordinate of each write, which a curved path does not survive, so both stay square.
+	 *
+	 * @param array|null $radius The cell's border_radius, as Tag\Td keeps it
+	 * @param array $table
+	 * @param float $x The cell's slot, border-spacing included
+	 * @param float $y
+	 * @param float $w
+	 * @param float $h
+	 * @param array $details The cell's border details
+	 *
+	 * @return array|null Keyed x0, y0, x1, y1 and radii, as RoundedBox::side() takes it
+	 */
+	function roundedCellBox($radius, $table, $x, $y, $w, $h, $details)
+	{
+		if (!$radius || !$table['borders_separate'] || $this->simpleTables || $this->ColActive) {
+			return null;
+		}
+
+		$x0 = $x + $table['border_spacing_H'] / 2;
+		$y0 = $y + $table['border_spacing_V'] / 2;
+		$x1 = $x + $w - $table['border_spacing_H'] / 2;
+		$y1 = $y + $h - $table['border_spacing_V'] / 2;
+
+		// A table shrunk to fit its page shrinks its radii with it
+		$radii = RoundedBox::SQUARE;
+		foreach ($radius['radii'] as $corner => $r) {
+			$radii[$corner] = [$r[0] / $this->shrin_k, $r[1] / $this->shrin_k];
+		}
+		$radii = BorderRadius::resolve($radii, $radius['percent'], $x1 - $x0, $y1 - $y0);
+		$radii = $this->roundedBox->fit($x1 - $x0, $y1 - $y0, $radii, ['top' => $details['T']['w'], 'right' => $details['R']['w'], 'bottom' => $details['B']['w'], 'left' => $details['L']['w']]);
+
+		if (max(array_map('max', $radii)) <= 0) {
+			return null;
+		}
+
+		return ['x0' => $x0, 'y0' => $y0, 'x1' => $x1, 'y1' => $y1, 'radii' => $radii];
+	}
+
+	/**
+	 * How many backgrounds each of a table level's layers holds, which marks where those of the next cell begin
+	 *
+	 * @param int $level The table's nesting level
+	 *
+	 * @return int[] Keyed by tableBackgrounds layer
+	 */
+	function countTableBackgrounds($level)
+	{
+		$counts = [];
+		for ($layer = $level * 9; $layer < ($level + 1) * 9; $layer++) {
+			$counts[$layer] = isset($this->tableBackgrounds[$layer]) ? count($this->tableBackgrounds[$layer]) : 0;
+		}
+
+		return $counts;
+	}
+
+	/**
+	 * Clip the backgrounds collected for a rounded cell since countTableBackgrounds() to its rounded border box,
+	 * the row's among them. The clip takes the place of the square one a row background is given in each cell.
+	 *
+	 * @param array $box As roundedCellBox() gives it
+	 * @param int[] $counts As countTableBackgrounds() gave them before the cell
+	 */
+	function clipRoundedCellBackgrounds($box, $counts)
+	{
+		$clip = ' q 0 w ' . $this->roundedBox->path($this->h, $box['x0'], $box['y0'], $box['x1'], $box['y1'], $box['radii']) . ' W n ';
+
+		foreach ($counts as $layer => $count) {
+			$total = isset($this->tableBackgrounds[$layer]) ? count($this->tableBackgrounds[$layer]) : 0;
+			for ($n = $count; $n < $total; $n++) {
+				$this->tableBackgrounds[$layer][$n]['clippath'] = $clip;
+			}
+		}
+	}
+
+	/**
+	 * Draw a rounded cell's border along its corners, each side on its own as PaintImgBorder() does. A double border
+	 * is two strokes a third as wide, and groove, ridge, inset and outset take the two tones _tableRect() gives a
+	 * square cell: the outer half of the top and left in one, the inner half in the other, and the other way round
+	 * on the bottom and right.
+	 *
+	 * @param array $box As roundedCellBox() gives it
+	 * @param int $bord The Border flags of the sides the cell draws
+	 * @param array $details The cell's border details
+	 */
+	function paintRoundedCellBorder($box, $bord, $details)
+	{
+		$sides = ['top' => ['T', Border::TOP], 'right' => ['R', Border::RIGHT], 'bottom' => ['B', Border::BOTTOM], 'left' => ['L', Border::LEFT]];
+		$widths = [];
+		foreach ($sides as $side => $flag) {
+			$widths[$side] = $details[$flag[0]]['w'];
+		}
+
+		foreach ($sides as $side => $flag) {
+			$bd = $details[$flag[0]];
+			if (!$this->issetBorder($bord, $flag[1]) || !Border::drawsSide($bd)) {
+				continue;
+			}
+			if (!$bd['c']) {
+				$bd['c'] = $this->colorConverter->convert(0, $this->PDFAXwarnings);
+			}
+
+			// Each stroke as [where it starts, its width] in parts of the border's width from the outer edge, and its colour
+			$strokes = [[[0, 1], $bd['c']]];
+			if ($bd['style'] === 'double') {
+				$strokes = [[[0, 1 / 3], $bd['c']], [[2 / 3, 1 / 3], $bd['c']]];
+			} elseif (in_array($bd['style'], ['groove', 'ridge', 'inset', 'outset'], true)) {
+				$light = $this->colorConverter->lighten($bd['c']);
+				$dark = $this->colorConverter->darken($bd['c']);
+				$tones = ($bd['style'] === 'inset' || $bd['style'] === 'ridge') ? [$light, $dark] : [$dark, $light];
+				if ($side === 'bottom' || $side === 'right') {
+					$tones = array_reverse($tones);
+				}
+				$strokes = [[[0, 1 / 2], $tones[0]], [[1 / 2, 1 / 2], $tones[1]]];
+			}
+
+			foreach ($strokes as $stroke) {
+				list($part, $colour) = $stroke;
+				$insets = [];
+				foreach ($widths as $s => $width) {
+					$insets[$s] = $width * $part[0];
+				}
+				$inner = [
+					'x0' => $box['x0'] + $insets['left'],
+					'y0' => $box['y0'] + $insets['top'],
+					'x1' => $box['x1'] - $insets['right'],
+					'y1' => $box['y1'] - $insets['bottom'],
+					'radii' => $this->roundedBox->inset($box['radii'], $insets),
+				];
+
+				$this->_setBorderLine(['w' => $bd['w'] * $part[1], 'c' => $colour]);
+				if ($bd['style'] === 'dotted' || $bd['style'] === 'dashed') {
+					$this->_setDashBorder($bd['style'], '', '', $flag[0]);
+				} else {
+					$this->SetLineCap(0); // An arc stops at the diagonal, so nothing may run past it into the next side
+				}
+				$this->writer->write($this->roundedBox->side($this->h, $side, $inner, $bd['w'] * $part[1]) . 'S');
+				$this->SetLineJoin(2);
+				$this->SetLineCap(2);
+				$this->SetDash();
+			}
+		}
+		$this->SetAlpha(1);
+	}
+
 	function _tableRect($x, $y, $w, $h, $bord = -1, $details = [], $buffer = false, $bSeparate = false, $cort = 'cell', $tablecorner = '', $bsv = 0, $bsh = 0)
 	{
 		$cellBorderOverlay = [];
@@ -23177,6 +23340,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$tablefooter[$i][$js]['border_details'] = $table['simple']['border_details'];
 						}
 						$tablefooter[$i][$js]['bgcolor'] = $cell['bgcolor'];
+						$tablefooter[$i][$js]['border_radius'] = Arrays::get($cell, 'border_radius', null);
 						$tablefooter[$i][$js]['padding'] = $cell['padding'];
 						if (isset($cell['rowspan'])) {
 							$tablefooter[$i][$js]['rowspan'] = $cell['rowspan'];
@@ -23751,6 +23915,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$bord_det = $table['simple']['border_details'];
 					}
 
+					$cellBox = $paintcell ? $this->roundedCellBox(Arrays::get($cell, 'border_radius', null), $table, $x, $y, $w, $h, $bord_det) : null;
+					if ($cellBox) {
+						$cellBackgrounds = $this->countTableBackgrounds($level);
+					}
+
 					// TABLE ROW OR CELL FILL BGCOLOR
 					$fill = 0;
 					if (isset($cell['bgcolor']) && $cell['bgcolor'] && $cell['bgcolor'] != 'transparent') {
@@ -23919,6 +24088,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$tableheader[$i][$j]['rowspan'] = (isset($cell['rowspan']) ? $cell['rowspan'] : null);
 						$tableheader[$i][$j]['colspan'] = (isset($cell['colspan']) ? $cell['colspan'] : null);
 						$tableheader[$i][$j]['bgcolor'] = $cell['bgcolor'];
+						$tableheader[$i][$j]['border_radius'] = Arrays::get($cell, 'border_radius', null);
 
 						if (!$this->simpleTables) {
 							$tableheader[$i][$j]['border'] = $bord;
@@ -23944,7 +24114,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					// CELL BORDER
 					if ($bord) {
-						if ($table['borders_separate'] && $paintcell) {
+						if ($cellBox) {
+							$this->paintRoundedCellBorder($cellBox, $bord, $bord_det);
+						} elseif ($table['borders_separate'] && $paintcell) {
 							$this->_tableRect($x + ($table['border_spacing_H'] / 2) + ($bord_det['L']['w'] / 2), $y + ($table['border_spacing_V'] / 2) + ($bord_det['T']['w'] / 2), $w - $table['border_spacing_H'] - ($bord_det['L']['w'] / 2) - ($bord_det['R']['w'] / 2), $h - $table['border_spacing_V'] - ($bord_det['T']['w'] / 2) - ($bord_det['B']['w'] / 2), $bord, $bord_det, false, $table['borders_separate']);
 						} elseif (!$table['borders_separate']) {
 							$this->_tableRect($x, $y, $w, $h, $bord, $bord_det, true, $table['borders_separate']);  // true causes buffer
@@ -24204,6 +24376,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					/* -- END BACKGROUNDS -- */
+
+					if ($cellBox) {
+						$this->clipRoundedCellBackgrounds($cellBox, $cellBackgrounds);
+					}
 
 					// TABLE BORDER - if separate
 					if (($table['borders_separate'] || ($this->simpleTables && !$table['simple']['border'])) && $table['border']) {
