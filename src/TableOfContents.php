@@ -528,7 +528,7 @@ class TableOfContents
 
 		$s = '';
 
-		$s .= $this->mpdf->PrintBodyBackgrounds();
+		$s .= $this->mpdf->PrintBodyBackgrounds() . '___BELOW___CONTENT' . $this->mpdf->uniqstr;
 
 		$s .= $this->mpdf->PrintPageBackgrounds();
 		$this->mpdf->pages[$this->mpdf->page] = preg_replace('/(___BACKGROUND___PATTERNS' . $this->mpdf->uniqstr . ')/', "\n" . $s . "\n" . '\\1', $this->mpdf->pages[$this->mpdf->page]);

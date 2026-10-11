@@ -97,6 +97,7 @@ abstract class BlockTag extends Tag
 				throw new \Mpdf\MpdfException('Cannot nest block with position:fixed or position:absolute');
 			}
 			$this->mpdf->inFixedPosBlock = true;
+			$this->mpdf->fixedPosBlockIsFixed = strtolower($p['POSITION']) === 'fixed';
 			return;
 		}
 		/* -- END CSS-POSITION -- */

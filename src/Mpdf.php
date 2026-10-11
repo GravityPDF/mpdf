@@ -323,7 +323,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $writingToC;
 	var $layers;
 	var $layerDetails;
-	var $current_layer;
+	var $current_layer; // -1 while a positioned block is written in standard cssMode: its content opens no layer
 	var $open_layer_pane;
 	var $decimal_offset;
 	var $inMeter;
@@ -407,6 +407,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $fixedPosBlockBBox;
 	var $fixedPosBlockSave;
 	var $fixedPosBlockCascadeCSS; // Descendant rules of the positioned block being written, for its content to match
+	var $fixedPosBlockIsFixed; // Whether the positioned block being buffered is position: fixed rather than absolute
+	var $runningFixedBlocks; // position: fixed blocks drawn on every page, each with the first page not yet drawn on
 	var $maxPosL;
 	var $maxPosR;
 	var $loaded;
@@ -1283,6 +1285,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->defaultTableAlign = 'L';
 
 		$this->fixedPosBlockSave = [];
+		$this->runningFixedBlocks = [];
 		$this->openElements = $this->newOpenElementStack();
 		$this->extraFontSubsets = 0;
 
@@ -2683,10 +2686,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		/* -- END COLUMNS -- */
 
+		/* -- CSS-POSITION -- */
+		// Onto the pages added since the last HTML was written
+		if ($this->cssMode === CssMode::STANDARD) {
+			$this->drawRunningFixedBlocks();
+		}
+		/* -- END CSS-POSITION -- */
+
 		// BODY Backgrounds
 		$s = '';
 
-		$s .= $this->PrintBodyBackgrounds();
+		$s .= $this->PrintBodyBackgrounds() . '___BELOW___CONTENT' . $this->uniqstr;
 		$s .= $this->PrintPageBackgrounds();
 
 		$this->pages[$this->page] = preg_replace(
@@ -3818,7 +3828,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// BODY Backgrounds
 		if ($this->page > 0) {
 			$s = '';
-			$s .= $this->PrintBodyBackgrounds();
+			$s .= $this->PrintBodyBackgrounds() . '___BELOW___CONTENT' . $this->uniqstr;
 
 			$s .= $this->PrintPageBackgrounds();
 			$this->pages[$this->page] = preg_replace('/(___BACKGROUND___PATTERNS' . $this->uniqstr . ')/', "\n" . $s . "\n" . '\\1', $this->pages[$this->page]);
@@ -11153,35 +11163,56 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		if (count($this->layers)) {
-			foreach ($this->pages as $pn => $page) {
+		foreach ($this->pages as $pn => $page) {
+			// Positioned blocks stacked by z-index, which standard cssMode marks
+			$stacked = strpos($page, '___STACKED___') !== false;
+			if (!$stacked && !count($this->layers)) {
+				continue;
+			}
+			if ($stacked) {
+				$this->pages[$pn] = $this->placeNegativeStackLevels($this->pages[$pn]);
+			}
+			$m = [[], [], [], []];
+			if (count($this->layers)) {
 				preg_match_all('/\/OCZ-index \/ZI(\d+) BDC(.*?)(EMCZ)-index/is', $this->pages[$pn], $m1);
 				preg_match_all('/\/OCBZ-index \/ZI(\d+) BDC(.*?)(EMCBZ)-index/is', $this->pages[$pn], $m2);
 				preg_match_all('/\/OCGZ-index \/ZI(\d+) BDC(.*?)(EMCGZ)-index/is', $this->pages[$pn], $m3);
-				$m = [];
 				for ($i = 0; $i < 4; $i++) {
 					$m[$i] = array_merge($m1[$i], $m2[$i], $m3[$i]);
 				}
-				$mFirstLength = count($m[0]);
-				if ($mFirstLength) {
-					$sortarr = [];
-					for ($i = 0; $i < $mFirstLength; $i++) {
-						$key = $m[1][$i] * 2;
-						if ($m[3][$i] == 'EMCZ') {
-							$key +=2; // background first then gradient then normal
-						} elseif ($m[3][$i] == 'EMCGZ') {
-							$key +=1;
-						}
-						$sortarr[$i] = $key;
+			}
+			if ($stacked) {
+				preg_match_all('/___STACKED___(\d+)___' . $this->uniqstr . '(.*?)(___STACKED___END)' . $this->uniqstr . '/s', $this->pages[$pn], $m4);
+				for ($i = 0; $i < 4; $i++) {
+					$m[$i] = array_merge($m[$i], $m4[$i]);
+				}
+			}
+			$mFirstLength = count($m[0]);
+			if ($mFirstLength) {
+				$sortarr = [];
+				for ($i = 0; $i < $mFirstLength; $i++) {
+					// Backgrounds, then gradients, then content and positioned blocks. Where blocks are stacked, a
+					// z-index's content no longer ties with the next one's background, and ties keep the order written
+					$key = (int) $m[1][$i] * ($stacked ? 3 : 2);
+					if ($m[3][$i] == 'EMCZ' || $m[3][$i] == '___STACKED___END') {
+						$key += 2;
+					} elseif ($m[3][$i] == 'EMCGZ') {
+						$key += 1;
 					}
-					asort($sortarr);
-					foreach ($sortarr as $i => $k) {
-						$this->pages[$pn] = str_replace($m[0][$i], '', $this->pages[$pn]);
-						$this->pages[$pn] .= "\n" . $m[0][$i] . "\n";
-					}
+					$sortarr[$i] = $stacked ? $key * $mFirstLength + $i : $key;
+				}
+				asort($sortarr);
+				foreach ($sortarr as $i => $k) {
+					$this->pages[$pn] = str_replace($m[0][$i], '', $this->pages[$pn]);
+					$this->pages[$pn] .= "\n" . $m[0][$i] . "\n";
+				}
+				if (count($this->layers)) {
 					$this->pages[$pn] = preg_replace('/\/OC[BG]{0,1}Z-index \/ZI(\d+) BDC/is', '/OC /ZI\\1 BDC ', $this->pages[$pn]);
 					$this->pages[$pn] = preg_replace('/EMC[BG]{0,1}Z-index/is', 'EMC', $this->pages[$pn]);
 				}
+			}
+			if ($stacked) {
+				$this->pages[$pn] = preg_replace('/___STACKED___(-?\d+___|END)' . $this->uniqstr . '/', '', $this->pages[$pn]);
 			}
 		}
 
@@ -11501,6 +11532,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->pgwidth = $this->w - $this->lMargin - $this->rMargin;
 		$this->SetAutoPageBreak($this->autoPageBreak, $this->bMargin);
 		$this->pageDim[$this->page]['sideMargins'] = [$this->DeflMargin, $this->DefrMargin];
+		$this->pageDim[$this->page]['verticalMargins'] = [$this->tMargin, $this->bMargin];
 
 		// Reset column top margin
 		$this->y0 = $this->tMargin;
@@ -15038,7 +15070,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 						if ($this->fixedPosBlockDepth == 0) {
 							// Its content was only buffered, so the open elements are as they were inside its start tag
-							$this->fixedPosBlockSave[] = [$this->fixedPosBlock, $this->fixedPosBlockBBox, $this->page, $this->openElements];
+							$this->fixedPosBlockSave[] = [$this->fixedPosBlock, $this->fixedPosBlockBBox, $this->page, $this->openElements, $this->fixedPosBlockIsFixed];
 							$this->fixedPosBlock = '';
 							$this->inFixedPosBlock = false;
 							// The block's frame is the top one, as its content was only buffered
@@ -15301,7 +15333,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->bufferoutput = false;
 
 			/* -- CSS-POSITION -- */
-			if (count($this->fixedPosBlockSave)) {
+			if ($this->cssMode === CssMode::STANDARD) {
+				// A header, or the content of a positioned block, is written in a mode of its own and adds no page
+				$this->drawPositionedBlocks($mode === HTMLParserMode::DEFAULT_MODE || $mode === HTMLParserMode::HTML_BODY);
+			} elseif (count($this->fixedPosBlockSave)) {
 				foreach ($this->fixedPosBlockSave as $fpbs) {
 					$old_page = $this->page;
 					$this->page = $fpbs[2];
@@ -15322,6 +15357,80 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/* -- CSS-POSITION -- */
+
+	/**
+	 * Draw the positioned blocks the HTML just written held, each on the page it appeared on
+	 *
+	 * In paged media a position: fixed block is drawn on every page (CSS 2.1 section 9.3.1). From the page it appears
+	 * on, it is drawn on each page there is now and kept to be drawn on the pages added later.
+	 *
+	 * @param bool $everyPage Whether the HTML was the document's body, whose fixed blocks repeat on every page
+	 */
+	private function drawPositionedBlocks($everyPage)
+	{
+		if ($everyPage) {
+			$this->drawRunningFixedBlocks();
+		}
+
+		foreach ($this->fixedPosBlockSave as $block) {
+			if ($everyPage && $block[4]) {
+				$this->runningFixedBlocks[] = ['block' => $block, 'from' => $block[2]];
+				$this->drawRunningFixedBlock(count($this->runningFixedBlocks) - 1);
+			} else {
+				$this->drawPositionedBlock($block, $block[2]);
+			}
+		}
+
+		$this->fixedPosBlockSave = [];
+	}
+
+	/**
+	 * Draw each position: fixed block on the pages added since it was last drawn
+	 */
+	private function drawRunningFixedBlocks()
+	{
+		foreach (array_keys($this->runningFixedBlocks) as $i) {
+			$this->drawRunningFixedBlock($i);
+		}
+	}
+
+	/**
+	 * Draw one position: fixed block on the pages added since it was last drawn
+	 *
+	 * @param int $i The block's key in runningFixedBlocks
+	 */
+	private function drawRunningFixedBlock($i)
+	{
+		for ($n = $this->runningFixedBlocks[$i]['from']; $n <= $this->page; $n++) {
+			$this->drawPositionedBlock($this->runningFixedBlocks[$i]['block'], $n);
+		}
+
+		$this->runningFixedBlocks[$i]['from'] = $this->page + 1;
+	}
+
+	/**
+	 * Draw a positioned block on a page, which is laid out by that page's size and margins
+	 *
+	 * @param mixed[] $block The block as fixedPosBlockSave holds it
+	 * @param int $page The page to draw it on
+	 */
+	private function drawPositionedBlock(array $block, $page)
+	{
+		$saved = [$this->page, $this->w, $this->h, $this->tMargin, $this->bMargin, $this->lMargin, $this->rMargin, $this->pgwidth, $this->x, $this->y];
+
+		$this->page = $page;
+		$this->w = $this->pageDim[$page]['w'];
+		$this->h = $this->pageDim[$page]['h'];
+		list($this->tMargin, $this->bMargin) = $this->pageDim[$page]['verticalMargins'];
+		$this->ResetMargins();
+		$this->pgwidth = $this->w - $this->lMargin - $this->rMargin;
+
+		$this->fixedPosBlockElements = $block[3];
+		$this->WriteFixedPosHTML($block[0], 0, 0, 100, 100, 'auto', $block[1]);
+		$this->fixedPosBlockElements = null;
+
+		list($this->page, $this->w, $this->h, $this->tMargin, $this->bMargin, $this->lMargin, $this->rMargin, $this->pgwidth, $this->x, $this->y) = $saved;
+	}
 
 	function WriteFixedPosHTML($html, $x, $y, $w, $h, $overflow = 'visible', $bounding = [])
 	{
@@ -15355,6 +15464,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$save_bgs = $this->pageBackgrounds;
 		$checkinnerhtml = preg_replace('/\s/', '', $html);
 		$rotate = 0;
+		$stackLevel = null;
+		$savedLayer = $this->current_layer;
 
 		if ($w > $this->w) {
 			$x = 0;
@@ -15410,6 +15521,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->setFixedPosBlockComputed($this->cssManager->getLastComputed());
 			}
 			$this->fixedPosBlockCascadeCSS = $this->blk[1]['cascadeCSS'];
+			if ($this->cssMode === CssMode::STANDARD) {
+				// Everything the block draws is stacked together, so its content opens no layer of its own
+				$stackLevel = isset($p['Z-INDEX']) ? (int) $p['Z-INDEX'] : 0;
+				$this->current_layer = -1;
+			}
 			if (isset($p['ROTATE'])) {
 				$rotate = Rotation::angle($p['ROTATE'], [90, -90, 180]);
 			}
@@ -15432,9 +15548,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($this->cssMode === CssMode::LEGACY) {
 				$carried = InheritedProperties::LEGACY_POSITIONED;
 			} else {
-				// Its content inherits from its frame. Text decorations and the stacking order are not inherited, but
-				// the <div> stands in for the block
-				$carried = ['TEXT-DECORATION', 'Z-INDEX'];
+				// Its content inherits from its frame. Text decorations are not inherited, but the <div> stands in for
+				// the block
+				$carried = ['TEXT-DECORATION'];
 			}
 			$css = '';
 			foreach (InheritedProperties::of($p, $carried) as $property => $value) {
@@ -15925,6 +16041,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// ================================================================
 
+		// Marks everything the block draws, for _enddoc() to stack by its z-index
+		if ($stackLevel) {
+			$this->pages[$this->page] .= '___STACKED___' . $stackLevel . '___' . $this->uniqstr;
+		}
 		$this->pages[$this->page] .= '___BEFORE_BORDERS___';
 		$block_s = $this->PrintPageBackgrounds(); // Save to print later inside clipping path
 		$this->pageBackgrounds = [];
@@ -16046,6 +16166,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->writer->write($rot_end);
 
+		if ($stackLevel) {
+			$this->pages[$this->page] .= '___STACKED___END' . $this->uniqstr;
+		}
+
 
 		// Page Links
 		foreach ($this->HTMLheaderPageLinks as $lk) {
@@ -16138,6 +16262,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->HTMLheaderPageForms = [];
 		$this->pageBackgrounds = $save_bgs;
 		$this->fixedPosBlockCascadeCSS = null;
+		if ($stackLevel !== null) {
+			$this->current_layer = $savedLayer;
+		}
 		$this->writingHTMLheader = false;
 
 		$this->writingHTMLfooter = false;
@@ -16154,6 +16281,38 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->SetColumns($save_nbcol, $this->colvAlign, $this->ColGap);
 		}
 		/* -- END COLUMNS -- */
+	}
+
+	/**
+	 * Move the positioned blocks with a negative z-index below the page's content, lowest first
+	 *
+	 * They go over the page's own background, where the page was closed. In the order they were written where their
+	 * z-index is the same.
+	 *
+	 * @param string $page The page's content
+	 *
+	 * @return string
+	 */
+	private function placeNegativeStackLevels($page)
+	{
+		$below = '___BELOW___CONTENT' . $this->uniqstr;
+		if (strpos($page, $below) === false
+			|| !preg_match_all('/___STACKED___(-\d+)___' . $this->uniqstr . '(.*?)___STACKED___END' . $this->uniqstr . '/s', $page, $m)) {
+			return $page;
+		}
+
+		$order = array_keys($m[0]);
+		usort($order, function ($a, $b) use ($m) {
+			return $m[1][$a] == $m[1][$b] ? $a - $b : (int) $m[1][$a] - (int) $m[1][$b];
+		});
+
+		$blocks = '';
+		foreach ($order as $i) {
+			$page = str_replace($m[0][$i], '', $page);
+			$blocks .= "\n" . $m[2][$i] . "\n";
+		}
+
+		return str_replace($below, $blocks . $below, $page);
 	}
 
 	/* -- END CSS-POSITION -- */
