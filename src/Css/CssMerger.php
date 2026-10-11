@@ -342,7 +342,7 @@ class CssMerger
 
 		// An inline element, and a block in a table cell, is drawn over the state of what it is in, which already
 		// holds what it inherits. What places an underline is read where the underline is set, so it comes too
-		return $inherit === 'INLINE' || $inherit === '' ? array_intersect_key($properties, $own + array_flip(InheritedProperties::DECORATION)) : $properties;
+		return $inherit === 'INLINE' || $inherit === '' ? array_intersect_key($properties, $own) + InheritedProperties::of($properties, InheritedProperties::DECORATION) : $properties;
 	}
 
 	/**

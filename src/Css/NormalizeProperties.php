@@ -1215,9 +1215,12 @@ class NormalizeProperties
 	private function processTextDecorationProperty($v)
 	{
 		$lines = [];
-		$parts = ['TEXT-DECORATION-STYLE' => 'solid', 'TEXT-DECORATION-COLOR' => 'currentcolor', 'TEXT-DECORATION-THICKNESS' => 'auto'];
+		$parts = [];
+		foreach (['TEXT-DECORATION-STYLE', 'TEXT-DECORATION-COLOR', 'TEXT-DECORATION-THICKNESS'] as $longhand) {
+			$parts[$longhand] = CssWideKeywords::initialValue($longhand);
+		}
 		foreach ($this->splitComponents($v) as $component) {
-			if (in_array($component, ['none', 'underline', 'overline', 'line-through', 'blink'], true)) {
+			if ($component === 'none' || $component === 'blink' || in_array($component, TextDecorations::LINES, true)) {
 				$lines[] = $component;
 			} elseif (in_array($component, TextDecorations::STYLES, true)) {
 				$parts['TEXT-DECORATION-STYLE'] = $component;
@@ -1229,9 +1232,7 @@ class NormalizeProperties
 		}
 
 		$this->properties['TEXT-DECORATION'] = $lines ? implode(' ', $lines) : 'none';
-		foreach ($parts as $longhand => $value) {
-			$this->properties[$longhand] = $value;
-		}
+		$this->properties = array_merge($this->properties, $parts);
 	}
 
 	/**

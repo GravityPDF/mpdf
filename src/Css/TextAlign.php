@@ -33,12 +33,10 @@ final class TextAlign
 	public static function matchParent(array $parent)
 	{
 		$align = isset($parent['TEXT-ALIGN']) ? strtolower($parent['TEXT-ALIGN']) : 'start';
-		if ($align !== 'start' && $align !== 'end' && $align !== 'match-parent') {
+		if (!in_array($align, ['start', 'end', 'match-parent'], true)) {
 			return $parent['TEXT-ALIGN'];
 		}
 
-		$direction = isset($parent['DIRECTION']) ? $parent['DIRECTION'] : 'ltr';
-
-		return self::physical($align === 'end' ? 'end' : 'start', $direction) === 'R' ? 'right' : 'left';
+		return self::physical($align, isset($parent['DIRECTION']) ? $parent['DIRECTION'] : null) === 'R' ? 'right' : 'left';
 	}
 }

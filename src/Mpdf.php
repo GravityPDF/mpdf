@@ -11727,12 +11727,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function decorationStroke(array $decoration, $side, $thickness, $x, $y, $txt, $OTLdata, $textvar)
 	{
-		if (!isset($decoration['style'])) {
-			return $this->_dounderline($x, $y, $txt, $OTLdata, $textvar);
-		}
-
 		return TextDecorations::stroke(
-			$decoration['style'],
+			isset($decoration['style']) ? $decoration['style'] : 'solid',
 			$x * Mpdf::SCALE,
 			($this->h - $y) * Mpdf::SCALE,
 			$this->decorationWidth($txt, $OTLdata, $textvar),
@@ -20131,9 +20127,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->textparam['o-decoration']['color'] = strtoupper($this->TextColor); // change 0 0 0 rg to 0 0 0 RG
 			}
 			if ($this->cssMode === CssMode::STANDARD) {
-				$drawing = $this->decorationDrawing($arrayaux);
+				$drawing = null;
 				foreach (TextDecorations::PARAMETERS as $bit => $parameter) {
-					if (isset($this->textparam[$parameter]) && stristr($v, TextDecorations::LINES[$bit])) {
+					if (stristr($v, TextDecorations::LINES[$bit])) {
+						if ($drawing === null) {
+							$drawing = $this->decorationDrawing($arrayaux);
+						}
 						$this->textparam[$parameter] = array_merge(array_diff_key($this->textparam[$parameter], TextDecorations::DRAWN_AS), $drawing);
 					}
 				}

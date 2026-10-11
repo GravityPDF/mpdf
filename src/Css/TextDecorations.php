@@ -43,8 +43,8 @@ final class TextDecorations
 	];
 
 	/**
-	 * The keys of a decoration's text parameter that Mpdf::setCSS() sets only where the element's CSS asks for them, as
-	 * keys, so an element's own decoration does not keep those of the one it replaces
+	 * The keys of a decoration's text parameter that Mpdf::setCSS() sets only where the element's CSS asks for them. An
+	 * element's own decoration drops them first, so it does not keep those of the decoration it replaces
 	 */
 	const DRAWN_AS = ['style' => true, 'thickness' => true, 'offset' => true, 'under' => true];
 
@@ -147,16 +147,17 @@ final class TextDecorations
 	}
 
 	/**
-	 * The PDF operators that stroke a decoration in a style other than solid, in the stroke colour and line width already
-	 * set. All lengths are in PDF units.
+	 * The PDF operators that stroke a decoration, in the stroke colour and line width already set. All lengths are in
+	 * PDF units.
 	 *
+	 * - solid, or a style not listed: one line
 	 * - double: two lines of the thickness, a thickness apart, the second away from the text
 	 * - dotted: round dots the thickness across, a dot's width apart
 	 * - dashed: dashes three thicknesses long, two apart
 	 * - wavy: a sine three thicknesses high from crest to trough, of half wavelength three thicknesses, fitted to the
 	 *   width with whole half waves, each a cubic Bézier arch
 	 *
-	 * @param string $style One of STYLES other than solid
+	 * @param string $style One of STYLES
 	 * @param float $x Where the decoration starts
 	 * @param float $y Where its centre line runs
 	 * @param float $width
@@ -185,11 +186,10 @@ final class TextDecorations
 				return sprintf('[%.3F %.3F] 0 d ', 3 * $thickness, 2 * $thickness) . $line($y) . ' [] 0 d';
 
 			case 'wavy':
-				$half = 3 * $thickness;
-				$count = max(1, (int) round($width / $half));
+				$count = max(1, (int) round($width / (3 * $thickness)));
 				$half = $width / $count;
-				// A cubic's control points at height h raise its middle by 3h/4
-				$height = 1.5 * $thickness * 4 / 3;
+				// A cubic's control points at height h raise its middle by 3h/4, so 2 thicknesses give a crest of 1.5
+				$height = 2 * $thickness;
 				$crest = $side === self::THROUGH ? self::OVER : $side;
 
 				$path = sprintf('1 j %.3F %.3F m', $x, $y);
