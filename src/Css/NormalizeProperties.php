@@ -62,6 +62,19 @@ class NormalizeProperties
 	const REPEAT_KEYWORDS = ['repeat', 'no-repeat', 'space', 'round'];
 
 	/**
+	 * The background longhands that list a value for each layer, with the key of their part in a parsed layer of the
+	 * shorthand and their initial value
+	 */
+	const LAYERED_LONGHANDS = [
+		'BACKGROUND-IMAGE' => ['i', ''],
+		'BACKGROUND-REPEAT' => ['r', 'repeat'],
+		'BACKGROUND-POSITION' => ['p', '0% 0%'],
+		'BACKGROUND-SIZE' => ['s', 'auto'],
+		'BACKGROUND-ORIGIN' => ['o', 'padding-box'],
+		'BACKGROUND-CLIP' => ['k', 'border-box'],
+	];
+
+	/**
 	 * @var array
 	 */
 	private $properties = [];
@@ -234,7 +247,7 @@ class NormalizeProperties
 				$this->processPageSizeProperty($k, $v);
 			} elseif ($k === 'BREAK-BEFORE' || $k === 'BREAK-AFTER' || $k === 'BREAK-INSIDE') {
 				$this->processBreakProperty($k, $v);
-			} elseif (in_array($k, ['BACKGROUND', 'BACKGROUND-IMAGE', 'BACKGROUND-REPEAT', 'BACKGROUND-POSITION'], true)) {
+			} elseif (in_array($k, ['BACKGROUND', 'BACKGROUND-IMAGE', 'BACKGROUND-REPEAT', 'BACKGROUND-POSITION', 'BACKGROUND-SIZE', 'BACKGROUND-ORIGIN', 'BACKGROUND-CLIP'], true)) {
 				$this->processBackgroundProperty($k, $v);
 			} elseif ($k === 'IMAGE-ORIENTATION') {
 				$this->processImageOrientationProperty($v);
@@ -569,23 +582,16 @@ class NormalizeProperties
 	 * Parse CSS background shorthand property.
 	 *
 	 * Reads the colour, image, position with an optional "/ size", repeat, attachment and boxes of each
-	 * comma-separated layer, in any order. Only the first layer is drawn, over the colour, which only the
-	 * last layer may carry.
+	 * comma-separated layer, in any order. Only the last layer may carry the colour.
 	 *
 	 * @param string $s Background property value
-	 * @return array|false The parts given, keyed 'c' (color), 'i' (image), 'r' (repeat), 'p' (position),
-	 *                     's' (size), 'o' (origin) and 'k' (clip), or false when the value is not a background
+	 * @return array[]|false The parts of each layer, the top layer first, keyed 'c' (color), 'i' (image), 'r' (repeat),
+	 *                       'p' (position), 's' (size), 'o' (origin) and 'k' (clip); an empty list for a CSS-wide
+	 *                       keyword; or false when the value is not a background
 	 */
-	protected function parseCssBackground($s)
+	private function parseBackgroundLayers($s)
 	{
-		$layers = [[]];
-		foreach ($this->splitComponents($s) as $component) {
-			if ($component === ',') {
-				$layers[] = [];
-			} else {
-				$layers[count($layers) - 1][] = $component;
-			}
-		}
+		$layers = $this->splitLayers($s);
 
 		// A CSS-wide keyword gives the initial value, no background. The standard CSS mode passes it to the longhands
 		// before this, for CssMerger to resolve
@@ -601,11 +607,27 @@ class NormalizeProperties
 			}
 		}
 
-		if (isset($layers[$last]['c'])) {
-			$layers[0]['c'] = $layers[$last]['c'];
+		return $layers;
+	}
+
+	/**
+	 * Splits a value at the commas outside its function calls and quoted strings
+	 *
+	 * @param string $value
+	 * @return string[][] The components of each comma-separated part
+	 */
+	private function splitLayers($value)
+	{
+		$layers = [[]];
+		foreach ($this->splitComponents($value) as $component) {
+			if ($component === ',') {
+				$layers[] = [];
+			} else {
+				$layers[count($layers) - 1][] = $component;
+			}
 		}
 
-		return $layers[0];
+		return $layers;
 	}
 
 	/**
@@ -613,7 +635,7 @@ class NormalizeProperties
 	 * A single box keyword sets both the origin and the clip.
 	 *
 	 * @param string[] $components
-	 * @return array|false The parts given, keyed as parseCssBackground() returns them, or false when a component is none of them
+	 * @return array|false The parts given, keyed as parseBackgroundLayers() returns them, or false when a component is none of them
 	 */
 	private function parseBackgroundLayer(array $components)
 	{
@@ -1065,7 +1087,8 @@ class NormalizeProperties
 	/**
 	 * Process background related CSS properties.
 	 *
-	 * Handles BACKGROUND, BACKGROUND-IMAGE, BACKGROUND-REPEAT, and BACKGROUND-POSITION.
+	 * Handles BACKGROUND and its longhands. The standard CSS mode reads a comma-separated list of layers into each
+	 * of them, kept as BackgroundLayers joins them.
 	 *
 	 * @param string $property Property name
 	 * @param string $value Property value
@@ -1073,29 +1096,42 @@ class NormalizeProperties
 	 */
 	protected function processBackgroundProperty($property, $value)
 	{
+		if ($property !== 'BACKGROUND' && $this->mpdf->cssMode === CssMode::STANDARD) {
+			$layers = $this->splitLayers($value);
+			if (count($layers) > 1) {
+				$this->processLayeredBackgroundProperty($property, $layers);
+				return;
+			}
+		}
+
 		switch ($property) {
 			case 'BACKGROUND':
-				$bg = $this->parseCssBackground($value);
+				$layers = $this->parseBackgroundLayers($value);
 
 				// A value that is not a background is dropped, as a browser drops it
-				if ($bg === false) {
+				if ($layers === false) {
 					break;
 				}
 
-				$this->properties['BACKGROUND-COLOR'] = isset($bg['c']) ? $bg['c'] : 'transparent';
-				$this->properties['BACKGROUND-IMAGE'] = isset($bg['i']) ? $bg['i'] : '';
+				$layers = $layers ?: [[]];
+				$bottom = $layers[count($layers) - 1];
+				$this->properties['BACKGROUND-COLOR'] = isset($bottom['c']) ? $bottom['c'] : 'transparent';
 
 				if (!$this->resetsOmittedParts()) {
-					$this->mergeBackgroundParts($bg);
+					// Only the top layer is drawn
+					$this->properties['BACKGROUND-IMAGE'] = isset($layers[0]['i']) ? $layers[0]['i'] : '';
+					$this->mergeBackgroundParts($layers[0]);
 					break;
 				}
 
 				// A part not given takes its initial value, replacing a longhand given before it in the cascade
-				$this->properties['BACKGROUND-REPEAT'] = isset($bg['r']) ? $bg['r'] : 'repeat';
-				$this->properties['BACKGROUND-POSITION'] = !empty($bg['p']) ? $bg['p'] : '0% 0%';
-				$this->properties['BACKGROUND-SIZE'] = isset($bg['s']) ? $bg['s'] : 'auto';
-				$this->properties['BACKGROUND-ORIGIN'] = isset($bg['o']) ? $bg['o'] : 'padding-box';
-				$this->properties['BACKGROUND-CLIP'] = isset($bg['k']) ? $bg['k'] : 'border-box';
+				foreach (self::LAYERED_LONGHANDS as $longhand => $part) {
+					$values = [];
+					foreach ($layers as $layer) {
+						$values[] = isset($layer[$part[0]]) && $layer[$part[0]] !== false ? $layer[$part[0]] : $part[1];
+					}
+					$this->properties[$longhand] = BackgroundLayers::join($values);
+				}
 				break;
 
 			case 'BACKGROUND-IMAGE':
@@ -1124,7 +1160,60 @@ class NormalizeProperties
 					$this->properties['BACKGROUND-POSITION'] = $normalizedPosition;
 				}
 				break;
+
+			default:
+				$this->properties[$property] = $value;
 		}
+	}
+
+	/**
+	 * Sets a background longhand that lists a value for each layer. The list is dropped when one of its values is not
+	 * a value of the property, as a browser drops it
+	 *
+	 * @param string $property Property name
+	 * @param string[][] $layers The components of each layer's value
+	 * @return void
+	 */
+	private function processLayeredBackgroundProperty($property, array $layers)
+	{
+		$values = [];
+		foreach ($layers as $components) {
+			$value = $this->layerValue($property, $components);
+			if ($value === false) {
+				return;
+			}
+			$values[] = $value;
+		}
+
+		$this->properties[$property] = BackgroundLayers::join($values);
+	}
+
+	/**
+	 * Reads one layer's value of a background longhand, the way the shorthand reads that part
+	 *
+	 * @param string $property Property name
+	 * @param string[] $components
+	 * @return string|false The value, or false when it is not a value of the property
+	 */
+	private function layerValue($property, array $components)
+	{
+		if ($property === 'BACKGROUND-SIZE') {
+			$size = implode(' ', $components);
+			$length = '(auto|' . self::NUMBER . '([a-z]+|%)?)';
+
+			return preg_match('/^(cover|contain|' . $length . '( ' . $length . ')?)$/', $size) ? $size : false;
+		}
+
+		$part = self::LAYERED_LONGHANDS[$property][0];
+		$layer = $this->parseBackgroundLayer($components);
+		if (!isset($layer[$part]) || $layer[$part] === false) {
+			return false;
+		}
+
+		// One box keyword sets both the origin and the clip in the shorthand; a longhand takes one keyword
+		$expected = $part === 'o' || $part === 'k' ? ['o' => $layer[$part], 'k' => $layer[$part]] : [$part => $layer[$part]];
+
+		return $layer == $expected ? $layer[$part] : false;
 	}
 
 	/**

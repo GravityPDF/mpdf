@@ -5,6 +5,7 @@ namespace Mpdf;
 use Mpdf\Config\ConfigVariables;
 use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
+use Mpdf\Css\BackgroundLayers;
 use Mpdf\Css\Border;
 use Mpdf\Css\BorderRadius;
 use Mpdf\Css\CommentParser;
@@ -2822,7 +2823,63 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return [$imw, $imh, $repx, $repy];
 	}
 
+	/**
+	 * Reads an element's background image or images
+	 *
+	 * @param array $properties The element's CSS
+	 * @param float $maxwidth The width percentages and font-relative lengths are read against
+	 * @return array|false What backgroundLayer() returns for a background of one layer; for more than one, the same of
+	 *                     each layer drawn, the top layer first, under the key 'layers'; or false when none is drawn
+	 */
 	function SetBackground(&$properties, &$maxwidth)
+	{
+		$layers = [];
+		$images = BackgroundLayers::split($properties['BACKGROUND-IMAGE']);
+		foreach ($images as $n => $image) {
+			if ($image === '') {
+				continue;
+			}
+
+			$layer = $properties;
+			$layer['BACKGROUND-IMAGE'] = $image;
+			foreach (['BACKGROUND-REPEAT', 'BACKGROUND-POSITION', 'BACKGROUND-SIZE', 'BACKGROUND-ORIGIN'] as $property) {
+				if (isset($properties[$property])) {
+					$layer[$property] = BackgroundLayers::valueFor($properties[$property], $n);
+				}
+			}
+
+			$layer = $this->backgroundLayer($layer, $maxwidth);
+			if ($layer) {
+				$layers[] = $layer;
+			}
+		}
+
+		if (count($layers) < 2) {
+			return $layers ? $layers[0] : false;
+		}
+
+		return ['layers' => $layers];
+	}
+
+	/**
+	 * The layers of a background SetBackground() read, in the order they are painted: the bottom layer first
+	 *
+	 * @param array $background
+	 * @return array[]
+	 */
+	private function backgroundLayers(array $background)
+	{
+		return isset($background['layers']) ? array_reverse($background['layers']) : [$background];
+	}
+
+	/**
+	 * Reads one layer of an element's background
+	 *
+	 * @param array $properties The element's CSS, with the layer's values
+	 * @param float $maxwidth The width percentages and font-relative lengths are read against
+	 * @return array|false The gradient, or the image and how it is placed, or false when the image cannot be read
+	 */
+	private function backgroundLayer(array $properties, $maxwidth)
 	{
 		if (isset($properties['BACKGROUND-ORIGIN']) && ($properties['BACKGROUND-ORIGIN'] == 'border-box' || $properties['BACKGROUND-ORIGIN'] == 'content-box')) {
 			$origin = $properties['BACKGROUND-ORIGIN'];
@@ -2951,23 +3008,25 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 		if ($this->bodyBackgroundImage) {
-			if (isset($this->bodyBackgroundImage['gradient']) && $this->bodyBackgroundImage['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $this->bodyBackgroundImage['gradient'])) {
-				$g = $this->gradient->parseMozGradient($this->bodyBackgroundImage['gradient']);
-				if ($g) {
-					$s .= $this->gradient->Gradient($clx, $cly, $clw, $clh, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend'], true);
-				}
-			} elseif ($this->bodyBackgroundImage['image_id']) { // Background pattern
-				$n = count($this->patterns) + 1;
-				// If using resize, uses TrimBox (not including the bleed)
-				list($orig_w, $orig_h, $x_repeat, $y_repeat) = $this->_resizeBackgroundImage($this->bodyBackgroundImage['orig_w'], $this->bodyBackgroundImage['orig_h'], $clw, $clh, $this->bodyBackgroundImage['resize'], $this->bodyBackgroundImage['x_repeat'], $this->bodyBackgroundImage['y_repeat']);
+			foreach ($this->backgroundLayers($this->bodyBackgroundImage) as $bg) {
+				if (isset($bg['gradient']) && $bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+					$g = $this->gradient->parseMozGradient($bg['gradient']);
+					if ($g) {
+						$s .= $this->gradient->Gradient($clx, $cly, $clw, $clh, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend'], true);
+					}
+				} elseif ($bg['image_id']) { // Background pattern
+					$n = count($this->patterns) + 1;
+					// If using resize, uses TrimBox (not including the bleed)
+					list($orig_w, $orig_h, $x_repeat, $y_repeat) = $this->_resizeBackgroundImage($bg['orig_w'], $bg['orig_h'], $clw, $clh, $bg['resize'], $bg['x_repeat'], $bg['y_repeat']);
 
-				$this->patterns[$n] = ['x' => $clx, 'y' => $cly, 'w' => $clw, 'h' => $clh, 'pgh' => $this->h, 'image_id' => $this->bodyBackgroundImage['image_id'], 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $this->bodyBackgroundImage['x_pos'], 'y_pos' => $this->bodyBackgroundImage['y_pos'], 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'itype' => $this->bodyBackgroundImage['itype']];
-				if (($this->bodyBackgroundImage['opacity'] > 0 || $this->bodyBackgroundImage['opacity'] === '0') && $this->bodyBackgroundImage['opacity'] < 1) {
-					$opac = $this->SetAlpha($this->bodyBackgroundImage['opacity'], 'Normal', true);
-				} else {
-					$opac = '';
+					$this->patterns[$n] = ['x' => $clx, 'y' => $cly, 'w' => $clw, 'h' => $clh, 'pgh' => $this->h, 'image_id' => $bg['image_id'], 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $bg['x_pos'], 'y_pos' => $bg['y_pos'], 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'itype' => $bg['itype']];
+					if (($bg['opacity'] > 0 || $bg['opacity'] === '0') && $bg['opacity'] < 1) {
+						$opac = $this->SetAlpha($bg['opacity'], 'Normal', true);
+					} else {
+						$opac = '';
+					}
+					$s .= sprintf('q /Pattern cs /P%d scn %s %.3F %.3F %.3F %.3F re f Q', $n, $opac, ($clx * Mpdf::SCALE), ($cly * Mpdf::SCALE), $clw * Mpdf::SCALE, $clh * Mpdf::SCALE) . "\n";
 				}
-				$s .= sprintf('q /Pattern cs /P%d scn %s %.3F %.3F %.3F %.3F re f Q', $n, $opac, ($clx * Mpdf::SCALE), ($cly * Mpdf::SCALE), $clw * Mpdf::SCALE, $clh * Mpdf::SCALE) . "\n";
 			}
 		}
 		/* -- END BACKGROUNDS -- */
@@ -13295,9 +13354,31 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if (isset($tablehf['background-image']) && $paintcell) {
-						if ($tablehf['background-image']['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $tablehf['background-image']['gradient'])) {
-							$g = $this->gradient->parseMozGradient($tablehf['background-image']['gradient']);
-							if ($g) {
+						// The layers of a list are drawn in their order, so its gradients go in with its images
+						$gradientSlot = isset($tablehf['background-image']['layers']) ? 8 : 7;
+						foreach ($this->backgroundLayers($tablehf['background-image']) as $bg) {
+							if ($bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+								$g = $this->gradient->parseMozGradient($bg['gradient']);
+								if ($g) {
+									if ($table['borders_separate']) {
+										$px = $x + ($table['border_spacing_H'] / 2);
+										$py = $y + ($table['border_spacing_V'] / 2);
+										$pw = $w - $table['border_spacing_H'];
+										$ph = $h - $table['border_spacing_V'];
+									} else {
+										$px = $x;
+										$py = $y;
+										$pw = $w;
+										$ph = $h;
+									}
+									if ($this->ColActive) {
+										$this->gradient->Gradient($px, $py, $pw, $ph, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend']);
+									} else {
+										$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+									}
+								}
+							} elseif ($bg['image_id']) { // Background pattern
+								$n = count($this->patterns) + 1;
 								if ($table['borders_separate']) {
 									$px = $x + ($table['border_spacing_H'] / 2);
 									$py = $y + ($table['border_spacing_V'] / 2);
@@ -13310,35 +13391,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									$ph = $h;
 								}
 								if ($this->ColActive) {
-									$this->gradient->Gradient($px, $py, $pw, $ph, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend']);
+									list($orig_w, $orig_h, $x_repeat, $y_repeat) = $this->_resizeBackgroundImage($bg['orig_w'], $bg['orig_h'], $pw, $ph, $bg['resize'], $bg['x_repeat'], $bg['y_repeat']);
+									$this->patterns[$n] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'pgh' => $this->h, 'image_id' => $bg['image_id'], 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $bg['x_pos'], 'y_pos' => $bg['y_pos'], 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'itype' => $bg['itype']];
+									if ($bg['opacity'] > 0 && $bg['opacity'] < 1) {
+										$opac = $this->SetAlpha($bg['opacity'], 'Normal', true);
+									} else {
+										$opac = '';
+									}
+									$this->writer->write(sprintf('q /Pattern cs /P%d scn %s %.3F %.3F %.3F %.3F re f Q', $n, $opac, $px * Mpdf::SCALE, ($this->h - $py) * Mpdf::SCALE, $pw * Mpdf::SCALE, -$ph * Mpdf::SCALE));
 								} else {
-									$this->tableBackgrounds[$level * 9 + 7][] = ['gradient' => true, 'x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+									$this->tableBackgrounds[$level * 9 + 8][] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'image_id' => $bg['image_id'], 'orig_w' => $bg['orig_w'], 'orig_h' => $bg['orig_h'], 'x_pos' => $bg['x_pos'], 'y_pos' => $bg['y_pos'], 'x_repeat' => $bg['x_repeat'], 'y_repeat' => $bg['y_repeat'], 'clippath' => '', 'resize' => $bg['resize'], 'opacity' => $bg['opacity'], 'itype' => $bg['itype']];
 								}
-							}
-						} elseif ($tablehf['background-image']['image_id']) { // Background pattern
-							$n = count($this->patterns) + 1;
-							if ($table['borders_separate']) {
-								$px = $x + ($table['border_spacing_H'] / 2);
-								$py = $y + ($table['border_spacing_V'] / 2);
-								$pw = $w - $table['border_spacing_H'];
-								$ph = $h - $table['border_spacing_V'];
-							} else {
-								$px = $x;
-								$py = $y;
-								$pw = $w;
-								$ph = $h;
-							}
-							if ($this->ColActive) {
-								list($orig_w, $orig_h, $x_repeat, $y_repeat) = $this->_resizeBackgroundImage($tablehf['background-image']['orig_w'], $tablehf['background-image']['orig_h'], $pw, $ph, $tablehf['background-image']['resize'], $tablehf['background-image']['x_repeat'], $tablehf['background-image']['y_repeat']);
-								$this->patterns[$n] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'pgh' => $this->h, 'image_id' => $tablehf['background-image']['image_id'], 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $tablehf['background-image']['x_pos'], 'y_pos' => $tablehf['background-image']['y_pos'], 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'itype' => $tablehf['background-image']['itype']];
-								if ($tablehf['background-image']['opacity'] > 0 && $tablehf['background-image']['opacity'] < 1) {
-									$opac = $this->SetAlpha($tablehf['background-image']['opacity'], 'Normal', true);
-								} else {
-									$opac = '';
-								}
-								$this->writer->write(sprintf('q /Pattern cs /P%d scn %s %.3F %.3F %.3F %.3F re f Q', $n, $opac, $px * Mpdf::SCALE, ($this->h - $py) * Mpdf::SCALE, $pw * Mpdf::SCALE, -$ph * Mpdf::SCALE));
-							} else {
-								$this->tableBackgrounds[$level * 9 + 8][] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'image_id' => $tablehf['background-image']['image_id'], 'orig_w' => $tablehf['background-image']['orig_w'], 'orig_h' => $tablehf['background-image']['orig_h'], 'x_pos' => $tablehf['background-image']['x_pos'], 'y_pos' => $tablehf['background-image']['y_pos'], 'x_repeat' => $tablehf['background-image']['x_repeat'], 'y_repeat' => $tablehf['background-image']['y_repeat'], 'clippath' => '', 'resize' => $tablehf['background-image']['resize'], 'opacity' => $tablehf['background-image']['opacity'], 'itype' => $tablehf['background-image']['itype']];
 							}
 						}
 					}
@@ -13476,9 +13539,42 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 
 						if (isset($content[$i][0]['trbackground-images']) && ($colctr == 1 || $table['borders_separate'])) {
-							if ($content[$i][0]['trbackground-images']['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $content[$i][0]['trbackground-images']['gradient'])) {
-								$g = $this->gradient->parseMozGradient($content[$i][0]['trbackground-images']['gradient']);
-								if ($g) {
+							// The layers of a list are drawn in their order, so its gradients go in with its images
+							$gradientSlot = isset($content[$i][0]['trbackground-images']['layers']) ? 5 : 4;
+							foreach ($this->backgroundLayers($content[$i][0]['trbackground-images']) as $bg) {
+								if ($bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+									$g = $this->gradient->parseMozGradient($bg['gradient']);
+									if ($g) {
+										$gx = $x0;
+										$gy = $y;
+										$gh = $h;
+										$gw = $table['w'] - ($table['max_cell_border_width']['L'] / 2) - ($table['max_cell_border_width']['R'] / 2) - $table['margin']['L'] - $table['margin']['R'];
+										if ($table['borders_separate']) {
+											$gw -= ($table['padding']['L'] + $table['border_details']['L']['w'] + $table['padding']['R'] + $table['border_details']['R']['w'] + $table['border_spacing_H']);
+											$clx = $x + ($table['border_spacing_H'] / 2);
+											$cly = $y + ($table['border_spacing_V'] / 2);
+											$clw = $w - $table['border_spacing_H'];
+											$clh = $h - $table['border_spacing_V'];
+											// Set clipping path
+											$s = $this->_setClippingPath($clx, $cly, $clw, $clh); // mPDF 6
+											$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => $s];
+										} else {
+											$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+										}
+									}
+								} else {
+									$image_id = $bg['image_id'];
+									$orig_w = $bg['orig_w'];
+									$orig_h = $bg['orig_h'];
+									$x_pos = $bg['x_pos'];
+									$y_pos = $bg['y_pos'];
+									$x_repeat = $bg['x_repeat'];
+									$y_repeat = $bg['y_repeat'];
+									$resize = $bg['resize'];
+									$opacity = $bg['opacity'];
+									$itype = $bg['itype'];
+
+									$clippath = '';
 									$gx = $x0;
 									$gy = $y;
 									$gh = $h;
@@ -13491,39 +13587,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 										$clh = $h - $table['border_spacing_V'];
 										// Set clipping path
 										$s = $this->_setClippingPath($clx, $cly, $clw, $clh); // mPDF 6
-										$this->tableBackgrounds[$level * 9 + 4][] = ['gradient' => true, 'x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => $s];
+										$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => $s, 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 									} else {
-										$this->tableBackgrounds[$level * 9 + 4][] = ['gradient' => true, 'x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+										$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 									}
-								}
-							} else {
-								$image_id = $content[$i][0]['trbackground-images']['image_id'];
-								$orig_w = $content[$i][0]['trbackground-images']['orig_w'];
-								$orig_h = $content[$i][0]['trbackground-images']['orig_h'];
-								$x_pos = $content[$i][0]['trbackground-images']['x_pos'];
-								$y_pos = $content[$i][0]['trbackground-images']['y_pos'];
-								$x_repeat = $content[$i][0]['trbackground-images']['x_repeat'];
-								$y_repeat = $content[$i][0]['trbackground-images']['y_repeat'];
-								$resize = $content[$i][0]['trbackground-images']['resize'];
-								$opacity = $content[$i][0]['trbackground-images']['opacity'];
-								$itype = $content[$i][0]['trbackground-images']['itype'];
-
-								$clippath = '';
-								$gx = $x0;
-								$gy = $y;
-								$gh = $h;
-								$gw = $table['w'] - ($table['max_cell_border_width']['L'] / 2) - ($table['max_cell_border_width']['R'] / 2) - $table['margin']['L'] - $table['margin']['R'];
-								if ($table['borders_separate']) {
-									$gw -= ($table['padding']['L'] + $table['border_details']['L']['w'] + $table['padding']['R'] + $table['border_details']['R']['w'] + $table['border_spacing_H']);
-									$clx = $x + ($table['border_spacing_H'] / 2);
-									$cly = $y + ($table['border_spacing_V'] / 2);
-									$clw = $w - $table['border_spacing_H'];
-									$clh = $h - $table['border_spacing_V'];
-									// Set clipping path
-									$s = $this->_setClippingPath($clx, $cly, $clw, $clh); // mPDF 6
-									$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => $s, 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
-								} else {
-									$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 								}
 							}
 						}
@@ -18754,146 +18821,153 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if (isset($this->blk[$blvl]['background-image'])) {
-			if (isset($this->blk[$blvl]['background-image']['gradient']) && $this->blk[$blvl]['background-image']['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $this->blk[$blvl]['background-image']['gradient'])) {
-				$g = $this->gradient->parseMozGradient($this->blk[$blvl]['background-image']['gradient']);
-				if ($g) {
-					$gx = $x0;
-					$gy = $y0;
-					// origin specifies the background-positioning-area (bpa)
-					if ($this->blk[$blvl]['background-image']['origin'] == 'padding-box') {
-						$gx += $this->blk[$blvl]['border_left']['w'];
-						$w -= ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['border_right']['w']);
-						if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
-							$gy += $this->blk[$blvl]['border_top']['w'];
+			// A gradient layer is sized from the whole box
+			$bgw = $w;
+			$bgh = $h;
+			foreach ($this->backgroundLayers($this->blk[$blvl]['background-image']) as $bg) {
+				$w = $bgw;
+				$h = $bgh;
+				if (isset($bg['gradient']) && $bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+					$g = $this->gradient->parseMozGradient($bg['gradient']);
+					if ($g) {
+						$gx = $x0;
+						$gy = $y0;
+						// origin specifies the background-positioning-area (bpa)
+						if ($bg['origin'] == 'padding-box') {
+							$gx += $this->blk[$blvl]['border_left']['w'];
+							$w -= ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['border_right']['w']);
+							if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
+								$gy += $this->blk[$blvl]['border_top']['w'];
+							}
+							if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
+								$gy1 = $y1 - $this->blk[$blvl]['border_bottom']['w'];
+							} else {
+								$gy1 = $y1;
+							}
+							$h = $gy1 - $gy;
+						} elseif ($bg['origin'] == 'content-box') {
+							$gx += $this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'];
+							$w -= ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'] + $this->blk[$blvl]['border_right']['w'] + $this->blk[$blvl]['padding_right']);
+							if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
+								$gy += $this->blk[$blvl]['border_top']['w'] + $this->blk[$blvl]['padding_top'];
+							}
+							if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
+								$gy1 = $y1 - ($this->blk[$blvl]['border_bottom']['w'] + $this->blk[$blvl]['padding_bottom']);
+							} else {
+								$gy1 = $y1 - $this->blk[$blvl]['padding_bottom'];
+							}
+							$h = $gy1 - $gy;
 						}
-						if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
-							$gy1 = $y1 - $this->blk[$blvl]['border_bottom']['w'];
-						} else {
-							$gy1 = $y1;
+
+						if (isset($bg['size']['w']) && $bg['size']['w']) {
+							$size = $bg['size'];
+							if ($size['w'] != 'contain' && $size['w'] != 'cover') {
+								if (stristr($size['w'], '%')) {
+									$size['w'] = (float) $size['w'];
+									$size['w'] /= 100;
+									$w *= $size['w'];
+								} elseif ($size['w'] != 'auto') {
+									$w = $size['w'];
+								}
+								if (stristr($size['h'], '%')) {
+									$size['h'] = (float) $size['h'];
+									$size['h'] /= 100;
+									$h *= $size['h'];
+								} elseif ($size['h'] != 'auto') {
+									$h = $size['h'];
+								}
+							}
 						}
-						$h = $gy1 - $gy;
-					} elseif ($this->blk[$blvl]['background-image']['origin'] == 'content-box') {
-						$gx += $this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'];
-						$w -= ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'] + $this->blk[$blvl]['border_right']['w'] + $this->blk[$blvl]['padding_right']);
-						if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
-							$gy += $this->blk[$blvl]['border_top']['w'] + $this->blk[$blvl]['padding_top'];
-						}
-						if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
-							$gy1 = $y1 - ($this->blk[$blvl]['border_bottom']['w'] + $this->blk[$blvl]['padding_bottom']);
-						} else {
-							$gy1 = $y1 - $this->blk[$blvl]['padding_bottom'];
-						}
-						$h = $gy1 - $gy;
+						$this->pageBackgrounds[$blvl][] = [
+							'gradient' => true,
+							'x' => $gx,
+							'y' => $gy,
+							'w' => $w,
+							'h' => $h,
+							'gradtype' => $g['type'],
+							'stops' => $g['stops'],
+							'colorspace' => $g['colorspace'],
+							'coords' => $g['coords'],
+							'extend' => $g['extend'],
+							'clippath' => $s,
+							'visibility' => $this->visibility,
+							'z-index' => $this->current_layer
+						];
 					}
 
-					if (isset($this->blk[$blvl]['background-image']['size']['w']) && $this->blk[$blvl]['background-image']['size']['w']) {
-						$size = $this->blk[$blvl]['background-image']['size'];
-						if ($size['w'] != 'contain' && $size['w'] != 'cover') {
-							if (stristr($size['w'], '%')) {
-								$size['w'] = (float) $size['w'];
-								$size['w'] /= 100;
-								$w *= $size['w'];
-							} elseif ($size['w'] != 'auto') {
-								$w = $size['w'];
-							}
-							if (stristr($size['h'], '%')) {
-								$size['h'] = (float) $size['h'];
-								$size['h'] /= 100;
-								$h *= $size['h'];
-							} elseif ($size['h'] != 'auto') {
-								$h = $size['h'];
-							}
+				} else {
+
+					$image_id = $bg['image_id'];
+					$orig_w = $bg['orig_w'];
+					$orig_h = $bg['orig_h'];
+					$x_pos = $bg['x_pos'];
+					$y_pos = $bg['y_pos'];
+					$x_repeat = $bg['x_repeat'];
+					$y_repeat = $bg['y_repeat'];
+					$resize = $bg['resize'];
+					$opacity = $bg['opacity'];
+					$itype = $bg['itype'];
+					$size = $bg['size'];
+					// origin specifies the background-positioning-area (bpa)
+
+					$bpa = ['x' => $x0, 'y' => $y0, 'w' => $w, 'h' => $h];
+
+					if ($bg['origin'] == 'padding-box') {
+
+						$bpa['x'] = $x0 + $this->blk[$blvl]['border_left']['w'];
+						$bpa['w'] = $w - ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['border_right']['w']);
+						if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
+							$bpa['y'] = $y0 + $this->blk[$blvl]['border_top']['w'];
+						} else {
+							$bpa['y'] = $y0;
 						}
+						if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
+							$bpay = $y1 - $this->blk[$blvl]['border_bottom']['w'];
+						} else {
+							$bpay = $y1;
+						}
+						$bpa['h'] = $bpay - $bpa['y'];
+
+					} elseif ($bg['origin'] == 'content-box') {
+
+						$bpa['x'] = $x0 + $this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'];
+						$bpa['w'] = $w - ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'] + $this->blk[$blvl]['border_right']['w'] + $this->blk[$blvl]['padding_right']);
+						if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
+							$bpa['y'] = $y0 + $this->blk[$blvl]['border_top']['w'] + $this->blk[$blvl]['padding_top'];
+						} else {
+							$bpa['y'] = $y0 + $this->blk[$blvl]['padding_top'];
+						}
+						if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
+							$bpay = $y1 - ($this->blk[$blvl]['border_bottom']['w'] + $this->blk[$blvl]['padding_bottom']);
+						} else {
+							$bpay = $y1 - $this->blk[$blvl]['padding_bottom'];
+						}
+						$bpa['h'] = $bpay - $bpa['y'];
+
 					}
+
 					$this->pageBackgrounds[$blvl][] = [
-						'gradient' => true,
-						'x' => $gx,
-						'y' => $gy,
+						'x' => $x0,
+						'y' => $y0,
 						'w' => $w,
 						'h' => $h,
-						'gradtype' => $g['type'],
-						'stops' => $g['stops'],
-						'colorspace' => $g['colorspace'],
-						'coords' => $g['coords'],
-						'extend' => $g['extend'],
+						'image_id' => $image_id,
+						'orig_w' => $orig_w,
+						'orig_h' => $orig_h,
+						'x_pos' => $x_pos,
+						'y_pos' => $y_pos,
+						'x_repeat' => $x_repeat,
+						'y_repeat' => $y_repeat,
 						'clippath' => $s,
+						'resize' => $resize,
+						'opacity' => $opacity,
+						'itype' => $itype,
 						'visibility' => $this->visibility,
-						'z-index' => $this->current_layer
+						'z-index' => $this->current_layer,
+						'size' => $size,
+						'bpa' => $bpa
 					];
 				}
-
-			} else {
-
-				$image_id = $this->blk[$blvl]['background-image']['image_id'];
-				$orig_w = $this->blk[$blvl]['background-image']['orig_w'];
-				$orig_h = $this->blk[$blvl]['background-image']['orig_h'];
-				$x_pos = $this->blk[$blvl]['background-image']['x_pos'];
-				$y_pos = $this->blk[$blvl]['background-image']['y_pos'];
-				$x_repeat = $this->blk[$blvl]['background-image']['x_repeat'];
-				$y_repeat = $this->blk[$blvl]['background-image']['y_repeat'];
-				$resize = $this->blk[$blvl]['background-image']['resize'];
-				$opacity = $this->blk[$blvl]['background-image']['opacity'];
-				$itype = $this->blk[$blvl]['background-image']['itype'];
-				$size = $this->blk[$blvl]['background-image']['size'];
-				// origin specifies the background-positioning-area (bpa)
-
-				$bpa = ['x' => $x0, 'y' => $y0, 'w' => $w, 'h' => $h];
-
-				if ($this->blk[$blvl]['background-image']['origin'] == 'padding-box') {
-
-					$bpa['x'] = $x0 + $this->blk[$blvl]['border_left']['w'];
-					$bpa['w'] = $w - ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['border_right']['w']);
-					if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
-						$bpa['y'] = $y0 + $this->blk[$blvl]['border_top']['w'];
-					} else {
-						$bpa['y'] = $y0;
-					}
-					if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
-						$bpay = $y1 - $this->blk[$blvl]['border_bottom']['w'];
-					} else {
-						$bpay = $y1;
-					}
-					$bpa['h'] = $bpay - $bpa['y'];
-
-				} elseif ($this->blk[$blvl]['background-image']['origin'] == 'content-box') {
-
-					$bpa['x'] = $x0 + $this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'];
-					$bpa['w'] = $w - ($this->blk[$blvl]['border_left']['w'] + $this->blk[$blvl]['padding_left'] + $this->blk[$blvl]['border_right']['w'] + $this->blk[$blvl]['padding_right']);
-					if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
-						$bpa['y'] = $y0 + $this->blk[$blvl]['border_top']['w'] + $this->blk[$blvl]['padding_top'];
-					} else {
-						$bpa['y'] = $y0 + $this->blk[$blvl]['padding_top'];
-					}
-					if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
-						$bpay = $y1 - ($this->blk[$blvl]['border_bottom']['w'] + $this->blk[$blvl]['padding_bottom']);
-					} else {
-						$bpay = $y1 - $this->blk[$blvl]['padding_bottom'];
-					}
-					$bpa['h'] = $bpay - $bpa['y'];
-
-				}
-
-				$this->pageBackgrounds[$blvl][] = [
-					'x' => $x0,
-					'y' => $y0,
-					'w' => $w,
-					'h' => $h,
-					'image_id' => $image_id,
-					'orig_w' => $orig_w,
-					'orig_h' => $orig_h,
-					'x_pos' => $x_pos,
-					'y_pos' => $y_pos,
-					'x_repeat' => $x_repeat,
-					'y_repeat' => $y_repeat,
-					'clippath' => $s,
-					'resize' => $resize,
-					'opacity' => $opacity,
-					'itype' => $itype,
-					'visibility' => $this->visibility,
-					'z-index' => $this->current_layer,
-					'size' => $size,
-					'bpa' => $bpa
-				];
 			}
 		}
 		/* -- END BACKGROUNDS -- */
@@ -19388,6 +19462,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						break;
 
 					case 'BACKGROUND-CLIP':
+						// Every layer is drawn under the clip of the bottom one, which the colour takes
+						$v = BackgroundLayers::bottomValue($v, isset($arrayaux['BACKGROUND-IMAGE']) ? $arrayaux['BACKGROUND-IMAGE'] : '');
 						if (strtoupper($v) == 'PADDING-BOX') {
 							$this->blk[$this->blklvl]['background_clip'] = 'padding-box';
 						} elseif (strtoupper($v) == 'CONTENT-BOX') {
@@ -23457,23 +23533,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									}
 
 									if (isset($table['background-image'])) {
-										if ($table['background-image']['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $table['background-image']['gradient'])) {
-											$g = $this->gradient->parseMozGradient($table['background-image']['gradient']);
-											if ($g) {
-												$this->tableBackgrounds[$level * 9 + 1][] = ['gradient' => true, 'x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+										// The layers of a list are drawn in their order, so its gradients go in with its images
+										$gradientSlot = isset($table['background-image']['layers']) ? 2 : 1;
+										foreach ($this->backgroundLayers($table['background-image']) as $bg) {
+											if ($bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+												$g = $this->gradient->parseMozGradient($bg['gradient']);
+												if ($g) {
+													$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+												}
+											} else {
+												$image_id = $bg['image_id'];
+												$orig_w = $bg['orig_w'];
+												$orig_h = $bg['orig_h'];
+												$x_pos = $bg['x_pos'];
+												$y_pos = $bg['y_pos'];
+												$x_repeat = $bg['x_repeat'];
+												$y_repeat = $bg['y_repeat'];
+												$resize = $bg['resize'];
+												$opacity = $bg['opacity'];
+												$itype = $bg['itype'];
+												$this->tableBackgrounds[$level * 9 + 2][] = ['x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 											}
-										} else {
-											$image_id = $table['background-image']['image_id'];
-											$orig_w = $table['background-image']['orig_w'];
-											$orig_h = $table['background-image']['orig_h'];
-											$x_pos = $table['background-image']['x_pos'];
-											$y_pos = $table['background-image']['y_pos'];
-											$x_repeat = $table['background-image']['x_repeat'];
-											$y_repeat = $table['background-image']['y_repeat'];
-											$resize = $table['background-image']['resize'];
-											$opacity = $table['background-image']['opacity'];
-											$itype = $table['background-image']['itype'];
-											$this->tableBackgrounds[$level * 9 + 2][] = ['x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 										}
 									}
 									/* -- END BACKGROUNDS -- */
@@ -23805,9 +23885,31 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					if (isset($cell['background-image']) && $paintcell) {
-						if (isset($cell['background-image']['gradient']) && $cell['background-image']['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $cell['background-image']['gradient'])) {
-							$g = $this->gradient->parseMozGradient($cell['background-image']['gradient']);
-							if ($g) {
+						// The layers of a list are drawn in their order, so its gradients go in with its images
+						$gradientSlot = isset($cell['background-image']['layers']) ? 8 : 7;
+						foreach ($this->backgroundLayers($cell['background-image']) as $bg) {
+							if (isset($bg['gradient']) && $bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+								$g = $this->gradient->parseMozGradient($bg['gradient']);
+								if ($g) {
+									if ($table['borders_separate']) {
+										$px = $x + ($table['border_spacing_H'] / 2);
+										$py = $y + ($table['border_spacing_V'] / 2);
+										$pw = $w - $table['border_spacing_H'];
+										$ph = $h - $table['border_spacing_V'];
+									} else {
+										$px = $x;
+										$py = $y;
+										$pw = $w;
+										$ph = $h;
+									}
+									if ($this->ColActive) {
+										$this->gradient->Gradient($px, $py, $pw, $ph, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend']);
+									} else {
+										$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+									}
+								}
+							} elseif (isset($bg['image_id']) && $bg['image_id']) { // Background pattern
+								$n = count($this->patterns) + 1;
 								if ($table['borders_separate']) {
 									$px = $x + ($table['border_spacing_H'] / 2);
 									$py = $y + ($table['border_spacing_V'] / 2);
@@ -23820,45 +23922,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									$ph = $h;
 								}
 								if ($this->ColActive) {
-									$this->gradient->Gradient($px, $py, $pw, $ph, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend']);
+									list($orig_w, $orig_h, $x_repeat, $y_repeat) = $this->_resizeBackgroundImage($bg['orig_w'], $bg['orig_h'], $pw, $ph, $bg['resize'], $bg['x_repeat'], $bg['y_repeat']);
+									$this->patterns[$n] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'pgh' => $this->h, 'image_id' => $bg['image_id'], 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $bg['x_pos'], 'y_pos' => $bg['y_pos'], 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat];
+									if ($bg['opacity'] > 0 && $bg['opacity'] < 1) {
+										$opac = $this->SetAlpha($bg['opacity'], 'Normal', true);
+									} else {
+										$opac = '';
+									}
+									$this->writer->write(sprintf('q /Pattern cs /P%d scn %s %.3F %.3F %.3F %.3F re f Q', $n, $opac, $px * Mpdf::SCALE, ($this->h - $py) * Mpdf::SCALE, $pw * Mpdf::SCALE, -$ph * Mpdf::SCALE));
 								} else {
-									$this->tableBackgrounds[$level * 9 + 7][] = ['gradient' => true, 'x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+									$image_id = $bg['image_id'];
+									$orig_w = $bg['orig_w'];
+									$orig_h = $bg['orig_h'];
+									$x_pos = $bg['x_pos'];
+									$y_pos = $bg['y_pos'];
+									$x_repeat = $bg['x_repeat'];
+									$y_repeat = $bg['y_repeat'];
+									$resize = $bg['resize'];
+									$opacity = $bg['opacity'];
+									$itype = $bg['itype'];
+									$this->tableBackgrounds[$level * 9 + 8][] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 								}
-							}
-						} elseif (isset($cell['background-image']['image_id']) && $cell['background-image']['image_id']) { // Background pattern
-							$n = count($this->patterns) + 1;
-							if ($table['borders_separate']) {
-								$px = $x + ($table['border_spacing_H'] / 2);
-								$py = $y + ($table['border_spacing_V'] / 2);
-								$pw = $w - $table['border_spacing_H'];
-								$ph = $h - $table['border_spacing_V'];
-							} else {
-								$px = $x;
-								$py = $y;
-								$pw = $w;
-								$ph = $h;
-							}
-							if ($this->ColActive) {
-								list($orig_w, $orig_h, $x_repeat, $y_repeat) = $this->_resizeBackgroundImage($cell['background-image']['orig_w'], $cell['background-image']['orig_h'], $pw, $ph, $cell['background-image']['resize'], $cell['background-image']['x_repeat'], $cell['background-image']['y_repeat']);
-								$this->patterns[$n] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'pgh' => $this->h, 'image_id' => $cell['background-image']['image_id'], 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $cell['background-image']['x_pos'], 'y_pos' => $cell['background-image']['y_pos'], 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat];
-								if ($cell['background-image']['opacity'] > 0 && $cell['background-image']['opacity'] < 1) {
-									$opac = $this->SetAlpha($cell['background-image']['opacity'], 'Normal', true);
-								} else {
-									$opac = '';
-								}
-								$this->writer->write(sprintf('q /Pattern cs /P%d scn %s %.3F %.3F %.3F %.3F re f Q', $n, $opac, $px * Mpdf::SCALE, ($this->h - $py) * Mpdf::SCALE, $pw * Mpdf::SCALE, -$ph * Mpdf::SCALE));
-							} else {
-								$image_id = $cell['background-image']['image_id'];
-								$orig_w = $cell['background-image']['orig_w'];
-								$orig_h = $cell['background-image']['orig_h'];
-								$x_pos = $cell['background-image']['x_pos'];
-								$y_pos = $cell['background-image']['y_pos'];
-								$x_repeat = $cell['background-image']['x_repeat'];
-								$y_repeat = $cell['background-image']['y_repeat'];
-								$resize = $cell['background-image']['resize'];
-								$opacity = $cell['background-image']['opacity'];
-								$itype = $cell['background-image']['itype'];
-								$this->tableBackgrounds[$level * 9 + 8][] = ['x' => $px, 'y' => $py, 'w' => $pw, 'h' => $ph, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 							}
 						}
 					}
@@ -24151,9 +24235,41 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							}
 						}
 						if (isset($table['trbackground-images'][$i]) && ($j == 0 || $table['borders_separate'])) {
-							if (isset($table['trbackground-images'][$i]['gradient']) && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $table['trbackground-images'][$i]['gradient'])) {
-								$g = $this->gradient->parseMozGradient($table['trbackground-images'][$i]['gradient']);
-								if ($g) {
+							// The layers of a list are drawn in their order, so its gradients go in with its images
+							$gradientSlot = isset($table['trbackground-images'][$i]['layers']) ? 5 : 4;
+							foreach ($this->backgroundLayers($table['trbackground-images'][$i]) as $bg) {
+								if (isset($bg['gradient']) && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+									$g = $this->gradient->parseMozGradient($bg['gradient']);
+									if ($g) {
+										$gx = $x0;
+										$gy = $y;
+										$gh = $h;
+										$gw = $table['w'] - ($table['max_cell_border_width']['L'] / 2) - ($table['max_cell_border_width']['R'] / 2) - $table['margin']['L'] - $table['margin']['R'];
+										if ($table['borders_separate']) {
+											$gw -= ($table['padding']['L'] + $table['border_details']['L']['w'] + $table['padding']['R'] + $table['border_details']['R']['w'] + $table['border_spacing_H']);
+											$clx = $x + ($table['border_spacing_H'] / 2);
+											$cly = $y + ($table['border_spacing_V'] / 2);
+											$clw = $w - $table['border_spacing_H'];
+											$clh = $h - $table['border_spacing_V'];
+											// Set clipping path
+											$s = $this->_setClippingPath($clx, $cly, $clw, $clh); // mPDF 6
+											$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => $s];
+										} else {
+											$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+										}
+									}
+								} else {
+									$image_id = $bg['image_id'];
+									$orig_w = $bg['orig_w'];
+									$orig_h = $bg['orig_h'];
+									$x_pos = $bg['x_pos'];
+									$y_pos = $bg['y_pos'];
+									$x_repeat = $bg['x_repeat'];
+									$y_repeat = $bg['y_repeat'];
+									$resize = $bg['resize'];
+									$opacity = $bg['opacity'];
+									$itype = $bg['itype'];
+									$clippath = '';
 									$gx = $x0;
 									$gy = $y;
 									$gh = $h;
@@ -24166,38 +24282,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 										$clh = $h - $table['border_spacing_V'];
 										// Set clipping path
 										$s = $this->_setClippingPath($clx, $cly, $clw, $clh); // mPDF 6
-										$this->tableBackgrounds[$level * 9 + 4][] = ['gradient' => true, 'x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => $s];
+										$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => $s, 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 									} else {
-										$this->tableBackgrounds[$level * 9 + 4][] = ['gradient' => true, 'x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+										$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 									}
-								}
-							} else {
-								$image_id = $table['trbackground-images'][$i]['image_id'];
-								$orig_w = $table['trbackground-images'][$i]['orig_w'];
-								$orig_h = $table['trbackground-images'][$i]['orig_h'];
-								$x_pos = $table['trbackground-images'][$i]['x_pos'];
-								$y_pos = $table['trbackground-images'][$i]['y_pos'];
-								$x_repeat = $table['trbackground-images'][$i]['x_repeat'];
-								$y_repeat = $table['trbackground-images'][$i]['y_repeat'];
-								$resize = $table['trbackground-images'][$i]['resize'];
-								$opacity = $table['trbackground-images'][$i]['opacity'];
-								$itype = $table['trbackground-images'][$i]['itype'];
-								$clippath = '';
-								$gx = $x0;
-								$gy = $y;
-								$gh = $h;
-								$gw = $table['w'] - ($table['max_cell_border_width']['L'] / 2) - ($table['max_cell_border_width']['R'] / 2) - $table['margin']['L'] - $table['margin']['R'];
-								if ($table['borders_separate']) {
-									$gw -= ($table['padding']['L'] + $table['border_details']['L']['w'] + $table['padding']['R'] + $table['border_details']['R']['w'] + $table['border_spacing_H']);
-									$clx = $x + ($table['border_spacing_H'] / 2);
-									$cly = $y + ($table['border_spacing_V'] / 2);
-									$clw = $w - $table['border_spacing_H'];
-									$clh = $h - $table['border_spacing_V'];
-									// Set clipping path
-									$s = $this->_setClippingPath($clx, $cly, $clw, $clh); // mPDF 6
-									$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx + ($table['border_spacing_H'] / 2), 'y' => $gy + ($table['border_spacing_V'] / 2), 'w' => $gw - $table['border_spacing_V'], 'h' => $gh - $table['border_spacing_H'], 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => $s, 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
-								} else {
-									$this->tableBackgrounds[$level * 9 + 5][] = ['x' => $gx, 'y' => $gy, 'w' => $gw, 'h' => $gh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 								}
 							}
 						}
@@ -24366,23 +24454,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			if (isset($table['background-image'])) {
-				if (isset($table['background-image']['gradient']) && $table['background-image']['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $table['background-image']['gradient'])) {
-					$g = $this->gradient->parseMozGradient($table['background-image']['gradient']);
-					if ($g) {
-						$this->tableBackgrounds[$level * 9 + 1][] = ['gradient' => true, 'x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+				// The layers of a list are drawn in their order, so its gradients go in with its images
+				$gradientSlot = isset($table['background-image']['layers']) ? 2 : 1;
+				foreach ($this->backgroundLayers($table['background-image']) as $bg) {
+					if (isset($bg['gradient']) && $bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+						$g = $this->gradient->parseMozGradient($bg['gradient']);
+						if ($g) {
+							$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
+						}
+					} else {
+						$image_id = $bg['image_id'];
+						$orig_w = $bg['orig_w'];
+						$orig_h = $bg['orig_h'];
+						$x_pos = $bg['x_pos'];
+						$y_pos = $bg['y_pos'];
+						$x_repeat = $bg['x_repeat'];
+						$y_repeat = $bg['y_repeat'];
+						$resize = $bg['resize'];
+						$opacity = $bg['opacity'];
+						$itype = $bg['itype'];
+						$this->tableBackgrounds[$level * 9 + 2][] = ['x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 					}
-				} else {
-					$image_id = $table['background-image']['image_id'];
-					$orig_w = $table['background-image']['orig_w'];
-					$orig_h = $table['background-image']['orig_h'];
-					$x_pos = $table['background-image']['x_pos'];
-					$y_pos = $table['background-image']['y_pos'];
-					$x_repeat = $table['background-image']['x_repeat'];
-					$y_repeat = $table['background-image']['y_repeat'];
-					$resize = $table['background-image']['resize'];
-					$opacity = $table['background-image']['opacity'];
-					$itype = $table['background-image']['itype'];
-					$this->tableBackgrounds[$level * 9 + 2][] = ['x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'image_id' => $image_id, 'orig_w' => $orig_w, 'orig_h' => $orig_h, 'x_pos' => $x_pos, 'y_pos' => $y_pos, 'x_repeat' => $x_repeat, 'y_repeat' => $y_repeat, 'clippath' => '', 'resize' => $resize, 'opacity' => $opacity, 'itype' => $itype];
 				}
 			}
 			/* -- END BACKGROUNDS -- */
