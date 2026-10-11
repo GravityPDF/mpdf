@@ -2,20 +2,26 @@
 
 namespace Mpdf\Image;
 
+use Mpdf\SizeConverter;
+
 /**
  * Where an image given object-fit or object-position is drawn inside its content box
  *
- * An image carries object_fit (contain, cover, none or scale-down; fill is left out, as it draws the image at the size
- * of the box), object_position ([x percent, x offset, y percent, y offset], offsets in millimetres) and natural_w and
- * natural_h, the size the image has when given neither a width nor a height.
+ * Such an image carries object_fit, keyed fit (fill, contain, cover, none or scale-down), position ([x percent,
+ * x offset, y percent, y offset], offsets in millimetres) and natural ([width, height] it has when given neither).
  */
 class ObjectFit
 {
 
 	/**
-	 * @var string[] The object-fit values that draw the image other than at the size of its box
+	 * @var string[] The values of object-fit
 	 */
-	const FITS = ['contain', 'cover', 'none', 'scale-down'];
+	const FITS = ['fill', 'contain', 'cover', 'none', 'scale-down'];
+
+	/**
+	 * @var int[] object-position's initial value, 50% 50%
+	 */
+	const CENTRE = [50, 0, 50, 0];
 
 	/**
 	 * The keywords of object-position, as the percentage they stand for
@@ -41,24 +47,29 @@ class ObjectFit
 			return [$boxW, $boxH];
 		}
 
-		$contain = min($boxW / $naturalW, $boxH / $naturalH);
-		$scales = [
-			'contain' => $contain,
-			'cover' => max($boxW / $naturalW, $boxH / $naturalH),
-			'none' => 1,
-			'scale-down' => min(1, $contain),
-		];
-		$scale = isset($scales[$fit]) ? $scales[$fit] : null;
-		if ($scale === null) {
-			return [$boxW, $boxH];
+		switch ($fit) {
+			case 'contain':
+				$scale = min($boxW / $naturalW, $boxH / $naturalH);
+				break;
+			case 'cover':
+				$scale = max($boxW / $naturalW, $boxH / $naturalH);
+				break;
+			case 'none':
+				$scale = 1;
+				break;
+			case 'scale-down':
+				$scale = min(1, $boxW / $naturalW, $boxH / $naturalH);
+				break;
+			default:
+				return [$boxW, $boxH];
 		}
 
 		return [$naturalW * $scale, $naturalH * $scale];
 	}
 
 	/**
-	 * The image's rectangle on the page: its content box, keyed INNER-X, INNER-Y, INNER-WIDTH and INNER-HEIGHT, with
-	 * the image fitted into it and placed by its object-position
+	 * Where the image is drawn: fitted into its content box, keyed INNER-X, INNER-Y, INNER-WIDTH and INNER-HEIGHT,
+	 * and placed by its object-position
 	 *
 	 * @param array $objattr The image, placed on the page
 	 * @param float $k The factor a table has shrunk the image by
@@ -69,10 +80,10 @@ class ObjectFit
 	{
 		$boxW = $objattr['INNER-WIDTH'];
 		$boxH = $objattr['INNER-HEIGHT'];
-		$fit = isset($objattr['object_fit']) ? $objattr['object_fit'] : 'fill';
-		list($w, $h) = self::size($fit, $boxW, $boxH, $objattr['natural_w'] / $k, $objattr['natural_h'] / $k);
+		$fit = $objattr['object_fit'];
+		list($w, $h) = self::size($fit['fit'], $boxW, $boxH, $fit['natural'][0] / $k, $fit['natural'][1] / $k);
 
-		$position = isset($objattr['object_position']) ? $objattr['object_position'] : [50, 0, 50, 0];
+		$position = $fit['position'];
 		$x = $objattr['INNER-X'] + $position[0] / 100 * ($boxW - $w) + $position[1] / $k;
 		$y = $objattr['INNER-Y'] + $position[2] / 100 * ($boxH - $h) + $position[3] / $k;
 
@@ -84,62 +95,82 @@ class ObjectFit
 	 * value is the horizontal one, or the vertical one when it is top or bottom, and the other axis is centred.
 	 *
 	 * @param string $value
-	 * @param callable $length Turns a length into millimetres
+	 * @param \Mpdf\SizeConverter $sizeConverter
+	 * @param float $fontSize What em is relative to
 	 *
 	 * @return float[]|null [x percent, x offset, y percent, y offset], or null when the value is not a position
 	 */
-	public static function position($value, $length)
+	public static function position($value, SizeConverter $sizeConverter, $fontSize)
 	{
 		$bits = preg_split('/\s+/', strtolower(trim($value)));
 		if (count($bits) === 1) {
-			$bits = in_array($bits[0], ['top', 'bottom'], true) ? ['center', $bits[0]] : [$bits[0], 'center'];
+			$bits = self::isVertical($bits[0]) ? ['center', $bits[0]] : [$bits[0], 'center'];
 		}
 		if (count($bits) !== 2) {
 			return null;
 		}
 
 		// A vertical keyword first, or a horizontal one second, means the pair is written the other way round
-		if (in_array($bits[0], ['top', 'bottom'], true) || in_array($bits[1], ['left', 'right'], true)) {
+		if (self::isVertical($bits[0]) || self::isHorizontal($bits[1])) {
 			$bits = [$bits[1], $bits[0]];
 		}
-		if (in_array($bits[0], ['top', 'bottom'], true) || in_array($bits[1], ['left', 'right'], true)) {
+		if (self::isVertical($bits[0]) || self::isHorizontal($bits[1])) {
 			return null;
 		}
 
-		$x = self::axis($bits[0], $length);
-		$y = self::axis($bits[1], $length);
-		if ($x === null || $y === null) {
-			return null;
-		}
+		$x = self::axis($bits[0], $sizeConverter, $fontSize);
+		$y = self::axis($bits[1], $sizeConverter, $fontSize);
 
-		return array_merge($x, $y);
+		return $x === null || $y === null ? null : array_merge($x, $y);
 	}
 
 	/**
 	 * One axis of object-position
 	 *
 	 * @param string $bit A keyword, a percentage or a length
-	 * @param callable $length
+	 * @param \Mpdf\SizeConverter $sizeConverter
+	 * @param float $fontSize
 	 *
 	 * @return float[]|null The percentage of the room left in the box, and an offset in millimetres
 	 */
-	private static function axis($bit, $length)
+	private static function axis($bit, SizeConverter $sizeConverter, $fontSize)
 	{
 		if (isset(self::$keywords[$bit])) {
 			return [self::$keywords[$bit], 0];
 		}
-		if (preg_match('/^[+-]?(\d+\.?\d*|\.\d+)%$/', $bit)) {
+		if (substr($bit, -1) === '%' && is_numeric(substr($bit, 0, -1))) {
 			return [(float) $bit, 0];
 		}
-		if (preg_match('/^[+-]?(\d+\.?\d*|\.\d+)([a-z]+)?$/', $bit, $m)) {
-			if (!isset($m[2]) && (float) $bit != 0) {
-				return null;
-			}
-
-			return [0, call_user_func($length, $bit)];
+		// A number with no unit is a length only when it is zero
+		if (!$sizeConverter->isLength($bit) || (is_numeric($bit) && (float) $bit != 0)) {
+			return null;
 		}
 
-		return null;
+		return [0, $sizeConverter->convert($bit, 0, $fontSize, false)];
+	}
+
+	/**
+	 * Whether a part of object-position can only be vertical
+	 *
+	 * @param string $bit
+	 *
+	 * @return bool
+	 */
+	private static function isVertical($bit)
+	{
+		return $bit === 'top' || $bit === 'bottom';
+	}
+
+	/**
+	 * Whether a part of object-position can only be horizontal
+	 *
+	 * @param string $bit
+	 *
+	 * @return bool
+	 */
+	private static function isHorizontal($bit)
+	{
+		return $bit === 'left' || $bit === 'right';
 	}
 
 }

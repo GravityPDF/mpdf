@@ -8116,10 +8116,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->SetAlpha($objattr['opacity']);
 				}
 
-				$contentBox = [$objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT']];
-				$fitClip = '';
-				if (isset($objattr['natural_w'])) {
-					list($objattr, $fitClip) = $this->fitImage($objattr, $k);
+				// The content box, relative to the picture, which object-fit may draw elsewhere
+				$contentBox = [0, 0, $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT']];
+				if (isset($objattr['object_fit'])) {
+					list($objattr, $contentBox) = $this->fitImage($objattr, $k);
 				}
 
 				$obiw = $objattr['INNER-WIDTH'];
@@ -8268,10 +8268,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				/* -- END BACKGROUNDS -- */
 				/* -- BORDER-RADIUS -- */
-				$clip = $fitClip;
+				// Placed only now, as a list marker may have moved the picture
+				$contentBox[0] += $objattr['INNER-X'];
+				$contentBox[1] += $objattr['INNER-Y'];
+				$clip = '';
 				if ($box) {
 					// The picture is trimmed to the content edge
 					$clip = $this->roundedBox->path($this->h, $contentBox[0], $contentBox[1], $contentBox[0] + $contentBox[2], $contentBox[1] + $contentBox[3], $box['content']) . 'W n ';
+				} elseif (isset($objattr['object_fit'])) {
+					$clip = sprintf('%.3F %.3F %.3F %.3F re W n ', $contentBox[0] * Mpdf::SCALE, ($this->h - $contentBox[1]) * Mpdf::SCALE, $contentBox[2] * Mpdf::SCALE, -$contentBox[3] * Mpdf::SCALE);
 				}
 				/* -- END BORDER-RADIUS -- */
 				// The CSS transform goes outermost, about the box's centre as it does for the background and border; the
@@ -19009,27 +19014,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * The image moved into the rectangle its object-fit and object-position draw it in, and the clip to its content
-	 * box that keeps what overflows the box off the page
+	 * The image moved into the rectangle its object-fit and object-position draw it in, and its content box
 	 *
 	 * @param array $objattr The image, placed on the page
 	 * @param float $k The factor a table has shrunk the image by
 	 *
-	 * @return array The image, and the clip's PDF operators
+	 * @return array The image, and its content box as x and y from the picture's top left corner, width and height
 	 */
 	private function fitImage(array $objattr, $k)
 	{
-		$clip = sprintf(
-			'%.3F %.3F %.3F %.3F re W n ',
-			$objattr['INNER-X'] * Mpdf::SCALE,
-			($this->h - $objattr['INNER-Y']) * Mpdf::SCALE,
-			$objattr['INNER-WIDTH'] * Mpdf::SCALE,
-			-$objattr['INNER-HEIGHT'] * Mpdf::SCALE
-		);
-
+		$box = [$objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT']];
 		list($objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT']) = ObjectFit::place($objattr, $k);
 
-		return [$objattr, $clip];
+		return [$objattr, [$box[0] - $objattr['INNER-X'], $box[1] - $objattr['INNER-Y'], $box[2], $box[3]]];
 	}
 
 	function PaintImgBorder($objattr, $is_table, $box = null)

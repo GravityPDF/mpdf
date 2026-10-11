@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\BorderRadius;
+use Mpdf\Css\NormalizeProperties;
 use Mpdf\CssMode;
 use Mpdf\Image\ImageSizing;
 use Mpdf\Image\ObjectFit;
@@ -437,8 +438,8 @@ class Img extends Tag
 			return $sizing;
 		}
 
-		$value = strtolower(trim($properties['ASPECT-RATIO']));
-		if (!preg_match('/^(\d+\.?\d*|\.\d+)\s*(?:\/\s*(\d+\.?\d*|\.\d+))?$/', $value, $m)) {
+		$number = NormalizeProperties::NUMBER;
+		if (!preg_match('/^' . $number . '\s*(?:\/\s*' . $number . ')?$/', trim($properties['ASPECT-RATIO']), $m)) {
 			return $sizing;
 		}
 
@@ -467,25 +468,22 @@ class Img extends Tag
 	 */
 	private function withObjectFit(array $objattr, array $properties, $naturalW, $naturalH)
 	{
-		$fit = isset($properties['OBJECT-FIT']) ? strtolower(trim($properties['OBJECT-FIT'])) : '';
-		if (in_array($fit, ObjectFit::FITS, true)) {
-			$objattr['object_fit'] = $fit;
+		$fit = isset($properties['OBJECT-FIT']) ? strtolower(trim($properties['OBJECT-FIT'])) : 'fill';
+		if (!in_array($fit, ObjectFit::FITS, true)) {
+			$fit = 'fill';
 		}
 
+		$position = null;
 		if (isset($properties['OBJECT-POSITION'])) {
-			$sizeConverter = $this->sizeConverter;
-			$fontSize = $this->mpdf->FontSize;
-			$position = ObjectFit::position($properties['OBJECT-POSITION'], function ($length) use ($sizeConverter, $fontSize) {
-				return $sizeConverter->convert($length, 0, $fontSize, false);
-			});
-			if ($position !== null && $position !== [50, 0, 50, 0]) {
-				$objattr['object_position'] = $position;
-			}
+			$position = ObjectFit::position($properties['OBJECT-POSITION'], $this->sizeConverter, $this->mpdf->FontSize);
+		}
+		if ($position === null) {
+			$position = ObjectFit::CENTRE;
 		}
 
-		if (isset($objattr['object_fit']) || isset($objattr['object_position'])) {
-			$objattr['natural_w'] = $naturalW;
-			$objattr['natural_h'] = $naturalH;
+		// fill at the centre is how an image is drawn without either property
+		if ($fit !== 'fill' || $position != ObjectFit::CENTRE) {
+			$objattr['object_fit'] = ['fit' => $fit, 'position' => $position, 'natural' => [$naturalW, $naturalH]];
 		}
 
 		return $objattr;

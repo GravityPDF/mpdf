@@ -186,11 +186,25 @@ class ObjectFitTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A position that is not one is ignored, and the picture stays centred
+	 * Values that are not positions: two horizontal keywords, an unknown unit, a number with no unit, three parts
+	 *
+	 * @return array
 	 */
-	public function testAnInvalidPositionLeavesThePictureCentred()
+	public function invalidPositionProvider()
 	{
-		$drawn = $this->drawn('width: 40mm; height: 40mm; object-fit: contain; object-position: left right', self::TALL);
+		return [['left right'], ['10foo 0'], ['5 0'], ['left top 2mm']];
+	}
+
+	/**
+	 * A position that is not one is ignored, and the picture stays centred
+	 *
+	 * @dataProvider invalidPositionProvider
+	 *
+	 * @param string $position
+	 */
+	public function testAnInvalidPositionLeavesThePictureCentred($position)
+	{
+		$drawn = $this->drawn('width: 40mm; height: 40mm; object-fit: contain; object-position: ' . $position, self::TALL);
 
 		$this->assertDrawnAt($drawn, [22.5, 40], [8.75, 0]);
 	}
