@@ -978,7 +978,7 @@ class PdfX4Test extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testPdfx4PermitsLayers()
 	{
-		$html = '<div style="position: absolute; top: 60mm; left: 20mm; z-index: 1">Layer</div><p>Text</p>';
+		$html = '<div style="z-index: 1">Layer</div><p>Text</p>';
 
 		$pdf = $this->pdf(['PDFX' => true, 'PDFXauto' => false], $html);
 		$this->assertStringContainsString('/Type /OCG', $pdf);

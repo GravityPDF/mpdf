@@ -216,7 +216,8 @@ class HtmlHeaderAnnotationTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 
 	/**
 	 * A fixed-position block is written through the same buffers as a header, and moves its annotations onto
-	 * the page itself. Writing the headers afterwards must not put them there again
+	 * the page itself. Writing the headers afterwards must not put them there again, so each page the block is drawn
+	 * on carries its note once
 	 */
 	public function testAFixedPositionAnnotationIsWrittenOnce()
 	{
@@ -225,7 +226,7 @@ class HtmlHeaderAnnotationTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 		$mpdf->WriteHTML('<div style="position: fixed; top: 100mm; left: 20mm;">Fixed <annotation content="Fixed note" /></div>' . self::BODY);
 		$notes = $this->rects($this->annotations($this->output($mpdf)), 'Text');
 
-		$this->assertSame([1, 0, 0], array_map('count', $notes), 'Only the first page should carry the fixed note, once');
+		$this->assertSame([1, 1, 1], array_map('count', $notes), 'Each page should carry the fixed note, once');
 	}
 
 	/**

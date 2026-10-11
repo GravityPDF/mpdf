@@ -104,6 +104,7 @@ final class PageWriter
 			// For some reason using + for repetition instead of {2,20} crashes PHP Script Interpreter ???
 			$thispage = preg_replace('/(\/GS1 gs\n){2,20}/', "/GS1 gs\n", $thispage);
 
+			$thispage = str_replace('___BELOW___CONTENT' . $this->mpdf->uniqstr, '', $thispage);
 			$thispage = preg_replace('/(\s*___BACKGROUND___PATTERNS' . $this->mpdf->uniqstr . '\s*)/', ' ', $thispage);
 			$thispage = preg_replace('/(\s*___HEADER___MARKER' . $this->mpdf->uniqstr . '\s*)/', ' ', $thispage);
 			$thispage = preg_replace('/(\s*___PAGE___START' . $this->mpdf->uniqstr . '\s*)/', ' ', $thispage);
