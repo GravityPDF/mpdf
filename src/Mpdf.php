@@ -6,6 +6,7 @@ use Mpdf\Config\ConfigVariables;
 use Mpdf\Config\FontVariables;
 use Mpdf\Conversion;
 use Mpdf\Css\Border;
+use Mpdf\Css\BorderRadius;
 use Mpdf\Css\CommentParser;
 use Mpdf\Css\ComputedValues;
 use Mpdf\Css\InheritedProperties;
@@ -14,6 +15,7 @@ use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextVars;
+use Mpdf\Css\WidthConstraints;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
@@ -15612,6 +15614,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($checkinnerhtml == '' && $inner_w === 'auto') {
 				$inner_w = 2 * $this->GetCharWidth('W', false);
 			}
+			// A width that min-width or max-width changes goes through the algorithm below as a set width
+			$widthConstraints = new WidthConstraints($this->sizeConverter, $this->cssMode === CssMode::STANDARD ? $p : [], $cont_w, $this->FontSize);
+			if ($inner_w !== 'auto') {
+				$inner_w = $widthConstraints->clamp($inner_w);
+			} elseif ($bbox_left !== 'auto' && $bbox_right !== 'auto') {
+				$available = $cont_w - $bbox_left - $bbox_right - $bbox_bl - $bbox_pl - $bbox_pr - $bbox_br
+					- ($bbox_ml === 'auto' ? 0 : $bbox_ml) - ($bbox_mr === 'auto' ? 0 : $bbox_mr);
+				$clamped = $widthConstraints->clamp($available);
+				if ($clamped != $available) {
+					$inner_w = $clamped;
+				}
+			}
 			// ================================================================
 			// Algorithm from CSS2.1  See http://www.w3.org/TR/CSS21/visudet.html#abs-non-replaced-height
 			// mPD 5.3.14
@@ -15786,7 +15800,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->maxPosR = 0;
 				$this->maxPosL = $this->w; // For RTL
 				$this->WriteHTML($html, HTMLParserMode::HTML_HEADER_BUFFER);
-				$inner_w = $this->maxPosR - $this->lMargin;
+				$inner_w = $widthConstraints->clamp($this->maxPosR - $this->lMargin);
 				if ($bbox_right_auto) {
 					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml;
 				} elseif ($bbox_left_auto) {
@@ -17948,69 +17962,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$border_bottom = 0;
 		}
 
-		$brTL_H = 0;
-		$brTL_V = 0;
-		$brTR_H = 0;
-		$brTR_V = 0;
-		$brBL_H = 0;
-		$brBL_V = 0;
-		$brBR_H = 0;
-		$brBR_V = 0;
-
-		$brset = false;
 		/* -- BORDER-RADIUS -- */
-		if (isset($this->blk[$blvl]['border_radius_TL_H'])) {
-			$brTL_H = $this->blk[$blvl]['border_radius_TL_H'];
-			$brset = true;
-		}
-		if (isset($this->blk[$blvl]['border_radius_TL_V'])) {
-			$brTL_V = $this->blk[$blvl]['border_radius_TL_V'];
-			$brset = true;
-		}
-		if (isset($this->blk[$blvl]['border_radius_TR_H'])) {
-			$brTR_H = $this->blk[$blvl]['border_radius_TR_H'];
-			$brset = true;
-		}
-		if (isset($this->blk[$blvl]['border_radius_TR_V'])) {
-			$brTR_V = $this->blk[$blvl]['border_radius_TR_V'];
-			$brset = true;
-		}
-		if (isset($this->blk[$blvl]['border_radius_BR_H'])) {
-			$brBR_H = $this->blk[$blvl]['border_radius_BR_H'];
-			$brset = true;
-		}
-		if (isset($this->blk[$blvl]['border_radius_BR_V'])) {
-			$brBR_V = $this->blk[$blvl]['border_radius_BR_V'];
-			$brset = true;
-		}
-		if (isset($this->blk[$blvl]['border_radius_BL_H'])) {
-			$brBL_H = $this->blk[$blvl]['border_radius_BL_H'];
-			$brset = true;
-		}
-		if (isset($this->blk[$blvl]['border_radius_BL_V'])) {
-			$brBL_V = $this->blk[$blvl]['border_radius_BL_V'];
-			$brset = true;
-		}
+		$brset = BorderRadius::isDeclared($this->blk[$blvl]);
+		// A part of a block split across pages resolves a percentage against its own height, the only one known here
+		$radii = BorderRadius::radii($this->blk[$blvl], $w, $h);
 
 		if (!$this->blk[$blvl]['border_top'] || $divider == 'pagetop' || $continuingpage) {
-			$brTL_H = 0;
-			$brTL_V = 0;
-			$brTR_H = 0;
-			$brTR_V = 0;
+			$radii['TL'] = $radii['TR'] = [0, 0];
 		}
 		if (!$this->blk[$blvl]['border_bottom'] || $blockstate == 1 || $divider == 'pagebottom') {
-			$brBL_H = 0;
-			$brBL_V = 0;
-			$brBR_H = 0;
-			$brBR_V = 0;
+			$radii['BL'] = $radii['BR'] = [0, 0];
 		}
 
-		$radii = $this->roundedBox->fit($w, $h, [
-			'TL' => [$brTL_H, $brTL_V],
-			'TR' => [$brTR_H, $brTR_V],
-			'BR' => [$brBR_H, $brBR_V],
-			'BL' => [$brBL_H, $brBL_V],
-		], ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left]);
+		$radii = $this->roundedBox->fit($w, $h, $radii, ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left]);
 		list($brTL_H, $brTL_V) = $radii['TL'];
 		list($brTR_H, $brTR_V) = $radii['TR'];
 		list($brBR_H, $brBR_V) = $radii['BR'];
@@ -19422,28 +19386,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					/* -- BORDER-RADIUS -- */
 					case 'BORDER-TOP-LEFT-RADIUS-H':
-						$this->blk[$this->blklvl]['border_radius_TL_H'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
-						break;
 					case 'BORDER-TOP-LEFT-RADIUS-V':
-						$this->blk[$this->blklvl]['border_radius_TL_V'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
-						break;
 					case 'BORDER-TOP-RIGHT-RADIUS-H':
-						$this->blk[$this->blklvl]['border_radius_TR_H'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
-						break;
 					case 'BORDER-TOP-RIGHT-RADIUS-V':
-						$this->blk[$this->blklvl]['border_radius_TR_V'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
-						break;
 					case 'BORDER-BOTTOM-LEFT-RADIUS-H':
-						$this->blk[$this->blklvl]['border_radius_BL_H'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
-						break;
 					case 'BORDER-BOTTOM-LEFT-RADIUS-V':
-						$this->blk[$this->blklvl]['border_radius_BL_V'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
-						break;
 					case 'BORDER-BOTTOM-RIGHT-RADIUS-H':
-						$this->blk[$this->blklvl]['border_radius_BR_H'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
-						break;
 					case 'BORDER-BOTTOM-RIGHT-RADIUS-V':
-						$this->blk[$this->blklvl]['border_radius_BR_V'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false);
+						// A percentage is of the block's own border box, which PaintDivBB() has
+						BorderRadius::set($this->blk[$this->blklvl], $k, $v, $this->sizeConverter, $this->FontSize);
 						break;
 					/* -- END BORDER-RADIUS -- */
 

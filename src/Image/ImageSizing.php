@@ -2,6 +2,8 @@
 
 namespace Mpdf\Image;
 
+use Mpdf\Css\BorderRadius;
+
 /**
  * The size an image is drawn at, from the lengths its HTML and CSS give it and the picture's own proportions.
  *
@@ -88,16 +90,12 @@ class ImageSizing
 	 */
 	public static function radii(array $objattr, array $radii, array $percent)
 	{
-		$box = [
+		$radii = BorderRadius::resolve(
+			$radii,
+			$percent,
 			$objattr['width'] - $objattr['margin_left'] - $objattr['margin_right'],
-			$objattr['height'] - $objattr['margin_top'] - $objattr['margin_bottom'],
-		];
-
-		foreach ($percent as $corner => $shares) {
-			foreach ($shares as $axis => $share) {
-				$radii[$corner][$axis] = $share / 100 * $box[$axis];
-			}
-		}
+			$objattr['height'] - $objattr['margin_top'] - $objattr['margin_bottom']
+		);
 
 		return array_filter($radii, function ($radius) {
 			return $radius[0] > 0 && $radius[1] > 0;
