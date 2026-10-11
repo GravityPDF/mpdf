@@ -15356,19 +15356,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$end = $i;
 		$this->closeElementsDownTo($floor);
 
-		for ($b = $this->blklvl; $b > 0 && $i === $end; $b--) {
+		for ($b = $this->blklvl; $b > 0; $b--) {
 			$this->tag->CloseTag($this->blk[$b]['tag'], $a, $i);
-		}
-
-		if ($i === $end && !$parseonly) {
-			if (count($this->textbuffer)) {
-				$this->printbuffer($this->textbuffer);
+			if ($i !== $end) {
+				return true;
 			}
-			$this->textbuffer = [];
-			$this->keepWithNext->settleByLine($a, $i);
 		}
 
-		return $i !== $end;
+		if ($parseonly) {
+			return false;
+		}
+		if (count($this->textbuffer)) {
+			$this->printbuffer($this->textbuffer);
+		}
+		$this->textbuffer = [];
+
+		return $this->keepWithNext->settleByLine($a, $i);
 	}
 
 	/* -- CSS-POSITION -- */

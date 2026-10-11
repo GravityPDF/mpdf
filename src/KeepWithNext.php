@@ -38,6 +38,13 @@ class KeepWithNext
 	 */
 	private $pending;
 
+	/**
+	 * How many blocks carrying a unit are open, which want the height of their first line
+	 *
+	 * @var int
+	 */
+	private $openUnits = 0;
+
 	public function __construct(Mpdf $mpdf)
 	{
 		$this->mpdf = $mpdf;
@@ -67,6 +74,7 @@ class KeepWithNext
 		$links = $this->pending !== null && $this->pending['page'] == $this->mpdf->page ? $this->pending['links'] : [];
 		$this->pending = null;
 		$links[] = ['state' => $snapshot !== null ? $snapshot : $this->mpdf->getStateSnapshot(), 'i' => $ihtml];
+		$this->openUnits++;
 
 		return ['links' => $links, 'page' => $this->mpdf->page, 'y' => $this->mpdf->y];
 	}
@@ -86,6 +94,7 @@ class KeepWithNext
 	 */
 	public function closes(array $blk, $forcedBreak, array &$ahtml, &$ihtml)
 	{
+		$this->openUnits--;
 		$unit = $blk['keepWithNext'];
 		$links = $unit['links'];
 		$before = array_slice($links, 0, -1);
@@ -111,30 +120,26 @@ class KeepWithNext
 	 * closes() keeps the blocks of a unit before it with
 	 *
 	 * @param float $height The line's height
-	 * @param bool $opensBlock Whether it is the first line of its block, which has the block's top margin, padding and
-	 * border above it. The margin is counted though a fresh page may drop it: a unit this close to a page's height is
-	 * better left split than moved to a page it then overruns (mpdf/mpdf#1801)
+	 * @param bool $opensBlock Whether it is the first line of its block, which has the block's top above it
 	 *
 	 * @return void
 	 */
 	public function lineDrawn($height, $opensBlock)
 	{
-		if ($this->mpdf->bufferoutput) {
+		$mpdf = $this->mpdf;
+		if (($this->pending === null && !$this->openUnits) || $mpdf->bufferoutput) {
 			return;
 		}
 
-		$mpdf = $this->mpdf;
 		if ($opensBlock) {
-			$blk = $mpdf->blk[$mpdf->blklvl];
-			$height += $blk['margin_top'] + $blk['padding_top'] + $blk['border_top']['w'];
+			$height += $this->blockTop($mpdf->blk[$mpdf->blklvl]);
 		}
-		$line = ['page' => $mpdf->page, 'height' => $height];
 
 		if ($this->pending !== null && !isset($this->pending['line'])) {
-			$this->pending['line'] = $line;
+			$this->pending['line'] = ['page' => $mpdf->page, 'height' => $height];
 		}
 		for ($level = $mpdf->blklvl; $level > 0 && !isset($mpdf->blk[$level]['firstLine']); $level--) {
-			$mpdf->blk[$level]['firstLine'] = $line;
+			$mpdf->blk[$level]['firstLine'] = $height;
 		}
 	}
 
@@ -209,7 +214,7 @@ class KeepWithNext
 
 	/**
 	 * What a block's first line takes up on a fresh page, as lineDrawn() measured it, its top margin, padding and border
-	 * included. A block that drew no line of its own has its line height counted
+	 * included. The line height stands in where no line was measured
 	 *
 	 * @param array $blk
 	 *
@@ -217,11 +222,21 @@ class KeepWithNext
 	 */
 	private function firstLine(array $blk)
 	{
-		if (isset($blk['firstLine'])) {
-			return $blk['firstLine']['height'];
-		}
+		return isset($blk['firstLine']) ? $blk['firstLine'] : $this->mpdf->lineheight + $this->blockTop($blk);
+	}
 
-		return $this->mpdf->lineheight + $blk['margin_top'] + $blk['padding_top'] + $blk['border_top']['w'];
+	/**
+	 * A block's top margin, padding and border, which stand above its first line. The margin is counted though a fresh
+	 * page may drop it: a unit this close to a page's height is better left split than moved to a page it then overruns
+	 * (mpdf/mpdf#1801)
+	 *
+	 * @param array $blk
+	 *
+	 * @return float
+	 */
+	private function blockTop(array $blk)
+	{
+		return $blk['margin_top'] + $blk['padding_top'] + $blk['border_top']['w'];
 	}
 
 	/**
