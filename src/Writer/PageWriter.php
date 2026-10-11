@@ -109,10 +109,12 @@ final class PageWriter
 			$thispage = preg_replace('/(\s*___PAGE___START' . $this->mpdf->uniqstr . '\s*)/', ' ', $thispage);
 			$thispage = preg_replace('/(\s*___TABLE___BACKGROUNDS' . $this->mpdf->uniqstr . '\s*)/', ' ', $thispage);
 
-			// mPDF 5.7.3 TRANSFORMS
-			while (preg_match('/(\% BTR(.*?)\% ETR)/is', $thispage, $m)) {
-				$thispage = preg_replace('/(\% BTR.*?\% ETR)/is', '', $thispage, 1) . "\n" . $m[2];
+			if (strpos($thispage, '___EFFECT___') !== false || strpos($thispage, '___GROUP___') !== false) {
+				$thispage = $this->drawGroups($thispage, $wPt, $hPt);
+				$thispage = preg_replace('/___(EFFECT|GROUP)___(START|END)?\d+___' . $this->mpdf->uniqstr . '/', '', $thispage);
 			}
+
+			$thispage = $this->transformedLast($thispage);
 
 			$thispage = $initialColor . $thispage;
 
@@ -216,6 +218,58 @@ final class PageWriter
 		$this->writer->write(sprintf('/MediaBox [0 0 %.3F %.3F]', $defwPt, $defhPt));
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
+	}
+
+	/**
+	 * Each group a block's opacity or transform is drawn in, as a form XObject drawn in its place: a transparency
+	 * group, so the opacity is applied to what the block drew as a whole. A group inside another goes into that one's.
+	 *
+	 * @param string $content
+	 * @param float $wPt The page's width, which bounds the group
+	 * @param float $hPt The page's height
+	 *
+	 * @return string
+	 */
+	private function drawGroups($content, $wPt, $hPt)
+	{
+		$id = '___' . $this->mpdf->uniqstr;
+
+		return preg_replace_callback('/___GROUP___START(\d+)' . $id . '(.*?)___GROUP___END\1' . $id . '/s', function ($m) use ($wPt, $hPt) {
+			$data = $this->transformedLast($this->drawGroups($m[2], $wPt, $hPt));
+			$i = count($this->mpdf->formobjects) + 1;
+			$this->mpdf->formobjects['group' . $i] = [
+				'i' => $i,
+				'x' => 0,
+				'y' => 0,
+				'w' => $wPt,
+				'h' => $hPt,
+				'data' => $data,
+				'inherits' => true,
+			];
+
+			return '/FO' . $i . ' Do';
+		}, $content);
+	}
+
+	/**
+	 * $content with each image a CSS transform draws moved to its end, over the rest
+	 *
+	 * @param string $content
+	 *
+	 * @return string
+	 */
+	private function transformedLast($content)
+	{
+		if (strpos($content, '% BTR') === false) {
+			return $content;
+		}
+
+		// mPDF 5.7.3 TRANSFORMS
+		while (preg_match('/(\% BTR(.*?)\% ETR)/is', $content, $m)) {
+			$content = preg_replace('/(\% BTR.*?\% ETR)/is', '', $content, 1) . "\n" . $m[2];
+		}
+
+		return $content;
 	}
 
 	/**

@@ -51,7 +51,8 @@ final class FormWriter
 				$this->writer->write('/Filter /FlateDecode');
 			}
 
-			$data = $initialColor . $info['data'];
+			// A block's group draws with the colours in force where it is drawn
+			$data = (empty($info['inherits']) ? $initialColor : '') . $info['data'];
 			$data = $this->mpdf->compress ? gzcompress($data) : $data;
 			$this->writer->write('/Length ' . $this->writer->streamLength($data) . '>>');
 			$this->writer->stream($data);
