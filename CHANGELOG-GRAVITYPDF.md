@@ -269,6 +269,7 @@ Bugfixes
 * `text-outline-width` with no `text-outline-color` raised an undefined-key warning (`outline-COLOR`) and drew the outline black. The warning is gone in either `cssMode`. In standard mode the outline is now drawn in the colour of the text, as `text-outline-color` is `currentColor` by default, and `text-outline` with a width alone, such as `text-outline: 0.2mm`, which was ignored, outlines the text in its colour too. A text outline in `currentColor`, written or by default, is passed on as the keyword, so a `<span>` of another colour inside the outlined text is outlined in its own colour. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep black outlines and to ignore that shorthand. [#552] [#650] [#681]
 * A percentage `border-radius` on a block, such as `border-radius: 50%` on a box 40 mm by 12 mm, drew a pill instead of an ellipse. Both radii were taken of the width of the block around it, and then shrunk to fit. A percentage is now of the block's own border box, as in CSS: a horizontal radius of its width and a vertical one of its height, so `50%` draws an ellipse and `10%` a corner a tenth of each side. A block split across pages resolves a vertical percentage against the height of the part on each page. With `autoPadding` on, a percentage radius no longer adds padding, since the box is not known when the padding is set. In both `cssMode`s. [#552] [#586]
 * `box-shadow: inset …` was drawn as an outer shadow, outside the box. An inset shadow is now drawn inside the padding box, over the background and under the content: it fills the box from its edges in to the shape offset and shrunk by the spread, its blur fades that inner edge, and it follows the padding edge's radii in a box with a `border-radius`. In both `cssMode` modes. [#585]
+* A blurred `box-shadow` on an elliptical corner, such as `border-radius: 12mm / 2mm`, whose short radius was tighter than the blur was drawn with a square solid part under the curve, so the shadow showed dark where the corner is cut away. The shadow now follows the corner's long radius. In both `cssMode` modes. [#698]
 
 ### Images and SVG
 
@@ -464,6 +465,7 @@ These changes do not change output.
 * **Compiled selectors.** A rule whose selector the legacy parser cannot read is compiled into its compound selectors, the combinators between them and its specificity, and filed under its rightmost compound for the selector matcher. A selector list is split at the commas outside parentheses, brackets and strings, so `:is(h1, h2)` and `[title="a,b"]` stay whole. [#538] [#619]
 * **Computed values on the open elements.** In the standard CSS mode, each element on the stack of open elements carries the properties merged for it, with the CSS-wide keywords resolved, in the `computed` slot of its frame, and the document's frame carries those of `<body>`. `inherit` reads a parent's from there. [#546] [#652]
 * **nth-child in tables from the open elements.** `tr`, `td` and `th:nth-child()` and `:first-child` take a row's or cell's position among its siblings from the stack of open elements, as the selector matcher does, instead of from mPDF's row and column counters. An element a browser moves out of a table, such as a `<bookmark>` or `<tocentry>` written between two cells, is not counted, and with `allow_html_optional_endtags` off a cell, row or row group with no end tag is closed by the next one, as mPDF lays it out. [#538] [#629]
+* **Box shadows.** Outer and inset box-shadows are built by one class, `Mpdf\BoxShadow`, which draws the blurred edge of both as a ring of Coons patches. `PaintDivBB()` only converts the colours and calls it. [#698]
 
 [mpdf/mpdf#7]: https://github.com/mpdf/mpdf/issues/7
 [mpdf/mpdf#83]: https://github.com/mpdf/mpdf/issues/83
@@ -967,3 +969,4 @@ These changes do not change output.
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
 [#585]: https://github.com/GravityPDF/mpdf/issues/585
+[#698]: https://github.com/GravityPDF/mpdf/issues/698

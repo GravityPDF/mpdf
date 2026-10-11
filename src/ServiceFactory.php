@@ -135,7 +135,7 @@ class ServiceFactory
 
 		$roundedBox = new RoundedBox();
 
-		$insetBoxShadow = new InsetBoxShadow($mpdf, $roundedBox, $gradient);
+		$boxShadow = new BoxShadow($mpdf, $roundedBox, $gradient);
 
 		$formWriter = new FormWriter($mpdf, $writer);
 
@@ -209,7 +209,7 @@ class ServiceFactory
 			'form' => $form,
 			'gradient' => $gradient,
 			'roundedBox' => $roundedBox,
-			'insetBoxShadow' => $insetBoxShadow,
+			'boxShadow' => $boxShadow,
 			'tableOfContents' => $tableOfContents,
 			'tag' => $tag,
 			'wmf' => $wmf,
@@ -256,7 +256,7 @@ class ServiceFactory
 			'form',
 			'gradient',
 			'roundedBox',
-			'insetBoxShadow',
+			'boxShadow',
 			'tableOfContents',
 			'tag',
 			'wmf',
