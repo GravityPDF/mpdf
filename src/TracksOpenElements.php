@@ -82,10 +82,11 @@ trait TracksOpenElements
 	private static $tableImpliedEndTags = [
 		'TD' => [['TD', 'TH'], ['TR', 'TABLE']],
 		'TH' => [['TD', 'TH'], ['TR', 'TABLE']],
-		'TR' => [['TR'], ['THEAD', 'TBODY', 'TFOOT', 'TABLE']],
-		'THEAD' => [['THEAD', 'TBODY', 'TFOOT'], ['TABLE']],
-		'TBODY' => [['THEAD', 'TBODY', 'TFOOT'], ['TABLE']],
-		'TFOOT' => [['THEAD', 'TBODY', 'TFOOT'], ['TABLE']],
+		'TR' => [['TR', 'COLGROUP'], ['THEAD', 'TBODY', 'TFOOT', 'TABLE']],
+		'THEAD' => [['THEAD', 'TBODY', 'TFOOT', 'COLGROUP'], ['TABLE']],
+		'TBODY' => [['THEAD', 'TBODY', 'TFOOT', 'COLGROUP'], ['TABLE']],
+		'TFOOT' => [['THEAD', 'TBODY', 'TFOOT', 'COLGROUP'], ['TABLE']],
+		'COLGROUP' => [['COLGROUP'], ['TABLE']],
 	];
 
 	/**
@@ -94,7 +95,8 @@ trait TracksOpenElements
 	 * is not counted among the part's children. It is still opened inside the part, as mPDF reads it there
 	 */
 	private static $tableChildren = [
-		'TABLE' => ['CAPTION' => true, 'THEAD' => true, 'TBODY' => true, 'TFOOT' => true],
+		'TABLE' => ['CAPTION' => true, 'COLGROUP' => true, 'THEAD' => true, 'TBODY' => true, 'TFOOT' => true],
+		'COLGROUP' => ['COL' => true],
 		'THEAD' => ['TR' => true],
 		'TBODY' => ['TR' => true],
 		'TFOOT' => ['TR' => true],
@@ -102,7 +104,7 @@ trait TracksOpenElements
 	];
 
 	/** @var array<string, true> The elements of a table, which draw no text of their own outside their cells */
-	private static $tableParts = ['TABLE' => true, 'THEAD' => true, 'TBODY' => true, 'TFOOT' => true, 'TR' => true, 'TD' => true, 'TH' => true];
+	private static $tableParts = ['TABLE' => true, 'COLGROUP' => true, 'THEAD' => true, 'TBODY' => true, 'TFOOT' => true, 'TR' => true, 'TD' => true, 'TH' => true];
 
 	/** @var array<string, true> The tags mPDF wraps substituted characters in, which are not the document's elements */
 	private static $substitutionTags = ['TTA' => true, 'TTS' => true, 'TTZ' => true];

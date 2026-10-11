@@ -389,6 +389,13 @@ class Td extends Tag
 			}
 		}
 
+		// A cell with no width of its own takes its column's. One spanning columns takes none of theirs
+		Col::endColumnGroup($table);
+		$spansColumns = isset($attr['COLSPAN']) && preg_match('/^\d+$/', $attr['COLSPAN']) && $attr['COLSPAN'] > 1;
+		if (!isset($c['w']) && !isset($c['wpercent']) && !$spansColumns && isset($table['col_widths'][$this->mpdf->col])) {
+			$c = array_merge($c, $table['col_widths'][$this->mpdf->col]);
+		}
+
 		if (isset($properties['HEIGHT']) && !strpos($properties['HEIGHT'], '%')) {
 			$c['h'] = $this->sizeConverter->convert($properties['HEIGHT'], $this->mpdf->blk[$this->mpdf->blklvl]['inner_width'], $this->mpdf->FontSize, false);
 		} elseif (isset($attr['HEIGHT']) && !strpos($attr['HEIGHT'], '%')) {

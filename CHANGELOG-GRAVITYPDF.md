@@ -81,6 +81,10 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
 * **`min-width` and `max-width` hold the width of a block**, as in a browser, in standard mode. mPDF never read them on a block, so `max-width: 100mm; margin: 0 auto`, the usual centred container, filled the page, `width: 150mm; max-width: 100mm` was 150mm wide, and `width: 50mm; min-width: 80mm` was 50mm. Now the width is held within the two, `max-width` first, then `min-width`, a percentage taken of the container's inner width as `width` is, and the block's auto margins, direction or float place the narrowed box. Floats and positioned blocks take the same limits. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore the two properties as before. [#588] [#691]
   * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
+* **`<col>`, `<colgroup>` and `table-layout: fixed` size a table's columns**, as in a browser, in standard mode. mPDF dropped both tags and never read `table-layout`, so every column was as wide as its content. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep ignoring them. [#606]
+  * A `<col>` or `<colgroup>` width, from its `width` attribute or CSS, sizes the columns it spans as a cell's width does. A cell's own width wins over its column's, and a cell spanning columns takes none of theirs. `span` counts the columns, and a `<colgroup>` with no `<col>` in it spans its own. Rules can name `col` and `colgroup`.
+  * A table with `table-layout: fixed` and a width keeps that width. Its columns take their widths from the `<col>` elements, or else from the cells of the first row, and share what is left equally. A column is never widened for its content: a word too long for it is broken. When the columns given a width need more room than the table has, the table widens to hold them.
+  * `height` on a row or a table, and a percentage `height` on a cell, are still not read.
 
 New features
 ------------
@@ -965,3 +969,4 @@ These changes do not change output.
 [#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
+[#606]: https://github.com/GravityPDF/mpdf/issues/606

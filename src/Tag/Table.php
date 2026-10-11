@@ -189,6 +189,10 @@ class Table extends Tag
 			$w = '';
 		}
 
+		// Read by _tableColumnWidth(), which lays a fixed table out only once it has a width
+		$table['layout_fixed'] = $this->mpdf->cssMode === CssMode::STANDARD
+			&& isset($properties['TABLE-LAYOUT']) && strtolower(trim($properties['TABLE-LAYOUT'])) === 'fixed';
+
 		if (isset($attr['ALIGN']) && array_key_exists(strtolower($attr['ALIGN']), self::ALIGN)) {
 			$table['a'] = $this->getAlign($attr['ALIGN']);
 		}

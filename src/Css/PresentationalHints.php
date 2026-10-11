@@ -25,7 +25,7 @@ class PresentationalHints
 	 */
 	const PROPERTIES = [
 		'COLOR' => [['FONT', 'HR'], 'COLOR'],
-		'WIDTH' => [['HR', 'IMG', 'METER', 'PROGRESS', 'TABLE', 'TD', 'TH'], 'WIDTH'],
+		'WIDTH' => [['COL', 'COLGROUP', 'HR', 'IMG', 'METER', 'PROGRESS', 'TABLE', 'TD', 'TH'], 'WIDTH'],
 		'HEIGHT' => [['IMG', 'METER', 'PROGRESS', 'TABLE', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR'], 'HEIGHT'],
 		'VALIGN' => [['TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR'], 'VERTICAL-ALIGN'],
 	];

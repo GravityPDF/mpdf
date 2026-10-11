@@ -20122,6 +20122,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($str == '') { // enable all tags
 			// Insert new supported tags in the long string below.
 			$this->enabledtags = "<a><acronym><address><article><aside><b><bdi><bdo><big><blockquote><br><caption><center><cite><code><del><details><dd><div><dl><dt><em><fieldset><figcaption><figure><font><form><h1><h2><h3><h4><h5><h6><hgroup><hr><i><img><input><ins><kbd><legend><li><main><mark><meter><nav><ol><option><p><pre><progress><q><s><samp><section><select><small><span><strike><strong><sub><summary><sup><table><tbody><td><template><textarea><tfoot><th><thead><time><tr><tt><u><ul><var><footer><header><annotation><bookmark><textcircle><barcode><dottab><indexentry><indexinsert><watermarktext><watermarkimage><tts><ttz><tta><column_break><columnbreak><newcolumn><newpage><page_break><pagebreak><formfeed><columns><toc><tocentry><tocpagebreak><pageheader><pagefooter><setpageheader><setpagefooter><sethtmlpageheader><sethtmlpagefooter>";
+			// Only the standard CSS mode sizes columns by them; the legacy mode drops them as it always has
+			if ($this->cssMode === CssMode::STANDARD) {
+				$this->enabledtags .= '<col><colgroup>';
+			}
 		} else {
 			$str = explode(",", $str);
 			foreach ($str as $v) {
@@ -20638,6 +20642,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$tblbw = $table['max_cell_border_width']['L'] / 2 + $table['max_cell_border_width']['R'] / 2 + $table['margin']['L'] + $table['margin']['R'];
 		}
 
+		// Read before the cells' widths are widened to fit their content below
+		if (!empty($table['layout_fixed']) && !empty($table['w']) && !isset($table['fixed_wc'])) {
+			$table['fixed_wc'] = $this->fixedColumnSpecs($table);
+		}
+
 		// ADDED table['l'][colno]
 		// = total length of text approx (using $c['s']) in that column - used to approximately distribute col widths in _tableWidth
 		//
@@ -20847,6 +20856,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				unset($c);
 			}//rows
 		}//columns
+
+		// A fixed table's columns are as wide as it gives them, whatever their content needs
+		if (isset($table['fixed_wc'])) {
+			$widths = $this->fixedColumnWidths($table, $tblbw);
+			foreach ($widths as $j => $width) {
+				$table['wc'][$j]['miw'] = $table['wc'][$j]['maw'] = $width;
+				$table['wc'][$j]['w'] = 1;
+				unset($table['wc'][$j]['wpercent']);
+			}
+			// Wider than its width when the columns given widths need more room, as in a browser
+			$table['w'] = max($table['w'], array_sum($widths) + $tblbw);
+			$listspan = [];
+		}
+
 		// COLUMN SPANS
 		$wc = &$table['wc'];
 		foreach ($listspan as $span) {
@@ -21045,6 +21068,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$checkminwidth += $tblbw;
 		$checkmaxwidth += $tblbw;
 
+		if (isset($table['fixed_wc'])) {
+			// Not the sum of its columns, whose rounding could leave it a hair wider than the table
+			$checkminwidth = $checkmaxwidth = $table['w'];
+		}
+
 		// Table['miw'] set by percent in first pass may be larger than sum of column miw
 		if ((isset($table['miw']) && $checkminwidth > $table['miw']) || !isset($table['miw'])) {
 			$table['miw'] = $checkminwidth;
@@ -21095,6 +21123,85 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		unset($cs);
 
 		return [0, 0];
+	}
+
+	/**
+	 * The widths table-layout: fixed sizes a table's columns by, before any content is measured: each column's from
+	 * its <col> or <colgroup>, or else from the cell in the first row, whose width is shared equally among the
+	 * columns it spans
+	 *
+	 * @param array $table
+	 *
+	 * @return array[] By column index, for the columns given a width: `w` in mm or `wpercent`
+	 */
+	private function fixedColumnSpecs(array $table)
+	{
+		$specs = isset($table['col_widths']) ? $table['col_widths'] : [];
+
+		for ($j = 0; $j < $table['nc']; $j++) {
+			if (empty($table['cells'][0][$j])) {
+				continue;
+			}
+
+			$c = $table['cells'][0][$j];
+			$span = isset($c['colspan']) ? (int) $c['colspan'] : 1;
+			if (isset($c['wpercent'])) {
+				$spec = ['wpercent' => $c['wpercent'] / $span];
+			} elseif (isset($c['w'])) {
+				$spec = ['w' => $c['w'] / $span];
+			} else {
+				continue;
+			}
+
+			for ($k = $j; $k < min($j + $span, $table['nc']); $k++) {
+				if (!isset($specs[$k])) {
+					$specs[$k] = $spec;
+				}
+			}
+		}
+
+		return $specs;
+	}
+
+	/**
+	 * Sizes a fixed table's columns from fixedColumnSpecs(). The room the table's width leaves after the columns with
+	 * a width is shared equally among the rest; when every column has a width and they leave room, each is widened
+	 * in proportion
+	 *
+	 * @param array $table
+	 * @param float $tblbw What the table's own margins, borders, padding and spacing take of its width
+	 *
+	 * @return float[] Each column's width, by index
+	 */
+	private function fixedColumnWidths(array $table, $tblbw)
+	{
+		$available = max(0, $table['w'] - $tblbw);
+		$widths = [];
+		$auto = [];
+
+		for ($j = 0; $j < $table['nc']; $j++) {
+			if (!isset($table['fixed_wc'][$j])) {
+				$auto[] = $j;
+				$widths[$j] = 0;
+				continue;
+			}
+
+			$spec = $table['fixed_wc'][$j];
+			$widths[$j] = isset($spec['wpercent']) ? $available * $spec['wpercent'] / 100 : $spec['w'];
+		}
+
+		$given = array_sum($widths);
+		if ($auto) {
+			foreach ($auto as $j) {
+				$widths[$j] = max(0, $available - $given) / count($auto);
+			}
+		} elseif ($given > 0 && $given < $available) {
+			foreach ($widths as $j => $width) {
+				$widths[$j] = $width * $available / $given;
+			}
+		}
+
+		return $widths;
 	}
 
 	function _tableWidth(&$table)
@@ -21180,7 +21287,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// IF the table width is now set - Need to distribute columns widths
 		// mPDF 5.7.3
 		// If the table width is already set to the maximum width (e.g. nested table), then use maximum column widths exactly
-		if (isset($table['w']) && ($table['w'] == $tablewidth) && !$percentages_set) {
+		if (isset($table['w'], $table['fixed_wc'])) {
+
+			// Shared out again, as a nested table can be given less room than it asked for
+			foreach ($this->fixedColumnWidths($table, $tblbw) as $i => $width) {
+				$widthcols[$i] = $width;
+			}
+
+		} elseif (isset($table['w']) && ($table['w'] == $tablewidth) && !$percentages_set) {
 
 			// This sets the columns all to maximum width
 			for ($i = 0; $i < $numcols; $i++) {
