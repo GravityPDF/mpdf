@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
+use Mpdf\Css\TextIndent;
 use Mpdf\Css\TextVars;
 use Mpdf\CssMode;
 use Mpdf\Utils\Arrays;
@@ -271,6 +272,21 @@ class Td extends Tag
 		$c['cellLineStackingShift'] = $table['cellLineStackingShift'];
 		if (isset($properties['LINE-STACKING-SHIFT'])) {
 			$c['cellLineStackingShift'] = strtolower($properties['LINE-STACKING-SHIFT']);
+		}
+
+		$indent = isset($properties['TEXT-INDENT']) && $this->mpdf->cssMode === CssMode::STANDARD
+			? TextIndent::parse($properties['TEXT-INDENT'])
+			: null;
+		if ($indent) {
+			$length = $indent['length'];
+			if (substr($length, -1) !== '%') {
+				$length = $this->sizeConverter->convert($length, 0, $this->mpdf->FontSize, false) . 'mm';
+			}
+			$c['textIndent'] = [
+				'text_indent' => $length,
+				'text_indent_hanging' => $indent['hanging'],
+				'text_indent_each_line' => $indent['each-line'],
+			];
 		}
 
 		if (isset($properties['TEXT-ROTATE']) && ($properties['TEXT-ROTATE'] || $properties['TEXT-ROTATE'] === '0')) {

@@ -35,6 +35,12 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 	/** The top of each of those lines, in the same order. */
 	public $drawnY = [];
 
+	/**
+	 * Where each of those lines' text sits on its line, as _setInlineBlockHeights() gave it, in the same order: its
+	 * glyph origin and baseline shift, offsets from the top of the line in mm, or false for text not drawn on a line
+	 */
+	public $drawnLineBoxes = [];
+
 	/** The text colour each of those lines was drawn in, as the PDF operator that sets it, in the same order. */
 	public $drawnColours = [];
 
@@ -114,6 +120,7 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 			$this->drawnFontSize[] = $this->FontSizePt;
 			$this->drawnBoxes[] = [$this->page, $this->x, $this->x + $w, $this->y];
 			$this->drawnY[] = $this->y;
+			$this->drawnLineBoxes[] = $lineBox;
 			$this->drawnColours[] = $this->TextColor;
 			$this->drawnIn[] = $this->whereDrawing();
 			$this->drawnFontStyles[] = $this->FontStyle;
