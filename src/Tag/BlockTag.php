@@ -145,7 +145,7 @@ abstract class BlockTag extends Tag
 			$properties = $this->cssManager->MergeCSS('', $tag, $attr);
 			TextDecorations::enter($this->mpdf, $properties);
 			if (!empty($properties)) {
-				$this->mpdf->setCSS($properties, 'INLINE');
+				$this->mpdf->setCSS($properties, 'INLINE', $tag);
 			}
 
 			// mPDF 6  Lists

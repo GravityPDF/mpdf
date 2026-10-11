@@ -14,6 +14,7 @@ use Mpdf\Css\RelativeFontValues;
 use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
 use Mpdf\Css\TextDecorations;
+use Mpdf\Css\TextIndent;
 use Mpdf\Css\TextVars;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\Fonts\Color\ColorFormats;
@@ -641,6 +642,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $cellLineHeight;
 	var $cellLineStackingStrategy;
 	var $cellLineStackingShift;
+
+	/**
+	 * @var array|null The text-indent of the table cell being laid out, keyed as TextIndent describes, or null for none
+	 */
+	var $cellTextIndent;
 
 	// mPDF 6  Lists
 	var $listcounter;
@@ -6162,6 +6168,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$shrin_k = 1;
 			}
 
+			// How far a vertical-align keyword moved the text, which its own decorations move with
+			$alignShift = isset($lineBox['vertical-align-shift']) ? $lineBox['vertical-align-shift'] : 0;
+
 			// UNDERLINE
 			if ($textvar & TextVars::FD_UNDERLINE) { // mPDF 5.7.1	// mPDF 6
 
@@ -6192,6 +6201,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$ubaseline = isset($this->textparam['u-decoration']['baseline'])
 					? $glyphYorigin - $this->textparam['u-decoration']['baseline'] / $shrin_k
 					: $glyphYorigin;
+				if (!empty($this->textparam['u-decoration']['vertical-align'])) {
+					$ubaseline -= $alignShift;
+				}
 
 				$olw = $this->LineWidth;
 
@@ -6243,6 +6255,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				$sbaseline = $glyphYorigin - $this->textparam['s-decoration']['baseline'] / $shrin_k;
+				if (!empty($this->textparam['s-decoration']['vertical-align'])) {
+					$sbaseline -= $alignShift;
+				}
 
 				$olw = $this->LineWidth;
 
@@ -6280,6 +6295,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				$adjusty = (-$ch / 1000 * $decorationfontsize) * $this->baselineO;
 				$obaseline = $glyphYorigin - $this->textparam['o-decoration']['baseline'] / $shrin_k;
+				if (!empty($this->textparam['o-decoration']['vertical-align'])) {
+					$obaseline -= $alignShift;
+				}
 				$olw = $this->LineWidth;
 				$sub .=' ' . (sprintf(' %.3F w 0 j 0 J ', $ut * Mpdf::SCALE));
 				$sub .=' ' . $this->_dounderline($this->x + $dx, $this->y + $obaseline + $adjusty, $txt, $OTLdata, $textvar);
@@ -7336,10 +7354,58 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->flowingBlockAttr['blockstate'] = $blockstate;
 
 		$this->flowingBlockAttr['newblock'] = $newblock;
+		$this->flowingBlockAttr['forcedBreak'] = false;
 		$this->flowingBlockAttr['valign'] = 'M';
 		$this->flowingBlockAttr['blockdir'] = $blockdir;
 		$this->flowingBlockAttr['cOTLdata'] = []; // mPDF 5.7.1
 		$this->flowingBlockAttr['lastBidiText'] = ''; // mPDF 5.7.1
+	}
+
+	/**
+	 * How far text-indent moves a line of the block, or the table cell, being laid out, in mm
+	 *
+	 * The first line of a block or cell is indented. Under CssMode::STANDARD each-line indents the first line after a
+	 * forced break as well, and hanging indents every line but those.
+	 *
+	 * @param bool $is_table Whether the line is in a table cell
+	 * @param bool $newblock Whether the run of lines the line is in starts the block
+	 * @param int|string $blockstate As printbuffer() takes it
+	 * @param int $line Which line of the run it is, from 0
+	 *
+	 * @return float|int
+	 */
+	private function lineTextIndent($is_table, $newblock, $blockstate, $line)
+	{
+		if ($is_table) {
+			$indent = $this->cellTextIndent;
+			$first = $newblock && $line == 0;
+		} else {
+			$indent = $this->blk[$this->blklvl];
+			$first = $newblock && ($blockstate == 1 || $blockstate == 3) && $line == 0;
+		}
+
+		if (!isset($indent['text_indent'])) {
+			return 0;
+		}
+
+		if (!empty($indent['text_indent_each_line']) && $line == 0 && !empty($this->flowingBlockAttr['forcedBreak'])) {
+			$first = true;
+		}
+
+		if ($first === !empty($indent['text_indent_hanging'])) {
+			return 0;
+		}
+
+		if ($is_table) {
+			// A cell's length is kept in mm before the table is shrunk to fit, and a percentage is of the cell's width
+			if (substr($indent['text_indent'], -1) === '%') {
+				return $this->sizeConverter->convert($indent['text_indent'], $this->divwidth, $this->FontSize, false);
+			}
+
+			return (float) $indent['text_indent'] / max(1, $this->shrin_k);
+		}
+
+		return $this->sizeConverter->convert($indent['text_indent'], $indent['inner_width'], $indent['InlineProperties']['size'], false);  // mPDF 5.7.4
 	}
 
 	function finishFlowingBlock($endofblock = false, $next = '')
@@ -7584,9 +7650,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Paragraph INDENT
 		$WidthCorrection = 0;
-		if (($newblock) && ($blockstate == 1 || $blockstate == 3) && isset($this->blk[$this->blklvl]['text_indent']) && ($lineCount == 0) && (!$is_table) && ($align != 'C')) {
-			$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
-			$WidthCorrection = ($ti * Mpdf::SCALE);
+		if ($align != 'C') {
+			$WidthCorrection = $this->lineTextIndent($is_table, $newblock, $blockstate, $lineCount) * Mpdf::SCALE;
 		}
 
 
@@ -7786,11 +7851,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// Paragraph INDENT
 			$WidthCorrection = 0;
-			if (($newblock) && ($blockstate == 1 || $blockstate == 3) && isset($this->blk[$this->blklvl]['text_indent']) && ($lineCount == 0) && (!$is_table) && ($align != 'C')) {
-				$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
-				if ($blockdir != 'rtl') {
-					$this->x += $ti;
-				} // mPDF 6
+			if ($align != 'C' && $blockdir != 'rtl') {
+				$this->x += $this->lineTextIndent($is_table, $newblock, $blockstate, $lineCount);
 			}
 
 			foreach ($chunkorder as $aord => $k) { // mPDF 5.7
@@ -8944,9 +9006,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			// Paragraph INDENT
 			$WidthCorrection = 0;
-			if (($newblock) && ($blockstate == 1 || $blockstate == 3) && isset($this->blk[$this->blklvl]['text_indent']) && ($lineCount == 0) && (!$is_table) && ($align != 'C')) {
-				$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
-				$WidthCorrection = ($ti * Mpdf::SCALE);
+			if ($align != 'C') {
+				$WidthCorrection = $this->lineTextIndent($is_table, $newblock, $blockstate, $lineCount) * Mpdf::SCALE;
 			}
 			// OUTDENT
 			foreach ($this->objectbuffer as $k => $objattr) {   // mPDF 6 DOTTAB
@@ -9542,9 +9603,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 
 					// Paragraph INDENT
-					if (isset($this->blk[$this->blklvl]['text_indent']) && ($newblock) && ($blockstate == 1 || $blockstate == 3) && ($lineCount == 1) && (!$is_table) && ($blockdir != 'rtl') && ($align != 'C')) {
-						$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
-						$this->x += $ti;
+					// The line written is the one before $lineCount
+					if ($align != 'C' && $blockdir != 'rtl') {
+						$this->x += $this->lineTextIndent($is_table, $newblock, $blockstate, $lineCount - 1);
 					}
 
 					// BIDI magic_reverse moved upwards from here
@@ -12435,6 +12496,62 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $ypos;
 	}
 
+	/**
+	 * The box of an inline element with a vertical-align keyword, as _setLineYpos() gives boxes, which the text and
+	 * images inside it are aligned by
+	 *
+	 * @param array $align The element's textparam['vertical-align']: the keyword, and its font and line-height
+	 * @param mixed $CSSlineheight The block's line-height, for an element with none of its own
+	 * @param array $strut The block's box
+	 *
+	 * @return array
+	 */
+	private function alignedElementBox(array $align, $CSSlineheight, array $strut)
+	{
+		$fontsize = $align['fontsize'] / max(1, $this->shrin_k);
+		if ($align['line-height'] !== null) {
+			return $this->_setLineYpos($fontsize, $this->fonts[$align['fontkey']]['desc'], $align['line-height']);
+		}
+
+		return $this->_setLineYpos($fontsize, $this->fonts[$align['fontkey']]['desc'], $CSSlineheight, $strut);
+	}
+
+	/**
+	 * How far up from the baseline a vertical-align keyword on inline text moves it, in mm
+	 *
+	 * The box aligned is the element's line-height box where the line holds those, and its font box where it does not.
+	 * middle puts the middle of the box at half the block's x-height, text-top and text-bottom put its top or bottom at
+	 * that of the block's font, and top and bottom at that of the line.
+	 *
+	 * @param string $va M, TT, TB, T or B, as Tag::ALIGN names them
+	 * @param array $box The box of the element with the keyword, as _setLineYpos() gives it
+	 * @param array $strut The block's box, likewise
+	 * @param float $xHeight The block's x-height
+	 * @param bool $inlineStacking Whether the line holds line-height boxes
+	 * @param float $lineTop The top of the line above the baseline, for top
+	 * @param float $lineBottom The bottom of the line, for bottom
+	 *
+	 * @return float
+	 */
+	private function inlineAlignShift($va, array $box, array $strut, $xHeight, $inlineStacking, $lineTop = 0, $lineBottom = 0)
+	{
+		$top = $inlineStacking ? $box['exttop'] : $box['boxtop'];
+		$bottom = $inlineStacking ? $box['extbottom'] : $box['boxbottom'];
+
+		switch ($va) {
+			case 'M':
+				return $xHeight / 2 - ($top + $bottom) / 2;
+			case 'TT':
+				return $strut['boxtop'] - $top;
+			case 'TB':
+				return $strut['boxbottom'] - $bottom;
+			case 'T':
+				return $lineTop - $top;
+			default:
+				return $lineBottom - $bottom;
+		}
+	}
+
 	/* Called from WriteFlowingBlock() and finishFlowingBlock()
 	  Determines the line hieght and glyph/writing position
 	  for each element in the line to be written */
@@ -12499,6 +12616,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$inlineStacking = !in_array($line_stacking_strategy, ['block-line-height', 'grid-height', 'max-height'], true);
 		// Whether an inline element with its own line-height (cssMode standard) is on the line
 		$elementLineheightOnLine = false;
+		// For vertical-align keywords on inline text (cssMode standard): the block's x-height, how far up each piece of
+		// text or image a keyword moves is moved, and the text aligned with the top or bottom of the line, with the box
+		// of the element that has the keyword
+		$xHeight = (!empty($fontdesc['XHeight']) ? $fontdesc['XHeight'] / 1000 : 0.5) * $fontsize;
+		$alignShift = [];
+		$alignBoxes = [];
+		$edgeAligned = [];
 		foreach ($content as $k => $chunk) {
 			if (isset($this->objectbuffer[$k]) && $this->objectbuffer[$k]['type'] == 'listmarker') {
 				$ypos[$k] = $ypos[-1];
@@ -12535,11 +12659,23 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$bottomy = min($bottomy, $elementYpos['extbottom']);
 				}
 
-				if ($va == 'BS') { //  (BASELINE default)
-					if ($oh > $topy) {
-						$topy = $oh;
+				// An image on the baseline of an inline element placed by a vertical-align keyword moves with it
+				if ($va == 'BS' && isset($font[$k]['textparam']['vertical-align'])) {
+					$align = $font[$k]['textparam']['vertical-align'];
+					if ($align['va'] == 'T' || $align['va'] == 'B') {
+						$va = $align['va'];
+					} else {
+						$alignBox = $this->alignedElementBox($align, $CSSlineheight, $ypos[-1]);
+						$alignShift[$k] = $this->inlineAlignShift($align['va'], $alignBox, $ypos[-1], $xHeight, $inlineStacking);
 					}
-					$bottomy = min($bottomy, 0);
+				}
+				$shift = isset($alignShift[$k]) ? $alignShift[$k] : 0;
+
+				if ($va == 'BS') { //  (BASELINE default)
+					if ($shift + $oh > $topy) {
+						$topy = $shift + $oh;
+					}
+					$bottomy = min($bottomy, $shift);
 				} elseif ($va == 'M') {
 					if (($midpoint + $oh / 2) > $topy) {
 						$topy = $midpoint + $oh / 2;
@@ -12582,11 +12718,32 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$ypos[$k]['baseline-shift'] = $font[$k]['textparam']['text-baseline'];
 				}
 
+				if (isset($font[$k]['textparam']['vertical-align'])) {
+					$align = $font[$k]['textparam']['vertical-align'];
+					$alignBox = $this->alignedElementBox($align, $CSSlineheight, $ypos[-1]);
+					if ($align['va'] == 'T' || $align['va'] == 'B') {
+						$edgeAligned[$k] = $align['va'];
+						$alignBoxes[$k] = $alignBox;
+					} else {
+						$alignShift[$k] = $this->inlineAlignShift($align['va'], $alignBox, $ypos[-1], $xHeight, $inlineStacking);
+						$ypos[$k]['baseline-shift'] += $alignShift[$k];
+					}
+				}
+
 				// DO ALIGNMENT FOR BASELINES *******************
 				// Until most fonts have OpenType BASE tables, this won't work
 				// $ypos[$k] compared to $ypos[-1] or $ypos[$k-1] using $dominant_baseline and $baseline_table
 				// UPDATE Maximums
-				if ($line_stacking_strategy == 'block-line-height' || $line_stacking_strategy == 'grid-height' || $line_stacking_strategy == 'max-height') { // don't include extended block progression of all inline elements
+				if (isset($edgeAligned[$k])) {
+					// Placed once the rest of the line is, and the line made tall enough for it, as an image is
+					$box = $alignBoxes[$k];
+					$height = $inlineStacking ? $box['exttop'] - $box['extbottom'] : $box['boxtop'] - $box['boxbottom'];
+					if ($edgeAligned[$k] == 'T') {
+						$mta = max($mta, $height);
+					} else {
+						$mba = max($mba, $height);
+					}
+				} elseif ($line_stacking_strategy == 'block-line-height' || $line_stacking_strategy == 'grid-height' || $line_stacking_strategy == 'max-height') { // don't include extended block progression of all inline elements
 					if ($line_stacking_shift == 'disregard-shifts') {
 						if ($ypos[$k]['boxtop'] > $topy) {
 							$topy = $ypos[$k]['boxtop'];
@@ -12697,6 +12854,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$topy += $diff / 2;
 		$bottomy -= $diff / 2;
 
+		foreach ($edgeAligned as $k => $va) {
+			$alignShift[$k] = $this->inlineAlignShift($va, $alignBoxes[$k], $ypos[-1], $xHeight, $inlineStacking, $topy, $bottomy);
+			$ypos[$k]['baseline-shift'] += $alignShift[$k];
+		}
+
 		// ADJUST $ypos => lineBox using $stackHeight; lineBox are all offsets from the top of stackHeight in mm
 		// and SET IMAGE OFFSETS
 		$lineBox[-1]['boxtop'] = $topy - $ypos[-1]['boxtop'];
@@ -12725,7 +12887,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$va = $this->objectbuffer[$k]['vertical-align']; // = $objattr['vertical-align'] = set as M,T,B,S
 
 				if ($va == 'BS') { //  (BASELINE default)
-					$lineBox[$k]['top'] = $lineBox[-1]['glyphYorigin'] - $oh;
+					$lineBox[$k]['top'] = $lineBox[-1]['glyphYorigin'] - (isset($alignShift[$k]) ? $alignShift[$k] : 0) - $oh;
 				} elseif ($va == 'M') {
 					$lineBox[$k]['top'] = $midpoint - $oh / 2;
 				} elseif ($va == 'TT') {
@@ -12753,6 +12915,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$lineBox[$k]['background-boxtop'] = $topy - $bgypos[$k]['boxtop'];
 					$lineBox[$k]['background-boxbottom'] = $topy - $bgypos[$k]['boxbottom'];
 					$lineBox[$k]['background-baseline-shift'] = $bgypos[$k]['baseline-shift'];
+				}
+				if (isset($alignShift[$k])) {
+					// The border, background and decorations of the element the keyword is on move with its text
+					$lineBox[$k]['vertical-align-shift'] = $alignShift[$k];
+					if (isset($lineBox[$k]['border-boxtop']) && !empty($font[$k]['textparam']['bord-decoration']['vertical-align'])) {
+						$lineBox[$k]['border-baseline-shift'] += $alignShift[$k];
+					}
+					if (isset($lineBox[$k]['background-boxtop']) && !empty($font[$k]['textparam']['bg-decoration']['vertical-align'])) {
+						$lineBox[$k]['background-baseline-shift'] += $alignShift[$k];
+					}
 				}
 			}
 		}
@@ -13188,6 +13360,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->cellLineHeight = Arrays::get($tablehf, 'cellLineHeight', null);
 					$this->cellLineStackingStrategy = Arrays::get($tablehf, 'cellLineStackingStrategy', null);
 					$this->cellLineStackingShift = Arrays::get($tablehf, 'cellLineStackingShift', null);
+					$this->cellTextIndent = Arrays::get($tablehf, 'textIndent', null);
 
 					$this->x = $x;
 
@@ -17728,6 +17901,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					/* -- END COLUMNS -- */
 					$this->newFlowingBlock($this->divwidth, $this->divheight, $align, $is_table, $blockstate, false, $blockdir, $table_draft);
+					$this->flowingBlockAttr['forcedBreak'] = true;
 				} else {
 					$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
 					// Added to correct for OddEven Margins
@@ -19202,6 +19376,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$preceeding_fontsize = $this->FontSize;
 		$spanbordset = false;
 		$spanbgset = false;
+		$verticalAlignSet = false;
 		// mPDF 6
 		$prevlevel = (($this->blklvl == 0) ? 0 : $this->blklvl - 1);
 
@@ -19436,6 +19611,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($type != 'INLINE' && $type != 'TABLECELL') { // All block-level, including BODY tag
 				switch ($k) {
 					case 'TEXT-INDENT':
+						$indent = $this->cssMode === CssMode::STANDARD ? TextIndent::parse($v, $this->sizeConverter) : null;
+						if ($indent) {
+							$v = $indent['length'];
+							$this->blk[$this->blklvl]['text_indent_hanging'] = $indent['hanging'];
+							$this->blk[$this->blklvl]['text_indent_each_line'] = $indent['each-line'];
+						}
 						// Computed value - to inherit
 						$this->blk[$this->blklvl]['text_indent'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false) . 'mm';
 						break;
@@ -19601,6 +19782,23 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									unset($this->textparam['text-baseline']);
 								}
 								break;
+							case 'MIDDLE':
+							case 'TOP':
+							case 'BOTTOM':
+							case 'TEXT-TOP':
+							case 'TEXT-BOTTOM':
+								// A block in a table cell passes its tag; vertical-align does not apply to a block
+								if ($type === 'INLINE' && $tag === '' && $this->cssMode === CssMode::STANDARD) {
+									$this->textvar = ($this->textvar & ~TextVars::FA_SUBSCRIPT);
+									$this->textvar = ($this->textvar & ~TextVars::FA_SUPERSCRIPT);
+									unset($this->textparam['text-baseline']);
+									// Placed once the line it is on is known, by _setInlineBlockHeights()
+									$this->textparam['vertical-align'] = ['va' => Tag\Tag::ALIGN[strtolower($v)]];
+									$verticalAlignSet = true;
+									break;
+								}
+								// Under cssMode legacy they are read as a length of 0, as before
+								// no break
 							// mPDF 5.7.3  inline text-decoration parameters
 							default:
 								$lh = $this->_computeLineheight(isset($this->textparam['line-height']) ? $this->textparam['line-height'] : $this->blk[$this->blklvl]['line_height']);
@@ -20018,6 +20216,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->textparam['o-decoration']['fontsize'] = $this->FontSize;
 				$this->textparam['o-decoration']['color'] = strtoupper($this->TextColor); // change 0 0 0 rg to 0 0 0 RG
 			}
+			// A decoration set on or inside an element placed by a vertical-align keyword moves with its text, as its
+			// border and background do
+			if (isset($this->textparam['vertical-align'])) {
+				foreach (['LINE-THROUGH' => 's-decoration', 'UNDERLINE' => 'u-decoration', 'OVERLINE' => 'o-decoration'] as $name => $parameter) {
+					if (stristr($v, $name)) {
+						$this->textparam[$parameter]['vertical-align'] = true;
+					}
+				}
+			}
 			// Under standard the element has no decoration of its own, and those it is in still propagate to it
 			if ($this->cssMode === CssMode::LEGACY && stristr($v, 'NONE')) {
 				$this->textvar = ($this->textvar & ~TextVars::FD_UNDERLINE);
@@ -20044,6 +20251,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			$this->textparam['bord-decoration']['fontkey'] = $this->FontFamily . $this->FontStyle;
 			$this->textparam['bord-decoration']['fontsize'] = $this->FontSize;
+			if (isset($this->textparam['vertical-align'])) {
+				$this->textparam['bord-decoration']['vertical-align'] = true;
+			}
 		}
 		if ($spanbgset) { // BACKGROUND[-COLOR] has been set on this INLINE element
 			if (isset($this->textparam['text-baseline'])) {
@@ -20053,6 +20263,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			$this->textparam['bg-decoration']['fontkey'] = $this->FontFamily . $this->FontStyle;
 			$this->textparam['bg-decoration']['fontsize'] = $this->FontSize;
+			if (isset($this->textparam['vertical-align'])) {
+				$this->textparam['bg-decoration']['vertical-align'] = true;
+			}
+		}
+		if ($verticalAlignSet) {
+			// The keyword aligns this element's box, and the text and images inside it move with that
+			$this->textparam['vertical-align']['fontkey'] = $this->FontFamily . $this->FontStyle;
+			$this->textparam['vertical-align']['fontsize'] = $this->FontSize;
+			$this->textparam['vertical-align']['line-height'] = isset($this->textparam['line-height']) ? $this->textparam['line-height'] : null;
 		}
 	}
 
@@ -20722,6 +20941,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 						if (isset($c['nestedmaw'])) {
 							$c['nestedmaw'] += $extrcw;
+						}
+						// The widths of the lines leave out the first one's indent, which may widen the widest
+						if (isset($c['textIndent']) && !$c['textIndent']['text_indent_hanging'] && substr($c['textIndent']['text_indent'], -1) !== '%') {
+							$indent = max(0, (float) $c['textIndent']['text_indent']);
+							$c['s'] += $indent;
+							if (isset($c['maxs'])) {
+								$c['maxs'] += $indent;
+							}
 						}
 					}
 
@@ -21505,6 +21732,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$this->cellLineHeight = $c['cellLineHeight'];
 							$this->cellLineStackingStrategy = $c['cellLineStackingStrategy'];
 							$this->cellLineStackingShift = $c['cellLineStackingShift'];
+							$this->cellTextIndent = isset($c['textIndent']) ? $c['textIndent'] : null;
 							$this->divwidth = $cw - $extraWLR;
 							// Size the images given a percentage of the cell's width, afresh each time the table is laid out.
 							// Their sizing is in unshrunk lengths, which are divided by shrin_k to draw.
@@ -23196,6 +23424,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if (isset($cell['cellLineStackingShift'])) {
 							$tablefooter[$i][$js]['cellLineStackingShift'] = $cell['cellLineStackingShift'];
 						}
+						if (isset($cell['textIndent'])) {
+							$tablefooter[$i][$js]['textIndent'] = $cell['textIndent'];
+						}
 					}
 				}
 			}
@@ -23940,6 +24171,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if (isset($cell['cellLineStackingShift'])) {
 							$tableheader[$i][$j]['cellLineStackingShift'] = $cell['cellLineStackingShift'];
 						}
+						if (isset($cell['textIndent'])) {
+							$tableheader[$i][$j]['textIndent'] = $cell['textIndent'];
+						}
 					}
 
 					// CELL BORDER
@@ -23970,6 +24204,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->cellLineHeight = $cell['cellLineHeight'];
 						$this->cellLineStackingStrategy = $cell['cellLineStackingStrategy'];
 						$this->cellLineStackingShift = $cell['cellLineStackingShift'];
+						$this->cellTextIndent = isset($cell['textIndent']) ? $cell['textIndent'] : null;
 						if ($level == 1) {
 							if (isset($table['is_tfoot'][$i]) && $table['is_tfoot'][$i]) {
 								if (preg_match('/{colsum([0-9]*)[_]*}/', $cell['textbuffer'][0][0], $m)) {
