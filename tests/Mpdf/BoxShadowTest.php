@@ -147,7 +147,7 @@ class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The solid fill of an outer shadow whose shape has square corners, run clockwise from the top right
+	 * The path of a square shape run clockwise from the top right, closed
 	 *
 	 * @param float $x0
 	 * @param float $y0
@@ -156,10 +156,10 @@ class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 *
 	 * @return string
 	 */
-	private function squareShape($x0, $y0, $x1, $y1)
+	private function squarePath($x0, $y0, $x1, $y1)
 	{
 		return $this->point($x1, $y0) . ' m ' . $this->point($x1, $y1) . ' l ' . $this->point($x0, $y1) . ' l '
-			. $this->point($x0, $y0) . ' l ' . $this->point($x1, $y0) . ' l h f Q';
+			. $this->point($x0, $y0) . ' l ' . $this->point($x1, $y0) . ' l h ';
 	}
 
 	/**
@@ -173,11 +173,7 @@ class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function squareFill($rect, $shape)
 	{
-		list($x0, $y0, $x1, $y1) = $shape;
-
-		return $this->rect(...$rect)
-			. $this->point($x1, $y0) . ' m ' . $this->point($x1, $y1) . ' l ' . $this->point($x0, $y1) . ' l '
-			. $this->point($x0, $y0) . ' l ' . $this->point($x1, $y0) . ' l h f* Q';
+		return $this->rect(...$rect) . $this->squarePath(...$shape) . 'f* Q';
 	}
 
 	/**
@@ -329,7 +325,7 @@ class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$clip = strpos($stream, $this->outerClipAround(10, 10, 70, 40) . '1 0 0 1 5.6693 -5.6693 cm' . "\n" . ' q ' . self::RED);
 		$this->assertNotFalse($clip);
-		$this->assertGreaterThan($clip, strpos($stream, $this->squareShape(10, 10, 70, 40)));
+		$this->assertGreaterThan($clip, strpos($stream, $this->squarePath(10, 10, 70, 40) . 'f Q'));
 		$this->assertStringNotContainsString(' sh', $stream);
 	}
 
@@ -352,7 +348,7 @@ class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$stream = $this->stream('box-shadow: 0 0 4mm #c00');
 
-		$fill = strpos($stream, $this->squareShape(12, 12, 68, 38));
+		$fill = strpos($stream, $this->squarePath(12, 12, 68, 38) . 'f Q');
 		$this->assertNotFalse($fill);
 		$this->assertGreaterThan($fill, strpos($stream, ' q  ' . $this->rect(8, 8, 64, 34) . 'W n '));
 		$this->assertGreaterThan($fill, strpos($stream, '/TGS1 gs /Sh1 sh'));

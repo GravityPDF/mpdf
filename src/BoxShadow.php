@@ -80,10 +80,9 @@ class BoxShadow
 		$s .= sprintf('0 %.3F m %.3F %.3F l ', $this->mpdf->h * $k, $this->mpdf->w * $k, $this->mpdf->h * $k);
 		$s .= sprintf('%.3F 0 l 0 0 l 0 %.3F l ', $this->mpdf->w * $k, $this->mpdf->h * $k) . 'W n' . "\n";
 
-		$sides = ['top' => -$fadedEdge, 'right' => -$fadedEdge, 'bottom' => -$fadedEdge, 'left' => -$fadedEdge];
-		$ring = $this->ring($box['x0'] - $fadedEdge, $box['y0'] - $fadedEdge, $w + 2 * $fadedEdge, $h + 2 * $fadedEdge, $blur, $this->roundedBox->inset($box['radii'], $sides));
+		$ring = $this->ring($box['x0'] - $fadedEdge, $box['y0'] - $fadedEdge, $w + 2 * $fadedEdge, $h + 2 * $fadedEdge, $blur, $this->roundedBox->inset($box['radii'], $this->sides(-$fadedEdge)));
 
-		return $s . $this->fill($shadow, $colour, $this->edge($ring, 'inner') . 'h f Q' . "\n", $blur ? $this->mesh($ring, 'inner', $colour, $faded, $colspace) : '');
+		return $s . $this->fill($shadow, $colour, $this->edge($ring, 'inner') . 'h f', $blur ? $this->mesh($ring, false, $colour, $faded, $colspace) : '');
 	}
 
 	/**
@@ -116,13 +115,12 @@ class BoxShadow
 
 		if ($w <= 2 * $solidEdge || $h <= 2 * $solidEdge) {
 			// The spread has closed the shape, and the shadow is solid throughout
-			return $s . $this->fill($shadow, $colour, $cover . 'f Q' . "\n", '');
+			return $s . $this->fill($shadow, $colour, $cover . 'f', '');
 		}
 
-		$sides = ['top' => $solidEdge, 'right' => $solidEdge, 'bottom' => $solidEdge, 'left' => $solidEdge];
-		$ring = $this->ring($x0 + $solidEdge, $y0 + $solidEdge, $w - 2 * $solidEdge, $h - 2 * $solidEdge, $blur, $this->roundedBox->inset($box['radii'], $sides));
+		$ring = $this->ring($x0 + $solidEdge, $y0 + $solidEdge, $w - 2 * $solidEdge, $h - 2 * $solidEdge, $blur, $this->roundedBox->inset($box['radii'], $this->sides($solidEdge)));
 
-		return $s . $this->fill($shadow, $colour, $cover . $this->edge($ring, 'outer') . 'h f* Q' . "\n", $blur ? $this->mesh($ring, 'outer', $colour, $faded, $colspace) : '');
+		return $s . $this->fill($shadow, $colour, $cover . $this->edge($ring, 'outer') . 'h f*', $blur ? $this->mesh($ring, true, $colour, $faded, $colspace) : '');
 	}
 
 	/**
@@ -131,35 +129,44 @@ class BoxShadow
 	 *
 	 * @param array $shadow
 	 * @param string $colour
-	 * @param string $path The solid part's path and painting operator, closing the graphics state the fill opens
+	 * @param string $path The solid part's path and painting operator
 	 * @param string $mesh
 	 *
 	 * @return string
 	 */
 	private function fill($shadow, $colour, $path, $mesh)
 	{
-		$s = '';
-		if ($shadow['x'] || $shadow['y']) {
-			$s .= sprintf('1 0 0 1 %.4F %.4F cm', $shadow['x'] * Mpdf::SCALE, -$shadow['y'] * Mpdf::SCALE) . "\n";
-		}
+		$s = $shadow['x'] || $shadow['y'] ? sprintf('1 0 0 1 %.4F %.4F cm', $shadow['x'] * Mpdf::SCALE, -$shadow['y'] * Mpdf::SCALE) . "\n" : '';
 
-		return $s . ' q ' . $this->mpdf->SetFColor($colour, true) . "\n" . $this->alpha($colour) . $path . $mesh . ' Q' . "\n";
+		return $s . ' q ' . $this->mpdf->SetFColor($colour, true) . "\n" . $this->alpha($colour) . $path . ' Q' . "\n" . $mesh . ' Q' . "\n";
 	}
 
 	/**
-	 * The patch mesh that fades a ring from $colour on the edge named to $faded on the other
+	 * The same length on every side of a box, keyed as RoundedBox::inset() takes it
+	 *
+	 * @param float $length
+	 *
+	 * @return float[]
+	 */
+	private function sides($length)
+	{
+		return ['top' => $length, 'right' => $length, 'bottom' => $length, 'left' => $length];
+	}
+
+	/**
+	 * The patch mesh that fades a ring from $colour on its solid edge to $faded on the other
 	 *
 	 * @param array $ring
-	 * @param string $solidEdge outer or inner
+	 * @param bool $outerSolid Whether the outer edge is the solid one
 	 * @param string $colour
 	 * @param string $faded
 	 * @param string $colspace
 	 *
 	 * @return string
 	 */
-	private function mesh($ring, $solidEdge, $colour, $faded, $colspace)
+	private function mesh($ring, $outerSolid, $colour, $faded, $colspace)
 	{
-		return $this->gradient->CoonsPatchMesh($ring['x'], $ring['y'], $ring['w'], $ring['h'], $this->patches($ring, $solidEdge, $colour, $faded), $ring['x'], $ring['x'] + $ring['w'], $ring['y'], $ring['y'] + $ring['h'], $colspace, true);
+		return $this->gradient->CoonsPatchMesh($ring['x'], $ring['y'], $ring['w'], $ring['h'], $this->patches($ring, $outerSolid, $colour, $faded), $ring['x'], $ring['x'] + $ring['w'], $ring['y'], $ring['y'] + $ring['h'], $colspace, true);
 	}
 
 	/**
@@ -263,7 +270,7 @@ class BoxShadow
 
 	/**
 	 * The control points of a spoke from $from to $to, both bunched at the solid end, so the fade holds most of its
-	 * colour through the first half of the blur and falls away across the second, as mPDF's outer shadow always has
+	 * colour through the first half of the blur and falls away across the second
 	 *
 	 * @param float[] $from
 	 * @param float[] $to
@@ -312,21 +319,18 @@ class BoxShadow
 	}
 
 	/**
-	 * The eight Coons patches that fill a ring, a corner and the side after it in turn, coloured $colour on the edge
-	 * named and $faded on the other
+	 * The eight Coons patches that fill a ring, a corner and the side after it in turn, coloured $colour on the
+	 * solid edge and $faded on the other
 	 *
 	 * @param array $ring
-	 * @param string $solidEdge outer or inner
+	 * @param bool $outerSolid Whether the outer edge is the solid one
 	 * @param string $colour
 	 * @param string $faded
 	 *
 	 * @return array As Gradient::CoonsPatchMesh() takes them
 	 */
-	private function patches($ring, $solidEdge, $colour, $faded)
+	private function patches($ring, $outerSolid, $colour, $faded)
 	{
-		$outerSolid = $solidEdge === 'outer';
-		$outer = $outerSolid ? $colour : $faded;
-		$inner = $outerSolid ? $faded : $colour;
 		$patches = [];
 		foreach ($ring['corners'] as $corner) {
 			$next = $ring['corners'][$corner['next']];
@@ -338,8 +342,8 @@ class BoxShadow
 				$corner['inner'][1],
 				array_reverse($corner['innerControls']),
 				$outerSolid,
-				$outer,
-				$inner
+				$colour,
+				$faded
 			);
 			$patches[] = $this->patch(
 				$corner['inner'][1],
@@ -349,8 +353,8 @@ class BoxShadow
 				$next['inner'][0],
 				$this->thirds($next['inner'][0], $corner['inner'][1]),
 				$outerSolid,
-				$outer,
-				$inner
+				$colour,
+				$faded
 			);
 		}
 
@@ -367,14 +371,16 @@ class BoxShadow
 	 * @param float[] $outerEnd
 	 * @param float[] $innerEnd
 	 * @param float[][] $innerControls The control points from $innerEnd back to $innerStart
-	 * @param bool $outerSolid Whether the outer edge carries the shadow's colour and the inner one fades
-	 * @param string $outer The colour of the outer edge
-	 * @param string $inner The colour of the inner edge
+	 * @param bool $outerSolid Whether the outer edge is the solid one
+	 * @param string $colour The colour of the solid edge
+	 * @param string $faded The colour of the other
 	 *
 	 * @return array
 	 */
-	private function patch($innerStart, $outerStart, $outerControls, $outerEnd, $innerEnd, $innerControls, $outerSolid, $outer, $inner)
+	private function patch($innerStart, $outerStart, $outerControls, $outerEnd, $innerEnd, $innerControls, $outerSolid, $colour, $faded)
 	{
+		$outer = $outerSolid ? $colour : $faded;
+		$inner = $outerSolid ? $faded : $colour;
 		$points = array_merge(
 			[$innerStart],
 			$this->spoke($innerStart, $outerStart, !$outerSolid),
