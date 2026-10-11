@@ -287,7 +287,7 @@ class ThreeDBorderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertCount(3, $this->sides($pages[0]));
 		$second = $this->sides($pages[1]);
 		$this->assertCount(3, $second);
-		// The left side's region starts square at the top of the page
+		// The second page draws the bottom, left and right sides; the left one starts square at the top of the page
 		$left = $second[1]['region'];
 		$this->assertEqualsWithDelta($left[1][1], $left[2][1], 0.01);
 	}

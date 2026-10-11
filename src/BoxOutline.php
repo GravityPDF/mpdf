@@ -6,7 +6,8 @@ use Mpdf\Color\ColorConverter;
 
 /**
  * Draws the outline of a box: a ring outside its border box, outline-offset away from it, that follows the box's
- * rounded corners. Draws the sides of a border in the two-tone styles too, in the same tones. Positions and sizes are in millimetres from the top left of the page, as RoundedBox takes them.
+ * rounded corners, and the sides of a border in the two-tone styles, in the tones of an outline in that style.
+ * Positions and sizes are in millimetres from the top left of the page, as RoundedBox takes them.
  */
 class BoxOutline
 {
@@ -188,6 +189,7 @@ class BoxOutline
 			return '';
 		}
 
+		// Each ring is [from, to, top and left tone, bottom and right tone]
 		$tone = in_array($side, ['top', 'left'], true) ? 2 : 3;
 		$s = 'q ' . $this->sideRegion($box, $widths, $side) . 'W n ';
 		foreach ($this->threeDRings($border['style'], $border['c']) as $ring) {
@@ -241,17 +243,20 @@ class BoxOutline
 		list($x0, $y0, $x1, $y1) = $box;
 		$halfW = ($x1 - $x0) / 2;
 		$halfH = ($y1 - $y0) / 2;
+		// Each corner and its direction into the box
 		$corners = [
-			'TL' => [$x0, $y0, 1, 1, 'left', 'top'],
-			'TR' => [$x1, $y0, -1, 1, 'right', 'top'],
-			'BR' => [$x1, $y1, -1, -1, 'right', 'bottom'],
-			'BL' => [$x0, $y1, 1, -1, 'left', 'bottom'],
+			'TL' => [$x0, $y0, 1, 1],
+			'TR' => [$x1, $y0, -1, 1],
+			'BR' => [$x1, $y1, -1, -1],
+			'BL' => [$x0, $y1, 1, -1],
 		];
+		$ends = ['top' => ['TL', 'TR'], 'right' => ['TR', 'BR'], 'bottom' => ['BR', 'BL'], 'left' => ['BL', 'TL']];
 
 		$outer = [];
 		$inner = [];
-		foreach ($corners as $corner => $c) {
-			list($x, $y, $sx, $sy, $h, $v) = $c;
+		foreach ($ends[$side] as $corner) {
+			list($x, $y, $sx, $sy) = $corners[$corner];
+			list($h, $v) = RoundedBox::CORNER_SIDES[$corner];
 			$dx = $widths[$h];
 			$dy = $widths[$v];
 			if (!$dx && !$dy) {
@@ -259,14 +264,11 @@ class BoxOutline
 			}
 			// Run the line on until it reaches the middle of the box, across or down
 			$t = min($dx ? $halfW / $dx : INF, $dy ? $halfH / $dy : INF);
-			$outer[$corner] = [$x, $y];
-			$inner[$corner] = [$x + $sx * $t * $dx, $y + $sy * $t * $dy];
+			$outer[] = [$x, $y];
+			$inner[] = [$x + $sx * $t * $dx, $y + $sy * $t * $dy];
 		}
 
-		$ends = ['top' => ['TL', 'TR'], 'right' => ['TR', 'BR'], 'bottom' => ['BR', 'BL'], 'left' => ['BL', 'TL']];
-		list($a, $b) = $ends[$side];
-
-		return $this->polygon([$outer[$a], $outer[$b], $inner[$b], [$x0 + $halfW, $y0 + $halfH], $inner[$a]]);
+		return $this->polygon([$outer[0], $outer[1], $inner[1], [$x0 + $halfW, $y0 + $halfH], $inner[0]]);
 	}
 
 	/**

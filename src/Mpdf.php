@@ -18020,7 +18020,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$radii['BL'] = $radii['BR'] = [0, 0];
 		}
 
-		$radii = $this->roundedBox->fit($w, $h, $radii, ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left]);
+		$blockWidths = ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left];
+		$radii = $this->roundedBox->fit($w, $h, $radii, $blockWidths);
 		list($brTL_H, $brTL_V) = $radii['TL'];
 		list($brTR_H, $brTR_V) = $radii['TR'];
 		list($brBR_H, $brBR_V) = $radii['BR'];
@@ -18041,7 +18042,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$h = $y1 - $y0;
 		$w = $this->blk[$blvl]['width'];
 		$blockBox = [$x0, $y0, $x0 + $w, $y0 + $h];
-		$blockWidths = ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left];
 
 		if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
 			$tbd = $this->blk[$blvl]['border_top'];
@@ -18089,7 +18089,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($threeD !== '') {
 				// A legend sits in a gap in the top border
 				if ($legend) {
-					$threeD = sprintf('q 0 0 %.3F %.3F re %.3F %.3F %.3F %.3F re W* n ', $this->w * Mpdf::SCALE, $this->h * Mpdf::SCALE, $legbreakL * Mpdf::SCALE, ($this->h - $y0 - $border_top) * Mpdf::SCALE, ($legbreakR - $legbreakL) * Mpdf::SCALE, $border_top * Mpdf::SCALE) . $threeD . ' Q';
+					$wholePage = sprintf('0 0 %.3F %.3F re ', $this->w * Mpdf::SCALE, $this->h * Mpdf::SCALE);
+					$legendGap = sprintf('%.3F %.3F %.3F %.3F re ', $legbreakL * Mpdf::SCALE, ($this->h - $y0 - $border_top) * Mpdf::SCALE, ($legbreakR - $legbreakL) * Mpdf::SCALE, $border_top * Mpdf::SCALE);
+					$threeD = 'q ' . $wholePage . $legendGap . 'W* n ' . $threeD . ' Q';
 				}
 				$this->writer->write($threeD);
 			} elseif (Border::drawsSide($tbd)) {
