@@ -62,6 +62,13 @@ final class InheritedProperties
 	];
 
 	/**
+	 * Read when generated content is drawn: the marks of a <q>
+	 */
+	const GENERATED = [
+		'QUOTES',
+	];
+
+	/**
 	 * What a positioned block handed its content under CssMode::LEGACY, in the order it was written. Text decorations
 	 * and the stacking order are not inherited, but the <div> that stands in for the block takes them too
 	 */
@@ -90,13 +97,13 @@ final class InheritedProperties
 	];
 
 	/**
-	 * @return string[] Every inherited property mPDF supports: TEXT, then BLOCK
+	 * @return string[] Every inherited property mPDF supports: TEXT, then BLOCK, then GENERATED
 	 */
 	public static function names()
 	{
 		static $names = null;
 		if ($names === null) {
-			$names = array_merge(self::TEXT, self::BLOCK);
+			$names = array_merge(self::TEXT, self::BLOCK, self::GENERATED);
 		}
 
 		return $names;

@@ -192,7 +192,7 @@ class NormalizeProperties
 			}
 
 			if ($k !== 'BACKGROUND-IMAGE' && $k !== 'BACKGROUND' && $k !== 'ODD-HEADER-NAME' && $k !== 'EVEN-HEADER-NAME' && $k !== 'ODD-FOOTER-NAME' && $k !== 'EVEN-FOOTER-NAME' && $k !== 'HEADER' && $k !== 'FOOTER' && $k !== 'LIST-STYLE' && $k !== 'LIST-STYLE-IMAGE') {
-				$v = strtolower($v);
+				$v = $this->keepsStringCase($k) ? $this->lowercaseOutsideStrings($v) : strtolower($v);
 			}
 
 			$v = $this->compactColorFunctions($v);
@@ -240,6 +240,8 @@ class NormalizeProperties
 				$this->processImageOrientationProperty($v);
 			} elseif ($k === 'TEXT-ALIGN') {
 				$this->processTextAlignProperty($k, $v);
+			} elseif ($k === 'LIST-STYLE' && $this->mpdf->cssMode === CssMode::STANDARD) {
+				$this->processStandardListStyleProperty($v);
 			} elseif ($k === 'LIST-STYLE') {
 				$this->processListStyleProperty($v);
 
@@ -1022,6 +1024,69 @@ class NormalizeProperties
 	private function resetsOmittedParts()
 	{
 		return $this->mpdf->cssMode === CssMode::STANDARD;
+	}
+
+	/**
+	 * @param string $property
+	 *
+	 * @return bool Whether the property's strings keep their case, as the standard CSS mode draws them
+	 */
+	private function keepsStringCase($property)
+	{
+		return ($property === 'LIST-STYLE-TYPE' || $property === 'QUOTES') && $this->mpdf->cssMode === CssMode::STANDARD;
+	}
+
+	/**
+	 * @param string $value
+	 *
+	 * @return string The value lowercased, but for the text of its strings
+	 */
+	private function lowercaseOutsideStrings($value)
+	{
+		return preg_replace_callback('/' . CssString::PATTERN . '|[^"\']+/s', function ($m) {
+			return $m[0][0] === '"' || $m[0][0] === "'" ? $m[0] : strtolower($m[0]);
+		}, $value);
+	}
+
+	/**
+	 * Sets the longhands a list-style shorthand names, reading each of its words whole, as a browser does, so that
+	 * decimal-leading-zero is not read as decimal. A none sets whichever of the type and the image the rest leaves
+	 * unset, or both, and a string is a marker of its own, kept in the case it was written
+	 *
+	 * @param string $v Property value
+	 * @return void
+	 */
+	protected function processStandardListStyleProperty($v)
+	{
+		$none = false;
+		$type = null;
+		$image = null;
+		foreach ($this->splitComponents($v) as $component) {
+			$word = strtolower($component);
+			if ($word === 'none') {
+				$none = true;
+			} elseif ($word === 'inside' || $word === 'outside') {
+				$this->properties['LIST-STYLE-POSITION'] = $word;
+			} elseif (preg_match('/^url\([\'"]?(.*?)[\'"]?\)$/is', $component, $m)) {
+				$image = trim($m[1]);
+			} else {
+				$type = CssString::isString($component) ? $component : $word;
+			}
+		}
+
+		if ($none && $type === null) {
+			$type = 'none';
+		}
+		if ($none && $image === null) {
+			$image = 'none';
+		}
+
+		if ($type !== null) {
+			$this->properties['LIST-STYLE-TYPE'] = $type;
+		}
+		if ($image !== null) {
+			$this->properties['LIST-STYLE-IMAGE'] = $image;
+		}
 	}
 
 	/**

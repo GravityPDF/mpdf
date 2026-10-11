@@ -9,6 +9,8 @@ use Mpdf\Css\Border;
 use Mpdf\Css\BorderRadius;
 use Mpdf\Css\CommentParser;
 use Mpdf\Css\ComputedValues;
+use Mpdf\Css\CounterStyle;
+use Mpdf\Css\CssString;
 use Mpdf\Css\InheritedProperties;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\Css\TextSpacing;
@@ -644,9 +646,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	// mPDF 6  Lists
 	var $listcounter;
+	/**
+	 * @var int[] What the list-item counter of each open list goes up by at each item, under the standard CSS mode:
+	 *            -1 for a reversed list, else 1
+	 */
+	var $listcounterstep;
 	var $listlvl;
 	var $listtype;
 	var $listitem;
+
+	/**
+	 * @var int How many <q> elements are open, under the standard CSS mode, which picks the pair of marks the next one
+	 *          is drawn with
+	 */
+	var $quoteDepth = 0;
 
 	var $pjustfinished;
 	var $ignorefollowingspaces;
@@ -1660,6 +1673,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->listtype = [];
 		$this->listitem = [];
 		$this->listcounter = [];
+		$this->listcounterstep = [];
 
 		$this->tdbegin = false;
 		$this->table = [];
@@ -12960,7 +12974,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$lowertype = strtolower($type);
 
-		if ($lowertype == 'upper-latin' || $lowertype == 'upper-alpha' || $type == 'A') {
+		if ($this->cssMode === CssMode::STANDARD && CounterStyle::isStyle($lowertype)) {
+
+			$ppgno = CounterStyle::represent($ppgno, $lowertype);
+
+		} elseif ($lowertype == 'upper-latin' || $lowertype == 'upper-alpha' || $type == 'A') {
 
 			$ppgno = $decToAlpha->convert($ppgno, true);
 
@@ -16568,6 +16586,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$e = '';
 		$this->listitem = '';
 		$spacer = ' ';
+		$counterStyle = $this->cssMode === CssMode::STANDARD && CounterStyle::draws($listitemtype);
+		$stringMarker = $counterStyle && !CounterStyle::isStyle($listitemtype);
 		// IMAGE
 		if ($listitemimage && $listitemimage != 'none') {
 			$listitemimage = trim(preg_replace('/url\(["\']*(.*?)["\']*\)/i', '\\1', $listitemimage));
@@ -16711,7 +16731,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$e = Mpdf::OBJECT_IDENTIFIER . "type=listmarker,objattr=" . serialize($objattr) . Mpdf::OBJECT_IDENTIFIER;
 			$this->listitem = $this->_saveTextBuffer($e, '', '', true); // true returns array
 
-		} elseif (preg_match('/U\+([a-fA-F0-9]+)/i', $listitemtype, $m)) { // SYMBOL 2 (needs new font)
+		} elseif (!$stringMarker && preg_match('/U\+([a-fA-F0-9]+)/i', $listitemtype, $m)) { // SYMBOL 2 (needs new font)
 
 			if ($this->_charDefined($this->CurrentFont['cw'], hexdec($m[1]))) {
 				$list_item_marker = UtfString::codeHex2utf($m[1]);
@@ -16760,17 +16780,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				return;
 			}
 
-			$num = $this->_getStyledNumber($counter, $listitemtype, true);
+			$rtl = isset($this->blk[$this->blklvl]['direction']) && $this->blk[$this->blklvl]['direction'] == 'rtl';
+			$suffix = $this->list_number_suffix;
+			if ($stringMarker) {
+				// A string is the whole marker, drawn as written
+				$num = CssString::single($listitemtype);
+				$suffix = '';
+				$spacer = '';
+			} elseif ($counterStyle) {
+				$num = CounterStyle::represent($counter, $listitemtype, $rtl);
+				$suffix = CounterStyle::suffix($listitemtype, $this->list_number_suffix);
+			} else {
+				$num = $this->_getStyledNumber($counter, $listitemtype, true);
+			}
 
 			if ($listitemposition == 'inside') {
-				$e = $num . $this->list_number_suffix . $spacer;
+				$e = $num . $suffix . $spacer;
 				$this->_saveTextBuffer($e);
 			} else {
-				if (isset($this->blk[$this->blklvl]['direction']) && $this->blk[$this->blklvl]['direction'] == 'rtl') {
+				if ($rtl) {
 					// REPLACE MIRRORED RTL $this->list_number_suffix  e.g. ) -> (  (NB could use Ucdn::$mirror_pairs)
-					$m = strtr($this->list_number_suffix, ")]}", "([{") . $num;
+					$m = strtr($suffix, ")]}", "([{") . $num;
 				} else {
-					$m = $num . $this->list_number_suffix;
+					$m = $num . $suffix;
 				}
 
 				$objattr = [];
@@ -16792,6 +16824,47 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 	}
 
+	/**
+	 * @param array $a The HTML being written, split into text and tags as WriteHTML() splits it
+	 * @param int $i The position of a list's start tag in it
+	 *
+	 * @return int How many items the list has, not counting those of the lists inside it
+	 */
+	function countListItemsAhead(array &$a, $i)
+	{
+		$items = 0;
+		$lvl = 1;
+		for ($j = $i + 2; $j < count($a); $j+=2) {
+			$e = $a[$j];
+			if (!$e) {
+				continue;
+			}
+			if ($e[0] == '/') { // end tag
+				$e = strtoupper(substr($e, 1));
+				if ($e == 'OL' || $e == 'UL') {
+					if ($lvl == 1) {
+						break;
+					}
+					$lvl--;
+				}
+			} else { // opening tag
+				if (strpos($e, ' ')) {
+					$e = substr($e, 0, strpos($e, ' '));
+				}
+				$e = strtoupper($e);
+				if ($e == 'LI') {
+					if ($lvl == 1) {
+						$items++;
+					}
+				} elseif ($e == 'OL' || $e == 'UL') {
+					$lvl++;
+				}
+			}
+		}
+
+		return $items;
+	}
+
 	// mPDF Lists
 	function _getListMarkerWidth(&$currblk, &$a, &$i)
 	{
@@ -16802,34 +16875,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Get Maximum number in the list
 		$maxnum = $this->listcounter[$this->listlvl];
 		if ($currblk['list_style_type'] != 'disc' && $currblk['list_style_type'] != 'circle' && $currblk['list_style_type'] != 'square') {
-			$lvl = 1;
-			for ($j = $i + 2; $j < count($a); $j+=2) {
-				$e = $a[$j];
-				if (!$e) {
-					continue;
-				}
-				if ($e[0] == '/') { // end tag
-					$e = strtoupper(substr($e, 1));
-					if ($e == 'OL' || $e == 'UL') {
-						if ($lvl == 1) {
-							break;
-						}
-						$lvl--;
-					}
-				} else { // opening tag
-					if (strpos($e, ' ')) {
-						$e = substr($e, 0, strpos($e, ' '));
-					}
-					$e = strtoupper($e);
-					if ($e == 'LI') {
-						if ($lvl == 1) {
-							$maxnum++;
-						}
-					} elseif ($e == 'OL' || $e == 'UL') {
-						$lvl++;
-					}
-				}
+			$items = $this->countListItemsAhead($a, $i);
+			if ($this->cssMode === CssMode::STANDARD && $this->listcounterstep[$this->listlvl] < 0) {
+				$maxnum = max(abs($maxnum - 1), abs($maxnum - $items));
+			} else {
+				$maxnum += $items;
 			}
+		}
+
+		if ($this->cssMode === CssMode::STANDARD && CounterStyle::draws($currblk['list_style_type'])) {
+			return $this->GetStringWidth(CounterStyle::marker($maxnum, $currblk['list_style_type'], $this->list_number_suffix)) + $markeroffset;
 		}
 
 		$decToAlpha = new Conversion\DecToAlpha();
@@ -19421,7 +19476,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// mPDF 6  Lists
 					// LISTS
 					case 'LIST-STYLE-TYPE':
-						$this->blk[$this->blklvl]['list_style_type'] = strtolower($v);
+						$this->blk[$this->blklvl]['list_style_type'] = $this->cssMode === CssMode::STANDARD ? CounterStyle::readType($v) : strtolower($v);
 						break;
 					case 'LIST-STYLE-IMAGE':
 						$this->blk[$this->blklvl]['list_style_image'] = strtolower($v) === 'none' ? 'none' : $v;

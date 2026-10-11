@@ -3,7 +3,6 @@
 namespace Mpdf\Css;
 
 use Mpdf\Mpdf;
-use Mpdf\Utils\UtfString;
 
 /**
  * Reads selectors as they are written in a stylesheet, before anything is uppercased, into the parts a matcher works
@@ -479,7 +478,7 @@ class SelectorCompiler
 				if (isset($m[3])) {
 					$value .= $m[3];
 				} elseif ($m[1] !== '') {
-					$value .= $this->codePoint(hexdec($m[1]));
+					$value .= CssString::codePoint(hexdec($m[1]));
 				}
 				$i += strlen($m[0]) - 1;
 			}
@@ -608,7 +607,7 @@ class SelectorCompiler
 				$name .= $c;
 				$pos++;
 			} elseif ($c === '\\' && preg_match('/\G\\\\(?:([0-9A-Fa-f]{1,6})[ \t\n\r\f]?|([^\r\n\f]))/', $text, $m, 0, $pos)) {
-				$name .= isset($m[2]) ? $m[2] : $this->codePoint(hexdec($m[1]));
+				$name .= isset($m[2]) ? $m[2] : CssString::codePoint(hexdec($m[1]));
 				$pos += strlen($m[0]);
 			} else {
 				break;
@@ -616,20 +615,6 @@ class SelectorCompiler
 		}
 
 		return $name;
-	}
-
-	/**
-	 * @param int $code
-	 *
-	 * @return string The character a hex escape stands for, as UTF-8. One that is not a character gives U+FFFD
-	 */
-	private function codePoint($code)
-	{
-		if ($code === 0 || $code > 0x10FFFF || ($code >= 0xD800 && $code <= 0xDFFF)) {
-			$code = 0xFFFD;
-		}
-
-		return UtfString::code2utf($code);
 	}
 
 	/**
