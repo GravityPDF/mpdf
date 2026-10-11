@@ -8,10 +8,12 @@ use Mpdf\Conversion\DecToGreek;
 use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
+use Mpdf\Css\BorderRadius;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
+use Mpdf\RoundedBox;
 use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
 use Mpdf\Utils\NumericString;
@@ -1484,11 +1486,16 @@ abstract class BlockTag extends Tag
 		}
 
 		if (NumericString::containsPercentChar($height)) {
-			if (empty($prevblk['css_set_height'])) {
+			$parentHeight = isset($prevblk['css_set_height']) ? $prevblk['css_set_height'] : false;
+			if ($this->mpdf->blklvl == 2 && $this->mpdf->fixedPosBlockHeight !== false) {
+				// The <div> at level 1 stands in for a positioned block, and has its height
+				$parentHeight = $this->mpdf->fixedPosBlockHeight;
+			}
+			if (empty($parentHeight)) {
 				return false;
 			}
 
-			return $this->sizeConverter->convert($height, $prevblk['css_set_height'], $this->mpdf->FontSize, false);
+			return $this->sizeConverter->convert($height, $parentHeight, $this->mpdf->FontSize, false);
 		}
 
 		return $this->sizeConverter->isLength($height) ? $this->sizeConverter->convert($height, $pageArea, $this->mpdf->FontSize, false) : false;
@@ -1542,11 +1549,7 @@ abstract class BlockTag extends Tag
 		$clip = $blk['overflow_clip'];
 		$rect = '';
 		if ($clip['closed']) {
-			$x = $blk['x0'] + $blk['border_left']['w'];
-			$y = $blk['y0'] + $blk['border_top']['w'];
-			$w = $blk['width'] - $blk['border_left']['w'] - $blk['border_right']['w'];
-			$h = $blk['y1'] - $blk['border_bottom']['w'] - $y;
-			$rect = sprintf('%.3F %.3F %.3F %.3F re W n', $x * Mpdf::SCALE, ($this->mpdf->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE);
+			$rect = $this->paddingBoxPath($blk) . ' W n';
 		}
 
 		$search = [$clip['open'], $clip['rect']];
@@ -1564,9 +1567,41 @@ abstract class BlockTag extends Tag
 			}
 			foreach ($entries as &$entry) {
 				$entry['clippath'] = str_replace($clip['rect'], $rect, $entry['clippath']);
+				if (!empty($entry['shadow'])) {
+					$entry['shadow'] = str_replace($clip['rect'], $rect, $entry['shadow']);
+				}
 			}
 		}
 		unset($entries, $entry);
+	}
+
+	/**
+	 * The padding box of a block that has closed, as a path to clip to: a rectangle, or the box with its corners rounded
+	 * when the block has a border-radius, whose curves are the outer radii less the borders
+	 *
+	 * @param array $blk
+	 *
+	 * @return string
+	 */
+	private function paddingBoxPath(array $blk)
+	{
+		$x = $blk['x0'] + $blk['border_left']['w'];
+		$y = $blk['y0'] + $blk['border_top']['w'];
+		$w = $blk['width'] - $blk['border_left']['w'] - $blk['border_right']['w'];
+		$h = $blk['y1'] - $blk['border_bottom']['w'] - $y;
+
+		if (BorderRadius::isDeclared($blk)) {
+			$roundedBox = new RoundedBox();
+			$borders = ['top' => $blk['border_top']['w'], 'right' => $blk['border_right']['w'], 'bottom' => $blk['border_bottom']['w'], 'left' => $blk['border_left']['w']];
+			$height = $blk['y1'] - $blk['y0'];
+			$radii = $roundedBox->fit($blk['width'], $height, BorderRadius::radii($blk, $blk['width'], $height), $borders);
+			$radii = $roundedBox->inset($radii, $borders);
+			if (max(array_map('max', $radii)) > 0) {
+				return $roundedBox->path($this->mpdf->h, $x, $y, $x + $w, $y + $h, $radii) . 'h';
+			}
+		}
+
+		return sprintf('%.3F %.3F %.3F %.3F re', $x * Mpdf::SCALE, ($this->mpdf->h - $y) * Mpdf::SCALE, $w * Mpdf::SCALE, -$h * Mpdf::SCALE);
 	}
 
 	/**
@@ -1588,10 +1623,14 @@ abstract class BlockTag extends Tag
 			return;
 		}
 
-		// A clippath leaves one q open, which PrintPageBackgrounds() closes; a further W n intersects the clip
+		// A clippath leaves one q open, which PrintPageBackgrounds() closes; a further W n intersects the clip. The shadow
+		// is drawn before the clippath, as it lies outside the block's own box, so it gets a clip of its own
 		$entries = &$this->mpdf->pageBackgrounds[$this->mpdf->blklvl];
 		for ($i = $from; $i < count($entries); $i++) {
 			$entries[$i]['clippath'] = ($entries[$i]['clippath'] === '' ? 'q' : $entries[$i]['clippath']) . $rects;
+			if (!empty($entries[$i]['shadow'])) {
+				$entries[$i]['shadow'] = 'q' . $rects . "\n" . $entries[$i]['shadow'] . "\nQ";
+			}
 		}
 	}
 

@@ -83,7 +83,8 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
 * **`height` on a block fixes its box**, as in a browser, in standard mode. mPDF read it as a minimum: content taller than the height grew the box, and `overflow: hidden` clipped nothing. Now the box is as tall as its height, padding and borders whatever its content: shorter content leaves space, taller content overflows the box, and `overflow: hidden`, `clip`, `auto` or `scroll` clips the content, and the backgrounds and borders of the blocks inside, to the padding box. Documents that used `height` as a minimum, since `min-height` is not supported on blocks, should drop it or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#587] [#695]
   * The borders count towards the box. A `height: 20mm` block with a 1mm border is 22mm tall; before, its borders were drawn inside the 20mm.
-  * A percentage `height` is taken of the parent's set height, and is `auto` when the parent has none. mPDF took it of the page area, so `height: 50%` was half a page tall wherever it was. Legacy mode keeps the page area.
+  * A percentage `height` is taken of the parent's set height, and is `auto` when the parent has none. mPDF took it of the page area, so `height: 50%` was half a page tall wherever it was. Inside a `position: absolute` or `fixed` block it is taken of that block's height, set by `height` or by `top` and `bottom`. Legacy mode keeps the page area. [#704]
+  * A block with `border-radius` clips to its padding box with the corners rounded, and the clip covers the `box-shadow` of the blocks inside as well as their backgrounds. [#704]
   * A block whose height does not fit in what is left of the page starts on the next page, as before. A block whose content runs past the foot of the page is laid out as before: the content continues on the next page, the box ends with it, and nothing is clipped. In columns and keep-with-table blocks the height stays a minimum and nothing is clipped.
 
 New features
@@ -971,3 +972,4 @@ These changes do not change output.
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
 [#587]: https://github.com/GravityPDF/mpdf/issues/587
 [#695]: https://github.com/GravityPDF/mpdf/pull/695
+[#704]: https://github.com/GravityPDF/mpdf/issues/704

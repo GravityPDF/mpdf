@@ -407,6 +407,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $fixedPosBlockBBox;
 	var $fixedPosBlockSave;
 	var $fixedPosBlockCascadeCSS; // Descendant rules of the positioned block being written, for its content to match
+	var $fixedPosBlockHeight = false; // Content height of the positioned block being written, or false when it is auto
 	var $maxPosL;
 	var $maxPosR;
 	var $loaded;
@@ -15685,6 +15686,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 
+			// A percentage height inside resolves against it
+			$this->fixedPosBlockHeight = $inner_h === 'auto' ? false : $inner_h;
+
 			// THEN DO SAME FOR WIDTH
 			// http://www.w3.org/TR/CSS21/visudet.html#abs-non-replaced-width
 			if ($bbox_left === 'auto' && $inner_w === 'auto' && $bbox_right === 'auto') {
@@ -16156,6 +16160,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->HTMLheaderPageForms = [];
 		$this->pageBackgrounds = $save_bgs;
 		$this->fixedPosBlockCascadeCSS = null;
+		$this->fixedPosBlockHeight = false;
 		$this->writingHTMLheader = false;
 
 		$this->writingHTMLfooter = false;
