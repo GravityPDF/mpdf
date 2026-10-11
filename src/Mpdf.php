@@ -10,6 +10,7 @@ use Mpdf\Css\BorderRadius;
 use Mpdf\Css\CommentParser;
 use Mpdf\Css\ComputedValues;
 use Mpdf\Css\InheritedProperties;
+use Mpdf\Css\MultiColumn;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
@@ -595,6 +596,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $ColDetails;
 	var $columnLinks;
 	var $colvAlign;
+
+	/**
+	 * The column-rule drawn between the columns a CSS multi-column block started, as MultiColumn::layout() gives it,
+	 * or null for none
+	 *
+	 * @var array|null
+	 */
+	var $columnRule;
 
 	// Substitutions
 	var $substitute;  // Array of substitution strings e.g. <ttz>112</ttz>
@@ -25521,6 +25530,32 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->x = $this->lMargin;
 	}
 
+	/**
+	 * Draws the column rule between each two columns of this page that both have content, from the top of the columns
+	 * to the foot of the longest
+	 */
+	private function drawColumnRules()
+	{
+		$columns = [];
+		$bottom = $this->y0;
+		foreach ($this->columnbuffer as $s) {
+			if ($s['s'] === 'ACROFORM' || !preg_match('/ (Td|re|l|m|c|Do)\b/', $s['s'])) {
+				continue;
+			}
+			$columns[isset($s['newcol']) ? $s['newcol'] : $s['col']] = true;
+			$bottom = max($bottom, (isset($s['newy']) ? $s['newy'] : $s['y']) + $s['h']);
+		}
+
+		$color = $this->SetDColor($this->columnRule['c'], true);
+		for ($i = 1; $i < $this->NbCol; $i++) {
+			if (!isset($columns[$i - 1], $columns[$i])) {
+				continue;
+			}
+			$x = $this->directionality === 'rtl' ? $this->ColR[$i] + $this->ColGap / 2 : $this->ColL[$i] - $this->ColGap / 2;
+			$this->pages[$this->page] .= MultiColumn::ruleOperators($this->columnRule, $color, $x, $this->y0, $bottom, $this->h) . "\n";
+		}
+	}
+
 	function SetCol($CurrCol)
 	{
 		// Used internally to set column by number: 0 is 1st column
@@ -26020,6 +26055,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->tableOfContents->_toc[] = ['t' => $v['t'], 'l' => $v['l'], 'p' => $v['p'], 'link' => $v['link'], 'toc_id' => $v['toc_id']];
 			}
 			/* -- END TOC -- */
+		}
+
+		if ($this->columnRule !== null) {
+			$this->drawColumnRules();
 		}
 
 		foreach ($this->internallink as $key => $f) {
