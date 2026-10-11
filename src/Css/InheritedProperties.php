@@ -59,6 +59,8 @@ final class InheritedProperties
 		'LIST-STYLE-TYPE',
 		'LIST-STYLE-IMAGE',
 		'LIST-STYLE-POSITION',
+		'ORPHANS',
+		'WIDOWS',
 	];
 
 	/**

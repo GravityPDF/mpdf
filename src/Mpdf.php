@@ -682,6 +682,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $tbrot_Links;
 
 	var $keep_block_together; // Keep a Block from page-break-inside: avoid
+
+	/**
+	 * @var \Mpdf\OrphansWidows|null Where a block's lines are kept to its orphans and widows while they are laid out
+	 */
+	var $orphansWidows;
 	var $kt_blank; // what the measuring pass of that block left blank at the foot of the pages it broke
 
 	var $tbrot_y0;
@@ -7542,9 +7547,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 
+		// A block's closing border and padding are no line of it
+		$orphansWidows = $this->orphansWidows !== null && !$is_table && (!$endofblock || $content) ? $this->orphansWidows : null;
+
 		// PAGEBREAK
-		if (!$is_table && ($this->y + $check_h) > ($this->PageBreakTrigger + $buff) and ! $this->InFooter and $this->AcceptPageBreak()) {
+		if (!$is_table && (($this->y + $check_h) > ($this->PageBreakTrigger + $buff) || ($orphansWidows && $orphansWidows->breaksBefore())) and ! $this->InFooter and $this->AcceptPageBreak()) {
 			$currentx += $this->turnPageKeepingPlace();
+		}
+		if ($orphansWidows) {
+			$orphansWidows->placed($this->page);
 		}
 
 
@@ -9474,8 +9485,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					// PAGEBREAK
 					// 'If' below used in order to fix "first-line of other page with justify on" bug
-					if (!$is_table && ($this->y + $check_h) > $this->PageBreakTrigger and ! $this->InFooter and $this->AcceptPageBreak()) {
+					$orphansWidows = $is_table ? null : $this->orphansWidows;
+					if (!$is_table && (($this->y + $check_h) > $this->PageBreakTrigger || ($orphansWidows && $orphansWidows->breaksBefore())) and ! $this->InFooter and $this->AcceptPageBreak()) {
 						$currentx += $this->turnPageKeepingPlace();
+					}
+					if ($orphansWidows) {
+						$orphansWidows->placed($this->page);
 					}
 
 					if ($this->kwt && !$is_table) { // mPDF 5.7+
@@ -19438,6 +19453,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					case 'TEXT-INDENT':
 						// Computed value - to inherit
 						$this->blk[$this->blklvl]['text_indent'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false) . 'mm';
+						break;
+
+					case 'ORPHANS':
+					case 'WIDOWS':
+						// A positive integer; OrphansWidows reads it under CssMode::STANDARD
+						if (ctype_digit(trim($v)) && (int) $v > 0) {
+							$this->blk[$this->blklvl][strtolower($k)] = (int) $v;
+						}
 						break;
 
 					case 'MARGIN-COLLAPSE': // Custom tag to collapse margins at top and bottom of page

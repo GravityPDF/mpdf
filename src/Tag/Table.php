@@ -6,6 +6,7 @@ use Mpdf\Css\Border;
 use Mpdf\Css\PresentationalHints;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
+use Mpdf\OrphansWidows;
 use Mpdf\Utils\Rotation;
 
 class Table extends Tag
@@ -44,7 +45,7 @@ class Table extends Tag
 			$this->mpdf->newFlowingBlock($this->mpdf->blk[$this->mpdf->blklvl]['width'], $this->mpdf->lineheight, '', false, 1, true, $this->mpdf->blk[$this->mpdf->blklvl]['direction']);
 			$this->mpdf->finishFlowingBlock(true); // true = END of flowing block
 		} elseif (!$this->mpdf->tableLevel && count($this->mpdf->textbuffer)) {
-			$this->mpdf->printbuffer($this->mpdf->textbuffer, $blockstate);
+			(new OrphansWidows($this->mpdf))->printBuffer($blockstate);
 		}
 
 		$this->mpdf->textbuffer = [];

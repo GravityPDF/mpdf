@@ -53,8 +53,9 @@ trait PageAreas
 	}
 
 	/**
-	 * Turn the page before measuring a line that will not fit, when pages of this flow have different page areas, so
-	 * the line is measured against the page area it is set in. Otherwise the page turns once the line has been set.
+	 * Turn the page before measuring a line that will not fit, or that orphans and widows start a fresh page at, when
+	 * pages of this flow have different page areas, so the line is measured against the page area it is set in.
+	 * Otherwise the page turns once the line has been set.
 	 *
 	 * @param float $lineHeight The least height the line takes, with the top margin, border and padding of a block it opens
 	 *
@@ -64,7 +65,7 @@ trait PageAreas
 	{
 		// A line that only moves to the next column keeps its width
 		if ($this->InFooter
-			|| $this->y + $lineHeight <= $this->PageBreakTrigger
+			|| ($this->y + $lineHeight <= $this->PageBreakTrigger && !($this->orphansWidows && $this->orphansWidows->breaksBefore()))
 			|| ($this->ColActive && $this->CurrCol < $this->NbCol - 1)
 			|| !$this->page_box['using']
 			|| !$this->cssManager->pseudoPagesSetSideMargins($this->page_box['current'])
