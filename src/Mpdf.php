@@ -2443,13 +2443,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Records what a PDF/A or PDF/X document had to change, unless it was asked to make such changes silently
+	 * Records what a PDF/A or PDF/X document had to change, unless it was asked to make such changes silently. Each
+	 * message is kept once, so a change made on every run of text is recorded once.
 	 *
 	 * @param string $message
 	 */
 	public function pdfaxWarning($message)
 	{
-		if (($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) {
+		if ((($this->PDFA && !$this->PDFAauto) || ($this->PDFX && !$this->PDFXauto)) && !in_array($message, $this->PDFAXwarnings, true)) {
 			$this->PDFAXwarnings[] = $message;
 		}
 	}
@@ -5674,7 +5675,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/**
 	 * Whether a text-shadow is drawn blurred. The blur is built from translucent layers, so where transparency is not
-	 * allowed the shadow is drawn sharp, with one warning for the document rather than one per run of text.
+	 * allowed the shadow is drawn sharp.
 	 *
 	 * @param array $shadow A text shadow as ShadowParser reads it
 	 *
@@ -5690,31 +5691,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return true;
 		}
 
-		$warning = 'A text-shadow cannot be blurred without transparency (Shadow drawn without blur)';
-		if (!in_array($warning, $this->PDFAXwarnings, true)) {
-			$this->pdfaxWarning($warning);
-		}
+		$this->pdfaxWarning('A text-shadow cannot be blurred without transparency (Shadow drawn without blur)');
 
 		return false;
 	}
 
 	/**
 	 * The content stream that draws a blurred text-shadow: the text repeated once per TextShadowBlur layer, filled and
-	 * stroked in the shadow colour at the layer's width and alpha, offset by the shadow's offset. Expects the text
-	 * colour already set to the shadow colour, inside a saved graphics state.
+	 * stroked at the layer's width and alpha. Expects the fill and stroke colours, the fill-and-stroke rendering mode
+	 * and the shadow's offset already set, inside a saved graphics state.
 	 *
-	 * @param array $shadow A text shadow as ShadowParser reads it
+	 * @param float $blur The blur radius, in mm
+	 * @param float|null $alpha The shadow colour's own alpha, or null when it has none
 	 * @param string $text The content stream that draws the text
 	 *
 	 * @return string
 	 */
-	private function blurredTextShadow(array $shadow, $text)
+	private function blurredTextShadow($blur, $alpha, $text)
 	{
-		$alpha = ColorConverter::alpha($shadow['col']);
-
-		$s = $this->SetDColor($shadow['col'], true) . " 2 Tr 1 j 1 J\n";
-		$s .= sprintf(' 1 0 0 1 %.4F %.4F cm', $shadow['x'] * Mpdf::SCALE, -$shadow['y'] * Mpdf::SCALE) . "\n";
-		foreach (TextShadowBlur::layers($shadow['blur'], $alpha === null ? 1 : min($alpha, 1)) as $layer) {
+		$s = '';
+		foreach (TextShadowBlur::layers($blur, $alpha === null ? 1 : $alpha) as $layer) {
 			$s .= $this->SetAlpha($layer['alpha'], 'Normal', true, 'B');
 			$s .= sprintf(' %.3F w ', $layer['width'] * Mpdf::SCALE) . $text . "\n";
 		}
@@ -6345,20 +6341,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				foreach ($this->textshadow as $ts) {
 					$s .= ' q ';
 					$s .= $this->SetTColor($ts['col'], true) . "\n";
-					if ($this->textShadowBlurs($ts)) {
-						$s .= $this->blurredTextShadow($ts, $sub);
-						$s .= ' Q ';
-						continue;
-					}
-					if ($ts['col'][0] == 5 && ord($ts['col'][4]) < 100) { // RGBa
-						$s .= $this->SetAlpha(ord($ts['col'][4]) / 100, 'Normal', true, 'F') . "\n";
-					} elseif ($ts['col'][0] == 6 && ord($ts['col'][5]) < 100) { // CMYKa
-						$s .= $this->SetAlpha(ord($ts['col'][5]) / 100, 'Normal', true, 'F') . "\n";
-					} elseif ($ts['col'][0] == 1 && $ts['col'][2] == 1 && ord($ts['col'][3]) < 100) { // Gray
-						$s .= $this->SetAlpha(ord($ts['col'][3]) / 100, 'Normal', true, 'F') . "\n";
+					$alpha = ColorConverter::alpha($ts['col']);
+					$blurs = $this->textShadowBlurs($ts);
+					if ($blurs) {
+						$s .= $this->SetDColor($ts['col'], true) . " 2 Tr 1 j 1 J\n";
+					} elseif ($alpha !== null && $alpha < 1) {
+						$s .= $this->SetAlpha($alpha, 'Normal', true, 'F') . "\n";
 					}
 					$s .= sprintf(' 1 0 0 1 %.4F %.4F cm', $ts['x'] * Mpdf::SCALE, -$ts['y'] * Mpdf::SCALE) . "\n";
-					$s .= $sub;
+					$s .= $blurs ? $this->blurredTextShadow($ts['blur'], $alpha, $sub) : $sub;
 					$s .= ' Q ';
 				}
 			}

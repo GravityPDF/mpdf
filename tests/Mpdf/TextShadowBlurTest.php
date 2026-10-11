@@ -95,7 +95,7 @@ class TextShadowBlurTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$page = $this->page('<p style="text-shadow: 1mm 2mm 1mm #ff0000">Soft</p>');
 
-		$this->assertSame(5, substr_count($page, '(Soft) Tj'));
+		$this->assertTextCount(5, 'Soft', $page);
 		$this->assertStringContainsString('1.000 0.000 0.000 RG 2 Tr 1 j 1 J', $page);
 		$this->assertStringContainsString(sprintf('1 0 0 1 %.4F %.4F cm', Mpdf::SCALE, -2 * Mpdf::SCALE), $page);
 		foreach (TextShadowBlur::layers(1, 1) as $layer) {
@@ -128,7 +128,7 @@ class TextShadowBlurTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$page = $this->page('<p style="text-shadow: ' . $shadow . '">Soft</p>', $config);
 
-		$this->assertSame(2, substr_count($page, '(Soft) Tj'));
+		$this->assertTextCount(2, 'Soft', $page);
 		$this->assertStringNotContainsString('2 Tr 1 j 1 J', $page);
 	}
 

@@ -16,7 +16,7 @@ final class TextShadowBlur
 {
 
 	/**
-	 * The widest band, in mm, one layer covers: about a pixel at 100 DPI, narrow enough that the steps do not show
+	 * The widest a band may be, in mm: about a pixel at 100 DPI, narrow enough that the steps do not show
 	 */
 	const BAND = 0.25;
 
@@ -37,20 +37,17 @@ final class TextShadowBlur
 	{
 		$count = (int) min(self::MAX_LAYERS, max(2, ceil($blur / self::BAND)));
 
-		// The opacity each band ends up with, sampled where it starts: band 1 reaches from the glyph's edge outwards
-		$opacity = [];
-		for ($band = 1; $band <= $count; $band++) {
-			$opacity[$band] = $alpha * self::edgeOpacity(($band - 1) / $count);
-		}
-		$opacity[$count + 1] = 0;
-
-		// A band is covered by its own layer and every wider one, so each layer adds what the wider ones leave short
+		// A band is covered by its own layer and every wider one, so each layer adds what the wider ones leave short of
+		// the opacity the band should have, sampled where it starts: band 1 reaches from the glyph's edge outwards
 		$layers = [];
+		$outer = 0;
 		for ($band = $count; $band >= 1; $band--) {
+			$opacity = $alpha * self::edgeOpacity(($band - 1) / $count);
 			$layers[] = [
 				'width' => 2 * $blur * $band / $count,
-				'alpha' => 1 - (1 - $opacity[$band]) / (1 - $opacity[$band + 1]),
+				'alpha' => 1 - (1 - $opacity) / (1 - $outer),
 			];
+			$outer = $opacity;
 		}
 
 		return $layers;
