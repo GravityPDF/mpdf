@@ -8,6 +8,9 @@ use Mpdf\Conversion\DecToGreek;
 use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
+use Mpdf\Css\CounterStyle;
+use Mpdf\Css\CssString;
+use Mpdf\Css\ListItemCounter;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\CssMode;
@@ -151,7 +154,9 @@ abstract class BlockTag extends Tag
 			// mPDF 6  Lists
 			if ($tag === 'UL' || $tag === 'OL') {
 				$this->mpdf->listlvl++;
-				if (isset($attr['START'])) {
+				if ($this->mpdf->cssMode === CssMode::STANDARD) {
+					$this->startListCounter($tag, $attr, $properties, $ahtml, $ihtml);
+				} elseif (isset($attr['START'])) {
 					$this->mpdf->listcounter[$this->mpdf->listlvl] = (int) $attr['START'] - 1;
 				} else {
 					$this->mpdf->listcounter[$this->mpdf->listlvl] = 0;
@@ -194,7 +199,7 @@ abstract class BlockTag extends Tag
 
 				// Override with CSS list-style-type if specified (highest specificity)
 				if (!empty($properties['LIST-STYLE-TYPE'])) {
-					$this->mpdf->listtype[$this->mpdf->listlvl] = strtolower($properties['LIST-STYLE-TYPE']);
+					$this->mpdf->listtype[$this->mpdf->listlvl] = $this->listStyleType($properties['LIST-STYLE-TYPE']);
 				}
 			}
 
@@ -206,7 +211,11 @@ abstract class BlockTag extends Tag
 					$this->mpdf->listcounter[$this->mpdf->listlvl] = 0;
 				}
 
-				$this->mpdf->listcounter[$this->mpdf->listlvl]++;
+				if ($this->mpdf->cssMode === CssMode::STANDARD) {
+					$this->advanceListCounter($attr, $properties);
+				} else {
+					$this->mpdf->listcounter[$this->mpdf->listlvl]++;
+				}
 				$this->mpdf->listitem = [];
 				//if in table - output here as a tabletextbuffer
 				//position:inside OR position:outside (always output in table as position:inside)
@@ -238,13 +247,14 @@ abstract class BlockTag extends Tag
 
 				// Allow individual LI to override list type via CSS (highest specificity)
 				if (!empty($properties['LIST-STYLE-TYPE'])) {
-					$currentListType = strtolower($properties['LIST-STYLE-TYPE']);
+					$currentListType = $this->listStyleType($properties['LIST-STYLE-TYPE']);
 				}
 
 				$decToAlpha = new DecToAlpha();
 				$decToRoman = new DecToRoman();
 				$counter = $this->mpdf->listcounter[$this->mpdf->listlvl];
 				$list_item_color = '';
+				$spacer = ' ';
 
 				switch ($currentListType) {
 					case 'upper-alpha':
@@ -324,7 +334,13 @@ abstract class BlockTag extends Tag
 						$blt = '';
 						break;
 					default:
-						if (preg_match('/U\+([a-fA-F0-9]+)/i', $currentListType, $m)) {
+						if ($this->mpdf->cssMode === CssMode::STANDARD && CounterStyle::draws($currentListType)) {
+							$blt = CounterStyle::marker($counter, $currentListType, $this->mpdf->list_number_suffix);
+							// A string marker is drawn as written, with no space added
+							if (!CounterStyle::isStyle($currentListType)) {
+								$spacer = '';
+							}
+						} elseif (preg_match('/U\+([a-fA-F0-9]+)/i', $currentListType, $m)) {
 							$blt = '-';
 							if ($this->mpdf->_charDefined($this->mpdf->CurrentFont['cw'], hexdec($m[1]))) {
 								$blt = UtfString::codeHex2utf($m[1]);
@@ -365,7 +381,7 @@ abstract class BlockTag extends Tag
 						$this->mpdf->_saveCellTextBuffer(' ');
 						$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['s'] += $this->mpdf->GetStringWidth(' ');
 					} else {
-						$ls = $indent . $blt . ' ';
+						$ls = $indent . $blt . $spacer;
 						$this->mpdf->_saveCellTextBuffer($ls);
 						$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['s'] += $this->mpdf->GetStringWidth($ls);
 					}
@@ -977,7 +993,9 @@ abstract class BlockTag extends Tag
 		// mPDF 6  Lists
 		if ($tag === 'OL' || $tag === 'UL') {
 			$this->mpdf->listlvl++;
-			if (!empty($attr['START'])) {
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				$this->startListCounter($tag, $attr, $properties, $ahtml, $ihtml);
+			} elseif (!empty($attr['START'])) {
 				$this->mpdf->listcounter[$this->mpdf->listlvl] = (int) $attr['START'] - 1;
 			} else {
 				$this->mpdf->listcounter[$this->mpdf->listlvl] = 0;
@@ -1060,7 +1078,11 @@ abstract class BlockTag extends Tag
 				$this->mpdf->listcounter[$this->mpdf->listlvl] = 0;
 			}
 
-			$this->mpdf->listcounter[$this->mpdf->listlvl]++;
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				$this->advanceListCounter($attr, $properties);
+			} else {
+				$this->mpdf->listcounter[$this->mpdf->listlvl]++;
+			}
 
 			$this->mpdf->listitem = [];
 
@@ -1459,6 +1481,95 @@ abstract class BlockTag extends Tag
 				}
 			}
 		}
+	}
+
+	/**
+	 * Sets the list-item counter a list starts from, as a browser does under the standard CSS mode. A counter-reset
+	 * of list-item beats the attributes, as an author rule beats the rules HTML maps them to. Otherwise <ol start>
+	 * gives the first item's number and <ol reversed> counts down, from the number of items when start is not given
+	 *
+	 * @param string $tag OL or UL
+	 * @param array $attr The list's attributes
+	 * @param array $properties The list's merged CSS
+	 * @param array $ahtml The HTML being written, split as WriteHTML() splits it
+	 * @param int $ihtml Where the list's start tag is in it
+	 */
+	private function startListCounter($tag, array $attr, array $properties, array $ahtml, $ihtml)
+	{
+		$reset = ListItemCounter::read($properties, 'COUNTER-RESET');
+		if ($reset !== null) {
+			list($initial, $reversed) = $reset;
+		} else {
+			$reversed = $tag === 'OL' && isset($attr['REVERSED']);
+			$start = $this->htmlInteger($attr, 'START');
+			$initial = $start === null ? null : $start + ($reversed ? 1 : -1);
+		}
+
+		if ($initial === null) {
+			$initial = $reversed ? $this->mpdf->countListItemsAhead($ahtml, $ihtml) + 1 : 0;
+		}
+
+		$this->mpdf->listcounter[$this->mpdf->listlvl] = $initial;
+		$this->mpdf->listcounterstep[$this->mpdf->listlvl] = $reversed ? -1 : 1;
+	}
+
+	/**
+	 * Moves the list-item counter on to a list item's number, as a browser does under the standard CSS mode: its
+	 * counter-reset, then its counter-increment, or the step its list counts by, then its counter-set, or else its
+	 * value attribute. The items after it count on from it
+	 *
+	 * @param array $attr The item's attributes
+	 * @param array $properties The item's merged CSS
+	 */
+	private function advanceListCounter(array $attr, array $properties)
+	{
+		$level = $this->mpdf->listlvl;
+		$counter = $this->mpdf->listcounter[$level];
+
+		$reset = ListItemCounter::read($properties, 'COUNTER-RESET');
+		if ($reset !== null) {
+			$counter = (int) $reset[0];
+		}
+
+		$increment = ListItemCounter::read($properties, 'COUNTER-INCREMENT');
+		if ($increment !== null) {
+			$counter += $increment[0] === null ? 1 : $increment[0];
+		} else {
+			$counter += isset($this->mpdf->listcounterstep[$level]) ? $this->mpdf->listcounterstep[$level] : 1;
+		}
+
+		$set = ListItemCounter::read($properties, 'COUNTER-SET');
+		$value = $this->htmlInteger($attr, 'VALUE');
+		if ($set !== null) {
+			$counter = (int) $set[0];
+		} elseif ($value !== null) {
+			$counter = $value;
+		}
+
+		$this->mpdf->listcounter[$level] = $counter;
+	}
+
+	/**
+	 * @param array $attr An element's attributes
+	 * @param string $name
+	 *
+	 * @return int|null The attribute read as HTML reads an integer, from its leading digits, or null where it is
+	 *                  missing or does not start with one
+	 */
+	private function htmlInteger(array $attr, $name)
+	{
+		return isset($attr[$name]) && preg_match('/^\s*([+-]?\d+)/', $attr[$name], $m) ? (int) $m[1] : null;
+	}
+
+	/**
+	 * @param string $type A list-style-type value
+	 *
+	 * @return string It as a list in a table cell keeps it: lowercased, but for a string marker under the standard
+	 *                CSS mode
+	 */
+	private function listStyleType($type)
+	{
+		return $this->mpdf->cssMode === CssMode::STANDARD && CssString::isString($type) ? trim($type) : strtolower($type);
 	}
 
 }
