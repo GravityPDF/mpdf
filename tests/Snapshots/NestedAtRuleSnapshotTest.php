@@ -79,7 +79,7 @@ class NestedAtRuleSnapshotTest extends Snapshot
 		</div>
 
 		<h2>Block at-rules mPDF does not use</h2>
-		<p class="caption">@keyframes, @container, @font-feature-values and an @page margin box are removed whole. Each paragraph is green and bold; none is red.</p>
+		<p class="caption">@keyframes, @container and @font-feature-values are removed whole, and the @page rule's margin box is drawn as the page's header: "Header" centred at the top of the page. Each paragraph is green and bold; none is red.</p>
 		<div class="case">
 			<p class="after-keyframes">After @keyframes</p>
 			<p class="after-container">After @container</p>
