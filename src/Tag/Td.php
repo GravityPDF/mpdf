@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
+use Mpdf\Css\Outline;
 use Mpdf\Css\TextVars;
 use Mpdf\CssMode;
 use Mpdf\Utils\Arrays;
@@ -406,6 +407,13 @@ class Td extends Tag
 		}
 		if (!empty($attr['NOWRAP']) && !$this->appliesStandardCascade()) {
 			$c['nowrap'] = 1;
+		}
+
+		if ($this->appliesStandardCascade()) {
+			$outline = Outline::parse($properties, $this->sizeConverter, $this->colorConverter, $this->mpdf->FontSize, $this->mpdf->PDFAXwarnings);
+			if ($outline) {
+				$c['outline'] = $outline;
+			}
 		}
 
 		$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col] = $c;

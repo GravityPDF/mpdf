@@ -10,6 +10,7 @@ use Mpdf\Css\BorderRadius;
 use Mpdf\Css\CommentParser;
 use Mpdf\Css\ComputedValues;
 use Mpdf\Css\InheritedProperties;
+use Mpdf\Css\Outline;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
@@ -338,6 +339,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $spanborder;
 	var $spanborddet;
 
+	/**
+	 * @var array|null The outline of the inline element Cell() is drawing a piece of text of, with the sides it is
+	 * left open on, as inlineOutline() gives it
+	 */
+	var $spanOutline;
+
+	/**
+	 * @var int How many inline elements with an outline the document has opened
+	 */
+	var $inlineOutlines = 0;
+
 	var $visibility;
 
 	var $kerning;
@@ -497,6 +509,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $innermostTableLevel;
 	var $saveTableCounter;
 	var $cellBorderBuffer;
+
+	/**
+	 * @var string[] The outlines of the table cells drawn since the cell borders were last drawn, as operators
+	 */
+	var $cellOutlineBuffer;
 
 	var $saveHTMLFooter_height;
 	var $saveHTMLFooterE_height;
@@ -961,6 +978,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * @var \Mpdf\RoundedBox
 	 */
 	private $roundedBox;
+
+	/**
+	 * @var \Mpdf\BoxOutline
+	 */
+	private $boxOutline;
 
 	/**
 	 * @var \Mpdf\Image\Bmp
@@ -1667,6 +1689,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->col = -1;
 		$this->row = -1;
 		$this->cellBorderBuffer = [];
+		$this->cellOutlineBuffer = [];
 
 		$this->divbegin = false;
 		// mPDF 6
@@ -2662,7 +2685,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->AddPage($this->CurOrientation);
 		}
 
-		if (count($this->cellBorderBuffer)) {
+		if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
 			$this->printcellbuffer();
 		}
 
@@ -6323,6 +6346,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($link != '') {
 				$this->Link($this->x, $boxtop, $w, $boxheight, $link);
 			}
+
+			if ($this->spanOutline) {
+				$s .= ' ' . $this->boxOutline->draw($this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw, RoundedBox::SQUARE, $this->spanOutline, $this->spanOutline['open']);
+			}
 		}
 		if ($s) {
 			$this->writer->write($s);
@@ -7854,6 +7881,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->spanborddet['R']['s'] = $this->spanborddet['R']['w'] = 0;
 					}
 				}
+				$this->spanOutline = isset($this->objectbuffer[$k]) ? null : $this->inlineOutline(isset($contentB[$k]) ? $contentB[$k] : '');
 				// WORD SPACING
 				// mPDF 5.7.1
 				$widthChunk = $this->aliasReplaceForWidth($chunk);
@@ -7904,6 +7932,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->x += $this->spanborddet['R']['w'];
 					}
 				}
+				$this->spanOutline = null;
 				// *********** SPAN BACKGROUND COLOR OFF - RESET BLOCK BGCOLOR ***************** //
 				if (isset($spanfill) && $spanfill) {
 					$fill = $save_fill;
@@ -8296,6 +8325,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				if ((isset($objattr['border_top']) && $objattr['border_top'] > 0) || (isset($objattr['border_left']) && $objattr['border_left'] > 0) || (isset($objattr['border_right']) && $objattr['border_right'] > 0) || (isset($objattr['border_bottom']) && $objattr['border_bottom'] > 0)) {
 					$this->PaintImgBorder($objattr, $is_table, $box);
+				}
+				if (isset($objattr['outline'])) {
+					$this->paintImageOutline($objattr, $k, $box);
 				}
 				if ($tr2) {
 					$this->restoreGraphicsState();
@@ -9604,6 +9636,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$this->spanborddet['R']['s'] = $this->spanborddet['R']['w'] = 0;
 							}
 						}
+						$this->spanOutline = isset($this->objectbuffer[$k]) ? null : $this->inlineOutline(isset($contentB[$k]) ? $contentB[$k] : '');
 
 						// WORD SPACING
 						// StringWidth this time includes any kashida spacing
@@ -9651,6 +9684,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$this->x += $this->spanborddet['R']['w'];
 							}
 						}
+						$this->spanOutline = null;
 						// *********** SPAN BACKGROUND COLOR OFF - RESET BLOCK BGCOLOR ***************** //
 						if (isset($spanfill) && $spanfill) {
 							$fill = $save_fill;
@@ -13451,6 +13485,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					$textbuffer = [];
 
+					if (isset($tablehf['outline']) && $paintcell) {
+						$this->bufferCellOutline($tablehf['outline'], $table, $x, $y, $w, $h, $border_details);
+					}
+
 					/* -- BACKGROUNDS -- */
 					if (!$this->ColActive) {
 						if (isset($content[$i][0]['trgradients']) && ($colctr == 1 || $table['borders_separate'])) {
@@ -17250,6 +17288,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+		$this->joinInlineOutlines($arrayaux);
+
 		if ($this->cssMode === CssMode::STANDARD) {
 			// Each piece of text is drawn in the state it was buffered with, over the block's own, and not over whatever
 			// is open when the buffer is drawn, such as an inline element the block opened in. Nothing here writes to
@@ -17421,6 +17461,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$save_dw = $this->divwidth;
 							$save_buffer = $this->cellBorderBuffer;
 							$this->cellBorderBuffer = [];
+							$save_outlines = $this->cellOutlineBuffer;
+							$this->cellOutlineBuffer = [];
 							$ncx = $this->x;
 							list($dummyx, $w) = $this->_tableGetWidth($table, $objattr['row'], $objattr['col']);
 							$ntw = $this->table[($level + 1)][$objattr['nestedcontent']]['w']; // nested table width
@@ -17452,6 +17494,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 							$this->_tableWrite($this->table[($level + 1)][$objattr['nestedcontent']]);
 							$this->cellBorderBuffer = $save_buffer;
+							$this->cellOutlineBuffer = $save_outlines;
 							$this->x = $bak_x;
 							$this->divwidth = $save_dw;
 						}
@@ -17841,7 +17884,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$this->Reset(); // mPDF 6
 		// PAINT DIV BORDER	// DISABLED IN COLUMNS AS DOESN'T WORK WHEN BROKEN ACROSS COLS??
-		if ((isset($this->blk[$this->blklvl]['border']) || isset($this->blk[$this->blklvl]['bgcolor']) || isset($this->blk[$this->blklvl]['box_shadow'])) && $blockstate && ($this->y != $this->oldy)) {
+		if ((isset($this->blk[$this->blklvl]['border']) || isset($this->blk[$this->blklvl]['bgcolor']) || isset($this->blk[$this->blklvl]['box_shadow']) || isset($this->blk[$this->blklvl]['outline'])) && $blockstate && ($this->y != $this->oldy)) {
 			$bottom_y = $this->y; // Does not include Bottom Margin
 			if (isset($this->blk[$this->blklvl]['startpage']) && $this->blk[$this->blklvl]['startpage'] != $this->page && $blockstate != 1) {
 				$this->PaintDivBB('pagetop', $blockstate);
@@ -18301,6 +18344,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+
+		if (isset($this->blk[$blvl]['outline'])) {
+			$open = ['top' => $divider == 'pagetop' || $continuingpage, 'bottom' => $blockstate == 1 || $divider == 'pagebottom'];
+			$this->writer->write($this->boxOutline->draw($x0, $y0, $x0 + $w, $y0 + $h, $radii, $this->blk[$blvl]['outline'], $open));
+		}
 
 		$this->SetDash();
 		$this->y = $save_y;
@@ -19053,6 +19101,75 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->SetAlpha(1);
 	}
 
+	/**
+	 * Marks the pieces of text that each inline element with an outline is drawn in: its outline is open on the
+	 * left of each piece but its first, and on the right of each but its last
+	 *
+	 * @param array $arrayaux The text buffer
+	 */
+	private function joinInlineOutlines(array &$arrayaux)
+	{
+		$last = null;
+		foreach (array_keys($arrayaux) as $i) {
+			if (!isset($arrayaux[$i][9]['box-outline'])) {
+				$last = null;
+				continue;
+			}
+			$outline = &$arrayaux[$i][9]['box-outline'];
+			$outline['L'] = $outline['R'] = true;
+			if ($last !== null && $arrayaux[$last][9]['box-outline']['id'] === $outline['id']) {
+				$outline['L'] = false;
+				$arrayaux[$last][9]['box-outline']['R'] = false;
+			}
+			unset($outline);
+			$last = $i;
+		}
+	}
+
+	/**
+	 * The outline to draw around a piece of an inline element's text, with the sides it is left open on: those where
+	 * the element goes on in another piece, or on another line
+	 *
+	 * @param string $markers L where the piece starts the text it was buffered with, R where it ends it
+	 *
+	 * @return array|null
+	 */
+	private function inlineOutline($markers)
+	{
+		if (!isset($this->textparam['box-outline'])) {
+			return null;
+		}
+
+		$outline = $this->textparam['box-outline'];
+		$outline['open'] = [
+			'left' => empty($outline['L']) || strpos($markers, 'L') === false,
+			'right' => empty($outline['R']) || strpos($markers, 'R') === false,
+		];
+
+		return $outline;
+	}
+
+	/**
+	 * Draws an image's outline around its border box, shrunk with the image where a table has shrunk it
+	 *
+	 * @param array $objattr The image object
+	 * @param float $k The factor a table has shrunk the image by
+	 * @param array|null $box The border box and its corners, where the image has rounded corners
+	 */
+	private function paintImageOutline(array $objattr, $k, $box)
+	{
+		if ($this->ColActive) {
+			return;
+		}
+		if ($box === null) {
+			$box = $this->roundedBox->imageBox($objattr + ['border_radius' => []], $k);
+		}
+		$outline = $objattr['outline'];
+		$outline['w'] /= $k;
+		$outline['offset'] /= $k;
+		$this->writer->write($this->boxOutline->draw($box['x0'], $box['y0'], $box['x1'], $box['y1'], $box['radii'], $outline));
+	}
+
 	/* -- END HTML-CSS -- */
 
 	function Reset()
@@ -19291,6 +19408,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// before vertical-align, whose percentages refer to it
 		if ($type == 'INLINE' && isset($arrayaux['LINE-HEIGHT']) && $this->cssMode === CssMode::STANDARD) {
 			$this->textparam['line-height'] = $this->fixLineheight($arrayaux['LINE-HEIGHT']);
+		}
+
+		if (($type == 'BLOCK' && $tag != 'BODY' || $type == 'INLINE') && $this->cssMode === CssMode::STANDARD) {
+			$outline = Outline::parse($arrayaux, $this->sizeConverter, $this->colorConverter, $this->FontSize, $this->PDFAXwarnings);
+			if ($outline && $type == 'BLOCK') {
+				$this->blk[$this->blklvl]['outline'] = $outline;
+			} elseif ($outline) {
+				// Numbered, so the pieces of text it is drawn around are told from those of a neighbour outlined alike
+				$outline['id'] = ++$this->inlineOutlines;
+				$this->textparam['box-outline'] = $outline;
+			}
 		}
 
 		foreach ($arrayaux as $k => $v) {
@@ -23928,6 +24056,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$tableheader[$i][$j]['border_details'] = $table['simple']['border_details'];
 						}
 						$tableheader[$i][$j]['padding'] = $cell['padding'];
+						if (isset($cell['outline'])) {
+							$tableheader[$i][$j]['outline'] = $cell['outline'];
+						}
 						if (isset($cell['direction'])) {
 							$tableheader[$i][$j]['direction'] = $cell['direction'];
 						}
@@ -24127,6 +24258,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->y = $opy;
 					}
 
+					if (isset($cell['outline']) && $paintcell) {
+						$this->bufferCellOutline($cell['outline'], $table, $x, $y, $w, $h, $bord_det);
+					}
+
 					/* -- BACKGROUNDS -- */
 					if (!$this->ColActive) {
 						if (isset($table['trgradients'][$i]) && ($j == 0 || $table['borders_separate'])) {
@@ -24257,7 +24392,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (!$this->table_keep_together && $i < $numrows - 1 && $level == 1) {
 					$this->breakpoints[$this->CurrCol][] = $y + $h;
 				} // mPDF 6
-				if (count($this->cellBorderBuffer)) {
+				if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
 					$this->printcellbuffer();
 				}
 			}
@@ -24271,7 +24406,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		} // end of rows
 
-		if (count($this->cellBorderBuffer)) {
+		if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
 			$this->printcellbuffer();
 		}
 
@@ -25390,7 +25525,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function AcceptPageBreak()
 	{
-		if (count($this->cellBorderBuffer)) {
+		if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
 			$this->printcellbuffer();
 		} // *TABLES*
 		/* -- COLUMNS -- */
@@ -26119,6 +26254,48 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$this->cellBorderBuffer = [];
 		}
+
+		// Over the borders, which a collapsed table draws only now
+		foreach ($this->cellOutlineBuffer as $outline) {
+			$this->writer->write($outline);
+		}
+		$this->cellOutlineBuffer = [];
+	}
+
+	/**
+	 * Sets aside the outline of a table cell, drawn with the cell borders that are set aside until the table or its
+	 * part on a page is done, so it is drawn over them. The cell's border box is inside the border spacing in the
+	 * separated borders model, and reaches out to the outer edges of the borders in the collapsed one
+	 *
+	 * @param array $outline As Css\Outline::parse() gives it
+	 * @param array $table The table the cell is in
+	 * @param float $x The cell's left edge, as the table lays it out
+	 * @param float $y Its top edge
+	 * @param float $w Its width
+	 * @param float $h Its height
+	 * @param array $details The cell's border details
+	 */
+	private function bufferCellOutline(array $outline, array $table, $x, $y, $w, $h, array $details)
+	{
+		if ($table['borders_separate']) {
+			$x0 = $x + $table['border_spacing_H'] / 2;
+			$y0 = $y + $table['border_spacing_V'] / 2;
+			$x1 = $x + $w - $table['border_spacing_H'] / 2;
+			$y1 = $y + $h - $table['border_spacing_V'] / 2;
+		} else {
+			$half = [];
+			foreach (['L', 'T', 'R', 'B'] as $side) {
+				$half[$side] = isset($details[$side]['w']) ? $details[$side]['w'] / 2 : 0;
+			}
+			$x0 = $x - $half['L'];
+			$y0 = $y - $half['T'];
+			$x1 = $x + $w + $half['R'];
+			$y1 = $y + $h + $half['B'];
+		}
+
+		$outline['w'] /= $this->shrin_k;
+		$outline['offset'] /= $this->shrin_k;
+		$this->cellOutlineBuffer[] = $this->boxOutline->draw($x0, $y0, $x1, $y1, RoundedBox::SQUARE, $outline);
 	}
 
 	// ==================================================================

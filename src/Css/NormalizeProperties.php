@@ -140,6 +140,7 @@ class NormalizeProperties
 		],
 		'LIST-STYLE' => ['LIST-STYLE-TYPE', 'LIST-STYLE-IMAGE', 'LIST-STYLE-POSITION'],
 		'TEXT-OUTLINE' => ['TEXT-OUTLINE', 'TEXT-OUTLINE-WIDTH', 'TEXT-OUTLINE-COLOR'],
+		'OUTLINE' => ['OUTLINE-WIDTH', 'OUTLINE-STYLE', 'OUTLINE-COLOR'],
 		'BREAK-BEFORE' => ['PAGE-BREAK-BEFORE'],
 		'BREAK-AFTER' => ['PAGE-BREAK-AFTER'],
 		'BREAK-INSIDE' => ['PAGE-BREAK-INSIDE'],
@@ -230,6 +231,8 @@ class NormalizeProperties
 				$this->processBorderShorthandProperty($k, $v);
 			} elseif ($k === 'TEXT-OUTLINE') {
 				$this->processTextOutlineProperty($v);
+			} elseif ($k === 'OUTLINE') {
+				$this->processOutlineProperty($v);
 			} elseif ($k === 'SIZE' || $k === 'SHEET-SIZE') {
 				$this->processPageSizeProperty($k, $v);
 			} elseif ($k === 'BREAK-BEFORE' || $k === 'BREAK-AFTER' || $k === 'BREAK-INSIDE') {
@@ -1194,6 +1197,36 @@ class NormalizeProperties
 			$this->properties['TEXT-OUTLINE-WIDTH'] = $prop[0];
 			$this->properties['TEXT-OUTLINE-COLOR'] = 'currentcolor';
 		}
+	}
+
+	/**
+	 * Expands the outline shorthand into its width, style and colour, each part it leaves out taking its initial
+	 * value as a border's does. Its style may be auto, which is drawn solid, and its colour invert, which
+	 * a browser that cannot invert takes as currentColor. A value that is not an outline is dropped
+	 *
+	 * @param string $v Property value
+	 * @return void
+	 */
+	protected function processOutlineProperty($v)
+	{
+		$components = [];
+		foreach ($this->splitComponents($v) as $component) {
+			if ($component === 'auto') {
+				$component = 'solid';
+			} elseif ($component === 'invert') {
+				$component = 'currentcolor';
+			}
+			$components[] = $component;
+		}
+
+		$parts = $this->parseBorderParts($components);
+		if ($parts === false) {
+			return;
+		}
+
+		$this->properties['OUTLINE-WIDTH'] = $parts['w'];
+		$this->properties['OUTLINE-STYLE'] = $parts['s'];
+		$this->properties['OUTLINE-COLOR'] = $parts['c'];
 	}
 
 	/**

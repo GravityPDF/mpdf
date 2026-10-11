@@ -3,7 +3,8 @@
 namespace Snapshots;
 
 /**
- * The CSS outline properties do not stroke an element's text, and mPDF's own text-outline properties still do.
+ * The CSS outline properties draw an outline around the element's box and do not stroke its text, and mPDF's own
+ * text-outline properties still do.
  *
  * @group snapshot
  */
@@ -38,7 +39,7 @@ class OutlinePropertiesSnapshotTest extends Snapshot
 		<h1>Outline properties</h1>
 
 		<h2>CSS outline</h2>
-		<p class="caption">outline-style, outline-width and outline-color: the text is plain black, with no red stroke.</p>
+		<p class="caption">outline-style, outline-width and outline-color: the text is plain black, with no red stroke, and a 1mm red outline runs around the box.</p>
 		<div class="sample" style="outline-style: solid; outline-width: 1mm; outline-color: #cc0000">Outlined box</div>
 
 		<p class="caption">outline-width: thick on its own: the text is plain black.</p>
