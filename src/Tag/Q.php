@@ -53,6 +53,8 @@ class Q extends InlineTag
 	}
 
 	/**
+	 * The next <q> is one level less deep
+	 *
 	 * @param array $ahtml
 	 * @param int $ihtml
 	 */
@@ -71,7 +73,7 @@ class Q extends InlineTag
 	 *
 	 * @return int|null Where its end tag is, past those of the <q> elements inside it, or null when it has none
 	 */
-	private function endTagPosition(array $ahtml, $ihtml)
+	private function endTagPosition(array &$ahtml, $ihtml)
 	{
 		$depth = 0;
 		$count = count($ahtml);
@@ -79,13 +81,13 @@ class Q extends InlineTag
 			if ($ahtml[$i] === '') {
 				continue;
 			}
-			$tag = strtolower(strtok($ahtml[$i], " \t\r\n/>"));
-			if ($ahtml[$i][0] === '/') {
-				if (strtolower(trim(substr($ahtml[$i], 1))) === 'q' && $depth-- === 0) {
-					return $i;
-				}
-			} elseif ($tag === 'q') {
+			if (strtolower(strtok($ahtml[$i], " \t\r\n/>")) !== 'q') {
+				continue;
+			}
+			if ($ahtml[$i][0] !== '/') {
 				$depth++;
+			} elseif ($depth-- === 0) {
+				return $i;
 			}
 		}
 

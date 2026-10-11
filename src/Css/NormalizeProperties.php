@@ -1043,7 +1043,7 @@ class NormalizeProperties
 	 */
 	private function lowercaseOutsideStrings($value)
 	{
-		return preg_replace_callback('/"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^"\']+/s', function ($m) {
+		return preg_replace_callback('/' . CssString::PATTERN . '|[^"\']+/s', function ($m) {
 			return $m[0][0] === '"' || $m[0][0] === "'" ? $m[0] : strtolower($m[0]);
 		}, $value);
 	}

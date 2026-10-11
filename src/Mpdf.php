@@ -16784,7 +16784,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$suffix = $this->list_number_suffix;
 			if ($stringMarker) {
 				// A string is the whole marker, drawn as written
-				$num = CounterStyle::stringOf($listitemtype);
+				$num = CssString::single($listitemtype);
 				$suffix = '';
 				$spacer = '';
 			} elseif ($counterStyle) {
@@ -16798,9 +16798,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$e = $num . $suffix . $spacer;
 				$this->_saveTextBuffer($e);
 			} else {
-				if ($stringMarker) {
-					$m = $num;
-				} elseif ($rtl) {
+				if ($rtl) {
 					// REPLACE MIRRORED RTL $this->list_number_suffix  e.g. ) -> (  (NB could use Ucdn::$mirror_pairs)
 					$m = strtr($suffix, ")]}", "([{") . $num;
 				} else {
@@ -16832,7 +16830,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 *
 	 * @return int How many items the list has, not counting those of the lists inside it
 	 */
-	function countListItemsAhead(array $a, $i)
+	function countListItemsAhead(array &$a, $i)
 	{
 		$items = 0;
 		$lvl = 1;
@@ -19478,7 +19476,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// mPDF 6  Lists
 					// LISTS
 					case 'LIST-STYLE-TYPE':
-						$this->blk[$this->blklvl]['list_style_type'] = $this->cssMode === CssMode::STANDARD && CssString::isString($v) ? trim($v) : strtolower($v);
+						$this->blk[$this->blklvl]['list_style_type'] = $this->cssMode === CssMode::STANDARD ? CounterStyle::readType($v) : strtolower($v);
 						break;
 					case 'LIST-STYLE-IMAGE':
 						$this->blk[$this->blklvl]['list_style_image'] = strtolower($v) === 'none' ? 'none' : $v;

@@ -9,7 +9,6 @@ use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
 use Mpdf\Css\CounterStyle;
-use Mpdf\Css\CssString;
 use Mpdf\Css\ListItemCounter;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\WidthConstraints;
@@ -1494,7 +1493,7 @@ abstract class BlockTag extends Tag
 	 * @param array $ahtml The HTML being written, split as WriteHTML() splits it
 	 * @param int $ihtml Where the list's start tag is in it
 	 */
-	private function startListCounter($tag, array $attr, array $properties, array $ahtml, $ihtml)
+	private function startListCounter($tag, array $attr, array $properties, array &$ahtml, $ihtml)
 	{
 		$reset = ListItemCounter::read($properties, 'COUNTER-RESET');
 		if ($reset !== null) {
@@ -1569,7 +1568,7 @@ abstract class BlockTag extends Tag
 	 */
 	private function listStyleType($type)
 	{
-		return $this->mpdf->cssMode === CssMode::STANDARD && CssString::isString($type) ? trim($type) : strtolower($type);
+		return $this->mpdf->cssMode === CssMode::STANDARD ? CounterStyle::readType($type) : strtolower($type);
 	}
 
 }

@@ -11,6 +11,11 @@ final class CssString
 {
 
 	/**
+	 * A CSS string with its quotes, as a regex fragment
+	 */
+	const PATTERN = '"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'';
+
+	/**
 	 * @param string $value A declared value
 	 *
 	 * @return string[]|null The strings the value is made of, separated by white space, or null when anything else is
@@ -19,7 +24,7 @@ final class CssString
 	public static function parseList($value)
 	{
 		$value = trim($value);
-		if ($value === '' || !preg_match_all('/\G\s*("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\')/su', $value, $m)) {
+		if ($value === '' || ($value[0] !== '"' && $value[0] !== "'") || !preg_match_all('/\G\s*(' . self::PATTERN . ')/su', $value, $m)) {
 			return null;
 		}
 
@@ -38,13 +43,23 @@ final class CssString
 	/**
 	 * @param string $value A declared value
 	 *
+	 * @return string|null The text of the value when it is a single string, else null
+	 */
+	public static function single($value)
+	{
+		$strings = self::parseList($value);
+
+		return $strings !== null && count($strings) === 1 ? $strings[0] : null;
+	}
+
+	/**
+	 * @param string $value A declared value
+	 *
 	 * @return bool Whether the value is a single string
 	 */
 	public static function isString($value)
 	{
-		$strings = self::parseList($value);
-
-		return $strings !== null && count($strings) === 1;
+		return self::single($value) !== null;
 	}
 
 	/**
@@ -64,9 +79,21 @@ final class CssString
 				return '';
 			}
 
-			$code = hexdec($m[1]);
-
-			return $code === 0 || $code > 0x10FFFF || ($code >= 0xD800 && $code <= 0xDFFF) ? "\xEF\xBF\xBD" : UtfString::code2utf($code);
+			return CssString::codePoint(hexdec($m[1]));
 		}, substr($quoted, 1, -1));
+	}
+
+	/**
+	 * @param int $code
+	 *
+	 * @return string The character a hex escape stands for, as UTF-8. One that is not a character gives U+FFFD
+	 */
+	public static function codePoint($code)
+	{
+		if ($code === 0 || $code > 0x10FFFF || ($code >= 0xD800 && $code <= 0xDFFF)) {
+			$code = 0xFFFD;
+		}
+
+		return UtfString::code2utf($code);
 	}
 }

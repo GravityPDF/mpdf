@@ -92,15 +92,13 @@ final class CounterStyle
 	}
 
 	/**
-	 * @param string $type A list-style-type value
+	 * @param string $value A declared list-style-type
 	 *
-	 * @return string|null The text of a string marker, or null when the value is not a string
+	 * @return string It as the standard CSS mode keeps it: a string as written, a keyword lowercased
 	 */
-	public static function stringOf($type)
+	public static function readType($value)
 	{
-		$strings = CssString::parseList($type);
-
-		return $strings !== null && count($strings) === 1 ? $strings[0] : null;
+		return CssString::isString($value) ? trim($value) : strtolower($value);
 	}
 
 	/**
@@ -116,9 +114,7 @@ final class CounterStyle
 		$n = (int) $n;
 
 		if ($type === 'decimal-leading-zero') {
-			$digits = (string) abs($n);
-
-			return ($n < 0 ? '-' : '') . (strlen($digits) + ($n < 0 ? 1 : 0) < 2 ? '0' : '') . $digits;
+			return sprintf('%02d', $n);
 		}
 
 		if ($type === 'disclosure-open') {
@@ -180,7 +176,7 @@ final class CounterStyle
 	public static function marker($n, $type, $defaultSuffix)
 	{
 		if (!self::isStyle($type)) {
-			return self::stringOf($type);
+			return CssString::single($type);
 		}
 
 		return self::represent($n, $type) . self::suffix($type, $defaultSuffix);
