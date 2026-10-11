@@ -341,7 +341,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	/**
 	 * @var array|null The outline of the inline element Cell() is drawing a piece of text of, with the sides it is
-	 * left open on, as inlineOutline() gives it
+	 * left open on, as inlinePiece() gives it
 	 */
 	var $spanOutline;
 
@@ -5887,7 +5887,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		$spanBox = [$this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw];
 		$spanWidths = ['top' => $tbw, 'right' => $rbw, 'bottom' => $bbw, 'left' => $lbw];
-		$spanRadii = $this->spanRadii($spanBox[0], $spanBox[1], $spanBox[2], $spanBox[3], $spanWidths);
+		$spanRadii = $this->spanRadii($spanBox, $spanWidths);
 
 		if ($fill == 1 || $border == 1 || !empty($this->spanborddet)) {
 
@@ -7917,8 +7917,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->spanborddet['R']['s'] = $this->spanborddet['R']['w'] = 0;
 					}
 				}
-				$this->spanOutline = isset($this->objectbuffer[$k]) ? null : $this->inlinePiece('box-outline', isset($contentB[$k]) ? $contentB[$k] : '');
-				$this->spanRadius = isset($this->objectbuffer[$k]) ? null : $this->inlinePiece('box-radius', isset($contentB[$k]) ? $contentB[$k] : '');
+				$this->startSpanPiece($k, $contentB);
 				// WORD SPACING
 				// mPDF 5.7.1
 				$widthChunk = $this->aliasReplaceForWidth($chunk);
@@ -9674,8 +9673,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								$this->spanborddet['R']['s'] = $this->spanborddet['R']['w'] = 0;
 							}
 						}
-						$this->spanOutline = isset($this->objectbuffer[$k]) ? null : $this->inlinePiece('box-outline', isset($contentB[$k]) ? $contentB[$k] : '');
-						$this->spanRadius = isset($this->objectbuffer[$k]) ? null : $this->inlinePiece('box-radius', isset($contentB[$k]) ? $contentB[$k] : '');
+						$this->startSpanPiece($k, $contentB);
 
 						// WORD SPACING
 						// StringWidth this time includes any kashida spacing
@@ -19137,11 +19135,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * The operators that draw one side of an inline element's border: along the curve of a rounded piece, in any
-	 * style, or as threeDBorderSide() draws it on a square one
+	 * The operators that draw one side of an inline element's border: round its corners, in any style, where the
+	 * element has a border-radius, or as threeDBorderSide() draws it where it has none
 	 *
 	 * @param array $box The piece's border box: x0, y0, x1, y1
-	 * @param array|null $radii Its corners, as spanRadii() gives them
+	 * @param array|null $radii Its corners, as spanRadii() gives them, or null where the element is not rounded
 	 * @param array $widths Its border widths, keyed top/right/bottom/left
 	 * @param string $side top, right, bottom or left
 	 * @param array $border The side's border
@@ -19273,38 +19271,46 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * The corners of the piece of an inline element's box Cell() is drawing, fitted to it: those on a side where the
-	 * element goes on in another piece are square, as with box-decoration-break: slice. A percentage is of the piece
+	 * Sets the outline and border-radius of the inline element whose piece of text Cell() draws next, with the sides
+	 * the piece is left open on. An object in the text, such as an image, has neither
 	 *
-	 * @param float $x0 The piece's border box
-	 * @param float $y0
-	 * @param float $x1
-	 * @param float $y1
+	 * @param int $k The piece's place in the line
+	 * @param array $contentB Each piece's L and R markers, as inlinePiece() reads them
+	 */
+	private function startSpanPiece($k, array $contentB)
+	{
+		$markers = isset($contentB[$k]) ? $contentB[$k] : '';
+		$isObject = isset($this->objectbuffer[$k]);
+		$this->spanOutline = $isObject ? null : $this->inlinePiece('box-outline', $markers);
+		$this->spanRadius = $isObject ? null : $this->inlinePiece('box-radius', $markers);
+	}
+
+	/**
+	 * The corners of the piece of an inline element's box Cell() is drawing, fitted to it: those on a side where the
+	 * element goes on in another piece are square, as with box-decoration-break: slice. A percentage is of the piece.
+	 * Every piece of a rounded element gets its corners, square or not, so all its pieces are drawn alike
+	 *
+	 * @param array $box The piece's border box: x0, y0, x1, y1
 	 * @param array $widths Its border widths, keyed top/right/bottom/left
 	 *
-	 * @return array|null Null where every corner is square
+	 * @return array|null Null where the element has no border-radius
 	 */
-	private function spanRadii($x0, $y0, $x1, $y1, array $widths)
+	private function spanRadii(array $box, array $widths)
 	{
 		if (!$this->spanRadius) {
 			return null;
 		}
 
-		$radii = BorderRadius::resolve($this->spanRadius['radii'], $this->spanRadius['percent'], $x1 - $x0, $y1 - $y0);
+		$width = $box[2] - $box[0];
+		$height = $box[3] - $box[1];
+		$radii = BorderRadius::resolve($this->spanRadius['radii'], $this->spanRadius['percent'], $width, $height);
 		foreach (['left' => ['TL', 'BL'], 'right' => ['TR', 'BR']] as $side => $corners) {
 			if ($this->spanRadius['open'][$side]) {
 				$radii[$corners[0]] = $radii[$corners[1]] = [0, 0];
 			}
 		}
-		$radii = $this->roundedBox->fit($x1 - $x0, $y1 - $y0, $radii, $widths);
 
-		foreach ($radii as $r) {
-			if ($r[0] > 0 && $r[1] > 0) {
-				return $radii;
-			}
-		}
-
-		return null;
+		return $this->roundedBox->fit($width, $height, $radii, $widths);
 	}
 
 	/**

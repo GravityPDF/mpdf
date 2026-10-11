@@ -92,7 +92,7 @@ class InlineBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A span that wraps rounds the left corners of its first piece and the right corners of its last; a piece in
-	 * between is square on both sides
+	 * between is square on both sides, but drawn the same way as the others
 	 */
 	public function testWrappedSpanRoundsOnlyItsEnds()
 	{
@@ -101,12 +101,11 @@ class InlineBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(
 			[
 				['TL' => true, 'BL' => true, 'BR' => false, 'TR' => false],
+				['TL' => false, 'BL' => false, 'BR' => false, 'TR' => false],
 				['TL' => false, 'BL' => false, 'BR' => true, 'TR' => true],
 			],
 			$this->roundedCorners($page)
 		);
-		// The middle line's piece is drawn as a plain rectangle
-		$this->assertMatchesRegularExpression('/re f /', $page);
 	}
 
 	/**
@@ -120,6 +119,7 @@ class InlineBorderRadiusTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame(
 			[
 				['TL' => true, 'BL' => true, 'BR' => false, 'TR' => false],
+				['TL' => false, 'BL' => false, 'BR' => false, 'TR' => false],
 				['TL' => false, 'BL' => false, 'BR' => true, 'TR' => true],
 			],
 			$this->roundedCorners($page)
