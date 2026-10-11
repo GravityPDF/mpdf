@@ -456,9 +456,28 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 				'linear-gradient(to right, red, blue) #fff',
 				['BACKGROUND-COLOR' => '#fff', 'BACKGROUND-IMAGE' => 'linear-gradient(to right, red, blue)'],
 			],
-			'the colour of the last layer under the first' => [
+			'every layer, with the colour of the last' => [
 				'url(a.png) no-repeat, url(b.png) repeat-y #fff',
-				['BACKGROUND-COLOR' => '#fff', 'BACKGROUND-IMAGE' => 'a.png', 'BACKGROUND-REPEAT' => 'no-repeat'],
+				[
+					'BACKGROUND-COLOR' => '#fff',
+					'BACKGROUND-IMAGE' => BackgroundLayers::join(['a.png', 'b.png']),
+					'BACKGROUND-REPEAT' => BackgroundLayers::join(['no-repeat', 'repeat-y']),
+					'BACKGROUND-POSITION' => BackgroundLayers::join(['0% 0%', '0% 0%']),
+					'BACKGROUND-SIZE' => BackgroundLayers::join(['auto', 'auto']),
+					'BACKGROUND-ORIGIN' => BackgroundLayers::join(['padding-box', 'padding-box']),
+					'BACKGROUND-CLIP' => BackgroundLayers::join(['border-box', 'border-box']),
+				],
+			],
+			'a gradient and an image, each with its own parts' => [
+				'linear-gradient(to right, red, rgb(0 0 255)) center / 50% auto content-box, url("a,b.png") no-repeat right bottom',
+				[
+					'BACKGROUND-IMAGE' => BackgroundLayers::join(['linear-gradient(to right, red, rgb(0,0,255))', 'a,b.png']),
+					'BACKGROUND-REPEAT' => BackgroundLayers::join(['repeat', 'no-repeat']),
+					'BACKGROUND-POSITION' => BackgroundLayers::join(['50% 50%', '100% 100%']),
+					'BACKGROUND-SIZE' => BackgroundLayers::join(['50% auto', 'auto']),
+					'BACKGROUND-ORIGIN' => BackgroundLayers::join(['content-box', 'padding-box']),
+					'BACKGROUND-CLIP' => BackgroundLayers::join(['content-box', 'border-box']),
+				],
 			],
 			'none' => [
 				'none',
@@ -514,6 +533,85 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'an image mPDF cannot draw' => ['#fff conic-gradient(red, blue)'],
 			'an unclosed parenthesis' => ['#fff url(' . str_repeat('a b ', 5000)],
 		];
+	}
+
+	/**
+	 * A background longhand with a comma-separated list keeps a value for each layer
+	 *
+	 * @dataProvider providerLayeredLonghand
+	 *
+	 * @param string $property
+	 * @param string $value
+	 * @param string[] $expected Each layer's value
+	 */
+	public function testReadsAValueForEachLayer($property, $value, array $expected)
+	{
+		$this->assertSame([$property => BackgroundLayers::join($expected)], $this->normalizeProperties->normalize([$property => $value]));
+	}
+
+	/**
+	 * Background longhand lists and each layer's value
+	 *
+	 * @return array[]
+	 */
+	public function providerLayeredLonghand()
+	{
+		return [
+			'images, a gradient and none' => ['BACKGROUND-IMAGE', 'url(a.png), linear-gradient(red, blue), none', ['a.png', 'linear-gradient(red, blue)', '']],
+			'an image with commas in its address' => ['BACKGROUND-IMAGE', 'url(data:image/png;base64,AB,CD), url("B.png")', ['data:image/png;base64,AB,CD', 'B.png']],
+			'repeats' => ['BACKGROUND-REPEAT', 'no-repeat, repeat-x', ['no-repeat', 'repeat-x']],
+			'positions' => ['BACKGROUND-POSITION', 'right bottom, 10mm 5mm', ['100% 100%', '10mm 5mm']],
+			'sizes' => ['BACKGROUND-SIZE', 'cover, 50% auto, 10mm', ['cover', '50% auto', '10mm']],
+			'origins' => ['BACKGROUND-ORIGIN', 'content-box, border-box', ['content-box', 'border-box']],
+			'clips' => ['BACKGROUND-CLIP', 'padding-box, border-box', ['padding-box', 'border-box']],
+		];
+	}
+
+	/**
+	 * A background longhand list with a value that is not a value of the property is dropped
+	 *
+	 * @dataProvider providerInvalidLayeredLonghand
+	 *
+	 * @param string $property
+	 * @param string $value
+	 */
+	public function testDropsAnInvalidLayerList($property, $value)
+	{
+		$this->assertSame([], $this->normalizeProperties->normalize([$property => $value]));
+	}
+
+	/**
+	 * Background longhand lists that are not lists of the property's values
+	 *
+	 * @return string[][]
+	 */
+	public function providerInvalidLayeredLonghand()
+	{
+		return [
+			'a colour among the images' => ['BACKGROUND-IMAGE', 'url(a.png), #fff'],
+			'an unknown repeat' => ['BACKGROUND-REPEAT', 'no-repeat, bogus'],
+			'an empty position' => ['BACKGROUND-POSITION', 'left,'],
+			'three sizes in a layer' => ['BACKGROUND-SIZE', '10mm 10mm 10mm, auto'],
+			'two boxes in a layer' => ['BACKGROUND-ORIGIN', 'padding-box content-box, border-box'],
+		];
+	}
+
+	/**
+	 * The legacy CSS mode reads only the top layer of a list, with the colour of the last
+	 */
+	public function testTheLegacyModeReadsOnlyTheTopLayer()
+	{
+		$this->mpdf->cssMode = CssMode::LEGACY;
+
+		$result = $this->normalizeProperties->normalize([
+			'BACKGROUND' => 'url(a.png) no-repeat, url(b.png) #fff',
+			'BACKGROUND-POSITION' => 'right bottom, left top',
+		]);
+
+		$this->assertSame('#fff', $result['BACKGROUND-COLOR']);
+		$this->assertSame('a.png', $result['BACKGROUND-IMAGE']);
+		$this->assertSame('no-repeat', $result['BACKGROUND-REPEAT']);
+		$this->assertArrayNotHasKey('BACKGROUND-POSITION', $result);
 	}
 
 	public function testNonExistentFontFamily()

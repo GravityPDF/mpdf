@@ -55,7 +55,7 @@ class BackgroundShorthandSnapshotTest extends Snapshot
 		<div class="box" style="padding: 5mm; background: content-box #ffcc99 url(img/bg.jpg) no-repeat"></div>
 
 		<h2>Two layers</h2>
-		<p class="caption">background: url(bg.jpg) no-repeat, #ccccff. mPDF draws only the first layer, over the colour of the last: the image at the top left, once, on a light blue box.</p>
+		<p class="caption">background: url(bg.jpg) no-repeat, #ccccff. The image at the top left, once, on a light blue box: the colour is the last layer's.</p>
 		<div class="box" style="background: url(img/bg.jpg) no-repeat, #ccccff"></div>
 
 		<h2>A background that is not a background is dropped</h2>
