@@ -3,10 +3,11 @@
 namespace Mpdf;
 
 /**
- * An inset box-shadow is drawn inside the padding box, above the background: clipped to the padding box, filled from
- * its edge in to the shape offset and shrunk by the spread, and faded at its inner edge by the blur
+ * An outer box-shadow is cut out of the box and fills the box grown by the spread, faded at its outer edge by the
+ * blur. An inset box-shadow is drawn inside the padding box, above the background: clipped to the padding box,
+ * filled from its edge in to the shape offset and shrunk by the spread, and faded at its inner edge by the blur.
  */
-class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
+class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
 	use PageStreams;
@@ -129,6 +130,39 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The whole clip an outer shadow opens with, cutting the square box given out of the page
+	 *
+	 * @param float $x0
+	 * @param float $y0
+	 * @param float $x1
+	 * @param float $y1
+	 *
+	 * @return string
+	 */
+	private function outerClipAround($x0, $y0, $x1, $y1)
+	{
+		return ' q 0 w ' . $this->roundedBox->path($this->pageHeight, $x0, $y0, $x1, $y1, $this->radii())
+			. sprintf('0 %.3F m %.3F %.3F l ', $this->pageHeight * Mpdf::SCALE, $this->pageWidth * Mpdf::SCALE, $this->pageHeight * Mpdf::SCALE)
+			. $this->outerClip() . "\n";
+	}
+
+	/**
+	 * The path of a square shape run clockwise from the top right, closed
+	 *
+	 * @param float $x0
+	 * @param float $y0
+	 * @param float $x1
+	 * @param float $y1
+	 *
+	 * @return string
+	 */
+	private function squarePath($x0, $y0, $x1, $y1)
+	{
+		return $this->point($x1, $y0) . ' m ' . $this->point($x1, $y1) . ' l ' . $this->point($x0, $y1) . ' l '
+			. $this->point($x0, $y0) . ' l ' . $this->point($x1, $y0) . ' l h ';
+	}
+
+	/**
 	 * The operators that fill a square-cornered shadow between the rectangle given and the shape whose corners are
 	 * given clockwise from the top right, in millimetres
 	 *
@@ -139,11 +173,7 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function squareFill($rect, $shape)
 	{
-		list($x0, $y0, $x1, $y1) = $shape;
-
-		return $this->rect(...$rect)
-			. $this->point($x1, $y0) . ' m ' . $this->point($x1, $y1) . ' l ' . $this->point($x0, $y1) . ' l '
-			. $this->point($x0, $y0) . ' l ' . $this->point($x1, $y0) . ' l h f* Q';
+		return $this->rect(...$rect) . $this->squarePath(...$shape) . 'f* Q';
 	}
 
 	/**
@@ -157,7 +187,7 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function roundedCorner($x1, $y0, $r)
 	{
-		$mag = InsetBoxShadow::MAG;
+		$mag = BoxShadow::MAG;
 
 		return $this->point($x1 - $r, $y0) . ' m ' . $this->point($x1 - $r + $r * $mag, $y0) . ' ' . $this->point($x1, $y0 + $r - $r * $mag) . ' ' . $this->point($x1, $y0 + $r) . ' c ';
 	}
@@ -283,5 +313,67 @@ class InsetBoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertStringContainsString(self::RED . "\n" . $this->rect(10, 10, 60, 30) . 'f Q', $stream);
 		$this->assertStringNotContainsString(' sh', $stream);
+	}
+
+	/**
+	 * An outer shadow with an offset is cut out of the box with the page around it, applies the offset as a
+	 * transformation, and fills the box itself, which the offset moves clear
+	 */
+	public function testAnOuterShadowIsCutOutOfTheBox()
+	{
+		$stream = $this->stream('box-shadow: 2mm 2mm #c00');
+
+		$clip = strpos($stream, $this->outerClipAround(10, 10, 70, 40) . '1 0 0 1 5.6693 -5.6693 cm' . "\n" . ' q ' . self::RED);
+		$this->assertNotFalse($clip);
+		$this->assertGreaterThan($clip, strpos($stream, $this->squarePath(10, 10, 70, 40) . 'f Q'));
+		$this->assertStringNotContainsString(' sh', $stream);
+	}
+
+	/**
+	 * The spread grows the shape by its length on every side, and rounds its square corners by that length
+	 */
+	public function testTheSpreadGrowsTheShape()
+	{
+		$stream = $this->stream('box-shadow: 0 0 0 3mm #c00');
+
+		$this->assertStringNotContainsString(' cm', $stream);
+		$this->assertStringContainsString($this->roundedCorner(73, 7, 3) . $this->point(73, 40) . ' l ', $stream);
+	}
+
+	/**
+	 * A blur keeps the shape solid up to half the blur inside its edge, where square corners come to a point, and
+	 * fades it through a translucent patch mesh out to half the blur outside it
+	 */
+	public function testTheBlurFadesTheOuterEdgeThroughAMesh()
+	{
+		$stream = $this->stream('box-shadow: 0 0 4mm #c00');
+
+		$fill = strpos($stream, $this->squarePath(12, 12, 68, 38) . 'f Q');
+		$this->assertNotFalse($fill);
+		$this->assertGreaterThan($fill, strpos($stream, ' q  ' . $this->rect(8, 8, 64, 34) . 'W n '));
+		$this->assertGreaterThan($fill, strpos($stream, '/TGS1 gs /Sh1 sh'));
+	}
+
+	/**
+	 * An elliptical corner tighter than the blur on its short side only keeps its long radius, less half the blur,
+	 * on the inner edge of the fade, so the solid part follows the curve
+	 */
+	public function testTheFadeFollowsTheLongRadiusOfAnEllipticalCorner()
+	{
+		$stream = $this->stream('border-radius: 12mm / 2mm; box-shadow: 0 0 6mm #c00');
+
+		$this->assertStringContainsString(' q ' . self::RED . "\n" . $this->point(58, 13) . ' m ', $stream);
+	}
+
+	/**
+	 * An outer shadow is cut out of the background's box, the padding box under background-clip: padding-box, and
+	 * cast by the border box
+	 */
+	public function testAnOuterShadowIsCutOutOfTheBackgroundsBox()
+	{
+		$stream = $this->stream('border: 2mm solid #000; background-clip: padding-box; box-shadow: 0 0 0 1mm #c00');
+
+		$this->assertStringContainsString($this->outerClipAround(12, 12, 72, 38), $stream);
+		$this->assertStringContainsString($this->roundedCorner(75, 9, 1) . $this->point(75, 40) . ' l ', $stream);
 	}
 }
