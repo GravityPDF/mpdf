@@ -637,6 +637,7 @@ abstract class BlockTag extends Tag
 		$float = isset($properties['FLOAT']) ? strtoupper($properties['FLOAT']) : '';
 		if ($float === 'RIGHT' && !$this->mpdf->ColActive) {
 			$currblk['float_container'] = true;
+			$currblk['float_far_margin'] = $currblk['margin_left'];
 
 			list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->mpdf->GetFloatDivInfo($this->mpdf->blklvl - 1);
 
@@ -680,6 +681,7 @@ abstract class BlockTag extends Tag
 
 		} elseif ($float === 'LEFT' && !$this->mpdf->ColActive) {
 			$currblk['float_container'] = true;
+			$currblk['float_far_margin'] = $currblk['margin_right'];
 
 			list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->mpdf->GetFloatDivInfo($this->mpdf->blklvl - 1);
 
@@ -762,6 +764,9 @@ abstract class BlockTag extends Tag
 		}
 		if ($measure !== null && $currblk['float']) {
 			$this->floatShrinkToFit->start($this->mpdf->blklvl, $measure, $ihtml);
+		} elseif ($currblk['float']) {
+			// Opened again after a forced page break
+			$this->floatShrinkToFit->resume($this->mpdf->blklvl);
 		}
 		/* -- END CSS-FLOAT -- */
 
