@@ -202,6 +202,7 @@ class Tag
 	{
 		// Correct for tags where HTML5 specifies optional end tags excluding table elements (cf WriteHTML() )
 		if ($this->mpdf->allow_html_optional_endtags) {
+			$token = $ihtml;
 			if (isset($this->mpdf->blk[$this->mpdf->blklvl]['tag'])) {
 				$closed = false;
 				// li end tag may be omitted if immediately followed by another li element
@@ -235,6 +236,11 @@ class Tag
 			// A cell, row or row group ends the open ones as deep in the table as it is, or deeper (see also WriteHTML())
 			if (isset(self::$tablePartDepths[$tag])) {
 				$this->closeTableParts(self::$tablePartDepths[$tag], $ahtml, $ihtml);
+			}
+
+			// A close that put back a kept block rewound the parser to that block; this tag is read again from there
+			if ($ihtml !== $token) {
+				return;
 			}
 		}
 

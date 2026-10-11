@@ -487,6 +487,10 @@ abstract class BlockTag extends Tag
 			$snapshot = $this->mpdf->getStateSnapshot();
 		}
 
+		// page-break-after: avoid, in standard mode: the block and the first line after it are laid out as one unit and
+		// move together (see KeepWithNext)
+		$keepWithNext = $this->mpdf->keepWithNext->opens($p, $attr, $ihtml);
+
 		// mPDF 6 pagebreaktype - moved after pagebreak
 		$this->mpdf->blklvl++;
 		$currblk = & $this->mpdf->blk[$this->mpdf->blklvl];
@@ -554,6 +558,12 @@ abstract class BlockTag extends Tag
 			$this->mpdf->HREF = $parent['href'];
 		}
 		$currblk['InlineProperties'] = $this->mpdf->saveInlineProperties();
+
+		if ($keepWithNext !== null) {
+			$currblk['keepWithNext'] = $keepWithNext;
+			// The unit takes the place of the one-line look-ahead in Cell() and finishFlowingBlock()
+			$currblk['page_break_after_avoid'] = false;
+		}
 
 		if (isset($properties['VISIBILITY'])) {
 			$v = strtolower($properties['VISIBILITY']);
@@ -1275,6 +1285,7 @@ abstract class BlockTag extends Tag
 
 
 		//Print content
+		$hasLine = count($this->mpdf->textbuffer) > 0;
 		$blockstate = 0;
 		if ($this->mpdf->lastblocklevelchange == 1) {
 			$blockstate = 3;
@@ -1412,10 +1423,18 @@ abstract class BlockTag extends Tag
 			// (a table or rows kept together) left at the foot of the page is discounted. A block that reached a third
 			// page is left split without looking further, as before
 			$movepage = ($this->mpdf->page - $start['page']) == 1 && $this->mpdf->y - $start['y'] < $this->mpdf->kt_blank;
+			// What the block takes up on the fresh page: its part before the break and its part after it
+			$height = $this->mpdf->PageBreakTrigger - $this->mpdf->kt_blank - $start['y'] + $this->mpdf->y - $this->mpdf->tMargin;
 
 			// Back to where the block opened: the pages the measuring pass made, the state of the one it started on,
 			// the enclosing blocks and the cursor all go with it
 			$this->mpdf->restoreStateSnapshot($start);
+
+			// The move parts the block from a block kept with its next just before it, so that one moves too, where
+			// both fit the fresh page; the parser is then rewound to it instead
+			if ($movepage && $this->mpdf->keepWithNext->settle($this->mpdf->page + 1, $height, $ahtml, $ihtml)) {
+				return;
+			}
 			$ahtml[$i] .= ' pagebreakavoidchecked="true";'; // so open() does not measure it again
 			$ihtml = $i - 1; // the parser advances onto the same token
 
@@ -1426,6 +1445,17 @@ abstract class BlockTag extends Tag
 		}
 		if ($blk['keep_block_together']) {
 			$this->mpdf->keep_block_together = false;
+			// The kept block stayed on the page it opened on, so a unit before it is kept with it
+			if ($this->mpdf->keepWithNext->settle($blk['kt_state']['page'], $this->mpdf->y - $blk['kt_state']['y'], $ahtml, $ihtml)) {
+				return;
+			}
+		} elseif ($hasLine && !$this->mpdf->keep_block_together && $this->mpdf->keepWithNext->settleAfter($blk, $ahtml, $ihtml)) {
+			// A block that drew a line of its own settles a unit before it by that line. Not while a kept block is
+			// measured: that block settles the unit whole, above
+			return;
+		}
+		if (isset($blk['keepWithNext']) && $this->mpdf->keepWithNext->closes($blk, (bool) $page_break_after, $ahtml, $ihtml)) {
+			return;
 		}
 
 		if ($this->mpdf->blklvl > 0) { // ==0 SHOULDN'T HAPPEN - NOT XHTML

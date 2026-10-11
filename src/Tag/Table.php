@@ -767,6 +767,7 @@ class Table extends Tag
 		$this->mpdf->cellPaddingT = 0;
 		$this->mpdf->cellPaddingB = 0;
 
+		$startpage = $this->mpdf->page;
 		if (isset($this->mpdf->table[1][1]['overflow']) && $this->mpdf->table[1][1]['overflow'] === 'visible') {
 			if ($this->mpdf->kwt || $this->mpdf->table_rotate || $this->mpdf->table_keep_together || $this->mpdf->ColActive) {
 				$this->mpdf->kwt = false;
@@ -1159,8 +1160,25 @@ class Table extends Tag
 				$this->mpdf->kwt_saved = false;
 			}
 
+			// A block kept with its next before the table is kept with the whole table where that is placed whole, and
+			// with its first row where it is not. Where the table was moved to a fresh page above, that is settled before
+			// it is written; where _tableWrite() itself starts the first row on a fresh page, after
+			$table = &$this->mpdf->table[1][1];
+			$firstRow = isset($table['hr'][0]) ? $table['hr'][0] : $this->mpdf->lineheight;
+			if ($this->mpdf->page != $startpage
+				&& $this->mpdf->keepWithNext->settle($this->mpdf->page, $this->mpdf->table_keep_together ? $table['h'] : $firstRow, $ahtml, $ihtml)) {
+				return;
+			}
+
 			// Recursively writes all tables starting at top level
-			$this->mpdf->_tableWrite($this->mpdf->table[1][1]);
+			$this->mpdf->_tableWrite($table);
+
+			$landed = isset($table['startpage']) ? $table['startpage'] : $startpage;
+			$height = $this->mpdf->page == $landed ? $this->mpdf->y - $this->mpdf->tMargin : $firstRow;
+			if ($this->mpdf->keepWithNext->settle($landed, $height, $ahtml, $ihtml)) {
+				return;
+			}
+			unset($table);
 
 			if ($this->mpdf->table_rotate && $this->mpdf->tablebuffer) {
 				$this->mpdf->PageBreakTrigger = $this->mpdf->h - $this->mpdf->bMargin;

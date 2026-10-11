@@ -611,9 +611,10 @@ trait TracksOpenElements
 	 */
 	private function newChildFrame(array $parent, $tag, array $attr)
 	{
-		// Marks a page-break-inside: avoid block laid out a second time. unset() would copy the array even without it
-		if (isset($attr['PAGEBREAKAVOIDCHECKED'])) {
-			unset($attr['PAGEBREAKAVOIDCHECKED']);
+		// Marks a page-break-inside: avoid or page-break-after: avoid block laid out a second time. unset() would copy
+		// the array even without them
+		if (isset($attr['PAGEBREAKAVOIDCHECKED']) || isset($attr[KeepWithNext::CHECKED])) {
+			unset($attr['PAGEBREAKAVOIDCHECKED'], $attr[KeepWithNext::CHECKED]);
 		}
 
 		$nthChild = count($parent['children']) + 1;
