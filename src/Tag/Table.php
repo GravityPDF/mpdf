@@ -45,6 +45,10 @@ class Table extends Tag
 			$this->mpdf->finishFlowingBlock(true); // true = END of flowing block
 		} elseif (!$this->mpdf->tableLevel && count($this->mpdf->textbuffer)) {
 			$this->mpdf->printbuffer($this->mpdf->textbuffer, $blockstate);
+			// Text loose in the parent block, after a block kept with its next, is what that block is kept with
+			if ($this->mpdf->keepWithNext->settleByLine($ahtml, $ihtml)) {
+				return;
+			}
 		}
 
 		$this->mpdf->textbuffer = [];

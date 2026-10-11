@@ -7596,6 +7596,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->breakpoints[$this->CurrCol][] = $this->y;
 			} // *COLUMNS*
 		}
+		if (!$is_table && $content) {
+			$this->keepWithNext->lineDrawn($stackHeight, $newblock && ($blockstate == 1 || $blockstate == 3) && $lineCount == 0);
+		}
 
 		// Paragraph INDENT
 		$WidthCorrection = 0;
@@ -9529,6 +9532,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if ($this->blk[$this->blklvl]['float']) {
 							$this->blk[$this->blklvl]['float_start_y'] = $this->y;
 						}
+					}
+					if (!$is_table) {
+						$this->keepWithNext->lineDrawn($stackHeight, $newblock && ($blockstate == 1 || $blockstate == 3) && $lineCount == 1);
 					}
 
 					// TOP PADDING and BORDER spacing/fill
@@ -14823,7 +14829,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$pbc = 0;
 		$this->subPos = -1;
 		$cnt = count($a);
-		for ($i = 0; $i < $cnt; $i++) {
+		// The step past the last token closes what the HTML left open, and goes on from a block kept with its next that
+		// this put back
+		for ($i = 0; $i <= $cnt; $i++) {
+			if ($i === $cnt) {
+				if ($close && $this->closeLeftOpen($a, $i, $floor, $parseonly)) {
+					continue;
+				}
+				break;
+			}
 			$e = $a[$i];
 			if ($i % 2 == 0) {
 				// TEXT
@@ -15255,21 +15269,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // end of	foreach($a as $i=>$e)
 
 		if ($close) {
-			$this->closeElementsDownTo($floor);
-
-			// Close any open block tags
-			for ($b = $this->blklvl; $b > 0; $b--) {
-				$this->tag->CloseTag($this->blk[$b]['tag'], $a, $i);
-			}
-
-			// Output any text left in buffer
-			if (count($this->textbuffer) && !$parseonly) {
-				$this->printbuffer($this->textbuffer);
-			}
-			if (!$parseonly) {
-				$this->textbuffer = [];
-			}
-
 			/* -- CSS-FLOAT -- */
 			// If ended with a float, need to move to end page
 			$currpos = $this->page * 1000 + $this->y;
@@ -15339,6 +15338,40 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->openElements = $flowElements;
 		}
 		$this->lookAhead = $outerLookAhead;
+	}
+
+	/**
+	 * Closes the elements and blocks the HTML left open at its end and draws the text left at its root. Either can be
+	 * the first line after a block kept with its next, which moving that block rewinds the parser to
+	 *
+	 * @param string[] $a The tokens being parsed
+	 * @param int $i The index past the last token, or that of the token before the kept block once it is put back
+	 * @param int $floor The open elements the HTML cannot close
+	 * @param bool $parseonly
+	 *
+	 * @return bool Whether a block kept with its next was put back, so the parse goes on from it
+	 */
+	private function closeLeftOpen(array &$a, &$i, $floor, $parseonly)
+	{
+		$end = $i;
+		$this->closeElementsDownTo($floor);
+
+		for ($b = $this->blklvl; $b > 0; $b--) {
+			$this->tag->CloseTag($this->blk[$b]['tag'], $a, $i);
+			if ($i !== $end) {
+				return true;
+			}
+		}
+
+		if ($parseonly) {
+			return false;
+		}
+		if (count($this->textbuffer)) {
+			$this->printbuffer($this->textbuffer);
+		}
+		$this->textbuffer = [];
+
+		return $this->keepWithNext->settleByLine($a, $i);
 	}
 
 	/* -- CSS-POSITION -- */

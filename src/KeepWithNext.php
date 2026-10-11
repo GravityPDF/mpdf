@@ -32,11 +32,18 @@ class KeepWithNext
 	/**
 	 * The unit waiting for the first line after it, or null. 'links' has one entry per block, in order, each with the
 	 * document state captured as the block opened and the index of its token; 'page' and 'y1' are where the last block
-	 * closed
+	 * closed; 'line' is the page and height of the first line drawn since, once there is one
 	 *
 	 * @var array|null
 	 */
 	private $pending;
+
+	/**
+	 * How many blocks carrying a unit are open, which want the height of their first line
+	 *
+	 * @var int
+	 */
+	private $openUnits = 0;
 
 	public function __construct(Mpdf $mpdf)
 	{
@@ -51,11 +58,13 @@ class KeepWithNext
 	 * @param array $properties The block's properties, as PreviewBlockCSS() reads them
 	 * @param array $attr
 	 * @param int $ihtml The index of the block's token
+	 * @param array|null $snapshot The document state the block's page-break-inside: avoid captured just before, if any,
+	 * which serves the unit too
 	 *
 	 * @return array|null The unit for the block to carry until it closes: its 'links', the block's own last, and the
 	 * 'page' and 'y' the block opened at. Null when the block is in no unit
 	 */
-	public function opens(array $properties, array $attr, $ihtml)
+	public function opens(array $properties, array $attr, $ihtml, $snapshot = null)
 	{
 		if (!isset($properties['PAGE-BREAK-AFTER']) || strtoupper($properties['PAGE-BREAK-AFTER']) !== 'AVOID'
 			|| isset($attr[self::CHECKED]) || !$this->applies() || ($this->mpdf->use_kwt && isset($attr['KEEP-WITH-TABLE']))) {
@@ -64,7 +73,8 @@ class KeepWithNext
 
 		$links = $this->pending !== null && $this->pending['page'] == $this->mpdf->page ? $this->pending['links'] : [];
 		$this->pending = null;
-		$links[] = ['state' => $this->mpdf->getStateSnapshot(), 'i' => $ihtml];
+		$links[] = ['state' => $snapshot !== null ? $snapshot : $this->mpdf->getStateSnapshot(), 'i' => $ihtml];
+		$this->openUnits++;
 
 		return ['links' => $links, 'page' => $this->mpdf->page, 'y' => $this->mpdf->y];
 	}
@@ -84,6 +94,7 @@ class KeepWithNext
 	 */
 	public function closes(array $blk, $forcedBreak, array &$ahtml, &$ihtml)
 	{
+		$this->openUnits--;
 		$unit = $blk['keepWithNext'];
 		$links = $unit['links'];
 		$before = array_slice($links, 0, -1);
@@ -104,19 +115,51 @@ class KeepWithNext
 	}
 
 	/**
-	 * Called as a block without a unit of its own closes, having drawn a line: that first line is what a unit before it
-	 * is kept with
+	 * Called as each line of a block is placed, outside tables, with the page it landed on current. The first line after
+	 * a waiting unit is what the unit is kept with, and the first line in a block, or in a block inside it, is the line
+	 * closes() keeps the blocks of a unit before it with
 	 *
-	 * @param array $blk The block, with the 'startpage' its first line landed on. The root block, which a stray end tag
-	 * closes and no open() started, has none and settles nothing
+	 * @param float $height The line's height
+	 * @param bool $opensBlock Whether it is the first line of its block, which has the block's top above it
+	 *
+	 * @return void
+	 */
+	public function lineDrawn($height, $opensBlock)
+	{
+		$mpdf = $this->mpdf;
+		if (($this->pending === null && !$this->openUnits) || $mpdf->bufferoutput) {
+			return;
+		}
+
+		if ($opensBlock) {
+			$height += $this->blockTop($mpdf->blk[$mpdf->blklvl]);
+		}
+
+		if ($this->pending !== null && !isset($this->pending['line'])) {
+			$this->pending['line'] = ['page' => $mpdf->page, 'height' => $height];
+		}
+		for ($level = $mpdf->blklvl; $level > 0 && !isset($mpdf->blk[$level]['firstLine']); $level--) {
+			$mpdf->blk[$level]['firstLine'] = $height;
+		}
+	}
+
+	/**
+	 * Called at the end of a block, and as a block or table starts after text left loose in its parent, once the lines
+	 * so far are drawn: the first of them since a waiting unit is what the unit is kept with. Not while a kept block is
+	 * measured, which settles the unit whole
+	 *
 	 * @param string[] $ahtml The tokens being parsed
 	 * @param int $ihtml The index of the token being parsed
 	 *
 	 * @return bool Whether the document was put back and the parser rewound, as settle() says
 	 */
-	public function settleAfter(array $blk, array &$ahtml, &$ihtml)
+	public function settleByLine(array &$ahtml, &$ihtml)
 	{
-		return isset($blk['startpage']) && $this->settle($blk['startpage'], $this->firstLine($blk), $ahtml, $ihtml);
+		if (!isset($this->pending['line']) || $this->mpdf->keep_block_together) {
+			return false;
+		}
+
+		return $this->settle($this->pending['line']['page'], $this->pending['line']['height'], $ahtml, $ihtml);
 	}
 
 	/**
@@ -170,9 +213,8 @@ class KeepWithNext
 	}
 
 	/**
-	 * What a block's first line takes up on a fresh page, its top margin, padding and border included. The margin is
-	 * counted though a fresh page may drop it: a unit this close to a page's height is better left split than moved to a
-	 * page it then overruns (mpdf/mpdf#1801)
+	 * What a block's first line takes up on a fresh page, as lineDrawn() measured it, its top margin, padding and border
+	 * included. The line height stands in where no line was measured
 	 *
 	 * @param array $blk
 	 *
@@ -180,7 +222,21 @@ class KeepWithNext
 	 */
 	private function firstLine(array $blk)
 	{
-		return $this->mpdf->lineheight + $blk['margin_top'] + $blk['padding_top'] + $blk['border_top']['w'];
+		return isset($blk['firstLine']) ? $blk['firstLine'] : $this->mpdf->lineheight + $this->blockTop($blk);
+	}
+
+	/**
+	 * A block's top margin, padding and border, which stand above its first line. The margin is counted though a fresh
+	 * page may drop it: a unit this close to a page's height is better left split than moved to a page it then overruns
+	 * (mpdf/mpdf#1801)
+	 *
+	 * @param array $blk
+	 *
+	 * @return float
+	 */
+	private function blockTop(array $blk)
+	{
+		return $blk['margin_top'] + $blk['padding_top'] + $blk['border_top']['w'];
 	}
 
 	/**
@@ -214,7 +270,9 @@ class KeepWithNext
 
 	/**
 	 * Puts the document back to how it was as $link's block opened, marks that block's token so it is laid out as an
-	 * ordinary block, rewinds the parser to it and starts the fresh page for it
+	 * ordinary block, rewinds the parser to it and starts the fresh page for it. A kept block laid out again between the
+	 * unit and what follows it keeps its mark: it was marked for being too tall for a page, which it still is, or for
+	 * moving to a fresh page alone, which settled the unit
 	 *
 	 * @param array $link
 	 * @param string[] $ahtml
@@ -227,10 +285,12 @@ class KeepWithNext
 		$i = $link['i'];
 		$marker = ' ' . strtolower(self::CHECKED) . '="true";';
 		$this->mpdf->restoreStateSnapshot($link['state']);
+		// The state may be a page-break-inside: avoid snapshot, taken before the block took over the unit waiting for it
+		$this->pending = null;
 		$ahtml[$i] .= $marker;
-		// The kept blocks laid out again between the unit and what follows it are measured afresh on the fresh page
-		for ($j = $i + 1; $j <= $ihtml; $j++) {
-			$ahtml[$j] = str_replace([' pagebreakavoidchecked="true";', $marker], '', $ahtml[$j]);
+		// $ihtml is past the last token where the end of the HTML settled the unit
+		for ($j = $i + 1, $last = min($ihtml, count($ahtml) - 1); $j <= $last; $j++) {
+			$ahtml[$j] = str_replace($marker, '', $ahtml[$j]);
 		}
 		$ihtml = $i - 1;
 		$this->mpdf->AddPage();

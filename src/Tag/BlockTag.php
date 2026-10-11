@@ -386,6 +386,11 @@ abstract class BlockTag extends Tag
 		$this->mpdf->printbuffer($this->mpdf->textbuffer, $blockstate);
 		$this->mpdf->textbuffer = [];
 
+		// Text loose in the parent block, after a block kept with its next, is what that block is kept with
+		if ($this->mpdf->keepWithNext->settleByLine($ahtml, $ihtml)) {
+			return;
+		}
+
 		$save_blklvl = $this->mpdf->blklvl;
 		$save_blk = $this->mpdf->blk;
 
@@ -489,7 +494,7 @@ abstract class BlockTag extends Tag
 
 		// page-break-after: avoid, in standard mode: the block and the first line after it are laid out as one unit and
 		// move together (see KeepWithNext)
-		$keepWithNext = $this->mpdf->keepWithNext->opens($p, $attr, $ihtml);
+		$keepWithNext = $this->mpdf->keepWithNext->opens($p, $attr, $ihtml, $snapshot);
 
 		// mPDF 6 pagebreaktype - moved after pagebreak
 		$this->mpdf->blklvl++;
@@ -1285,7 +1290,6 @@ abstract class BlockTag extends Tag
 
 
 		//Print content
-		$hasLine = count($this->mpdf->textbuffer) > 0;
 		$blockstate = 0;
 		if ($this->mpdf->lastblocklevelchange == 1) {
 			$blockstate = 3;
@@ -1449,9 +1453,8 @@ abstract class BlockTag extends Tag
 			if ($this->mpdf->keepWithNext->settle($blk['kt_state']['page'], $this->mpdf->y - $blk['kt_state']['y'], $ahtml, $ihtml)) {
 				return;
 			}
-		} elseif ($hasLine && !$this->mpdf->keep_block_together && $this->mpdf->keepWithNext->settleAfter($blk, $ahtml, $ihtml)) {
-			// A block that drew a line of its own settles a unit before it by that line. Not while a kept block is
-			// measured: that block settles the unit whole, above
+		} elseif ($this->mpdf->keepWithNext->settleByLine($ahtml, $ihtml)) {
+			// A unit before the block is settled by the first line drawn after it
 			return;
 		}
 		if (isset($blk['keepWithNext']) && $this->mpdf->keepWithNext->closes($blk, (bool) $page_break_after, $ahtml, $ihtml)) {
