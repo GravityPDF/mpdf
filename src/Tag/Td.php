@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
+use Mpdf\Css\BorderRadius;
 use Mpdf\Css\TextVars;
 use Mpdf\CssMode;
 use Mpdf\Utils\Arrays;
@@ -210,6 +211,14 @@ class Td extends Tag
 			}
 		}
 		/* -- END BACKGROUNDS -- */
+
+		if ($this->mpdf->cssMode === CssMode::STANDARD) {
+			list($radii, $percent) = BorderRadius::parse($properties, $this->sizeConverter, $this->mpdf->FontSize);
+			if ($radii) {
+				$c['border_radius'] = ['radii' => $radii, 'percent' => $percent];
+			}
+		}
+
 		if (isset($properties['VERTICAL-ALIGN'])) {
 			$c['va'] = $this->getAlign($properties['VERTICAL-ALIGN']);
 		} elseif (isset($attr['VALIGN'])) {
