@@ -154,7 +154,7 @@ class MultipleBackgroundsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The legacy CSS mode draws only the top layer, as before
+	 * The legacy CSS mode draws only the top layer, as mPDF v7 did
 	 */
 	public function testTheLegacyModeDrawsOnlyTheTopLayer()
 	{

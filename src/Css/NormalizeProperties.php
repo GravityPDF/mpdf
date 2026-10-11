@@ -63,15 +63,15 @@ class NormalizeProperties
 
 	/**
 	 * The background longhands that list a value for each layer, with the key of their part in a parsed layer of the
-	 * shorthand and their initial value
+	 * shorthand
 	 */
 	const LAYERED_LONGHANDS = [
-		'BACKGROUND-IMAGE' => ['i', ''],
-		'BACKGROUND-REPEAT' => ['r', 'repeat'],
-		'BACKGROUND-POSITION' => ['p', '0% 0%'],
-		'BACKGROUND-SIZE' => ['s', 'auto'],
-		'BACKGROUND-ORIGIN' => ['o', 'padding-box'],
-		'BACKGROUND-CLIP' => ['k', 'border-box'],
+		'BACKGROUND-IMAGE' => 'i',
+		'BACKGROUND-REPEAT' => 'r',
+		'BACKGROUND-POSITION' => 'p',
+		'BACKGROUND-SIZE' => 's',
+		'BACKGROUND-ORIGIN' => 'o',
+		'BACKGROUND-CLIP' => 'k',
 	];
 
 	/**
@@ -247,7 +247,7 @@ class NormalizeProperties
 				$this->processPageSizeProperty($k, $v);
 			} elseif ($k === 'BREAK-BEFORE' || $k === 'BREAK-AFTER' || $k === 'BREAK-INSIDE') {
 				$this->processBreakProperty($k, $v);
-			} elseif (in_array($k, ['BACKGROUND', 'BACKGROUND-IMAGE', 'BACKGROUND-REPEAT', 'BACKGROUND-POSITION', 'BACKGROUND-SIZE', 'BACKGROUND-ORIGIN', 'BACKGROUND-CLIP'], true)) {
+			} elseif ($k === 'BACKGROUND' || array_key_exists($k, self::LAYERED_LONGHANDS)) {
 				$this->processBackgroundProperty($k, $v);
 			} elseif ($k === 'IMAGE-ORIENTATION') {
 				$this->processImageOrientationProperty($v);
@@ -667,14 +667,11 @@ class NormalizeProperties
 				if ($i + 1 < $count && $components[$i + 1] === '/') {
 					$i += 2;
 					$size = isset($components[$i]) ? [strtolower($components[$i])] : [];
-					if ($size !== ['cover'] && $size !== ['contain']) {
-						$sizeLength = '/^(auto|' . self::NUMBER . '([a-z]+|%)?)$/';
-						if (!$size || !preg_match($sizeLength, $size[0])) {
-							return false;
-						}
-						if ($i + 1 < $count && preg_match($sizeLength, strtolower($components[$i + 1]))) {
-							$size[] = strtolower($components[++$i]);
-						}
+					if (!$this->isBackgroundSize($size)) {
+						return false;
+					}
+					if ($size !== ['cover'] && $size !== ['contain'] && $i + 1 < $count && $this->isBackgroundSize([$size[0], strtolower($components[$i + 1])])) {
+						$size[] = strtolower($components[++$i]);
 					}
 					$layer['s'] = implode(' ', $size);
 				}
@@ -727,6 +724,19 @@ class NormalizeProperties
 	private function isBackgroundPosition($component)
 	{
 		return preg_match('/^(left|right|top|bottom|center|[+-]?' . self::NUMBER . '([a-z]+|%)?)$/', $component) === 1;
+	}
+
+	/**
+	 * Whether components are a background size: cover, contain, or one or two lengths, percentages or auto
+	 *
+	 * @param string[] $components Lowercased components
+	 * @return bool
+	 */
+	private function isBackgroundSize(array $components)
+	{
+		$length = '(auto|' . self::NUMBER . '([a-z]+|%)?)';
+
+		return preg_match('/^(cover|contain|' . $length . '( ' . $length . ')?)$/', implode(' ', $components)) === 1;
 	}
 
 	/**
@@ -1061,7 +1071,7 @@ class NormalizeProperties
 	 * Sets only the parts a background shorthand names, besides its colour and image, as mPDF v7 read it: the
 	 * repeat, position and size only with an image, which they have nothing to apply to without
 	 *
-	 * @param array $bg The shorthand as parseCssBackground() reads it
+	 * @param array $bg The top layer of the shorthand, as parseBackgroundLayers() reads it
 	 * @return void
 	 */
 	private function mergeBackgroundParts(array $bg)
@@ -1096,7 +1106,7 @@ class NormalizeProperties
 	 */
 	protected function processBackgroundProperty($property, $value)
 	{
-		if ($property !== 'BACKGROUND' && $this->mpdf->cssMode === CssMode::STANDARD) {
+		if ($property !== 'BACKGROUND' && $this->mpdf->cssMode === CssMode::STANDARD && strpos($value, ',') !== false) {
 			$layers = $this->splitLayers($value);
 			if (count($layers) > 1) {
 				$this->processLayeredBackgroundProperty($property, $layers);
@@ -1118,7 +1128,7 @@ class NormalizeProperties
 				$this->properties['BACKGROUND-COLOR'] = isset($bottom['c']) ? $bottom['c'] : 'transparent';
 
 				if (!$this->resetsOmittedParts()) {
-					// Only the top layer is drawn
+					// mPDF v7 drew only the top layer
 					$this->properties['BACKGROUND-IMAGE'] = isset($layers[0]['i']) ? $layers[0]['i'] : '';
 					$this->mergeBackgroundParts($layers[0]);
 					break;
@@ -1128,7 +1138,7 @@ class NormalizeProperties
 				foreach (self::LAYERED_LONGHANDS as $longhand => $part) {
 					$values = [];
 					foreach ($layers as $layer) {
-						$values[] = isset($layer[$part[0]]) && $layer[$part[0]] !== false ? $layer[$part[0]] : $part[1];
+						$values[] = isset($layer[$part]) && $layer[$part] !== false ? $layer[$part] : CssWideKeywords::initialValue($longhand);
 					}
 					$this->properties[$longhand] = BackgroundLayers::join($values);
 				}
@@ -1198,13 +1208,10 @@ class NormalizeProperties
 	private function layerValue($property, array $components)
 	{
 		if ($property === 'BACKGROUND-SIZE') {
-			$size = implode(' ', $components);
-			$length = '(auto|' . self::NUMBER . '([a-z]+|%)?)';
-
-			return preg_match('/^(cover|contain|' . $length . '( ' . $length . ')?)$/', $size) ? $size : false;
+			return $this->isBackgroundSize($components) ? implode(' ', $components) : false;
 		}
 
-		$part = self::LAYERED_LONGHANDS[$property][0];
+		$part = self::LAYERED_LONGHANDS[$property];
 		$layer = $this->parseBackgroundLayer($components);
 		if (!isset($layer[$part]) || $layer[$part] === false) {
 			return false;

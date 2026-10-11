@@ -2842,6 +2842,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$layer = $properties;
 			$layer['BACKGROUND-IMAGE'] = $image;
+			// The clip is the bottom layer's for every layer, which setCSS() reads
 			foreach (['BACKGROUND-REPEAT', 'BACKGROUND-POSITION', 'BACKGROUND-SIZE', 'BACKGROUND-ORIGIN'] as $property) {
 				if (isset($properties[$property])) {
 					$layer[$property] = BackgroundLayers::valueFor($properties[$property], $n);
