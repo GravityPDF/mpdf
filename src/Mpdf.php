@@ -17607,7 +17607,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$objattr['OUTER-HEIGHT'] = $h;
 						$objattr['OUTER-X'] = $fx;
 						$objattr['OUTER-Y'] = $fy;
-						$buffered = count($this->floatbuffer);
+						$beside = null;
 						if ($objattr['float'] == 'R') {
 							// If R float already exists at this level
 							$this->floatmargins['R']['skipline'] = false;
@@ -17629,6 +17629,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 										$this->floatmargins['R']['id'] = count($this->floatbuffer) + 0;
 										$objattr['skipline'] = true;
 									}
+									$beside = $this->floatmargins['L']['w'];
 									$this->floatbuffer[] = $objattr;
 								}
 							} else {
@@ -17641,6 +17642,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									$this->floatmargins['R']['id'] = count($this->floatbuffer) + 0;
 									$objattr['skipline'] = true;
 								}
+								$beside = 0;
 								$this->floatbuffer[] = $objattr;
 							}
 						} elseif ($objattr['float'] == 'L') {
@@ -17665,6 +17667,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 										$this->floatmargins['L']['id'] = count($this->floatbuffer) + 0;
 										$objattr['skipline'] = true;
 									}
+									$beside = $this->floatmargins['R']['w'];
 									$this->floatbuffer[] = $objattr;
 								}
 							} else {
@@ -17677,11 +17680,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									$this->floatmargins['L']['id'] = count($this->floatbuffer) + 0;
 									$objattr['skipline'] = true;
 								}
+								$beside = 0;
 								$this->floatbuffer[] = $objattr;
 							}
 						}
-						if (count($this->floatbuffer) > $buffered) {
-							$this->floatShrinkToFit->recordFloatedImage($objattr['float'], $w, $fy);
+						if ($beside !== null) {
+							// For a float with no width around it, with the image floated to the other side beside it
+							$this->floatShrinkToFit->recordLine($w + $beside);
 						}
 					} else {
 						/* -- END CSS-IMAGE-FLOAT -- */

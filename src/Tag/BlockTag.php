@@ -764,7 +764,7 @@ abstract class BlockTag extends Tag
 		}
 		if ($measure !== null && $currblk['float']) {
 			$this->floatShrinkToFit->start($this->mpdf->blklvl, $measure, $ihtml);
-		} elseif ($currblk['float'] && $this->shrinksToFit($p, $attr)) {
+		} elseif ($currblk['float']) {
 			// Opened again after a forced page break
 			$this->floatShrinkToFit->resume($this->mpdf->blklvl);
 		}

@@ -14,8 +14,8 @@ namespace Mpdf;
  * The result is min(max-content, available): a line that wrapped means the content wants more than there was, so
  * the float keeps the width it had, and the measuring pass stands as its layout. CSS takes the larger of that and
  * min-content, which only tells when min-content is wider than the space available; a browser lets the float overflow
- * then, where mPDF breaks the long word and keeps the float within its container. A float with nothing that records
- * a width, only empty blocks say, is as narrow as its padding and borders.
+ * then, where mPDF breaks the long word and keeps the float within its container. A float holding nothing that records
+ * a width, such as only empty blocks, is as narrow as its padding and borders.
  *
  * A forced page break closes the float with no tokens to come back to and opens it again on the next page. The
  * measurement is put by when it closes and taken up again when it opens, so the float is measured on both pages and
@@ -111,29 +111,6 @@ class FloatShrinkToFit
 	}
 
 	/**
-	 * Records an image floated in the current block, with an image floated to the other side beside it
-	 *
-	 * @param string $side L or R
-	 * @param float $width The image's width with its margins and borders
-	 * @param float $y Its top
-	 *
-	 * @return void
-	 */
-	public function recordFloatedImage($side, $width, $y)
-	{
-		if (!$this->measuring) {
-			return;
-		}
-
-		$other = $side === 'L' ? 'R' : 'L';
-		if (isset($this->mpdf->floatmargins[$other]['y1']) && $y >= $this->mpdf->floatmargins[$other]['y0'] && $y < $this->mpdf->floatmargins[$other]['y1']) {
-			$width += $this->mpdf->floatmargins[$other]['w'];
-		}
-
-		$this->record($this->mpdf->blklvl, $width, false);
-	}
-
-	/**
 	 * Records a block of set width that opens at $blklvl, before its margins take up the slack
 	 *
 	 * @param int $blklvl
@@ -176,19 +153,17 @@ class FloatShrinkToFit
 		}
 
 		$measure = $this->mpdf->blk[$blklvl]['float_measure'];
-		$available = $this->mpdf->blk[$blklvl]['css_set_width'];
+		unset($this->mpdf->blk[$blklvl]['float_measure']);
 		$this->measuring--;
 
 		if (!isset($tokens[$measure['token']])) {
 			$this->suspended[$blklvl] = $measure;
-			unset($this->mpdf->blk[$blklvl]['float_measure']);
 
 			return null;
 		}
 
-		$width = $measure['wrapped'] ? $available : min($measure['width'] + self::SLACK, $available);
-		if ($width >= $available) {
-			unset($this->mpdf->blk[$blklvl]['float_measure']);
+		$width = $measure['width'] + self::SLACK;
+		if ($measure['wrapped'] || $width >= $this->mpdf->blk[$blklvl]['css_set_width']) {
 			$this->recordBlock($blklvl);
 
 			return null;
