@@ -293,6 +293,23 @@ class ThreeDBorderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * Where a side has no border, the rings of the others run out past the box there, so their two edges do not lie on
+	 * each other at the edge of the clip, which a renderer paints as a hairline
+	 */
+	public function testRingsRunPastASideWithNoBorder()
+	{
+		$page = $this->pages($this->render('<div style="width: 40mm; border-top: 3mm inset #36c">Text</div>'))[0];
+
+		list($top) = $this->sides($page);
+		$left = min(array_column($top['region'], 0));
+		$ring = $top['rings'][0];
+
+		$this->assertEqualsWithDelta($left - 1, $ring['outer'][0], 0.02);
+		$this->assertEqualsWithDelta($left - 1, $ring['inner'][0], 0.02);
+		$this->assertEqualsWithDelta($ring['outer'][1] + 3, $ring['inner'][1], 0.02);
+	}
+
+	/**
 	 * A legend sits in a gap cut out of the top border
 	 */
 	public function testLegendIsLeftAGapInTheTopBorder()

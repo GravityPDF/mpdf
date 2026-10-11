@@ -192,9 +192,10 @@ class BoxOutline
 		// Each ring is [from, to, top and left tone, bottom and right tone]
 		$tone = in_array($side, ['top', 'left'], true) ? 2 : 3;
 		$s = 'q ' . $this->sideRegion($box, $widths, $side) . 'W n ';
+		$rings = $this->runPastBorderlessSides($box, $radii, $widths);
 		foreach ($this->threeDRings($border['style'], $border['c']) as $ring) {
-			$s .= $this->fill($ring[$tone]) . ' ' . $this->insetPath($box, $radii, $widths, 1 - $ring[1])
-				. $this->insetPath($box, $radii, $widths, 1 - $ring[0]) . 'f* ';
+			$s .= $this->fill($ring[$tone]) . ' ' . $this->insetPath($rings, $radii, $widths, 1 - $ring[1])
+				. $this->insetPath($rings, $radii, $widths, 1 - $ring[0]) . 'f* ';
 		}
 
 		return $s . 'Q';
@@ -269,6 +270,36 @@ class BoxOutline
 		}
 
 		return $this->polygon([$outer[0], $outer[1], $inner[1], [$x0 + $halfW, $y0 + $halfH], $inner[0]]);
+	}
+
+	/**
+	 * The box the rings of a border are drawn on. Along a side with no border, such as one cut by a page or a line
+	 * break, both edges of a ring would lie on the box's edge, and a renderer paints that as a hairline, so the box is
+	 * run out past the edge there, beyond the clip of every side. A side with a rounded corner keeps its edge, as
+	 * moving it would change the curve
+	 *
+	 * @param array $box x0, y0, x1, y1
+	 * @param array $radii
+	 * @param array $widths keyed top/right/bottom/left
+	 *
+	 * @return array
+	 */
+	private function runPastBorderlessSides(array $box, array $radii, array $widths)
+	{
+		$sides = [
+			'left' => [0, -1, 'TL', 'BL'],
+			'top' => [1, -1, 'TL', 'TR'],
+			'right' => [2, 1, 'TR', 'BR'],
+			'bottom' => [3, 1, 'BL', 'BR'],
+		];
+		foreach ($sides as $side => $how) {
+			list($edge, $direction, $a, $b) = $how;
+			if (!$widths[$side] && !max($radii[$a]) && !max($radii[$b])) {
+				$box[$edge] += $direction;
+			}
+		}
+
+		return $box;
 	}
 
 	/**
