@@ -10,7 +10,8 @@ use Mpdf\Css\BorderRadius;
  * A sizing is an array of the lengths an image was given, in millimetres: w and h (0 when not given), minw, maxw, minh
  * and maxh (false when not given), natural_w and natural_h (the size it takes when given neither w nor h), extrawidth
  * and extraheight (its padding, border and margin), fit_w and fit_h (the most room it may take up), and percent: the
- * percentages of a table cell's width still to resolve, keyed as the length they stand for.
+ * percentages of a table cell's width still to resolve, keyed as the length they stand for. An image given an
+ * aspect-ratio also has ratio: the width and height of the proportions it is sized by, in place of the picture's own.
  */
 class ImageSizing
 {
@@ -27,6 +28,10 @@ class ImageSizing
 	 */
 	public static function fit(array $sizing, $ratioW, $ratioH, $basis = null)
 	{
+		if (isset($sizing['ratio'])) {
+			list($ratioW, $ratioH) = $sizing['ratio'];
+		}
+
 		foreach ($sizing['percent'] as $key => $percent) {
 			$sizing[$key] = $basis === null ? false : $percent / 100 * $basis;
 		}
