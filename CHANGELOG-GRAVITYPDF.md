@@ -81,6 +81,10 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
 * **`min-width` and `max-width` hold the width of a block**, as in a browser, in standard mode. mPDF never read them on a block, so `max-width: 100mm; margin: 0 auto`, the usual centred container, filled the page, `width: 150mm; max-width: 100mm` was 150mm wide, and `width: 50mm; min-width: 80mm` was 50mm. Now the width is held within the two, `max-width` first, then `min-width`, a percentage taken of the container's inner width as `width` is, and the block's auto margins, direction or float place the narrowed box. Floats and positioned blocks take the same limits. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore the two properties as before. [#588] [#691]
   * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
+* **`height` on a block fixes its box**, as in a browser, in standard mode. mPDF read it as a minimum: content taller than the height grew the box, and `overflow: hidden` clipped nothing. Now the box is as tall as its height, padding and borders whatever its content: shorter content leaves space, taller content overflows the box, and `overflow: hidden`, `clip`, `auto` or `scroll` clips the content, and the backgrounds and borders of the blocks inside, to the padding box. Documents that used `height` as a minimum, since `min-height` is not supported on blocks, should drop it or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#587] [#695]
+  * The borders count towards the box. A `height: 20mm` block with a 1mm border is 22mm tall; before, its borders were drawn inside the 20mm.
+  * A percentage `height` is taken of the parent's set height, and is `auto` when the parent has none. mPDF took it of the page area, so `height: 50%` was half a page tall wherever it was. Legacy mode keeps the page area.
+  * A block whose height does not fit in what is left of the page starts on the next page, as before. A block whose content runs past the foot of the page is laid out as before: the content continues on the next page, the box ends with it, and nothing is clipped. In columns and keep-with-table blocks the height stays a minimum and nothing is clipped.
 
 New features
 ------------
@@ -965,3 +969,5 @@ These changes do not change output.
 [#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
+[#587]: https://github.com/GravityPDF/mpdf/issues/587
+[#695]: https://github.com/GravityPDF/mpdf/pull/695
