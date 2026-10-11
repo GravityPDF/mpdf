@@ -41,6 +41,7 @@ class CssMerger
 		'BACKGROUND-COLOR',
 		'BACKGROUND-IMAGE',
 		'BOX-SHADOW',
+		'OUTLINE-COLOR',
 		'TEXT-SHADOW',
 		'TOPNTAIL',
 		'THEAD-UNDERLINE',
@@ -413,8 +414,8 @@ class CssMerger
 
 	/**
 	 * Replaces currentColor in the merged properties with the element's colour, which is its own color, or the one it
-	 * inherits. In standard mode, color: currentColor is the colour the element inherits, and a shadow that names no
-	 * colour takes currentColor, as a border does. Legacy mode resolves it only where it raised warnings
+	 * inherits. In standard mode, color: currentColor is the colour the element inherits, and a shadow or an outline
+	 * that names no colour takes currentColor, as a border does. Legacy mode resolves it only where it raised warnings
 	 *
 	 * @param string $inherit Inheritance context (BLOCK, INLINE, TABLE, TOPTABLE, or empty)
 	 * @param array $inherited Under the standard cascade, what the element inherits
@@ -430,6 +431,12 @@ class CssMerger
 				if (isset($this->cssProperties[$property])) {
 					$this->cssProperties[$property] = ShadowParser::withColor($this->cssProperties[$property], 'currentcolor');
 				}
+			}
+
+			// A browser that cannot invert draws invert as currentColor
+			if (isset($this->cssProperties['OUTLINE-STYLE']) && !in_array(strtolower($this->cssProperties['OUTLINE-STYLE']), ['none', 'hidden'], true)
+				&& (!isset($this->cssProperties['OUTLINE-COLOR']) || strtolower($this->cssProperties['OUTLINE-COLOR']) === 'invert')) {
+				$this->cssProperties['OUTLINE-COLOR'] = 'currentcolor';
 			}
 
 			if (isset($this->cssProperties['COLOR']) && strtolower($this->cssProperties['COLOR']) === 'currentcolor') {

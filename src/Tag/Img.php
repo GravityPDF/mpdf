@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\BorderRadius;
+use Mpdf\Css\Outline;
 use Mpdf\Image\ImageSizing;
 use Mpdf\Mpdf;
 use Mpdf\Utils\NumericString;
@@ -305,6 +306,12 @@ class Img extends Tag
 				$objattr['border_radius'] = $radii;
 			}
 			/* -- END BORDER-RADIUS -- */
+			if ($this->appliesStandardCascade()) {
+				$outline = Outline::parse($properties, $this->sizeConverter, $this->colorConverter, $this->mpdf->FontSize, $this->mpdf->PDFAXwarnings);
+				if ($outline) {
+					$objattr['outline'] = $outline;
+				}
+			}
 			if ($percent) {
 				$objattr['cell_sizing'] = $sizing;
 				$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['sized_images'] = true;
