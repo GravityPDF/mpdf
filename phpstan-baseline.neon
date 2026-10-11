@@ -49,6 +49,18 @@ parameters:
 			path: src/DirectWrite.php
 
 		-
+			message: '#^Undefined variable\: \$fsSelection$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Fonts/FontSubsetter.php
+
+		-
+			message: '#^Variable \$format might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Fonts/FontSubsetter.php
+
+		-
 			message: '#^Variable \$js in isset\(\) always exists and is not nullable\.$#'
 			identifier: isset.variable
 			count: 1
@@ -337,66 +349,6 @@ parameters:
 			path: src/Mpdf.php
 
 		-
-			message: '#^Variable \$bbox_bb might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_bl might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_br might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_bt might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_pb might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_pl might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_pr might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_pt might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_x might not be defined\.$#'
-			identifier: variable.undefined
-			count: 10
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$bbox_y might not be defined\.$#'
-			identifier: variable.undefined
-			count: 10
-			path: src/Mpdf.php
-
-		-
 			message: '#^Variable \$blm might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
@@ -529,18 +481,6 @@ parameters:
 			path: src/Mpdf.php
 
 		-
-			message: '#^Variable \$inner_h might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$inner_w might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Mpdf.php
-
-		-
 			message: '#^Variable \$innerp might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
@@ -553,25 +493,7 @@ parameters:
 			path: src/Mpdf.php
 
 		-
-			message: '#^Variable \$lx1 might not be defined\.$#'
-			identifier: variable.undefined
-			count: 7
-			path: src/Mpdf.php
-
-		-
 			message: '#^Variable \$lx2 might not be defined\.$#'
-			identifier: variable.undefined
-			count: 7
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$ly1 might not be defined\.$#'
-			identifier: variable.undefined
-			count: 7
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$ly2 might not be defined\.$#'
 			identifier: variable.undefined
 			count: 7
 			path: src/Mpdf.php
@@ -627,7 +549,7 @@ parameters:
 		-
 			message: '#^Variable \$ratio might not be defined\.$#'
 			identifier: variable.undefined
-			count: 1
+			count: 2
 			path: src/Mpdf.php
 
 		-
@@ -786,32 +708,11 @@ parameters:
 			count: 1
 			path: src/Otl.php
 
-
-
-
-
 		-
 			message: '#^Variable \$Value might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
 			path: src/Otl.php
-
-		-
-			message: '#^Variable \$cctr might not be defined\.$#'
-			identifier: variable.undefined
-			count: 3
-			path: src/Unicode/Bidi.php
-
-		-
-			message: '#^Variable \$next_level might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Unicode/Bidi.php
-
-
-
-
-
 
 		-
 			message: '#^Variable \$new_reph_pos might not be defined\.$#'
@@ -820,22 +721,16 @@ parameters:
 			path: src/Shaper/Indic.php
 
 		-
-			message: '#^Undefined variable\: \$fsSelection$#'
+			message: '#^Variable \$MarkGlyphSetsDef_offset might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
-			path: src/Fonts/FontSubsetter.php
+			path: src/TTFontFile.php
 
 		-
 			message: '#^Variable \$arr might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1
 			path: src/TTFontFile.php
-
-		-
-			message: '#^Variable \$format might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: src/Fonts/FontSubsetter.php
 
 		-
 			message: '#^Variable \$locaH might not be defined\.$#'
@@ -892,6 +787,30 @@ parameters:
 			path: src/Tag/Table.php
 
 		-
+			message: '#^Variable \$cellLineHeight might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Tag/Table.php
+
+		-
+			message: '#^Variable \$cellLineStackingShift might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Tag/Table.php
+
+		-
+			message: '#^Variable \$cellLineStackingStrategy might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Tag/Table.php
+
+		-
+			message: '#^Variable \$direction might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Tag/Table.php
+
+		-
 			message: '#^Variable \$fullpage might not be defined\.$#'
 			identifier: variable.undefined
 			count: 2
@@ -926,6 +845,24 @@ parameters:
 			identifier: variable.undefined
 			count: 4
 			path: src/Tag/Table.php
+
+		-
+			message: '#^Variable \$txta might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Tag/Table.php
+
+		-
+			message: '#^Variable \$cctr might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: src/Unicode/Bidi.php
+
+		-
+			message: '#^Variable \$next_level might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Unicode/Bidi.php
 
 		-
 			message: '#^Variable \$f1 might not be defined\.$#'
