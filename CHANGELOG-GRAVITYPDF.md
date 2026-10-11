@@ -81,6 +81,13 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
 * **`min-width` and `max-width` hold the width of a block**, as in a browser, in standard mode. mPDF never read them on a block, so `max-width: 100mm; margin: 0 auto`, the usual centred container, filled the page, `width: 150mm; max-width: 100mm` was 150mm wide, and `width: 50mm; min-width: 80mm` was 50mm. Now the width is held within the two, `max-width` first, then `min-width`, a percentage taken of the container's inner width as `width` is, and the block's auto margins, direction or float place the narrowed box. Floats and positioned blocks take the same limits. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore the two properties as before. [#588] [#691]
   * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
+* **`opacity` and `transform` apply to blocks, and `opacity` to inline elements**, as in a browser, in standard mode. mPDF read them on images only, so a faded "PAID" stamp or a `transform: rotate(30deg)` label on a `<div>` was drawn opaque and upright. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore them as before. [#602]
+  * A block with `opacity` is drawn as one transparency group, so its background does not show through its text and the boxes inside it do not show through each other. The opacity of a block inside it multiplies in.
+  * `transform` takes `translate()`, `scale()`, `rotate()` and `skew()` and their one-axis forms, in a list, about the centre of the block's border box or the point `transform-origin` names. It does not move anything else on the page. A link in a turned block covers the box around its turned corners.
+  * A block a page break splits has a group on each page, transformed about the part of the block on that page.
+  * `opacity` on an inline element fades each run of its text, its background and border included.
+  * PDF/A-1 and PDF/X-1a, which forbid transparency, draw the opacity opaque and report it unless `PDFAauto` or `PDFXauto` is set. A transform is kept.
+  * Floats, positioned blocks, blocks in a table, in columns or in an HTML header or footer, and tables and cells themselves are drawn as before.
 
 New features
 ------------
@@ -965,3 +972,4 @@ These changes do not change output.
 [#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
+[#602]: https://github.com/GravityPDF/mpdf/issues/602

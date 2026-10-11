@@ -971,6 +971,7 @@ abstract class BlockTag extends Tag
 		$currblk['x0'] = $this->mpdf->x;
 		$currblk['startpage'] = $this->mpdf->page; // mPDF 6
 		$this->mpdf->oldy = $this->mpdf->y;
+		$this->mpdf->beginBlockEffect($properties);
 
 		$this->mpdf->lastblocklevelchange = 1;
 
@@ -1340,6 +1341,9 @@ abstract class BlockTag extends Tag
 		/* -- CSS-IMAGE-FLOAT -- */
 		$this->mpdf->printfloatbuffer();
 		/* -- END CSS-IMAGE-FLOAT -- */
+
+		$closing = $this->mpdf->blk[$this->mpdf->blklvl];
+		$this->mpdf->closeBlockEffect($this->mpdf->blklvl, isset($closing['y1']) ? $closing['y1'] : $this->mpdf->y, true);
 
 		if ($tag === 'PRE') {
 			$this->mpdf->ispre = false;
