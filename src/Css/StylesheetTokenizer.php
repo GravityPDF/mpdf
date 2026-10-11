@@ -167,6 +167,51 @@ class StylesheetTokenizer
 	}
 
 	/**
+	 * The at-rules in a block of declarations, such as the margin boxes of an @page rule, which declarations() leaves
+	 * out
+	 *
+	 * Each starts after the semicolon or block before it, so a declaration left without its semicolon takes the at-rule
+	 * after it in, as it does in a browser. One whose block is left open is left out.
+	 *
+	 * @param string $block With its comments removed
+	 *
+	 * @return string[][] Each [the at-rule's name in lower case, without the @; the text inside its block]
+	 */
+	public function nestedAtRules($block)
+	{
+		$rules = [];
+		if (strpos($block, '{') === false) {
+			return $rules;
+		}
+
+		$start = 0;
+		$open = 0;
+		$depth = 0;
+
+		foreach ($this->structure($block) as $token) {
+			list($char, $offset) = $token;
+
+			if ($char === '{') {
+				if ($depth++ === 0) {
+					$open = $offset;
+				}
+			} elseif ($char === '}') {
+				if ($depth > 0 && --$depth === 0) {
+					$rule = $this->rule(substr($block, $start, $open - $start), (string) substr($block, $open + 1, $offset - $open - 1));
+					if ($rule[0] !== null) {
+						$rules[] = [$rule[0], $rule[2]];
+					}
+					$start = $offset + 1;
+				}
+			} elseif ($depth === 0) {
+				$start = $offset + 1;
+			}
+		}
+
+		return $rules;
+	}
+
+	/**
 	 * Each brace and semicolon outside strings, unquoted url() and escapes
 	 *
 	 * @param string $css

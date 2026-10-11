@@ -506,6 +506,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $firstPageBoxFooter;
 	var $firstPageBoxFooterEven;
 
+	/**
+	 * @var string[] The HTML of each header and footer the @page rules last put in force, by the property that holds
+	 *               it, such as HTMLHeaderE. A margin box does not replace a header put in force otherwise.
+	 */
+	var $pageRuleHeaders = [];
+
 	var $page_box;
 
 	var $show_marks; // crop or cross marks
@@ -11297,6 +11303,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->_setPageSize($newformat, $orientation);
 		}
 
+		// The headers and footers the @page rules put in force on the page
+		$pageRuleSlots = [];
+
 		/* -- CSS-PAGE -- */
 		// Paged media (page-box)
 		if ($pagesel || $this->page_box['using']) {
@@ -11321,21 +11330,37 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$psel = '';
 			}
 
-			list($orientation, $mgl, $mgr, $mgt, $mgb, $mgh, $mgf, $hname, $fname, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat) = $this->SetPagedMediaCSS($psel, $first, $oddEven);
+			list($orientation, $mgl, $mgr, $mgt, $mgb, $mgh, $mgf, $hname, $fname, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat, $boxHeader, $boxFooter) = $this->SetPagedMediaCSS($psel, $first, $oddEven);
 
-			if ($this->mirrorMargins && ($this->page % 2 === 0)) {
+			$even = $this->mirrorMargins && ($this->page % 2 === 0);
+			$headerSlot = $even ? 'HTMLHeaderE' : 'HTMLHeader';
+			$footerSlot = $even ? 'HTMLFooterE' : 'HTMLFooter';
+
+			$keepHeader = $keepFooter = false;
+			if ($boxHeader) {
+				$hname = $this->marginBoxHeaderName($boxHeader, $headerSlot, $this->pageHTMLheaders);
+				$keepHeader = $hname === '';
+			}
+			if ($boxFooter) {
+				$fname = $this->marginBoxHeaderName($boxFooter, $footerSlot, $this->pageHTMLfooters);
+				$keepFooter = $fname === '';
+			}
+
+			$pageRuleSlots = array_merge($keepHeader ? [] : [$headerSlot], $keepFooter ? [] : [$footerSlot]);
+
+			if ($even) {
 
 				if ($hname) {
 					$ehvalue = 1;
 					$ehname = $hname;
-				} else {
+				} elseif (!$keepHeader) {
 					$ehvalue = -1;
 				}
 
 				if ($fname) {
 					$efvalue = 1;
 					$efname = $fname;
-				} else {
+				} elseif (!$keepFooter) {
 					$efvalue = -1;
 				}
 
@@ -11344,14 +11369,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if ($hname) {
 					$ohvalue = 1;
 					$ohname = $hname;
-				} else {
+				} elseif (!$keepHeader) {
 					$ohvalue = -1;
 				}
 
 				if ($fname) {
 					$ofvalue = 1;
 					$ofname = $fname;
-				} else {
+				} elseif (!$keepFooter) {
 					$ofvalue = -1;
 				}
 			}
@@ -11583,6 +11608,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->SetHTMLHeader($this->HTMLHeaderE, 'E');
 			$this->SetHTMLFooter($this->HTMLFooter);
 			$this->SetHTMLFooter($this->HTMLFooterE, 'E');
+		}
+
+		foreach ($pageRuleSlots as $slot) {
+			$header = $this->$slot;
+			$this->pageRuleHeaders[$slot] = is_array($header) ? $header['html'] : '';
 		}
 
 
@@ -12839,7 +12869,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$path = Path::relativeToAbsolutePath($path, $basepath);
 	}
 
-	function docPageNum($num = 0, $extras = false)
+	/**
+	 * The number a page is given, in the page number style in force on it
+	 *
+	 * @param int $num The page, or 0 for the current one
+	 * @param bool $extras Whether to put pagenumPrefix and pagenumSuffix around it
+	 * @param string $style A counter style to number it in instead, or '' for none
+	 *
+	 * @return string '' when page numbers are suppressed on the page
+	 */
+	function docPageNum($num = 0, $extras = false, $style = '')
 	{
 		if ($num < 1) {
 			$num = $this->page;
@@ -12879,7 +12918,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return '';
 		}
 
-		$ppgno = $this->_getStyledNumber($ppgno, $type);
+		$ppgno = $this->_getStyledNumber($ppgno, $style ? $style : $type);
 
 		if ($extras) {
 			$ppgno = $this->pagenumPrefix . $ppgno . $this->pagenumSuffix;
@@ -16459,7 +16498,39 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->page_box['outer_width_LR'] = $outer_width_LR; // Used in MARKS:crop etc.
 		$this->page_box['outer_width_TB'] = $outer_width_TB;
 
-		return [$orientation, $mgl, $mgr, $mgt, $mgb, $mgh, $mgf, $header, $footer, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat];
+		// The margin boxes give a page its header and footer when no rule names one
+		$marginBoxes = new Css\PageMarginBoxes($this);
+		$boxHeader = $header ? '' : $marginBoxes->html($p, 'TOP');
+		$boxFooter = $footer ? '' : $marginBoxes->html($p, 'BOTTOM');
+
+		return [$orientation, $mgl, $mgr, $mgt, $mgb, $mgh, $mgf, $header, $footer, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat, $boxHeader, $boxFooter];
+	}
+
+	/**
+	 * The name of the header or footer a page's margin boxes make, defined under it, or '' to leave the page the one in
+	 * force: one set with SetHeader(), <sethtmlpageheader> or the like, rather than by the @page rules, wins over the
+	 * margin boxes
+	 *
+	 * @param string $html The header or footer the margin boxes make
+	 * @param string $slot The property that holds the header or footer in force, such as HTMLHeaderE
+	 * @param array[] $defined pageHTMLheaders or pageHTMLfooters
+	 *
+	 * @return string
+	 */
+	private function marginBoxHeaderName($html, $slot, array &$defined)
+	{
+		$current = $this->$slot;
+		$pageRules = isset($this->pageRuleHeaders[$slot]) ? $this->pageRuleHeaders[$slot] : '';
+		if (is_array($current) && !empty($current['html']) && $current['html'] !== $pageRules) {
+			return '';
+		}
+
+		$name = '_pagemarginbox_' . md5($html);
+		if (!isset($defined[$name])) {
+			$defined[$name] = ['html' => $html];
+		}
+
+		return $name;
 	}
 
 	/* -- END CSS-PAGE -- */
@@ -28779,6 +28850,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	protected function aliasReplace($html, $PAGENO, $NbPgGp, $NbPg)
 	{
+		// The page number, or number of pages, in a counter style, which an @page margin box's counter() asks for
+		if ($this->cssMode === CssMode::STANDARD && (strpos($html, '{PAGENO:') !== false || strpos($html, '{nb:') !== false)) {
+			$html = preg_replace_callback('/\{(PAGENO|nb):([a-z-]+)\}/', function ($m) use ($NbPg) {
+				return $m[1] === 'nb' ? $this->_getStyledNumber($NbPg, $m[2]) : $this->docPageNum($this->page, true, $m[2]);
+			}, $html);
+		}
+
 		// Replaces for header and footer
 		$html = str_replace('{PAGENO}', $PAGENO, $html);
 		$html = str_replace($this->aliasNbPgGp, $NbPgGp, $html); // {nbpg}

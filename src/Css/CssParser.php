@@ -69,6 +69,11 @@ class CssParser
 	private $shadowParser;
 
 	/**
+	 * @var PageMarginBoxes
+	 */
+	private $pageMarginBoxes;
+
+	/**
 	 * CSS for simple selectors.
 	 *
 	 * Stores CSS properties for simple selectors (depth 1).
@@ -155,6 +160,7 @@ class CssParser
 		$this->selectorParser = new SelectorParser($mpdf);
 		$this->selectorCompiler = new SelectorCompiler($mpdf);
 		$this->shadowParser = new ShadowParser($mpdf, $sizeConverter, $colorConverter);
+		$this->pageMarginBoxes = new PageMarginBoxes($mpdf);
 	}
 
 	/**
@@ -298,7 +304,7 @@ class CssParser
 			}
 
 			if ($name === null || $name === 'page') {
-				$this->processRule($name === null ? $prelude : '@page ' . $prelude, $block);
+				$this->processRule($name === null ? $prelude : '@page ' . $prelude, $block, $name === 'page');
 			} elseif (($name === 'media' && $this->mediaQueryProcessor->matches($prelude))
 				|| ($name === 'supports' && !preg_match('/^not\b/i', $prelude))
 				|| $name === 'layer'
@@ -313,11 +319,18 @@ class CssParser
 	 *
 	 * @param string $selectors
 	 * @param string $declarations
+	 * @param bool $page Whether it is an @page rule, whose margin boxes standard mode keeps with its declarations
 	 * @return void
 	 */
-	private function processRule($selectors, $declarations)
+	private function processRule($selectors, $declarations, $page = false)
 	{
 		list($classProperties, $important) = $this->parseCssPropertiesByImportance($declarations);
+
+		if ($page && $this->mpdf->cssMode === CssMode::STANDARD) {
+			list($boxes, $importantBoxes) = $this->marginBoxProperties($declarations);
+			$classProperties = array_merge($classProperties, $boxes);
+			$important = array_merge($important, $importantBoxes);
+		}
 
 		if (strpbrk($selectors, "\t\n\r\f\v") !== false) {
 			$selectors = preg_replace(self::WHITESPACE, ' ', $selectors);
@@ -326,6 +339,36 @@ class CssParser
 		foreach ($this->selectorCompiler->splitList($selectors) as $selector) {
 			$this->processCssSelector($selector, $classProperties, $important);
 		}
+	}
+
+	/**
+	 * The properties of the margin boxes in an @page rule, each under its box's name, such as @TOP-CENTER>>CONTENT. A
+	 * content declaration PageMarginBoxes cannot read is dropped, as a browser drops it, so one before it applies.
+	 *
+	 * @param string $declarations The @page rule's block
+	 * @return array[] [normal properties, important properties]
+	 */
+	private function marginBoxProperties($declarations)
+	{
+		$properties = [[], []];
+		foreach ($this->tokenizer->nestedAtRules($declarations) as $rule) {
+			if (!$this->pageMarginBoxes->isBox($rule[0])) {
+				continue;
+			}
+
+			$declarations = array_filter($this->declarationsOf($rule[1]), function ($declaration) {
+				return strcasecmp(trim($declaration[0]), 'content') !== 0
+					|| $this->pageMarginBoxes->content(preg_replace('/!\s*important\s*$/i', '', $declaration[1])) !== null;
+			});
+
+			foreach ($this->inlineStyleParser->parseDeclarationsByImportance($declarations) as $set => $boxProperties) {
+				foreach ($boxProperties as $property => $value) {
+					$properties[$set]['@' . strtoupper($rule[0]) . '>>' . $property] = $value;
+				}
+			}
+		}
+
+		return $properties;
 	}
 
 	/**

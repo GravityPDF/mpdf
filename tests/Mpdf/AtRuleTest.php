@@ -48,7 +48,7 @@ class AtRuleTest extends TestCase
 			'@keyframes' => ['@keyframes spin { from { opacity: 0; } to { opacity: 1; } }'],
 			'@container' => ['@container (min-width: 1px) { h1 { color: #ff0000; } }'],
 			'@font-feature-values' => ['@font-feature-values Font { @swash { fancy: 1; } }'],
-			'@page with a margin box' => ['@page { @top-center { content: "x"; } }'],
+			'@page with a margin box' => ['@page { @top-center { color: #ff0000; } }'],
 			'a brace in a string' => ['@supports (content: "}") { h1 { content: "{"; } }'],
 		];
 	}
