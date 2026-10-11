@@ -275,6 +275,96 @@ class PageBreakAfterAvoidTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The line after a unit is measured as it is drawn, not taken as tall as the paragraph's line height: a block nearly
+	 * a page tall cannot share a fresh page with a line holding a 15mm image or a span with line-height: 3, so it is left
+	 * split rather than moved to a page the line then overruns
+	 */
+	public function testTheLineAfterAUnitIsMeasuredAsItIsDrawn()
+	{
+		$tall = function ($height) {
+			return '<div style="page-break-after: avoid; height: ' . $height . 'mm">TALL</div>';
+		};
+
+		list($pages, $mpdf) = $this->drawn($tall(245) . '<p><img src="' . $this->backgroundImage() . '" style="width: 15mm; height: 15mm" /> IMG</p>');
+		$this->assertSame(['TALL' => 1, 'IMG' => 2], $pages);
+		$this->assertSame(2, $mpdf->page);
+		$this->assertSame(0, $mpdf->unwinds);
+
+		list($pages, $mpdf) = $this->drawn($tall(250) . '<p>A <span style="line-height: 3">SPAN</span></p>');
+		$this->assertSame(['TALL' => 1, 'A' => 2, 'SPAN' => 2], $pages);
+		$this->assertSame(2, $mpdf->page);
+		$this->assertSame(0, $mpdf->unwinds);
+	}
+
+	/**
+	 * Text loose in the parent block, in no block of its own, is the line after the heading: the heading moves with it
+	 * where it starts the next page, and stays with it where it fits, though the block after the text moves
+	 */
+	public function testAHeadingIsKeptWithTheTextLooseAfterIt()
+	{
+		list($pages, $mpdf) = $this->drawn($this->lines(48) . self::HEAD . 'Loose<p>P1</p>');
+		$this->assertSame(['HEAD' => 1, 'Loose' => 1, 'P1' => 2], $pages);
+		$this->assertSame(0, $mpdf->unwinds);
+
+		list($pages, $mpdf) = $this->drawn($this->lines(50) . self::HEAD . 'Loose<p>P1</p>');
+		$this->assertSame(['HEAD' => 2, 'Loose' => 2, 'P1' => 2], $pages);
+		$this->assertSame(1, $mpdf->unwinds);
+
+		list($pages) = $this->drawn($this->lines(48) . self::HEAD . 'Loose' . self::TABLE);
+		$this->assertSame(['HEAD' => 1, 'Loose' => 1, 'R1' => 2, 'R2' => 2, 'R3' => 2, 'R4' => 2], $pages);
+
+		list($pages) = $this->drawn($this->lines(50) . '<div>' . self::HEAD . 'Loose</div>');
+		$this->assertSame(['HEAD' => 2, 'Loose' => 2], $pages);
+	}
+
+	/**
+	 * What the end of the HTML draws, text loose at its root or a block left open, settles the heading too: the parse
+	 * goes on from the heading, and nothing is lost
+	 */
+	public function testTheEndOfTheHtmlSettlesTheHeading()
+	{
+		list($pages, $mpdf) = $this->drawn($this->lines(50) . self::HEAD . 'Loose');
+		$this->assertSame(['HEAD' => 2, 'Loose' => 2], $pages);
+		$this->assertSame(1, $mpdf->unwinds);
+
+		list($pages, $mpdf) = $this->drawn($this->lines(50) . self::HEAD . '<p>T1');
+		$this->assertSame(['HEAD' => 2, 'T1' => 2], $pages);
+		$this->assertSame(1, $mpdf->unwinds);
+	}
+
+	/**
+	 * A kept block taller than a page is laid out where it falls. When its first line takes the heading to the next
+	 * page, it is laid out there without being measured again, as it is no shorter for the move
+	 */
+	public function testAKeptBlockTallerThanAPageIsNotMeasuredAgainWhenTheHeadingMoves()
+	{
+		$kept = '<div style="page-break-inside: avoid"><p>L1</p>' . str_repeat('<p>Filler</p>', 40) . '<p>LAST</p></div>';
+
+		list($pages, $mpdf) = $this->drawn($this->lines(50) . self::HEAD . $kept);
+
+		$this->assertSame(['HEAD' => 2, 'L1' => 2, 'LAST' => 3], $pages);
+		$this->assertSame(1, $mpdf->unwinds);
+	}
+
+	/**
+	 * A block with both page-break-inside: avoid and page-break-after: avoid takes a single snapshot as it opens, which
+	 * puts the document back for either: here for the line after it, which takes the heading, the block and the line to
+	 * the next page
+	 */
+	public function testABlockKeptTogetherAndWithItsNextTakesOneSnapshot()
+	{
+		$kept = '<div style="page-break-inside: avoid; page-break-after: avoid"><p>L1</p><p>L2</p></div>';
+
+		list($pages, $mpdf) = $this->drawn($this->lines(30) . $kept . '<p>T1</p>');
+		$this->assertSame(['L1' => 1, 'L2' => 1, 'T1' => 1], $pages);
+		$this->assertSame(1, $mpdf->snapshots);
+
+		list($pages, $mpdf) = $this->drawn($this->lines(47) . self::HEAD . $kept . '<p>T1</p>');
+		$this->assertSame(['HEAD' => 2, 'L1' => 2, 'L2' => 2, 'T1' => 2], $pages);
+		$this->assertSame(1, $mpdf->unwinds);
+	}
+
+	/**
 	 * Legacy mode asks for room for one more line as tall as the heading's own, as mPDF v7 did: it knows nothing of
 	 * what follows, so a kept table leaves it behind, while a paragraph's line is only kept where that check moves it
 	 */
