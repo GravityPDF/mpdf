@@ -76,12 +76,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	const SCRIPT_RUN_ATTRIBUTE = 'DATA-MPDF-SCRIPT-RUN';
 
 	/**
-	 * CJK punctuation, as a character class for preg_match() with /u. Under word-break: keep-all a line of CJK text
-	 * breaks only beside one of these, besides at spaces
-	 */
-	const CJK_PUNCTUATION = '\x{3001}-\x{3003}\x{3008}-\x{3011}\x{3014}-\x{301f}\x{fe10}-\x{fe19}\x{fe30}-\x{fe6b}\x{ff01}-\x{ff0f}\x{ff1a}-\x{ff20}\x{ff3b}-\x{ff40}\x{ff5b}-\x{ff65}';
-
-	/**
 	 * A zero-width space (U+200B) in UTF-8, as Unicode-font text carries it
 	 */
 	const ZERO_WIDTH_SPACE_UTF8 = "\xe2\x80\x8b";
@@ -8871,6 +8865,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$Oikomi = false; // mPDF 6
 		$hanger = '';
 
+		$keepAll = WordBreak::keepsAll($this->textparam);
+		$breakAll = WordBreak::breaksAll($this->textparam);
+		$breaksLongWords = WordBreak::breaksLongWords($this->textparam);
+
 		// COLS
 		$oldcolumn = $this->CurrCol;
 		if ($this->ColActive && !$is_table) {
@@ -9104,7 +9102,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$Oikomi = false;
 					$breakfound = true;
 				}
-				$keepAll = WordBreak::keepsAll($this->textparam);
 				if (!$this->usingCoreFont && !$breakfound && $this->checkCJK) {
 
 					// Get next/following character (in this chunk)
@@ -9141,7 +9138,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				/* -- END CJK-FONTS -- */
 
 				// With word-break: break-all the line breaks where it is full, inside a word as anywhere else
-				if (!$breakfound && $prevchar !== false && $prevchar !== ' ' && WordBreak::breaksAll($this->textparam)) {
+				if (!$breakfound && $prevchar !== false && $prevchar !== ' ' && $breakAll) {
 					$breakfound = true;
 				}
 
@@ -9184,10 +9181,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				// Search backwards to find first line-break opportunity
 				$zeroWidthSpace = $this->zeroWidthSpace();
+				$lineEnd = [$contentctr, $charctr];
+				// While a word overflows, the line up to its last character has been searched already
+				$searched = $this->flowingBlockAttr['overflowing'] ? $this->flowingBlockAttr['overflowSearched'] : [-1, 0];
 				while ($breakfound == false && $prevchar !== false) {
 					$cutcontentctr = $contentctr;
 					$cutcharctr = $charctr;
 					$prevchar = $this->_moveToPrevChar($contentctr, $charctr, $content);
+					if ($contentctr < $searched[0] || ($contentctr == $searched[0] && $charctr < $searched[1])) {
+						break;
+					}
 					/////////////////////
 					// 3) Break at SPACE
 					/////////////////////
@@ -9240,7 +9243,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					/////////////////////
 					elseif (!$this->usingCoreFont && $this->checkCJK && preg_match("/[" . $this->pregCJKchars . "]/u", $checkchar) &&
 						!preg_match("/[" . $this->CJKfollowing . "]/u", $checkchar) && !preg_match("/[" . $this->CJKleading . "]/u", $prevchar) &&
-						(!$keepAll || preg_match('/[' . self::CJK_PUNCTUATION . ']/u', $prevchar . $checkchar)) &&
+						(!$keepAll || preg_match(WordBreak::CJK_PUNCTUATION, $prevchar . $checkchar)) &&
 						!(preg_match("/[0-9\x{ff10}-\x{ff19}]/u", $prevchar) && preg_match("/[0-9\x{ff10}-\x{ff19}]/u", $checkchar))) {
 						$breakfound = [$cutcontentctr, $cutcharctr, $cutcontentctr, $cutcharctr, 'cut'];
 					}
@@ -9257,9 +9260,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				// A word with nowhere to break overflows the line, unless word-break or overflow-wrap lets it break
-				if ($breakfound === false && !WordBreak::breaksLongWords($this->textparam)) {
+				if ($breakfound === false && !$breaksLongWords) {
 					$lineCount--;
 					$this->flowingBlockAttr['overflowing'] = true;
+					$this->flowingBlockAttr['overflowSearched'] = $lineEnd;
 					$currContent .= $c;
 					$contentWidth += $cw;
 					continue;

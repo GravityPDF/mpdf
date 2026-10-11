@@ -14,6 +14,12 @@ final class WordBreak
 {
 
 	/**
+	 * CJK punctuation, as a pattern for preg_match(). Under word-break: keep-all a line of CJK text breaks only beside
+	 * one of these, or at a space
+	 */
+	const CJK_PUNCTUATION = '/[\x{3001}-\x{3003}\x{3008}-\x{3011}\x{3014}-\x{301f}\x{fe10}-\x{fe19}\x{fe30}-\x{fe6b}\x{ff01}-\x{ff0f}\x{ff1a}-\x{ff20}\x{ff3b}-\x{ff40}\x{ff5b}-\x{ff65}]/u';
+
+	/**
 	 * The values each property takes, as NormalizeProperties keeps them
 	 */
 	const VALUES = [
@@ -91,6 +97,8 @@ final class WordBreak
 	}
 
 	/**
+	 * The word-break the text is set in, normal when no element sets it
+	 *
 	 * @param array|null $textparam
 	 *
 	 * @return string
@@ -101,6 +109,8 @@ final class WordBreak
 	}
 
 	/**
+	 * The overflow-wrap the text is set in, normal when no element sets it
+	 *
 	 * @param array|null $textparam
 	 *
 	 * @return string
