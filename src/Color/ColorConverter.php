@@ -107,6 +107,7 @@ class ColorConverter
 		} elseif ($c[0] == static::MODE_GRAYSCALE) {
 			$ret = [1, min(255, ord($c[1]) + 32)];
 		}
+		$ret = $this->withAlphaOf($c, $ret);
 
 		$c = array_pad($ret, 6, 0);
 		$cstr = pack(
@@ -137,10 +138,38 @@ class ColorConverter
 		} elseif ($c[0] == static::MODE_GRAYSCALE) {
 			$ret = [1, max(0, ord($c[1]) - 32)];
 		}
+		$ret = $this->withAlphaOf($c, $ret);
 		$c = array_pad($ret, 6, 0);
 		$cstr = pack('a1ccccc', $c[0], $c[1] & 0xFF, $c[2] & 0xFF, $c[3] & 0xFF, $c[4] & 0xFF, $c[5] & 0xFF);
 
 		return $cstr;
+	}
+
+	/**
+	 * A shade worked out by lighten() or darken(), given back the alpha of the colour it was worked out from
+	 *
+	 * @param string $c The colour, as convert() gives it
+	 * @param array $shade The shade's mode and components, opaque
+	 *
+	 * @return array
+	 */
+	private function withAlphaOf($c, array $shade)
+	{
+		$alpha = static::alpha($c);
+		if ($alpha === null) {
+			return $shade;
+		}
+
+		if ($shade[0] == static::MODE_RGB) {
+			return [static::MODE_RGBA, $shade[1], $shade[2], $shade[3], round($alpha * 100)];
+		}
+
+		if ($shade[0] == static::MODE_CMYK) {
+			return [static::MODE_CMYKA, $shade[1], $shade[2], $shade[3], $shade[4], round($alpha * 100)];
+		}
+
+		// A grayscale colour keeps its alpha behind a "1", as ColorModeConverter::rgb2gray() marks it
+		return [static::MODE_GRAYSCALE, $shade[1], ord(1), round($alpha * 100)];
 	}
 
 	/**

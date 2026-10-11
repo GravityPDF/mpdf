@@ -287,6 +287,10 @@ class ColorConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			["1\xff\x00\x00\x00\x00", "1\xff\x00\x00\x00\x00"],
 			["1U\x00\x00\x00\x00", "1u\x00\x00\x00\x00"],
 			["1\x00\x00\x00\x00\x00", "1 \x00\x00\x00\x00"],
+			// A colour with an alpha keeps it
+			["5\x00\x00\xff\x19\x00", "5\xcc\xcc\xcc\x19\x00", 'rgb2hsl', 1, [1, 2, 3], 'hsl2rgb', 1, [204, 204, 204]],
+			["6TJDJ<", "6@606<"],
+			["1U1\x19\x00\x00", "1u1\x19\x00\x00"],
 		];
 	}
 
@@ -324,6 +328,10 @@ class ColorConverterTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			["1\xff\x00\x00\x00\x00", "1\xdf\x00\x00\x00\x00"],
 			["1U\x00\x00\x00\x00", "15\x00\x00\x00\x00"],
 			["1\x00\x00\x00\x00\x00", "1\x00\x00\x00\x00\x00"],
+			// A colour with an alpha keeps it
+			["5\x00\x00\xff\x19\x00", "5TTT\x19\x00", 'rgb2hsl', 1, [1, 2, 3], 'hsl2rgb', 1, [84, 84, 84]],
+			["6TJDJ<", "6d^X^<"],
+			["1U1\x19\x00\x00", "151\x19\x00\x00"],
 		];
 	}
 

@@ -6,10 +6,15 @@ use Mpdf\Color\ColorConverter;
 
 /**
  * Draws the outline of a box: a ring outside its border box, outline-offset away from it, that follows the box's
- * rounded corners. Positions and sizes are in millimetres from the top left of the page, as RoundedBox takes them.
+ * rounded corners. Draws the sides of a border in the two-tone styles too, in the same tones. Positions and sizes are in millimetres from the top left of the page, as RoundedBox takes them.
  */
 class BoxOutline
 {
+
+	/**
+	 * The border and outline styles drawn in two tones
+	 */
+	const THREE_D_STYLES = ['groove', 'ridge', 'inset', 'outset'];
 
 	/**
 	 * @var \Mpdf\Mpdf
@@ -94,7 +99,7 @@ class BoxOutline
 		$s = 'q ' . $clip;
 		$style = $outline['style'];
 		// A colour mPDF cannot shade, such as a spot colour, draws a groove, ridge, inset or outset solid
-		if ($c[0] == ColorConverter::MODE_SPOT && in_array($style, ['groove', 'ridge', 'inset', 'outset'], true)) {
+		if ($c[0] == ColorConverter::MODE_SPOT && in_array($style, self::THREE_D_STYLES, true)) {
 			$style = 'solid';
 		}
 
@@ -130,9 +135,7 @@ class BoxOutline
 	}
 
 	/**
-	 * A groove, ridge, inset or outset outline: lit from the top left, so one tone along the top and left sides and
-	 * another along the bottom and right, meeting on the diagonals of the corners. A groove or ridge is two rings,
-	 * each half the width, in opposite tones. The tones are those a table border in the same style is drawn in
+	 * A groove, ridge, inset or outset outline, its rings split along the diagonals of the corners of the outer box
 	 *
 	 * @param array $box x0, y0, x1, y1
 	 * @param array $radii
@@ -142,26 +145,8 @@ class BoxOutline
 	 */
 	private function threeD(array $box, array $radii, array $outline)
 	{
-		$c = $outline['c'];
 		$w = $outline['w'];
 		$offset = $outline['offset'];
-
-		$dark = $this->colorConverter->darken($c);
-		$light = $this->colorConverter->lighten($c);
-
-		switch ($outline['style']) {
-			case 'inset':
-				$rings = [[$offset, $offset + $w, $dark, $light]];
-				break;
-			case 'outset':
-				$rings = [[$offset, $offset + $w, $light, $dark]];
-				break;
-			case 'groove':
-				$rings = [[$offset + $w / 2, $offset + $w, $dark, $light], [$offset, $offset + $w / 2, $light, $dark]];
-				break;
-			default:
-				$rings = [[$offset + $w / 2, $offset + $w, $light, $dark], [$offset, $offset + $w / 2, $dark, $light]];
-		}
 
 		// The two halves of the outer box, split along the diagonals through its top right and bottom left corners
 		$x0 = $box[0] - $offset - $w;
@@ -173,14 +158,143 @@ class BoxOutline
 		$bottomRight = $this->polygon([[$x1, $y1], [$x0, $y1], [$x0 + $t, $y1 - $t], [$x1 - $t, $y0 + $t], [$x1, $y0]]);
 
 		$s = '';
-		foreach ($rings as $ring) {
+		foreach ($this->threeDRings($outline['style'], $outline['c']) as $ring) {
 			list($from, $to, $first, $second) = $ring;
-			$path = $this->ring($box, $radii, $from, $to);
+			$path = $this->ring($box, $radii, $offset + $from * $w, $offset + $to * $w);
 			$s .= 'q ' . $topLeft . 'W n ' . $this->fill($first) . ' ' . $path . 'f* Q ';
 			$s .= 'q ' . $bottomRight . 'W n ' . $this->fill($second) . ' ' . $path . 'f* Q ';
 		}
 
 		return $s;
+	}
+
+	/**
+	 * The operators that draw one side of a border in a groove, ridge, inset or outset style, in the tones and rings
+	 * an outline in that style is drawn in. The side is cut from its neighbours along lines from each outer corner
+	 * towards its inner one, as CSS joins borders of different widths.
+	 *
+	 * @param array $box The border box: x0, y0, x1, y1
+	 * @param array $radii The border box's corners, fitted to it, keyed TL/TR/BR/BL
+	 * @param array $widths The border widths, keyed top/right/bottom/left
+	 * @param string $side top, right, bottom or left
+	 * @param array $border The side's border, with its style and colour
+	 *
+	 * @return string The operators, or an empty string where the side is in another style, or in a colour that
+	 *                cannot be shaded, such as a spot colour, for the caller to draw as before
+	 */
+	public function borderSide(array $box, array $radii, array $widths, $side, array $border)
+	{
+		if (!in_array($border['style'], self::THREE_D_STYLES, true) || $border['c'][0] == ColorConverter::MODE_SPOT) {
+			return '';
+		}
+
+		$tone = in_array($side, ['top', 'left'], true) ? 2 : 3;
+		$s = 'q ' . $this->sideRegion($box, $widths, $side) . 'W n ';
+		foreach ($this->threeDRings($border['style'], $border['c']) as $ring) {
+			$s .= $this->fill($ring[$tone]) . ' ' . $this->insetPath($box, $radii, $widths, 1 - $ring[1])
+				. $this->insetPath($box, $radii, $widths, 1 - $ring[0]) . 'f* ';
+		}
+
+		return $s . 'Q';
+	}
+
+	/**
+	 * The rings a groove, ridge, inset or outset is drawn in, lit from the top left: each is [from, to, the tone of
+	 * its top and left sides, the tone of its bottom and right], from and to measured as fractions of the width from
+	 * the inside out. A groove or ridge is two rings, each half the width, in opposite tones. The tones are those a
+	 * table border in the same style is drawn in
+	 *
+	 * @param string $style
+	 * @param string $c A colour as ColorConverter gives it
+	 *
+	 * @return array
+	 */
+	private function threeDRings($style, $c)
+	{
+		$dark = $this->colorConverter->darken($c);
+		$light = $this->colorConverter->lighten($c);
+
+		switch ($style) {
+			case 'inset':
+				return [[0, 1, $dark, $light]];
+			case 'outset':
+				return [[0, 1, $light, $dark]];
+			case 'groove':
+				return [[0.5, 1, $dark, $light], [0, 0.5, $light, $dark]];
+			default:
+				return [[0.5, 1, $light, $dark], [0, 0.5, $dark, $light]];
+		}
+	}
+
+	/**
+	 * The part of a box a side of its border is drawn in: a quadrilateral from the side's two outer corners, along
+	 * the lines towards the inner corners, to the centre of the box. The four sides' parts tile the box
+	 *
+	 * @param array $box x0, y0, x1, y1
+	 * @param array $widths keyed top/right/bottom/left
+	 * @param string $side
+	 *
+	 * @return string
+	 */
+	private function sideRegion(array $box, array $widths, $side)
+	{
+		list($x0, $y0, $x1, $y1) = $box;
+		$halfW = ($x1 - $x0) / 2;
+		$halfH = ($y1 - $y0) / 2;
+		$corners = [
+			'TL' => [$x0, $y0, 1, 1, 'left', 'top'],
+			'TR' => [$x1, $y0, -1, 1, 'right', 'top'],
+			'BR' => [$x1, $y1, -1, -1, 'right', 'bottom'],
+			'BL' => [$x0, $y1, 1, -1, 'left', 'bottom'],
+		];
+
+		$outer = [];
+		$inner = [];
+		foreach ($corners as $corner => $c) {
+			list($x, $y, $sx, $sy, $h, $v) = $c;
+			$dx = $widths[$h];
+			$dy = $widths[$v];
+			if (!$dx && !$dy) {
+				$dx = $dy = 1;
+			}
+			// Run the line on until it reaches the middle of the box, across or down
+			$t = min($dx ? $halfW / $dx : INF, $dy ? $halfH / $dy : INF);
+			$outer[$corner] = [$x, $y];
+			$inner[$corner] = [$x + $sx * $t * $dx, $y + $sy * $t * $dy];
+		}
+
+		$ends = ['top' => ['TL', 'TR'], 'right' => ['TR', 'BR'], 'bottom' => ['BR', 'BL'], 'left' => ['BL', 'TL']];
+		list($a, $b) = $ends[$side];
+
+		return $this->polygon([$outer[$a], $outer[$b], $inner[$b], [$x0 + $halfW, $y0 + $halfH], $inner[$a]]);
+	}
+
+	/**
+	 * The path of the border box moved in by a fraction of the border widths on each side, its corners moving in with
+	 * it, or nothing where that closes the box up
+	 *
+	 * @param array $box x0, y0, x1, y1
+	 * @param array $radii
+	 * @param array $widths keyed top/right/bottom/left
+	 * @param float $f
+	 *
+	 * @return string
+	 */
+	private function insetPath(array $box, array $radii, array $widths, $f)
+	{
+		$d = [];
+		foreach ($widths as $side => $width) {
+			$d[$side] = $width * $f;
+		}
+		$x0 = $box[0] + $d['left'];
+		$y0 = $box[1] + $d['top'];
+		$x1 = $box[2] - $d['right'];
+		$y1 = $box[3] - $d['bottom'];
+		if ($x1 <= $x0 || $y1 <= $y0) {
+			return '';
+		}
+
+		return $this->roundedBox->path($this->mpdf->h, $x0, $y0, $x1, $y1, $this->roundedBox->inset($radii, $d)) . 'h ';
 	}
 
 	/**
