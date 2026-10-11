@@ -102,16 +102,15 @@ class OrphansWidows
 		$this->startPage = $mpdf->page;
 		$this->belowContent = $mpdf->y > $mpdf->tMargin + 0.001;
 
-		for ($pass = 1;; $pass++) {
+		do {
 			$this->pages = [];
 			$mpdf->printbuffer($mpdf->textbuffer, $blockstate);
-			$break = $pass < self::MAX_PASSES ? $this->nextBreak() : null;
-			if ($break === null) {
-				break;
+			$break = count($this->breaks) < self::MAX_PASSES - 1 ? $this->nextBreak() : null;
+			if ($break !== null) {
+				$mpdf->restoreStateSnapshot($snapshot);
+				$this->breaks[] = $break;
 			}
-			$mpdf->restoreStateSnapshot($snapshot);
-			$this->breaks[] = $break;
-		}
+		} while ($break !== null);
 
 		$mpdf->orphansWidows = null;
 	}
@@ -167,33 +166,29 @@ class OrphansWidows
 	 */
 	private function nextBreak()
 	{
-		$pages = $this->pages;
-		$count = count($pages);
-		if ($count < 2 || $pages[0] == $pages[$count - 1]) {
+		// The index of the first line on each page the lines landed on
+		$starts = [0];
+		for ($i = 1; $i < count($this->pages); $i++) {
+			if ($this->pages[$i] != $this->pages[$i - 1]) {
+				$starts[] = $i;
+			}
+		}
+		$segments = count($starts);
+		if ($segments < 2) {
 			return null;
 		}
 
-		$onFirst = 0;
-		while ($pages[$onFirst] == $pages[0]) {
-			$onFirst++;
-		}
-		if ($onFirst < $this->orphans) {
+		if ($starts[1] < $this->orphans) {
 			return $this->breakAt(0);
 		}
 
-		$lastStart = $count - 1;
-		while ($pages[$lastStart - 1] == $pages[$count - 1]) {
-			$lastStart--;
-		}
-		if ($count - $lastStart >= $this->widows) {
+		$lastStart = $starts[$segments - 1];
+		if (count($this->pages) - $lastStart >= $this->widows) {
 			return null;
 		}
 
-		$previousStart = $lastStart - 1;
-		while ($previousStart > 0 && $pages[$previousStart - 1] == $pages[$lastStart - 1]) {
-			$previousStart--;
-		}
-		$break = $count - $this->widows;
+		$previousStart = $starts[$segments - 2];
+		$break = count($this->pages) - $this->widows;
 		if ($break - $previousStart >= $this->orphans) {
 			return $this->breakAt($break);
 		}

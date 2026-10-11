@@ -65,7 +65,7 @@ trait PageAreas
 	{
 		// A line that only moves to the next column keeps its width
 		if ($this->InFooter
-			|| ($this->y + $lineHeight <= $this->PageBreakTrigger && !($this->orphansWidows && $this->orphansWidows->breaksBefore()))
+			|| ($this->y + $lineHeight <= $this->PageBreakTrigger && !$this->orphansWidowsBreak())
 			|| ($this->ColActive && $this->CurrCol < $this->NbCol - 1)
 			|| !$this->page_box['using']
 			|| !$this->cssManager->pseudoPagesSetSideMargins($this->page_box['current'])
@@ -82,6 +82,16 @@ trait PageAreas
 		}
 
 		return $shift;
+	}
+
+	/**
+	 * Whether orphans and widows start a fresh page at the line about to be placed, whether it fits or not
+	 *
+	 * @return bool
+	 */
+	public function orphansWidowsBreak()
+	{
+		return $this->orphansWidows !== null && $this->orphansWidows->breaksBefore();
 	}
 
 	/**

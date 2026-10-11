@@ -7548,14 +7548,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 
 		// A block's closing border and padding are no line of it
-		$orphansWidows = $this->orphansWidows !== null && !$is_table && (!$endofblock || $content) ? $this->orphansWidows : null;
+		$isLine = !$is_table && (!$endofblock || $content);
 
 		// PAGEBREAK
-		if (!$is_table && (($this->y + $check_h) > ($this->PageBreakTrigger + $buff) || ($orphansWidows && $orphansWidows->breaksBefore())) and ! $this->InFooter and $this->AcceptPageBreak()) {
+		if (!$is_table && (($this->y + $check_h) > ($this->PageBreakTrigger + $buff) || ($isLine && $this->orphansWidowsBreak())) and ! $this->InFooter and $this->AcceptPageBreak()) {
 			$currentx += $this->turnPageKeepingPlace();
 		}
-		if ($orphansWidows) {
-			$orphansWidows->placed($this->page);
+		if ($isLine && $this->orphansWidows) {
+			$this->orphansWidows->placed($this->page);
 		}
 
 
@@ -9485,12 +9485,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					// PAGEBREAK
 					// 'If' below used in order to fix "first-line of other page with justify on" bug
-					$orphansWidows = $is_table ? null : $this->orphansWidows;
-					if (!$is_table && (($this->y + $check_h) > $this->PageBreakTrigger || ($orphansWidows && $orphansWidows->breaksBefore())) and ! $this->InFooter and $this->AcceptPageBreak()) {
+					if (!$is_table && (($this->y + $check_h) > $this->PageBreakTrigger || $this->orphansWidowsBreak()) and ! $this->InFooter and $this->AcceptPageBreak()) {
 						$currentx += $this->turnPageKeepingPlace();
 					}
-					if ($orphansWidows) {
-						$orphansWidows->placed($this->page);
+					if (!$is_table && $this->orphansWidows) {
+						$this->orphansWidows->placed($this->page);
 					}
 
 					if ($this->kwt && !$is_table) { // mPDF 5.7+
