@@ -2,6 +2,8 @@
 
 namespace Mpdf\Css;
 
+use Mpdf\SizeConverter;
+
 /**
  * A text-indent value read under CssMode::STANDARD: a length or percentage, with the hanging and each-line keywords
  * in any order around it.
@@ -14,11 +16,12 @@ final class TextIndent
 
 	/**
 	 * @param string $value The declared value
+	 * @param SizeConverter $sizeConverter
 	 *
 	 * @return array|null ['length' => string, 'hanging' => bool, 'each-line' => bool], or null when the value is not
 	 *                    one length with at most one of each keyword
 	 */
-	public static function parse($value)
+	public static function parse($value, SizeConverter $sizeConverter)
 	{
 		$indent = ['length' => null, 'hanging' => false, 'each-line' => false];
 		foreach (preg_split('/\s+/', trim($value), -1, PREG_SPLIT_NO_EMPTY) as $part) {
@@ -28,7 +31,7 @@ final class TextIndent
 					return null;
 				}
 				$indent[$keyword] = true;
-			} elseif ($indent['length'] === null && !preg_match('/^-?[a-z]/i', $part)) {
+			} elseif ($indent['length'] === null && $sizeConverter->isLength($part)) {
 				$indent['length'] = $part;
 			} else {
 				return null;

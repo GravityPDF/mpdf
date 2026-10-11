@@ -2,6 +2,10 @@
 
 namespace Mpdf\Css;
 
+use Mpdf\Mpdf;
+use Mpdf\SizeConverter;
+use Psr\Log\NullLogger;
+
 class TextIndentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
@@ -15,7 +19,9 @@ class TextIndentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testParse($value, $expected)
 	{
-		$this->assertSame($expected, TextIndent::parse($value));
+		$sizeConverter = new SizeConverter(96, 11, new Mpdf(['mode' => 'c']), new NullLogger());
+
+		$this->assertSame($expected, TextIndent::parse($value, $sizeConverter));
 	}
 
 	/**
@@ -35,6 +41,7 @@ class TextIndentTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'two lengths' => ['10mm 5mm', null],
 			'a keyword twice' => ['10mm hanging hanging', null],
 			'an unknown keyword' => ['10mm inherit', null],
+			'not a length' => ['5foo hanging', null],
 			'empty' => ['', null],
 		];
 	}

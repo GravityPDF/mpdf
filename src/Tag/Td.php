@@ -275,7 +275,7 @@ class Td extends Tag
 		}
 
 		$indent = isset($properties['TEXT-INDENT']) && $this->mpdf->cssMode === CssMode::STANDARD
-			? TextIndent::parse($properties['TEXT-INDENT'])
+			? TextIndent::parse($properties['TEXT-INDENT'], $this->sizeConverter)
 			: null;
 		if ($indent) {
 			$length = $indent['length'];

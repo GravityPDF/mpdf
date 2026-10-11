@@ -12617,8 +12617,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Whether an inline element with its own line-height (cssMode standard) is on the line
 		$elementLineheightOnLine = false;
 		// For vertical-align keywords on inline text (cssMode standard): the block's x-height, how far up each piece of
-		// text or image a keyword moves is moved, the box of the element with the keyword for each piece of text, and
-		// the text aligned with the top or bottom of the line
+		// text or image a keyword moves is moved, and the text aligned with the top or bottom of the line, with the box
+		// of the element that has the keyword
 		$xHeight = (!empty($fontdesc['XHeight']) ? $fontdesc['XHeight'] / 1000 : 0.5) * $fontsize;
 		$alignShift = [];
 		$alignBoxes = [];
@@ -12720,11 +12720,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				if (isset($font[$k]['textparam']['vertical-align'])) {
 					$align = $font[$k]['textparam']['vertical-align'];
-					$alignBoxes[$k] = $this->alignedElementBox($align, $CSSlineheight, $ypos[-1]);
+					$alignBox = $this->alignedElementBox($align, $CSSlineheight, $ypos[-1]);
 					if ($align['va'] == 'T' || $align['va'] == 'B') {
 						$edgeAligned[$k] = $align['va'];
+						$alignBoxes[$k] = $alignBox;
 					} else {
-						$alignShift[$k] = $this->inlineAlignShift($align['va'], $alignBoxes[$k], $ypos[-1], $xHeight, $inlineStacking);
+						$alignShift[$k] = $this->inlineAlignShift($align['va'], $alignBox, $ypos[-1], $xHeight, $inlineStacking);
 						$ypos[$k]['baseline-shift'] += $alignShift[$k];
 					}
 				}
@@ -19610,7 +19611,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($type != 'INLINE' && $type != 'TABLECELL') { // All block-level, including BODY tag
 				switch ($k) {
 					case 'TEXT-INDENT':
-						$indent = $this->cssMode === CssMode::STANDARD ? TextIndent::parse($v) : null;
+						$indent = $this->cssMode === CssMode::STANDARD ? TextIndent::parse($v, $this->sizeConverter) : null;
 						if ($indent) {
 							$v = $indent['length'];
 							$this->blk[$this->blklvl]['text_indent_hanging'] = $indent['hanging'];
@@ -19796,7 +19797,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									$verticalAlignSet = true;
 									break;
 								}
-								// mPDF read these as a length of 0
+								// Under cssMode legacy they are read as a length of 0, as before
 								// no break
 							// mPDF 5.7.3  inline text-decoration parameters
 							default:
