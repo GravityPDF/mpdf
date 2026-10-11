@@ -37,7 +37,7 @@ class BlockMinMaxWidthSnapshotTest extends Snapshot
 			['max-width: 50%', 'max-width: 50%: a 90mm box at the left, half the page area.'],
 			['max-width: 100mm; margin-left: auto', 'max-width: 100mm; margin-left: auto: a 100mm box at the right.'],
 			['max-width: 100mm; direction: rtl', 'max-width: 100mm; direction: rtl: a 100mm box at the right, its text right-aligned.'],
-			['float: left; max-width: 100mm', 'float: left; max-width: 100mm: a 100mm box at the left, with the text of the next caption beside it.'],
+			['float: left; min-width: 100mm', 'float: left; min-width: 100mm: a 100mm box at the left, wider than its text, with the text of the next caption beside it.'],
 			['max-width: 100mm; margin: 0 auto; padding: 5mm; border: 1mm solid #000000', 'max-width: 100mm; margin: 0 auto; padding: 5mm; border: 1mm solid: a 112mm box centred, 34mm in from each side, with a black border.'],
 		];
 	}
