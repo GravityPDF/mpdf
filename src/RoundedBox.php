@@ -136,6 +136,25 @@ class RoundedBox
 	}
 
 	/**
+	 * Every corner, its radii divided by $k, as a table shrunk to fit its page shrinks what it holds. A corner left
+	 * out is square.
+	 *
+	 * @param array $radii Keyed by the corners given a radius
+	 * @param float $k
+	 *
+	 * @return array
+	 */
+	public function scale($radii, $k)
+	{
+		$scaled = self::SQUARE;
+		foreach ($radii as $corner => $r) {
+			$scaled[$corner] = [$r[0] / $k, $r[1] / $k];
+		}
+
+		return $scaled;
+	}
+
+	/**
 	 * Radii moved in from their edge by what lies along each side, stopping at square: the padding edge's corners
 	 * are the border edge's less the borders, and the content edge's are those less the paddings. $insets is keyed
 	 * top/right/bottom/left.
@@ -171,11 +190,7 @@ class RoundedBox
 			$paddings[$side] = $objattr['padding_' . $side] / $k;
 		}
 
-		$radii = self::SQUARE;
-		foreach ($objattr['border_radius'] as $corner => $r) {
-			$radii[$corner] = [$r[0] / $k, $r[1] / $k];
-		}
-		$radii = $this->fit($x1 - $x0, $y1 - $y0, $radii, $borders);
+		$radii = $this->fit($x1 - $x0, $y1 - $y0, $this->scale($objattr['border_radius'], $k), $borders);
 
 		return [
 			'x0' => $x0,
