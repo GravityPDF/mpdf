@@ -161,15 +161,27 @@ class CssColumnsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 	/**
 	 * A column rule is drawn in its colour, which is currentColor when it names none, in its width, and dashed where
-	 * its style says so
+	 * its style says so, with the dashes of a dashed border
 	 */
 	public function testColumnRuleTakesItsColourWidthAndStyle()
 	{
 		$named = $this->render('<div style="column-count: 2; column-rule: 2mm dashed #ff0000">' . $this->words() . '</div>');
 		$current = $this->render('<div style="color: #0000ff; column-count: 2; column-rule: 2mm solid">' . $this->words() . '</div>');
 
-		$this->assertMatchesRegularExpression('/q 1\.000 0\.000 0\.000 RG 5\.669 w \[17\.008 17\.008\] 0 d 0 J [\d. ]+ m [\d. ]+ l S Q/', $named);
+		$this->assertMatchesRegularExpression('/q 1\.000 0\.000 0\.000 RG 5\.669 w \[5\.669 15\.118\] 0 d 0 J [\d. ]+ m [\d. ]+ l S Q/', $named);
 		$this->assertMatchesRegularExpression('/q 0\.000 0\.000 1\.000 RG 5\.669 w \[\] 0 d 0 J [\d. ]+ m [\d. ]+ l S Q/', $current);
+	}
+
+	/**
+	 * A column-rule-style given without the shorthand draws a medium rule in the element's colour, or black
+	 */
+	public function testColumnRuleLonghandsTakeTheirInitialValues()
+	{
+		$coloured = $this->render('<div style="color: #00ff00; column-count: 2; column-rule-style: solid">' . $this->words() . '</div>');
+		$black = $this->render('<div style="column-count: 2; column-rule-style: solid">' . $this->words() . '</div>');
+
+		$this->assertMatchesRegularExpression('/q 0\.000 1\.000 0\.000 RG 2\.250 w \[\] 0 d/', $coloured);
+		$this->assertMatchesRegularExpression('/q 0\.000 0\.000 0\.000 RG 2\.250 w \[\] 0 d/', $black);
 	}
 
 	/**
@@ -285,6 +297,18 @@ class CssColumnsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$pages = $this->lines('<div style="column-count: 2; column-fill: auto">' . $this->words() . '</div>');
 
 		$this->assertSame([15.0], $this->columnEdges($pages[0]));
+	}
+
+	/**
+	 * column-fill: auto still fills one column after another on the page after a page break, where mPDF starts its
+	 * columns again
+	 */
+	public function testColumnFillAutoHoldsAcrossAPageBreak()
+	{
+		$pages = $this->lines('<div style="column-count: 2; column-fill: auto">' . str_repeat('<p>' . $this->words() . '</p>', 10) . '</div>');
+
+		$this->assertCount(2, $pages);
+		$this->assertSame([15.0], $this->columnEdges($pages[1]));
 	}
 
 	/**

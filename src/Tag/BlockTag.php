@@ -1177,13 +1177,13 @@ abstract class BlockTag extends Tag
 	{
 		if ($this->mpdf->cssMode !== CssMode::STANDARD || $this->mpdf->blklvl != 1 || $this->mpdf->ColActive
 			|| $this->mpdf->bufferoutput || $this->mpdf->writingHTMLheader || $this->mpdf->writingHTMLfooter
-			|| !MultiColumn::isRequested($properties) || $this->hasBox($blk, $properties)) {
+			|| (!isset($properties['COLUMN-COUNT']) && !isset($properties['COLUMN-WIDTH']))) {
 			return;
 		}
 
 		$multiColumn = new MultiColumn($this->sizeConverter, $this->colorConverter);
-		$layout = $multiColumn->layout($properties, $this->mpdf->pgwidth, $this->mpdf->FontSize);
-		if ($layout === null) {
+		$layout = $multiColumn->layout($properties, $this->mpdf->pgwidth, $this->mpdf->FontSize, $this->mpdf->colorarray);
+		if ($layout === null || $this->hasBox($blk, $properties)) {
 			return;
 		}
 
@@ -1247,10 +1247,9 @@ abstract class BlockTag extends Tag
 	 */
 	private function startColumns(array $layout)
 	{
-		$this->setColumns($layout['count'], $layout['gap']);
-		// Content fills one column after another; balancing them is what SetColumns() does where they end
-		$this->mpdf->ColumnAdjust = $layout['balance'];
+		$this->mpdf->balanceColumns = $layout['balance'];
 		$this->mpdf->columnRule = $layout['rule'];
+		$this->setColumns($layout['count'], $layout['gap']);
 	}
 
 	/**
@@ -1259,23 +1258,21 @@ abstract class BlockTag extends Tag
 	private function endColumns()
 	{
 		$this->setColumns(0, 0);
+		$this->mpdf->balanceColumns = true;
 		$this->mpdf->columnRule = null;
 	}
 
 	/**
-	 * Turns columns on or off without the blank line SetColumns() moves down by: the block's content is already
-	 * finished, and the space around the columns is the block's margins. The block holding the columns is as wide as
-	 * a column, or the page's text area without them
+	 * Turns columns on or off without the line SetColumns() moves down by for the <columns> tag: the space around
+	 * the columns is the block's margins. The block holding the columns has no box of its own (hasBox()), so it is as
+	 * wide as a column, or as the page's text area without them
 	 *
 	 * @param int $count
 	 * @param float $gap
 	 */
 	private function setColumns($count, $gap)
 	{
-		$lasth = $this->mpdf->lasth;
-		$this->mpdf->lasth = 0;
-		$this->mpdf->SetColumns($count, '', $gap);
-		$this->mpdf->lasth = $lasth;
+		$this->mpdf->SetColumns($count, '', $gap, false);
 
 		if (isset($this->mpdf->blk[1]['multicol'])) {
 			$this->mpdf->blk[1]['width'] = $this->mpdf->pgwidth;

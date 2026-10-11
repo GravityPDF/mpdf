@@ -605,6 +605,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	var $columnRule;
 
+	/**
+	 * Whether columns are balanced where they end, as column-fill: balance has it. Off, they fill one after another
+	 *
+	 * @var bool
+	 */
+	var $balanceColumns = true;
+
 	// Substitutions
 	var $substitute;  // Array of substitution strings e.g. <ttz>112</ttz>
 	var $entsearch;  // Array of HTML entities (>ASCII 127) to substitute
@@ -3850,7 +3857,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$family = $this->FontFamily;
 		$style = $this->FontStyle;
 		$size = $this->FontSizePt;
-		$this->ColumnAdjust = true; // enables column height adjustment for the page
+		$this->ColumnAdjust = $this->balanceColumns; // enables column height adjustment for the page
 		$lw = $this->LineWidth;
 		$dc = $this->DrawColor;
 		$fc = $this->FillColor;
@@ -25447,7 +25454,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// ----------- COLUMNS ---------------------
 	/* -- COLUMNS -- */
 
-	function SetColumns($NbCol, $vAlign = '', $gap = 5)
+	/**
+	 * @param int $NbCol Anything less than 2 turns columns off
+	 * @param string $vAlign J stretches the columns of each page to the same height
+	 * @param float $gap In mm
+	 * @param bool $lineBreak Whether to move down a line first, as the <columns> tag does
+	 */
+	function SetColumns($NbCol, $vAlign = '', $gap = 5, $lineBreak = true)
 	{
 		// NbCol = number of columns
 		// Anything less than 2 turns columns off
@@ -25461,7 +25474,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->ResetMargins();
 				$this->pgwidth = $this->w - $this->lMargin - $this->rMargin;
 				$this->divwidth = 0;
-				$this->Ln();
+				if ($lineBreak) {
+					$this->Ln();
+				}
 			}
 			$this->ColActive = 0;
 			$this->columnbuffer = [];
@@ -25480,14 +25495,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				$this->ResetMargins();
 			}
-			if (isset($this->y) && $this->y > $this->tMargin) {
+			if ($lineBreak && isset($this->y) && $this->y > $this->tMargin) {
 				$this->Ln();
 			}
 			$this->NbCol = $NbCol;
 			$this->ColGap = $gap;
 			$this->divwidth = 0;
 			$this->ColActive = 1;
-			$this->ColumnAdjust = true; // enables column height adjustment for the page
+			$this->ColumnAdjust = $this->balanceColumns; // enables column height adjustment for the page
 			$this->columnbuffer = [];
 			$this->ColDetails = [];
 			$this->columnLinks = [];

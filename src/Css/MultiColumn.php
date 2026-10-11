@@ -39,18 +39,6 @@ final class MultiColumn
 	}
 
 	/**
-	 * Whether the properties ask for columns: a column-count or column-width other than auto
-	 *
-	 * @param array $properties The element's merged CSS, by upper-cased property
-	 *
-	 * @return bool
-	 */
-	public static function isRequested(array $properties)
-	{
-		return self::count($properties) !== null || self::width($properties) !== null;
-	}
-
-	/**
 	 * The columns an element is laid out in, or null where it takes fewer than two. A column-width is the narrowest a
 	 * column may be, so it gives as many columns as fit, and no more than a column-count also given (CSS Multi-column
 	 * Layout 3.4)
@@ -58,10 +46,11 @@ final class MultiColumn
 	 * @param array $properties The element's merged CSS, by upper-cased property
 	 * @param float $availableWidth The width the columns share, in mm
 	 * @param float $fontSize The element's font size in mm, which an em and the normal gap are taken of
+	 * @param string $textColor The element's colour, as ColorConverter gives it, or '' for black
 	 *
 	 * @return array|null [count, gap in mm, whether the last columns are balanced, rule or null]
 	 */
-	public function layout(array $properties, $availableWidth, $fontSize)
+	public function layout(array $properties, $availableWidth, $fontSize, $textColor)
 	{
 		$gap = $fontSize;
 		if (isset($properties['COLUMN-GAP']) && $properties['COLUMN-GAP'] !== 'normal') {
@@ -87,7 +76,7 @@ final class MultiColumn
 			'count' => $count,
 			'gap' => $gap,
 			'balance' => !isset($properties['COLUMN-FILL']) || $properties['COLUMN-FILL'] !== 'auto',
-			'rule' => $this->rule($properties, $availableWidth, $fontSize),
+			'rule' => $this->rule($properties, $availableWidth, $fontSize, $textColor),
 		];
 	}
 
@@ -112,9 +101,10 @@ final class MultiColumn
 			$lines = [$x - $w / 3, $x + $w / 3];
 			$w /= 3;
 		} elseif ($rule['style'] === 'dashed') {
-			$dash = sprintf('[%.3F %.3F] 0 d 0 J', 3 * $w * Mpdf::SCALE, 3 * $w * Mpdf::SCALE);
+			// The dashes of a dashed border (Mpdf::_setDashBorder())
+			$dash = sprintf('[%.3F %.3F] 0 d 0 J', 2 * Mpdf::SCALE, (2 / 1.5 + 2 * $w) * Mpdf::SCALE);
 		} elseif ($rule['style'] === 'dotted') {
-			$dash = sprintf('[0 %.3F] 0 d 1 J', 2 * $w * Mpdf::SCALE);
+			$dash = sprintf('[0.001 %.3F] 0 d 1 J', 3 * $w * Mpdf::SCALE);
 			$top += $w / 2;
 			$bottom -= $w / 2;
 		}
@@ -139,10 +129,11 @@ final class MultiColumn
 	 * @param array $properties
 	 * @param float $availableWidth
 	 * @param float $fontSize
+	 * @param string $textColor The colour a rule that names none is drawn in, currentColor's
 	 *
 	 * @return array|null [w in mm, style, c as ColorConverter gives it]
 	 */
-	private function rule(array $properties, $availableWidth, $fontSize)
+	private function rule(array $properties, $availableWidth, $fontSize, $textColor)
 	{
 		$style = isset($properties['COLUMN-RULE-STYLE']) ? $properties['COLUMN-RULE-STYLE'] : 'none';
 		if ($style === 'none' || $style === 'hidden') {
@@ -151,7 +142,8 @@ final class MultiColumn
 
 		$width = isset($properties['COLUMN-RULE-WIDTH']) ? $properties['COLUMN-RULE-WIDTH'] : 'medium';
 		$width = $this->sizeConverter->convert($width, $availableWidth, $fontSize, false);
-		$color = isset($properties['COLUMN-RULE-COLOR']) ? $this->colorConverter->convert($properties['COLUMN-RULE-COLOR']) : false;
+		$color = isset($properties['COLUMN-RULE-COLOR']) ? $properties['COLUMN-RULE-COLOR'] : 'currentcolor';
+		$color = $color === 'currentcolor' && $textColor !== '' ? $textColor : $this->colorConverter->convert($color === 'currentcolor' ? '#000000' : $color);
 		if ($width <= 0 || !$color) {
 			return null;
 		}
@@ -172,7 +164,7 @@ final class MultiColumn
 	 */
 	private static function count(array $properties)
 	{
-		if (isset($properties['COLUMN-COUNT']) && preg_match('/^\d+$/', $properties['COLUMN-COUNT']) && (int) $properties['COLUMN-COUNT'] > 0) {
+		if (isset($properties['COLUMN-COUNT']) && preg_match('/^0*[1-9]\d*$/', $properties['COLUMN-COUNT'])) {
 			return (int) $properties['COLUMN-COUNT'];
 		}
 
@@ -188,7 +180,7 @@ final class MultiColumn
 	 */
 	private static function width(array $properties)
 	{
-		if (isset($properties['COLUMN-WIDTH']) && preg_match('/^(\d+\.?\d*|\.\d+)[a-z]+$/', $properties['COLUMN-WIDTH'])) {
+		if (isset($properties['COLUMN-WIDTH']) && preg_match('/^' . NormalizeProperties::NUMBER . '[a-z]+$/', $properties['COLUMN-WIDTH'])) {
 			return $properties['COLUMN-WIDTH'];
 		}
 

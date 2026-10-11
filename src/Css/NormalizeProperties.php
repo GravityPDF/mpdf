@@ -1298,14 +1298,21 @@ class NormalizeProperties
 				$autos++;
 				continue;
 			}
-			$kind = preg_match('/^\d+$/', $part) ? 'COLUMN-COUNT' : (preg_match('/^' . self::NUMBER . '[a-z]+$/', $part) ? 'COLUMN-WIDTH' : null);
-			if ($kind === null || isset($parts[$kind])) {
+			if (preg_match('/^\d+$/', $part)) {
+				$kind = 'COLUMN-COUNT';
+			} elseif (preg_match('/^' . self::NUMBER . '[a-z]+$/', $part)) {
+				$kind = 'COLUMN-WIDTH';
+			} else {
+				return;
+			}
+			if (isset($parts[$kind])) {
 				return;
 			}
 			$parts[$kind] = $part;
 		}
 
-		if (count($parts) + $autos === 0 || count($parts) + $autos > 2) {
+		$given = count($parts) + $autos;
+		if ($given === 0 || $given > 2) {
 			return;
 		}
 
