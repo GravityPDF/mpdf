@@ -356,12 +356,12 @@ class CssParser
 				continue;
 			}
 
-			$declarations = array_filter($this->declarationsOf($rule[1]), function ($declaration) {
+			$boxDeclarations = array_filter($this->declarationsOf($rule[1]), function ($declaration) {
 				return strcasecmp(trim($declaration[0]), 'content') !== 0
 					|| $this->pageMarginBoxes->content(preg_replace('/!\s*important\s*$/i', '', $declaration[1])) !== null;
 			});
 
-			foreach ($this->inlineStyleParser->parseDeclarationsByImportance($declarations) as $set => $boxProperties) {
+			foreach ($this->inlineStyleParser->parseDeclarationsByImportance($boxDeclarations) as $set => $boxProperties) {
 				foreach ($boxProperties as $property => $value) {
 					$properties[$set]['@' . strtoupper($rule[0]) . '>>' . $property] = $value;
 				}

@@ -512,6 +512,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	var $pageRuleHeaders = [];
 
+	/**
+	 * @var \Mpdf\Css\PageMarginBoxes|null Draws the @page margin boxes as headers and footers
+	 */
+	var $pageMarginBoxes;
+
 	var $page_box;
 
 	var $show_marks; // crop or cross marks
@@ -11346,7 +11351,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$keepFooter = $fname === '';
 			}
 
-			$pageRuleSlots = array_merge($keepHeader ? [] : [$headerSlot], $keepFooter ? [] : [$footerSlot]);
+			if (!$keepHeader) {
+				$pageRuleSlots[] = $headerSlot;
+			}
+			if (!$keepFooter) {
+				$pageRuleSlots[] = $footerSlot;
+			}
 
 			if ($even) {
 
@@ -12918,7 +12928,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return '';
 		}
 
-		$ppgno = $this->_getStyledNumber($ppgno, $style ? $style : $type);
+		$ppgno = $this->_getStyledNumber($ppgno, $style ?: $type);
 
 		if ($extras) {
 			$ppgno = $this->pagenumPrefix . $ppgno . $this->pagenumSuffix;
@@ -16499,9 +16509,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->page_box['outer_width_TB'] = $outer_width_TB;
 
 		// The margin boxes give a page its header and footer when no rule names one
-		$marginBoxes = new Css\PageMarginBoxes($this);
-		$boxHeader = $header ? '' : $marginBoxes->html($p, 'TOP');
-		$boxFooter = $footer ? '' : $marginBoxes->html($p, 'BOTTOM');
+		if (!$this->pageMarginBoxes) {
+			$this->pageMarginBoxes = new Css\PageMarginBoxes($this);
+		}
+		$boxHeader = $header ? '' : $this->pageMarginBoxes->html($p, 'TOP');
+		$boxFooter = $footer ? '' : $this->pageMarginBoxes->html($p, 'BOTTOM');
 
 		return [$orientation, $mgl, $mgr, $mgt, $mgb, $mgh, $mgf, $header, $footer, $bg, $resetpagenum, $pagenumstyle, $suppress, $marks, $newformat, $boxHeader, $boxFooter];
 	}

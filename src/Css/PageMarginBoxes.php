@@ -56,7 +56,7 @@ class PageMarginBoxes
 	 */
 	public function isBox($name)
 	{
-		return in_array(strtolower($name), array_merge(array_values(self::BOXES['TOP']), array_values(self::BOXES['BOTTOM'])), true);
+		return (bool) preg_match('/^(?:top|bottom)-(?:left|center|right)$/i', $name);
 	}
 
 	/**
@@ -127,8 +127,7 @@ class PageMarginBoxes
 			return '';
 		}
 
-		list($left, $center, $right) = $this->mpdf->_shareHeaderFooterWidth($cells['LEFT'][0], $cells['CENTER'][0], $cells['RIGHT'][0]);
-		$widths = ['LEFT' => $left, 'CENTER' => $center, 'RIGHT' => $right];
+		$widths = array_combine(['LEFT', 'CENTER', 'RIGHT'], $this->mpdf->_shareHeaderFooterWidth($cells['LEFT'][0], $cells['CENTER'][0], $cells['RIGHT'][0]));
 
 		// A table's columns run from the right in a right-to-left document, and each box keeps to its own side
 		if ($this->mpdf->directionality === 'rtl') {
