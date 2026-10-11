@@ -18368,6 +18368,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				'y1' => $y1 - $border_bottom,
 				'radii' => $this->roundedBox->inset($radii, ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left]),
 			];
+			// box-decoration-break: slice shadows the whole box, so a part of it split across pages has none at the break
+			$sliced = $this->cssMode === CssMode::STANDARD && (!isset($this->blk[$blvl]['box_decoration_break']) || $this->blk[$blvl]['box_decoration_break'] !== 'clone');
+			$split = [
+				'top' => $sliced && ($divider == 'pagetop' || $continuingpage),
+				'bottom' => $sliced && ($blockstate == 1 || $divider == 'pagebottom'),
+			];
 			foreach ($this->blk[$blvl]['box_shadow'] as $sh) {
 				// Colors
 				if ($sh['col'][0] == 1) {
@@ -18404,11 +18410,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				if (!empty($sh['inset'])) {
-					$insetShadow .= $this->boxShadow->inset($paddingBox, $sh, $col1, $col2, $colspace);
+					$insetShadow .= $this->boxShadow->inset($paddingBox, $sh, $col1, $col2, $colspace, $split);
 					continue;
 				}
 
-				$shadow .= $this->boxShadow->outer($backgroundBox, $borderBox, $sh, $col1, $col2, $colspace);
+				$shadow .= $this->boxShadow->outer($backgroundBox, $borderBox, $sh, $col1, $col2, $colspace, $split);
 			}
 		}
 

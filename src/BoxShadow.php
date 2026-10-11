@@ -60,12 +60,22 @@ class BoxShadow
 	 * @param string $colour The shadow's colour in mPDF's internal form
 	 * @param string $faded The same colour with its alpha at 0, for the far side of the blur
 	 * @param string $colspace RGB, CMYK or Gray, the colour space of the mesh
+	 * @param bool[] $split Keyed top and bottom: whether the block breaks across pages there, and the shadow is cut off
 	 *
 	 * @return string
 	 */
-	public function outer($clip, $box, $shadow, $colour, $faded, $colspace)
+	public function outer($clip, $box, $shadow, $colour, $faded, $colspace, $split = [])
 	{
 		$k = Mpdf::SCALE;
+		$band = '';
+		if (!empty($split['top']) || !empty($split['bottom'])) {
+			// Cut at the break, as the whole box's shadow would be, and with nothing of its edge on that side
+			$top = !empty($split['top']) ? $box['y0'] : 0;
+			$bottom = !empty($split['bottom']) ? $box['y1'] : $this->mpdf->h;
+			$band = sprintf('0.000 %.3F %.3F %.3F re W n ', ($this->mpdf->h - $top) * $k, $this->mpdf->w * $k, ($top - $bottom) * $k);
+		}
+		$clip = $this->pastBreaks($clip, $shadow, $split);
+		$box = $this->pastBreaks($box, $shadow, $split);
 		$w = $box['x1'] - $box['x0'];
 		$h = $box['y1'] - $box['y0'];
 		$blur = $shadow['blur'];
@@ -76,7 +86,7 @@ class BoxShadow
 		}
 		$fadedEdge = $spread + $blur / 2;
 
-		$s = ' q 0 w ' . $this->roundedBox->path($this->mpdf->h, $clip['x0'], $clip['y0'], $clip['x1'], $clip['y1'], $clip['radii']);
+		$s = ' q 0 w ' . $band . $this->roundedBox->path($this->mpdf->h, $clip['x0'], $clip['y0'], $clip['x1'], $clip['y1'], $clip['radii']);
 		$s .= sprintf('0 %.3F m %.3F %.3F l ', $this->mpdf->h * $k, $this->mpdf->w * $k, $this->mpdf->h * $k);
 		$s .= sprintf('%.3F 0 l 0 0 l 0 %.3F l ', $this->mpdf->w * $k, $this->mpdf->h * $k) . 'W n' . "\n";
 
@@ -93,20 +103,23 @@ class BoxShadow
 	 * @param string $colour The shadow's colour in mPDF's internal form
 	 * @param string $faded The same colour with its alpha at 0, for the far side of the blur
 	 * @param string $colspace RGB, CMYK or Gray, the colour space of the mesh
+	 * @param bool[] $split Keyed top and bottom: whether the block breaks across pages there, and the shadow is cut off
 	 *
 	 * @return string
 	 */
-	public function inset($box, $shadow, $colour, $faded, $colspace)
+	public function inset($box, $shadow, $colour, $faded, $colspace, $split = [])
 	{
 		$k = Mpdf::SCALE;
+		$s = ' q 0 w ' . $this->roundedBox->path($this->mpdf->h, $box['x0'], $box['y0'], $box['x1'], $box['y1'], $box['radii']) . ' W n' . "\n";
+
+		// The padding box stays the clip, so the shadow is cut at the break
+		$box = $this->pastBreaks($box, $shadow, $split);
 		$x0 = $box['x0'];
 		$y0 = $box['y0'];
 		$w = $box['x1'] - $x0;
 		$h = $box['y1'] - $y0;
 		$blur = $shadow['blur'];
 		$solidEdge = $shadow['spread'] - $blur / 2;
-
-		$s = ' q 0 w ' . $this->roundedBox->path($this->mpdf->h, $x0, $y0, $box['x1'], $box['y1'], $box['radii']) . ' W n' . "\n";
 
 		// Whatever the clip lets through, however far the shape is offset
 		$dx = abs($shadow['x']);
@@ -121,6 +134,29 @@ class BoxShadow
 		$ring = $this->ring($x0 + $solidEdge, $y0 + $solidEdge, $w - 2 * $solidEdge, $h - 2 * $solidEdge, $blur, $this->roundedBox->inset($box['radii'], $this->sides($solidEdge)));
 
 		return $s . $this->fill($shadow, $colour, $cover . $this->edge($ring, 'outer') . 'h f*', $blur ? $this->mesh($ring, true, $colour, $faded, $colspace) : '');
+	}
+
+	/**
+	 * The box carried past the top or bottom of the page on each side where the block breaks, far enough that none
+	 * of the shadow's edge, offset, spread or blur on that side reaches the page
+	 *
+	 * @param array $box Keyed x0, y0, x1, y1 and radii
+	 * @param array $shadow
+	 * @param bool[] $split Keyed top and bottom
+	 *
+	 * @return array
+	 */
+	private function pastBreaks($box, $shadow, $split)
+	{
+		$reach = abs($shadow['y']) + abs($shadow['spread']) + $shadow['blur'] + 1;
+		if (!empty($split['top'])) {
+			$box['y0'] = min($box['y0'], 0) - $reach;
+		}
+		if (!empty($split['bottom'])) {
+			$box['y1'] = max($box['y1'], $this->mpdf->h) + $reach;
+		}
+
+		return $box;
 	}
 
 	/**

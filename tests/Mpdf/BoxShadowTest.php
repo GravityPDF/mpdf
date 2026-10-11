@@ -62,6 +62,25 @@ class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The content streams of the first two pages for a 60 mm wide block at 10 mm from the left that breaks from the
+	 * first page, which it leaves at 50 mm, onto the second, which it starts at 10 mm
+	 *
+	 * @param string $style
+	 * @param array $config
+	 *
+	 * @return string[]
+	 */
+	private function splitStreams($style, $config = [])
+	{
+		$mpdf = $this->mpdf($config + ['format' => [80, 60], 'margin_left' => 10, 'margin_right' => 10, 'margin_top' => 10, 'margin_bottom' => 10, 'margin_header' => 0, 'margin_footer' => 0]);
+		$mpdf->WriteHTML('<div style="' . $style . '">' . str_repeat('Line<br>', 12) . '</div>');
+		$this->pageHeight = $mpdf->h;
+		$this->pageWidth = $mpdf->w;
+
+		return array_slice($this->pageContents($this->output($mpdf)), 0, 2);
+	}
+
+	/**
 	 * A point in millimetres from the top left of the page, as the operators write it
 	 *
 	 * @param float $x
@@ -375,5 +394,71 @@ class BoxShadowTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertStringContainsString($this->outerClipAround(12, 12, 72, 38), $stream);
 		$this->assertStringContainsString($this->roundedCorner(75, 9, 1) . $this->point(75, 40) . ' l ', $stream);
+	}
+
+	/**
+	 * The ways a block keeps its shadow on the edges where it breaks: box-decoration-break: clone, and legacy mode,
+	 * which does not read box-decoration-break for shadows
+	 *
+	 * @return array[]
+	 */
+	public function shadowedBreaks()
+	{
+		return [
+			'clone' => ['box-decoration-break: clone; ', []],
+			'legacy' => ['', ['cssMode' => CssMode::LEGACY]],
+		];
+	}
+
+	/**
+	 * Under box-decoration-break: slice, the default, an outer shadow is cut off at the bottom of the first page and
+	 * the top of the second, and its shape runs on past the page edge there, so none of its edge shows at the break
+	 */
+	public function testASlicedOuterShadowIsCutOffAtTheBreak()
+	{
+		list($first, $second) = $this->splitStreams('box-shadow: 0 0 0 2mm #c00');
+
+		$this->assertStringContainsString(' q 0 w ' . $this->rect(0, 0, 80, 50) . 'W n ', $first);
+		$this->assertStringContainsString($this->roundedCorner(72, 8, 2) . $this->point(72, 63) . ' l ', $first);
+
+		$this->assertStringContainsString(' q 0 w ' . $this->rect(0, 10, 80, 50) . 'W n ', $second);
+		$this->assertStringContainsString(' q ' . self::RED . "\n" . $this->point(70, -5) . ' m ', $second);
+	}
+
+	/**
+	 * Under box-decoration-break: slice an inset shadow stays clipped to the part of the padding box on the page,
+	 * and fills to a shape that runs on past the page edge where the block breaks, so it has no edge there
+	 */
+	public function testASlicedInsetShadowHasNoEdgeAtTheBreak()
+	{
+		list($first, $second) = $this->splitStreams('box-shadow: inset 0 0 0 2mm #c00');
+
+		$this->assertStringContainsString($this->insetClip(10, 10, 70, 50, $this->radii()), $first);
+		$this->assertStringContainsString($this->squareFill([10, 10, 60, 53], [12, 12, 68, 61]), $first);
+
+		$this->assertStringContainsString(' q ' . self::RED . "\n" . sprintf('%.3F %.3F %.3F ', 10 * Mpdf::SCALE, ($this->pageHeight + 3) * Mpdf::SCALE, 60 * Mpdf::SCALE), $second);
+		$this->assertStringContainsString($this->point(68, -1) . ' m ', $second);
+	}
+
+	/**
+	 * Under box-decoration-break: clone, and in legacy mode, each part of a block on a page gets the whole shadow
+	 * round it, the edges at the break included
+	 *
+	 * @dataProvider shadowedBreaks
+	 *
+	 * @param string $style
+	 * @param array $config
+	 */
+	public function testAClonedShadowIsDrawnRoundEachPart($style, $config)
+	{
+		list($first, $second) = $this->splitStreams($style . 'box-shadow: 0 0 0 2mm #00c, inset 0 0 0 2mm #c00', $config);
+
+		$this->assertStringNotContainsString($this->rect(0, 0, 80, 50) . 'W n ', $first);
+		$this->assertStringContainsString($this->outerClipAround(10, 10, 70, 50), $first);
+		$this->assertStringContainsString($this->roundedCorner(72, 8, 2) . $this->point(72, 50) . ' l ', $first);
+		$this->assertStringContainsString($this->squareFill([10, 10, 60, 40], [12, 12, 68, 48]), $first);
+
+		$this->assertStringContainsString($this->roundedCorner(72, 8, 2), $second);
+		$this->assertStringContainsString($this->point(68, 12) . ' m ', $second);
 	}
 }
