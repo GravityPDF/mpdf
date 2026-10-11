@@ -158,6 +158,11 @@ New features
   * A reset such as `* { margin: 0; padding: 0 }` now takes away the default margins of paragraphs, headings and lists, a list's indent and a cell's padding, as in a browser. It reaches the lines of the table of contents and the index as well, which are the document's elements, so their levels are no longer indented. Style `div.mpdf_toc_level_1` and the like to indent them again.
   * mPDF's own `<barcode>`, `<dottab>` and `<textcircle>` are not HTML elements. A rule reaches them only by naming their tag, or an id or class they carry, so `*`, and `:empty`, `[attr]` or `:not()` alone, leave them as they are: `:empty { display: none }` does not hide a barcode.
 * **Font weights as numbers, `bolder` and `lighter`, and `font-size: larger` and `smaller`.** In the standard CSS mode, `font-weight` takes a number from 1 to 1000, and `bolder` and `lighter` step from the parent's weight by the table in CSS Fonts. The weight is inherited as a number, so `bolder` inside `bolder` gives 900 and `lighter` inside 700 gives 400, and `h1 { font-weight: lighter }` is regular, one step down from its parent's 400. A weight above 500 is drawn with the family's bold face and any other with its regular face. `larger` and `smaller` multiply and divide the parent's size by 1.2. A form field reads them against the document's size, as it reads its other font sizes. The `font` shorthand's weight is read the same way. All of these were ignored before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to read only `normal` and `bold`, as before. [#545] [#647]
+* **The `text-decoration` longhands, and `text-align: start`, `end` and `match-parent`, in standard mode.** They were ignored before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep ignoring them. [#552] [#607]
+  * `text-decoration-line`, `text-decoration-style`, `text-decoration-color` and `text-decoration-thickness` are read, and so are the style, colour and thickness parts of the `text-decoration` shorthand, which resets those it leaves out. `p { text-decoration: underline wavy #f00 }` draws a red wavy underline where it drew a straight one in the text colour.
+  * The styles are `solid`, `double`, `dotted`, `dashed` and `wavy`. A thickness is a length, or a percentage of the font size; `auto` and `from-font` keep the font's.
+  * `text-underline-offset` sets the top of the underline that far below the baseline, and `text-underline-position: under` puts it below the descenders. Both are inherited, and read where the underline is set.
+  * `text-align: start` and `end` align a block's or a cell's text to the left or right by its direction, so `end` aligns ltr text right and rtl text left. `match-parent` takes the parent's alignment, with `start` or `end` taken against the parent's direction.
 
 Performance
 -----------
@@ -964,4 +969,5 @@ These changes do not change output.
 [#588]: https://github.com/GravityPDF/mpdf/issues/588
 [#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
+[#607]: https://github.com/GravityPDF/mpdf/issues/607
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
