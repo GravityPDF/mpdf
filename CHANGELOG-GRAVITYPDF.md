@@ -128,6 +128,7 @@ New features
 ### Images
 
 * **Rounded images.** Images take CSS `border-radius`, including per-corner, elliptical and percentage radii. The picture, its background and its border all follow the curve. [#70]
+* **`object-fit`, `object-position` and `aspect-ratio` on images, in standard mode.** An image given a width and a height kept being stretched to them. Now `object-fit: contain`, `cover`, `none` and `scale-down` scale the picture inside that box and cut it off at the box's content edge, or at its rounded corners, and `object-position` places it there with keywords, percentages and lengths, centred by default. `aspect-ratio` gives the length not set, so `width: 60mm; aspect-ratio: 1 / 1` is a 60 mm square; `auto` keeps the picture's own proportions. These were ignored before, so a document that has them changes. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore them as before. [#604]
 * **Exif orientation.** Set `useImageExifOrientation` to turn JPEGs the way their Exif `Orientation` tag says, as browsers do. It is off by default. `imageJpegQuality` sets the quality of the re-encoded image. [#35] [#51]
 
 ### Forms
@@ -965,3 +966,4 @@ These changes do not change output.
 [#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
+[#604]: https://github.com/GravityPDF/mpdf/issues/604

@@ -3,7 +3,10 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\BorderRadius;
+use Mpdf\Css\NormalizeProperties;
+use Mpdf\CssMode;
 use Mpdf\Image\ImageSizing;
+use Mpdf\Image\ObjectFit;
 use Mpdf\Mpdf;
 use Mpdf\Utils\NumericString;
 
@@ -274,6 +277,10 @@ class Img extends Tag
 				'fit_h' => $maxHeight,
 				'percent' => $percent,
 			];
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				$sizing = $this->withAspectRatio($sizing, $properties);
+				$objattr = $this->withObjectFit($objattr, $properties, $naturalW, $naturalH);
+			}
 			list($w, $h) = ImageSizing::fit($sizing, $info['w'], $info['h']);
 			$objattr['type'] = 'image';
 			$objattr['itype'] = $info['type'];
@@ -414,6 +421,72 @@ class Img extends Tag
 	private function percentage($value)
 	{
 		return NumericString::containsPercentChar($value) ? (float) $value : null;
+	}
+
+	/**
+	 * The sizing with the proportions aspect-ratio gives the image in place of its own, which an image given neither
+	 * a width nor a height takes at its natural width. With auto the image keeps its own proportions.
+	 *
+	 * @param array $sizing
+	 * @param array $properties
+	 *
+	 * @return array
+	 */
+	private function withAspectRatio(array $sizing, array $properties)
+	{
+		if (!isset($properties['ASPECT-RATIO'])) {
+			return $sizing;
+		}
+
+		$number = NormalizeProperties::NUMBER;
+		if (!preg_match('/^' . $number . '\s*(?:\/\s*' . $number . ')?$/', trim($properties['ASPECT-RATIO']), $m)) {
+			return $sizing;
+		}
+
+		$ratioW = (float) $m[1];
+		$ratioH = isset($m[2]) ? (float) $m[2] : 1.0;
+		// A ratio with a zero in it is degenerate, which CSS reads as auto
+		if ($ratioW <= 0 || $ratioH <= 0) {
+			return $sizing;
+		}
+
+		$sizing['ratio'] = [$ratioW, $ratioH];
+		$sizing['natural_h'] = $sizing['natural_w'] * $ratioH / $ratioW;
+
+		return $sizing;
+	}
+
+	/**
+	 * The image with the object-fit and object-position it is drawn by inside its box, and its natural size to fit
+	 *
+	 * @param array $objattr
+	 * @param array $properties
+	 * @param float $naturalW
+	 * @param float $naturalH
+	 *
+	 * @return array
+	 */
+	private function withObjectFit(array $objattr, array $properties, $naturalW, $naturalH)
+	{
+		$fit = isset($properties['OBJECT-FIT']) ? strtolower(trim($properties['OBJECT-FIT'])) : 'fill';
+		if (!in_array($fit, ObjectFit::FITS, true)) {
+			$fit = 'fill';
+		}
+
+		$position = null;
+		if (isset($properties['OBJECT-POSITION'])) {
+			$position = ObjectFit::position($properties['OBJECT-POSITION'], $this->sizeConverter, $this->mpdf->FontSize);
+		}
+		if ($position === null) {
+			$position = ObjectFit::CENTRE;
+		}
+
+		// fill at the centre is how an image is drawn without either property
+		if ($fit !== 'fill' || $position != ObjectFit::CENTRE) {
+			$objattr['object_fit'] = ['fit' => $fit, 'position' => $position, 'natural' => [$naturalW, $naturalH]];
+		}
+
+		return $objattr;
 	}
 
 	public function close(&$ahtml, &$ihtml)

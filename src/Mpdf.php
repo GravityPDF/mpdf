@@ -21,6 +21,7 @@ use Mpdf\Fonts\FontRegistry;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Image\ImageSizing;
+use Mpdf\Image\ObjectFit;
 use Mpdf\Output\Destination;
 use Mpdf\Pdf\DocumentProfile;
 use Mpdf\Invoice\EmbeddedInvoiceInterface;
@@ -8115,6 +8116,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->SetAlpha($objattr['opacity']);
 				}
 
+				// The content box, relative to the picture, which object-fit may draw elsewhere
+				$contentBox = [0, 0, $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT']];
+				if (isset($objattr['object_fit'])) {
+					list($objattr, $contentBox) = $this->fitImage($objattr, $k);
+				}
+
 				$obiw = $objattr['INNER-WIDTH'];
 				$obih = $objattr['INNER-HEIGHT'];
 
@@ -8261,10 +8268,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				/* -- END BACKGROUNDS -- */
 				/* -- BORDER-RADIUS -- */
+				// Placed only now, as a list marker may have moved the picture
+				$contentBox[0] += $objattr['INNER-X'];
+				$contentBox[1] += $objattr['INNER-Y'];
 				$clip = '';
 				if ($box) {
 					// The picture is trimmed to the content edge
-					$clip = $this->roundedBox->path($this->h, $objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-X'] + $objattr['INNER-WIDTH'], $objattr['INNER-Y'] + $objattr['INNER-HEIGHT'], $box['content']) . 'W n ';
+					$clip = $this->roundedBox->path($this->h, $contentBox[0], $contentBox[1], $contentBox[0] + $contentBox[2], $contentBox[1] + $contentBox[3], $box['content']) . 'W n ';
+				} elseif (isset($objattr['object_fit'])) {
+					$clip = sprintf('%.3F %.3F %.3F %.3F re W n ', $contentBox[0] * Mpdf::SCALE, ($this->h - $contentBox[1]) * Mpdf::SCALE, $contentBox[2] * Mpdf::SCALE, -$contentBox[3] * Mpdf::SCALE);
 				}
 				/* -- END BORDER-RADIUS -- */
 				// The CSS transform goes outermost, about the box's centre as it does for the background and border; the
@@ -8283,7 +8295,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->writer->write($outstring);
 				// LINK
 				if (isset($objattr['link'])) {
-					$this->Link($objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT'], $objattr['link']);
+					$this->Link($contentBox[0], $contentBox[1], $contentBox[2], $contentBox[3], $objattr['link']);
 				}
 				if (isset($objattr['opacity'])) {
 					$this->SetAlpha(1);
@@ -18999,6 +19011,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		$this->SetDash();
 		$this->y = $save_y;
+	}
+
+	/**
+	 * The image moved into the rectangle its object-fit and object-position draw it in, and its content box
+	 *
+	 * @param array $objattr The image, placed on the page
+	 * @param float $k The factor a table has shrunk the image by
+	 *
+	 * @return array The image, and its content box as x and y from the picture's top left corner, width and height
+	 */
+	private function fitImage(array $objattr, $k)
+	{
+		$box = [$objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT']];
+		list($objattr['INNER-X'], $objattr['INNER-Y'], $objattr['INNER-WIDTH'], $objattr['INNER-HEIGHT']) = ObjectFit::place($objattr, $k);
+
+		return [$objattr, [$box[0] - $objattr['INNER-X'], $box[1] - $objattr['INNER-Y'], $box[2], $box[3]]];
 	}
 
 	function PaintImgBorder($objattr, $is_table, $box = null)
