@@ -433,7 +433,9 @@ class CssMerger
 				}
 			}
 
-			if (isset($this->cssProperties['OUTLINE-STYLE']) && !isset($this->cssProperties['OUTLINE-COLOR'])) {
+			// A browser that cannot invert draws invert as currentColor
+			if (isset($this->cssProperties['OUTLINE-STYLE']) && !in_array(strtolower($this->cssProperties['OUTLINE-STYLE']), ['none', 'hidden'], true)
+				&& (!isset($this->cssProperties['OUTLINE-COLOR']) || strtolower($this->cssProperties['OUTLINE-COLOR']) === 'invert')) {
 				$this->cssProperties['OUTLINE-COLOR'] = 'currentcolor';
 			}
 

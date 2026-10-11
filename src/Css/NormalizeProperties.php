@@ -1211,12 +1211,8 @@ class NormalizeProperties
 	{
 		$components = [];
 		foreach ($this->splitComponents($v) as $component) {
-			if ($component === 'auto') {
-				$component = 'solid';
-			} elseif ($component === 'invert') {
-				$component = 'currentcolor';
-			}
-			$components[] = $component;
+			// Neither is a border value: auto is drawn solid, and invert as currentColor
+			$components[] = $component === 'auto' ? 'solid' : ($component === 'invert' ? 'currentcolor' : $component);
 		}
 
 		$parts = $this->parseBorderParts($components);

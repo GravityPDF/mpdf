@@ -46,14 +46,15 @@ class BoxOutline
 	 * @param float $x1 Its right edge
 	 * @param float $y1 Its bottom edge
 	 * @param array $radii The border box's corners, fitted to it, keyed TL/TR/BR/BL
-	 * @param array $outline As Css\Outline::parse() gives it
-	 * @param array $open The sides, keyed top/right/bottom/left, where the box is cut off by a page or a line break.
-	 *                    The outline is left open there, as the border is
+	 * @param array $outline As Css\Outline::parse() gives it, and under open the sides, keyed top/right/bottom/left,
+	 *                       where the box is cut off by a page or a line break. The outline is left open there, as the
+	 *                       border is
 	 *
 	 * @return string
 	 */
-	public function draw($x0, $y0, $x1, $y1, array $radii, array $outline, array $open = [])
+	public function draw($x0, $y0, $x1, $y1, array $radii, array $outline)
 	{
+		$open = isset($outline['open']) ? $outline['open'] : [];
 		$w = $outline['w'];
 		$offset = $outline['offset'];
 		$box = [$x0, $y0, $x1, $y1];
@@ -91,12 +92,17 @@ class BoxOutline
 
 		$c = $outline['c'];
 		$s = 'q ' . $clip;
+		$style = $outline['style'];
+		// A colour mPDF cannot shade, such as a spot colour, draws a groove, ridge, inset or outset solid
+		if ($c[0] == ColorConverter::MODE_SPOT && in_array($style, ['groove', 'ridge', 'inset', 'outset'], true)) {
+			$style = 'solid';
+		}
 
-		switch ($outline['style']) {
+		switch ($style) {
 			case 'dotted':
 			case 'dashed':
 				$s .= $this->stroke($c) . sprintf(' %.3F w ', $w * Mpdf::SCALE);
-				if ($outline['style'] === 'dotted') {
+				if ($style === 'dotted') {
 					$s .= sprintf('1 J 1 j [0 %.3F] 0 d ', 2 * $w * Mpdf::SCALE);
 				} else {
 					$s .= sprintf('0 J 0 j [%.3F %.3F] 0 d ', 3 * $w * Mpdf::SCALE, 3 * $w * Mpdf::SCALE);
@@ -139,11 +145,6 @@ class BoxOutline
 		$c = $outline['c'];
 		$w = $outline['w'];
 		$offset = $outline['offset'];
-
-		// A colour mPDF cannot shade, such as a spot colour, is drawn solid
-		if ($c[0] == 2) {
-			return $this->fill($c) . ' ' . $this->ring($box, $radii, $offset, $offset + $w) . 'f* ';
-		}
 
 		$dark = $this->colorConverter->darken($c);
 		$light = $this->colorConverter->lighten($c);
@@ -264,7 +265,7 @@ class BoxOutline
 	}
 
 	/**
-	 * The operator setting the alpha of an RGBa or CMYKa colour, or nothing for an opaque one
+	 * The operator setting the alpha of a colour that has one, or nothing for an opaque one
 	 *
 	 * @param string $c
 	 * @param string $mode F for fills, S for strokes
@@ -273,13 +274,8 @@ class BoxOutline
 	 */
 	private function alpha($c, $mode)
 	{
-		if ($c[0] == 5) {
-			return ' ' . $this->mpdf->SetAlpha(ord($c[4]) / 100, 'Normal', true, $mode);
-		}
-		if ($c[0] == 6) {
-			return ' ' . $this->mpdf->SetAlpha(ord($c[5]) / 100, 'Normal', true, $mode);
-		}
+		$alpha = ColorConverter::alpha($c);
 
-		return '';
+		return $alpha === null ? '' : ' ' . $this->mpdf->SetAlpha($alpha, 'Normal', true, $mode);
 	}
 }

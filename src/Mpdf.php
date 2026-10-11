@@ -350,6 +350,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	var $inlineOutlines = 0;
 
+	/**
+	 * @var string The outlines of the inline elements on the line being drawn, as operators
+	 */
+	var $lineOutlines = '';
+
 	var $visibility;
 
 	var $kerning;
@@ -2685,9 +2690,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->AddPage($this->CurOrientation);
 		}
 
-		if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
-			$this->printcellbuffer();
-		}
+		$this->printcellbuffer();
 
 		// *TABLES*
 		if ($this->tablebuffer) {
@@ -6347,8 +6350,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->Link($this->x, $boxtop, $w, $boxheight, $link);
 			}
 
+			// Written once the line is drawn, so the text and backgrounds after this piece do not cover it
 			if ($this->spanOutline) {
-				$s .= ' ' . $this->boxOutline->draw($this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw, RoundedBox::SQUARE, $this->spanOutline, $this->spanOutline['open']);
+				$this->lineOutlines .= ' ' . $this->boxOutline->draw($this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw, RoundedBox::SQUARE, $this->spanOutline);
 			}
 		}
 		if ($s) {
@@ -7948,6 +7952,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$this->printobjectbuffer($is_table, $blockdir);
 			$this->objectbuffer = [];
+			$this->writeLineOutlines();
 			$this->ResetSpacing();
 		} // END IF CONTENT
 
@@ -9712,6 +9717,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$this->printobjectbuffer($is_table, $blockdir);
 				}
 				$this->objectbuffer = [];
+				$this->writeLineOutlines();
 
 
 				/* -- CSS-IMAGE-FLOAT -- */
@@ -18346,8 +18352,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 
 		if (isset($this->blk[$blvl]['outline'])) {
-			$open = ['top' => $divider == 'pagetop' || $continuingpage, 'bottom' => $blockstate == 1 || $divider == 'pagebottom'];
-			$this->writer->write($this->boxOutline->draw($x0, $y0, $x0 + $w, $y0 + $h, $radii, $this->blk[$blvl]['outline'], $open));
+			$outline = $this->blk[$blvl]['outline'];
+			$outline['open'] = ['top' => $divider == 'pagetop' || $continuingpage, 'bottom' => $blockstate == 1 || $divider == 'pagebottom'];
+			$this->writer->write($this->boxOutline->draw($x0, $y0, $x0 + $w, $y0 + $h, $radii, $outline));
 		}
 
 		$this->SetDash();
@@ -19109,6 +19116,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function joinInlineOutlines(array &$arrayaux)
 	{
+		if (!$this->inlineOutlines) {
+			return;
+		}
+
 		$last = null;
 		foreach (array_keys($arrayaux) as $i) {
 			if (!isset($arrayaux[$i][9]['box-outline'])) {
@@ -19147,6 +19158,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		];
 
 		return $outline;
+	}
+
+	/**
+	 * Writes the outlines of the inline elements on the line just drawn, over everything on it
+	 */
+	private function writeLineOutlines()
+	{
+		if ($this->lineOutlines !== '') {
+			$this->writer->write($this->lineOutlines);
+			$this->lineOutlines = '';
+		}
 	}
 
 	/**
@@ -24392,9 +24414,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (!$this->table_keep_together && $i < $numrows - 1 && $level == 1) {
 					$this->breakpoints[$this->CurrCol][] = $y + $h;
 				} // mPDF 6
-				if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
-					$this->printcellbuffer();
-				}
+				$this->printcellbuffer();
 			}
 			/* -- END COLUMNS -- */
 
@@ -24406,9 +24426,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		} // end of rows
 
-		if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
-			$this->printcellbuffer();
-		}
+		$this->printcellbuffer();
 
 
 		if ($this->tableClipPath) {
@@ -25525,9 +25543,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function AcceptPageBreak()
 	{
-		if (count($this->cellBorderBuffer) || count($this->cellOutlineBuffer)) {
-			$this->printcellbuffer();
-		} // *TABLES*
+		$this->printcellbuffer(); // *TABLES*
 		/* -- COLUMNS -- */
 		if ($this->ColActive == 1) {
 			if ($this->CurrCol < $this->NbCol - 1) {
