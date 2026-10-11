@@ -229,12 +229,6 @@ parameters:
 			path: src/Image/Wmf.php
 
 		-
-			message: '#^Binary operation "\*" between string and 2 results in an error\.$#'
-			identifier: binaryOp.invalid
-			count: 1
-			path: src/Mpdf.php
-
-		-
 			message: '#^Binary operation "\+" between non\-empty\-string and 0 results in an error\.$#'
 			identifier: binaryOp.invalid
 			count: 1
