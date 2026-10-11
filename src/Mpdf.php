@@ -15686,7 +15686,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 
-			// A percentage height inside resolves against it
+			// What a percentage height on the content resolves against
 			$this->fixedPosBlockHeight = $inner_h === 'auto' ? false : $inner_h;
 
 			// THEN DO SAME FOR WIDTH

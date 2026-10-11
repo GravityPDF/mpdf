@@ -1470,8 +1470,8 @@ abstract class BlockTag extends Tag
 	/**
 	 * The content height the block's height declaration sets, or false for auto
 	 *
-	 * A percentage is taken of the enclosing block's set height, and is auto when it has none, as in CSS. The legacy
-	 * CSS mode takes it of the page area, as mPDF v7 did
+	 * A percentage is taken of the enclosing block's set height, and is auto when it has none, as in CSS. Inside a
+	 * positioned block the enclosing block is that block. The legacy CSS mode takes it of the page area, as mPDF v7 did
 	 *
 	 * @param string $height
 	 * @param array $prevblk The enclosing block
@@ -1486,11 +1486,9 @@ abstract class BlockTag extends Tag
 		}
 
 		if (NumericString::containsPercentChar($height)) {
-			$parentHeight = isset($prevblk['css_set_height']) ? $prevblk['css_set_height'] : false;
-			if ($this->mpdf->blklvl == 2 && $this->mpdf->fixedPosBlockHeight !== false) {
-				// The <div> at level 1 stands in for a positioned block, and has its height
-				$parentHeight = $this->mpdf->fixedPosBlockHeight;
-			}
+			// The <div> at level 1 stands in for a positioned block, and has its height
+			$standIn = $this->mpdf->blklvl == 2 && $this->mpdf->fixedPosBlockHeight !== false;
+			$parentHeight = $standIn ? $this->mpdf->fixedPosBlockHeight : (isset($prevblk['css_set_height']) ? $prevblk['css_set_height'] : false);
 			if (empty($parentHeight)) {
 				return false;
 			}
@@ -1585,14 +1583,14 @@ abstract class BlockTag extends Tag
 	 */
 	private function paddingBoxPath(array $blk)
 	{
-		$x = $blk['x0'] + $blk['border_left']['w'];
-		$y = $blk['y0'] + $blk['border_top']['w'];
-		$w = $blk['width'] - $blk['border_left']['w'] - $blk['border_right']['w'];
-		$h = $blk['y1'] - $blk['border_bottom']['w'] - $y;
+		$borders = ['top' => $blk['border_top']['w'], 'right' => $blk['border_right']['w'], 'bottom' => $blk['border_bottom']['w'], 'left' => $blk['border_left']['w']];
+		$x = $blk['x0'] + $borders['left'];
+		$y = $blk['y0'] + $borders['top'];
+		$w = $blk['width'] - $borders['left'] - $borders['right'];
+		$h = $blk['y1'] - $borders['bottom'] - $y;
 
 		if (BorderRadius::isDeclared($blk)) {
 			$roundedBox = new RoundedBox();
-			$borders = ['top' => $blk['border_top']['w'], 'right' => $blk['border_right']['w'], 'bottom' => $blk['border_bottom']['w'], 'left' => $blk['border_left']['w']];
 			$height = $blk['y1'] - $blk['y0'];
 			$radii = $roundedBox->fit($blk['width'], $height, BorderRadius::radii($blk, $blk['width'], $height), $borders);
 			$radii = $roundedBox->inset($radii, $borders);
