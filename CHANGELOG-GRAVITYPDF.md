@@ -82,6 +82,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **`min-width` and `max-width` hold the width of a block**, as in a browser, in standard mode. mPDF never read them on a block, so `max-width: 100mm; margin: 0 auto`, the usual centred container, filled the page, `width: 150mm; max-width: 100mm` was 150mm wide, and `width: 50mm; min-width: 80mm` was 50mm. Now the width is held within the two, `max-width` first, then `min-width`, a percentage taken of the container's inner width as `width` is, and the block's auto margins, direction or float place the narrowed box. Floats and positioned blocks take the same limits. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore the two properties as before. [#588] [#691]
   * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
 * **`text-indent` indents the first line of a table cell**, as in a browser, in standard mode. mPDF ignored it in cells, including the value a cell inherits, so `body { text-indent: 10mm }` indented paragraphs and left cells alone. Now a cell's first line is indented by its own `text-indent` or the one it inherits from its table and the blocks around it, and a cell sized to its content is made wide enough for the indent. Set `td, th { text-indent: 0 }` to keep cells unindented, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#608]
+* **A word too long for its line overflows it when `word-break` or `overflow-wrap` leave it nowhere to break**, as in a browser, in standard mode. mPDF ignored both and always cut such a word where the line was full. That is still what happens when neither property is set, but `overflow-wrap: normal`, `word-break: normal` or `word-break: keep-all` on its own now let the word run out of its box. Set `overflow-wrap: anywhere` to have it cut, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. [#607]
   * A `<p>` or `<div>` inside a cell, which mPDF lays out as part of the cell's text, is indented only when it starts the cell.
 
 New features
@@ -163,6 +164,7 @@ New features
 * **`vertical-align: middle`, `top`, `bottom`, `text-top` and `text-bottom` on inline text**, in standard mode. They worked on images only, and left text on the baseline. Now `middle` puts the middle of the element's line box half the x-height of the block's font above the baseline, `text-top` and `text-bottom` line its top or bottom up with the top or bottom of the block's font, and `top` and `bottom` with the top or bottom of the line, which grows to hold it. The text, images, background, border and decorations inside the element move with it. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to leave text on the baseline as before. [#608]
   * Each element is aligned against the block's font, not against the inline element it is in, and an image inside an element aligned with `top` or `bottom` is aligned with the line on its own.
 * **`text-indent: hanging` and `each-line`**, in standard mode. `hanging` indents every line but the first, and `each-line` indents the first line after each `<br>` too. A value with either keyword was read as no indent before. [#608]
+* **`word-break`, `overflow-wrap` and `word-wrap`**, in standard mode, in blocks and table cells. Both are inherited, and `word-wrap` is read as `overflow-wrap`. `word-break: break-all` breaks a line where it is full, inside a word or not. `keep-all` stops CJK text breaking between its letters, so it breaks at spaces and punctuation only. `overflow-wrap: break-word` and `anywhere`, and `word-break: break-word`, cut a word too long for its line at the edge. In a table cell `break-all`, `anywhere` and `word-break: break-word` let the column be as narrow as its widest letter, so `td { word-break: break-all }` keeps a 30mm table 30mm wide around a long URL, where the table used to widen to hold it. [#607]
 
 Performance
 -----------
@@ -970,4 +972,5 @@ These changes do not change output.
 [#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
+[#607]: https://github.com/GravityPDF/mpdf/issues/607
 [#608]: https://github.com/GravityPDF/mpdf/issues/608

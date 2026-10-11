@@ -62,6 +62,14 @@ final class InheritedProperties
 	];
 
 	/**
+	 * Held in the text state like TEXT, but read only under CssMode::STANDARD, so no legacy channel hands them on
+	 */
+	const WORD_BREAK = [
+		'WORD-BREAK',
+		'OVERFLOW-WRAP',
+	];
+
+	/**
 	 * What a positioned block handed its content under CssMode::LEGACY, in the order it was written. Text decorations
 	 * and the stacking order are not inherited, but the <div> that stands in for the block takes them too
 	 */
@@ -90,13 +98,13 @@ final class InheritedProperties
 	];
 
 	/**
-	 * @return string[] Every inherited property mPDF supports: TEXT, then BLOCK
+	 * @return string[] Every inherited property mPDF supports: TEXT, then BLOCK, then WORD_BREAK
 	 */
 	public static function names()
 	{
 		static $names = null;
 		if ($names === null) {
-			$names = array_merge(self::TEXT, self::BLOCK);
+			$names = array_merge(self::TEXT, self::BLOCK, self::WORD_BREAK);
 		}
 
 		return $names;
