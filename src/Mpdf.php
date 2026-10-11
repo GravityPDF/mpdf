@@ -323,7 +323,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $writingToC;
 	var $layers;
 	var $layerDetails;
-	var $current_layer;
+	var $current_layer; // -1 while a positioned block is written in standard cssMode: its content opens no layer
 	var $open_layer_pane;
 	var $decimal_offset;
 	var $inMeter;
@@ -11191,14 +11191,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if ($mFirstLength) {
 				$sortarr = [];
 				for ($i = 0; $i < $mFirstLength; $i++) {
-					// Backgrounds, then gradients, then content and positioned blocks, each in the order they were written
-					$key = $m[1][$i] * 3;
+					// Backgrounds, then gradients, then content and positioned blocks. Where blocks are stacked, a
+					// z-index's content no longer ties with the next one's background, and ties keep the order written
+					$key = (int) $m[1][$i] * ($stacked ? 3 : 2);
 					if ($m[3][$i] == 'EMCZ' || $m[3][$i] == '___STACKED___END') {
 						$key += 2;
 					} elseif ($m[3][$i] == 'EMCGZ') {
 						$key += 1;
 					}
-					$sortarr[$i] = $key * $mFirstLength + $i;
+					$sortarr[$i] = $stacked ? $key * $mFirstLength + $i : $key;
 				}
 				asort($sortarr);
 				foreach ($sortarr as $i => $k) {
@@ -16040,7 +16041,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// ================================================================
 
-		$blockStart = strlen($this->pages[$this->page]);
+		// Marks everything the block draws, for _enddoc() to stack by its z-index
+		if ($stackLevel) {
+			$this->pages[$this->page] .= '___STACKED___' . $stackLevel . '___' . $this->uniqstr;
+		}
 		$this->pages[$this->page] .= '___BEFORE_BORDERS___';
 		$block_s = $this->PrintPageBackgrounds(); // Save to print later inside clipping path
 		$this->pageBackgrounds = [];
@@ -16163,7 +16167,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->writer->write($rot_end);
 
 		if ($stackLevel) {
-			$this->stackPositionedBlock($blockStart, $stackLevel);
+			$this->pages[$this->page] .= '___STACKED___END' . $this->uniqstr;
 		}
 
 
@@ -16280,20 +16284,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	}
 
 	/**
-	 * Mark what a positioned block drew on the page, for _enddoc() to stack it by its z-index
-	 *
-	 * @param int $start Where in the page's content the block starts
-	 * @param int $stackLevel The block's z-index, not 0
-	 */
-	private function stackPositionedBlock($start, $stackLevel)
-	{
-		$this->pages[$this->page] = substr($this->pages[$this->page], 0, $start)
-			. '___STACKED___' . $stackLevel . '___' . $this->uniqstr
-			. substr($this->pages[$this->page], $start)
-			. '___STACKED___END' . $this->uniqstr;
-	}
-
-	/**
 	 * Move the positioned blocks with a negative z-index below the page's content, lowest first
 	 *
 	 * They go over the page's own background, where the page was closed. In the order they were written where their
@@ -16313,7 +16303,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$order = array_keys($m[0]);
 		usort($order, function ($a, $b) use ($m) {
-			return $m[1][$a] == $m[1][$b] ? $a - $b : $m[1][$a] - $m[1][$b];
+			return $m[1][$a] == $m[1][$b] ? $a - $b : (int) $m[1][$a] - (int) $m[1][$b];
 		});
 
 		$blocks = '';
