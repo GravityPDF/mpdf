@@ -5883,12 +5883,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$s .= sprintf('%.3F %.3F %.3F %.3F re f ', ($this->x - $lbw) * Mpdf::SCALE, ($this->h - $bg_boxtop + $tbw) * Mpdf::SCALE, ($w + $lbw + $rbw) * Mpdf::SCALE, (-$bg_boxheight - $tbw - $bbw) * Mpdf::SCALE);
 				}
 
+				$spanBox = [$this->x - $lbw, $bord_boxtop - $tbw, $this->x + $w + $rbw, $bord_boxbottom + $bbw];
+				$spanWidths = ['top' => $tbw, 'right' => $rbw, 'bottom' => $bbw, 'left' => $lbw];
+
 				$s.= ' q ';
 				$dashon = 3;
 				$dashoff = 3.5;
 				$dot = 2.5;
 
-				if (Border::drawsSide($this->spanborddet['T'])) {
+				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'top', $this->spanborddet['T']);
+				if ($threeD !== '') {
+					$s .= $threeD . ' ';
+				} elseif (Border::drawsSide($this->spanborddet['T'])) {
 					$short = 0;
 
 					if ($this->spanborddet['T']['style'] == 'dashed') {
@@ -5927,7 +5933,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$s .= ' Q ';
 					}
 				}
-				if (Border::drawsSide($this->spanborddet['B'])) {
+				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'bottom', $this->spanborddet['B']);
+				if ($threeD !== '') {
+					$s .= $threeD . ' ';
+				} elseif (Border::drawsSide($this->spanborddet['B'])) {
 
 					$short = 0;
 					if ($this->spanborddet['B']['style'] == 'dashed') {
@@ -5967,7 +5976,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				if (Border::drawsSide($this->spanborddet['L'])) {
+				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'left', $this->spanborddet['L']);
+				if ($threeD !== '') {
+					$s .= $threeD . ' ';
+				} elseif (Border::drawsSide($this->spanborddet['L'])) {
 					$short = 0;
 					if ($this->spanborddet['L']['style'] == 'dashed') {
 						$s .= sprintf(' 0 j 0 J [%.3F %.3F] 0 d ', $lbw * $dashon * Mpdf::SCALE, $lbw * $dashoff * Mpdf::SCALE);
@@ -6005,7 +6017,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				if (Border::drawsSide($this->spanborddet['R'])) {
+				$threeD = $this->threeDBorderSide($spanBox, RoundedBox::SQUARE, $spanWidths, 'right', $this->spanborddet['R']);
+				if ($threeD !== '') {
+					$s .= $threeD . ' ';
+				} elseif (Border::drawsSide($this->spanborddet['R'])) {
 
 					$short = 0;
 					if ($this->spanborddet['R']['style'] == 'dashed') {
@@ -18005,7 +18020,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$radii['BL'] = $radii['BR'] = [0, 0];
 		}
 
-		$radii = $this->roundedBox->fit($w, $h, $radii, ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left]);
+		$blockWidths = ['top' => $border_top, 'right' => $border_right, 'bottom' => $border_bottom, 'left' => $border_left];
+		$radii = $this->roundedBox->fit($w, $h, $radii, $blockWidths);
 		list($brTL_H, $brTL_V) = $radii['TL'];
 		list($brTR_H, $brTR_V) = $radii['TR'];
 		list($brBR_H, $brBR_V) = $radii['BR'];
@@ -18025,6 +18041,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		$h = $y1 - $y0;
 		$w = $this->blk[$blvl]['width'];
+		$blockBox = [$x0, $y0, $x0 + $w, $y0 + $h];
 
 		if ($this->blk[$blvl]['border_top'] && $divider != 'pagetop' && !$continuingpage) {
 			$tbd = $this->blk[$blvl]['border_top'];
@@ -18068,7 +18085,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->SetTColor($this->colorConverter->convert(0, $this->PDFAXwarnings));
 			}
 
-			if (Border::drawsSide($tbd)) {
+			$threeD = $this->threeDBorderSide($blockBox, $radii, $blockWidths, 'top', $tbd);
+			if ($threeD !== '') {
+				// A legend sits in a gap in the top border
+				if ($legend) {
+					$wholePage = sprintf('0 0 %.3F %.3F re ', $this->w * Mpdf::SCALE, $this->h * Mpdf::SCALE);
+					$legendGap = sprintf('%.3F %.3F %.3F %.3F re ', $legbreakL * Mpdf::SCALE, ($this->h - $y0 - $border_top) * Mpdf::SCALE, ($legbreakR - $legbreakL) * Mpdf::SCALE, $border_top * Mpdf::SCALE);
+					$threeD = 'q ' . $wholePage . $legendGap . 'W* n ' . $threeD . ' Q';
+				}
+				$this->writer->write($threeD);
+			} elseif (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -18165,7 +18191,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->blk[$blvl]['border_bottom'] && $blockstate != 1 && $divider != 'pagebottom') {
 			$tbd = $this->blk[$blvl]['border_bottom'];
-			if (Border::drawsSide($tbd)) {
+			$threeD = $this->threeDBorderSide($blockBox, $radii, $blockWidths, 'bottom', $tbd);
+			if ($threeD !== '') {
+				$this->writer->write($threeD);
+			} elseif (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -18229,7 +18258,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		if ($this->blk[$blvl]['border_left']) {
 			$tbd = $this->blk[$blvl]['border_left'];
-			if (Border::drawsSide($tbd)) {
+			$threeD = $this->threeDBorderSide($blockBox, $radii, $blockWidths, 'left', $tbd);
+			if ($threeD !== '') {
+				$this->writer->write($threeD);
+			} elseif (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -18290,7 +18322,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if ($this->blk[$blvl]['border_right']) {
 			$tbd = $this->blk[$blvl]['border_right'];
-			if (Border::drawsSide($tbd)) {
+			$threeD = $this->threeDBorderSide($blockBox, $radii, $blockWidths, 'right', $tbd);
+			if ($threeD !== '') {
+				$this->writer->write($threeD);
+			} elseif (Border::drawsSide($tbd)) {
 				if (!$brset && $tbd['style'] != 'dotted' && $tbd['style'] != 'dashed') {
 					$this->writer->write('q');
 					$this->SetLineWidth(0);
@@ -19056,6 +19091,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->y = $save_y;
 	}
 
+	/**
+	 * The operators that draw one side of a border in two tones where its style is groove, ridge, inset or outset, as
+	 * the standard CSS mode draws them on blocks, inline elements and images. Tables draw their own
+	 *
+	 * @param array $box The border box: x0, y0, x1, y1
+	 * @param array $radii The border box's corners, fitted to it
+	 * @param array $widths The border widths as drawn, keyed top/right/bottom/left
+	 * @param string $side top, right, bottom or left
+	 * @param array $border The side's border
+	 *
+	 * @return string The operators, or an empty string where the side is drawn as before
+	 */
+	private function threeDBorderSide(array $box, array $radii, array $widths, $side, array $border)
+	{
+		if ($this->cssMode !== CssMode::STANDARD || !Border::drawsSide($border)) {
+			return '';
+		}
+
+		return $this->boxOutline->borderSide($box, $radii, $widths, $side, $border);
+	}
+
 	function PaintImgBorder($objattr, $is_table, $box = null)
 	{
 		// Borders are disabled in columns - messes up the repositioning in printcolumnbuffer
@@ -19083,9 +19139,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			'right' => [$x0 + $w, $y0, $x0 + $w, $y0 + $h],
 			'bottom' => [$x0, $y0 + $h, $x0 + $w, $y0 + $h],
 		];
+		$widths = [];
+		foreach (array_keys($lines) as $side) {
+			$widths[$side] = $objattr['border_' . $side]['w'] / $k;
+		}
+		// BORDER-X and the rest run along the middle of the border
+		$borderBox = $box ? [$box['x0'], $box['y0'], $box['x1'], $box['y1']] : [$x0 - $widths['left'] / 2, $y0 - $widths['top'] / 2, $x0 + $w + $widths['right'] / 2, $y0 + $h + $widths['bottom'] / 2];
+		$radii = $box ? $box['radii'] : RoundedBox::SQUARE;
+
 		foreach ($lines as $side => $line) {
 			$tbd = $objattr['border_' . $side];
 			if (!Border::drawsSide($tbd)) {
+				continue;
+			}
+			$threeD = $this->threeDBorderSide($borderBox, $radii, $widths, $side, $tbd);
+			if ($threeD !== '') {
+				$this->writer->write($threeD);
 				continue;
 			}
 			$this->_setBorderLine($tbd, $k);
