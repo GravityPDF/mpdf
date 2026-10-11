@@ -10,6 +10,7 @@ use Mpdf\Css\BorderRadius;
 use Mpdf\Css\CommentParser;
 use Mpdf\Css\ComputedValues;
 use Mpdf\Css\InheritedProperties;
+use Mpdf\Css\MultiColumn;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
@@ -595,6 +596,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $ColDetails;
 	var $columnLinks;
 	var $colvAlign;
+
+	/**
+	 * The column-rule drawn between the columns a CSS multi-column block started, as MultiColumn::layout() gives it,
+	 * or null for none
+	 *
+	 * @var array|null
+	 */
+	var $columnRule;
+
+	/**
+	 * Whether columns are balanced where they end, as column-fill: balance has it. Off, they fill one after another
+	 *
+	 * @var bool
+	 */
+	var $balanceColumns = true;
 
 	// Substitutions
 	var $substitute;  // Array of substitution strings e.g. <ttz>112</ttz>
@@ -3841,7 +3857,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$family = $this->FontFamily;
 		$style = $this->FontStyle;
 		$size = $this->FontSizePt;
-		$this->ColumnAdjust = true; // enables column height adjustment for the page
+		$this->ColumnAdjust = $this->balanceColumns; // enables column height adjustment for the page
 		$lw = $this->LineWidth;
 		$dc = $this->DrawColor;
 		$fc = $this->FillColor;
@@ -25438,7 +25454,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// ----------- COLUMNS ---------------------
 	/* -- COLUMNS -- */
 
-	function SetColumns($NbCol, $vAlign = '', $gap = 5)
+	/**
+	 * @param int $NbCol Anything less than 2 turns columns off
+	 * @param string $vAlign J stretches the columns of each page to the same height
+	 * @param float $gap In mm
+	 * @param bool $lineBreak Whether to move down a line first, as the <columns> tag does
+	 */
+	function SetColumns($NbCol, $vAlign = '', $gap = 5, $lineBreak = true)
 	{
 		// NbCol = number of columns
 		// Anything less than 2 turns columns off
@@ -25452,7 +25474,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->ResetMargins();
 				$this->pgwidth = $this->w - $this->lMargin - $this->rMargin;
 				$this->divwidth = 0;
-				$this->Ln();
+				if ($lineBreak) {
+					$this->Ln();
+				}
 			}
 			$this->ColActive = 0;
 			$this->columnbuffer = [];
@@ -25471,14 +25495,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				$this->ResetMargins();
 			}
-			if (isset($this->y) && $this->y > $this->tMargin) {
+			if ($lineBreak && isset($this->y) && $this->y > $this->tMargin) {
 				$this->Ln();
 			}
 			$this->NbCol = $NbCol;
 			$this->ColGap = $gap;
 			$this->divwidth = 0;
 			$this->ColActive = 1;
-			$this->ColumnAdjust = true; // enables column height adjustment for the page
+			$this->ColumnAdjust = $this->balanceColumns; // enables column height adjustment for the page
 			$this->columnbuffer = [];
 			$this->ColDetails = [];
 			$this->columnLinks = [];
@@ -25519,6 +25543,32 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->y0 = $this->y;
 		}
 		$this->x = $this->lMargin;
+	}
+
+	/**
+	 * Draws the column rule between each two columns of this page that both have content, from the top of the columns
+	 * to the foot of the longest
+	 */
+	private function drawColumnRules()
+	{
+		$columns = [];
+		$bottom = $this->y0;
+		foreach ($this->columnbuffer as $s) {
+			if ($s['s'] === 'ACROFORM' || !preg_match('/ (Td|re|l|m|c|Do)\b/', $s['s'])) {
+				continue;
+			}
+			$columns[isset($s['newcol']) ? $s['newcol'] : $s['col']] = true;
+			$bottom = max($bottom, (isset($s['newy']) ? $s['newy'] : $s['y']) + $s['h']);
+		}
+
+		$color = $this->SetDColor($this->columnRule['c'], true);
+		for ($i = 1; $i < $this->NbCol; $i++) {
+			if (!isset($columns[$i - 1], $columns[$i])) {
+				continue;
+			}
+			$x = $this->directionality === 'rtl' ? $this->ColR[$i] + $this->ColGap / 2 : $this->ColL[$i] - $this->ColGap / 2;
+			$this->pages[$this->page] .= MultiColumn::ruleOperators($this->columnRule, $color, $x, $this->y0, $bottom, $this->h) . "\n";
+		}
 	}
 
 	function SetCol($CurrCol)
@@ -26020,6 +26070,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->tableOfContents->_toc[] = ['t' => $v['t'], 'l' => $v['l'], 'p' => $v['p'], 'link' => $v['link'], 'toc_id' => $v['toc_id']];
 			}
 			/* -- END TOC -- */
+		}
+
+		if ($this->columnRule !== null) {
+			$this->drawColumnRules();
 		}
 
 		foreach ($this->internallink as $key => $f) {

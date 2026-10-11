@@ -963,4 +963,64 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('normal', $result['FONT-VARIANT-POSITION']);
 	}
 
+	/**
+	 * The columns shorthand sets column-width and column-count, in either order, each auto where it is left out
+	 *
+	 * @dataProvider columnsValues
+	 *
+	 * @param string $value
+	 * @param array $expected
+	 */
+	public function testColumnsSetsWidthAndCount($value, array $expected)
+	{
+		$this->assertSame($expected, $this->normalizeProperties->normalize(['COLUMNS' => $value]));
+	}
+
+	/**
+	 * Values of the columns shorthand, and the longhands each sets: none for a value that is not one
+	 *
+	 * @return array[]
+	 */
+	public function columnsValues()
+	{
+		return [
+			'a count' => ['3', ['COLUMN-WIDTH' => 'auto', 'COLUMN-COUNT' => '3']],
+			'a width' => ['40mm', ['COLUMN-WIDTH' => '40mm', 'COLUMN-COUNT' => 'auto']],
+			'a width then a count' => ['12em 2', ['COLUMN-WIDTH' => '12em', 'COLUMN-COUNT' => '2']],
+			'a count then a width' => ['2 12em', ['COLUMN-WIDTH' => '12em', 'COLUMN-COUNT' => '2']],
+			'auto and a count' => ['auto 4', ['COLUMN-WIDTH' => 'auto', 'COLUMN-COUNT' => '4']],
+			'auto' => ['auto', ['COLUMN-WIDTH' => 'auto', 'COLUMN-COUNT' => 'auto']],
+			'two counts' => ['2 3', []],
+			'three parts' => ['auto 2 10mm', []],
+			'a word' => ['wide', []],
+		];
+	}
+
+	/**
+	 * The column-rule shorthand sets its width, style and colour as border does, currentColor where it names none
+	 */
+	public function testColumnRuleSetsWidthStyleAndColour()
+	{
+		$this->assertSame(
+			['COLUMN-RULE-WIDTH' => '1px', 'COLUMN-RULE-STYLE' => 'dotted', 'COLUMN-RULE-COLOR' => 'currentcolor'],
+			$this->normalizeProperties->normalize(['COLUMN-RULE' => 'dotted 1px'])
+		);
+		$this->assertSame([], $this->normalizeProperties->normalize(['COLUMN-RULE' => '1px solid wide']));
+	}
+
+	/**
+	 * A CSS-wide keyword given to columns or column-rule goes to each of their longhands
+	 */
+	public function testColumnShorthandsPassAKeywordToTheirLonghands()
+	{
+		$this->assertSame(
+			['COLUMN-WIDTH' => 'inherit', 'COLUMN-COUNT' => 'inherit'],
+			$this->normalizeProperties->normalize(['COLUMNS' => 'inherit'])
+		);
+		$this->assertSame(
+			['COLUMN-RULE-WIDTH' => 'initial', 'COLUMN-RULE-STYLE' => 'initial', 'COLUMN-RULE-COLOR' => 'initial'],
+			$this->normalizeProperties->normalize(['COLUMN-RULE' => 'initial'])
+		);
+	}
+
 }

@@ -125,6 +125,8 @@ class NormalizeProperties
 		'BORDER-STYLE' => ['BORDER-TOP-STYLE', 'BORDER-RIGHT-STYLE', 'BORDER-BOTTOM-STYLE', 'BORDER-LEFT-STYLE'],
 		'BORDER-COLOR' => ['BORDER-TOP-COLOR', 'BORDER-RIGHT-COLOR', 'BORDER-BOTTOM-COLOR', 'BORDER-LEFT-COLOR'],
 		'BORDER-SPACING' => ['BORDER-SPACING-H', 'BORDER-SPACING-V'],
+		'COLUMNS' => ['COLUMN-WIDTH', 'COLUMN-COUNT'],
+		'COLUMN-RULE' => ['COLUMN-RULE-WIDTH', 'COLUMN-RULE-STYLE', 'COLUMN-RULE-COLOR'],
 		'BORDER-RADIUS' => [
 			'BORDER-TOP-LEFT-RADIUS-H', 'BORDER-TOP-LEFT-RADIUS-V', 'BORDER-TOP-RIGHT-RADIUS-H', 'BORDER-TOP-RIGHT-RADIUS-V',
 			'BORDER-BOTTOM-RIGHT-RADIUS-H', 'BORDER-BOTTOM-RIGHT-RADIUS-V', 'BORDER-BOTTOM-LEFT-RADIUS-H',
@@ -228,6 +230,10 @@ class NormalizeProperties
 				$this->processBorderProperty($k, $v);
 			} elseif (in_array($k, ['BORDER-STYLE', 'BORDER-WIDTH', 'BORDER-COLOR', 'BORDER-SPACING'], true)) {
 				$this->processBorderShorthandProperty($k, $v);
+			} elseif ($k === 'COLUMNS') {
+				$this->processColumnsProperty($v);
+			} elseif ($k === 'COLUMN-RULE') {
+				$this->processColumnRuleProperty($v);
 			} elseif ($k === 'TEXT-OUTLINE') {
 				$this->processTextOutlineProperty($v);
 			} elseif ($k === 'SIZE' || $k === 'SHEET-SIZE') {
@@ -1274,6 +1280,62 @@ class NormalizeProperties
 
 		$this->properties['SHEET-SIZE'] = $orientation === ['landscape'] ? array_reverse($sheet) : $sheet;
 		$this->properties['SIZE'] = 'AUTO';
+	}
+
+	/**
+	 * Read the columns shorthand as column-width and column-count, each auto where it is not given. A value with a
+	 * component that is neither, or more than one of either, is dropped
+	 *
+	 * @param string $value
+	 * @return void
+	 */
+	private function processColumnsProperty($value)
+	{
+		$parts = [];
+		$autos = 0;
+		foreach ($this->splitComponents($value) as $part) {
+			if ($part === 'auto') {
+				$autos++;
+				continue;
+			}
+			if (preg_match('/^\d+$/', $part)) {
+				$kind = 'COLUMN-COUNT';
+			} elseif (preg_match('/^' . self::NUMBER . '[a-z]+$/', $part)) {
+				$kind = 'COLUMN-WIDTH';
+			} else {
+				return;
+			}
+			if (isset($parts[$kind])) {
+				return;
+			}
+			$parts[$kind] = $part;
+		}
+
+		$given = count($parts) + $autos;
+		if ($given === 0 || $given > 2) {
+			return;
+		}
+
+		$this->properties['COLUMN-WIDTH'] = isset($parts['COLUMN-WIDTH']) ? $parts['COLUMN-WIDTH'] : 'auto';
+		$this->properties['COLUMN-COUNT'] = isset($parts['COLUMN-COUNT']) ? $parts['COLUMN-COUNT'] : 'auto';
+	}
+
+	/**
+	 * Read the column-rule shorthand as its width, style and colour, which take a border's syntax and initial values
+	 *
+	 * @param string $value
+	 * @return void
+	 */
+	private function processColumnRuleProperty($value)
+	{
+		$parts = $this->parseBorderParts($this->splitComponents($value));
+		if ($parts === false) {
+			return;
+		}
+
+		$this->properties['COLUMN-RULE-WIDTH'] = $parts['w'];
+		$this->properties['COLUMN-RULE-STYLE'] = $parts['s'];
+		$this->properties['COLUMN-RULE-COLOR'] = $parts['c'];
 	}
 
 	/**

@@ -8,6 +8,7 @@ use Mpdf\Conversion\DecToGreek;
 use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
+use Mpdf\Css\MultiColumn;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\CssMode;
@@ -386,6 +387,11 @@ abstract class BlockTag extends Tag
 		$this->mpdf->printbuffer($this->mpdf->textbuffer, $blockstate);
 		$this->mpdf->textbuffer = [];
 
+		$spansColumns = $this->spansColumns($p);
+		if ($spansColumns) {
+			$this->endColumns();
+		}
+
 		$save_blklvl = $this->mpdf->blklvl;
 		$save_blk = $this->mpdf->blk;
 
@@ -494,6 +500,9 @@ abstract class BlockTag extends Tag
 		$prevblk = & $this->mpdf->blk[$this->mpdf->blklvl - 1];
 		$currblk['tag'] = $tag;
 		$currblk['attr'] = $attr;
+		if ($spansColumns) {
+			$currblk['column_span'] = true;
+		}
 
 		$properties = $this->cssManager->MergeCSS('BLOCK', $tag, $attr); // mPDF 6 - moved to after page-break-before
 		// The <div> standing in for a positioned block passes that block's descendant rules on to its content
@@ -597,6 +606,8 @@ abstract class BlockTag extends Tag
 
 		$currblk['padding_left'] = is_numeric($currblk['padding_left']) ? $currblk['padding_left'] : 0;
 		$currblk['padding_right'] = is_numeric($currblk['padding_right']) ? $currblk['padding_right'] : 0;
+
+		$this->startMultiColumn($currblk, $properties);
 
 		$container_w = $prevblk['inner_width'];
 		$bdr = $currblk['border_right']['w'];
@@ -1152,6 +1163,123 @@ abstract class BlockTag extends Tag
 		}
 	}
 
+	/**
+	 * Lays out a block at the top level in CSS columns when it asks for them, in the standard CSS mode. Its content
+	 * goes through SetColumns(), which spans the page's text area, so a block with a box of its own (borders, padding,
+	 * a background, a shadow, a width or height, side margins) or one that floats stays in one column. Its top and
+	 * bottom margins are kept above and below the columns. A page-break-inside: avoid on it is dropped, as columns
+	 * cannot be laid out twice
+	 *
+	 * @param array $blk The block being opened, whose CSS has been set
+	 * @param array $properties Its merged CSS
+	 */
+	private function startMultiColumn(array &$blk, array $properties)
+	{
+		if ($this->mpdf->cssMode !== CssMode::STANDARD || $this->mpdf->blklvl != 1 || $this->mpdf->ColActive
+			|| $this->mpdf->bufferoutput || $this->mpdf->writingHTMLheader || $this->mpdf->writingHTMLfooter
+			|| (!isset($properties['COLUMN-COUNT']) && !isset($properties['COLUMN-WIDTH']))) {
+			return;
+		}
+
+		$multiColumn = new MultiColumn($this->sizeConverter, $this->colorConverter);
+		$layout = $multiColumn->layout($properties, $this->mpdf->pgwidth, $this->mpdf->FontSize, $this->mpdf->colorarray);
+		if ($layout === null || $this->hasBox($blk, $properties)) {
+			return;
+		}
+
+		if ($blk['keep_block_together']) {
+			$blk['keep_block_together'] = false;
+			unset($blk['kt_state'], $blk['array_i']);
+			$this->mpdf->keep_block_together = false;
+		}
+
+		$this->mpdf->DivLn($blk['margin_top'], -3, true, true);
+		$blk['multicol'] = ['layout' => $layout, 'margin_bottom' => $blk['margin_bottom']];
+		$blk['margin_top'] = 0;
+		$blk['margin_bottom'] = 0;
+
+		$this->startColumns($layout);
+	}
+
+	/**
+	 * Whether a block has a box that columns spanning the page's text area could not draw around it
+	 *
+	 * @param array $blk The block, whose CSS has been set
+	 * @param array $properties Its merged CSS
+	 *
+	 * @return bool
+	 */
+	private function hasBox(array $blk, array $properties)
+	{
+		foreach (['top', 'right', 'bottom', 'left'] as $side) {
+			if ($blk['padding_' . $side] || (!empty($blk['border_' . $side]['s']) && $blk['border_' . $side]['w'] > 0)) {
+				return true;
+			}
+		}
+
+		foreach (['FLOAT', 'BACKGROUND-IMAGE', 'MAX-WIDTH', 'MIN-WIDTH'] as $property) {
+			if (isset($properties[$property]) && !in_array(strtolower($properties[$property]), ['none', 'auto', '0'], true)) {
+				return true;
+			}
+		}
+
+		return $blk['margin_left'] || $blk['margin_right'] || $blk['bgcolor'] || !empty($blk['gradient'])
+			|| !empty($blk['box_shadow']) || isset($blk['css_set_width']) || $blk['css_set_height'];
+	}
+
+	/**
+	 * Whether a block about to open is a child of a block laid out in CSS columns that spans them all
+	 *
+	 * @param array $p The block's previewed CSS
+	 *
+	 * @return bool
+	 */
+	private function spansColumns(array $p)
+	{
+		return $this->mpdf->blklvl == 1 && isset($this->mpdf->blk[1]['multicol']) && $this->mpdf->ColActive
+			&& isset($p['COLUMN-SPAN']) && strtolower($p['COLUMN-SPAN']) === 'all';
+	}
+
+	/**
+	 * Starts the columns of a block laid out in CSS columns, or starts them again after a child that spans them
+	 *
+	 * @param array $layout The columns, as MultiColumn::layout() gives them
+	 */
+	private function startColumns(array $layout)
+	{
+		$this->mpdf->balanceColumns = $layout['balance'];
+		$this->mpdf->columnRule = $layout['rule'];
+		$this->setColumns($layout['count'], $layout['gap']);
+	}
+
+	/**
+	 * Ends the columns of a block laid out in CSS columns, before a child that spans them or where the block closes
+	 */
+	private function endColumns()
+	{
+		$this->setColumns(0, 0);
+		$this->mpdf->balanceColumns = true;
+		$this->mpdf->columnRule = null;
+	}
+
+	/**
+	 * Turns columns on or off without the line SetColumns() moves down by for the <columns> tag: the space around
+	 * the columns is the block's margins. The block holding the columns has no box of its own (hasBox()), so it is as
+	 * wide as a column, or as the page's text area without them
+	 *
+	 * @param int $count
+	 * @param float $gap
+	 */
+	private function setColumns($count, $gap)
+	{
+		$this->mpdf->SetColumns($count, '', $gap, false);
+
+		if (isset($this->mpdf->blk[1]['multicol'])) {
+			$this->mpdf->blk[1]['width'] = $this->mpdf->pgwidth;
+			$this->mpdf->blk[1]['inner_width'] = $this->mpdf->pgwidth;
+		}
+	}
+
 	public function close(&$ahtml, &$ihtml)
 	{
 		$tag = $this->getTagName();
@@ -1427,6 +1555,11 @@ abstract class BlockTag extends Tag
 		if ($blk['keep_block_together']) {
 			$this->mpdf->keep_block_together = false;
 		}
+		if (isset($blk['multicol'])) {
+			$this->endColumns();
+			$this->mpdf->DivLn($blk['multicol']['margin_bottom']);
+			$this->mpdf->lastblockbottommargin = $blk['multicol']['margin_bottom'];
+		}
 
 		if ($this->mpdf->blklvl > 0) { // ==0 SHOULDN'T HAPPEN - NOT XHTML
 			if ($this->mpdf->blk[$this->mpdf->blklvl]['tag'] == $tag) {
@@ -1434,6 +1567,10 @@ abstract class BlockTag extends Tag
 				$this->mpdf->blklvl--;
 			}
 			//else { echo $tag; exit; }	// debug - forces error if incorrectly nested html tags
+		}
+
+		if (!empty($blk['column_span'])) {
+			$this->startColumns($this->mpdf->blk[1]['multicol']['layout']);
 		}
 
 		$this->mpdf->lastblocklevelchange = -1;
