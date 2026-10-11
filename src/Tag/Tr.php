@@ -15,6 +15,8 @@ class Tr extends Tag
 		$this->mpdf->row++;
 		$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['nr'] ++;
 		$this->mpdf->col = -1;
+		// A row ends a colgroup left open, before its cells look up their columns' widths
+		Col::endColumnGroup($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]);
 		$properties = $this->cssManager->MergeCSS('TABLE', 'TR', $attr);
 
 		// write pagebreak markers into row list, so _tableWrite can respect it

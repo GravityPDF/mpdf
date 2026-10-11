@@ -652,7 +652,7 @@ class SelectorCompiler
 	/**
 	 * Whether a type selector may name a tag. Which elements take part in the cascade is decided per tag, by
 	 * Mpdf::$allowedCSStags, as it is for the selectors the legacy parser reads. html is always allowed: the matcher
-	 * holds it as the parent of body. So are col and colgroup, which only the standard mode these selectors serve reads
+	 * holds it as the parent of body
 	 *
 	 * @param string $tag Uppercased
 	 *
@@ -660,7 +660,7 @@ class SelectorCompiler
 	 */
 	private function isAllowedTag($tag)
 	{
-		if ($tag === 'HTML' || $tag === 'COL' || $tag === 'COLGROUP') {
+		if ($tag === 'HTML') {
 			return true;
 		}
 

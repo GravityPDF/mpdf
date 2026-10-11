@@ -389,10 +389,13 @@ class Td extends Tag
 			}
 		}
 
+		$cs = $rs = 1;
+		if (isset($attr['COLSPAN']) && preg_match('/^\d+$/', $attr['COLSPAN']) && $attr['COLSPAN'] > 1) {
+			$cs = $attr['COLSPAN'];
+		}
+
 		// A cell with no width of its own takes its column's. One spanning columns takes none of theirs
-		Col::endColumnGroup($table);
-		$spansColumns = isset($attr['COLSPAN']) && preg_match('/^\d+$/', $attr['COLSPAN']) && $attr['COLSPAN'] > 1;
-		if (!isset($c['w']) && !isset($c['wpercent']) && !$spansColumns && isset($table['col_widths'][$this->mpdf->col])) {
+		if (!isset($c['w']) && !isset($c['wpercent']) && $cs == 1 && isset($table['col_widths'][$this->mpdf->col])) {
 			$c = array_merge($c, $table['col_widths'][$this->mpdf->col]);
 		}
 
@@ -419,9 +422,8 @@ class Td extends Tag
 		unset($c);
 		$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['s'] = 0;
 
-		$cs = $rs = 1;
-		if (isset($attr['COLSPAN']) && preg_match('/^\d+$/', $attr['COLSPAN']) && $attr['COLSPAN'] > 1) {
-			$cs = $this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['colspan'] = $attr['COLSPAN'];
+		if ($cs > 1) {
+			$this->mpdf->cell[$this->mpdf->row][$this->mpdf->col]['colspan'] = $cs;
 		}
 
 		if ($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['nc'] < $this->mpdf->col + $cs) {
