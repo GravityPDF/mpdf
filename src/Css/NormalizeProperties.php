@@ -62,6 +62,12 @@ class NormalizeProperties
 	const REPEAT_KEYWORDS = ['repeat', 'no-repeat', 'space', 'round'];
 
 	/**
+	 * The font shorthand, with any space around its slash removed: the style, variant, weight and stretch keywords,
+	 * then the size, any /line-height, and the family list
+	 */
+	const FONT_SHORTHAND = '/^((?:(?:normal|italic|oblique|small-caps|bold|bolder|lighter|\d+|[a-z-]*condensed|[a-z-]*expanded)\s+)*)(\S+?)(?:\/(\S+))?\s+(\S.*)$/s';
+
+	/**
 	 * @var array
 	 */
 	private $properties = [];
@@ -92,6 +98,88 @@ class NormalizeProperties
 	private static $colorProperties = [
 		'COLOR' => true, 'BACKGROUND-COLOR' => true,
 		'BORDER-TOP-COLOR' => true, 'BORDER-RIGHT-COLOR' => true, 'BORDER-BOTTOM-COLOR' => true, 'BORDER-LEFT-COLOR' => true,
+	];
+
+	/**
+	 * The keywords a length property takes in CSS. A length property not listed takes none
+	 *
+	 * @var string[][]
+	 */
+	private static $lengthKeywords = [
+		'MARGIN' => ['auto'], 'MARGIN-TOP' => ['auto'], 'MARGIN-RIGHT' => ['auto'], 'MARGIN-BOTTOM' => ['auto'],
+		'MARGIN-LEFT' => ['auto'],
+		'WIDTH' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
+		'HEIGHT' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
+		'MIN-WIDTH' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
+		'MIN-HEIGHT' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
+		'MAX-WIDTH' => ['none', 'min-content', 'max-content', 'fit-content', 'stretch'],
+		'MAX-HEIGHT' => ['none', 'min-content', 'max-content', 'fit-content', 'stretch'],
+		'TOP' => ['auto'], 'RIGHT' => ['auto'], 'BOTTOM' => ['auto'], 'LEFT' => ['auto'],
+		// auto sizes the text of a form field to fit it
+		'FONT-SIZE' => [
+			'xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large', 'xxx-large', 'larger', 'smaller',
+			'math', 'auto',
+		],
+		// n is mPDF's own normal, as the legacy mode hands it on to the content of a positioned block
+		'LINE-HEIGHT' => ['normal', 'n'],
+		'TEXT-INDENT' => ['hanging', 'each-line'],
+		'LETTER-SPACING' => ['normal'],
+		'WORD-SPACING' => ['normal'],
+		'BORDER-WIDTH' => ['thin', 'medium', 'thick'], 'BORDER-TOP-WIDTH' => ['thin', 'medium', 'thick'],
+		'BORDER-RIGHT-WIDTH' => ['thin', 'medium', 'thick'], 'BORDER-BOTTOM-WIDTH' => ['thin', 'medium', 'thick'],
+		'BORDER-LEFT-WIDTH' => ['thin', 'medium', 'thick'],
+	];
+
+	/**
+	 * Properties whose value is made of keywords only, with the keywords each takes in CSS or in mPDF (visibility:
+	 * printonly, overflow: wrap). A property that takes several keywords at once, such as display: inline flow-root,
+	 * is not checked for their order. The border styles mPDF draws are added from Mpdf::$borderstyles
+	 *
+	 * @var string[][]
+	 */
+	private static $keywordProperties = [
+		'TEXT-ALIGN' => ['left', 'right', 'center', 'justify', 'start', 'end', 'match-parent', 'justify-all'],
+		'DISPLAY' => [
+			'none', 'contents', 'block', 'inline', 'run-in', 'flow', 'flow-root', 'table', 'flex', 'grid', 'ruby', 'math',
+			'list-item', 'inline-block', 'inline-table', 'inline-flex', 'inline-grid', 'table-row-group',
+			'table-header-group', 'table-footer-group', 'table-row', 'table-cell', 'table-column-group', 'table-column',
+			'table-caption', 'ruby-base', 'ruby-text', 'ruby-base-container', 'ruby-text-container',
+		],
+		'FLOAT' => ['left', 'right', 'none', 'inline-start', 'inline-end'],
+		'CLEAR' => ['left', 'right', 'both', 'none', 'inline-start', 'inline-end'],
+		'POSITION' => ['static', 'relative', 'absolute', 'fixed', 'sticky'],
+		'VISIBILITY' => ['visible', 'hidden', 'collapse', 'printonly', 'screenonly'],
+		'OVERFLOW' => ['visible', 'hidden', 'clip', 'scroll', 'auto', 'overlay', 'wrap'],
+		'DIRECTION' => ['ltr', 'rtl'],
+		'TEXT-TRANSFORM' => ['none', 'capitalize', 'uppercase', 'lowercase', 'full-width', 'full-size-kana', 'math-auto'],
+		'WHITE-SPACE' => [
+			'normal', 'pre', 'nowrap', 'pre-wrap', 'pre-line', 'break-spaces', 'collapse', 'preserve', 'preserve-breaks',
+			'preserve-spaces', 'wrap',
+		],
+		'FONT-STYLE' => ['normal', 'italic', 'oblique'],
+		'FONT-WEIGHT' => ['normal', 'bold', 'bolder', 'lighter'],
+		'VERTICAL-ALIGN' => ['baseline', 'sub', 'super', 'text-top', 'text-bottom', 'middle', 'top', 'bottom'],
+		'BOX-SIZING' => ['content-box', 'border-box'],
+		'BORDER-COLLAPSE' => ['collapse', 'separate'],
+		'LIST-STYLE-POSITION' => ['inside', 'outside'],
+		'PAGE-BREAK-BEFORE' => ['auto', 'always', 'avoid', 'left', 'right', 'recto', 'verso'],
+		'PAGE-BREAK-AFTER' => ['auto', 'always', 'avoid', 'left', 'right', 'recto', 'verso'],
+		'PAGE-BREAK-INSIDE' => ['auto', 'avoid'],
+		'BORDER-STYLE' => ['none', 'hidden'],
+		'BORDER-TOP-STYLE' => ['none', 'hidden'],
+		'BORDER-RIGHT-STYLE' => ['none', 'hidden'],
+		'BORDER-BOTTOM-STYLE' => ['none', 'hidden'],
+		'BORDER-LEFT-STYLE' => ['none', 'hidden'],
+	];
+
+	/**
+	 * The keywords of the background shorthand that are not colours
+	 *
+	 * @var string[]
+	 */
+	private static $backgroundKeywords = [
+		'none', 'repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round', 'scroll', 'fixed', 'local', 'left',
+		'right', 'top', 'bottom', 'center', 'auto', 'cover', 'contain', 'border-box', 'padding-box', 'content-box', 'text',
 	];
 
 	/**
@@ -284,7 +372,9 @@ class NormalizeProperties
 	 *
 	 * A browser drops a declaration it cannot parse, so the value it would have replaced still applies. mPDF drops
 	 * a value that uses a CSS function it does not implement, a length it cannot read or in a unit it does not
-	 * know, and a colour it does not recognise where the colour is the whole value. Keywords are not checked.
+	 * know, a colour it does not recognise where the colour is the whole value, and a keyword the property does not
+	 * take. The keywords of the font, border and background shorthands are checked too. The keywords of other
+	 * properties, such as list-style-type, which takes any counter style name, are not.
 	 *
 	 * @param string $property The property name, uppercased
 	 * @param string $value
@@ -306,19 +396,149 @@ class NormalizeProperties
 			}
 		}
 
-		if (isset(self::$lengthProperties[$property])) {
-			foreach (preg_split('/[\s\/]+/', $value, -1, PREG_SPLIT_NO_EMPTY) as $part) {
-				if (!preg_match('/^-?[a-z_][\w-]*$/', $part) && !$this->sizeConverter->isLength($part)) {
-					return false;
-				}
-			}
-		} elseif (isset(self::$colorProperties[$property])) {
+		if (isset(self::$colorProperties[$property])) {
 			return in_array($value, ['transparent', 'currentcolor', 'inherit', 'initial', 'unset'], true)
 				|| ($this->mpdf->cssMode === CssMode::STANDARD && CssWideKeywords::keywordOf($value) !== null)
 				|| $this->colorConverter->isColor($value);
 		}
 
+		// Read in either mode as before: CssMerger resolves them in standard mode
+		if (in_array($value, self::CSS_WIDE_KEYWORDS, true) || $value === 'revert-layer') {
+			return true;
+		}
+
+		if (isset(self::$lengthProperties[$property])) {
+			foreach (preg_split('/[\s\/]+/', $value, -1, PREG_SPLIT_NO_EMPTY) as $part) {
+				if (!$this->sizeConverter->isLength($part) && !$this->isLengthKeyword($property, $part)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		if (isset(self::$keywordProperties[$property])) {
+			foreach ($this->splitComponents($value) as $part) {
+				if (!in_array($part, self::$keywordProperties[$property], true) && !$this->isKeywordPropertyPart($property, $part)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		switch ($property) {
+			case 'BREAK-BEFORE':
+			case 'BREAK-AFTER':
+			case 'BREAK-INSIDE':
+				return isset(self::PAGE_BREAK_VALUES[$value]);
+
+			case 'BORDER':
+			case 'BORDER-TOP':
+			case 'BORDER-RIGHT':
+			case 'BORDER-BOTTOM':
+			case 'BORDER-LEFT':
+				return $this->parseBorderParts($this->splitComponents($value)) !== false;
+
+			case 'BACKGROUND':
+				return $this->isBackground($value);
+
+			case 'FONT':
+				return $this->isFont($value);
+		}
+
 		return true;
+	}
+
+	/**
+	 * Whether a word of a length property's value is a keyword the property takes
+	 *
+	 * @param string $property The property name, uppercased
+	 * @param string $part A word of the value, lowercased
+	 *
+	 * @return bool
+	 */
+	private function isLengthKeyword($property, $part)
+	{
+		if (isset(self::$lengthKeywords[$property]) && in_array($part, self::$lengthKeywords[$property], true)) {
+			return true;
+		}
+
+		// The size names a document may add through the fontsizes configuration
+		return $property === 'FONT-SIZE' && isset($this->mpdf->fontsizes[strtoupper($part)]);
+	}
+
+	/**
+	 * Whether a word of a keyword property's value is one of the values that property takes besides its keywords
+	 *
+	 * @param string $property The property name, uppercased
+	 * @param string $part A word of the value, lowercased
+	 *
+	 * @return bool
+	 */
+	private function isKeywordPropertyPart($property, $part)
+	{
+		switch ($property) {
+			case 'TEXT-ALIGN':
+				// The character a table cell's numbers are aligned on, such as "."
+				return (bool) preg_match('/^(["\']).*\1$/s', $part);
+
+			case 'FONT-WEIGHT':
+				return is_numeric($part) && $part >= 1 && $part <= 1000;
+
+			case 'FONT-STYLE':
+				// The angle of oblique
+				return (bool) preg_match('/^[-+]?' . self::NUMBER . '(deg|grad|rad|turn)$/', $part);
+
+			case 'VERTICAL-ALIGN':
+				return $this->sizeConverter->isLength($part);
+
+			case 'BORDER-STYLE':
+			case 'BORDER-TOP-STYLE':
+			case 'BORDER-RIGHT-STYLE':
+			case 'BORDER-BOTTOM-STYLE':
+			case 'BORDER-LEFT-STYLE':
+				return in_array($part, $this->mpdf->borderstyles, true);
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether each word of a background shorthand is a background keyword, a length or a colour. Images, gradients
+	 * and colours written as functions are not looked into
+	 *
+	 * @param string $value Lowercased
+	 *
+	 * @return bool
+	 */
+	private function isBackground($value)
+	{
+		$words = preg_replace('/"[^"]*"|\'[^\']*\'|[\w-]*(\((?:[^()]++|(?1))*+\))/', ' ', $value);
+
+		foreach (preg_split('/[\s,\/]+/', $words, -1, PREG_SPLIT_NO_EMPTY) as $part) {
+			if (!in_array($part, self::$backgroundKeywords, true) && !$this->sizeConverter->isLength($part) && !$this->isColorComponent($part)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Whether a font shorthand has a size and a family, with a size and a line height each property takes
+	 *
+	 * @param string $value Lowercased
+	 *
+	 * @return bool
+	 */
+	private function isFont($value)
+	{
+		if (!preg_match(self::FONT_SHORTHAND, preg_replace('/\s*\/\s*/', '/', $value), $m)) {
+			return false;
+		}
+
+		return $this->canParse('FONT-SIZE', $m[2]) && ($m[3] === '' || $this->canParse('LINE-HEIGHT', $m[3]));
 	}
 
 	/**
@@ -337,7 +557,7 @@ class NormalizeProperties
 		// The size, with any /line-height, is the first word that is not a style, variant, weight or stretch keyword,
 		// and everything after it is the family list
 		$value = preg_replace('/\s*\/\s*/', '/', trim($value));
-		if (!preg_match('/^((?:(?:normal|italic|oblique|small-caps|bold|bolder|lighter|\d+|[a-z-]*condensed|[a-z-]*expanded)\s+)*)(\S+?)(?:\/(\S+))?\s+(\S.*)$/s', $value, $m)) {
+		if (!preg_match(self::FONT_SHORTHAND, $value, $m)) {
 			return;
 		}
 
