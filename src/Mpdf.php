@@ -6265,8 +6265,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				// mPDF 5.7.3  inline text-decoration parameters
-				$decorationfontkey = (int) (((float) $this->textparam['o-decoration']['fontkey']) / $shrin_k);
-				$decorationfontsize = $this->textparam['o-decoration']['fontsize'];
+				$decorationfontkey = $this->textparam['o-decoration']['fontkey'];
+				$decorationfontsize = $this->textparam['o-decoration']['fontsize'] / $shrin_k;
 
 				if (isset($this->fonts[$decorationfontkey]['ut']) && $this->fonts[$decorationfontkey]['ut']) {
 					$ut = $this->fonts[$decorationfontkey]['ut'] / 1000 * $decorationfontsize;
