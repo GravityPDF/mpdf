@@ -19566,7 +19566,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							}
 						} elseif ($type != 'INLINE') {
 							if ($this->ColActive) {
-								// A parent with no background has no colour to take
+								// Unset rather than skip: an earlier declaration may have left a colour here
 								if (isset($this->blk[$prevlevel]['bgcolorarray'])) {
 									$this->blk[$this->blklvl]['bgcolorarray'] = $this->blk[$prevlevel]['bgcolorarray'];
 								} else {

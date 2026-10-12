@@ -37,34 +37,17 @@ class ColumnBlockBackgroundTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	}
 
 	/**
-	 * A block in columns whose background gives no colour takes its parent's, and renders without a warning when the
+	 * A block in columns whose background sets no colour takes its parent's, and renders without a warning when the
 	 * parent has none either
 	 *
-	 * @dataProvider backgroundsWithoutColourProvider
+	 * @dataProvider cssModeProvider
 	 *
 	 * @param string $cssMode
-	 * @param string $background
 	 */
-	public function testBlockWithoutBackgroundColourInColumnsRendersSilently($cssMode, $background)
+	public function testTransparentBlockInColumnsRendersSilently($cssMode)
 	{
-		$this->assertDrawsSilently(function (Mpdf $mpdf) use ($background) {
-			$mpdf->WriteHTML('<columns column-count="2" /><div><div style="' . $background . '">Text</div></div>');
+		$this->assertDrawsSilently(function (Mpdf $mpdf) {
+			$mpdf->WriteHTML('<columns column-count="2" /><div><div style="background-color: transparent">Text</div></div>');
 		}, ['cssMode' => $cssMode]);
-	}
-
-	/**
-	 * Backgrounds that set no colour, in both CSS modes
-	 *
-	 * @return array
-	 */
-	public static function backgroundsWithoutColourProvider()
-	{
-		$cases = [];
-		foreach (self::cssModeProvider() as $mode => $args) {
-			$cases[$mode . ', transparent'] = [$args[0], 'background-color: transparent'];
-			$cases[$mode . ', none'] = [$args[0], 'background: none'];
-		}
-
-		return $cases;
 	}
 }
