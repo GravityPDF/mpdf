@@ -12,7 +12,8 @@ class PositionedBlockVerticalMarginsTest extends \Yoast\PHPUnitPolyfills\TestCas
 	use PageStreams;
 
 	/**
-	 * A block of each kind, and the top edge and height in mm of the box a browser draws
+	 * A block of each kind, the top edge and height in mm of the box a browser draws, and the config to draw it with.
+	 * A margin counted twice is a plain bug, so legacy mode is fixed too.
 	 *
 	 * @return array[]
 	 */
@@ -26,6 +27,7 @@ class PositionedBlockVerticalMarginsTest extends \Yoast\PHPUnitPolyfills\TestCas
 			'fixed, top, height and bottom all set' => ['position: fixed; top: 20mm; height: 30mm; bottom: 30mm; margin-top: 20mm; margin-bottom: 5mm', 56, 30],
 			'fixed, height auto' => ['position: fixed; top: 20mm; bottom: 30mm; margin-top: 20mm; margin-bottom: 5mm', 56, 190],
 			'absolute, height auto' => ['position: absolute; top: 20mm; bottom: 30mm; margin-top: 20mm; margin-bottom: 5mm', 40, 222],
+			'fixed, top auto, legacy mode' => ['position: fixed; bottom: 10mm; height: 30mm; margin-top: 20mm; margin-bottom: 0', 241, 30, ['cssMode' => CssMode::LEGACY]],
 		];
 	}
 
@@ -37,18 +39,11 @@ class PositionedBlockVerticalMarginsTest extends \Yoast\PHPUnitPolyfills\TestCas
 	 * @param string $style
 	 * @param float $top
 	 * @param float $height
+	 * @param array $config
 	 */
-	public function testEachMarginCountsOnce($style, $top, $height)
+	public function testEachMarginCountsOnce($style, $top, $height, $config = [])
 	{
-		$this->assertBox($top, $height, $style);
-	}
-
-	/**
-	 * The same block in legacy mode, since a margin counted twice is a plain bug in either mode
-	 */
-	public function testLegacyModeCountsEachMarginOnce()
-	{
-		$this->assertBox(241, 30, 'position: fixed; bottom: 10mm; height: 30mm; margin-top: 20mm; margin-bottom: 0', ['cssMode' => CssMode::LEGACY]);
+		$this->assertBox($top, $height, $style, $config);
 	}
 
 	/**
