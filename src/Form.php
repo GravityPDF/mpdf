@@ -874,8 +874,8 @@ class Form
 	}
 
 	/**
-	 * The /AA entry pointing a field's triggers at its scripts, which writeFieldScripts() writes straight after the
-	 * field's own object. A field with a calculate script joins the calculation order.
+	 * The /AA entry, led by a space, pointing a field's triggers at its scripts, which writeFieldScripts() writes
+	 * straight after the field's own object. A field with a calculate script joins the calculation order.
 	 *
 	 * @param string[] $scripts as fieldScripts() gives them
 	 *
@@ -897,7 +897,7 @@ class Form
 			$this->pdf_array_co .= $this->mpdf->n . ' 0 R ';
 		}
 
-		return '/AA << ' . $actions . '>>';
+		return ' /AA << ' . $actions . '>>';
 	}
 
 	/**
@@ -953,7 +953,7 @@ class Form
 		foreach ($this->forms as $form) {
 			if (isset($form['copyOf'])) {
 				$gathered['copies of ' . $form['copyOf']][] = $form;
-			} elseif ($form['typ'] === 'Bt' && $form['subtype'] !== 'checkbox') {
+			} elseif ($this->isGatheredByName($form)) {
 				$gathered['name ' . $form['T']][] = $form;
 			}
 		}
@@ -1002,13 +1002,42 @@ class Form
 				continue;
 			}
 
-			if ($this->forms[$n]['typ'] === 'Bt' && $this->forms[$n]['subtype'] !== 'checkbox') {
+			if ($this->isGatheredByName($this->forms[$n])) {
 				continue;
 			}
 
 			$this->forms[$n]['copyOf'] = $n;
 			$this->forms[$copies[$i]]['copyOf'] = $n;
 		}
+	}
+
+	/**
+	 * How many fields have been made. The next field is numbered one more.
+	 *
+	 * @return int
+	 */
+	public function fieldCount()
+	{
+		return (int) $this->formCount;
+	}
+
+	/**
+	 * The fields made since fieldCount() gave $count, in the order they were made
+	 *
+	 * @param int $count
+	 *
+	 * @return int[]
+	 */
+	public function fieldsSince($count)
+	{
+		$fields = [];
+		for ($n = $count + 1; $n <= $this->formCount; $n++) {
+			if (isset($this->forms[$n])) {
+				$fields[] = $n;
+			}
+		}
+
+		return $fields;
 	}
 
 	/**
@@ -1021,6 +1050,18 @@ class Form
 	private function isPushButton($form)
 	{
 		return $form['typ'] === 'Bt' && $form['subtype'] !== 'radio' && $form['subtype'] !== 'checkbox';
+	}
+
+	/**
+	 * Whether a field is a radio or push button, which addGroupIds() gathers with the others of its name
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return bool
+	 */
+	private function isGatheredByName($form)
+	{
+		return $form['typ'] === 'Bt' && $form['subtype'] !== 'checkbox';
 	}
 
 	/**
@@ -1064,7 +1105,7 @@ class Form
 			if ($form['typ'] !== 'Bt') {
 				$scripts = $this->fieldScripts($form);
 				$entries = $form['typ'] === 'Tx' ? $this->textFieldEntries($form) : $this->choiceFieldEntries($form);
-				$this->writer->write('<< ' . $entries . ' /Kids [ ' . $kids . '] ' . $this->scriptActions($scripts) . ' >>');
+				$this->writer->write('<< ' . $entries . ' /Kids [ ' . $kids . ']' . $this->scriptActions($scripts) . ' >>');
 				$this->writer->write('endobj');
 				$this->writeFieldScripts($form, $scripts);
 
@@ -2501,7 +2542,7 @@ class Form
 		$scripts = [];
 		if ($parent === null) {
 			$scripts = $this->fieldScripts($form);
-			$this->writer->write($this->choiceFieldEntries($form) . ' ' . $this->scriptActions($scripts));
+			$this->writer->write($this->choiceFieldEntries($form) . $this->scriptActions($scripts));
 		} else {
 			$this->writer->write('/Parent ' . $parent . ' 0 R');
 		}
@@ -2589,7 +2630,7 @@ class Form
 		$scripts = [];
 		if ($parent === null) {
 			$scripts = $this->fieldScripts($form);
-			$this->writer->write($this->textFieldEntries($form));
+			$this->writer->write($this->textFieldEntries($form) . $this->scriptActions($scripts));
 		} else {
 			$this->writer->write('/Parent ' . $parent . ' 0 R');
 		}
@@ -2601,7 +2642,6 @@ class Form
 
 		$this->writer->write('/NM ' . $this->writer->string(sprintf('%04u-%04u', $n, 5000 + $form['n'])));
 		$this->writer->write('/M ' . $this->writer->dateString());
-		$this->writer->write($this->scriptActions($scripts));
 
 		$this->writeAppearanceReference($form);
 		$this->writer->write('>>');

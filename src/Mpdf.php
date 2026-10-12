@@ -15402,11 +15402,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private function drawRunningFixedBlock($i)
 	{
 		for ($n = $this->runningFixedBlocks[$i]['from']; $n <= $this->page; $n++) {
-			$before = $this->form->forms;
+			$count = $this->form->fieldCount();
 			$this->drawPositionedBlock($this->runningFixedBlocks[$i]['block'], $n);
 
 			// Each page's fields are widgets of the fields the block made on its first page
-			$fields = array_keys(array_diff_key($this->form->forms, $before));
+			$fields = $this->form->fieldsSince($count);
 			if ($this->runningFixedBlocks[$i]['fields'] === null) {
 				$this->runningFixedBlocks[$i]['fields'] = $fields;
 			} else {
