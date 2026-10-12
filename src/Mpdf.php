@@ -10501,7 +10501,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$alpha = $this->blk[$blvl]['bgcolor'] ? Color\ColorConverter::alpha($this->blk[$blvl]['bgcolorarray']) : null;
 					if ($alpha === null || $alpha == 1) {
 						$this->Cell(($this->blk[$blvl]['width']), $h, '', '', 0, '', 1);
-					} elseif ($blvl == $firstblockfill || $this->blk[$blvl]['bgcolorarray'] !== $this->blk[$blvl - 1]['bgcolorarray']) {
+					} elseif ($blvl == $firstblockfill || !isset($this->blk[$blvl - 1]['bgcolorarray']) || $this->blk[$blvl]['bgcolorarray'] !== $this->blk[$blvl - 1]['bgcolorarray']) {
 						// In columns a block inherits its parent's background, which the parent has already painted
 						// here: painting it again would double its opacity
 						$this->translucentDivLnFill($blvl, $h, $alpha);
@@ -19566,7 +19566,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							}
 						} elseif ($type != 'INLINE') {
 							if ($this->ColActive) {
-								$this->blk[$this->blklvl]['bgcolorarray'] = $this->blk[$prevlevel]['bgcolorarray'];
+								// A parent with no background has no colour to take
+								if (isset($this->blk[$prevlevel]['bgcolorarray'])) {
+									$this->blk[$this->blklvl]['bgcolorarray'] = $this->blk[$prevlevel]['bgcolorarray'];
+								} else {
+									unset($this->blk[$this->blklvl]['bgcolorarray']);
+								}
 								$this->blk[$this->blklvl]['bgcolor'] = $this->blk[$prevlevel]['bgcolor'];
 							}
 						}

@@ -250,6 +250,7 @@ Bugfixes
 * Balancing columns raised a warning and drew a block's closing background past the last column. [#475] [#488]
 * Inside `<columns>`, a block with an `rgba()` or `cmyka()` background was painted fully opaque. [#482] [#498]
 * Inside `<columns>`, a table in a block with a border and no background raised `Undefined array key "bgcolorarray"` warnings, one for each row and one for each repeated header. [#552] [#748]
+* Inside `<columns>`, a block whose background sets no colour, such as `background-color: transparent` or `background: none`, raised an `Undefined array key "bgcolorarray"` warning when the block around it had no background. So did a block with an `rgba()` background inside a block with a border and no background, once for each line. [#552] [#748]
 * In a UTF-8 document, CSS naming `chelvetica`, `ctimes` or `ccourier` did not draw in the core font. [#467] [#468]
 * The U+200B the line breaker inserts was drawn. [#28]
 * A zero-width space was drawn, and gave no line break, in core fonts and in text written outside `WriteHTML()`. [#463] [#503]
