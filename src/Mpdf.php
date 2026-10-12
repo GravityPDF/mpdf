@@ -13358,7 +13358,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						// The layers of a list are drawn in their order, so its gradients go in with its images
 						$gradientSlot = isset($tablehf['background-image']['layers']) ? 8 : 7;
 						foreach ($this->backgroundLayers($tablehf['background-image']) as $bg) {
-							if ($bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+							if (!empty($bg['gradient']) && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
 								$g = $this->gradient->parseMozGradient($bg['gradient']);
 								if ($g) {
 									if ($table['borders_separate']) {
@@ -13543,7 +13543,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							// The layers of a list are drawn in their order, so its gradients go in with its images
 							$gradientSlot = isset($content[$i][0]['trbackground-images']['layers']) ? 5 : 4;
 							foreach ($this->backgroundLayers($content[$i][0]['trbackground-images']) as $bg) {
-								if ($bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+								if (!empty($bg['gradient']) && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
 									$g = $this->gradient->parseMozGradient($bg['gradient']);
 									if ($g) {
 										$gx = $x0;
