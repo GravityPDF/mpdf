@@ -7,7 +7,7 @@ class ColumnTableBlockFillTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	use PageStreams;
 
 	/**
-	 * Both CSS modes, since the fill beside a table in columns is drawn the same way in each
+	 * Both CSS modes, since the warning came in each
 	 *
 	 * @return array
 	 */
@@ -45,9 +45,9 @@ class ColumnTableBlockFillTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 	public function testRepeatedHeaderInBorderedBlockInColumnsRendersSilently($cssMode)
 	{
 		$pdf = $this->assertDrawsSilently(function (Mpdf $mpdf) {
-			$rows = str_repeat('<tr><td>Cell</td></tr>', 120);
+			$rows = str_repeat('<tr><td>Cell</td></tr>', 20);
 			$mpdf->WriteHTML('<columns column-count="2" /><div style="border: 1px solid black"><table><thead><tr><th>Head</th></tr></thead><tbody>' . $rows . '</tbody></table></div>');
-		}, ['cssMode' => $cssMode]);
+		}, ['cssMode' => $cssMode, 'format' => [100, 60]]);
 
 		$this->assertGreaterThan(1, substr_count($pdf, '(Head)'), 'The header should repeat in the next column');
 	}
