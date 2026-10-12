@@ -7,8 +7,8 @@ class RepeatedTableHeaderBackgroundTest extends \Yoast\PHPUnitPolyfills\TestCase
 	use PageStreams;
 
 	/**
-	 * A header or footer drawn again on a later page read the gradient of its background image without checking for
-	 * one, and an image from a URL has none. Its image is still tiled on every page.
+	 * A background image from a URL has no gradient, and a header or footer drawn again on a later page must not
+	 * expect one: the image is tiled on every page and nothing is raised.
 	 *
 	 * @dataProvider backgrounds
 	 *
@@ -40,7 +40,7 @@ class RepeatedTableHeaderBackgroundTest extends \Yoast\PHPUnitPolyfills\TestCase
 	 */
 	public function backgrounds()
 	{
-		$image = 'background-image: url(' . __DIR__ . '/../data/img/bg.jpg)';
+		$image = 'background-image: url(' . $this->backgroundImage() . ')';
 		$plainRow = '<tr><td>Plain</td><td>Plain</td></tr>';
 		$cases = [
 			'a header cell' => ['<tr><th style="' . $image . '">Cell</th><th>Plain</th></tr>', $plainRow],
