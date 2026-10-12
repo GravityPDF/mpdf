@@ -92,7 +92,7 @@ class SelectRowsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function widgetHeight($attributes)
 	{
 		$pdf = $this->render($this->select($attributes), ['useActiveForms' => true]);
-		$this->assertSame(1, preg_match('/\/Rect \[\s*[\d.]+ ([\d.]+) [\d.]+ ([\d.]+)\s*\][^>]*?\/FT \/Ch\b/s', $pdf, $rect), 'The select should be written as a choice field');
+		$this->assertSame(1, preg_match('/\/Rect \[\s*[\d.]+ ([\d.]+) [\d.]+ ([\d.]+)\s*\](?:(?!endobj).)*?\/FT \/Ch\b/s', $pdf, $rect), 'The select should be written as a choice field');
 
 		return $rect[2] - $rect[1];
 	}

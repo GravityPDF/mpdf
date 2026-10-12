@@ -825,21 +825,8 @@ class Form
 	private function getCountItems($form)
 	{
 		$total = 1;
-		if ($form['typ'] === 'Tx') {
-			if (isset($this->array_form_text_js[$form['T']])) {
-				if (isset($this->array_form_text_js[$form['T']]['F'])) {
-					$total++;
-				}
-				if (isset($this->array_form_text_js[$form['T']]['K'])) {
-					$total++;
-				}
-				if (isset($this->array_form_text_js[$form['T']]['V'])) {
-					$total++;
-				}
-				if (isset($this->array_form_text_js[$form['T']]['C'])) {
-					$total++;
-				}
-			}
+		if (!isset($form['copyOf'])) {
+			$total += count($this->fieldScripts($form));
 		}
 
 		if ($form['typ'] === 'Bt') {
@@ -856,15 +843,84 @@ class Form
 				$total += 2;
 			}
 		}
-		if ($form['typ'] === 'Ch') {
-			if (isset($this->array_form_choice_js[$form['T']])) {
-				$total++;
-			}
-		}
 		if (isset($form['AP'])) {
 			$total++;
 		}
 		return $total;
+	}
+
+	/**
+	 * The scripts a text field or choice runs, by the trigger that runs them: format, keystroke, validate and calculate
+	 * for a text field, validate for a choice
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return string[]
+	 */
+	private function fieldScripts($form)
+	{
+		$scripts = [];
+		if ($form['typ'] === 'Tx' && isset($this->array_form_text_js[$form['T']])) {
+			foreach (['F', 'K', 'V', 'C'] as $trigger) {
+				if (isset($this->array_form_text_js[$form['T']][$trigger])) {
+					$scripts[$trigger] = $this->array_form_text_js[$form['T']][$trigger]['js'];
+				}
+			}
+		} elseif ($form['typ'] === 'Ch' && isset($this->array_form_choice_js[$form['T']])) {
+			$scripts['V'] = $this->array_form_choice_js[$form['T']]['js'];
+		}
+
+		return $scripts;
+	}
+
+	/**
+	 * The /AA entry, led by a space, pointing a field's triggers at its scripts, which writeFieldScripts() writes
+	 * straight after the field's own object. A field with a calculate script joins the calculation order.
+	 *
+	 * @param string[] $scripts as fieldScripts() gives them
+	 *
+	 * @return string
+	 */
+	private function scriptActions(array $scripts)
+	{
+		if (!$scripts) {
+			return '';
+		}
+
+		$actions = '';
+		$id = $this->mpdf->n;
+		foreach (array_keys($scripts) as $trigger) {
+			$actions .= '/' . $trigger . ' ' . (++$id) . ' 0 R ';
+		}
+
+		if (isset($scripts['C'])) {
+			$this->pdf_array_co .= $this->mpdf->n . ' 0 R ';
+		}
+
+		return ' /AA << ' . $actions . '>>';
+	}
+
+	/**
+	 * Writes the scripts scriptActions() pointed a field at, and drops them, so a later field of the same name runs none
+	 *
+	 * @param mixed[] $form
+	 * @param string[] $scripts as fieldScripts() gives them
+	 */
+	private function writeFieldScripts($form, array $scripts)
+	{
+		if (!$scripts) {
+			return;
+		}
+
+		foreach ($scripts as $js) {
+			$this->mpdf->_set_object_javascript($js);
+		}
+
+		if ($form['typ'] === 'Tx') {
+			unset($this->array_form_text_js[$form['T']]);
+		} else {
+			unset($this->array_form_choice_js[$form['T']]);
+		}
 	}
 
 	/**
@@ -885,38 +941,103 @@ class Form
 	}
 
 	/**
-	 * Gathers radio and push buttons by name, numbers from $id the field each group is written as, and notes it on
-	 * each widget as its parent. A push button with a name of its own stays a single field.
+	 * Gathers radio and push buttons by name, and the copies of a field repeatFields() noted, numbers from $id the field
+	 * each group is written as, and notes it on each widget as its parent. A push button with a name of its own stays a
+	 * single field.
 	 *
 	 * @param int $id the first group's object number, left at the next free one
 	 */
 	public function addGroupIds(&$id)
 	{
-		$names = [];
+		$gathered = [];
 		foreach ($this->forms as $form) {
-			if ($form['typ'] === 'Bt' && $form['subtype'] !== 'checkbox') {
-				$names[$form['T']][] = $form;
+			if (isset($form['copyOf'])) {
+				$gathered['copies of ' . $form['copyOf']][] = $form;
+			} elseif ($this->isGatheredByName($form)) {
+				$gathered['name ' . $form['T']][] = $form;
 			}
 		}
 
 		$this->groups = [];
-		foreach ($names as $name => $forms) {
-			if (count($forms) === 1 && $forms[0]['subtype'] !== 'radio') {
+		foreach ($gathered as $forms) {
+			if (count($forms) === 1 && !isset($forms[0]['copyOf']) && $forms[0]['subtype'] !== 'radio') {
 				continue;
 			}
 
-			$group = ['obj_id' => $id++, 'kids' => [], 'flags' => [], 'state' => null];
+			$group = ['obj_id' => $id++, 'name' => $forms[0]['T'], 'kids' => [], 'flags' => [], 'state' => null];
 			foreach ($forms as $form) {
 				$this->forms[$form['n']]['parent'] = $group['obj_id'];
 				$group['kids'][] = $form['n'];
+				if ($form['typ'] !== 'Bt') {
+					continue;
+				}
+
 				$group['flags'] = array_merge($group['flags'], $this->buttonFlags($form));
 				if ($form['subtype'] === 'radio' && ($form['activ'] || $group['state'] === null)) {
 					$group['state'] = $form['activ'] ? $form['V'] : 'Off';
+				} elseif ($form['subtype'] === 'checkbox' && $form['activ']) {
+					$group['state'] = $form['V'];
 				}
 			}
 
-			$this->groups[$name] = $group;
+			// A text field's or choice's scripts follow the field that runs them
+			$id += count($this->fieldScripts($forms[0]));
+
+			$this->groups[] = $group;
 		}
+	}
+
+	/**
+	 * Notes each field the latest drawing of a repeated block made as a copy of the field the first drawing made in its
+	 * place, so the copies are written as the widgets of one field and share its value. Radio and push buttons are
+	 * gathered by name in any case.
+	 *
+	 * @param int[] $fields the fields the first drawing made, in the order it made them
+	 * @param int[] $copies the fields the latest drawing made, in the order it made them
+	 */
+	public function repeatFields(array $fields, array $copies)
+	{
+		foreach ($fields as $i => $n) {
+			if (!isset($copies[$i], $this->forms[$n], $this->forms[$copies[$i]])) {
+				continue;
+			}
+
+			if ($this->isGatheredByName($this->forms[$n])) {
+				continue;
+			}
+
+			$this->forms[$n]['copyOf'] = $n;
+			$this->forms[$copies[$i]]['copyOf'] = $n;
+		}
+	}
+
+	/**
+	 * How many fields have been made. The next field is numbered one more.
+	 *
+	 * @return int
+	 */
+	public function fieldCount()
+	{
+		return (int) $this->formCount;
+	}
+
+	/**
+	 * The fields made since fieldCount() gave $count, in the order they were made
+	 *
+	 * @param int $count
+	 *
+	 * @return int[]
+	 */
+	public function fieldsSince($count)
+	{
+		$fields = [];
+		for ($n = $count + 1; $n <= $this->formCount; $n++) {
+			if (isset($this->forms[$n])) {
+				$fields[] = $n;
+			}
+		}
+
+		return $fields;
 	}
 
 	/**
@@ -929,6 +1050,18 @@ class Form
 	private function isPushButton($form)
 	{
 		return $form['typ'] === 'Bt' && $form['subtype'] !== 'radio' && $form['subtype'] !== 'checkbox';
+	}
+
+	/**
+	 * Whether a field is a radio or push button, which addGroupIds() gathers with the others of its name
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return bool
+	 */
+	private function isGatheredByName($form)
+	{
+		return $form['typ'] === 'Bt' && $form['subtype'] !== 'checkbox';
 	}
 
 	/**
@@ -954,12 +1087,12 @@ class Form
 	}
 
 	/**
-	 * Writes each group as a field holding the type, flags, name and, for radio buttons, the value, with the widgets
-	 * as its kids. The kids inherit those entries, and no page lists the group.
+	 * Writes each group as a field holding the type, flags, name and value, with the widgets as its kids. The kids
+	 * inherit those entries, and no page lists the group.
 	 */
 	public function putGroups()
 	{
-		foreach ($this->groups as $name => $group) {
+		foreach ($this->groups as $group) {
 			$this->writer->object();
 			$this->pdf_acro_array .= $this->mpdf->n . ' 0 R ';
 
@@ -968,13 +1101,28 @@ class Form
 				$kids .= $this->forms[$kid]['obj'] . ' 0 R ';
 			}
 
+			$form = $this->forms[$group['kids'][0]];
+			if ($form['typ'] !== 'Bt') {
+				$scripts = $this->fieldScripts($form);
+				$entries = $form['typ'] === 'Tx' ? $this->textFieldEntries($form) : $this->choiceFieldEntries($form);
+				$this->writer->write('<< ' . $entries . ' /Kids [ ' . $kids . ']' . $this->scriptActions($scripts) . ' >>');
+				$this->writer->write('endobj');
+				$this->writeFieldScripts($form, $scripts);
+
+				continue;
+			}
+
 			$value = '';
 			if ($group['state'] !== null) {
 				$state = '/' . $this->writer->escape($group['state']);
 				$value = ' /V ' . $state . ' /DV ' . $state;
 			}
 
-			$this->writer->write('<< /FT /Btn /Ff ' . $this->_setflag(array_unique($group['flags'])) . ' /T ' . $this->writer->string($name) . ' /Kids [ ' . $kids . ']' . $value . ' >>');
+			if ($form['subtype'] === 'checkbox') {
+				$value .= ' /Opt [ ' . str_repeat($this->writer->string($form['OPT']) . ' ', count($group['kids'])) . ']';
+			}
+
+			$this->writer->write('<< /FT /Btn /Ff ' . $this->_setflag(array_unique($group['flags'])) . ' /T ' . $this->writer->string($group['name']) . ' /Kids [ ' . $kids . ']' . $value . ' >>');
 			$this->writer->write('endobj');
 		}
 	}
@@ -2214,18 +2362,18 @@ class Form
 			$this->writer->write('/BS << /W 1 /S /S >>');
 			$this->writer->write("/MK << $temp >>");
 
-			if ($form['activ']) {
+			if ($form['activ'] && $parent === null) {
 				$this->writer->write('/V /' . $this->writer->escape($form['V']) . ' ');
 				$this->writer->write('/DV /' . $this->writer->escape($form['V']) . ' ');
-				$this->writer->write('/AS /' . $this->writer->escape($form['V']) . ' ');
-			} else {
-				$this->writer->write('/AS /Off ');
 			}
+			$this->writer->write('/AS /' . ($form['activ'] ? $this->writer->escape($form['V']) : 'Off') . ' ');
 
 			$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' 0 Tf ' . $radio_color . ' rg'));
 			$this->writer->write('/AP << /N << /' . $this->writer->escape($form['V']) . ' ' . ($this->mpdf->n + 1) . ' 0 R /Off ' . ($this->mpdf->n + 2) . ' 0 R >> >>');
 
-			$this->writer->write('/Opt [ ' . $this->writer->string($form['OPT']) . ' ' . $this->writer->string($form['OPT']) . ' ]');
+			if ($parent === null) {
+				$this->writer->write('/Opt [ ' . $this->writer->string($form['OPT']) . ' ' . $this->writer->string($form['OPT']) . ' ]');
+			}
 		}
 
 		if ($form['subtype'] === 'radio') {
@@ -2365,10 +2513,12 @@ class Form
 
 	function _putform_ch($form, $hPt)
 	{
-		$put_js = 0;
 		$this->writer->object();
 		$n = $this->mpdf->n;
-		$this->pdf_acro_array .= $n . ' 0 R ';
+		$parent = isset($form['parent']) ? $form['parent'] : null;
+		if ($parent === null) {
+			$this->pdf_acro_array .= $n . ' 0 R ';
+		}
 		$this->forms[$form['n']]['obj'] = $n;
 
 		$this->writer->write('<<');
@@ -2376,7 +2526,6 @@ class Form
 		$this->writer->write('/Subtype /Widget');
 		$this->writer->write('/Rect [ ' . $this->_form_rect($form['x'], $form['y'], $form['w'], $form['h'], $hPt) . ' ]');
 		$this->writer->write('/F 4');
-		$this->writer->write('/FT /Ch');
 		if ($form['Q']) {
 			$this->writer->write('/Q ' . $form['Q'] . '');
 		}
@@ -2390,67 +2539,74 @@ class Form
 		$this->writer->write('/NM ' . $this->writer->string(sprintf('%04u-%04u', $n, 6000 + $form['n'])));
 		$this->writer->write('/M ' . $this->writer->dateString());
 
-		$this->writer->write('/T ' . $this->writer->string($form['T']));
+		$scripts = [];
+		if ($parent === null) {
+			$scripts = $this->fieldScripts($form);
+			$this->writer->write($this->choiceFieldEntries($form) . $this->scriptActions($scripts));
+		} else {
+			$this->writer->write('/Parent ' . $parent . ' 0 R');
+		}
 		$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
+
+		$this->writeAppearanceReference($form);
+		$this->writer->write('>>');
+		$this->writer->write('endobj');
+
+		$this->writeFieldScripts($form, $scripts);
+		$this->writeAppearance($form);
+
+		return $n;
+	}
+
+	/**
+	 * The entries of a choice's dictionary that belong to the field, which a widget sharing the field inherits: type,
+	 * name, options, the options selected and flags
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return string
+	 */
+	private function choiceFieldEntries($form)
+	{
+		$entries = '/FT /Ch /T ' . $this->writer->string($form['T']);
 
 		$opt = '';
 		$count = count($form['OPT']['VAL']);
 		for ($i = 0; $i < $count; $i++) {
 			$opt .= '[ ' . $this->writer->string($form['OPT']['VAL'][$i]) . ' ' . $this->writer->string($form['OPT']['OPT'][$i]) . ' ] ';
 		}
-		$this->writer->write('/Opt [ ' . $opt . ']');
+		$entries .= ' /Opt [ ' . $opt . ']';
 
-		// selected
-		$selectItem = false;
-		$selectIndex = false;
-		foreach ($form['OPT']['SEL'] as $selectKey => $selectVal) {
-			$selectName = $this->writer->string($form['OPT']['VAL'][$selectVal]);
-			$selectItem .= ' ' . $selectName . ' ';
+		$selectItem = '';
+		$selectIndex = '';
+		foreach ($form['OPT']['SEL'] as $selectVal) {
+			$selectItem .= ' ' . $this->writer->string($form['OPT']['VAL'][$selectVal]) . ' ';
 			$selectIndex .= ' ' . $selectVal . ' ';
 		}
 		if ($selectItem) {
 			if (count($form['OPT']['SEL']) < 2) {
-				$this->writer->write('/V ' . $selectItem . ' ');
-				$this->writer->write('/DV ' . $selectItem . ' ');
+				$entries .= ' /V ' . $selectItem . ' /DV ' . $selectItem;
 			} else {
-				$this->writer->write('/V [' . $selectItem . '] ');
-				$this->writer->write('/DV [' . $selectItem . '] ');
+				$entries .= ' /V [' . $selectItem . '] /DV [' . $selectItem . ']';
 			}
-			$this->writer->write('/I [' . $selectIndex . '] ');
+			$entries .= ' /I [' . $selectIndex . ']';
 		}
 
 		if (is_array($form['FF']) && count($form['FF']) > 0) {
-			$this->writer->write('/Ff ' . $this->_setflag($form['FF']) . ' ');
+			$entries .= ' /Ff ' . $this->_setflag($form['FF']);
 		}
 
-		// Javascript
-		if (isset($this->array_form_choice_js[$form['T']])) {
-			$this->writer->write('/AA << /V ' . ($this->mpdf->n + 1) . ' 0 R >>');
-			$put_js = 1;
-		}
-
-		$this->writeAppearanceReference($form);
-		$this->writer->write('>>');
-		$this->writer->write('endobj');
-
-		// obj + 1
-		if ($put_js === 1) {
-			$this->mpdf->_set_object_javascript($this->array_form_choice_js[$form['T']]['js']);
-			unset($this->array_form_choice_js[$form['T']]);
-			$put_js = null;
-		}
-
-		$this->writeAppearance($form);
-
-		return $n;
+		return $entries;
 	}
 
 	function _putform_tx($form, $hPt)
 	{
-		$put_js = 0;
 		$this->writer->object();
 		$n = $this->mpdf->n;
-		$this->pdf_acro_array .= $n . ' 0 R ';
+		$parent = isset($form['parent']) ? $form['parent'] : null;
+		if ($parent === null) {
+			$this->pdf_acro_array .= $n . ' 0 R ';
+		}
 		$this->forms[$form['n']]['obj'] = $n;
 
 		$this->writer->write('<<');
@@ -2460,17 +2616,9 @@ class Form
 		$this->writer->write('/Rect [ ' . $this->_form_rect($form['x'], $form['y'], $form['w'], $form['h'], $hPt) . ' ] ');
 		// PDF/A has every annotation printed; a hidden input takes up no space in any case
 		$this->writer->write($form['hidden'] && !$this->mpdf->PDFA ? '/F 2 ' : '/F 4 ');
-		$this->writer->write('/FT /Tx ');
 
 		$this->writer->write('/H /N ');
 		$this->writer->write('/R 0 ');
-
-		if (is_array($form['FF']) && count($form['FF']) > 0) {
-			$this->writer->write('/Ff ' . $this->_setflag($form['FF']) . ' ');
-		}
-		if (isset($form['maxlen']) && $form['maxlen'] > 0) {
-			$this->writer->write('/MaxLen ' . $form['maxlen']);
-		}
 
 		$temp = '';
 		$temp .= '/W ' . $form['BS_W'] . ' ';
@@ -2479,12 +2627,14 @@ class Form
 
 		$this->writer->write('/MK <<' . $this->markColors($form) . ' >>');
 
-		$this->writer->write('/T ' . $this->writer->string($form['T']));
-		$this->writer->write('/TU ' . $this->writer->string($form['TU']));
-		if ($form['V'] || $form['V'] === '0') {
-			$this->writer->write('/V ' . $this->writer->string($form['V']));
+		$scripts = [];
+		if ($parent === null) {
+			$scripts = $this->fieldScripts($form);
+			$this->writer->write($this->textFieldEntries($form) . $this->scriptActions($scripts));
+		} else {
+			$this->writer->write('/Parent ' . $parent . ' 0 R');
 		}
-		$this->writer->write('/DV ' . $this->writer->string($form['DV']));
+
 		$this->writer->write('/DA ' . $this->writer->string('/F' . $this->mpdf->fonts[$form['style']['font']]['i'] . ' ' . $form['style']['fontsize'] . ' Tf ' . $form['style']['fontcolor']));
 		if ($form['Q']) {
 			$this->writer->write('/Q ' . $form['Q'] . '');
@@ -2493,56 +2643,39 @@ class Form
 		$this->writer->write('/NM ' . $this->writer->string(sprintf('%04u-%04u', $n, 5000 + $form['n'])));
 		$this->writer->write('/M ' . $this->writer->dateString());
 
-
-		if (isset($this->array_form_text_js[$form['T']])) {
-			$put_js = 1;
-			$cc = 0;
-			$js_str = '';
-
-			if (isset($this->array_form_text_js[$form['T']]['F'])) {
-				$cc++;
-				$js_str .= '/F ' . ($cc + $this->mpdf->n) . ' 0 R ';
-			}
-			if (isset($this->array_form_text_js[$form['T']]['K'])) {
-				$cc++;
-				$js_str .= '/K ' . ($cc + $this->mpdf->n) . ' 0 R ';
-			}
-			if (isset($this->array_form_text_js[$form['T']]['V'])) {
-				$cc++;
-				$js_str .= '/V ' . ($cc + $this->mpdf->n) . ' 0 R ';
-			}
-			if (isset($this->array_form_text_js[$form['T']]['C'])) {
-				$cc++;
-				$js_str .= '/C ' . ($cc + $this->mpdf->n) . ' 0 R ';
-				$this->pdf_array_co .= $this->mpdf->n . ' 0 R ';
-			}
-			$this->writer->write('/AA << ' . $js_str . ' >>');
-		}
-
 		$this->writeAppearanceReference($form);
 		$this->writer->write('>>');
 		$this->writer->write('endobj');
 
-		if ($put_js == 1) {
-			if (isset($this->array_form_text_js[$form['T']]['F'])) {
-				$this->mpdf->_set_object_javascript($this->array_form_text_js[$form['T']]['F']['js']);
-				unset($this->array_form_text_js[$form['T']]['F']);
-			}
-			if (isset($this->array_form_text_js[$form['T']]['K'])) {
-				$this->mpdf->_set_object_javascript($this->array_form_text_js[$form['T']]['K']['js']);
-				unset($this->array_form_text_js[$form['T']]['K']);
-			}
-			if (isset($this->array_form_text_js[$form['T']]['V'])) {
-				$this->mpdf->_set_object_javascript($this->array_form_text_js[$form['T']]['V']['js']);
-				unset($this->array_form_text_js[$form['T']]['V']);
-			}
-			if (isset($this->array_form_text_js[$form['T']]['C'])) {
-				$this->mpdf->_set_object_javascript($this->array_form_text_js[$form['T']]['C']['js']);
-				unset($this->array_form_text_js[$form['T']]['C']);
-			}
+		$this->writeFieldScripts($form, $scripts);
+		$this->writeAppearance($form);
+
+		return $n;
+	}
+
+	/**
+	 * The entries of a text field's dictionary that belong to the field, which a widget sharing the field inherits:
+	 * type, flags, length, name, tooltip and value
+	 *
+	 * @param mixed[] $form
+	 *
+	 * @return string
+	 */
+	private function textFieldEntries($form)
+	{
+		$entries = '/FT /Tx';
+		if (is_array($form['FF']) && count($form['FF']) > 0) {
+			$entries .= ' /Ff ' . $this->_setflag($form['FF']);
+		}
+		if (isset($form['maxlen']) && $form['maxlen'] > 0) {
+			$entries .= ' /MaxLen ' . $form['maxlen'];
 		}
 
-		$this->writeAppearance($form);
-		return $n;
+		$entries .= ' /T ' . $this->writer->string($form['T']) . ' /TU ' . $this->writer->string($form['TU']);
+		if ($form['V'] || $form['V'] === '0') {
+			$entries .= ' /V ' . $this->writer->string($form['V']);
+		}
+
+		return $entries . ' /DV ' . $this->writer->string($form['DV']);
 	}
 }
