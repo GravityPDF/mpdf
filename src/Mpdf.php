@@ -28824,8 +28824,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * can only be computed by writing to the document. For example, {@see TableOfContents::insertTOC}
 	 * uses this functionality to determine the correct page numbers.
 	 *
-	 * Only scalar and array values are captured in the snapshot, plus the state of the Form and
-	 * TableOfContents objects, where a document registers its fields and contents entries.
+	 * Only scalar and array values are put back, plus the state of the Form and TableOfContents
+	 * objects, where a document registers its fields and contents entries.
 	 *
 	 * @return array<string, mixed>
 	 *
@@ -28838,6 +28838,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// The loader caches stay live: the pass being unwound only adds to them and the pass that follows needs every
 		// entry. So does the counter that numbers fonts alongside them, and the reference into one of them
 		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont']);
+
+		// blk[0] holds the page width by reference, so the snapshot would hold that reference rather than the width
+		unset($snapshot['pgwidth']);
+		$snapshot['pgwidth'] = $this->pgwidth;
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
