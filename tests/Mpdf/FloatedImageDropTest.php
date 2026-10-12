@@ -37,52 +37,20 @@ class FloatedImageDropTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Where each image on a page is placed, keyed w/h/x/top in millimetres from the top left corner of the page
+	 * The content stream of each page of the document, drawn without a warning
 	 *
-	 * @param string $stream
+	 * @param string $html
+	 * @param string $mode The CSS mode
 	 *
-	 * @return array[]
+	 * @return string[]
 	 */
-	private function placements($stream)
+	private function silentPages($html, $mode = CssMode::STANDARD)
 	{
-		preg_match_all('/([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) ([-\d.]+) cm \/I\d+ Do/', $stream, $matches, PREG_SET_ORDER);
-
-		return array_map(function ($match) {
-			$h = $match[2] / Mpdf::SCALE;
-
-			return ['w' => $match[1] / Mpdf::SCALE, 'h' => $h, 'x' => $match[3] / Mpdf::SCALE, 'top' => 297 - $match[4] / Mpdf::SCALE - $h];
-		}, $matches);
-	}
-
-	/**
-	 * Each side the first image can float to, in each CSS mode
-	 *
-	 * @return array[]
-	 */
-	public function sideAndModeProvider()
-	{
-		return [
-			'left first, standard' => ['left', CssMode::STANDARD],
-			'right first, standard' => ['right', CssMode::STANDARD],
-			'left first, legacy' => ['left', CssMode::LEGACY],
-			'right first, legacy' => ['right', CssMode::LEGACY],
-		];
-	}
-
-	/**
-	 * Neither mode reads the margin of a float that was never recorded
-	 *
-	 * @dataProvider sideAndModeProvider
-	 *
-	 * @param string $first
-	 * @param string $mode
-	 */
-	public function testFloatsTooWideToShareALineRaiseNoWarning($first, $mode)
-	{
-		$html = $this->html($first);
-		$this->assertDrawsSilently(function (Mpdf $mpdf) use ($html) {
+		$pdf = $this->assertDrawsSilently(function (Mpdf $mpdf) use ($html) {
 			$mpdf->WriteHTML($html);
-		}, ['cssMode' => $mode]);
+		}, ['cssMode' => $mode, 'useKerning' => false]); // Kerned text is drawn with TJ, which drawnTextPositions() does not read
+
+		return $this->pages($pdf);
 	}
 
 	/**
@@ -99,7 +67,8 @@ class FloatedImageDropTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The second image keeps its size and goes against its own side, its top at the bottom of the first
+	 * The second image keeps its size and goes against its own side, its top at the bottom of the first. Text runs
+	 * beside the first image and then beside the second, with no line crossing into the second's top.
 	 *
 	 * @dataProvider sideProvider
 	 *
@@ -109,7 +78,9 @@ class FloatedImageDropTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheSecondFloatGoesBelowTheFirst($first, $firstX, $secondX)
 	{
-		$images = $this->placements($this->firstPage($this->html($first)));
+		$pages = $this->silentPages($this->html($first));
+		$this->assertCount(1, $pages);
+		$images = $this->placementsIn($pages[0]);
 
 		$this->assertCount(2, $images);
 		foreach ($images as $image) {
@@ -118,30 +89,15 @@ class FloatedImageDropTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 		$this->assertEqualsWithDelta($firstX, $images[0]['x'], 0.01);
 		$this->assertEqualsWithDelta($secondX, $images[1]['x'], 0.01);
-		$this->assertEqualsWithDelta($images[0]['top'] + 30, $images[1]['top'], 0.01);
-	}
-
-	/**
-	 * Text runs beside the first image and then beside the second, with no line crossing into the second's top
-	 *
-	 * @dataProvider sideProvider
-	 *
-	 * @param string $first
-	 * @param float $firstX
-	 * @param float $secondX
-	 */
-	public function testTextStaysClearOfTheSecondFloat($first, $firstX, $secondX)
-	{
-		$page = $this->firstPage($this->html($first));
-		$images = $this->placements($page);
 		$top = $images[1]['top'];
+		$this->assertEqualsWithDelta($images[0]['top'] + 30, $top, 0.01);
 
 		$above = 0;
 		$below = 0;
-		foreach ($this->drawnTextPositions($page) as $text) {
+		foreach ($this->drawnTextPositions($pages[0]) as $text) {
 			if ($text['y'] < $top) {
 				$above++;
-				// The baseline stays far enough above the image for the descenders and the line's leading
+				// Far enough above the image for the descenders and the line's leading
 				$this->assertLessThan($top - 1, $text['y'], 'A line beside the first float runs into the second');
 			} else {
 				$below++;
@@ -153,11 +109,30 @@ class FloatedImageDropTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Legacy mode writes the second image inline, in the room left beside the first, as mPDF always did
+	 * Each side the first image can float to
+	 *
+	 * @return array[]
 	 */
-	public function testLegacyModeWritesTheSecondFloatInline()
+	public function firstSideProvider()
 	{
-		$images = $this->placements($this->firstPage($this->html('left'), ['cssMode' => CssMode::LEGACY]));
+		return [
+			'left first' => ['left'],
+			'right first' => ['right'],
+		];
+	}
+
+	/**
+	 * Legacy mode writes the second image inline, in the room left beside the first, as mPDF always did
+	 *
+	 * @dataProvider firstSideProvider
+	 *
+	 * @param string $first
+	 */
+	public function testLegacyModeWritesTheSecondFloatInline($first)
+	{
+		$pages = $this->silentPages($this->html($first), CssMode::LEGACY);
+		$this->assertCount(1, $pages);
+		$images = $this->placementsIn($pages[0]);
 
 		$this->assertCount(2, $images);
 		$this->assertLessThan(120, $images[1]['w']);
@@ -170,12 +145,8 @@ class FloatedImageDropTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testASecondFloatThatWouldRunOffThePageIsWrittenInline()
 	{
-		$pdf = $this->assertDrawsSilently(function (Mpdf $mpdf) {
-			$mpdf->WriteHTML($this->html('left', '<div style="height: 215mm"></div>'));
-		});
-
-		foreach ($this->pages($pdf) as $page) {
-			foreach ($this->placements($page) as $image) {
+		foreach ($this->silentPages($this->html('left', '<div style="height: 215mm"></div>')) as $page) {
+			foreach ($this->placementsIn($page) as $image) {
 				$this->assertLessThanOrEqual(297 - 16 + 0.01, $image['top'] + $image['h']);
 			}
 		}
