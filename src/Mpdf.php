@@ -23537,7 +23537,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 										// The layers of a list are drawn in their order, so its gradients go in with its images
 										$gradientSlot = isset($table['background-image']['layers']) ? 2 : 1;
 										foreach ($this->backgroundLayers($table['background-image']) as $bg) {
-											if ($bg['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
+											if (!empty($bg['gradient']) && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $bg['gradient'])) {
 												$g = $this->gradient->parseMozGradient($bg['gradient']);
 												if ($g) {
 													$this->tableBackgrounds[$level * 9 + $gradientSlot][] = ['gradient' => true, 'x' => $bx, 'y' => $by, 'w' => $bw, 'h' => $bh, 'gradtype' => $g['type'], 'stops' => $g['stops'], 'colorspace' => $g['colorspace'], 'coords' => $g['coords'], 'extend' => $g['extend'], 'clippath' => ''];
