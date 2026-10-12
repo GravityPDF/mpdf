@@ -9693,6 +9693,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				// Update values if set to skipline
 				if ($this->floatmargins) {
 					$this->_advanceFloatMargins();
+					$this->lineToFloatBelow($currentx);
 				}
 				/* -- END CSS-IMAGE-FLOAT -- */
 
@@ -9830,6 +9831,55 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	// ----------------------END OF FLOWING BLOCK------------------------------------//
 
+
+	/* -- CSS-IMAGE-FLOAT -- */
+	/**
+	 * Records a floated image's margin on its side of the block and buffers it to be drawn at the end of the block.
+	 *
+	 * @param array $objattr The image, placed at $fx and the line's y
+	 * @param float $fx The left edge of the image's margin box
+	 * @param float $fy Where the top of its margin box goes, below the line's y when it is dropped below another float
+	 * @param bool $skipline Whether it waits for the next line, where _advanceFloatMargins() moves it to
+	 */
+	private function bufferImageFloat($objattr, $fx, $fy, $skipline)
+	{
+		$side = $objattr['float'];
+		$yadj = $fy - $objattr['OUTER-Y'];
+		if (isset($objattr['BORDER-Y'])) {
+			$objattr['BORDER-Y'] += $yadj;
+		}
+		$objattr['INNER-Y'] += $yadj;
+		$objattr['OUTER-Y'] = $fy;
+
+		$this->floatmargins[$side]['x'] = $side == 'L' ? $fx + $objattr['OUTER-WIDTH'] : $fx;
+		$this->floatmargins[$side]['w'] = $objattr['OUTER-WIDTH'];
+		$this->floatmargins[$side]['y0'] = $fy;
+		$this->floatmargins[$side]['y1'] = $fy + $objattr['OUTER-HEIGHT'];
+		$this->floatmargins[$side]['skipline'] = $skipline;
+		if ($skipline) {
+			$this->floatmargins[$side]['id'] = count($this->floatbuffer);
+			$objattr['skipline'] = true;
+		}
+		$this->floatbuffer[] = $objattr;
+	}
+
+	/**
+	 * Starts the next line at the top of a float dropped below the float on the other side, when that top falls
+	 * inside the line: the line would have to fit between both floats, and a dropped float is there because they
+	 * leave too little room for text.
+	 *
+	 * @param float $currentx The line's x, which DivLn() may move
+	 */
+	private function lineToFloatBelow($currentx)
+	{
+		foreach ($this->floatmargins as $float) {
+			if (isset($float['y0']) && $this->y + 0.002 < $float['y0'] && $this->y + $this->divheight > $float['y0']) {
+				$this->DivLn($float['y0'] - $this->y);
+				$this->x = $currentx;
+				return;
+			}
+		}
+	}
 
 	/* -- CSS-IMAGE-FLOAT -- */
 	// Update values if set to skipline
@@ -17608,81 +17658,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$objattr['OUTER-X'] = $fx;
 						$objattr['OUTER-Y'] = $fy;
 						$beside = null;
-						if ($objattr['float'] == 'R') {
-							// If R float already exists at this level
-							$this->floatmargins['R']['skipline'] = false;
-							if (isset($this->floatmargins['R']['y1']) && $this->floatmargins['R']['y1'] > 0 && $fy < $this->floatmargins['R']['y1']) {
-								$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
-							} // If L float already exists at this level
-							elseif (isset($this->floatmargins['L']['y1']) && $this->floatmargins['L']['y1'] > 0 && $fy < $this->floatmargins['L']['y1']) {
-								// Final check distance between floats is not now too narrow to fit text
-								$mw = 2 * $this->GetCharWidth('W', false);
-								if (($this->blk[$this->blklvl]['inner_width'] - $w - $this->floatmargins['L']['w']) < $mw) {
-									$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
-								} else {
-									$this->floatmargins['R']['x'] = $fx;
-									$this->floatmargins['R']['w'] = $w;
-									$this->floatmargins['R']['y0'] = $fy;
-									$this->floatmargins['R']['y1'] = $fy + $h;
-									if ($skipln == 1) {
-										$this->floatmargins['R']['skipline'] = true;
-										$this->floatmargins['R']['id'] = count($this->floatbuffer) + 0;
-										$objattr['skipline'] = true;
-									}
-									$beside = $this->floatmargins['L']['w'];
-									$this->floatbuffer[] = $objattr;
-								}
-							} else {
-								$this->floatmargins['R']['x'] = $fx;
-								$this->floatmargins['R']['w'] = $w;
-								$this->floatmargins['R']['y0'] = $fy;
-								$this->floatmargins['R']['y1'] = $fy + $h;
-								if ($skipln == 1) {
-									$this->floatmargins['R']['skipline'] = true;
-									$this->floatmargins['R']['id'] = count($this->floatbuffer) + 0;
-									$objattr['skipline'] = true;
-								}
+						$side = $objattr['float'];
+						$other = $side == 'R' ? 'L' : 'R';
+						// If a float already exists on this side at this level
+						if (isset($this->floatmargins[$side]['y1']) && $this->floatmargins[$side]['y1'] > 0 && $fy < $this->floatmargins[$side]['y1']) {
+							$this->floatmargins[$side]['skipline'] = false;
+							$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
+						} // If a float already exists on the other side at this level
+						elseif (isset($this->floatmargins[$other]['y1']) && $this->floatmargins[$other]['y1'] > 0 && $fy < $this->floatmargins[$other]['y1']) {
+							// Final check distance between floats is not now too narrow to fit text
+							$mw = 2 * $this->GetCharWidth('W', false);
+							if (($this->blk[$this->blklvl]['inner_width'] - $w - $this->floatmargins[$other]['w']) >= $mw) {
+								$this->bufferImageFloat($objattr, $fx, $fy, $skipln == 1);
+								$beside = $this->floatmargins[$other]['w'];
+							} elseif ($this->cssMode === CssMode::STANDARD && !$this->floatmargins[$other]['skipline'] && $this->floatmargins[$other]['y1'] + $h <= $this->PageBreakTrigger) {
+								// Too wide to sit beside the other float, so it goes below it, as in a browser
+								$this->bufferImageFloat($objattr, $fx, $this->floatmargins[$other]['y1'], false);
 								$beside = 0;
-								$this->floatbuffer[] = $objattr;
-							}
-						} elseif ($objattr['float'] == 'L') {
-							// If L float already exists at this level
-							$this->floatmargins['L']['skipline'] = false;
-							if (isset($this->floatmargins['L']['y1']) && $this->floatmargins['L']['y1'] > 0 && $fy < $this->floatmargins['L']['y1']) {
-								$this->floatmargins['L']['skipline'] = false;
-								$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
-							} // If R float already exists at this level
-							elseif (isset($this->floatmargins['R']['y1']) && $this->floatmargins['R']['y1'] > 0 && $fy < $this->floatmargins['R']['y1']) {
-								// Final check distance between floats is not now too narrow to fit text
-								$mw = 2 * $this->GetCharWidth('W', false);
-								if (($this->blk[$this->blklvl]['inner_width'] - $w - $this->floatmargins['R']['w']) < $mw) {
-									$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
-								} else {
-									$this->floatmargins['L']['x'] = $fx + $w;
-									$this->floatmargins['L']['w'] = $w;
-									$this->floatmargins['L']['y0'] = $fy;
-									$this->floatmargins['L']['y1'] = $fy + $h;
-									if ($skipln == 1) {
-										$this->floatmargins['L']['skipline'] = true;
-										$this->floatmargins['L']['id'] = count($this->floatbuffer) + 0;
-										$objattr['skipline'] = true;
-									}
-									$beside = $this->floatmargins['R']['w'];
-									$this->floatbuffer[] = $objattr;
-								}
 							} else {
-								$this->floatmargins['L']['x'] = $fx + $w;
-								$this->floatmargins['L']['w'] = $w;
-								$this->floatmargins['L']['y0'] = $fy;
-								$this->floatmargins['L']['y1'] = $fy + $h;
-								if ($skipln == 1) {
-									$this->floatmargins['L']['skipline'] = true;
-									$this->floatmargins['L']['id'] = count($this->floatbuffer) + 0;
-									$objattr['skipline'] = true;
-								}
-								$beside = 0;
-								$this->floatbuffer[] = $objattr;
+								$this->WriteFlowingBlock($vetor[0], $vetor[18]);  // mPDF 5.7.1
 							}
+						} else {
+							$this->bufferImageFloat($objattr, $fx, $fy, $skipln == 1);
+							$beside = 0;
 						}
 						if ($beside !== null) {
 							// For a float with no width around it, with the image floated to the other side beside it
