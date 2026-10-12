@@ -11354,7 +11354,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$fname = $this->marginBoxHeaderName($boxFooter, $footerSlot, $this->pageHTMLfooters);
 			}
 
-			// A rule that names no header or footer leaves the one set otherwise, taking back any an earlier page's rule put in its place
+			// A rule that names no header or footer leaves the one in force, or puts back the one an earlier page's rule replaced
 			foreach ([$headerSlot => $hname, $footerSlot => $fname] as $slot => $ruleName) {
 				if ($ruleName) {
 					$this->holdHeaderBeforePageRules($slot);
@@ -11364,26 +11364,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			}
 
-			if ($even) {
-
-				if ($hname) {
+			if ($hname) {
+				if ($even) {
 					$ehvalue = 1;
 					$ehname = $hname;
-				}
-
-				if ($fname) {
-					$efvalue = 1;
-					$efname = $fname;
-				}
-
-			} else {
-
-				if ($hname) {
+				} else {
 					$ohvalue = 1;
 					$ohname = $hname;
 				}
+			}
 
-				if ($fname) {
+			if ($fname) {
+				if ($even) {
+					$efvalue = 1;
+					$efname = $fname;
+				} else {
 					$ofvalue = 1;
 					$ofname = $fname;
 				}
@@ -11643,7 +11638,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function _setAutoHeaderHeight(&$htmlh)
 	{
 		/* When the setAutoTopMargin option is set to pad/stretch, only apply auto header height when a header exists */
-		if ($this->HTMLHeader === '' && $this->HTMLHeaderE === '') {
+		if (empty($this->HTMLHeader) && empty($this->HTMLHeaderE)) {
 			return;
 		}
 
@@ -11670,7 +11665,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function _setAutoFooterHeight(&$htmlf)
 	{
 		/* When the setAutoTopMargin option is set to pad/stretch, only apply auto footer height when a footer exists */
-		if ($this->HTMLFooter === '' && $this->HTMLFooterE === '') {
+		if (empty($this->HTMLFooter) && empty($this->HTMLFooterE)) {
 			return;
 		}
 
@@ -16568,7 +16563,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function holdHeaderBeforePageRules($slot)
 	{
-		if (!array_key_exists($slot, $this->headersBeforePageRules) || !$this->pageRuleHeaderInForce($slot)) {
+		if (!$this->pageRuleHeaderInForce($slot)) {
 			$this->headersBeforePageRules[$slot] = $this->$slot;
 		}
 	}
@@ -16582,10 +16577,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private function restoreHeaderBeforePageRules($slot)
 	{
-		if (!array_key_exists($slot, $this->headersBeforePageRules)) {
-			return false;
-		}
-
 		$restore = $this->pageRuleHeaderInForce($slot);
 		if ($restore) {
 			$this->$slot = $this->headersBeforePageRules[$slot];
