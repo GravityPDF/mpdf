@@ -13117,8 +13117,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$bak_x = $this->x;
 							$this->DivLn($divh, -3, false);
 							// Reset current block fill
-							$bcor = $this->blk[$this->blklvl]['bgcolorarray'];
-							$this->SetFColor($bcor);
+							if (isset($this->blk[$this->blklvl]['bgcolorarray'])) {
+								$this->SetFColor($this->blk[$this->blklvl]['bgcolorarray']);
+							}
 							$this->x = $bak_x;
 						}
 					}
@@ -23683,9 +23684,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									$this->DivLn($divh, -3, false);
 									$outerfilled = $this->y + $divh;
 									// Reset current block fill
-									$bcor = $this->blk[$this->blklvl]['bgcolorarray'];
-									if ($bcor) {
-										$this->SetFColor($bcor);
+									if (isset($this->blk[$this->blklvl]['bgcolorarray'])) {
+										$this->SetFColor($this->blk[$this->blklvl]['bgcolorarray']);
 									}
 									$this->x = $bak_x;
 									$this->y = $bak_y;
