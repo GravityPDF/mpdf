@@ -12,6 +12,7 @@ use Mpdf\Css\TextDecorations;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
+use Mpdf\OrphansWidows;
 use Mpdf\Shaper\OtlData;
 use Mpdf\Utils\Arrays;
 use Mpdf\Utils\UtfString;
@@ -383,7 +384,7 @@ abstract class BlockTag extends Tag
 			$blockstate = 0;
 		} // NO margins/padding
 
-		$this->mpdf->printbuffer($this->mpdf->textbuffer, $blockstate);
+		(new OrphansWidows($this->mpdf))->printBuffer($blockstate);
 		$this->mpdf->textbuffer = [];
 
 		$save_blklvl = $this->mpdf->blklvl;
@@ -1327,7 +1328,7 @@ abstract class BlockTag extends Tag
 			$this->mpdf->finishFlowingBlock(true); // true = END of flowing block
 			$this->mpdf->PaintDivBB('', $blockstate);
 		} else {
-			$this->mpdf->printbuffer($this->mpdf->textbuffer, $blockstate);
+			(new OrphansWidows($this->mpdf))->printBuffer($blockstate);
 		}
 
 

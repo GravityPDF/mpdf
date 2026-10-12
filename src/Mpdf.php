@@ -682,6 +682,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $tbrot_Links;
 
 	var $keep_block_together; // Keep a Block from page-break-inside: avoid
+
+	/**
+	 * @var \Mpdf\OrphansWidows|null Where a block's lines are kept to its orphans and widows while they are laid out
+	 */
+	var $orphansWidows;
 	var $kt_blank; // what the measuring pass of that block left blank at the foot of the pages it broke
 
 	var $tbrot_y0;
@@ -7542,9 +7547,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 
+		// A block's closing border and padding are no line of it
+		$isLine = !$is_table && (!$endofblock || $content);
+
 		// PAGEBREAK
-		if (!$is_table && ($this->y + $check_h) > ($this->PageBreakTrigger + $buff) and ! $this->InFooter and $this->AcceptPageBreak()) {
+		if (!$is_table && (($this->y + $check_h) > ($this->PageBreakTrigger + $buff) || ($isLine && $this->orphansWidowsBreak())) and ! $this->InFooter and $this->AcceptPageBreak()) {
 			$currentx += $this->turnPageKeepingPlace();
+		}
+		if ($isLine && $this->orphansWidows) {
+			$this->orphansWidows->placed($this->page);
 		}
 
 
@@ -9474,8 +9485,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					// PAGEBREAK
 					// 'If' below used in order to fix "first-line of other page with justify on" bug
-					if (!$is_table && ($this->y + $check_h) > $this->PageBreakTrigger and ! $this->InFooter and $this->AcceptPageBreak()) {
+					if (!$is_table && (($this->y + $check_h) > $this->PageBreakTrigger || $this->orphansWidowsBreak()) and ! $this->InFooter and $this->AcceptPageBreak()) {
 						$currentx += $this->turnPageKeepingPlace();
+					}
+					if (!$is_table && $this->orphansWidows) {
+						$this->orphansWidows->placed($this->page);
 					}
 
 					if ($this->kwt && !$is_table) { // mPDF 5.7+
@@ -19440,6 +19454,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$this->blk[$this->blklvl]['text_indent'] = $this->sizeConverter->convert($v, $this->blk[$prevlevel]['inner_width'], $this->FontSize, false) . 'mm';
 						break;
 
+					case 'ORPHANS':
+					case 'WIDOWS':
+						// A positive integer; OrphansWidows reads it under CssMode::STANDARD
+						if (ctype_digit(trim($v)) && (int) $v > 0) {
+							$this->blk[$this->blklvl][strtolower($k)] = (int) $v;
+						}
+						break;
+
 					case 'MARGIN-COLLAPSE': // Custom tag to collapse margins at top and bottom of page
 						if (strtoupper($v) == 'COLLAPSE') {
 							$this->blk[$this->blklvl]['margin_collapse'] = true;
@@ -28802,8 +28824,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * can only be computed by writing to the document. For example, {@see TableOfContents::insertTOC}
 	 * uses this functionality to determine the correct page numbers.
 	 *
-	 * Only scalar and array values are captured in the snapshot, plus the state of the Form and
-	 * TableOfContents objects, where a document registers its fields and contents entries.
+	 * Only scalar and array values are put back, plus the state of the Form and TableOfContents
+	 * objects, where a document registers its fields and contents entries.
 	 *
 	 * @return array<string, mixed>
 	 *
@@ -28816,6 +28838,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// The loader caches stay live: the pass being unwound only adds to them and the pass that follows needs every
 		// entry. So does the counter that numbers fonts alongside them, and the reference into one of them
 		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont']);
+
+		// blk[0] holds the page width by reference, so the snapshot would hold that reference rather than the width
+		unset($snapshot['pgwidth']);
+		$snapshot['pgwidth'] = $this->pgwidth;
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();

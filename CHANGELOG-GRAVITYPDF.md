@@ -81,6 +81,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **Stylesheet rules that name `sup`, `sub` or `center` apply**, in both CSS modes. mPDF left the three tags out of `allowedCSStags`, so `sup { color: red }`, `p sub { … }` and `center { … }` did nothing while a class rule on the same element worked. A rule's `font-size` and `vertical-align` take the place of the 55% size and the raise or drop mPDF gives the tags by default, rather than adding to them, so normalize.css's `sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline }` now draws them at 75% on the baseline. To keep ignoring such rules, pass an `allowedCSStags` without `SUP`, `SUB` and `CENTER`. [#649] [#680]
 * **`min-width` and `max-width` hold the width of a block**, as in a browser, in standard mode. mPDF never read them on a block, so `max-width: 100mm; margin: 0 auto`, the usual centred container, filled the page, `width: 150mm; max-width: 100mm` was 150mm wide, and `width: 50mm; min-width: 80mm` was 50mm. Now the width is held within the two, `max-width` first, then `min-width`, a percentage taken of the container's inner width as `width` is, and the block's auto margins, direction or float place the narrowed box. Floats and positioned blocks take the same limits. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to ignore the two properties as before. [#588] [#691]
   * `box-sizing` is not read, so the limits measure the content, and a block with padding and borders is wider by them. `min-width` and `max-width` on a table or cell are still not read.
+* **`orphans` and `widows` are read, and both default to 2**, as in a browser, in standard mode. A paragraph that breaks across a page leaves at least `orphans` lines at the foot of the page and carries at least `widows` onto the next, taking lines over or moving whole where no break does both. Both are inherited and read as positive integers. A paragraph that used to leave one line at the foot of a page, or carry one line alone onto the next, now moves lines so neither happens, and the pages after it can break differently. Each block laid out in standard mode costs a little more CPU time, about 3% on a long text document. Add `body { orphans: 1; widows: 1 }` to break where the page ends, as before, or set `'cssMode' => \Mpdf\CssMode::LEGACY`. Not in table cells or columns. [#605]
 
 New features
 ------------
@@ -173,6 +174,7 @@ Performance
 * **GD memory.** GD asks for less memory when it re-encodes an image. [#49]
 * **nth-child rules in tables.** Each row and cell looks up the nth-child rules the stylesheet uses by their keys, instead of running a regex over every rule. A 2,000-cell table under 1,000 rules is written in about 540 ms instead of 745 ms. Class combinations are built only up to the most classes one compound selector names, not one whole selector. [#526] [#580]
 * **Selector matching.** A chain of descendant combinators stops trying ancestors once none left can match, instead of trying every combination of them, and a general sibling combinator skips a tag the parent has no child of and looks from the first sibling. `.x div div div div div p` is matched on a path 50 deep in well under a millisecond instead of 4 seconds, and `h2 ~ p` against 5,000 paragraphs after an `<h2>` in 20 ms instead of 5 seconds. [#535] [#631]
+* **Look-aheads.** The document state that `page-break-inside: avoid`, the table of contents and `orphans` and `widows` save before laying a block out, so they can lay it out again, is copied in about 14 µs instead of 33 µs. [#605]
 
 Bugfixes
 --------
@@ -965,3 +967,4 @@ These changes do not change output.
 [#691]: https://github.com/GravityPDF/mpdf/pull/691
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
+[#605]: https://github.com/GravityPDF/mpdf/issues/605
