@@ -86,6 +86,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A positioned block's background, borders, shadow and content are stacked together: by `z-index`, then in document order, with `auto` and `0` together and above the page's content. A negative `z-index` puts the block under the page's content, over the page's background.
   * A `z-index` on a block that is not positioned still lifts it into a layer, an mPDF extension, and the positioned blocks stack among those layers by their own `z-index`. Inside a positioned block, a `z-index` opens no layer.
   * Positioned blocks are stacked without optional content, so they no longer add a "Layer" to the document's layers and stack in PDF/A-1 and PDF/X-1a too.
+  * A form field in a fixed block is one field with a widget on each page, so a value typed on one page shows on all of them, and the form exports it once. [#747]
 
 New features
 ------------
@@ -971,3 +972,4 @@ These changes do not change output.
 [#584]: https://github.com/GravityPDF/mpdf/issues/584
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
 [#601]: https://github.com/GravityPDF/mpdf/issues/601
+[#747]: https://github.com/GravityPDF/mpdf/issues/747

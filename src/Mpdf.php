@@ -408,7 +408,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $fixedPosBlockSave;
 	var $fixedPosBlockCascadeCSS; // Descendant rules of the positioned block being written, for its content to match
 	var $fixedPosBlockIsFixed; // Whether the positioned block being buffered is position: fixed rather than absolute
-	var $runningFixedBlocks; // position: fixed blocks drawn on every page, each with the first page not yet drawn on
+	var $runningFixedBlocks; // position: fixed blocks drawn on every page, each with the first page not yet drawn on and the fields its first drawing made
 	var $maxPosL;
 	var $maxPosR;
 	var $loaded;
@@ -15374,7 +15374,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		foreach ($this->fixedPosBlockSave as $block) {
 			if ($everyPage && $block[4]) {
-				$this->runningFixedBlocks[] = ['block' => $block, 'from' => $block[2]];
+				$this->runningFixedBlocks[] = ['block' => $block, 'from' => $block[2], 'fields' => null];
 				$this->drawRunningFixedBlock(count($this->runningFixedBlocks) - 1);
 			} else {
 				$this->drawPositionedBlock($block, $block[2]);
@@ -15402,7 +15402,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private function drawRunningFixedBlock($i)
 	{
 		for ($n = $this->runningFixedBlocks[$i]['from']; $n <= $this->page; $n++) {
+			$before = $this->form->forms;
 			$this->drawPositionedBlock($this->runningFixedBlocks[$i]['block'], $n);
+
+			// Each page's fields are widgets of the fields the block made on its first page
+			$fields = array_keys(array_diff_key($this->form->forms, $before));
+			if ($this->runningFixedBlocks[$i]['fields'] === null) {
+				$this->runningFixedBlocks[$i]['fields'] = $fields;
+			} else {
+				$this->form->repeatFields($this->runningFixedBlocks[$i]['fields'], $fields);
+			}
 		}
 
 		$this->runningFixedBlocks[$i]['from'] = $this->page + 1;
