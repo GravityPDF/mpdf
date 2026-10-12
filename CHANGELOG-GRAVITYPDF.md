@@ -85,6 +85,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
   * A float without a `width` took the whole width left on the line, so nothing flowed beside it. It is now as wide as the widest line, table or block of set width inside it, up to the width available, and the text after it flows beside it. A float whose text wraps still takes the whole width. The float is laid out twice to find that width, as a `page-break-inside: avoid` block is.
   * A float holding only a floated image, or only empty blocks, kept the whole width, and so did a float with a forced page break inside it. A floated image now counts as content, and so does an image floated right beside a line of text; empty blocks leave the float as narrow as its padding; a float with `page-break-before: always` inside it is measured on both pages. A float of set width inside it counts with its `margin-left` or `margin-right`, and the text inside a block of set width no longer widens the float past that block. [#705]
   * Every ancestor of a float grew to the float's bottom, and whatever followed the ancestor went below the float. Now only the body, a float, a positioned block, and a block with `overflow` other than `visible` or with `display: flow-root` contain their floats. A float sticks out of any other parent, and the blocks after that parent flow beside it. A `<div style="clear: both"></div>` at the end of the parent still makes it contain the float, as a clearfix does, and a `clear` inside a block that starts a block formatting context no longer moves below the floats outside it.
+* **A floated image too wide to sit beside a float on the other side goes below it**, as in a browser, under the standard `cssMode`. mPDF wrote it into the line as an inline image, squeezed into the room left beside the first float. It now keeps its size and floats against its own side, its top at the bottom of the first float, and the text runs beside the first float and then beside it. If it would run past the bottom of the page there, it is still written inline. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep writing it inline. [#552] [#739]
 
 New features
 ------------
@@ -290,6 +291,7 @@ Bugfixes
 * An RGB image converted to CMYK truncated its inks, so full ink fell short of 255. [#349] [#354]
 * An image's `/SMask` pointed at whichever object came before it, which is only its mask if nothing was added in between. An image and its soft mask are now registered together. [#373]
 * A `<textcircle>` with no `font-size` from its tag or the CSS raised three `Undefined array key "fontsize"` warnings. It is now drawn at the size of the text around it, as though that size were set on it. [#645] [#678]
+* A left and a right floated image too wide to sit side by side raised `Undefined array key "y1"` warnings for every line after them, in both CSS modes. [#739]
 
 ### Forms
 
@@ -972,3 +974,4 @@ These changes do not change output.
 [#590]: https://github.com/GravityPDF/mpdf/issues/590
 [#696]: https://github.com/GravityPDF/mpdf/pull/696
 [#705]: https://github.com/GravityPDF/mpdf/issues/705
+[#739]: https://github.com/GravityPDF/mpdf/issues/739
