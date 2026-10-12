@@ -5,12 +5,13 @@ namespace Mpdf;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
- * An overline is drawn as thick as the font's underline, as an underline is, and at the size a table shrunk to fit
- * draws its text at
+ * An overline takes the font's underline thickness, so it matches the underline on the same text, and a table shrunk
+ * to fit thins it with its text
  */
 class OverlineThicknessTest extends TestCase
 {
 
+	use DrawnStyles;
 	use PageStreams;
 
 	/**
@@ -21,7 +22,7 @@ class OverlineThicknessTest extends TestCase
 	public function modesAndFonts()
 	{
 		$cases = [];
-		foreach ([CssMode::STANDARD, CssMode::LEGACY] as $mode) {
+		foreach (array_keys($this->modes()) as $mode) {
 			$cases[$mode . ', DejaVu Serif Condensed'] = [$mode, ['mode' => '', 'default_font' => 'dejavuserifcondensed'], 1.76];
 			$cases[$mode . ', core Times'] = [$mode, ['mode' => 'c', 'default_font' => 'times'], 2.0];
 		}
@@ -30,8 +31,7 @@ class OverlineThicknessTest extends TestCase
 	}
 
 	/**
-	 * 40pt text with an overline draws it at the font's underline thickness, the same width as its underline, in
-	 * either CSS mode
+	 * At 40pt an overline and an underline are both drawn at the font's underline thickness, in either CSS mode
 	 *
 	 * @dataProvider modesAndFonts
 	 *
@@ -41,14 +41,16 @@ class OverlineThicknessTest extends TestCase
 	 */
 	public function testAnOverlineIsAsThickAsTheFontsUnderline($mode, array $font, $points)
 	{
-		$config = $font + ['cssMode' => $mode];
+		$widths = $this->lineWidths(
+			'<p style="font-size: 40pt; text-decoration: overline">Decorated</p><p style="font-size: 40pt; text-decoration: underline">Decorated</p>',
+			$font + ['cssMode' => $mode]
+		);
 
-		$this->assertSame([$points], $this->lineWidths('<p style="font-size: 40pt; text-decoration: overline">Decorated</p>', $config));
-		$this->assertSame([$points], $this->lineWidths('<p style="font-size: 40pt; text-decoration: underline">Decorated</p>', $config));
+		$this->assertSame([$points, $points], $widths);
 	}
 
 	/**
-	 * In a table shrunk to fit its width, the overline is thinned with the text, as the underline beside it is
+	 * In a table shrunk to fit, the overline is thinned with the text to the width of the underline beside it
 	 *
 	 * @dataProvider modes
 	 *
@@ -64,16 +66,6 @@ class OverlineThicknessTest extends TestCase
 		$this->assertCount(2, $widths);
 		$this->assertLessThan(1.76, $widths[0]);
 		$this->assertSame($widths[0], $widths[1]);
-	}
-
-	/**
-	 * Each CSS mode
-	 *
-	 * @return array[]
-	 */
-	public function modes()
-	{
-		return [CssMode::STANDARD => [CssMode::STANDARD], CssMode::LEGACY => [CssMode::LEGACY]];
 	}
 
 	/**
