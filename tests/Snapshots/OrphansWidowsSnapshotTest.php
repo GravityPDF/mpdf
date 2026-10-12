@@ -26,18 +26,18 @@ class OrphansWidowsSnapshotTest extends Snapshot
 
 	/**
 	 * Each case: the paragraph's style, its number of lines, the height of the box above it, which sets how many of its
-	 * lines fit the first page without either property, and the caption
+	 * lines would fit the first page before any move, and the caption
 	 *
 	 * @return array[]
 	 */
 	protected function cases()
 	{
 		return [
-			['', 3, 252, 'Neither property set: two lines of the blue paragraph at the foot of this page, and Line 3 of 3 alone at the top of the next, as mPDF has always broken it.'],
-			['orphans: 2; widows: 2', 3, 252, 'orphans: 2; widows: 2. Two lines fit here, which would carry the last over alone: none of the blue paragraph is on this page, and all three lines are at the top of the next.'],
+			['', 3, 252, 'Neither property set, so both are 2. Two lines fit here, which would carry the last over alone: none of the blue paragraph is on this page, and all three lines are at the top of the next.'],
+			['orphans: 1; widows: 1', 3, 252, 'orphans: 1; widows: 1: two lines of the blue paragraph at the foot of this page, and Line 3 of 3 alone at the top of the next, as mPDF broke it before.'],
 			['orphans: 2; widows: 2', 3, 257, 'orphans: 2; widows: 2. One line fits here: none of the blue paragraph is on this page, and all three lines are at the top of the next.'],
 			['orphans: 3; widows: 3', 6, 237, 'orphans: 3; widows: 3. Five lines fit here, which would carry Line 6 over alone: Lines 1 to 3 of 6 are at the foot of this page, and Lines 4 to 6 at the top of the next.'],
-			['widows: 3', 4, 252, 'widows: 3 alone. Two lines fit here: Line 1 of 4 alone is at the foot of this page, as orphans is 1, and Lines 2 to 4 at the top of the next.'],
+			['orphans: 1; widows: 3', 4, 252, 'orphans: 1; widows: 3. Two lines fit here: Line 1 of 4 alone is at the foot of this page, and Lines 2 to 4 at the top of the next.'],
 		];
 	}
 

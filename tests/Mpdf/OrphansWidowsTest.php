@@ -28,7 +28,7 @@ class OrphansWidowsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Two lines on page 1 and the last alone on page 2, or the first alone on page 1, with both properties at 2 or 3
+	 * Two lines on page 1 and the last alone on page 2, or the first alone on page 1, with both at 2, set or by default, or at 3
 	 *
 	 * @return array[]
 	 */
@@ -36,17 +36,18 @@ class OrphansWidowsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		return [
 			'last line alone, 2' => [51, 'orphans: 2; widows: 2'],
+			'last line alone, neither set' => [51, ''],
 			'first line alone, 2' => [52, 'orphans: 2; widows: 2'],
 			'first line alone, 3' => [52, 'orphans: 3; widows: 3'],
 		];
 	}
 
 	/**
-	 * Without either property the paragraph breaks where the page ends, as before, and is laid out once
+	 * Both at 1 break the paragraph where the page ends, and it is laid out once
 	 */
-	public function testAParagraphBreaksWhereThePageEndsWithoutEitherProperty()
+	public function testBothAtOneBreakWhereThePageEnds()
 	{
-		$mpdf = $this->write($this->fillers(51) . $this->paragraph(3));
+		$mpdf = $this->write($this->fillers(51) . $this->paragraph(3, 'orphans: 1; widows: 1'));
 
 		$this->assertSame([1, 1, 2], $this->linePages($mpdf));
 		$this->assertSame(0, $mpdf->unwinds);
@@ -142,11 +143,11 @@ class OrphansWidowsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * widows alone may leave a single line behind, as orphans keeps its initial value of 1
+	 * widows may leave a single line behind where orphans is 1
 	 */
-	public function testWidowsAloneMayLeaveOneLineBehind()
+	public function testWidowsMayLeaveOneLineBehindWhereOrphansIsOne()
 	{
-		$mpdf = $this->write($this->fillers(51) . $this->paragraph(4, 'widows: 3'));
+		$mpdf = $this->write($this->fillers(51) . $this->paragraph(4, 'orphans: 1; widows: 3'));
 
 		$this->assertSame([1, 2, 2, 2], $this->linePages($mpdf));
 	}
@@ -162,7 +163,7 @@ class OrphansWidowsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A value that is not a positive integer is ignored
+	 * A value that is not a positive integer is ignored, leaving both at 2
 	 *
 	 * @dataProvider invalidProvider
 	 *
@@ -172,8 +173,8 @@ class OrphansWidowsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$mpdf = $this->write($this->fillers(51) . $this->paragraph(3, 'orphans: ' . $value . '; widows: ' . $value));
 
-		$this->assertSame([1, 1, 2], $this->linePages($mpdf));
-		$this->assertSame(0, $mpdf->unwinds);
+		$this->assertSame([2, 2, 2], $this->linePages($mpdf));
+		$this->assertSame(1, $mpdf->unwinds);
 	}
 
 	/**
@@ -240,7 +241,7 @@ class OrphansWidowsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testTheTextBeforeANestedBlockOrTableKeepsToItsWidows($after)
 	{
-		$mpdf = $this->write($this->fillers(51) . '<div style="margin: 0; width: 25mm; widows: 2">' . $this->lines(3) . $after . '</div>');
+		$mpdf = $this->write($this->fillers(51) . '<div style="margin: 0; width: 25mm; orphans: 1; widows: 2">' . $this->lines(3) . $after . '</div>');
 
 		$this->assertSame([1, 2, 2], array_slice($this->linePages($mpdf), 0, 3));
 	}

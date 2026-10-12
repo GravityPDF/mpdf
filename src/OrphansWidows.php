@@ -20,10 +20,9 @@ class OrphansWidows
 {
 
 	/**
-	 * What both properties are where no stylesheet sets them: mPDF's own breaks, not CSS's initial value of 2, which
-	 * would move lines in most documents that run over a page and lay out every block twice over to check them
+	 * What both properties are where no stylesheet sets them, as in CSS
 	 */
-	const INITIAL = 1;
+	const INITIAL = 2;
 
 	/**
 	 * The most times one block's lines are laid out: once to measure them, once with a fresh page at the first line
