@@ -269,8 +269,12 @@ final class BaseWriter
 			} elseif ($this->mpdf->tableLevel > 0 && preg_match('/\d+\.\d\d+ \d+\.\d\d+ \d+\.\d\d+ ([\-]{0,1}\d+\.\d\d+) re/', $s, $m)) { // Rect in table
 
 				$h = ($m[1] / Mpdf::SCALE);
-				// Update/overwrite the lowest bottom of printing y value for a column
-				$this->mpdf->ColDetails[$this->mpdf->CurrCol]['bottom_margin'] = max($this->mpdf->ColDetails[$this->mpdf->CurrCol]['bottom_margin'], $this->mpdf->y + $h);
+				$bottom = $this->mpdf->y + $h;
+				// A table background can be the first thing drawn in a column, before it has a bottom to compare with
+				if (isset($this->mpdf->ColDetails[$this->mpdf->CurrCol]['bottom_margin'])) {
+					$bottom = max($this->mpdf->ColDetails[$this->mpdf->CurrCol]['bottom_margin'], $bottom);
+				}
+				$this->mpdf->ColDetails[$this->mpdf->CurrCol]['bottom_margin'] = $bottom;
 
 			} elseif (isset($this->mpdf->ColDetails[$this->mpdf->CurrCol]['bottom_margin'])) {
 
