@@ -513,6 +513,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $pageRuleHeaders = [];
 
 	/**
+	 * @var array The header or footer an @page rule replaced, by the property that holds it, to restore on a page whose
+	 *            rules name none
+	 */
+	var $headersBeforePageRules = [];
+
+	/**
 	 * @var \Mpdf\Css\PageMarginBoxes|null Draws the @page margin boxes as headers and footers
 	 */
 	var $pageMarginBoxes;
@@ -11341,21 +11347,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$headerSlot = $even ? 'HTMLHeaderE' : 'HTMLHeader';
 			$footerSlot = $even ? 'HTMLFooterE' : 'HTMLFooter';
 
-			$keepHeader = $keepFooter = false;
 			if ($boxHeader) {
 				$hname = $this->marginBoxHeaderName($boxHeader, $headerSlot, $this->pageHTMLheaders);
-				$keepHeader = $hname === '';
 			}
 			if ($boxFooter) {
 				$fname = $this->marginBoxHeaderName($boxFooter, $footerSlot, $this->pageHTMLfooters);
-				$keepFooter = $fname === '';
 			}
 
-			if (!$keepHeader) {
-				$pageRuleSlots[] = $headerSlot;
-			}
-			if (!$keepFooter) {
-				$pageRuleSlots[] = $footerSlot;
+			// A rule that names no header or footer leaves the one set otherwise, taking back any an earlier page's rule put in its place
+			foreach ([$headerSlot => $hname, $footerSlot => $fname] as $slot => $ruleName) {
+				if ($ruleName) {
+					$this->holdHeaderBeforePageRules($slot);
+					$pageRuleSlots[] = $slot;
+				} elseif ($this->restoreHeaderBeforePageRules($slot)) {
+					$resetHTMLHeadersrequired = true;
+				}
 			}
 
 			if ($even) {
@@ -11363,15 +11369,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if ($hname) {
 					$ehvalue = 1;
 					$ehname = $hname;
-				} elseif (!$keepHeader) {
-					$ehvalue = -1;
 				}
 
 				if ($fname) {
 					$efvalue = 1;
 					$efname = $fname;
-				} elseif (!$keepFooter) {
-					$efvalue = -1;
 				}
 
 			} else {
@@ -11379,15 +11381,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if ($hname) {
 					$ohvalue = 1;
 					$ohname = $hname;
-				} elseif (!$keepHeader) {
-					$ohvalue = -1;
 				}
 
 				if ($fname) {
 					$ofvalue = 1;
 					$ofname = $fname;
-				} elseif (!$keepFooter) {
-					$ofvalue = -1;
 				}
 			}
 
@@ -16532,8 +16530,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private function marginBoxHeaderName($html, $slot, array &$defined)
 	{
 		$current = $this->$slot;
-		$pageRules = isset($this->pageRuleHeaders[$slot]) ? $this->pageRuleHeaders[$slot] : '';
-		if (is_array($current) && !empty($current['html']) && $current['html'] !== $pageRules) {
+		if (is_array($current) && !empty($current['html']) && !$this->pageRuleHeaderInForce($slot)) {
 			return '';
 		}
 
@@ -16543,6 +16540,59 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return $name;
+	}
+
+	/**
+	 * Whether the header or footer in force is the one the @page rules put there, rather than one set since with
+	 * SetHTMLHeader(), <sethtmlpageheader> or the like
+	 *
+	 * @param string $slot The property that holds it, such as HTMLHeaderE
+	 *
+	 * @return bool
+	 */
+	private function pageRuleHeaderInForce($slot)
+	{
+		if (!isset($this->pageRuleHeaders[$slot])) {
+			return false;
+		}
+
+		$current = $this->$slot;
+
+		return (is_array($current) ? $current['html'] : '') === $this->pageRuleHeaders[$slot];
+	}
+
+	/**
+	 * Keep the header or footer an @page rule is about to replace, unless it is one an earlier rule put there
+	 *
+	 * @param string $slot The property that holds it, such as HTMLHeaderE
+	 */
+	private function holdHeaderBeforePageRules($slot)
+	{
+		if (!array_key_exists($slot, $this->headersBeforePageRules) || !$this->pageRuleHeaderInForce($slot)) {
+			$this->headersBeforePageRules[$slot] = $this->$slot;
+		}
+	}
+
+	/**
+	 * Put back the header or footer an @page rule replaced, unless it has been set again since
+	 *
+	 * @param string $slot The property that holds it, such as HTMLHeaderE
+	 *
+	 * @return bool Whether it was put back
+	 */
+	private function restoreHeaderBeforePageRules($slot)
+	{
+		if (!array_key_exists($slot, $this->headersBeforePageRules)) {
+			return false;
+		}
+
+		$restore = $this->pageRuleHeaderInForce($slot);
+		if ($restore) {
+			$this->$slot = $this->headersBeforePageRules[$slot];
+		}
+		unset($this->headersBeforePageRules[$slot], $this->pageRuleHeaders[$slot]);
+
+		return $restore;
 	}
 
 	/* -- END CSS-PAGE -- */
