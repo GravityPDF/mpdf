@@ -15438,6 +15438,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 			$css = '';
 			foreach (InheritedProperties::of($p, $carried) as $property => $value) {
+				// N, mPDF's own normal, is not CSS. The legacy mode has always drawn it here at the fixed normal
+				if ($property === 'LINE-HEIGHT' && $value === 'N') {
+					$value = (string) $this->normalLineheight;
+				}
 				$css .= strtolower($property) . ': ' . strtolower($value) . '; ';
 			}
 			// The inner HTML is written as a document of its own, in which this <div> stands in for the positioned block

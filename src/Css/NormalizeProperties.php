@@ -68,6 +68,26 @@ class NormalizeProperties
 	const FONT_SHORTHAND = '/^((?:(?:normal|italic|oblique|small-caps|bold|bolder|lighter|\d+|[a-z-]*condensed|[a-z-]*expanded)\s+)*)(\S+?)(?:\/(\S+))?\s+(\S.*)$/s';
 
 	/**
+	 * The keywords width, height, min-width and min-height take
+	 */
+	const SIZES = ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'];
+
+	/**
+	 * The keywords max-width and max-height take
+	 */
+	const MAX_SIZES = ['none', 'min-content', 'max-content', 'fit-content', 'stretch'];
+
+	/**
+	 * border-style and its longhands, whose keywords are the border styles
+	 */
+	const BORDER_STYLE_PROPERTY = '/^BORDER(-(TOP|RIGHT|BOTTOM|LEFT))?-STYLE$/';
+
+	/**
+	 * The keywords a border width takes
+	 */
+	const BORDER_WIDTHS = ['thin', 'medium', 'thick'];
+
+	/**
 	 * @var array
 	 */
 	private $properties = [];
@@ -108,32 +128,24 @@ class NormalizeProperties
 	private static $lengthKeywords = [
 		'MARGIN' => ['auto'], 'MARGIN-TOP' => ['auto'], 'MARGIN-RIGHT' => ['auto'], 'MARGIN-BOTTOM' => ['auto'],
 		'MARGIN-LEFT' => ['auto'],
-		'WIDTH' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
-		'HEIGHT' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
-		'MIN-WIDTH' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
-		'MIN-HEIGHT' => ['auto', 'min-content', 'max-content', 'fit-content', 'stretch'],
-		'MAX-WIDTH' => ['none', 'min-content', 'max-content', 'fit-content', 'stretch'],
-		'MAX-HEIGHT' => ['none', 'min-content', 'max-content', 'fit-content', 'stretch'],
+		'WIDTH' => self::SIZES, 'HEIGHT' => self::SIZES, 'MIN-WIDTH' => self::SIZES, 'MIN-HEIGHT' => self::SIZES,
+		'MAX-WIDTH' => self::MAX_SIZES, 'MAX-HEIGHT' => self::MAX_SIZES,
 		'TOP' => ['auto'], 'RIGHT' => ['auto'], 'BOTTOM' => ['auto'], 'LEFT' => ['auto'],
-		// auto sizes the text of a form field to fit it
-		'FONT-SIZE' => [
-			'xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large', 'xxx-large', 'larger', 'smaller',
-			'math', 'auto',
-		],
-		// n is mPDF's own normal, as the legacy mode hands it on to the content of a positioned block
-		'LINE-HEIGHT' => ['normal', 'n'],
+		// auto sizes the text of a form field to fit it. The size names come from the fontsizes configuration
+		'FONT-SIZE' => ['auto', 'larger', 'smaller'],
+		'LINE-HEIGHT' => ['normal'],
 		'TEXT-INDENT' => ['hanging', 'each-line'],
 		'LETTER-SPACING' => ['normal'],
 		'WORD-SPACING' => ['normal'],
-		'BORDER-WIDTH' => ['thin', 'medium', 'thick'], 'BORDER-TOP-WIDTH' => ['thin', 'medium', 'thick'],
-		'BORDER-RIGHT-WIDTH' => ['thin', 'medium', 'thick'], 'BORDER-BOTTOM-WIDTH' => ['thin', 'medium', 'thick'],
-		'BORDER-LEFT-WIDTH' => ['thin', 'medium', 'thick'],
+		'BORDER-WIDTH' => self::BORDER_WIDTHS, 'BORDER-TOP-WIDTH' => self::BORDER_WIDTHS,
+		'BORDER-RIGHT-WIDTH' => self::BORDER_WIDTHS, 'BORDER-BOTTOM-WIDTH' => self::BORDER_WIDTHS,
+		'BORDER-LEFT-WIDTH' => self::BORDER_WIDTHS,
 	];
 
 	/**
 	 * Properties whose value is made of keywords only, with the keywords each takes in CSS or in mPDF (visibility:
 	 * printonly, overflow: wrap). A property that takes several keywords at once, such as display: inline flow-root,
-	 * is not checked for their order. The border styles mPDF draws are added from Mpdf::$borderstyles
+	 * is not checked for their order. border-style and its longhands are checked against the border styles instead
 	 *
 	 * @var string[][]
 	 */
@@ -165,21 +177,6 @@ class NormalizeProperties
 		'PAGE-BREAK-BEFORE' => ['auto', 'always', 'avoid', 'left', 'right', 'recto', 'verso'],
 		'PAGE-BREAK-AFTER' => ['auto', 'always', 'avoid', 'left', 'right', 'recto', 'verso'],
 		'PAGE-BREAK-INSIDE' => ['auto', 'avoid'],
-		'BORDER-STYLE' => ['none', 'hidden'],
-		'BORDER-TOP-STYLE' => ['none', 'hidden'],
-		'BORDER-RIGHT-STYLE' => ['none', 'hidden'],
-		'BORDER-BOTTOM-STYLE' => ['none', 'hidden'],
-		'BORDER-LEFT-STYLE' => ['none', 'hidden'],
-	];
-
-	/**
-	 * The keywords of the background shorthand that are not colours
-	 *
-	 * @var string[]
-	 */
-	private static $backgroundKeywords = [
-		'none', 'repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round', 'scroll', 'fixed', 'local', 'left',
-		'right', 'top', 'bottom', 'center', 'auto', 'cover', 'contain', 'border-box', 'padding-box', 'content-box', 'text',
 	];
 
 	/**
@@ -402,8 +399,8 @@ class NormalizeProperties
 				|| $this->colorConverter->isColor($value);
 		}
 
-		// Read in either mode as before: CssMerger resolves them in standard mode
-		if (in_array($value, self::CSS_WIDE_KEYWORDS, true) || $value === 'revert-layer') {
+		// CssMerger resolves them in the standard mode; the legacy mode reads them as mPDF v7 did
+		if (CssWideKeywords::keywordOf($value) !== null) {
 			return true;
 		}
 
@@ -417,9 +414,9 @@ class NormalizeProperties
 			return true;
 		}
 
-		if (isset(self::$keywordProperties[$property])) {
+		if (isset(self::$keywordProperties[$property]) || preg_match(self::BORDER_STYLE_PROPERTY, $property)) {
 			foreach ($this->splitComponents($value) as $part) {
-				if (!in_array($part, self::$keywordProperties[$property], true) && !$this->isKeywordPropertyPart($property, $part)) {
+				if (!$this->isKeywordPropertyPart($property, $part)) {
 					return false;
 				}
 			}
@@ -441,10 +438,13 @@ class NormalizeProperties
 				return $this->parseBorderParts($this->splitComponents($value)) !== false;
 
 			case 'BACKGROUND':
-				return $this->isBackground($value);
+				return $this->parseCssBackground($value) !== false;
 
 			case 'FONT':
-				return $this->isFont($value);
+				$font = $this->matchFontShorthand($value);
+
+				return $font !== false && $this->canParse('FONT-SIZE', $font[2])
+					&& ($font[3] === '' || $this->canParse('LINE-HEIGHT', $font[3]));
 		}
 
 		return true;
@@ -464,12 +464,11 @@ class NormalizeProperties
 			return true;
 		}
 
-		// The size names a document may add through the fontsizes configuration
 		return $property === 'FONT-SIZE' && isset($this->mpdf->fontsizes[strtoupper($part)]);
 	}
 
 	/**
-	 * Whether a word of a keyword property's value is one of the values that property takes besides its keywords
+	 * Whether a word of a keyword property's value is one of the values that property takes
 	 *
 	 * @param string $property The property name, uppercased
 	 * @param string $part A word of the value, lowercased
@@ -478,6 +477,10 @@ class NormalizeProperties
 	 */
 	private function isKeywordPropertyPart($property, $part)
 	{
+		if (isset(self::$keywordProperties[$property]) && in_array($part, self::$keywordProperties[$property], true)) {
+			return true;
+		}
+
 		switch ($property) {
 			case 'TEXT-ALIGN':
 				// The character a table cell's numbers are aligned on, such as "."
@@ -492,53 +495,34 @@ class NormalizeProperties
 
 			case 'VERTICAL-ALIGN':
 				return $this->sizeConverter->isLength($part);
-
-			case 'BORDER-STYLE':
-			case 'BORDER-TOP-STYLE':
-			case 'BORDER-RIGHT-STYLE':
-			case 'BORDER-BOTTOM-STYLE':
-			case 'BORDER-LEFT-STYLE':
-				return in_array($part, $this->mpdf->borderstyles, true);
 		}
 
-		return false;
+		return preg_match(self::BORDER_STYLE_PROPERTY, $property) && $this->isBorderStyle($part);
 	}
 
 	/**
-	 * Whether each word of a background shorthand is a background keyword, a length or a colour. Images, gradients
-	 * and colours written as functions are not looked into
+	 * Whether a word is none, hidden or a border style mPDF draws
 	 *
-	 * @param string $value Lowercased
+	 * @param string $part A word of a value, lowercased
 	 *
 	 * @return bool
 	 */
-	private function isBackground($value)
+	private function isBorderStyle($part)
 	{
-		$words = preg_replace('/"[^"]*"|\'[^\']*\'|[\w-]*(\((?:[^()]++|(?1))*+\))/', ' ', $value);
-
-		foreach (preg_split('/[\s,\/]+/', $words, -1, PREG_SPLIT_NO_EMPTY) as $part) {
-			if (!in_array($part, self::$backgroundKeywords, true) && !$this->sizeConverter->isLength($part) && !$this->isColorComponent($part)) {
-				return false;
-			}
-		}
-
-		return true;
+		return $part === 'none' || $part === 'hidden' || in_array($part, $this->mpdf->borderstyles, true);
 	}
 
 	/**
-	 * Whether a font shorthand has a size and a family, with a size and a line height each property takes
+	 * Matches a font shorthand against FONT_SHORTHAND
 	 *
-	 * @param string $value Lowercased
+	 * @param string $value
 	 *
-	 * @return bool
+	 * @return string[]|false The keywords, size, line height ('' if none) and family list at 1 to 4, or false when the
+	 *                        value has no size and family
 	 */
-	private function isFont($value)
+	private function matchFontShorthand($value)
 	{
-		if (!preg_match(self::FONT_SHORTHAND, preg_replace('/\s*\/\s*/', '/', $value), $m)) {
-			return false;
-		}
-
-		return $this->canParse('FONT-SIZE', $m[2]) && ($m[3] === '' || $this->canParse('LINE-HEIGHT', $m[3]));
+		return preg_match(self::FONT_SHORTHAND, preg_replace('/\s*\/\s*/', '/', trim($value)), $m) ? $m : false;
 	}
 
 	/**
@@ -556,8 +540,8 @@ class NormalizeProperties
 	{
 		// The size, with any /line-height, is the first word that is not a style, variant, weight or stretch keyword,
 		// and everything after it is the family list
-		$value = preg_replace('/\s*\/\s*/', '/', trim($value));
-		if (!preg_match(self::FONT_SHORTHAND, $value, $m)) {
+		$m = $this->matchFontShorthand($value);
+		if ($m === false) {
 			return;
 		}
 
@@ -1211,7 +1195,7 @@ class NormalizeProperties
 		}
 
 		foreach ($prop as $part) {
-			if (in_array($part, $this->mpdf->borderstyles, true) || $part === 'none' || $part === 'hidden') {
+			if ($this->isBorderStyle($part)) {
 				$kind = 's';
 			} elseif (preg_match('/^(thin|medium|thick|' . self::NUMBER . '[a-z]*)$/', $part)) {
 				$kind = 'w';
