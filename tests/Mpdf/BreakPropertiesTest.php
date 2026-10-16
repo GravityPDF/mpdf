@@ -117,14 +117,7 @@ class BreakPropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf = new TextRecordingMpdf($config);
 		$mpdf->WriteHTML($html);
 
-		$pages = [];
-		foreach ($mpdf->drawnText as $i => $text) {
-			if (preg_match('/^M[A-Z]$/', trim($text))) {
-				$pages[trim($text)] = $mpdf->drawnBoxes[$i][0];
-			}
-		}
-
-		return $pages;
+		return array_map('max', $mpdf->drawnPages('/^M[A-Z]$/'));
 	}
 
 }
