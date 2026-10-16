@@ -179,6 +179,13 @@ class Svg
 	 */
 	private $parseError = '';
 
+	/**
+	 * One entry per open <svg>: null for the outermost, and for a nested one the size of the viewport around it
+	 *
+	 * @var array
+	 */
+	private $viewports = [];
+
 	public function __construct(
 		Mpdf $mpdf,
 		Otl $otl,
@@ -323,34 +330,8 @@ class Svg
 					$img_w = $img_h * $info['w'] / $info['h'];
 				}
 			}
-			if ($ar[0] == 'xminymin') {
-				// do nothing to x
-				// do nothing to y
-			} elseif ($ar[0] == 'xmidymin') {
-				$img_x += $w / 2 - $img_w / 2; // xMid
-				// do nothing to y
-			} elseif ($ar[0] == 'xmaxymin') {
-				$img_x += $w - $img_w; // xMax
-				// do nothing to y
-			} elseif ($ar[0] == 'xminymid') {
-				// do nothing to x
-				$img_y += $h / 2 - $img_h / 2; // yMid
-			} elseif ($ar[0] == 'xmaxymid') {
-				$img_x += $w - $img_w; // xMax
-				$img_y += $h / 2 - $img_h / 2; // yMid
-			} elseif ($ar[0] == 'xminymax') {
-				// do nothing to x
-				$img_y += $h - $img_h; // yMax
-			} elseif ($ar[0] == 'xmidymax') {
-				$img_x += $w / 2 - $img_w / 2; // xMid
-				$img_y += $h - $img_h; // yMax
-			} elseif ($ar[0] == 'xmaxymax') {
-				$img_x += $w - $img_w; // xMax
-				$img_y += $h - $img_h; // yMax
-			} else { // xMidYMid (the default)
-				$img_x += $w / 2 - $img_w / 2; // xMid
-				$img_y += $h / 2 - $img_h / 2; // yMid
-			}
+			$img_x += $this->viewBoxAlignment($ar[0], 'x', $w - $img_w);
+			$img_y += $this->viewBoxAlignment($ar[0], 'y', $h - $img_h);
 		}
 
 		// Output
@@ -1113,6 +1094,81 @@ class Svg
 
 
 		return ['x' => $x2, 'y' => $y2];
+	}
+
+	/**
+	 * Start the viewport a nested <svg> sets up: moved by x and y, clipped to its width and height unless its
+	 * overflow is visible, with its viewBox fitted into it as preserveAspectRatio says. The size of the viewport
+	 * around it is kept, for percentages, until the matching </svg>
+	 *
+	 * @param array $attribs
+	 */
+	private function openViewport($attribs)
+	{
+		$this->viewports[] = ['w' => $this->svg_info['w'], 'h' => $this->svg_info['h']];
+
+		$x = $this->ConvertSVGSizePixels(Arrays::get($attribs, 'x', 0), 'x');
+		$y = $this->ConvertSVGSizePixels(Arrays::get($attribs, 'y', 0), 'y');
+		$w = $this->ConvertSVGSizePixels(Arrays::get($attribs, 'width', '100%'), 'x');
+		$h = $this->ConvertSVGSizePixels(Arrays::get($attribs, 'height', '100%'), 'y');
+
+		$s = sprintf(' q 1 0 0 1 %.3F %.3F cm ', $x * $this->kp, -$y * $this->kp);
+
+		$overflow = strtolower(trim(Arrays::get($attribs, 'overflow', 'hidden')));
+		if ($w <= 0 || $h <= 0 || ($overflow !== 'visible' && $overflow !== 'auto')) {
+			$s .= sprintf('0 0 %.3F %.3F re W n ', max($w, 0) * $this->kp, -max($h, 0) * $this->kp);
+		}
+
+		$this->svg_info['w'] = $w;
+		$this->svg_info['h'] = $h;
+
+		$vb = preg_split('/[\s,]+/', trim(Arrays::get($attribs, 'viewBox', '')));
+		if (count($vb) === 4 && $vb[2] > 0 && $vb[3] > 0 && $w > 0 && $h > 0) {
+			$sx = $w / $vb[2];
+			$sy = $h / $vb[3];
+			$tx = 0;
+			$ty = 0;
+
+			$par = preg_split('/\s+/', strtolower(trim(Arrays::get($attribs, 'preserveAspectRatio', ''))));
+			if ($par[0] !== 'none') {
+				$sx = $sy = isset($par[1]) && $par[1] === 'slice' ? max($sx, $sy) : min($sx, $sy);
+				$tx = $this->viewBoxAlignment($par[0], 'x', $w - $vb[2] * $sx);
+				$ty = $this->viewBoxAlignment($par[0], 'y', $h - $vb[3] * $sy);
+			}
+
+			$s .= sprintf('%.5F 0 0 %.5F %.3F %.3F cm ', $sx, $sy, ($tx - $vb[0] * $sx) * $this->kp, -($ty - $vb[1] * $sy) * $this->kp);
+
+			$this->svg_info['w'] = $vb[2];
+			$this->svg_info['h'] = $vb[3];
+		}
+
+		$this->svgWriteString($s);
+
+		array_push($this->svg_style, $this->svgDefineStyle($attribs));
+		$this->svgDefineTxtStyle($attribs);
+	}
+
+	/**
+	 * How far preserveAspectRatio moves a fitted viewBox or image along one axis: none of the room left over
+	 * for min, all of it for max, and half of it for mid, the default
+	 *
+	 * @param string $align  e.g. "xmidymid", lower case
+	 * @param string $axis   "x" or "y"
+	 * @param float  $spare  the viewport's length less the fitted content's
+	 *
+	 * @return float
+	 */
+	private function viewBoxAlignment($align, $axis, $spare)
+	{
+		if (strpos($align, $axis . 'min') !== false) {
+			return 0;
+		}
+
+		if (strpos($align, $axis . 'max') !== false) {
+			return $spare;
+		}
+
+		return $spare / 2;
 	}
 
 	function svgDefineStyle($critere_style)
@@ -3073,6 +3129,7 @@ class Svg
 		}
 
 		$this->svg_info = [];
+		$this->viewports = [];
 		$last_gradid = ''; // mPDF 6
 		$last_svg_fontid = ''; // mPDF 6
 		$last_svg_fontdefw = ''; // mPDF 6
@@ -3610,7 +3667,12 @@ class Svg
 				return;
 
 			case 'svg':
-				$this->svgOffset($attribs);
+				if ($this->viewports) {
+					$this->openViewport($attribs);
+				} else {
+					$this->svgOffset($attribs);
+					$this->viewports[] = null;
+				}
 				break;
 
 			case 'path':
@@ -4085,6 +4147,17 @@ class Svg
 		}
 
 		switch ($name) {
+			case 'svg':
+				$viewport = array_pop($this->viewports);
+				if ($viewport) {
+					$this->svgWriteString(" Q\n");
+					$this->svg_info['w'] = $viewport['w'];
+					$this->svg_info['h'] = $viewport['h'];
+					array_pop($this->svg_style);
+					array_pop($this->txt_style);
+				}
+				break;
+
 			case "g":
 			case "a":
 				if ($this->intext) {
