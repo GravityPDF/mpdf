@@ -272,6 +272,7 @@ Bugfixes
 * A percentage `border-radius` on a block, such as `border-radius: 50%` on a box 40 mm by 12 mm, drew a pill instead of an ellipse. Both radii were taken of the width of the block around it, and then shrunk to fit. A percentage is now of the block's own border box, as in CSS: a horizontal radius of its width and a vertical one of its height, so `50%` draws an ellipse and `10%` a corner a tenth of each side. A block split across pages resolves a vertical percentage against the height of the part on each page. With `autoPadding` on, a percentage radius no longer adds padding, since the box is not known when the padding is set. In both `cssMode`s. [#552] [#586]
 * `list-style: U+2022`, the shorthand, numbered the list where `list-style-type: U+2022` drew a bullet. The shorthand dropped the `U+` from the marker it set. It now keeps it, so the shorthand draws the character as the longhand does, in either `cssMode`. [#552] [#746] [#755]
 * `text-decoration: overline` was drawn heavier than an underline on the same text, 2.4 pt against 1.76 pt at 40pt in DejaVu Serif Condensed. The overline is now as thick as the font's underline, sits at the font's cap height rather than a fixed 700/1000 em, and in a table shrunk to fit is thinned and placed with its text. In either `cssMode`. [#741]
+* A fixed or absolutely positioned block with a `margin-top` and no `top`, such as `bottom: 10mm; height: 30mm; margin-top: 20mm`, was drawn taller by its top margin, and one with a `top`, a `height` and a `margin-top` grew by its top margin less its bottom margin. Its top margin was counted twice when the top, height or bottom was worked out from the others, and its bottom margin not at all. Each margin now counts once, so `margin-top` moves the box without stretching it. In both `cssMode`s. [#552] [#737]
 
 ### Images and SVG
 
@@ -974,3 +975,4 @@ These changes do not change output.
 [#743]: https://github.com/GravityPDF/mpdf/issues/743
 [#741]: https://github.com/GravityPDF/mpdf/issues/741
 [#748]: https://github.com/GravityPDF/mpdf/issues/748
+[#737]: https://github.com/GravityPDF/mpdf/issues/737

@@ -15642,7 +15642,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				} elseif ($bbox_mb === 'auto') {
 					$bbox_mb = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_bottom;
 				} else {
-					$bbox_bottom = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mt;
+					$bbox_bottom = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mb;
 				}
 			} else {
 				if ($bbox_mt === 'auto') {
@@ -15655,15 +15655,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// solve for $bbox_top when content_h known - $inner_h=='auto' && $bbox_top =='auto'
 				} elseif ($bbox_top === 'auto' && $bbox_bottom === 'auto' && $inner_h !== 'auto') {
 					$bbox_top = $orig_y0 - $bbox_mt - $cont_y;
-					$bbox_bottom = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mt;
+					$bbox_bottom = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mb;
 				} elseif ($inner_h === 'auto' && $bbox_bottom === 'auto' && $bbox_top !== 'auto') {
 					// solve for $bbox_bottom when content_h known - $inner_h=='auto' && $bbox_bottom=='auto'
 				} elseif ($bbox_top === 'auto' && $inner_h !== 'auto' && $bbox_bottom !== 'auto') {
-					$bbox_top = $cont_h - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mt - $bbox_bottom;
+					$bbox_top = $cont_h - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mb - $bbox_bottom;
 				} elseif ($inner_h === 'auto' && $bbox_top !== 'auto' && $bbox_bottom !== 'auto') {
-					$inner_h = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $bbox_pb - $bbox_bb - $bbox_mt - $bbox_bottom;
+					$inner_h = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $bbox_pb - $bbox_bb - $bbox_mb - $bbox_bottom;
 				} elseif ($bbox_bottom === 'auto' && $bbox_top !== 'auto' && $inner_h !== 'auto') {
-					$bbox_bottom = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mt;
+					$bbox_bottom = $cont_h - $bbox_top - $bbox_mt - $bbox_bt - $bbox_pt - $inner_h - $bbox_pb - $bbox_bb - $bbox_mb;
 				}
 			}
 
