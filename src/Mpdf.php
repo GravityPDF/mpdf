@@ -28174,6 +28174,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = (new CommentParser())->removeHtmlComments($html);
 		$html = preg_replace('/' . CommentParser::SCRIPT . '/si', '', $html);
 
+		// A browser never draws a <title>. ReadMetaTags() has already read the document title, and running after the SVG
+		// pass keeps an SVG's own titles in its image
+		if (stripos($html, '<title') !== false) {
+			$html = preg_replace('/' . HtmlTags::elementPattern('title') . '/si', '', $html);
+		}
+
 		$html = preg_replace('/\f/', '', $html); // replace formfeed by nothing
 		$html = preg_replace('/\r/', '', $html); // replace carriage return by nothing
 
