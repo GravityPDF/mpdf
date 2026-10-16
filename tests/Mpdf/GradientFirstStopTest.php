@@ -72,7 +72,7 @@ class GradientFirstStopTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame($type, $gradient['type']);
 		$this->assertSame([self::RED, self::BLUE], $this->leadingColours($gradient));
-		$this->assertSame(0, $gradient['stops'][0]['offset']);
+		$this->assertEquals(0, $gradient['stops'][0]['offset']);
 
 		if ($repeats) {
 			$this->assertSame(self::RED, $gradient['stops'][2]['col'], 'drawn again after the last stop');

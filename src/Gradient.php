@@ -191,17 +191,11 @@ class Gradient
 		}
 
 		if ($coords[0] !== false && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $coords[0], $m)) {
-			$tmp = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false);
-			if ($tmp) {
-				$coords[0] = $tmp / $w;
-			}
+			$coords[0] = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false) / $w;
 		}
 
 		if ($coords[1] !== false && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $coords[1], $m)) {
-			$tmp = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false);
-			if ($tmp) {
-				$coords[1] = 1 - ($tmp / $h);
-			}
+			$coords[1] = 1 - ($this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false) / $h);
 		}
 
 		if ($type == self::TYPE_LINEAR) {
@@ -530,6 +524,9 @@ class Gradient
 			}
 		}
 
+		// A repeating gradient's period runs from its first stop to the furthest one. Offsets are written to three
+		// decimals, so a period shorter than that would repeat without end.
+		$zeroPeriod = max(array_column($stops, 'offset')) - $stops[0]['offset'] < 0.0005;
 
 		if (isset($stops[0]['offset']) && $stops[0]['offset'] > 0) {
 			$firststop = $stops[0];
@@ -541,10 +538,7 @@ class Gradient
 			$endstop['offset'] = 1;
 			$stops[] = $endstop;
 		}
-		if ($stops[0]['offset'] > $stops[count($stops) - 1]['offset']) {
-			$stops[0]['offset'] = 0;
-			$stops[count($stops) - 1]['offset'] = 1;
-		}
+		$stops = $this->clampStopOffsets($stops);
 
 		for ($i = 0; $i < count($stops); $i++) {
 			$this->mpdf->gradients[$n]['stops'][$i]['col'] = $this->colorConverter->gradientComponents($stops[$i]['col'], $colorspace);
@@ -558,7 +552,7 @@ class Gradient
 			$this->mpdf->gradients[$n]['stops'][$i]['opacity'] = $stops[$i]['opacity'];
 			// OFFSET
 			if ($i > 0 && $i < (count($stops) - 1)) {
-				if (!isset($stops[$i]['offset']) || (isset($stops[$i + 1]['offset']) && $stops[$i]['offset'] > $stops[$i + 1]['offset']) || $stops[$i]['offset'] < $stops[$i - 1]['offset']) {
+				if (!isset($stops[$i]['offset'])) {
 					if (isset($stops[$i - 1]['offset']) && isset($stops[$i + 1]['offset'])) {
 						$stops[$i]['offset'] = ($stops[$i - 1]['offset'] + $stops[$i + 1]['offset']) / 2;
 					} else {
@@ -578,24 +572,33 @@ class Gradient
 		}
 
 		if ($repeat) {
-			$ns = count($this->mpdf->gradients[$n]['stops']);
-			$offs = [];
-			for ($i = 0; $i < $ns; $i++) {
-				$offs[$i] = $this->mpdf->gradients[$n]['stops'][$i]['offset'];
-			}
-			$gp = 0;
-			$inside = true;
-			while ($inside) {
-				$gp++;
+			if ($zeroPeriod) {
+				// Leave out the copy of the first stop put at 0, before the period
+				$start = $stops[count($stops) - 1]['offset'];
+				$period = array_filter($this->mpdf->gradients[$n]['stops'], function ($stop) use ($start) {
+					return $stop['offset'] >= $start;
+				});
+				$this->mpdf->gradients[$n]['stops'] = $this->averageStops(array_values($period));
+			} else {
+				$ns = count($this->mpdf->gradients[$n]['stops']);
+				$offs = [];
 				for ($i = 0; $i < $ns; $i++) {
-					$this->mpdf->gradients[$n]['stops'][($ns * $gp) + $i] = $this->mpdf->gradients[$n]['stops'][($ns * ($gp - 1)) + $i];
-					$tmp = $this->mpdf->gradients[$n]['stops'][($ns * ($gp - 1)) + ($ns - 1)]['offset'] + $offs[$i];
-					if ($tmp < 1) {
-						$this->mpdf->gradients[$n]['stops'][($ns * $gp) + $i]['offset'] = $tmp;
-					} else {
-						$this->mpdf->gradients[$n]['stops'][($ns * $gp) + $i]['offset'] = 1;
-						$inside = false;
-						break;
+					$offs[$i] = $this->mpdf->gradients[$n]['stops'][$i]['offset'];
+				}
+				$gp = 0;
+				$inside = true;
+				while ($inside) {
+					$gp++;
+					for ($i = 0; $i < $ns; $i++) {
+						$this->mpdf->gradients[$n]['stops'][($ns * $gp) + $i] = $this->mpdf->gradients[$n]['stops'][($ns * ($gp - 1)) + $i];
+						$tmp = $this->mpdf->gradients[$n]['stops'][($ns * ($gp - 1)) + ($ns - 1)]['offset'] + $offs[$i];
+						if ($tmp < 1) {
+							$this->mpdf->gradients[$n]['stops'][($ns * $gp) + $i]['offset'] = $tmp;
+						} else {
+							$this->mpdf->gradients[$n]['stops'][($ns * $gp) + $i]['offset'] = 1;
+							$inside = false;
+							break;
+						}
 					}
 				}
 			}
@@ -729,7 +732,7 @@ class Gradient
 				$g['colorspace'] = 'CMYK';
 			}
 
-			$g['stops'][] = $this->getStop($col, $el, true);
+			$g['stops'][] = $this->getStop($col, $el);
 		}
 
 		return $g;
@@ -970,6 +973,69 @@ class Gradient
 	}
 
 	/**
+	 * A solid fill of the average colour of the stops, as CSS Images draws a repeating gradient whose stops all sit at
+	 * one position: the colours are spread evenly across the line and averaged along it
+	 *
+	 * @param array[] $stops The stops as given to the shading function, each with its colour components and opacity
+	 *
+	 * @return array[] Two stops of the average colour, at 0 and 1
+	 */
+	private function averageStops(array $stops)
+	{
+		$segments = count($stops) - 1;
+		$colour = array_fill(0, count(explode(' ', $stops[0]['col'])), 0);
+		$opacity = 0;
+
+		foreach ($stops as $i => $stop) {
+			// An end stop bounds one segment, any other stop two
+			$weight = ($i === 0 || $i === $segments ? 0.5 : 1) / $segments;
+
+			foreach (explode(' ', $stop['col']) as $c => $component) {
+				$colour[$c] += (float) $component * $weight;
+			}
+
+			$opacity += $stop['opacity'] * $weight;
+		}
+
+		$average = [
+			'col' => implode(' ', array_map(function ($component) {
+				return sprintf('%.3F', $component);
+			}, $colour)),
+			'opacity' => $opacity,
+			'offset' => 0,
+		];
+
+		return [$average, array_merge($average, ['offset' => 1])];
+	}
+
+	/**
+	 * Moves each stop whose position lies before an earlier stop's up to the largest position before it, as CSS Images
+	 * does, so the colours meet in a hard edge there. Stops without a position are left for Gradient() to spread out.
+	 *
+	 * @param array[] $stops The stops, each with its offset as a fraction of the gradient's length where one is given
+	 *
+	 * @return array[]
+	 */
+	private function clampStopOffsets(array $stops)
+	{
+		$largest = null;
+
+		foreach ($stops as $i => $stop) {
+			if (!isset($stop['offset'])) {
+				continue;
+			}
+
+			if ($largest !== null && $stop['offset'] < $largest) {
+				$stops[$i]['offset'] = $largest;
+			} else {
+				$largest = $stop['offset'];
+			}
+		}
+
+		return $stops;
+	}
+
+	/**
 	 * Whether the first argument of a gradient is a colour stop rather than a direction, point, shape or size: its
 	 * first word is a colour. A bare 0 is the unitless angle CSS allows, not the grey mPDF reads an integer as, so
 	 * linear-gradient(0, red, blue) points up while linear-gradient(red 0, blue) starts red.
@@ -1019,26 +1085,35 @@ class Gradient
 				continue;
 			}
 
-			$fraction = null;
-			if ($words[$index] === '0') {
-				$fraction = 0;
-			} elseif (preg_match('/(\d+)[%]/i', $words[$index], $m)) {
-				$fraction = $m[1] / 100;
-			}
+			$fraction = $words[$index] === '0' ? 0 : $this->readPercentage($words[$index]);
 
 			if ($fraction !== null) {
 				$coords[$index] = $index === 1 ? 1 - $fraction : $fraction;
 			} elseif ($coords[$index] === null && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $words[$index], $m)) {
-				if ($this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false)) {
-					$coords[$index] = $m[1];
-				}
+				$coords[$index] = $m[1];
 			}
 		}
 
 		return $coords;
 	}
 
-	private function getStop($col, $el, $convertOffset = false)
+	/**
+	 * The fraction a percentage such as 12.5% gives
+	 *
+	 * @param string $word
+	 *
+	 * @return float|null Null when the word is not a percentage
+	 */
+	private function readPercentage($word)
+	{
+		if (preg_match('/(\d*\.?\d+)%/', $word, $m)) {
+			return (float) $m[1] / 100;
+		}
+
+		return null;
+	}
+
+	private function getStop($col, $el)
 	{
 		$stop = [
 			'col' => $col,
@@ -1050,20 +1125,13 @@ class Gradient
 		}
 
 		if (isset($el[1])) {
-			if (preg_match('/(\d+)[%]/', $el[1], $m)) {
-				$stop['offset'] = $m[1] / 100;
-				if ($stop['offset'] > 1) {
-					unset($stop['offset']);
+			$fraction = $this->readPercentage($el[1]);
+			if ($fraction !== null) {
+				if ($fraction <= 1) {
+					$stop['offset'] = $fraction;
 				}
 			} elseif (preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $el[1], $m)) {
-				if ($convertOffset) {
-					$tmp = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false);
-					if ($tmp) {
-						$stop['offset'] = $m[1];
-					}
-				} else {
-					$stop['offset'] = $el[1];
-				}
+				$stop['offset'] = $m[1];
 			}
 		}
 
