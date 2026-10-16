@@ -203,4 +203,78 @@ class TagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame($expected, $replaced);
 	}
 
+	/**
+	 * Text, and the end tag of <pre> found at its start, if any
+	 *
+	 * @return array
+	 */
+	public static function endTagProvider()
+	{
+		return [
+			'plain' => ['</pre>x', '</pre>'],
+			'a space' => ['</pre >x', '</pre >'],
+			'a newline' => ["</pre\n>x", "</pre\n>"],
+			'a slash' => ['</pre/>x', '</pre/>'],
+			'an attribute' => ['</PRE class="x">x', '</PRE class="x">'],
+			'a ">" in an attribute' => ['</pre title="a>b">x', '</pre title="a>b">'],
+			'a longer name' => ['</prefix>x', null],
+			'a start tag' => ['<pre>x', null],
+		];
+	}
+
+	/**
+	 * An end tag is found with whatever a browser ignores before its ">", but only for the name given
+	 *
+	 * @dataProvider endTagProvider
+	 *
+	 * @param string $html
+	 * @param string|null $expected
+	 */
+	public function testEndTagPattern($html, $expected)
+	{
+		$found = preg_match('/^' . Tags::endTagPattern('pre') . '/i', $html, $match);
+
+		$this->assertSame($expected, $found ? $match[0] : null);
+	}
+
+	/**
+	 * An element ends at the first end tag of its name, whatever comes before that tag's ">"
+	 */
+	public function testElementPatternEndsAtAnEndTagWithASpace()
+	{
+		preg_match_all('/' . Tags::elementPattern('style') . '/si', '<style>a</style ><p>b</p><style>c</style>', $matches);
+
+		$this->assertSame(['a', 'c'], $matches[2]);
+	}
+
+	/**
+	 * The content of a tag, and the name it reads as
+	 *
+	 * @return array
+	 */
+	public static function nameProvider()
+	{
+		return [
+			'a start tag' => ['ol type="a"', 'OL'],
+			'a start tag that closes itself' => ['br/', 'BR'],
+			'an end tag' => ['/caption', 'CAPTION'],
+			'an end tag with a space' => ['/caption ', 'CAPTION'],
+			'an end tag with an attribute' => ['/caption class="x"', 'CAPTION'],
+			'no name' => ['/', ''],
+		];
+	}
+
+	/**
+	 * A tag is named as a browser reads it, whatever follows its name
+	 *
+	 * @dataProvider nameProvider
+	 *
+	 * @param string $content
+	 * @param string $expected
+	 */
+	public function testName($content, $expected)
+	{
+		$this->assertSame($expected, Tags::name($content));
+	}
+
 }
