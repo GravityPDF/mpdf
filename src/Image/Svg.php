@@ -186,6 +186,14 @@ class Svg
 	 */
 	private $viewports = [];
 
+	/**
+	 * The picture's bounding box when the outermost <svg> fits its viewBox into a width and height of another shape.
+	 * Otherwise null, and the box is the viewBox, or the width and height
+	 *
+	 * @var array|null
+	 */
+	private $box;
+
 	public function __construct(
 		Mpdf $mpdf,
 		Otl $otl,
@@ -1010,16 +1018,6 @@ class Svg
 	{
 		// save all <svg> tag attributes
 		$this->svg_attribs = $attribs;
-		if (isset($this->svg_attribs['viewBox'])) {
-			$vb = preg_split('/[\s,]+/is', trim($this->svg_attribs['viewBox']));
-			if (count($vb) == 4) {
-				$this->svg_info['x'] = $vb[0];
-				$this->svg_info['y'] = $vb[1];
-				$this->svg_info['w'] = $vb[2];
-				$this->svg_info['h'] = $vb[3];
-				// return;
-			}
-		}
 		$svg_w = 0;
 		$svg_h = 0;
 		if (isset($attribs['width']) && $attribs['width']) {
@@ -1029,14 +1027,17 @@ class Svg
 			$svg_h = $this->sizeConverter->convert($attribs['height']); // mm
 		}
 
-		// mPDF 5.0.005
-		if (isset($this->svg_info['w']) && $this->svg_info['w']) { // if 'w' set by viewBox
-			if ($svg_w) { // if width also set, use these values to determine to set size of "pixel"
-				$this->kp *= ($svg_w / 0.2645) / $this->svg_info['w'];
-				$this->kf = ($svg_w / 0.2645) / $this->svg_info['w'];
-			} elseif ($svg_h) {
-				$this->kp *= ($svg_h / 0.2645) / $this->svg_info['h'];
-				$this->kf = ($svg_h / 0.2645) / $this->svg_info['h'];
+		$vb = $this->viewBox($attribs);
+		if ($vb) {
+			list($this->svg_info['x'], $this->svg_info['y'], $this->svg_info['w'], $this->svg_info['h']) = $vb;
+
+			// Compare shapes, not the two scales, which rounding can set apart: a box of the viewBox's shape keeps
+			// being scaled by its width alone, and drawn exactly as before
+			if ($svg_w && $svg_h && abs($svg_w * $vb[3] - $svg_h * $vb[2]) > 1e-9 * $svg_w * $vb[3]) {
+				$this->fitOuterViewBox($vb, $svg_w / 0.2645, $svg_h / 0.2645, $attribs);
+			} elseif ($svg_w || $svg_h) {
+				$this->kf = $svg_w ? ($svg_w / 0.2645) / $vb[2] : ($svg_h / 0.2645) / $vb[3];
+				$this->kp *= $this->kf;
 			}
 			return;
 		}
@@ -1056,6 +1057,37 @@ class Svg
 		$this->svg_info['y'] = 0;
 		$this->svg_info['w'] = $svg_w / 0.2645; // mm->pixels
 		$this->svg_info['h'] = $svg_h / 0.2645; // mm->pixels
+	}
+
+	/**
+	 * Fit the outermost <svg>'s viewBox into a width and height of another shape, as its preserveAspectRatio says.
+	 * The picture takes the width and height, and the form's bounding box clips whatever of the viewBox falls
+	 * outside them. Percentages stay percentages of the viewBox
+	 *
+	 * @param array    $vb      the viewBox
+	 * @param float    $w       the width, in pixels
+	 * @param float    $h       the height, in pixels
+	 * @param array    $attribs
+	 */
+	private function fitOuterViewBox($vb, $w, $h, $attribs)
+	{
+		list($sx, $sy, $tx, $ty) = $this->fitViewBox($vb, $w, $h, $attribs);
+
+		$kp = $this->kp;
+		$this->kp *= $sx;
+		$this->kf = $sx;
+
+		// Everything is drawn at the scale along x, so preserveAspectRatio="none" stretches it to the scale along y
+		if ($sx != $sy) {
+			$this->svgWriteString(sprintf('1 0 0 %.5F 0 0 cm ', $sy / $sx));
+		}
+
+		$this->box = [
+			'x' => ($vb[0] * $sx - $tx) * $kp,
+			'y' => -($vb[1] * $sy - $ty) * $kp,
+			'w' => $w * $kp,
+			'h' => -$h * $kp,
+		];
 	}
 
 	//
@@ -1122,19 +1154,9 @@ class Svg
 		$this->svg_info['w'] = $w;
 		$this->svg_info['h'] = $h;
 
-		$vb = preg_split('/[\s,]+/', trim(Arrays::get($attribs, 'viewBox', '')));
-		if (count($vb) === 4 && $vb[2] > 0 && $vb[3] > 0 && $w > 0 && $h > 0) {
-			$sx = $w / $vb[2];
-			$sy = $h / $vb[3];
-			$tx = 0;
-			$ty = 0;
-
-			$par = preg_split('/\s+/', strtolower(trim(Arrays::get($attribs, 'preserveAspectRatio', ''))));
-			if ($par[0] !== 'none') {
-				$sx = $sy = isset($par[1]) && $par[1] === 'slice' ? max($sx, $sy) : min($sx, $sy);
-				$tx = $this->viewBoxAlignment($par[0], 'x', $w - $vb[2] * $sx);
-				$ty = $this->viewBoxAlignment($par[0], 'y', $h - $vb[3] * $sy);
-			}
+		$vb = $this->viewBox($attribs);
+		if ($vb && $w > 0 && $h > 0) {
+			list($sx, $sy, $tx, $ty) = $this->fitViewBox($vb, $w, $h, $attribs);
 
 			$s .= sprintf('%.5F 0 0 %.5F %.3F %.3F cm ', $sx, $sy, ($tx - $vb[0] * $sx) * $this->kp, -($ty - $vb[1] * $sy) * $this->kp);
 
@@ -1146,6 +1168,58 @@ class Svg
 
 		array_push($this->svg_style, $this->svgDefineStyle($attribs));
 		$this->svgDefineTxtStyle($attribs);
+	}
+
+	/**
+	 * The viewBox of an <svg>, as x, y, width and height, or null when it has none, or one that is not four numbers
+	 * with a width and height above zero. A whole number stays an integer, so a 0 is never written as -0
+	 *
+	 * @param array $attribs
+	 *
+	 * @return array<int|float>|null
+	 */
+	private function viewBox($attribs)
+	{
+		$vb = [];
+		foreach (preg_split('/[\s,]+/', trim(Arrays::get($attribs, 'viewBox', ''))) as $number) {
+			if (!is_numeric($number)) {
+				return null;
+			}
+			$vb[] = $number + 0;
+		}
+
+		return count($vb) === 4 && $vb[2] > 0 && $vb[3] > 0 ? $vb : null;
+	}
+
+	/**
+	 * How a viewBox fits into a viewport as the <svg>'s preserveAspectRatio says: the scale along x and y, and how
+	 * far the scaled viewBox is moved along each from the viewport's top left corner
+	 *
+	 * @param array    $vb      the viewBox
+	 * @param float    $w       the viewport's width
+	 * @param float    $h       the viewport's height
+	 * @param array    $attribs
+	 *
+	 * @return float[] sx, sy, tx and ty
+	 */
+	private function fitViewBox($vb, $w, $h, $attribs)
+	{
+		$sx = $w / $vb[2];
+		$sy = $h / $vb[3];
+
+		$par = preg_split('/\s+/', strtolower(trim(Arrays::get($attribs, 'preserveAspectRatio', ''))));
+		if ($par[0] === 'none') {
+			return [$sx, $sy, 0, 0];
+		}
+
+		$s = isset($par[1]) && $par[1] === 'slice' ? max($sx, $sy) : min($sx, $sy);
+
+		return [
+			$s,
+			$s,
+			$this->viewBoxAlignment($par[0], 'x', $w - $vb[2] * $s),
+			$this->viewBoxAlignment($par[0], 'y', $h - $vb[3] * $s),
+		];
 	}
 
 	/**
@@ -3130,6 +3204,7 @@ class Svg
 
 		$this->svg_info = [];
 		$this->viewports = [];
+		$this->box = null;
 		$last_gradid = ''; // mPDF 6
 		$last_svg_fontid = ''; // mPDF 6
 		$last_svg_fontdefw = ''; // mPDF 6
@@ -3197,13 +3272,14 @@ class Svg
 		if ($this->svg_error) {
 			return false;
 		} else {
-			return [
+			$box = $this->box ?: [
 				'x' => $this->svg_info['x'] * $this->kp,
 				'y' => -$this->svg_info['y'] * $this->kp,
 				'w' => $this->svg_info['w'] * $this->kp,
 				'h' => -$this->svg_info['h'] * $this->kp,
-				'data' => $this->svg_string,
 			];
+
+			return $box + ['data' => $this->svg_string];
 		}
 	}
 
