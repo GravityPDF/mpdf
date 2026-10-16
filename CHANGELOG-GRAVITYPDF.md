@@ -308,6 +308,7 @@ Bugfixes
 * An inline SVG's `<title>` became the PDF's title when the document had none, or when the SVG came before the document's own `<title>`. Only a `<title>` outside any `<svg>` now titles the document. [#779] [#783]
 * An inline SVG holding another `<svg>` was cut at the inner `</svg>`: what followed it in the outer SVG was not drawn. [#780] [#784]
 * An SVG `<use>`, `<tref>` or gradient `xlink:href` drew nothing when another of its attributes held a `>`, as in `data-note="a > b"`, and an element with a `data-id` was taken for the one whose `id` was named. References are now found by the `id` attribute alone, and a `<use>`'s `x` and `y` move it after its own `transform` rather than being added to a `translate()` in it. An element named like `<markers>` or `<patterns>`, or an empty `<marker/>` or `<pattern/>`, was dropped with everything up to the next `</marker>` or `</pattern>`. An SVG that is not well-formed is still drawn as far as it can be read, but now logs a warning, or throws under `debug` or `showImageErrors`. [#778] [#791]
+* An SVG `<use>` of a `<g>` holding another `<g>` drew only what came before the inner `</g>`, and left the markup after it unbalanced. The referenced element now ends at the end tag that closes it, however deeply elements of its name nest inside it. [#790] [#796]
 * An `<svg>` nested in an SVG ignored its `x`, `y`, `width` and `height`, and its `viewBox` rescaled the whole outer SVG, changing the picture's size. It now sets up a viewport of its own: moved by `x` and `y`, clipped to its size unless `overflow` is `visible`, with its `viewBox` fitted in as `preserveAspectRatio` says. [#785] [#793]
 
 ### Forms
@@ -1021,6 +1022,8 @@ These changes do not change output.
 [#798]: https://github.com/GravityPDF/mpdf/pull/798
 [#778]: https://github.com/GravityPDF/mpdf/issues/778
 [#791]: https://github.com/GravityPDF/mpdf/pull/791
+[#790]: https://github.com/GravityPDF/mpdf/issues/790
+[#796]: https://github.com/GravityPDF/mpdf/pull/796
 [#785]: https://github.com/GravityPDF/mpdf/issues/785
 [#793]: https://github.com/GravityPDF/mpdf/pull/793
 [#802]: https://github.com/GravityPDF/mpdf/issues/802

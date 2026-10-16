@@ -99,6 +99,42 @@ class TagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * HTML, the offset of a <g>'s start tag in it, and the element found there
+	 *
+	 * @return array
+	 */
+	public static function elementAtProvider()
+	{
+		return [
+			'no nesting' => ['x<g a="1">y</g>z', 1, ['<g a="1">y</g>', 'g a="1"', 'y', '</g>']],
+			'one nested' => ['<g id="a"><g>b</g>c</g>d', 0, ['<g id="a"><g>b</g>c</g>', 'g id="a"', '<g>b</g>c', '</g>']],
+			'two levels' => ['<g><g><g>a</g></g>b</g>', 0, ['<g><g><g>a</g></g>b</g>', 'g', '<g><g>a</g></g>b', '</g>']],
+			'an inner one' => ['<g><g>a</g>b</g>', 3, ['<g>a</g>', 'g', 'a', '</g>']],
+			'one inside that closes itself' => ['<g><g/>a</g>b</g>', 0, ['<g><g/>a</g>', 'g', '<g/>a', '</g>']],
+			'one that closes itself' => ['<g id="r"/>a</g>', 0, ['<g id="r"/>', 'g id="r"/', '', '']],
+			'tags in a value' => ['<g title="<g>"><g>a</g>b</G>c</g>', 0, ['<g title="<g>"><g>a</g>b</G>', 'g title="<g>"', '<g>a</g>b', '</G>']],
+			'a name that only starts the same' => ['<g><gx>a</gx>b</g>', 0, ['<g><gx>a</gx>b</g>', 'g', '<gx>a</gx>b', '</g>']],
+			'never closed' => ['<g><g>a</g>', 0, null],
+			'another tag at the offset' => ['<p><g>a</g>', 0, null],
+		];
+	}
+
+	/**
+	 * The element at the offset ends at the end tag that closes it, an element of the same name nested inside it
+	 * kept whole
+	 *
+	 * @dataProvider elementAtProvider
+	 *
+	 * @param string $html
+	 * @param int $offset
+	 * @param string[]|null $expected
+	 */
+	public function testElementAt($html, $offset, $expected)
+	{
+		$this->assertSame($expected, Tags::elementAt($html, 'g', $offset));
+	}
+
+	/**
 	 * HTML and how it reads once the tags named br, input and bookmark close themselves
 	 *
 	 * @return array
