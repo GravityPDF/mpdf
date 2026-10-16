@@ -15688,7 +15688,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				} elseif ($bbox_mr === 'auto') {
 					$bbox_mr = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_right;
 				} else {
-					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml;
+					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_mr;
 				}
 			} else {
 				if ($bbox_ml === 'auto') {
@@ -15702,15 +15702,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				} elseif ($bbox_left === 'auto' && $bbox_right === 'auto' && $inner_w !== 'auto') {
 					// IF containing element RTL, should set $bbox_right
 					$bbox_left = $orig_x0 - $bbox_ml - $cont_x;
-					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml;
+					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_mr;
 				} elseif ($inner_w === 'auto' && $bbox_right === 'auto' && $bbox_left !== 'auto') {
 					// solve for $bbox_right when content_w known - $inner_w=='auto' && $bbox_right=='auto'
 				} elseif ($bbox_left === 'auto' && $inner_w !== 'auto' && $bbox_right !== 'auto') {
-					$bbox_left = $cont_w - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml - $bbox_right;
+					$bbox_left = $cont_w - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_mr - $bbox_right;
 				} elseif ($inner_w === 'auto' && $bbox_left !== 'auto' && $bbox_right !== 'auto') {
-					$inner_w = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $bbox_pr - $bbox_br - $bbox_ml - $bbox_right;
+					$inner_w = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $bbox_pr - $bbox_br - $bbox_mr - $bbox_right;
 				} elseif ($bbox_right === 'auto' && $bbox_left !== 'auto' && $inner_w !== 'auto') {
-					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml;
+					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_mr;
 				}
 			}
 
@@ -15784,9 +15784,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->WriteHTML($html, HTMLParserMode::HTML_HEADER_BUFFER);
 				$inner_w = $widthConstraints->clamp($this->maxPosR - $this->lMargin);
 				if ($bbox_right_auto) {
-					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml;
+					$bbox_right = $cont_w - $bbox_left - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_mr;
 				} elseif ($bbox_left_auto) {
-					$bbox_left = $cont_w - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_ml - $bbox_right;
+					$bbox_left = $cont_w - $bbox_ml - $bbox_bl - $bbox_pl - $inner_w - $bbox_pr - $bbox_br - $bbox_mr - $bbox_right;
 					$bbox_x = $cont_x + $bbox_left + $bbox_ml;
 					$inner_x = $bbox_x + $bbox_bl + $bbox_pl;
 					$x = $inner_x;
