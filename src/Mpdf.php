@@ -18,6 +18,7 @@ use Mpdf\Css\TextVars;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
+use Mpdf\Html\Tags as HtmlTags;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Image\ImageSizing;
@@ -14769,13 +14770,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = str_replace('</tts><tts>', '|', $html);
 		$html = str_replace('</ttz><ttz>', '|', $html);
 
-		// Add new supported tags in the DisableTags function
-		$html = strip_tags($html, $this->enabledtags); // remove all unsupported tags, but the ones inside the 'enabledtags' string
-		// Explode the string in order to parse the HTML code
-		$a = preg_split('/<(.*?)>/ms', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
-		// ? more accurate regexp that allows e.g. <a name="Silly <name>">
-		// if changing - also change in fn.SubstituteChars()
-		// $a = preg_split ('/<((?:[^<>]+(?:"[^"]*"|\'[^\']*\')?)+)>/ms', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+		$html = HtmlTags::removeUnsupported($html, $this->enabledtags);
+		$a = HtmlTags::split($html);
 
 		if ($this->mb_enc) {
 			mb_internal_encoding($this->mb_enc);
@@ -26687,13 +26683,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		// only substitute characters between tags
 		if (count($this->substitute)) {
-			$a = preg_split('/(<.*?>)/ms', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+			$a = HtmlTags::split($html);
 			$html = '';
 			foreach ($a as $i => $e) {
-				if ($i % 2 == 0) {
-					$e = strtr($e, $this->substitute);
-				}
-				$html .= $e;
+				$html .= $i % 2 == 0 ? strtr($e, $this->substitute) : '<' . $e . '>';
 			}
 		}
 
@@ -27971,7 +27964,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		$n = '';
-		$a = preg_split('/<(.*?)>/ms', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+		$a = HtmlTags::split($html);
 		foreach ($a as $i => $e) {
 			if ($i % 2 == 0) {
 
@@ -28289,11 +28282,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$selftabs = 'input|hr|img|br|barcode|dottab';
 		$selftabs2 = 'indexentry|indexinsert|bookmark|watermarktext|watermarkimage|column_break|columnbreak|newcolumn|newpage|page_break|pagebreak|formfeed|columns|toc|tocpagebreak|setpageheader|setpagefooter|sethtmlpageheader|sethtmlpagefooter|annotation';
 
-		// Fix self-closing tags which don't close themselves
-		$html = preg_replace('/(<(' . $selftabs . '|' . $selftabs2 . ')[^>\/]*)>/i', '\\1 />', $html);
-
-		// Fix self-closing tags that don't include a space between the tag name and the closing slash
-		$html = preg_replace('/(<(' . $selftabs . '|' . $selftabs2 . '))\/>/i', '\\1 />', $html);
+		$html = HtmlTags::closeSelfClosing($html, $selftabs . '|' . $selftabs2);
 
 		$iterator = 0;
 		while ($thereispre) { // Recover <pre attributes>content</pre>
