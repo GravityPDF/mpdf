@@ -193,6 +193,7 @@ Bugfixes
 * Only double-quoted attributes were read. Single-quoted, unquoted and bare attributes are now read as well. [mpdf/mpdf#2030] [#24]
 * A `>` inside a quoted attribute value, such as `style="font-family: 'a>b'"`, `title="1 > 0"` or a link to `…?q=a>b`, left the whole page blank with `autoScriptToLang` on, and was deleted from the value otherwise, along with any `<`. A quoted value is now read whole, as a browser reads it, and reaches the tag unchanged in either `cssMode`, including in a tag that closes itself, where `<input value="a > b">` showed `a /b` and a bookmark titled `a > b` read `a  / b`. A stray quote in an unquoted value, as in `<img src=a.jpg" width="84">`, no longer swallows the tags after it up to the next quote. [#552] [#745] [#761]
 * A quoted attribute value holding ` name=value` was cut at the `=`: `<bookmark content="Set x=1 first" />` was titled `Set x=`, a text field showed the same, and a link whose `title` held ` href=` lost its link. An apostrophe in an unquoted value, as in `title=don't`, also ended it. Attribute values are now read as written, in either `cssMode`. [#771] [#773]
+* An attribute ending in the name mPDF looked for was read in its place: `<htmlpageheader data-name="x" name="main">` was registered as `x`, and a `<body>` took its style, `dir` or `lang` from `data-style`, `data-dir` or `data-lang`. A `<meta>` keywords, author or description holding ` x=1` was cut at the `=`, one single-quoted was not read, and a `<title>` holding ` a=1` gained quotes. These tags now read their attributes by name, quoted or not. [#772] [#774]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
 * A border that draws nothing was described with fewer keys than one that draws, and the border code read the missing keys anyway. [mpdf/mpdf#1892] [#29]
 * A `<tr>` border was read for sides the row did not set. [mpdf/mpdf#1893] [#30]
@@ -990,4 +991,6 @@ These changes do not change output.
 [#745]: https://github.com/GravityPDF/mpdf/issues/745
 [#761]: https://github.com/GravityPDF/mpdf/pull/761
 [#771]: https://github.com/GravityPDF/mpdf/issues/771
+[#772]: https://github.com/GravityPDF/mpdf/issues/772
 [#773]: https://github.com/GravityPDF/mpdf/pull/773
+[#774]: https://github.com/GravityPDF/mpdf/pull/774

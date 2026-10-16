@@ -291,4 +291,103 @@ class AttributeParsingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertTrue($this->red($output));
 	}
 
+	/**
+	 * A data-name before the name does not take its place, nor does a ">" in a value end the tag
+	 */
+	public function testAPageHeaderAndFooterAreRegisteredUnderTheirName()
+	{
+		$mpdf = $this->write('<htmlpageheader title="a > b" data-name="x" name="main"><div>H</div></htmlpageheader>'
+			. '<htmlpagefooter data-name="y" name=foot><div>F</div></htmlpagefooter><p>t</p>');
+
+		$this->assertSame(['main'], array_keys($mpdf->pageHTMLheaders));
+		$this->assertSame(['foot'], array_keys($mpdf->pageHTMLfooters));
+	}
+
+	/**
+	 * A data-style before the style does not take its place, nor does a ">" in a value end the tag
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param string $cssMode
+	 */
+	public function testTheBodyStyleIsReadFromItsOwnAttribute($cssMode)
+	{
+		$output = $this->render('<body title="a > b" data-style="color: #ff0000" style="color: #0000ff"><p>t</p></body>', ['cssMode' => $cssMode]);
+
+		$this->assertFalse($this->red($output));
+		$this->assertStringContainsString('0.000 0.000 1.000 rg', $output);
+	}
+
+	/**
+	 * Body tags, and the direction and language they give the document
+	 *
+	 * @return array
+	 */
+	public static function bodyLangAndDirProvider()
+	{
+		return [
+			'a data-dir and data-lang' => ['<body data-lang="fr" data-dir="rtl">', 'ltr', false],
+			'unquoted' => ['<BODY LANG=fr DIR=RTL>', 'rtl', true],
+		];
+	}
+
+	/**
+	 * The body's dir and lang are read by name, however they are written. A p:lang(fr) rule colours the text red
+	 *
+	 * @dataProvider bodyLangAndDirProvider
+	 *
+	 * @param string $body
+	 * @param string $directionality
+	 * @param bool $french
+	 */
+	public function testTheBodyLangAndDirAreReadByName($body, $directionality, $french)
+	{
+		$mpdf = $this->write('<style>p:lang(fr) { color: #ff0000 }</style>' . $body . '<p>t</p></body>');
+
+		$this->assertSame($directionality, $mpdf->directionality);
+		$this->assertSame($french, $this->red($mpdf->Output('', 'S')));
+	}
+
+	/**
+	 * Meta tags written in each way, and the keywords, author and subject they set
+	 *
+	 * @return array
+	 */
+	public static function metaProvider()
+	{
+		return [
+			'a " name=value" in the content' => ['<meta name="keywords" content="set x=1 first">', 'keywords', 'set x=1 first'],
+			'single quoted' => ['<meta name=\'author\' content=\'J "Q" Public\'>', 'author', 'J "Q" Public'],
+			'the content first' => ['<meta content="A summary" name="description">', 'subject', 'A summary'],
+			'unquoted' => ['<META NAME=keywords CONTENT=one>', 'keywords', 'one'],
+			'a data-name before the name' => ['<meta data-name="x" name="author" content="Jo">', 'author', 'Jo'],
+		];
+	}
+
+	/**
+	 * A meta tag's name and content are read whole, in either order and however they are quoted
+	 *
+	 * @dataProvider metaProvider
+	 *
+	 * @param string $meta
+	 * @param string $property
+	 * @param string $expected
+	 */
+	public function testAMetaTagIsReadWhole($meta, $property, $expected)
+	{
+		$mpdf = $this->write('<html><head>' . $meta . '</head><body><p>t</p></body></html>');
+
+		$this->assertSame($expected, $mpdf->$property);
+	}
+
+	/**
+	 * A title holding " name=value" is not given quotes
+	 */
+	public function testATitleHoldingANameAndValueIsReadWhole()
+	{
+		$mpdf = $this->write('<html><head><title>Set a=1 first</title></head><body><p>t</p></body></html>');
+
+		$this->assertSame('Set a=1 first', $mpdf->title);
+	}
+
 }
