@@ -1383,8 +1383,9 @@ class NormalizeProperties
 
 		if (preg_match('/(lower-roman|upper-roman|lower-latin|lower-alpha|lower-greek|upper-latin|upper-alpha|decimal|disc|circle|square|arabic-indic|bengali|devanagari|gujarati|gurmukhi|kannada|malayalam|oriya|persian|tamil|telugu|thai|urdu|cambodian|khmer|lao|cjk-decimal|hebrew)/i', $v, $m)) {
 			$this->properties['LIST-STYLE-TYPE'] = strtolower(trim($m[1]));
-		} elseif (preg_match('/U\+([a-fA-F0-9]+)/i', $v, $m)) {
-			$this->properties['LIST-STYLE-TYPE'] = strtolower(trim($m[1]));
+		} elseif (preg_match('/U\+[0-9a-f]+/i', $v, $m)) {
+			// Kept with its U+, as the longhand is, since that is how the marker is told from a counter style
+			$this->properties['LIST-STYLE-TYPE'] = strtolower($m[0]);
 		}
 
 		if (preg_match('/url\([\'\"]{0,1}(.*?)[\'\"]{0,1}\)/i', $v, $m)) {

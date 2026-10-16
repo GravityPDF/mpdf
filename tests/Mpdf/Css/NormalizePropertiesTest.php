@@ -182,6 +182,34 @@ class NormalizePropertiesTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 	}
 
+	/**
+	 * A U+XXXX marker in the list-style shorthand keeps its U+, as the list-style-type longhand does, so it is drawn
+	 * as that character rather than read as an unknown type and numbered
+	 *
+	 * @dataProvider providerListStyleUnicodeMarker
+	 *
+	 * @param string $listStyle The list-style shorthand
+	 * @param string $type The list-style-type it should set
+	 */
+	public function testListStyleUnicodeMarkerKeepsItsPrefix($listStyle, $type)
+	{
+		$result = $this->normalizeProperties->normalize(['LIST-STYLE' => $listStyle]);
+
+		$this->assertSame($type, $result['LIST-STYLE-TYPE']);
+	}
+
+	/**
+	 * @return array[] list-style shorthands with a U+ marker, and the list-style-type each should set
+	 */
+	public function providerListStyleUnicodeMarker()
+	{
+		return [
+			'capitals' => ['U+2022', 'u+2022'],
+			'lowercase hex digits' => ['u+25ba', 'u+25ba'],
+			'with a position' => ['U+25BA inside', 'u+25ba'],
+		];
+	}
+
 	public function testNormalizeTextAlign()
 	{
 		$prop = ['TEXT-ALIGN' => 'center'];
