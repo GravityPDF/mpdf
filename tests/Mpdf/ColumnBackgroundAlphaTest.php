@@ -211,4 +211,85 @@ class ColumnBackgroundAlphaTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 		$this->assertSame([], $this->translucentFills($page));
 		$this->assertGreaterThan(1, $this->opaqueFills($page));
 	}
+
+	/**
+	 * Both CSS modes, since the bgcolorarray warnings came in each
+	 *
+	 * @return array[]
+	 */
+	public static function cssModes()
+	{
+		return [
+			'standard' => [CssMode::STANDARD],
+			'legacy' => [CssMode::LEGACY],
+		];
+	}
+
+	/**
+	 * A translucent block inside a block with a border but no background, in columns, renders without a warning and
+	 * still paints its own translucent background
+	 *
+	 * @dataProvider cssModes
+	 *
+	 * @param string $cssMode
+	 */
+	public function testTranslucentBlockInBorderedBlockInColumnsRendersSilently($cssMode)
+	{
+		$html = $this->columns('<div style="border: 1px solid black"><div style="background: rgba(255, 0, 0, 0.5)">Text</div></div>');
+		$pdf = $this->assertDrawsSilently(function (Mpdf $mpdf) use ($html) {
+			$mpdf->WriteHTML($html);
+		}, ['cssMode' => $cssMode]);
+
+		$this->assertMatchesRegularExpression('#/GS\d+ gs 1\.000 0\.000 0\.000 rg#', $pdf, 'The translucent background should be painted');
+	}
+
+	/**
+	 * A block in columns whose background sets no colour takes its parent's, and renders without a warning when the
+	 * parent has none either
+	 *
+	 * @dataProvider cssModes
+	 *
+	 * @param string $cssMode
+	 */
+	public function testTransparentBlockInColumnsRendersSilently($cssMode)
+	{
+		$html = $this->columns('<div><div style="background-color: transparent">Text</div></div>');
+		$this->assertDrawsSilently(function (Mpdf $mpdf) use ($html) {
+			$mpdf->WriteHTML($html);
+		}, ['cssMode' => $cssMode]);
+	}
+
+	/**
+	 * A table in a block that has a border but no background, inside columns, renders without a warning: the block's
+	 * fill is put back after each row only when the block has one
+	 *
+	 * @dataProvider cssModes
+	 *
+	 * @param string $cssMode
+	 */
+	public function testTableInBorderedBlockInColumnsRendersSilently($cssMode)
+	{
+		$html = $this->columns('<div style="border: 1px solid black"><table><tr><td>Cell</td></tr></table></div>');
+		$this->assertDrawsSilently(function (Mpdf $mpdf) use ($html) {
+			$mpdf->WriteHTML($html);
+		}, ['cssMode' => $cssMode]);
+	}
+
+	/**
+	 * A table header that repeats at the top of the next column, in a bordered block without a background, renders
+	 * without a warning too
+	 *
+	 * @dataProvider cssModes
+	 *
+	 * @param string $cssMode
+	 */
+	public function testRepeatedHeaderInBorderedBlockInColumnsRendersSilently($cssMode)
+	{
+		$html = $this->columns('<div style="border: 1px solid black"><table><thead><tr><th>Head</th></tr></thead><tbody>' . str_repeat('<tr><td>Cell</td></tr>', 8) . '</tbody></table></div>');
+		$pdf = $this->assertDrawsSilently(function (Mpdf $mpdf) use ($html) {
+			$mpdf->WriteHTML($html);
+		}, ['cssMode' => $cssMode, 'format' => [100, 60]]);
+
+		$this->assertGreaterThan(1, substr_count($pdf, '(Head)'), 'The header should repeat in the next column');
+	}
 }
