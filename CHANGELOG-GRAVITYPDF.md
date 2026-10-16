@@ -249,6 +249,7 @@ Bugfixes
 * When a later `WriteHTML()` call turned the document right to left, the text on the page already started was set between the swapped side margins. That page now keeps its margins, and the swap starts with the next page. [#554] [#558]
 * Balancing columns raised a warning and drew a block's closing background past the last column. [#475] [#488]
 * Inside `<columns>`, a block with an `rgba()` or `cmyka()` background was painted fully opaque. [#482] [#498]
+* A table with a background on the table, a row or a cell, drawn first in a `<columns>` column, raised an "Undefined array key" warning. [#552] [#743]
 * In a UTF-8 document, CSS naming `chelvetica`, `ctimes` or `ccourier` did not draw in the core font. [#467] [#468]
 * The U+200B the line breaker inserts was drawn. [#28]
 * A zero-width space was drawn, and gave no line break, in core fonts and in text written outside `WriteHTML()`. [#463] [#503]
@@ -968,3 +969,4 @@ These changes do not change output.
 [#689]: https://github.com/GravityPDF/mpdf/pull/689
 [#746]: https://github.com/GravityPDF/mpdf/issues/746
 [#755]: https://github.com/GravityPDF/mpdf/pull/755
+[#743]: https://github.com/GravityPDF/mpdf/issues/743
