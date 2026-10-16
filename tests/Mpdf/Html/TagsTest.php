@@ -129,4 +129,47 @@ class TagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame($expected, Tags::closeSelfClosing($html, 'br|input|bookmark'));
 	}
 
+	/**
+	 * HTML and how it reads once each outermost <svg> is written as "[start tag content|inner|end tag]"
+	 *
+	 * @return array
+	 */
+	public static function replaceElementsProvider()
+	{
+		return [
+			'none' => ['<p>x</p>', '<p>x</p>'],
+			'one' => ['a<svg w="1">b</svg>c', 'a[svg w="1"|b|</svg>]c'],
+			'two in a row' => ['<svg>a</svg><svg>b</svg>', '[svg|a|</svg>][svg|b|</svg>]'],
+			'one nested' => ['<svg><svg>a</svg>b</svg>c', '[svg|<svg>a</svg>b|</svg>]c'],
+			'two deep' => ['<svg><svg><svg>a</svg></svg>b</svg>', '[svg|<svg><svg>a</svg></svg>b|</svg>]'],
+			'in another case' => ['<SVG>a</Svg >', '[SVG|a|</Svg >]'],
+			'a start tag never closed' => ['<svg>a<svg>b</svg>', '<svg>a[svg|b|</svg>]'],
+			'a stray end tag' => ['a</svg><svg>b</svg>', 'a</svg>[svg|b|</svg>]'],
+			'one in a value' => ['<svg><a title="<svg>">a</a></svg>', '[svg|<a title="<svg>">a</a>|</svg>]'],
+			'one that closes itself, then one' => ['a<svg/>b<svg>c</svg>d', 'a<svg/>b[svg|c|</svg>]d'],
+			'one that closes itself, nested' => ['<svg>a<svg/>b</svg>c', '[svg|a<svg/>b|</svg>]c'],
+			'one that closes itself before a nested one' => ['<svg><svg /><svg>a</svg>b</svg>c', '[svg|<svg /><svg>a</svg>b|</svg>]c'],
+			'a name starting with svg' => ['<svg><svg-icon></svg-icon></svg>', '[svg|<svg-icon></svg-icon>|</svg>]'],
+		];
+	}
+
+	/**
+	 * Each outermost element is replaced, an end tag closing the nearest start tag of its name still open
+	 *
+	 * @dataProvider replaceElementsProvider
+	 *
+	 * @param string $html
+	 * @param string $expected
+	 */
+	public function testReplaceElements($html, $expected)
+	{
+		$replaced = Tags::replaceElements($html, 'svg', function ($element) {
+			$this->assertSame('<' . $element[1] . '>' . $element[2] . $element[3], $element[0]);
+
+			return '[' . $element[1] . '|' . $element[2] . '|' . $element[3] . ']';
+		});
+
+		$this->assertSame($expected, $replaced);
+	}
+
 }

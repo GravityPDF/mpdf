@@ -19066,8 +19066,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function ReadMetaTags($html)
 	{
-		if (stripos($html, '<title') !== false && preg_match('/' . HtmlTags::elementPattern('title') . '/si', $html, $m)) {
-			$this->SetTitle($m[2]);
+		if (stripos($html, '<title') !== false) {
+			// An inline SVG's <title> names the image, not the document
+			$document = stripos($html, '</svg') !== false ? preg_replace('/' . HtmlTags::elementPattern('svg') . '/si', '', $html) : $html;
+			if (preg_match('/' . HtmlTags::elementPattern('title') . '/si', $document, $m)) {
+				$this->SetTitle($m[2]);
+			}
 		}
 
 		if (stripos($html, '<meta') === false) {
@@ -28155,7 +28159,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if (stripos($html, '</svg') !== false) {
-			$html = preg_replace_callback('/' . HtmlTags::elementPattern('svg') . '/si', function ($m) {
+			$html = HtmlTags::replaceElements($html, 'svg', function ($m) {
 				$file = $this->cache->write('/_tempSVG' . uniqid(random_int(1, 100000), true) . '.svg', $m[0]);
 
 				// Kept so the selectors written for the SVG still reach the image; no class name holds a double quote
@@ -28163,7 +28167,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$class = isset($attributes['CLASS']) ? str_replace('"', '', $attributes['CLASS']) : '';
 
 				return '<img src="' . $file . '"' . ($class !== '' ? ' class="' . $class . '"' : '') . ' />';
-			}, $html);
+			});
 		}
 
 		// Remove comments, then javascript code, from HTML (neither should appear in the PDF file)
@@ -28278,7 +28282,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = preg_replace('/<textarea(' . HtmlTags::CONTENT_PATTERN . ')><\/textarea>/si', '<textarea\\1> </textarea>', $html);
 		// With use_kwt, a caption above its table is kept with it the same way as a heading (mpdf/mpdf#1666)
 		$kwt = $this->use_kwt ? ' keep-with-table="1"' : '';
-		$html = preg_replace('/(<table' . HtmlTags::CONTENT_PATTERN . '>)\s*(<caption)(.*?<\/caption>)(.*?<\/table>)/si', '\\2 position="top"' . $kwt . '\\3\\1\\4\\2 position="bottom"\\3', $html); // *TABLES*
+		// A caption is copied above and below its table, nested tables each moving their own
+		if (stripos($html, '<caption') !== false) {
+			$moveCaption = function ($table) use (&$moveCaption, $kwt) {
+				// Saves rescanning a table, and the tables nested in it, that holds no caption
+				if (stripos($table[2], '<caption') === false) {
+					return $table[0];
+				}
+
+				$content = HtmlTags::replaceElements($table[2], 'table', $moveCaption);
+				$startTag = '<' . $table[1] . '>';
+
+				if (!preg_match('/^\s*<caption(.*?<\/caption>)/si', $content, $caption)) {
+					return $startTag . $content . $table[3];
+				}
+
+				return '<caption position="top"' . $kwt . $caption[1] . $startTag . substr($content, strlen($caption[0]))
+					. $table[3] . '<caption position="bottom"' . $caption[1];
+			};
+			$html = HtmlTags::replaceElements($html, 'table', $moveCaption); // *TABLES*
+		}
 
 		if ($this->use_kwt) {
 			$returnHtml = preg_replace('/<(h[1-6])(' . HtmlTags::CONTENT_PATTERN . '(?<!\/))(>[^>]*<\/\\1>\s*<table)/si', '<\\1\\2 keep-with-table="1"\\3', $html);
