@@ -3,6 +3,7 @@
 namespace Mpdf\Css;
 
 use Mpdf\CssMode;
+use Mpdf\Html\Tags;
 use Mpdf\Mpdf;
 use Mpdf\SizeConverter;
 use Psr\Log\NullLogger;
@@ -28,13 +29,22 @@ class MediaQueryProcessorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		parent::tear_down();
 	}
 
+	/**
+	 * The pattern CssParser finds <style> blocks with
+	 *
+	 * @return string
+	 */
+	private function stylePattern()
+	{
+		return '/' . Tags::elementPattern('style') . '/si';
+	}
+
 	public function testFilterByMediaQueryMatches()
 	{
 		$this->mpdf->CSSselectMedia = 'print';
 		$html = '<style media="print">.print { color: black; }</style>';
-		$pattern = '/<style[^>]*media=["\']([^"\'>]*)["\'].*?<\/style>/is';
 
-		$processed = $this->processor->filterByMediaQuery($html, $pattern);
+		$processed = $this->processor->filterByMediaQuery($html, $this->stylePattern());
 		$this->assertEquals($html, $processed);
 	}
 
@@ -42,9 +52,8 @@ class MediaQueryProcessorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$this->mpdf->CSSselectMedia = 'screen';
 		$html = '<style media="print">.print { color: black; }</style>';
-		$pattern = '/<style[^>]*media=["\']([^"\'>]*)["\'].*?<\/style>/is';
 
-		$processed = $this->processor->filterByMediaQuery($html, $pattern);
+		$processed = $this->processor->filterByMediaQuery($html, $this->stylePattern());
 		$this->assertEmpty($processed); // Should be removed
 	}
 
@@ -52,9 +61,8 @@ class MediaQueryProcessorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$this->mpdf->CSSselectMedia = 'screen';
 		$html = '<style media="all">.all { color: blue; }</style>';
-		$pattern = '/<style[^>]*media=["\']([^"\'>]*)["\'].*?<\/style>/is';
 
-		$processed = $this->processor->filterByMediaQuery($html, $pattern);
+		$processed = $this->processor->filterByMediaQuery($html, $this->stylePattern());
 		$this->assertEquals($html, $processed);
 	}
 
@@ -188,9 +196,8 @@ class MediaQueryProcessorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	public function testFilterByMediaQueryLeavesOutANegatedMatch()
 	{
-		$pattern = '/<style[^>]*media=["\']([^"\'>]*)["\'].*?<\/style>/is';
 
-		$this->assertSame('', $this->processor->filterByMediaQuery('<style media="not print">p { color: red; }</style>', $pattern));
+		$this->assertSame('', $this->processor->filterByMediaQuery('<style media="not print">p { color: red; }</style>', $this->stylePattern()));
 	}
 
 	/**
@@ -227,9 +234,8 @@ class MediaQueryProcessorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testFilterByMediaQueryKeepsANegatedMatchInLegacyMode()
 	{
 		$this->mpdf->cssMode = CssMode::LEGACY;
-		$pattern = '/<style[^>]*media=["\']([^"\'>]*)["\'].*?<\/style>/is';
 		$html = '<style media="not print">p { color: red; }</style>';
 
-		$this->assertSame($html, $this->processor->filterByMediaQuery($html, $pattern));
+		$this->assertSame($html, $this->processor->filterByMediaQuery($html, $this->stylePattern()));
 	}
 }

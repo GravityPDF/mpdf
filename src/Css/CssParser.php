@@ -9,6 +9,7 @@ use Mpdf\Mpdf;
 use Mpdf\Cache;
 use Mpdf\SizeConverter;
 use Mpdf\Color\ColorConverter;
+use Mpdf\Html\Tags;
 use Mpdf\AssetFetcher;
 
 class CssParser
@@ -173,8 +174,15 @@ class CssParser
 		$ind = 0;
 		$stylesheets = [];
 
-		$html = $this->mediaQueryProcessor->filterByMediaQuery($html, '/<style[^>]*media=["\']([^"\'>]*)["\'].*?<\/style>/is');
-		$html = $this->mediaQueryProcessor->filterByMediaQuery($html, '/<link[^>]*media=["\']([^"\'>]*)["\'].*?>/is');
+		$style = '/' . Tags::elementPattern('style') . '/si';
+
+		$hasStyle = stripos($html, '<style') !== false;
+		if ($hasStyle) {
+			$html = $this->mediaQueryProcessor->filterByMediaQuery($html, $style);
+		}
+		if (stripos($html, '<link') !== false) {
+			$html = $this->mediaQueryProcessor->filterByMediaQuery($html, '/' . Tags::startTagPattern('link') . '/i');
+		}
 		$html = $this->commentParser->removeCommentsFromStyleBlocks($html);
 		$html = $this->commentParser->removeHtmlComments($html);
 
@@ -196,20 +204,19 @@ class CssParser
 			$ind++;
 		}
 
-		// CSS as <style> in HTML document
-		if (preg_match_all('/<style.*?>(.*?)<\/style>/si', $html, $cssBlock)) {
-			foreach ($cssBlock[1] as $css) {
-				$stylesheets[] = $this->cssLoader->resolveBackgroundUrls($css);
-			}
+		// CSS as <style> in HTML document, taken out of it
+		if ($hasStyle) {
+			$html = preg_replace_callback($style, function ($m) use (&$stylesheets) {
+				$stylesheets[] = $this->cssLoader->resolveBackgroundUrls($m[2]);
+
+				return '';
+			}, $html);
 		}
 
 		// Each is read on its own, so a block or comment one leaves open ends with it
 		foreach ($stylesheets as $css) {
 			$this->processCssString($this->tokenizer->removeComments($css));
 		}
-
-		// Remove CSS (tags and content), if any (it can be <style> or <style type="txt/css">)
-		$html = preg_replace('/<style.*?>(.*?)<\/style>/si', '', $html);
 
 		return $html;
 	}

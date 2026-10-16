@@ -3,6 +3,7 @@
 namespace Mpdf\Css;
 
 use Mpdf\CssMode;
+use Mpdf\Html\Tags;
 use Mpdf\Mpdf;
 use Mpdf\SizeConverter;
 
@@ -44,22 +45,24 @@ class MediaQueryProcessor
 	/**
 	 * Filter HTML elements by media query.
 	 *
-	 * Removes elements (style or link tags) that don't match the configured media type.
+	 * Removes elements (style or link tags) whose media attribute doesn't match the configured media type.
 	 *
 	 * @param string $html HTML content to filter
-	 * @param string $pattern Regex pattern to match elements
+	 * @param string $pattern Regex pattern to match elements, capturing the content of their start tag first
 	 * @return string Filtered HTML
 	 */
 	public function filterByMediaQuery($html, $pattern)
 	{
-		preg_match_all($pattern, $html, $m);
-		foreach ($m[0] as $i => $url) {
+		return preg_replace_callback($pattern, function ($m) {
+			list(, $attributes) = Tags::attributes($m[1]);
+
 			// Unlike an @media block, a <style> or <link> for any medium is left out when CSSselectMedia names none
-			if (!$this->mpdf->CSSselectMedia || !$this->matches($m[1][$i])) {
-				$html = str_replace($m[0][$i], '', $html);
+			if (isset($attributes['MEDIA']) && (!$this->mpdf->CSSselectMedia || !$this->matches($attributes['MEDIA']))) {
+				return '';
 			}
-		}
-		return $html;
+
+			return $m[0];
+		}, $html);
 	}
 
 	/**

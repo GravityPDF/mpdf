@@ -6,6 +6,7 @@ use Mpdf\AssetFetcher;
 use Mpdf\Cache;
 use Mpdf\CssMode;
 use Mpdf\Exception\AssetFetchingException;
+use Mpdf\Html\Tags;
 use Mpdf\Mpdf;
 use Mpdf\MpdfException;
 use Mpdf\Utils\Path;
@@ -78,8 +79,7 @@ class CssLoader
 	 * Extract external stylesheet URLs from HTML.
 	 *
 	 * Finds all external CSS file references including:
-	 * - <link rel="stylesheet" href="...">
-	 * - <link href="..." rel="stylesheet">
+	 * - <link rel="stylesheet" href="...">, its attributes in any order
 	 * - @import url(...) and @import "..." in <style> blocks, whose media query list matches
 	 *
 	 * @param string $html HTML content to scan
@@ -89,19 +89,23 @@ class CssLoader
 	{
 		$cssUrls = [];
 
-		// <link rel="stylesheet" href="...">
-		if (preg_match_all('/<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^>"\']*)["\'].*?>/si', $html, $cxt)) {
-			$cssUrls = $cxt[1];
+		if (stripos($html, '<link') !== false) {
+			preg_match_all('/' . Tags::startTagPattern('link') . '/i', $html, $links);
+			foreach ($links[1] as $link) {
+				list(, $attributes) = Tags::attributes($link);
+				if (isset($attributes['REL'], $attributes['HREF']) && strtolower(trim($attributes['REL'])) === 'stylesheet') {
+					$cssUrls[] = $attributes['HREF'];
+				}
+			}
 		}
 
-		// <link href="..." rel="stylesheet">
-		if (preg_match_all('/<link[^>]*href=["\']([^>"\']*)["\'][^>]*?rel=["\']stylesheet["\'].*?>/si', $html, $cxt)) {
-			$cssUrls = array_merge($cssUrls, $cxt[1]);
+		if (stripos($html, '<style') === false) {
+			return $cssUrls;
 		}
 
-		preg_match_all('/<style.*?>(.*?)<\/style>/si', $html, $styles);
+		preg_match_all('/' . Tags::elementPattern('style') . '/si', $html, $styles);
 
-		return array_merge($cssUrls, $this->extractImportUrls($styles[1], true));
+		return array_merge($cssUrls, $this->extractImportUrls($styles[2], true));
 	}
 
 	/**

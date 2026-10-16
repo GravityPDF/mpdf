@@ -14545,25 +14545,36 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($mode === HTMLParserMode::DEFAULT_MODE || $mode === HTMLParserMode::HEADER_CSS) {
 			$this->ReadMetaTags($html);
 
-			if (preg_match('/<base[^>]*href=["\']([^"\'>]*)["\']/i', $html, $m)) {
-				$this->SetBasePath($m[1]);
+			if (stripos($html, '<base') !== false) {
+				preg_match_all('/' . HtmlTags::startTagPattern('base') . '/i', $html, $bases);
+				foreach ($bases[1] as $base) {
+					list(, $attributes) = HtmlTags::attributes($base);
+					if (isset($attributes['HREF'])) {
+						$this->SetBasePath($attributes['HREF']);
+						break;
+					}
+				}
 			}
 			$html = $this->cssManager->ReadCSS($html);
 
-			if (preg_match('/<html\s[^>]*\blang=["\']([^"\']*)["\']/i', $html, $m)) {
-				$this->documentLang = $m[1];
-				if ($this->autoLangToFont && !$this->usingCoreFont) {
-					$html_lang = $m[1];
+			if (stripos($html, '<html') !== false && preg_match('/' . HtmlTags::startTagPattern('html') . '/i', $html, $m)) {
+				list(, $attributes) = HtmlTags::attributes($m[1]);
+				if (isset($attributes['LANG'])) {
+					$this->documentLang = $attributes['LANG'];
+					if ($this->autoLangToFont && !$this->usingCoreFont) {
+						$html_lang = $attributes['LANG'];
+					}
+				}
+
+				if (isset($attributes['DIR']) && strtolower(trim($attributes['DIR'])) === 'rtl') {
+					$zproperties['DIRECTION'] = 'rtl';
 				}
 			}
 
-			if (preg_match('/<html [^>]*dir=[\'\"]\s*rtl\s*[\'\"]/ism', $html)) {
-				$zproperties['DIRECTION'] = 'rtl';
-			}
-
 			// allow in-line CSS for body tag to be parsed // Get <body> tag inline CSS
-			$body = '/(?=<body\b)' . HtmlTags::TAG_PATTERN;
-			if (preg_match($body . '(.*?)<\/body>/is', $html, $m) || preg_match($body . '(.*)$/is', $html, $m)) {
+			if (stripos($html, '<body') !== false && (preg_match('/' . HtmlTags::elementPattern('body') . '/si', $html, $m)
+				|| preg_match('/' . HtmlTags::startTagPattern('body') . '(.*)$/si', $html, $m))
+			) {
 				$html = $m[2];
 				list(, $attributes) = HtmlTags::attributes($m[1]);
 				if (isset($attributes['STYLE'])) {
@@ -14709,18 +14720,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$html = $this->markScriptToLang($html);
 		}
 
+		// Each is registered under its name and taken out of the flow
 		foreach (['htmlpageheader' => 'pageHTMLheaders', 'htmlpagefooter' => 'pageHTMLfooters'] as $tagName => $property) {
-			preg_match_all('/(?=<' . $tagName . '\b)' . HtmlTags::TAG_PATTERN . '(.*?)<\/' . $tagName . '>/si', $html, $parts, PREG_SET_ORDER);
-			foreach ($parts as $part) {
+			if (stripos($html, '<' . $tagName) === false) {
+				continue;
+			}
+
+			$html = preg_replace_callback('/' . HtmlTags::elementPattern($tagName) . '/si', function ($part) use ($property) {
 				list(, $attributes) = HtmlTags::attributes($part[1]);
 				if (isset($attributes['NAME'])) {
 					$this->{$property}[$attributes['NAME']] = ['html' => $part[2], 'h' => $this->_getHtmlHeight($part[2])];
 				}
-			}
-		}
 
-		$html = preg_replace('/<htmlpageheader.*?<\/htmlpageheader>/si', '', $html);
-		$html = preg_replace('/<htmlpagefooter.*?<\/htmlpagefooter>/si', '', $html);
+				return '';
+			}, $html);
+		}
 
 		if ($this->state == 0 && ($mode === HTMLParserMode::DEFAULT_MODE || $mode === HTMLParserMode::HTML_BODY)) {
 			$this->AddPage($this->CurOrientation);
@@ -19052,10 +19066,15 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function ReadMetaTags($html)
 	{
-		if (preg_match('/<title>(.*?)<\/title>/si', $html, $m)) {
-			$this->SetTitle($m[1]);
+		if (stripos($html, '<title') !== false && preg_match('/' . HtmlTags::elementPattern('title') . '/si', $html, $m)) {
+			$this->SetTitle($m[2]);
 		}
-		preg_match_all('/(?=<meta\s)' . HtmlTags::TAG_PATTERN . '/i', $html, $tags);
+
+		if (stripos($html, '<meta') === false) {
+			return;
+		}
+
+		preg_match_all('/' . HtmlTags::startTagPattern('meta') . '/i', $html, $tags);
 		foreach ($tags[1] as $tag) {
 			list(, $attributes) = HtmlTags::attributes($tag);
 			if (!isset($attributes['NAME'], $attributes['CONTENT'])) {
@@ -25220,7 +25239,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				// Sub-entries e.g. Mammals:elephant
 				// But allow for tags e.g. <b>Mammal</b>:elephants
-				$a = preg_split('/(<.*?>)/', $txt, -1, PREG_SPLIT_DELIM_CAPTURE);
+				$a = HtmlTags::split($txt);
 				$txt = '';
 				$marker = false;
 				foreach ($a as $k => $e) {
@@ -25243,7 +25262,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$marker = true; // Don't replace any more once the subentry marker has been found
 						}
 					}
-					$txt .= $e;
+					$txt .= $k % 2 == 0 ? $e : '<' . $e . '>';
 				}
 
 				if (!$marker) {
@@ -28128,21 +28147,23 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			));
 		}
 
-		preg_match_all("/(<annotation.*?>)/si", $html, $m);
-		if (count($m[1])) {
-			for ($i = 0; $i < count($m[1]); $i++) {
-				$sub = preg_replace("/\n/si", Mpdf::OBJECT_IDENTIFIER, $m[1][$i]);
-				$html = preg_replace('/' . preg_quote($m[1][$i], '/') . '/si', $sub, $html);
-			}
+		// The newlines in an annotation's content are kept through the linefeed replacement below
+		if (stripos($html, '<annotation') !== false) {
+			$html = preg_replace_callback('/' . HtmlTags::startTagPattern('annotation') . '/i', function ($m) {
+				return str_replace("\n", Mpdf::OBJECT_IDENTIFIER, $m[0]);
+			}, $html);
 		}
 
-		preg_match_all("/(<svg.*?<\/svg>)/si", $html, $svgi);
-		if (count($svgi[0])) {
-			for ($i = 0; $i < count($svgi[0]); $i++) {
-				$file = $this->cache->write('/_tempSVG' . uniqid(random_int(1, 100000), true) . '_' . $i . '.svg', $svgi[0][$i]);
-				$class = $this->svgClassAttribute($svgi[0][$i]);
-				$html = str_replace($svgi[0][$i], '<img src="' . $file . '"' . ($class !== '' ? ' class="' . $class . '"' : '') . ' />', $html);
-			}
+		if (stripos($html, '</svg') !== false) {
+			$html = preg_replace_callback('/' . HtmlTags::elementPattern('svg') . '/si', function ($m) {
+				$file = $this->cache->write('/_tempSVG' . uniqid(random_int(1, 100000), true) . '.svg', $m[0]);
+
+				// Kept so the selectors written for the SVG still reach the image; no class name holds a double quote
+				list(, $attributes) = HtmlTags::attributes($m[1]);
+				$class = isset($attributes['CLASS']) ? str_replace('"', '', $attributes['CLASS']) : '';
+
+				return '<img src="' . $file . '"' . ($class !== '' ? ' class="' . $class . '"' : '') . ' />';
+			}, $html);
 		}
 
 		// Remove comments, then javascript code, from HTML (neither should appear in the PDF file)
@@ -28160,7 +28181,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = preg_replace('/<tr>\s*<\/tr>/i', '', $html);
 		$html = preg_replace('/<thead>\s*<\/thead>/i', '', $html);
 		$html = preg_replace('/<tfoot>\s*<\/tfoot>/i', '', $html);
-		$html = preg_replace('/<table[^>]*>\s*<\/table>/i', '', $html);
+		$html = preg_replace('/<table' . HtmlTags::CONTENT_PATTERN . '>\s*<\/table>/i', '', $html);
 
 		// Remove spaces at end of table cells
 		$html = preg_replace("/[ \n\r]+<\/t(d|h)/", '</t\\1', $html);
@@ -28177,34 +28198,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = preg_replace('/<wbr[ \/]*>\s*/is', "&#173;", $html);
 
 		// Preserve '\n's in content between the tags <pre> and </pre>
-		if (preg_match('/<pre/', $html)) {
-
-			$html_a = preg_split('/(\<\/?pre[^\>]*\>)/', $html, -1, 2);
-			$h = [];
-			$c = 0;
-
-			foreach ($html_a as $s) {
-				if ($c > 1 && preg_match('/^<\/pre/i', $s)) {
-					$c--;
-					$s = preg_replace('/<\/pre/i', '</innerpre', $s);
-				} elseif ($c > 0 && preg_match('/^<pre/i', $s)) {
-					$c++;
-					$s = preg_replace('/<pre/i', '<innerpre', $s);
-				} elseif (preg_match('/^<pre/i', $s)) {
-					$c++;
-				} elseif (preg_match('/^<\/pre/i', $s)) {
-					$c--;
+		// A pre block inside another is renamed innerpre until the end, so the outer one is matched whole
+		if (strpos($html, '<pre') !== false) {
+			$depth = 0;
+			$html = preg_replace_callback('/' . HtmlTags::startTagPattern('pre|\/pre') . '/', function ($m) use (&$depth) {
+				if ($m[1][0] === '/') {
+					return --$depth > 0 ? '</innerpre' . substr($m[0], strlen('</pre')) : $m[0];
 				}
-				array_push($h, $s);
-			}
 
-			$html = implode('', $h);
+				return $depth++ > 0 ? '<innerpre' . substr($m[0], strlen('<pre')) : $m[0];
+			}, $html);
 		}
 
-		$thereispre = preg_match_all('#<pre(.*?)>(.*?)</pre>#si', $html, $temp);
+		$pre = '/' . HtmlTags::elementPattern('pre') . '/si';
+		$temp = [];
+		$thereispre = stripos($html, '<pre') !== false ? preg_match_all($pre, $html, $temp) : 0;
 
 		// Preserve '\n's in content between the tags <textarea> and </textarea>
-		$thereistextarea = preg_match_all('#<textarea(.*?)>(.*?)</textarea>#si', $html, $temp2);
+		$textarea = '/' . HtmlTags::elementPattern('textarea') . '/si';
+		$temp2 = [];
+		$thereistextarea = stripos($html, '<textarea') !== false ? preg_match_all($textarea, $html, $temp2) : 0;
 		$html = preg_replace('/[\n]/', ' ', $html); // replace linefeed by spaces
 		$html = preg_replace('/[\t]/', ' ', $html); // replace tabs by spaces
 
@@ -28216,7 +28229,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = preg_replace('/\/(u|o)l>\s+<\/li/i', '/\\1l></li', $html);
 		$html = preg_replace('/\/li>\s+<\/(u|o)l/i', '/li></\\1l', $html);
 		$html = preg_replace('/\/li>\s+<li/i', '/li><li', $html);
-		$html = preg_replace('/<(u|o)l([^>]*)>[ ]+/i', '<\\1l\\2>', $html);
+		$html = preg_replace('/<(u|o)l(' . HtmlTags::CONTENT_PATTERN . ')>[ ]+/i', '<\\1l\\2>', $html);
 		$html = preg_replace('/[ ]+<(u|o)l/i', '<\\1l', $html);
 
 		// Make self closing tabs valid XHTML
@@ -28226,28 +28239,26 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$html = HtmlTags::closeSelfClosing($html, $selftabs . '|' . $selftabs2);
 
-		$iterator = 0;
-		while ($thereispre) { // Recover <pre attributes>content</pre>
-			$temp[2][$iterator] = preg_replace('/<([^!\/a-zA-Z_:])/', '&lt;\\1', $temp[2][$iterator]); // mPDF 5.7.2	// mPDF 5.7.3
+		// Each element is put back as it was before the linefeeds went, the n-th match getting the n-th one taken
+		if ($thereispre) {
+			$iterator = 0;
+			$html = preg_replace_callback($pre, function () use ($temp, $tabSpaces, &$iterator) {
+				$content = preg_replace('/<([^!\/a-zA-Z_:])/', '&lt;\\1', $temp[2][$iterator]); // mPDF 5.7.2	// mPDF 5.7.3
+				$content = preg_replace_callback("/^([^\n\t]*?)\t/m", [$this, 'tabs2spaces_callback'], $content); // mPDF 5.7+
+				$content = preg_replace('/\t/', str_repeat(" ", $tabSpaces), $content);
+				$content = preg_replace('/\n/', "<br />", $content);
 
-			$temp[2][$iterator] = preg_replace_callback("/^([^\n\t]*?)\t/m", [$this, 'tabs2spaces_callback'], $temp[2][$iterator]); // mPDF 5.7+
-			$temp[2][$iterator] = preg_replace('/\t/', str_repeat(" ", $tabSpaces), $temp[2][$iterator]);
-
-			$temp[2][$iterator] = preg_replace('/\n/', "<br />", $temp[2][$iterator]);
-			$temp[2][$iterator] = str_replace('\\', "\\\\", $temp[2][$iterator]);
-			// $html = preg_replace('#<pre(.*?)>(.*?)</pre>#si','<erp'.$temp[1][$iterator].'>'.$temp[2][$iterator].'</erp>',$html,1);
-			$html = preg_replace('#<pre(.*?)>(.*?)</pre>#si', '<erp' . $temp[1][$iterator] . '>' . str_replace('$', '\$', $temp[2][$iterator]) . '</erp>', $html, 1); // mPDF 5.7+
-			$thereispre--;
-			$iterator++;
+				return '<erp' . substr($temp[1][$iterator++], strlen('pre')) . '>' . $content . '</erp>';
+			}, $html);
 		}
 
-		$iterator = 0;
-		while ($thereistextarea) { // Recover <textarea attributes>content</textarea>
-			$temp2[2][$iterator] = preg_replace('/\t/', str_repeat(" ", $tabSpaces), $temp2[2][$iterator]);
-			$temp2[2][$iterator] = str_replace('\\', "\\\\", $temp2[2][$iterator]);
-			$html = preg_replace('#<textarea(.*?)>(.*?)</textarea>#si', '<aeratxet' . $temp2[1][$iterator] . '>' . trim($temp2[2][$iterator]) . '</aeratxet>', $html, 1);
-			$thereistextarea--;
-			$iterator++;
+		if ($thereistextarea) {
+			$iterator = 0;
+			$html = preg_replace_callback($textarea, function () use ($temp2, $tabSpaces, &$iterator) {
+				$content = trim(preg_replace('/\t/', str_repeat(" ", $tabSpaces), $temp2[2][$iterator]));
+
+				return '<aeratxet' . substr($temp2[1][$iterator++], strlen('textarea')) . '>' . $content . '</aeratxet>';
+			}, $html);
 		}
 
 		// Restore original tag names
@@ -28258,13 +28269,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = str_replace("</innerpre", "</pre", $html);
 		$html = str_replace("<innerpre", "<pre", $html);
 
-		$html = preg_replace('/<textarea([^>]*)><\/textarea>/si', '<textarea\\1> </textarea>', $html);
+		$html = preg_replace('/<textarea(' . HtmlTags::CONTENT_PATTERN . ')><\/textarea>/si', '<textarea\\1> </textarea>', $html);
 		// With use_kwt, a caption above its table is kept with it the same way as a heading (mpdf/mpdf#1666)
 		$kwt = $this->use_kwt ? ' keep-with-table="1"' : '';
-		$html = preg_replace('/(<table[^>]*>)\s*(<caption)(.*?<\/caption>)(.*?<\/table>)/si', '\\2 position="top"' . $kwt . '\\3\\1\\4\\2 position="bottom"\\3', $html); // *TABLES*
+		$html = preg_replace('/(<table' . HtmlTags::CONTENT_PATTERN . '>)\s*(<caption)(.*?<\/caption>)(.*?<\/table>)/si', '\\2 position="top"' . $kwt . '\\3\\1\\4\\2 position="bottom"\\3', $html); // *TABLES*
 
 		if ($this->use_kwt) {
-			$returnHtml = preg_replace('/<(h[1-6])([^>]*(?<!\/))(>[^>]*<\/\\1>\s*<table)/si', '<\\1\\2 keep-with-table="1"\\3', $html);
+			$returnHtml = preg_replace('/<(h[1-6])(' . HtmlTags::CONTENT_PATTERN . '(?<!\/))(>[^>]*<\/\\1>\s*<table)/si', '<\\1\\2 keep-with-table="1"\\3', $html);
 			/* If no errors then save the return value */
 			if (preg_last_error() === PREG_NO_ERROR) {
 				$html = $returnHtml;
@@ -28277,28 +28288,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = preg_replace("/(&#[x]{0,1}[0-9a-f]{1,5})</i", "\\1;<", $html);
 
 		return $html;
-	}
-
-	/**
-	 * The class an embedded SVG was given, so the img element it becomes can still be reached by the
-	 * selectors written for it. The value may be double quoted, single quoted or unquoted, as any
-	 * attribute value may be; a double quote is dropped because no class name can hold one.
-	 *
-	 * @param string $svg
-	 *
-	 * @return string
-	 */
-	private function svgClassAttribute($svg)
-	{
-		$matches = [];
-		if (!preg_match('/^<svg\b[^>]*?\sclass\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>"\']+))/si', $svg, $matches)) {
-			return '';
-		}
-
-		// PCRE drops the groups after the one that took part
-		$class = array_pop($matches);
-
-		return str_replace('"', '', $class);
 	}
 
 	// mPDF 5.7+

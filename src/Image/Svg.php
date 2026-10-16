@@ -4,6 +4,7 @@ namespace Mpdf\Image;
 
 use Mpdf\Color\ColorConverter;
 use Mpdf\CssManager;
+use Mpdf\Html\Tags;
 use Mpdf\Language\LanguageToFontInterface;
 use Mpdf\Language\ScriptToLanguageInterface;
 use Mpdf\Mpdf;
@@ -3298,7 +3299,7 @@ class Svg
 		}
 
 		$n = '';
-		$a = preg_split('/<(.*?)>/ms', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+		$a = Tags::split($html);
 		foreach ($a as $i => $e) {
 			if ($i % 2 == 0) {
 
