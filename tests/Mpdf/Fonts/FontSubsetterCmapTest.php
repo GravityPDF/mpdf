@@ -258,7 +258,9 @@ class FontSubsetterCmapTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function packFormat4Subtable(array $codeToGlyph)
 	{
 		$reflected = new \ReflectionMethod(FontSubsetter::class, 'format4Subtable');
-		$reflected->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$reflected->setAccessible(true);
+		}
 
 		return $reflected->invoke($this->subsetter(), $codeToGlyph);
 	}

@@ -241,7 +241,9 @@ class ArabicJoiningTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testTheScopeIsTheScriptsOtlSendsToTheArabicShaper()
 	{
 		$selectShaper = new \ReflectionMethod('Mpdf\Otl', 'selectShaper');
-		$selectShaper->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$selectShaper->setAccessible(true);
+		}
 		$otl = new \ReflectionClass('Mpdf\Otl');
 
 		$arabic = [];

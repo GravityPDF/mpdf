@@ -234,13 +234,17 @@ class AttributeParsingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A relative link is resolved against the base path, its entities decoded
+	 * A relative link is resolved against the base path, its entities decoded. The base is a URL so the link reads the
+	 * same on Windows, where a local path holds backslashes
 	 */
 	public function testARelativeLinkIsResolved()
 	{
-		$output = $this->render('<a href="page.html?a=1&amp;b=2">x</a>');
+		$mpdf = new Mpdf();
+		$mpdf->compress = false;
+		$mpdf->SetBasePath('https://example.com/docs/');
+		$mpdf->WriteHTML('<a href="page.html?a=1&amp;b=2">x</a>');
 
-		$this->assertStringContainsString('/URI (' . __DIR__ . '/../data/page.html?a=1&b=2)', $output);
+		$this->assertStringContainsString('/URI (https://example.com/docs/page.html?a=1&b=2)', $mpdf->Output('', 'S'));
 	}
 
 	/**
