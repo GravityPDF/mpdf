@@ -16179,6 +16179,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$blk['cascadeCSS'] = [];
 		$blk['block-align'] = false;
 		$blk['bgcolor'] = false;
+		// Columns copy a block's fill colour to its children and read it back after each row
+		$blk['bgcolorarray'] = false;
 		$blk['page_break_after_avoid'] = false;
 		$blk['keep_block_together'] = false;
 		$blk['float'] = false;
