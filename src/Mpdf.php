@@ -14562,28 +14562,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			// allow in-line CSS for body tag to be parsed // Get <body> tag inline CSS
-			if (preg_match('/<body([^>]*)>(.*?)<\/body>/ism', $html, $m) || preg_match('/<body([^>]*)>(.*)$/ism', $html, $m)) {
+			$body = '/(?=<body\b)' . HtmlTags::TAG_PATTERN;
+			if (preg_match($body . '(.*?)<\/body>/is', $html, $m) || preg_match($body . '(.*)$/is', $html, $m)) {
 				$html = $m[2];
-				// Changed to allow style="background: url('bg.jpg')"
-				if (preg_match('/style=[\"](.*?)[\"]/ism', $m[1], $mm) || preg_match('/style=[\'](.*?)[\']/ism', $m[1], $mm)) {
+				list(, $attributes) = HtmlTags::attributes($m[1]);
+				if (isset($attributes['STYLE'])) {
 					if ($this->cssMode === CssMode::STANDARD) {
 						// Merged as an element's style is, so the !important declarations of a body rule beat it
-						$bodyAttr['STYLE'] = $mm[1];
+						$bodyAttr['STYLE'] = $attributes['STYLE'];
 						$zproperties = [];
 					} else {
-						$zproperties = $this->cssManager->readInlineCSS($mm[1]);
+						$zproperties = $this->cssManager->readInlineCSS($attributes['STYLE']);
 					}
 				}
-				if (preg_match('/dir=[\'\"]\s*rtl\s*[\'\"]/ism', $m[1])) {
+				if (isset($attributes['DIR']) && strtolower(trim($attributes['DIR'])) === 'rtl') {
 					$zproperties['DIRECTION'] = 'rtl';
 				}
 				if (isset($html_lang) && $html_lang) {
 					$zproperties['LANG'] = $html_lang;
 				}
-				if (preg_match('/\blang=["\']([^"\']*)["\']/i', $m[1], $mm)) {
-					$this->documentLang = $mm[1];
+				if (isset($attributes['LANG'])) {
+					$this->documentLang = $attributes['LANG'];
 					if ($this->autoLangToFont && !$this->onlyCoreFonts) {
-						$zproperties['LANG'] = $mm[1];
+						$zproperties['LANG'] = $attributes['LANG'];
 					}
 				}
 			}
@@ -14708,18 +14709,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$html = $this->markScriptToLang($html);
 		}
 
-		preg_match_all('/<htmlpageheader([^>]*)>(.*?)<\/htmlpageheader>/si', $html, $h);
-		for ($i = 0; $i < count($h[1]); $i++) {
-			if (preg_match('/name=[\'|\"](.*?)[\'|\"]/', $h[1][$i], $n)) {
-				$this->pageHTMLheaders[$n[1]]['html'] = $h[2][$i];
-				$this->pageHTMLheaders[$n[1]]['h'] = $this->_getHtmlHeight($h[2][$i]);
-			}
-		}
-		preg_match_all('/<htmlpagefooter([^>]*)>(.*?)<\/htmlpagefooter>/si', $html, $f);
-		for ($i = 0; $i < count($f[1]); $i++) {
-			if (preg_match('/name=[\'|\"](.*?)[\'|\"]/', $f[1][$i], $n)) {
-				$this->pageHTMLfooters[$n[1]]['html'] = $f[2][$i];
-				$this->pageHTMLfooters[$n[1]]['h'] = $this->_getHtmlHeight($f[2][$i]);
+		foreach (['htmlpageheader' => 'pageHTMLheaders', 'htmlpagefooter' => 'pageHTMLfooters'] as $tagName => $property) {
+			preg_match_all('/(?=<' . $tagName . '\b)' . HtmlTags::TAG_PATTERN . '(.*?)<\/' . $tagName . '>/si', $html, $parts, PREG_SET_ORDER);
+			foreach ($parts as $part) {
+				list(, $attributes) = HtmlTags::attributes($part[1]);
+				if (isset($attributes['NAME'])) {
+					$this->{$property}[$attributes['NAME']] = ['html' => $part[2], 'h' => $this->_getHtmlHeight($part[2])];
+				}
 			}
 		}
 
@@ -15108,11 +15104,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 					/* -- END CSS-POSITION -- */
 					list($tag, $attributes) = HtmlTags::attributes($e);
-					$tag = strtoupper($tag);
 
 					$attr = [];
 					foreach ($attributes as $name => $value) {
-						$name = strtoupper($name);
 						// A relative link or image path is resolved against the base path
 						if (($name === 'HREF' || $name === 'SRC') && trim($value) != '' && !($name === 'SRC' && substr($value, 0, 4) == 'var:') && substr($value, 0, 1) != '@') {
 							$value = htmlspecialchars_decode($value); // mPDF 5.7.4 URLs
@@ -19058,19 +19052,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function ReadMetaTags($html)
 	{
-		// changes anykey=anyvalue to anykey="anyvalue" (only do this when this happens inside tags)
-		$regexp = '/ (\\w+?)=([^\\s>"]+)/si';
-		$html = preg_replace($regexp, " \$1=\"\$2\"", $html);
 		if (preg_match('/<title>(.*?)<\/title>/si', $html, $m)) {
 			$this->SetTitle($m[1]);
 		}
-		preg_match_all('/<meta [^>]*?(name|content)="([^>]*?)" [^>]*?(name|content)="([^>]*?)".*?>/si', $html, $aux);
-		$firstattr = $aux[1];
-		$secondattr = $aux[3];
-		for ($i = 0; $i < count($aux[0]); $i++) {
-			$name = ( strtoupper($firstattr[$i]) == "NAME" ) ? strtoupper($aux[2][$i]) : strtoupper($aux[4][$i]);
-			$content = ( strtoupper($firstattr[$i]) == "CONTENT" ) ? $aux[2][$i] : $aux[4][$i];
-			switch ($name) {
+		preg_match_all('/(?=<meta\s)' . HtmlTags::TAG_PATTERN . '/i', $html, $tags);
+		foreach ($tags[1] as $tag) {
+			list(, $attributes) = HtmlTags::attributes($tag);
+			if (!isset($attributes['NAME'], $attributes['CONTENT'])) {
+				continue;
+			}
+			$content = $attributes['CONTENT'];
+			switch (strtoupper($attributes['NAME'])) {
 				case "KEYWORDS":
 					$this->SetKeywords($content);
 					break;

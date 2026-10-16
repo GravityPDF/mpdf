@@ -69,17 +69,19 @@ class TagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public static function attributesProvider()
 	{
 		return [
-			'no attributes' => ['p', ['p', []]],
-			'each value form' => ['td a="1" b=\'2\' c=3 d', ['td', ['a' => '1', 'b' => '2', 'c' => '3', 'd' => '']]],
-			'spaces around "="' => ["p a = \"1\"\nb =2", ['p', ['a' => '1', 'b' => '2']]],
-			'a "name=value" inside a value' => ['bookmark content="Set x=1 first" /', ['bookmark', ['content' => 'Set x=1 first']]],
-			'an "href=" inside a value' => ['a title="see href=x now" href="y"', ['a', ['title' => 'see href=x now', 'href' => 'y']]],
-			'a ">" and quotes inside a value' => ['p title="a > \'b\'" c=\'"d"\'', ['p', ['title' => "a > 'b'", 'c' => '"d"']]],
-			'an apostrophe in an unquoted value' => ["p title=don't", ['p', ['title' => "don't"]]],
-			'a stray quote' => ['b class=x"', ['b', ['class' => 'x']]],
-			'an empty value' => ['p title="" class=x', ['p', ['title' => '', 'class' => 'x']]],
-			'the later of two' => ['p a="1" a="2"', ['p', ['a' => '2']]],
-			'a trailing "/"' => ['br/', ['br', []]],
+			'no attributes' => ['p', ['P', []]],
+			'each value form' => ['td a="1" b=\'2\' c=3 d', ['TD', ['A' => '1', 'B' => '2', 'C' => '3', 'D' => '']]],
+			'spaces around "="' => ["p a = \"1\"\nb =2", ['P', ['A' => '1', 'B' => '2']]],
+			'a "name=value" inside a value' => ['bookmark content="Set x=1 first" /', ['BOOKMARK', ['CONTENT' => 'Set x=1 first']]],
+			'an "href=" inside a value' => ['a title="see href=x now" href="y"', ['A', ['TITLE' => 'see href=x now', 'HREF' => 'y']]],
+			'a ">" and quotes inside a value' => ['p title="a > \'b\'" c=\'"d"\'', ['P', ['TITLE' => "a > 'b'", 'C' => '"d"']]],
+			'an apostrophe in an unquoted value' => ["p title=don't", ['P', ['TITLE' => "don't"]]],
+			'a stray quote' => ['b class=x"', ['B', ['CLASS' => 'x']]],
+			'an empty value' => ['p title="" class=x', ['P', ['TITLE' => '', 'CLASS' => 'x']]],
+			'the later of two' => ['p a="1" a="2"', ['P', ['A' => '2']]],
+			'the later of two in another case' => ['Meta Name="a" NAME="b"', ['META', ['NAME' => 'b']]],
+			'a name ending in another' => ['body data-style="a" style="b"', ['BODY', ['DATA-STYLE' => 'a', 'STYLE' => 'b']]],
+			'a trailing "/"' => ['br/', ['BR', []]],
 		];
 	}
 

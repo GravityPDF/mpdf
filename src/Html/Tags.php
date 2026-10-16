@@ -41,11 +41,12 @@ class Tags
 
 	/**
 	 * Reads the content of a start tag into its name and its attributes, each value as it was written between its
-	 * quotes. A later attribute of the same name replaces an earlier one
+	 * quotes. Names are uppercased, as HTML ignores their case, and a later attribute of the same name replaces an
+	 * earlier one
 	 *
 	 * @param string $content What is between the tag's angle brackets: 'a title="x = 1" href=b'
 	 *
-	 * @return array The tag name, and the attribute values by name: ['a', ['title' => 'x = 1', 'href' => 'b']]
+	 * @return array The tag name, and the attribute values by name: ['A', ['TITLE' => 'x = 1', 'HREF' => 'b']]
 	 */
 	public static function attributes($content)
 	{
@@ -55,10 +56,10 @@ class Tags
 		$attributes = [];
 		foreach ($matches as $match) {
 			// The value is the last group: PCRE drops the ones after the form that took part
-			$attributes[$match[1]] = count($match) > 2 ? end($match) : '';
+			$attributes[strtoupper($match[1])] = count($match) > 2 ? end($match) : '';
 		}
 
-		return [$tag ? $tag[1] : '', $attributes];
+		return [$tag ? strtoupper($tag[1]) : '', $attributes];
 	}
 
 	/**
