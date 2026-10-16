@@ -2,6 +2,8 @@
 
 namespace Mpdf\Css;
 
+use Mpdf\Html\Tags;
+
 class CommentParser
 {
 	/**
@@ -42,16 +44,12 @@ class CommentParser
 	 */
 	public function removeCommentsFromStyleBlocks($html)
 	{
-		preg_match_all('/<style.*?>(.*?)<\/style>/si', $html, $m);
-		if (count($m[1]) === 0) {
+		if (stripos($html, '<style') === false) {
 			return $html;
 		}
 
-		foreach ($m[1] as $style) {
-			$sub = '>' . str_replace(['<!--', '-->'], ' ', $style) . '</style>';
-			$html = str_replace('>' . $style . '</style>', $sub, $html);
-		}
-
-		return $html;
+		return preg_replace_callback('/' . Tags::elementPattern('style') . '/si', function ($m) {
+			return '<' . $m[1] . '>' . str_replace(['<!--', '-->'], ' ', $m[2]) . '</style>';
+		}, $html);
 	}
 }

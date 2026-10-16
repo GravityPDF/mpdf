@@ -17,9 +17,14 @@ class Tags
 	const QUOTED_VALUE_PATTERN = '=\s*+(?:"[^"]*+"|\'[^\']*+\')?';
 
 	/**
+	 * A tag's content between its angle brackets, or the part of it after the name
+	 */
+	const CONTENT_PATTERN = '(?:[^>=]++|' . self::QUOTED_VALUE_PATTERN . ')*+';
+
+	/**
 	 * A tag, with its content between the angle brackets captured
 	 */
-	const TAG_PATTERN = '<((?:[^>=]++|' . self::QUOTED_VALUE_PATTERN . ')*+)>';
+	const TAG_PATTERN = '<(' . self::CONTENT_PATTERN . ')>';
 
 	/**
 	 * A name, then a value that may be double quoted, single quoted, unquoted, or absent altogether, as it is for
@@ -37,6 +42,36 @@ class Tags
 	public static function split($html)
 	{
 		return preg_split('/' . self::TAG_PATTERN . '/', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+	}
+
+	/**
+	 * A pattern for the start tags of the given names, their content captured as TAG_PATTERN captures it. Every other
+	 * tag is skipped whole, so one written inside its attribute value, as in title="draw <svg>", is not found
+	 *
+	 * @param string $names The tag names, separated by "|"
+	 *
+	 * @return string The pattern, without delimiters
+	 */
+	public static function startTagPattern($names)
+	{
+		// The name ends where its tag's content goes on, so <svg-icon> is not an <svg>
+		$named = '<(?:' . $names . ')(?=[\s\/>])';
+		$other = '(?=<[a-zA-Z\/!])(?!' . $named . ')' . self::TAG_PATTERN . '(*SKIP)(*FAIL)';
+
+		return '(?|' . $other . '|(?=' . $named . ')' . self::TAG_PATTERN . ')';
+	}
+
+	/**
+	 * A pattern for the elements of the given name, their start tag found as startTagPattern() finds it: the start
+	 * tag's content is captured first, then what is between it and the first end tag. Used with the "s" modifier
+	 *
+	 * @param string $name
+	 *
+	 * @return string The pattern, without delimiters
+	 */
+	public static function elementPattern($name)
+	{
+		return self::startTagPattern($name) . '(.*?)<\/' . $name . '>';
 	}
 
 	/**
