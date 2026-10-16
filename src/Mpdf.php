@@ -15107,63 +15107,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						continue;
 					}
 					/* -- END CSS-POSITION -- */
-					// Rewrite single quoted values as double quoted ones, unless that would swallow a
-					// double quote of their own - those are left for the attribute regex below
-					$regexp = '|=\'([^\'"]*)\'|s';
-					$e = preg_replace($regexp, "=\"\$1\"", $e);
-					// changes anykey=anyvalue to anykey="anyvalue" (only do this inside [some] tags)
-					if (substr($e, 0, 10) != 'pageheader' && substr($e, 0, 10) != 'pagefooter' && substr($e, 0, 12) != 'tocpagebreak' && substr($e, 0, 10) != 'indexentry' && substr($e, 0, 8) != 'tocentry') { // mPDF 6  (ZZZ99H)
-						$regexp = '| (\\w+?)=([^\\s>"\']+)|si';
-						$e = preg_replace($regexp, " \$1=\"\$2\"", $e);
-					}
-
-					$e = preg_replace('/ (\\S+?)\s*=\s*"/i', " \\1=\"", $e);
-
-					// Fix path values, if needed
-					$orig_srcpath = '';
-					if ((stristr($e, "href=") !== false) or ( stristr($e, "src=") !== false)) {
-						$regexp = '/ (href|src)\s*=\s*"(.*?)"/i';
-						preg_match($regexp, $e, $auxiliararray);
-						if (isset($auxiliararray[2])) {
-							$path = $auxiliararray[2];
-						} else {
-							$path = '';
-						}
-						if (trim($path) != '' && !(stristr($e, "src=") !== false && substr($path, 0, 4) == 'var:') && substr($path, 0, 1) != '@') {
-							$path = htmlspecialchars_decode($path); // mPDF 5.7.4 URLs
-							$orig_srcpath = $path;
-							$this->GetFullPath($path);
-							$regexp = '/ (href|src)="(.*?)"/i';
-							$e = preg_replace($regexp, ' \\1="' . $path . '"', $e);
-						}
-					}//END of Fix path values
-					// Extract attributes. The tag name is the first thing matched; after it comes a
-					// name, then a value that may be double quoted, single quoted, unquoted, or
-					// absent altogether, as it is for boolean attributes such as `selected`.
-					// Names are letter-led so the slash that closes an empty tag is not read as one.
-					preg_match_all('/([a-zA-Z][\w:.\-]*)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>"]+)))?/', $e, $contents, PREG_SET_ORDER);
-
-					$tag = $contents ? strtoupper($contents[0][1]) : '';
-					array_shift($contents); // the tag name itself is not an attribute
+					list($tag, $attributes) = HtmlTags::attributes($e);
+					$tag = strtoupper($tag);
 
 					$attr = [];
-					if ($orig_srcpath) {
-						$attr['ORIG_SRC'] = $orig_srcpath;
-					}
-					foreach ($contents as $v) {
-						// At most one of the three value forms takes part, and PCRE drops whichever
-						// groups come after the one that did
-						if (isset($v[4])) {
-							$value = $v[4];
-						} elseif (isset($v[3])) {
-							$value = $v[3];
-						} elseif (isset($v[2])) {
-							$value = $v[2];
-						} else {
-							$value = '';
+					foreach ($attributes as $name => $value) {
+						$name = strtoupper($name);
+						// A relative link or image path is resolved against the base path
+						if (($name === 'HREF' || $name === 'SRC') && trim($value) != '' && !($name === 'SRC' && substr($value, 0, 4) == 'var:') && substr($value, 0, 1) != '@') {
+							$value = htmlspecialchars_decode($value); // mPDF 5.7.4 URLs
+							$attr['ORIG_SRC'] = $value;
+							$this->GetFullPath($value);
 						}
-
-						$name = strtoupper($v[1]);
 						// 4.2.013 Omits STYLE; HEADER-STYLE-RIGHT etc. are used for <pageheader>
 						if ($name === 'ID' || $name === 'CLASS' || preg_match('/^(HEADER|FOOTER)-STYLE/', $name)) {
 							$value = strtoupper($value);
@@ -15176,19 +15131,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					// An element inside one hidden with display: none is not laid out, but it is one of the document's
 					// elements, and the selectors that look at its siblings read its attributes
 					if ($this->blk[$this->blklvl]['hide']) {
-						if (strpos($e, ' ')) {
-							$te = strtoupper(substr($e, 0, strpos($e, ' ')));
-						} else {
-							$te = strtoupper($e);
-						}
 						// mPDF 6
-						if ($te == 'THEAD' || $te == 'TBODY' || $te == 'TFOOT' || $te == 'TR' || $te == 'TD' || $te == 'TH') {
-							$this->lastoptionaltag = $te;
+						if ($tag == 'THEAD' || $tag == 'TBODY' || $tag == 'TFOOT' || $tag == 'TR' || $tag == 'TD' || $tag == 'TH') {
+							$this->lastoptionaltag = $tag;
 						}
-						if (in_array($te, $this->outerblocktags) || in_array($te, $this->innerblocktags)) {
+						if (in_array($tag, $this->outerblocktags) || in_array($tag, $this->innerblocktags)) {
 							$this->blklvl++;
 							$this->blk[$this->blklvl]['hide'] = true;
-							$this->blk[$this->blklvl]['tag'] = $te; // mPDF 6
+							$this->blk[$this->blklvl]['tag'] = $tag; // mPDF 6
 						}
 						$this->closeElementsImpliedBy($tag, $floor);
 						$this->startElement($tag, $attr, $selfClosing);

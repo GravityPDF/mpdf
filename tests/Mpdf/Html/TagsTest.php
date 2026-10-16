@@ -62,6 +62,41 @@ class TagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 
 	/**
+	 * The content of a start tag, and the name and attributes it reads as
+	 *
+	 * @return array
+	 */
+	public static function attributesProvider()
+	{
+		return [
+			'no attributes' => ['p', ['p', []]],
+			'each value form' => ['td a="1" b=\'2\' c=3 d', ['td', ['a' => '1', 'b' => '2', 'c' => '3', 'd' => '']]],
+			'spaces around "="' => ["p a = \"1\"\nb =2", ['p', ['a' => '1', 'b' => '2']]],
+			'a "name=value" inside a value' => ['bookmark content="Set x=1 first" /', ['bookmark', ['content' => 'Set x=1 first']]],
+			'an "href=" inside a value' => ['a title="see href=x now" href="y"', ['a', ['title' => 'see href=x now', 'href' => 'y']]],
+			'a ">" and quotes inside a value' => ['p title="a > \'b\'" c=\'"d"\'', ['p', ['title' => "a > 'b'", 'c' => '"d"']]],
+			'an apostrophe in an unquoted value' => ["p title=don't", ['p', ['title' => "don't"]]],
+			'a stray quote' => ['b class=x"', ['b', ['class' => 'x']]],
+			'an empty value' => ['p title="" class=x', ['p', ['title' => '', 'class' => 'x']]],
+			'the later of two' => ['p a="1" a="2"', ['p', ['a' => '2']]],
+			'a trailing "/"' => ['br/', ['br', []]],
+		];
+	}
+
+	/**
+	 * A start tag reads as its name and its attributes, each value as it was written between its quotes
+	 *
+	 * @dataProvider attributesProvider
+	 *
+	 * @param string $content
+	 * @param array $expected
+	 */
+	public function testAttributes($content, array $expected)
+	{
+		$this->assertSame($expected, Tags::attributes($content));
+	}
+
+	/**
 	 * HTML and how it reads once the tags named br, input and bookmark close themselves
 	 *
 	 * @return array
