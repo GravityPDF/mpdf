@@ -9,7 +9,7 @@ class CommentParser
 	/**
 	 * A <script> element, for a regular expression with the s and i modifiers
 	 */
-	const SCRIPT = '<script\b.*?<\/script\s*>';
+	const SCRIPT = '<script\b.*?<\/script' . Tags::END_TAG_REST_PATTERN;
 
 	/**
 	 * Remove mPDF-specific and general HTML comments from content.
