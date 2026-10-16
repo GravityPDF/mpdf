@@ -22,14 +22,14 @@ class CommentParser
 	 */
 	public function removeHtmlComments($html)
 	{
-		$html = preg_replace('/<!--mpdf|mpdf-->/i', '', $html);
+		$html = Tags::replaceOutsideTags($html, '<!--mpdf|mpdf-->', '', 'i');
 
 		if (!preg_match('/<!--/', $html)) {
 			return $html;
 		}
 
-		// (*SKIP)(*F) steps over a script whole, so the search for a comment carries on after it
-		return preg_replace('/' . self::SCRIPT . '(*SKIP)(*F)|<!--.*?-->/si', '', $html);
+		// A script is put back as it was, so the search for a comment carries on after it
+		return Tags::replaceOutsideTags($html, '(' . self::SCRIPT . ')|<!--.*?-->', '\\1', 'si');
 	}
 
 	/**

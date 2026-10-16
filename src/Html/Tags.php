@@ -54,8 +54,7 @@ class Tags
 	 */
 	public static function startTagPattern($names)
 	{
-		// The name ends where its tag's content goes on, so <svg-icon> is not an <svg>
-		$named = '<(?:' . $names . ')(?=[\s\/>])';
+		$named = self::namedTagStart($names);
 		$other = '(?=<[a-zA-Z\/!])(?!' . $named . ')' . self::TAG_PATTERN . '(*SKIP)(*FAIL)';
 
 		return '(?|' . $other . '|(?=' . $named . ')' . self::TAG_PATTERN . ')';
@@ -172,10 +171,33 @@ class Tags
 		return preg_replace('/' . $kept . '|' . self::TAG_PATTERN . '/i', '', $html);
 	}
 
+	/**
+	 * Replaces what the given pattern matches outside tags: any tag the pattern does not match from its "<" is skipped
+	 * whole, so nothing inside an attribute value, as in title="<br>", is replaced. Comments are not skipped
+	 *
+	 * @param string $html
+	 * @param string $pattern Without delimiters or backtracking verbs such as (*SKIP). Its groups keep their numbers
+	 * @param string $replacement As preg_replace() takes it
+	 * @param string $modifiers
+	 *
+	 * @return string|null Null when the pattern fails, as preg_replace() returns it
+	 */
+	public static function replaceOutsideTags($html, $pattern, $replacement, $modifiers = '')
+	{
+		// A plain search is cheaper than one stepping over every tag, and most documents hold no match at all
+		if (!preg_match('/' . $pattern . '/' . $modifiers, $html)) {
+			return $html;
+		}
+
+		$otherTag = '(?=<[a-zA-Z\/])' . self::TAG_PATTERN . '(*SKIP)(*FAIL)';
+
+		return preg_replace('/(?:' . $pattern . ')|' . $otherTag . '/' . $modifiers, $replacement, $html);
+	}
 
 	/**
 	 * Writes each tag of the given names as one that closes itself, with " />": "<br>", "<br/>" and
-	 * "<input value="a > b">" become "<br />", "<br />" and "<input value="a > b" />"
+	 * "<input value="a > b">" become "<br />", "<br />" and "<input value="a > b" />". One inside another tag's
+	 * attribute value is left alone
 	 *
 	 * @param string $html
 	 * @param string $names The tag names, separated by "|"
@@ -184,9 +206,22 @@ class Tags
 	 */
 	public static function closeSelfClosing($html, $names)
 	{
-		$html = preg_replace('/(<(?:' . $names . ')(?:[^>=\/]++|' . self::QUOTED_VALUE_PATTERN . ')*+)>/i', '\\1 />', $html);
+		$content = '(?:[^>=\/]++|' . self::QUOTED_VALUE_PATTERN . ')*+';
 
-		return preg_replace('/(<(?:' . $names . '))\/>/i', '\\1 />', $html);
+		return self::replaceOutsideTags($html, '(' . self::namedTagStart($names) . ')(?:\/>|(' . $content . ')>)', '\\1\\2 />', 'i');
+	}
+
+	/**
+	 * The "<" and name of a start tag of the given names. The name must end where the tag's content starts, so
+	 * <svg-icon> is not an <svg> and <brand> is not a <br>
+	 *
+	 * @param string $names The tag names, separated by "|"
+	 *
+	 * @return string The pattern, without delimiters
+	 */
+	private static function namedTagStart($names)
+	{
+		return '<(?:' . $names . ')(?=[\s\/>])';
 	}
 
 }
