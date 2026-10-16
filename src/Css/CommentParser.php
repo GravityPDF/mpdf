@@ -33,14 +33,25 @@ class CommentParser
 	}
 
 	/**
-	 * Remove the HTML comment markers from style blocks.
+	 * Remove the HTML comment markers from the CSS of a style block.
 	 *
-	 * Replaces each <!-- and --> in <style> tag contents with a space, so removeHtmlComments() does not take the
-	 * stylesheet for a comment. CSS comments are left for StylesheetTokenizer::removeComments(), which knows a comment
-	 * marker inside a string is not one.
+	 * Replaces each <!-- and --> with a space, so removeHtmlComments() does not take the stylesheet for a comment. CSS
+	 * comments are left for StylesheetTokenizer::removeComments(), which knows a comment marker inside a string is not
+	 * one.
 	 *
-	 * @param string $html HTML content with style tags
-	 * @return string HTML with cleaned style blocks
+	 * @param string $css
+	 * @return string
+	 */
+	public function removeCommentMarkers($css)
+	{
+		return str_replace(['<!--', '-->'], ' ', $css);
+	}
+
+	/**
+	 * Remove the HTML comment markers from the CSS of each style block in HTML, as removeCommentMarkers() does
+	 *
+	 * @param string $html
+	 * @return string
 	 */
 	public function removeCommentsFromStyleBlocks($html)
 	{
@@ -49,7 +60,7 @@ class CommentParser
 		}
 
 		return preg_replace_callback('/' . Tags::elementPattern('style') . '/si', function ($m) {
-			return '<' . $m[1] . '>' . str_replace(['<!--', '-->'], ' ', $m[2]) . '</style>';
+			return '<' . $m[1] . '>' . $this->removeCommentMarkers($m[2]) . '</style>';
 		}, $html);
 	}
 }

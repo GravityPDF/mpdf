@@ -20,6 +20,9 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	/** @var Mpdf */
 	private $mpdf;
 
+	/** @var AssetFetcher|\PHPUnit\Framework\MockObject\MockObject */
+	private $assetFetcher;
+
 	protected function set_up()
 	{
 		parent::set_up();
@@ -29,7 +32,7 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->mpdf = new Mpdf(['cssMode' => CssMode::LEGACY]);
 		$this->mpdf->setLogger($logger);
 
-		$assetFetcher = $this->getMockBuilder(AssetFetcher::class)
+		$this->assetFetcher = $this->getMockBuilder(AssetFetcher::class)
 			->disableOriginalConstructor()
 			->getMock();
 
@@ -47,13 +50,13 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			$cache,
 			$sizeConverter,
 			$colorConverter,
-			$assetFetcher
+			$this->assetFetcher
 		);
 	}
 
 	public function tear_down()
 	{
-		unset($this->mpdf, $this->parser);
+		unset($this->mpdf, $this->parser, $this->assetFetcher);
 
 		parent::tear_down();
 	}
@@ -646,6 +649,36 @@ class CssParserTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->parser->parse("<style> \xEF\xBB\xBF@charset \"UTF-8\"; p { color: red }</style><style>\xEF\xBB\xBFh1 { color: blue }</style>");
 
 		$this->assertSame(['P' => ['COLOR' => 'red'], 'H1' => ['COLOR' => 'blue']], $this->parser->getCss());
+	}
+
+	/**
+	 * The <style> blocks and <link> tags for another medium are left out, and the rest of the <style> blocks taken out
+	 * of the HTML. HTML comment markers in a <style> block keep its CSS, a <style> in an HTML comment is not read, and
+	 * one in an <!--mpdf ... mpdf--> comment is
+	 */
+	public function testParseReadsTheStyleBlocksForTheMedium()
+	{
+		$this->assetFetcher->expects($this->once())
+			->method('fetchDataFromPath')
+			->with('print.css')
+			->willReturn('h5 { color: navy }');
+
+		$html = $this->parser->parse(
+			'<style media="print">p { color: red }</style>'
+			. '<style media="screen">h1 { color: red }</style>'
+			. '<link rel="stylesheet" media="screen" href="screen.css">'
+			. '<link title="a > b" rel="stylesheet" media="print" href="print.css">'
+			. '<style title="a > b"><!-- h2 { color: blue } --></style>'
+			. '<!-- <style>h3 { color: red }</style> -->'
+			. '<!--mpdf <style>h4 { color: green }</style> mpdf-->'
+			. '<p>Text</p>'
+		);
+
+		$this->assertSame('<link title="a > b" rel="stylesheet" media="print" href="print.css">  <p>Text</p>', $html);
+		$this->assertSame(
+			['H5' => ['COLOR' => 'navy'], 'P' => ['COLOR' => 'red'], 'H2' => ['COLOR' => 'blue'], 'H4' => ['COLOR' => 'green']],
+			$this->storedValues(['H5' => ['COLOR' => 0], 'P' => ['COLOR' => 0], 'H2' => ['COLOR' => 0], 'H4' => ['COLOR' => 0]])
+		);
 	}
 
 	/**

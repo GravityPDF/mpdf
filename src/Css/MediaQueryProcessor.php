@@ -54,15 +54,22 @@ class MediaQueryProcessor
 	public function filterByMediaQuery($html, $pattern)
 	{
 		return preg_replace_callback($pattern, function ($m) {
-			list(, $attributes) = Tags::attributes($m[1]);
-
-			// Unlike an @media block, a <style> or <link> for any medium is left out when CSSselectMedia names none
-			if (isset($attributes['MEDIA']) && (!$this->mpdf->CSSselectMedia || !$this->matches($attributes['MEDIA']))) {
-				return '';
-			}
-
-			return $m[0];
+			return $this->isForSelectedMedium($m[1]) ? $m[0] : '';
 		}, $html);
+	}
+
+	/**
+	 * Whether a <style> or <link> is for the medium CSSselectMedia names, by the media attribute of its start tag
+	 *
+	 * @param string $startTag The content of the start tag
+	 * @return bool
+	 */
+	public function isForSelectedMedium($startTag)
+	{
+		list(, $attributes) = Tags::attributes($startTag);
+
+		// Unlike an @media block, a <style> or <link> for any medium is left out when CSSselectMedia names none
+		return !isset($attributes['MEDIA']) || ($this->mpdf->CSSselectMedia && $this->matches($attributes['MEDIA']));
 	}
 
 	/**

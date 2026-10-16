@@ -174,6 +174,7 @@ Performance
 * **GD memory.** GD asks for less memory when it re-encodes an image. [#49]
 * **nth-child rules in tables.** Each row and cell looks up the nth-child rules the stylesheet uses by their keys, instead of running a regex over every rule. A 2,000-cell table under 1,000 rules is written in about 540 ms instead of 745 ms. Class combinations are built only up to the most classes one compound selector names, not one whole selector. [#526] [#580]
 * **Selector matching.** A chain of descendant combinators stops trying ancestors once none left can match, instead of trying every combination of them, and a general sibling combinator skips a tag the parent has no child of and looks from the first sibling. `.x div div div div div p` is matched on a path 50 deep in well under a millisecond instead of 4 seconds, and `h2 ~ p` against 5,000 paragraphs after an `<h2>` in 20 ms instead of 5 seconds. [#535] [#631]
+* **Finding `<style>` and `<link>`.** The stylesheets in the HTML are found in two passes, one before HTML comments are removed and one after, instead of up to six. The search for a tag also steps over up to 16 other tags in one attempt instead of starting again after each. On a 1 MB table with one `<style>` and one `<link>`, reading the stylesheets takes about 2.5 ms instead of 7.7 ms with PCRE's JIT, and 30 ms instead of 80 ms without it. [#781] [#800]
 
 Bugfixes
 --------
@@ -1034,3 +1035,5 @@ These changes do not change output.
 [#799]: https://github.com/GravityPDF/mpdf/pull/799
 [#786]: https://github.com/GravityPDF/mpdf/issues/786
 [#795]: https://github.com/GravityPDF/mpdf/pull/795
+[#781]: https://github.com/GravityPDF/mpdf/issues/781
+[#800]: https://github.com/GravityPDF/mpdf/pull/800
