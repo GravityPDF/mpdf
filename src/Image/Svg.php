@@ -174,6 +174,11 @@ class Svg
 
 	private $inDefs;
 
+	/**
+	 * @var string
+	 */
+	private $parseError = '';
+
 	public function __construct(
 		Mpdf $mpdf,
 		Otl $otl,
@@ -3083,167 +3088,15 @@ class Svg
 		}
 
 		if (preg_match('/xlink:href\s*=/si', $data)) {
-
-			// GRADIENTS
-			// Get links
-			preg_match_all('/(<(linearGradient|radialgradient)[^>]*)xlink:href\s*=\s*["\']#(.*?)["\'](.*?)\/>/si', $data, $links);
-			if (count($links[0])) {
-				$links[5] = [];
-			}
-
-			// Delete links from data - keeping in $links
-			for ($i = 0; $i < count($links[0]); $i++) {
-				$links[5][$i] = 'tmpLink' . random_int(100000, 9999999);
-				$data = preg_replace('/' . preg_quote($links[0][$i], '/') . '/is', '<MYLINKS' . $links[5][$i] . '>', $data);
-			}
-
-			// Get targets
-			preg_match_all('/<(linearGradient|radialgradient)([^>]*)id\s*=\s*["\'](.*?)["\'](.*?)>(.*?)<\/(linearGradient|radialgradient)>/si', $data, $m);
-			$targets = [];
-			$stops = [];
-
-			// keeping in $targets
-			for ($i = 0; $i < count($m[0]); $i++) {
-				$stops[$m[3][$i]] = $m[5][$i];
-			}
-
-			// Add back links this time as targets (gradients)
-			for ($i = 0; $i < count($links[0]); $i++) {
-				$def = $links[1][$i] . ' ' . $links[4][$i] . '>' . $stops[$links[3][$i]] . '</' . $links[2][$i] . '>';
-				$data = preg_replace('/<MYLINKS' . $links[5][$i] . '>/is', $def, $data);
-			}
-
-			// mPDF 5.7.4
-			// <TREF>
-			preg_match_all('/<tref ([^>]*)xlink:href\s*=\s*["\']#([^>]*?)["\']([^>]*)\/>/si', $data, $links);
-			for ($i = 0; $i < count($links[0]); $i++) {
-				// Get the item to use from defs
-				$insert = '';
-				if (preg_match('/<text [^>]*id\s*=\s*["\']' . $links[2][$i] . '["\'][^>]*>(.*?)<\/text>/si', $data, $m)) {
-					$insert = $m[1];
-				}
-				if ($insert) {
-					$data = preg_replace('/' . preg_quote($links[0][$i], '/') . '/is', $insert, $data);
-				}
-			}
-
-			// mPDF 5.7.2
-			// <USE>
-			preg_match_all('/<use( [^>]*)xlink:href\s*=\s*["\']#([^>]*?)["\']([^>]*)\/>/si', $data, $links);
-			for ($i = 0; $i < count($links[0]); $i++) {
-				// Get the item to use from defs
-				$insert = '';
-				if (preg_match('/<([a-zA-Z]*) [^>]*id\s*=\s*["\']' . $links[2][$i] . '["\'][^>]*\/>/si', $data, $m)) {
-					$insert = $m[0];
-				}
-				if (!$insert && preg_match('/<([a-zA-Z]*) [^>]*id\s*=\s*["\']' . $links[2][$i] . '["\']/si', $data, $m)) {
-					if (preg_match('/<' . $m[1] . '[^>]*id\s*=\s*["\']' . $links[2][$i] . '["\'][^>]*>.*?<\/' . $m[1] . '>/si', $data, $m)) {
-						$insert = $m[0];
-					}
-				}
-
-				if ($insert) {
-					$inners = $links[1][$i] . ' ' . $links[3][$i];
-
-					// Change x,y coords to translate()
-					if (preg_match('/\sy\s*=\s*["\']([^>]*?)["\']/', $inners, $m)) {
-						$y = $m[1];
-					} else {
-						$y = 0;
-					}
-
-					if (preg_match('/\sx\s*=\s*["\']([^>]*?)["\']/', $inners, $m)) {
-						$x = $m[1];
-					} else {
-						$x = 0;
-					}
-
-					if ($x || $y) {
-
-						$inners = preg_replace('/(y|x)\s*=\s*["\']([^>]*?)["\']/', '', $inners);
-						if (preg_match('/transform\s*=\s*["\']([^>]*?)["\']/', $inners, $m)) {
-
-							if (preg_match('/translate\(\s*([0-9\.]+)\s*,\s*([0-9\.]+)\s*\)/', $m[1], $mm)) {
-								$transform = $m[1]; // transform="...."
-								$x += $mm[1];
-								$y += $mm[2];
-								$transform = preg_replace('/' . preg_quote($mm[0], '/') . '/', '', $transform);
-								$transform = 'transform="' . $transform . ' translate(' . $x . ', ' . $y . ')"';
-								$inners = preg_replace('/' . preg_quote($m[0], '/') . '/is', $transform, $inners);
-							} else {
-								$inners = preg_replace('/' . preg_quote($m[0], '/') . '/is', 'transform="' . $m[1] . ' translate(' . $x . ', ' . $y . ')"', $inners);
-							}
-
-						} else {
-							$inners .= ' transform="translate(' . $x . ', ' . $y . ')"';
-						}
-					}
-				}
-
-				$replacement = '<g ' . $inners . '>' . $insert . '</g>';
-				$data = preg_replace('/' . preg_quote($links[0][$i], '/') . '/is', $replacement, $data);
-			}
-
-			preg_match_all('/<use( [^>]*)xlink:href\s*=\s*["\']#([^>]*?)["\']([^>]*)>\s*<\/use>/si', $data, $links);
-			for ($i = 0; $i < count($links[0]); $i++) {
-
-				// Get the item to use from defs
-				$insert = '';
-				if (preg_match('/<([a-zA-Z]*) [^>]*id\s*=\s*["\']' . $links[2][$i] . '["\'][^>]*\/>/si', $data, $m)) {
-					$insert = $m[0];
-				}
-
-				if (!$insert && preg_match('/<([a-zA-Z]*) [^>]*id\s*=\s*["\']' . $links[2][$i] . '["\']/si', $data, $m)) {
-					if (preg_match('/<' . $m[1] . '[^>]*id\s*=\s*["\']' . $links[2][$i] . '["\'][^>]*>.*?<\/' . $m[1] . '>/si', $data, $m)) {
-						$insert = $m[0];
-					}
-				}
-
-				if ($insert) {
-					$inners = $links[1][$i] . ' ' . $links[3][$i];
-
-					// Change x,y coords to translate()
-					if (preg_match('/\sy\s*=\s*["\']([^>]*?)["\']/', $inners, $m)) {
-						$y = $m[1];
-					} else {
-						$y = 0;
-					}
-
-					if (preg_match('/\sx\s*=\s*["\']([^>]*?)["\']/', $inners, $m)) {
-						$x = $m[1];
-					} else {
-						$x = 0;
-					}
-
-					if ($x || $y) {
-						$inners = preg_replace('/(y|x)\s*=\s*["\']([^>]*?)["\']/', '', $inners);
-						if (preg_match('/transform\s*=\s*["\']([^>]*?)["\']/', $inners, $m)) {
-							if (preg_match('/translate\(\s*([0-9\.]+)\s*,\s*([0-9\.]+)\s*\)/', $m[1], $mm)) {
-								$transform = $m[1]; // transform="...."
-								$x += $mm[1];
-								$y += $mm[2];
-								$transform = preg_replace('/' . preg_quote($mm[0], '/') . '/', '', $transform);
-								$transform = 'transform="' . $transform . ' translate(' . $x . ', ' . $y . ')"';
-								$inners = preg_replace('/' . preg_quote($m[0], '/') . '/is', $transform, $inners);
-							} else {
-								$inners = preg_replace('/' . preg_quote($m[0], '/') . '/is', 'transform="' . $m[1] . ' translate(' . $x . ', ' . $y . ')"', $inners);
-							}
-						} else {
-							$inners .= ' transform="translate(' . $x . ', ' . $y . ')"';
-						}
-					}
-
-					$replacement = '<g ' . $inners . '>' . $insert . '</g>';
-					$data = preg_replace('/' . preg_quote($links[0][$i], '/') . '/is', $replacement, $data);
-				}
-			}
+			$data = $this->resolveReferences($data, 'linearGradient|radialGradient', [$this, 'linkedGradient']);
+			$data = $this->resolveReferences($data, 'tref', [$this, 'referencedText']);
+			$data = $this->resolveReferences($data, 'use', [$this, 'usedElement']);
 		}
 
-		// Removes <pattern>
-		$data = preg_replace('/<pattern.*?<\/pattern>/is', '', $data);
-
-		// Removes <marker>
-		$data = preg_replace('/<marker.*?<\/marker>/is', '', $data);
+		// Neither is drawn. One that closes itself ends there, not at the next end tag of its name
+		foreach (['pattern', 'marker'] as $name) {
+			$data = preg_replace('/' . Tags::startTagPattern($name) . '(?:(?<=\/>)|.*?<\/' . $name . '>)/is', '', $data);
+		}
 
 		$this->svg_info['data'] = $data;
 		$this->svg_string = '';
@@ -3268,7 +3121,14 @@ class Svg
 			[$this, 'characterData']
 		);
 
-		xml_parse($svg2pdf_xml_parser, $data);
+		$this->parseError = '';
+		if (!xml_parse($svg2pdf_xml_parser, $data, true)) {
+			$this->parseError = sprintf(
+				'%s on line %d',
+				xml_error_string(xml_get_error_code($svg2pdf_xml_parser)),
+				xml_get_current_line_number($svg2pdf_xml_parser)
+			);
+		}
 
 		// The <svg> element is where the picture's dimensions come from. A document the parser could
 		// not read that far into - one with an unquoted attribute value, say - leaves none behind,
@@ -3288,6 +3148,185 @@ class Svg
 				'data' => $this->svg_string,
 			];
 		}
+	}
+
+	/**
+	 * Why the parser stopped reading the last SVG before its end, or '' when it read all of it
+	 *
+	 * @return string
+	 */
+	public function parseError()
+	{
+		return $this->parseError;
+	}
+
+	/**
+	 * Swaps each empty element of the given names that references another by xlink:href for what $replace makes of
+	 * it. Empty means self-closing, or followed by its end tag with only space between
+	 *
+	 * @param string $data
+	 * @param string $names The tag names, separated by "|"
+	 * @param callable $replace Takes the start tag's content and the referenced element as referencedElement()
+	 *                          returns it; returns the replacement, or null to keep the element
+	 *
+	 * @return string
+	 */
+	private function resolveReferences($data, $names, callable $replace)
+	{
+		// The whole document is indexed only once one of these elements is found
+		$elements = null;
+
+		$pattern = '/' . Tags::startTagPattern($names) . '(\s*<\/(?:' . $names . ')>)?/i';
+
+		return preg_replace_callback($pattern, function ($m) use ($data, &$elements, $replace) {
+			if (substr($m[1], -1) !== '/' && !isset($m[2])) {
+				return $m[0];
+			}
+
+			if ($elements === null) {
+				$elements = $this->elementsById($data);
+			}
+
+			$target = $this->referencedElement($m[1], $data, $elements);
+			$replacement = $target ? call_user_func($replace, $m[1], $target) : null;
+
+			return $replacement === null ? $m[0] : $replacement;
+		}, $data);
+	}
+
+	/**
+	 * A gradient that links to another, given the stops of the gradient it links to
+	 *
+	 * @param string $content The linking gradient's start tag content
+	 * @param array $target
+	 *
+	 * @return string|null
+	 */
+	private function linkedGradient($content, array $target)
+	{
+		if (!in_array($target['name'], ['LINEARGRADIENT', 'RADIALGRADIENT'], true)) {
+			return null;
+		}
+
+		$name = strtok($content, " \t\r\n/");
+
+		return '<' . $name . $this->attributesWithout($content, ['XLINK:HREF']) . '>' . $target['content'] . '</' . $name . '>';
+	}
+
+	/**
+	 * The content of the <text> a <tref> references
+	 *
+	 * @param string $content The <tref>'s start tag content
+	 * @param array $target
+	 *
+	 * @return string|null
+	 */
+	private function referencedText($content, array $target)
+	{
+		return $target['name'] === 'TEXT' && $target['content'] !== '' ? $target['content'] : null;
+	}
+
+	/**
+	 * A <g> holding a copy of the element a <use> references, the <use>'s x and y applied as a translation after its
+	 * own transform
+	 *
+	 * @param string $content The <use>'s start tag content
+	 * @param array $target
+	 *
+	 * @return string
+	 */
+	private function usedElement($content, array $target)
+	{
+		list(, $attributes) = Tags::attributes($content);
+		$x = isset($attributes['X']) ? $attributes['X'] : 0;
+		$y = isset($attributes['Y']) ? $attributes['Y'] : 0;
+
+		$transform = isset($attributes['TRANSFORM']) ? $attributes['TRANSFORM'] : '';
+		if ($x || $y) {
+			$transform = trim($transform . ' translate(' . $x . ', ' . $y . ')');
+		}
+
+		$g = '<g' . $this->attributesWithout($content, ['XLINK:HREF', 'X', 'Y', 'TRANSFORM']);
+		if ($transform !== '') {
+			$g .= ' transform="' . $transform . '"';
+		}
+
+		return $g . '>' . $target['element'] . '</g>';
+	}
+
+	/**
+	 * The start tag of each element with an id, by id, the first one where an id is used twice
+	 *
+	 * @param string $data
+	 *
+	 * @return array[] The tag's name, uppercased, its content and its offset in $data
+	 */
+	private function elementsById($data)
+	{
+		preg_match_all('/' . Tags::TAG_PATTERN . '/', $data, $tags, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+
+		$elements = [];
+		foreach ($tags as $tag) {
+			list($name, $attributes) = Tags::attributes($tag[1][0]);
+			if (isset($attributes['ID']) && !isset($elements[$attributes['ID']])) {
+				$elements[$attributes['ID']] = ['name' => $name, 'tag' => $tag[1][0], 'offset' => $tag[0][1]];
+			}
+		}
+
+		return $elements;
+	}
+
+	/**
+	 * The element a start tag's xlink:href references within the document, by "#" and its id
+	 *
+	 * @param string $content The referencing start tag's content
+	 * @param string $data
+	 * @param array[] $elements As elementsById() finds them in $data
+	 *
+	 * @return array|null The element's uppercased name, the whole element, and what is between its tags; or null
+	 */
+	private function referencedElement($content, $data, array $elements)
+	{
+		list(, $attributes) = Tags::attributes($content);
+		if (!isset($attributes['XLINK:HREF']) || !preg_match('/^\s*#(.+?)\s*$/s', $attributes['XLINK:HREF'], $id)
+			|| !isset($elements[$id[1]])) {
+			return null;
+		}
+
+		$target = $elements[$id[1]];
+		if (substr($target['tag'], -1) === '/') {
+			return ['name' => $target['name'], 'element' => '<' . $target['tag'] . '>', 'content' => ''];
+		}
+
+		$name = preg_quote(strtok($target['tag'], " \t\r\n"), '/');
+		if (!preg_match('/\G' . Tags::elementPattern($name) . '/si', $data, $m, 0, $target['offset'])) {
+			return null;
+		}
+
+		return ['name' => $target['name'], 'element' => $m[0], 'content' => $m[2]];
+	}
+
+	/**
+	 * The attributes of a start tag as they were written, each after a space, without the given ones
+	 *
+	 * @param string $content The start tag's content
+	 * @param string[] $names The attribute names left out, uppercased
+	 *
+	 * @return string
+	 */
+	private function attributesWithout($content, array $names)
+	{
+		preg_match_all(Tags::ATTRIBUTE_PATTERN, $content, $matches, PREG_SET_ORDER);
+		array_shift($matches);
+
+		$kept = '';
+		foreach ($matches as $match) {
+			if (!in_array(strtoupper($match[1]), $names, true)) {
+				$kept .= ' ' . $match[0];
+			}
+		}
+
+		return $kept;
 	}
 
 	// AUTOFONT =========================
