@@ -321,6 +321,7 @@ Bugfixes
 * An active field in a fixed-position block that shrinks to fit kept its unscaled appearance, so it clipped its value and changed size when clicked. [#457] [#487]
 * Push buttons that share a name are written as one field, with each widget as a kid. [#447]
 * Each radio widget wrote `/AP` twice. Radio groups and same-named push buttons are now one field that their widgets inherit from. [#450] [#500]
+* A linefeed in a text field's value was drawn as a space, so `value="x(newline)y"` showed `x y`, and one written as `&#10;` was drawn as a missing-glyph box. A text, search, email, URL, tel or password field, or one of any type mPDF draws as text, now drops the linefeeds and carriage returns in its value, as a browser does, on the page and in an active field. A hidden field, checkbox, radio, button and `<textarea>` are unchanged. [#794] [#798]
 
 ### Links, annotations and attachments
 
@@ -1013,3 +1014,5 @@ These changes do not change output.
 [#789]: https://github.com/GravityPDF/mpdf/pull/789
 [#788]: https://github.com/GravityPDF/mpdf/issues/788
 [#797]: https://github.com/GravityPDF/mpdf/pull/797
+[#794]: https://github.com/GravityPDF/mpdf/issues/794
+[#798]: https://github.com/GravityPDF/mpdf/pull/798
