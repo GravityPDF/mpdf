@@ -60,6 +60,14 @@ class Lzw
 			$ret .= chr($iIndex);
 		}
 
+		// The End code can come before the last data sub-block, and the zero-length block terminator
+		// is only read when more bits are needed. Skip up to and past it so the next block starts at $dp.
+		while (!$this->Done && $dp < $stLen) {
+			$count = ord($data[$dp]);
+			$dp += 1 + $count;
+			$this->Done = $count === 0;
+		}
+
 		$datLen = $dp;
 
 		if ($iIndex != -2) {
