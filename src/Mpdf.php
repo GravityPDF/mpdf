@@ -28227,7 +28227,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Converts < to &lt; when not a tag
 		$html = preg_replace('/<([^!\/a-zA-Z_:])/i', '&lt;\\1', $html); // mPDF 5.7.3
-		$html = preg_replace("/[ ]+/", ' ', $html);
+		// Spaces are collapsed only outside tags, so an attribute value keeps its own, as value="a   b" does in a browser
+		$html = HtmlTags::replaceOutsideTags($html, '[ ]{2,}', ' ');
 
 		$html = HtmlTags::replaceOutsideTags($html, '(<\/li>)\s+(?=<\/[uo]l|<li)|(<\/[uo]l>)\s+(?=<\/li)', '\\1\\2', 'i');
 		$list = '(<[uo]l' . HtmlTags::CONTENT_PATTERN . '>)';

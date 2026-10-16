@@ -198,6 +198,7 @@ Bugfixes
 * A `<title>` in the `<body>`, in a table cell, in an HTML header, or in the `<head>` of HTML with no `<body>` tag was drawn as text where it stood. It is no longer drawn, as in a browser, and the first one still gives the document its title. [#782] [#787]
 * The caption of a table with another table in a cell was drawn inside that cell, after the inner table, under `caption-side: bottom`. It is now drawn below the whole table. [#780] [#784]
 * A `<!--` or `<script>` inside a quoted attribute value, such as a `title`, hid everything after it up to the next real comment or script. A text field whose value held a comment, `<br>`, `<wbr>`, `<dottab>`, an empty `<tr></tr>`, a `<table>` with a `<caption>` or `</tts><tts>` showed it changed or emptied, and the caption was drawn as text after the field. Comments, scripts and the tags mPDF rewrites before reading the document are now found only outside tags. [#777] [#789]
+* A run of spaces inside a quoted attribute value was collapsed to one: `<bookmark content="Total:   42" />` was titled `Total: 42`, and a text field, index entry, annotation, watermark or title written with several spaces lost them. Spaces are now collapsed only between tags, so a value keeps them as written. [#788] [#797]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
 * A border that draws nothing was described with fewer keys than one that draws, and the border code read the missing keys anyway. [mpdf/mpdf#1892] [#29]
 * A `<tr>` border was read for sides the row did not set. [mpdf/mpdf#1893] [#30]
@@ -1010,3 +1011,5 @@ These changes do not change output.
 [#784]: https://github.com/GravityPDF/mpdf/pull/784
 [#777]: https://github.com/GravityPDF/mpdf/issues/777
 [#789]: https://github.com/GravityPDF/mpdf/pull/789
+[#788]: https://github.com/GravityPDF/mpdf/issues/788
+[#797]: https://github.com/GravityPDF/mpdf/pull/797
