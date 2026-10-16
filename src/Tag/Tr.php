@@ -72,8 +72,8 @@ class Tr extends Tag
 	}
 
 	/**
-	 * The marker a row's page-break-before or page-break-after leaves in the table's row list: 'always' for a forced
-	 * break, which left and right are read as, 'avoid' to keep the row with its neighbour, or null for none
+	 * The marker a row's page-break-before or page-break-after leaves in the table's row list: 'always', 'left' or
+	 * 'right' for a forced break, 'avoid' to keep the row with its neighbour, or null for none
 	 *
 	 * @param array $properties
 	 * @param string $property PAGE-BREAK-BEFORE or PAGE-BREAK-AFTER
@@ -81,16 +81,16 @@ class Tr extends Tag
 	 */
 	private function rowBreak(array $properties, $property)
 	{
-		if ($this->forcesPageBreak($properties, $property)) {
-			return 'always';
+		if (!isset($properties[$property]) || $this->pageBreakRank($properties[$property]) < 0) {
+			return null;
 		}
 
-		return isset($properties[$property]) && strtoupper($properties[$property]) === 'AVOID' ? 'avoid' : null;
+		return strtolower($properties[$property]);
 	}
 
 	/**
 	 * Records a break before a row in the table's row list, which _tableWrite() reads; a page-break-after is kept as
-	 * a break before the row after it. A forced break stands against the avoid of the row on its other side.
+	 * a break before the row after it. Where the rows on both sides set one, the stronger wins, and the later on a tie
 	 *
 	 * @param int $row
 	 * @param string|null $break
@@ -103,7 +103,7 @@ class Tr extends Tag
 			return;
 		}
 
-		if ($break === 'avoid' && isset($table['pagebreak-before'][$row]) && $table['pagebreak-before'][$row] === 'always') {
+		if (isset($table['pagebreak-before'][$row]) && $this->pageBreakRank($break) < $this->pageBreakRank($table['pagebreak-before'][$row])) {
 			return;
 		}
 
