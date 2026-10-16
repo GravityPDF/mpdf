@@ -902,6 +902,11 @@ abstract class BlockTag extends Tag
 			if ($currblk['float']) {
 				$currblk['slack_margin'] = $currblk['float'] === 'R' ? 'left' : 'right';
 			}
+
+			// The branches above stop each margin at 0, which legacy mode keeps to hold the block in its container
+			if ($this->mpdf->cssMode === CssMode::STANDARD) {
+				$this->overflowContainer($currblk, $prevblk['inner_width']);
+			}
 		}
 
 		$currblk['outer_left_margin'] = $prevblk['outer_left_margin'] + $currblk['margin_left']
@@ -1150,6 +1155,31 @@ abstract class BlockTag extends Tag
 		if ($clamped != $width) {
 			$blk['css_set_width'] = $clamped;
 		}
+	}
+
+	/**
+	 * Lets a block too wide for its container stick out of it by making the margin on the far side negative, as
+	 * CSS 2.1 §10.3.3 does. That is the right margin, the left where the text runs right to left, or the slack margin
+	 * of a float. A block that is not floated ignores its slack margin, since with margin-left: auto it is on the
+	 * left but the box sticks out on the right.
+	 *
+	 * @param array $blk The block being opened, with its width, margins and slack margin set
+	 * @param float $containerWidth The inner width of the containing block
+	 */
+	private function overflowContainer(array &$blk, $containerWidth)
+	{
+		$overflow = $blk['css_set_width'] + $blk['margin_left'] + $blk['margin_right']
+			+ $blk['border_left']['w'] + $blk['padding_left'] + $blk['border_right']['w'] + $blk['padding_right']
+			- $containerWidth;
+		if ($overflow <= 0) {
+			return;
+		}
+
+		$side = $blk['direction'] === 'rtl' ? 'left' : 'right';
+		if ($blk['float']) {
+			$side = $blk['slack_margin'];
+		}
+		$blk['margin_' . $side] -= $overflow;
 	}
 
 	public function close(&$ahtml, &$ihtml)

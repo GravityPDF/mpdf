@@ -138,24 +138,11 @@ class BlockMinMaxWidthTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 */
 	private function assertBox($left, $width, $html, $config = [])
 	{
-		$box = $this->firstBox($this->render($html, $config));
+		$rectangles = $this->rectangles($this->pages($this->render($html, $config))[0]);
+		$this->assertNotEmpty($rectangles, 'A rectangle should be drawn');
+		$box = $rectangles[0];
 
 		$this->assertEqualsWithDelta($left, $box[0], 0.01, 'The left edge of the box');
 		$this->assertEqualsWithDelta($width, $box[1], 0.01, 'The width of the box');
-	}
-
-	/**
-	 * The left edge and width, in mm, of the first filled rectangle on the first page
-	 *
-	 * @param string $pdf
-	 *
-	 * @return float[]
-	 */
-	private function firstBox($pdf)
-	{
-		$pages = $this->pages($pdf);
-		$this->assertSame(1, preg_match('/(-?[\d.]+) -?[\d.]+ (-?[\d.]+) -?[\d.]+ re\b/', $pages[0], $rect), 'A rectangle should be drawn');
-
-		return [$rect[1] / Mpdf::SCALE, $rect[2] / Mpdf::SCALE];
 	}
 }

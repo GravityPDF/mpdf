@@ -292,6 +292,23 @@ trait PageStreams
 	}
 
 	/**
+	 * The rectangles a page's content stream draws, in the order it draws them, each as its left edge, width and height
+	 * in mm
+	 *
+	 * @param string $stream
+	 *
+	 * @return array[]
+	 */
+	private function rectangles($stream)
+	{
+		preg_match_all('/(-?[\d.]+) -?[\d.]+ (-?[\d.]+) (-?[\d.]+) re\b/', $stream, $rects, PREG_SET_ORDER);
+
+		return array_map(function ($rect) {
+			return [$rect[1] / Mpdf::SCALE, $rect[2] / Mpdf::SCALE, abs($rect[3]) / Mpdf::SCALE];
+		}, $rects);
+	}
+
+	/**
 	 * The width of the only image on the first page, in millimetres
 	 *
 	 * @param string $html
