@@ -93,56 +93,35 @@ class Tags
 	}
 
 	/**
-	 * Replaces each outermost element of the given name with what the callback returns for it. An end tag closes the
-	 * nearest start tag still open, so an element of the same name nested inside stays part of the outer one, and a
-	 * start tag never closed, or one that closes itself, is left as it was. Tags are found as startTagPattern() finds them
+	 * Replaces each outermost element of the given name with what the callback returns for it. Elements are found as
+	 * elementAt() finds them, so an element of the same name nested inside stays part of the outer one, and a start
+	 * tag never closed, or one that closes itself, is left as it was
 	 *
 	 * @param string $html
 	 * @param string $name
-	 * @param callable $callback Given the element as elementPattern() captures it, with its end tag added: [element,
-	 *                           start tag content, what is between the tags, end tag]
+	 * @param callable $callback Given the element as elementAt() returns it: [element, start tag content, what is
+	 *                           between the tags, end tag]
 	 *
 	 * @return string
 	 */
 	public static function replaceElements($html, $name, callable $callback)
 	{
-		preg_match_all('/' . self::startTagPattern($name . '|\/' . $name) . '/i', $html, $tags, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-
-		$open = [];
-		$elements = [];
-		foreach ($tags as $tag) {
-			if ($tag[1][0][0] !== '/') {
-				// One that closes itself leaves nothing open
-				if (substr($tag[1][0], -1) !== '/') {
-					$open[] = $tag;
-				}
-			} elseif ($open) {
-				$start = array_pop($open);
-				$elements[$start[0][1]] = [$start, $tag];
+		$outermost = [];
+		foreach (self::pairs($html, preg_quote($name, '/'), 0, []) as $pair) {
+			// Those already paired after its start tag are inside it
+			while ($outermost && $outermost[count($outermost) - 1][0][0][1] > $pair[0][0][1]) {
+				array_pop($outermost);
 			}
+			$outermost[] = $pair;
 		}
-
-		ksort($elements);
 
 		$replaced = '';
 		$offset = 0;
-		foreach ($elements as $from => $element) {
-			// One inside an element already replaced is part of it
-			if ($from < $offset) {
-				continue;
-			}
-
-			list($start, $end) = $element;
-			$innerFrom = $from + strlen($start[0][0]);
-			$to = $end[0][1] + strlen($end[0][0]);
-
-			$replaced .= substr($html, $offset, $from - $offset) . call_user_func($callback, [
-				substr($html, $from, $to - $from),
-				$start[1][0],
-				substr($html, $innerFrom, $end[0][1] - $innerFrom),
-				$end[0][0],
-			]);
-			$offset = $to;
+		foreach ($outermost as $pair) {
+			$element = self::element($html, $pair);
+			$from = $pair[0][0][1];
+			$replaced .= substr($html, $offset, $from - $offset) . call_user_func($callback, $element);
+			$offset = $from + strlen($element[0]);
 		}
 
 		return $replaced . substr($html, $offset);
@@ -164,31 +143,85 @@ class Tags
 	public static function elementAt($html, $name, $offset)
 	{
 		$name = preg_quote($name, '/');
-		if (!preg_match('/\G' . self::startTagPattern($name) . '/i', $html, $start, 0, $offset)) {
+		if (!preg_match('/\G' . self::startTagPattern($name) . '/i', $html, $start, PREG_OFFSET_CAPTURE, $offset)) {
 			return null;
 		}
 
-		if (substr($start[1], -1) === '/') {
-			return [$start[0], $start[1], '', ''];
+		if (self::closesItself($start[1][0])) {
+			return [$start[0][0], $start[1][0], '', ''];
 		}
 
-		$tag = '/' . self::startTagPattern($name . '|\/' . $name) . '/i';
-		$inner = $offset + strlen($start[0]);
-		$depth = 1;
-		$from = $inner;
-		while (preg_match($tag, $html, $m, PREG_OFFSET_CAPTURE, $from)) {
-			$from = $m[0][1] + strlen($m[0][0]);
-			if ($m[1][0][0] !== '/') {
-				// One that closes itself leaves nothing open
-				if (substr($m[1][0], -1) !== '/') {
-					$depth++;
-				}
-			} elseif (--$depth === 0) {
-				return [substr($html, $offset, $from - $offset), $start[1], substr($html, $inner, $m[0][1] - $inner), $m[0][0]];
+		// Its own start tag is opened first, so the pair that starts there is the last of its element, and the HTML after
+		// its end tag is not read
+		foreach (self::pairs($html, $name, $offset + strlen($start[0][0]), [$start]) as $pair) {
+			if ($pair[0][0][1] === $offset) {
+				return self::element($html, $pair);
 			}
 		}
 
 		return null;
+	}
+
+	/**
+	 * Pairs the start and end tags of a name from the offset on, as each end tag closes the nearest start tag still
+	 * open. A stray end tag, or a start tag that closes itself, is passed over, and a start tag never closed pairs with
+	 * nothing
+	 *
+	 * @param string $html
+	 * @param string $name The tag name, quoted for a pattern
+	 * @param int $offset
+	 * @param array[] $open The start tags already open before the offset
+	 *
+	 * @return \Generator Each [start tag, end tag] as it is closed, as startTagPattern() matches them with
+	 *                    PREG_OFFSET_CAPTURE
+	 */
+	private static function pairs($html, $name, $offset, array $open)
+	{
+		$tag = '/' . self::startTagPattern($name . '|\/' . $name) . '/i';
+		while (preg_match($tag, $html, $m, PREG_OFFSET_CAPTURE, $offset)) {
+			$offset = $m[0][1] + strlen($m[0][0]);
+			if ($m[1][0][0] !== '/') {
+				if (!self::closesItself($m[1][0])) {
+					$open[] = $m;
+				}
+			} elseif ($open) {
+				yield [array_pop($open), $m];
+			}
+		}
+	}
+
+	/**
+	 * The parts of the element a start and end tag enclose
+	 *
+	 * @param string $html
+	 * @param array $pair A start and end tag from pairs()
+	 *
+	 * @return string[] [element, start tag content, what is between the tags, end tag]
+	 */
+	private static function element($html, array $pair)
+	{
+		list($start, $end) = $pair;
+		$from = $start[0][1];
+		$inner = $from + strlen($start[0][0]);
+
+		return [
+			substr($html, $from, $end[0][1] + strlen($end[0][0]) - $from),
+			$start[1][0],
+			substr($html, $inner, $end[0][1] - $inner),
+			$end[0][0],
+		];
+	}
+
+	/**
+	 * Whether a start tag closes itself, as <svg/> does, and so opens nothing
+	 *
+	 * @param string $content The start tag's content
+	 *
+	 * @return bool
+	 */
+	private static function closesItself($content)
+	{
+		return substr($content, -1) === '/';
 	}
 
 	/**
