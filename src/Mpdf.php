@@ -14775,10 +14775,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		// Don't allow non-breaking spaces that are converted to substituted chars or will break anyway and mess up table width calc.
-		$html = str_replace('<tta>160</tta>', chr(32), $html);
-		$html = str_replace('</tta><tta>', '|', $html);
-		$html = str_replace('</tts><tts>', '|', $html);
-		$html = str_replace('</ttz><ttz>', '|', $html);
+		$html = HtmlTags::replaceOutsideTags($html, '<tta>160<\/tta>', ' ');
+		$html = HtmlTags::replaceOutsideTags($html, '<\/(tt[sza])><\1>', '|');
 
 		$html = HtmlTags::removeUnsupported($html, $this->enabledtags);
 		$a = HtmlTags::split($html);
@@ -28172,7 +28170,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// Remove comments, then javascript code, from HTML (neither should appear in the PDF file)
 		$html = (new CommentParser())->removeHtmlComments($html);
-		$html = preg_replace('/' . CommentParser::SCRIPT . '/si', '', $html);
+		$html = HtmlTags::replaceOutsideTags($html, CommentParser::SCRIPT, '', 'si');
 
 		// A browser never draws a <title>. ReadMetaTags() has already read the document title, and running after the SVG
 		// pass keeps an SVG's own titles in its image
@@ -28184,28 +28182,24 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = preg_replace('/\r/', '', $html); // replace carriage return by nothing
 
 		// Well formed XHTML end tags
-		$html = preg_replace('/<(br|hr)>/i', "<\\1 />", $html); // mPDF 6
-		$html = preg_replace('/<(br|hr)\/>/i', "<\\1 />", $html);
+		$html = HtmlTags::closeSelfClosing($html, 'br|hr');
 
-		// Get rid of empty <thead></thead> etc
-		$html = preg_replace('/<tr>\s*<\/tr>/i', '', $html);
-		$html = preg_replace('/<thead>\s*<\/thead>/i', '', $html);
-		$html = preg_replace('/<tfoot>\s*<\/tfoot>/i', '', $html);
-		$html = preg_replace('/<table' . HtmlTags::CONTENT_PATTERN . '>\s*<\/table>/i', '', $html);
+		// Get rid of empty <thead></thead> etc, rows first so a thead or tfoot they leave empty goes too
+		$html = HtmlTags::replaceOutsideTags($html, '<tr>\s*<\/tr>', '', 'i');
+		$html = HtmlTags::replaceOutsideTags($html, '<(thead|tfoot)>\s*<\/\1>', '', 'i');
+		$html = HtmlTags::replaceOutsideTags($html, '<table' . HtmlTags::CONTENT_PATTERN . '>\s*<\/table>', '', 'i');
 
 		// Remove spaces at end of table cells
-		$html = preg_replace("/[ \n\r]+<\/t(d|h)/", '</t\\1', $html);
+		$html = HtmlTags::replaceOutsideTags($html, '[ \n]+<\/t(d|h)', '</t\\1');
 
-		$html = preg_replace("/[ ]*<dottab\s*[\/]*>[ ]*/", '<dottab />', $html);
+		$html = HtmlTags::replaceOutsideTags($html, '[ ]*<dottab\s*[\/]*>[ ]*', '<dottab />');
 
 		// Concatenates any Substitute characters from symbols/dingbats
-		$html = str_replace('</tts><tts>', '|', $html);
-		$html = str_replace('</ttz><ttz>', '|', $html);
-		$html = str_replace('</tta><tta>', '|', $html);
+		$html = HtmlTags::replaceOutsideTags($html, '<\/(tt[sza])><\1>', '|');
 
-		$html = preg_replace('/<br \/>\s*/is', "<br />", $html);
+		$html = HtmlTags::replaceOutsideTags($html, '<br \/>\s*', '<br />', 'i');
 
-		$html = preg_replace('/<wbr[ \/]*>\s*/is', "&#173;", $html);
+		$html = HtmlTags::replaceOutsideTags($html, '<wbr[ \/]*>\s*', '&#173;', 'i');
 
 		// Preserve '\n's in content between the tags <pre> and </pre>
 		// A pre block inside another is renamed innerpre until the end, so the outer one is matched whole
@@ -28235,17 +28229,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = preg_replace('/<([^!\/a-zA-Z_:])/i', '&lt;\\1', $html); // mPDF 5.7.3
 		$html = preg_replace("/[ ]+/", ' ', $html);
 
-		$html = preg_replace('/\/li>\s+<\/(u|o)l/i', '/li></\\1l', $html);
-		$html = preg_replace('/\/(u|o)l>\s+<\/li/i', '/\\1l></li', $html);
-		$html = preg_replace('/\/li>\s+<\/(u|o)l/i', '/li></\\1l', $html);
-		$html = preg_replace('/\/li>\s+<li/i', '/li><li', $html);
-		$html = preg_replace('/<(u|o)l(' . HtmlTags::CONTENT_PATTERN . ')>[ ]+/i', '<\\1l\\2>', $html);
-		$html = preg_replace('/[ ]+<(u|o)l/i', '<\\1l', $html);
+		$html = HtmlTags::replaceOutsideTags($html, '(<\/li>)\s+(?=<\/[uo]l|<li)|(<\/[uo]l>)\s+(?=<\/li)', '\\1\\2', 'i');
+		$list = '(<[uo]l' . HtmlTags::CONTENT_PATTERN . '>)';
+		$html = HtmlTags::replaceOutsideTags($html, '[ ]+' . $list . '[ ]*|' . $list . '[ ]+', '\\1\\2', 'i');
 
 		// Make self closing tabs valid XHTML
 		// Tags which are self-closing: 1) Replaceable and 2) Non-replaced items
 		$selftabs = 'input|hr|img|br|barcode|dottab';
-		$selftabs2 = 'indexentry|indexinsert|bookmark|watermarktext|watermarkimage|column_break|columnbreak|newcolumn|newpage|page_break|pagebreak|formfeed|columns|toc|tocpagebreak|setpageheader|setpagefooter|sethtmlpageheader|sethtmlpagefooter|annotation';
+		$selftabs2 = 'indexentry|indexinsert|bookmark|watermarktext|watermarkimage|column_break|columnbreak|newcolumn|newpage|page_break|pagebreak|formfeed|columns|toc|tocentry|tocpagebreak|setpageheader|setpagefooter|sethtmlpageheader|sethtmlpagefooter|annotation';
 
 		$html = HtmlTags::closeSelfClosing($html, $selftabs . '|' . $selftabs2);
 
@@ -28279,7 +28270,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = str_replace("</innerpre", "</pre", $html);
 		$html = str_replace("<innerpre", "<pre", $html);
 
-		$html = preg_replace('/<textarea(' . HtmlTags::CONTENT_PATTERN . ')><\/textarea>/si', '<textarea\\1> </textarea>', $html);
+		$html = HtmlTags::replaceOutsideTags($html, '<textarea(' . HtmlTags::CONTENT_PATTERN . ')><\/textarea>', '<textarea\\1> </textarea>', 'si');
 		// With use_kwt, a caption above its table is kept with it the same way as a heading (mpdf/mpdf#1666)
 		$kwt = $this->use_kwt ? ' keep-with-table="1"' : '';
 		// A caption is copied above and below its table, nested tables each moving their own
@@ -28304,7 +28295,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if ($this->use_kwt) {
-			$returnHtml = preg_replace('/<(h[1-6])(' . HtmlTags::CONTENT_PATTERN . '(?<!\/))(>[^>]*<\/\\1>\s*<table)/si', '<\\1\\2 keep-with-table="1"\\3', $html);
+			$heading = '<(h[1-6])(' . HtmlTags::CONTENT_PATTERN . '(?<!\/))(>[^>]*<\/\\1>\s*<table)';
+			$returnHtml = HtmlTags::replaceOutsideTags($html, $heading, '<\\1\\2 keep-with-table="1"\\3', 'si');
 			/* If no errors then save the return value */
 			if (preg_last_error() === PREG_NO_ERROR) {
 				$html = $returnHtml;

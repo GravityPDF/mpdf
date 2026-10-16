@@ -113,7 +113,38 @@ class TagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'a ">" in a value, already closed' => ['<bookmark content="a > b" />', '<bookmark content="a > b" />'],
 			'a "/" in a value' => ['<input value="a/b">', '<input value="a/b" />'],
 			'another tag' => ['<p title="a > b">', '<p title="a > b">'],
+			'one inside another tag\'s value' => ['<p title="<br> <br/>"><br>', '<p title="<br> <br/>"><br />'],
+			'a name that only starts with one of them' => ['<brand>', '<brand>'],
 		];
+	}
+
+	/**
+	 * HTML, and what is left of it once each "<b>" outside a tag is removed
+	 *
+	 * @return array[]
+	 */
+	public static function replaceOutsideTagsProvider()
+	{
+		return [
+			'between tags' => ['<p>a<b>b</p>', '<p>ab</p>'],
+			'inside a value' => ['<p title="a<b>b">c</p><b>', '<p title="a<b>b">c</p>'],
+			'inside a value quoted with apostrophes' => ['<p title=\'<b>\'><b>c</p>', '<p title=\'<b>\'>c</p>'],
+			'inside a comment, which is not a tag' => ['<!-- <b> -->', '<!--  -->'],
+			'a "<" that starts no tag' => ['a < b<b>', 'a < b'],
+		];
+	}
+
+	/**
+	 * A pattern is replaced between tags, and not inside another tag's attribute value
+	 *
+	 * @dataProvider replaceOutsideTagsProvider
+	 *
+	 * @param string $html
+	 * @param string $expected
+	 */
+	public function testReplaceOutsideTags($html, $expected)
+	{
+		$this->assertSame($expected, Tags::replaceOutsideTags($html, '<b>', ''));
 	}
 
 	/**

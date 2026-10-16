@@ -38,4 +38,15 @@ class AdjustHtmlTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('<h5 align="center" style="color: red" keep-with-table="1">', $adjustedHtml);
 		$this->assertStringContainsString('<h6 class="name" keep-with-table="1">', $adjustedHtml);
 	}
+
+	/**
+	 * A thead or tfoot holding only empty rows is removed with them, and so is a table left empty
+	 */
+	public function testSectionsLeftEmptyByEmptyRowsAreRemoved()
+	{
+		$html = '<table><thead><tr></tr></thead><tbody><tr><td>x</td></tr></tbody><tfoot> <tr> </tr> </tfoot></table>'
+			. '<table><thead><tr> </tr></thead></table>';
+
+		$this->assertSame('<table><tbody><tr><td>x</td></tr></tbody></table>', $this->mpdf->AdjustHTML($html));
+	}
 }

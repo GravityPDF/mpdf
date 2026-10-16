@@ -41,6 +41,9 @@ class CommentParserTest extends TestCase
 			'a conditional comment that shows its content' => ['a<!--[if !mso]><!-->b<!--<![endif]-->c', 'abc'],
 			'a comment marker in a script' => ['<script>s = "<!--";</script>a<!-- x -->b', '<script>s = "<!--";</script>ab'],
 			'a script tag in a comment' => ['a<!-- <script> -->b<script>x</script>', 'ab<script>x</script>'],
+			'a comment marker in an attribute value' => ['<p title="a <!-- b">x</p><!-- y --><p>z</p>', '<p title="a <!-- b">x</p><p>z</p>'],
+			'a script tag in an attribute value' => ['<p title="<script>">x</p><!-- y --><script>s</script>z', '<p title="<script>">x</p><script>s</script>z'],
+			'mPDF markers in an attribute value' => ['<p title="<!--mpdf mpdf-->">x</p>', '<p title="<!--mpdf mpdf-->">x</p>'],
 			'no comment' => ['<p>a b</p>', '<p>a b</p>'],
 		];
 	}
