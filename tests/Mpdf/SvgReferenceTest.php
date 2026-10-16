@@ -76,6 +76,51 @@ class SvgReferenceTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * The element a <use> references, holding elements of its own name
+	 *
+	 * @return array[]
+	 */
+	public static function nestedTargets()
+	{
+		$red = '<rect width="20" height="20" fill="#ff0000"/>';
+		$blue = '<rect x="30" width="20" height="20" fill="#0000ff"/>';
+
+		return [
+			'a <g> in a <g>' => ['<g id="a"><g>' . $red . '</g>' . $blue . '</g>'],
+			'two levels' => ['<g id="a"><g><g>' . $red . '</g></g>' . $blue . '</g>'],
+			'an empty <g> and a <g> in a <g>' => ['<g id="a"><g/><g>' . $red . '</g>' . $blue . '</g>'],
+		];
+	}
+
+	/**
+	 * A <use> copies the whole of the element it references, not only up to the first end tag of its name
+	 *
+	 * @dataProvider nestedTargets
+	 *
+	 * @param string $target
+	 */
+	public function testAUseCopiesAllOfANestedElement($target)
+	{
+		$drawn = $this->drawn(self::OPEN . '<defs>' . $target . '</defs><use xlink:href="#a"/></svg>');
+
+		$this->assertStringContainsString(self::RED, $drawn);
+		$this->assertStringContainsString(self::BLUE, $drawn);
+	}
+
+	/**
+	 * A <use> of an inner <g> copies that <g> alone, not the <g> around it or the one after it
+	 */
+	public function testAUseOfAnInnerGroupCopiesItAlone()
+	{
+		$drawn = $this->drawn(self::OPEN . '<defs><g><g id="a"><rect width="20" height="20" fill="#ff0000"/></g>'
+			. '<rect x="30" width="20" height="20" fill="#0000ff"/></g></defs><use xlink:href="#a"/>'
+			. '<g><rect x="60" width="20" height="20" fill="#00ff00"/></g></svg>');
+
+		$this->assertSame(1, substr_count($drawn, self::RED));
+		$this->assertStringNotContainsString(self::BLUE, $drawn);
+	}
+
+	/**
 	 * The <use>'s x and y move the element after its own transform
 	 */
 	public function testAUsesPositionIsAppliedAfterItsTransform()

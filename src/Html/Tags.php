@@ -130,6 +130,49 @@ class Tags
 	}
 
 	/**
+	 * The element whose start tag begins at the offset. Unlike elementPattern(), an end tag closes the nearest start
+	 * tag of its name still open, so an element of the same name nested inside stays part of it. Tags are found as
+	 * startTagPattern() finds them, and names compared without regard to case
+	 *
+	 * @param string $html
+	 * @param string $name
+	 * @param int $offset
+	 *
+	 * @return string[]|null [element, start tag content, what is between the tags, end tag], the last two empty when
+	 *                       the start tag closes itself; or null when no start tag of the name begins at the offset,
+	 *                       or it is never closed
+	 */
+	public static function elementAt($html, $name, $offset)
+	{
+		$name = preg_quote($name, '/');
+		if (!preg_match('/\G' . self::startTagPattern($name) . '/i', $html, $start, 0, $offset)) {
+			return null;
+		}
+
+		if (substr($start[1], -1) === '/') {
+			return [$start[0], $start[1], '', ''];
+		}
+
+		$tag = '/' . self::startTagPattern($name . '|\/' . $name) . '/i';
+		$inner = $offset + strlen($start[0]);
+		$depth = 1;
+		$from = $inner;
+		while (preg_match($tag, $html, $m, PREG_OFFSET_CAPTURE, $from)) {
+			$from = $m[0][1] + strlen($m[0][0]);
+			if ($m[1][0][0] !== '/') {
+				// One that closes itself leaves nothing open
+				if (substr($m[1][0], -1) !== '/') {
+					$depth++;
+				}
+			} elseif (--$depth === 0) {
+				return [substr($html, $offset, $from - $offset), $start[1], substr($html, $inner, $m[0][1] - $inner), $m[0][0]];
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Reads the content of a start tag into its name and its attributes, each value as it was written between its
 	 * quotes. Names are uppercased, as HTML ignores their case, and a later attribute of the same name replaces an
 	 * earlier one

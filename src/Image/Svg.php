@@ -3259,7 +3259,7 @@ class Svg
 	 *
 	 * @param string $data
 	 *
-	 * @return array[] The tag's name, uppercased, its content and its offset in $data
+	 * @return array[] The tag's name, uppercased, and its offset in $data
 	 */
 	private function elementsById($data)
 	{
@@ -3269,7 +3269,7 @@ class Svg
 		foreach ($tags as $tag) {
 			list($name, $attributes) = Tags::attributes($tag[1][0]);
 			if (isset($attributes['ID']) && !isset($elements[$attributes['ID']])) {
-				$elements[$attributes['ID']] = ['name' => $name, 'tag' => $tag[1][0], 'offset' => $tag[0][1]];
+				$elements[$attributes['ID']] = ['name' => $name, 'offset' => $tag[0][1]];
 			}
 		}
 
@@ -3294,16 +3294,9 @@ class Svg
 		}
 
 		$target = $elements[$id[1]];
-		if (substr($target['tag'], -1) === '/') {
-			return ['name' => $target['name'], 'element' => '<' . $target['tag'] . '>', 'content' => ''];
-		}
+		$element = Tags::elementAt($data, $target['name'], $target['offset']);
 
-		$name = preg_quote(strtok($target['tag'], " \t\r\n"), '/');
-		if (!preg_match('/\G' . Tags::elementPattern($name) . '/si', $data, $m, 0, $target['offset'])) {
-			return null;
-		}
-
-		return ['name' => $target['name'], 'element' => $m[0], 'content' => $m[2]];
+		return $element ? ['name' => $target['name'], 'element' => $element[0], 'content' => $element[2]] : null;
 	}
 
 	/**
