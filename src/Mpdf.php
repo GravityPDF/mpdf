@@ -19066,8 +19066,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function ReadMetaTags($html)
 	{
-		if (stripos($html, '<title') !== false && preg_match('/' . HtmlTags::elementPattern('title') . '/si', $html, $m)) {
-			$this->SetTitle($m[2]);
+		if (stripos($html, '<title') !== false) {
+			// An inline SVG's <title> names the image, not the document
+			$document = stripos($html, '</svg') !== false ? preg_replace('/' . HtmlTags::elementPattern('svg') . '/si', '', $html) : $html;
+			if (preg_match('/' . HtmlTags::elementPattern('title') . '/si', $document, $m)) {
+				$this->SetTitle($m[2]);
+			}
 		}
 
 		if (stripos($html, '<meta') === false) {

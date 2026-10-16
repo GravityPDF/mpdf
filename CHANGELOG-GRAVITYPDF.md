@@ -300,6 +300,7 @@ Bugfixes
 * An RGB image converted to CMYK truncated its inks, so full ink fell short of 255. [#349] [#354]
 * An image's `/SMask` pointed at whichever object came before it, which is only its mask if nothing was added in between. An image and its soft mask are now registered together. [#373]
 * A `<textcircle>` with no `font-size` from its tag or the CSS raised three `Undefined array key "fontsize"` warnings. It is now drawn at the size of the text around it, as though that size were set on it. [#645] [#678]
+* An inline SVG's `<title>` became the PDF's title when the document had none, or when the SVG came before the document's own `<title>`. Only a `<title>` outside any `<svg>` now titles the document. [#779] [#783]
 
 ### Forms
 
@@ -997,3 +998,5 @@ These changes do not change output.
 [#774]: https://github.com/GravityPDF/mpdf/pull/774
 [#768]: https://github.com/GravityPDF/mpdf/issues/768
 [#776]: https://github.com/GravityPDF/mpdf/pull/776
+[#779]: https://github.com/GravityPDF/mpdf/issues/779
+[#783]: https://github.com/GravityPDF/mpdf/pull/783
