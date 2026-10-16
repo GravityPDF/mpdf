@@ -15033,7 +15033,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 			} else { // TAG **
 				if (isset($e[0]) && $e[0] == '/') {
-					$endtag = trim(strtoupper(substr($e, 1)));
+					$endtag = HtmlTags::name($e);
 
 					/* -- CSS-POSITION -- */
 					// mPDF 6
@@ -16741,7 +16741,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					continue;
 				}
 				if ($e[0] == '/') { // end tag
-					$e = strtoupper(substr($e, 1));
+					$e = HtmlTags::name($e);
 					if ($e == 'OL' || $e == 'UL') {
 						if ($lvl == 1) {
 							break;
@@ -19102,7 +19102,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		// Charset conversion
 		if ($this->allow_charset_conversion) {
-			if (preg_match('/<head.*charset=([^\'\"\s]*).*<\/head>/si', $html, $m)) {
+			if (preg_match('/<head.*charset=([^\'\"\s]*).*' . HtmlTags::endTagPattern('head') . '/si', $html, $m)) {
 				if (strtoupper($m[1]) != 'UTF-8') {
 					$this->charset_in = strtoupper($m[1]);
 				}
@@ -28190,9 +28190,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = HtmlTags::closeSelfClosing($html, 'br|hr');
 
 		// Get rid of empty <thead></thead> etc, rows first so a thead or tfoot they leave empty goes too
-		$html = HtmlTags::replaceOutsideTags($html, '<tr>\s*<\/tr>', '', 'i');
-		$html = HtmlTags::replaceOutsideTags($html, '<(thead|tfoot)>\s*<\/\1>', '', 'i');
-		$html = HtmlTags::replaceOutsideTags($html, '<table' . HtmlTags::CONTENT_PATTERN . '>\s*<\/table>', '', 'i');
+		$html = HtmlTags::replaceOutsideTags($html, '<tr>\s*' . HtmlTags::endTagPattern('tr'), '', 'i');
+		$html = HtmlTags::replaceOutsideTags($html, '<(thead|tfoot)>\s*' . HtmlTags::endTagPattern('\1'), '', 'i');
+		$html = HtmlTags::replaceOutsideTags($html, '<table' . HtmlTags::CONTENT_PATTERN . '>\s*' . HtmlTags::endTagPattern('table'), '', 'i');
 
 		// Remove spaces at end of table cells
 		$html = HtmlTags::replaceOutsideTags($html, '[ \n]+<\/t(d|h)', '</t\\1');
@@ -28235,7 +28235,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Spaces are collapsed only outside tags, so an attribute value keeps its own, as value="a   b" does in a browser
 		$html = HtmlTags::replaceOutsideTags($html, '[ ]{2,}', ' ');
 
-		$html = HtmlTags::replaceOutsideTags($html, '(<\/li>)\s+(?=<\/[uo]l|<li)|(<\/[uo]l>)\s+(?=<\/li)', '\\1\\2', 'i');
+		$html = HtmlTags::replaceOutsideTags($html, '(' . HtmlTags::endTagPattern('li') . ')\s+(?=<\/[uo]l|<li)|(' . HtmlTags::endTagPattern('[uo]l') . ')\s+(?=<\/li)', '\\1\\2', 'i');
 		$list = '(<[uo]l' . HtmlTags::CONTENT_PATTERN . '>)';
 		$html = HtmlTags::replaceOutsideTags($html, '[ ]+' . $list . '[ ]*|' . $list . '[ ]+', '\\1\\2', 'i');
 
@@ -28276,7 +28276,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$html = str_replace("</innerpre", "</pre", $html);
 		$html = str_replace("<innerpre", "<pre", $html);
 
-		$html = HtmlTags::replaceOutsideTags($html, '<textarea(' . HtmlTags::CONTENT_PATTERN . ')><\/textarea>', '<textarea\\1> </textarea>', 'si');
+		$html = HtmlTags::replaceOutsideTags($html, '<textarea(' . HtmlTags::CONTENT_PATTERN . ')>' . HtmlTags::endTagPattern('textarea'), '<textarea\\1> </textarea>', 'si');
 		// With use_kwt, a caption above its table is kept with it the same way as a heading (mpdf/mpdf#1666)
 		$kwt = $this->use_kwt ? ' keep-with-table="1"' : '';
 		// A caption is copied above and below its table, nested tables each moving their own
@@ -28290,7 +28290,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$content = HtmlTags::replaceElements($table[2], 'table', $moveCaption);
 				$startTag = '<' . $table[1] . '>';
 
-				if (!preg_match('/^\s*<caption(.*?<\/caption>)/si', $content, $caption)) {
+				if (!preg_match('/^\s*<caption(.*?' . HtmlTags::endTagPattern('caption') . ')/si', $content, $caption)) {
 					return $startTag . $content . $table[3];
 				}
 
@@ -28301,7 +28301,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		if ($this->use_kwt) {
-			$heading = '<(h[1-6])(' . HtmlTags::CONTENT_PATTERN . '(?<!\/))(>[^>]*<\/\\1>\s*<table)';
+			$heading = '<(h[1-6])(' . HtmlTags::CONTENT_PATTERN . '(?<!\/))(>[^>]*' . HtmlTags::endTagPattern('\\1') . '\s*<table)';
 			$returnHtml = HtmlTags::replaceOutsideTags($html, $heading, '<\\1\\2 keep-with-table="1"\\3', 'si');
 			/* If no errors then save the return value */
 			if (preg_last_error() === PREG_NO_ERROR) {

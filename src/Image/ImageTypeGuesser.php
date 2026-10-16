@@ -2,6 +2,8 @@
 
 namespace Mpdf\Image;
 
+use Mpdf\Html\Tags;
+
 class ImageTypeGuesser
 {
 
@@ -36,7 +38,7 @@ class ImageTypeGuesser
 			return 'wmf';
 		}
 
-		if (preg_match('/<svg.*<\/svg>/is', $data)) {
+		if (preg_match('/<svg.*' . Tags::endTagPattern('svg') . '/is', $data)) {
 			return 'svg';
 		}
 

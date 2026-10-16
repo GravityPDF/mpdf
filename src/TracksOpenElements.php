@@ -3,6 +3,7 @@
 namespace Mpdf;
 
 use Mpdf\Css\TextDecorations;
+use Mpdf\Html\Tags;
 
 /**
  * Keeps the tree of elements in the HTML WriteHTML() reads, so that each CSS rule can be applied to the elements its
@@ -526,7 +527,7 @@ trait TracksOpenElements
 					$this->openElements[count($this->openElements) - 1]['empty'] = false;
 				}
 			} elseif (isset($token[0]) && $token[0] === '/') {
-				$this->closeElementsEndedBy(trim(strtoupper(substr($token, 1))), $floor);
+				$this->closeElementsEndedBy(Tags::name($token), $floor);
 			} elseif (preg_match('/[a-zA-Z][\w:.\-]*/', $token, $name)) {
 				$tag = strtoupper($name[0]);
 				$this->closeElementsImpliedBy($tag, $floor);

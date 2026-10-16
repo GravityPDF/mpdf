@@ -3095,7 +3095,7 @@ class Svg
 
 		// Neither is drawn. One that closes itself ends there, not at the next end tag of its name
 		foreach (['pattern', 'marker'] as $name) {
-			$data = preg_replace('/' . Tags::startTagPattern($name) . '(?:(?<=\/>)|.*?<\/' . $name . '>)/is', '', $data);
+			$data = preg_replace('/' . Tags::startTagPattern($name) . '(?:(?<=\/>)|.*?' . Tags::endTagPattern($name) . ')/is', '', $data);
 		}
 
 		$this->svg_info['data'] = $data;
@@ -3176,7 +3176,7 @@ class Svg
 		// The whole document is indexed only once one of these elements is found
 		$elements = null;
 
-		$pattern = '/' . Tags::startTagPattern($names) . '(\s*<\/(?:' . $names . ')>)?/i';
+		$pattern = '/' . Tags::startTagPattern($names) . '(\s*' . Tags::endTagPattern($names) . ')?/i';
 
 		return preg_replace_callback($pattern, function ($m) use ($data, &$elements, $replace) {
 			if (substr($m[1], -1) !== '/' && !isset($m[2])) {
