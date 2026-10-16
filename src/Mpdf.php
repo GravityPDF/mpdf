@@ -14544,7 +14544,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$zproperties = [];
 		$bodyAttr = [];
 		if ($mode === HTMLParserMode::DEFAULT_MODE || $mode === HTMLParserMode::HEADER_CSS) {
-			$this->ReadMetaTags($html);
+			if (stripos($html, '<title') !== false || stripos($html, '<meta') !== false) {
+				$this->ReadMetaTags(HtmlTags::removeRawText($html));
+			}
 
 			if (stripos($html, '<base') !== false) {
 				preg_match_all('/' . HtmlTags::startTagPattern('base') . '/i', $html, $bases);

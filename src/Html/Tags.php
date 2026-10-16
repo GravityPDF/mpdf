@@ -2,10 +2,12 @@
 
 namespace Mpdf\Html;
 
+use Mpdf\Css\CommentParser;
+
 /**
  * Finds the tags in HTML and reads their attributes, a value quoted after "=" whole, so a "<" or ">" inside it does not
- * end the tag. Any "<" starts a tag, and comments and raw text are not told apart, so this is not yet a browser's
- * tokenizer
+ * end the tag. Any "<" starts a tag, and comments and raw text are not told apart unless removeRawText() drops them
+ * first, so this is not yet a browser's tokenizer
  */
 class Tags
 {
@@ -257,6 +259,28 @@ class Tags
 	public static function name($content)
 	{
 		return strtoupper((string) strtok($content, " \t\n\r\f/"));
+	}
+
+	/**
+	 * Drops the comments, and the script, style and textarea elements whose content a browser reads as text, so a tag
+	 * written in them, as in var t = "<title>x</title>", is not found
+	 *
+	 * @param string $html
+	 *
+	 * @return string
+	 */
+	public static function removeRawText($html)
+	{
+		$comments = new CommentParser();
+		$html = $comments->removeHtmlComments($comments->removeCommentsFromStyleBlocks($html));
+
+		foreach (['script', 'style', 'textarea'] as $name) {
+			if (stripos($html, '</' . $name) !== false) {
+				$html = preg_replace('/' . self::elementPattern($name) . '/si', '', $html);
+			}
+		}
+
+		return $html;
 	}
 
 	/**
