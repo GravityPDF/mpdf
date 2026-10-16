@@ -19,6 +19,7 @@ use Mpdf\Css\WidthConstraints;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
 use Mpdf\Html\Tags as HtmlTags;
+use Mpdf\Tag\Input as InputTag;
 use Mpdf\Log\Context as LogContext;
 use Mpdf\Fonts\MetricsGenerator;
 use Mpdf\Image\ImageSizing;
@@ -28176,6 +28177,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// pass keeps an SVG's own titles in its image
 		if (stripos($html, '<title') !== false) {
 			$html = preg_replace('/' . HtmlTags::elementPattern('title') . '/si', '', $html);
+		}
+
+		if (stripos($html, '<input') !== false) {
+			$html = InputTag::removeValueLinefeeds($html);
 		}
 
 		$html = preg_replace('/\f/', '', $html); // replace formfeed by nothing

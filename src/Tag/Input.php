@@ -2,11 +2,56 @@
 
 namespace Mpdf\Tag;
 
+use Mpdf\Html\Tags as HtmlTags;
 use Mpdf\Mpdf;
 use Mpdf\Utils\UtfString;
 
 class Input extends Tag
 {
+
+	/**
+	 * The types not drawn as a text field. Any other type, or none, is one
+	 */
+	const NOT_TEXT_FIELDS = ['HIDDEN', 'CHECKBOX', 'RADIO', 'IMAGE', 'BUTTON', 'SUBMIT', 'RESET'];
+
+	/**
+	 * Removes the linefeeds written in the value of each text field, as a browser does, before AdjustHTML() turns the
+	 * document's linefeeds into spaces: value="x(linefeed)y" shows "xy", not "x y"
+	 *
+	 * @param string $html
+	 *
+	 * @return string
+	 */
+	public static function removeValueLinefeeds($html)
+	{
+		return preg_replace_callback('/' . HtmlTags::startTagPattern('input') . '/i', function ($tag) {
+			if (strpos($tag[1], "\n") === false) {
+				return $tag[0];
+			}
+
+			list(, $attributes) = HtmlTags::attributes($tag[1]);
+			if (!self::isTextField($attributes)) {
+				return $tag[0];
+			}
+
+			// Each attribute is matched whole from where the last one ended, so a "value=" inside another's value is not
+			return '<' . preg_replace_callback(HtmlTags::ATTRIBUTE_PATTERN, function ($attribute) {
+				return strtoupper($attribute[1]) === 'VALUE' ? str_replace("\n", '', $attribute[0]) : $attribute[0];
+			}, $tag[1]) . '>';
+		}, $html);
+	}
+
+	/**
+	 * Whether an input with these attributes is drawn as a text field
+	 *
+	 * @param array $attributes Keyed by uppercased name
+	 *
+	 * @return bool
+	 */
+	private static function isTextField(array $attributes)
+	{
+		return !isset($attributes['TYPE']) || !in_array(strtoupper($attributes['TYPE']), self::NOT_TEXT_FIELDS, true);
+	}
 
 	public function open($attr, &$ahtml, &$ihtml)
 	{
@@ -59,6 +104,10 @@ class Input extends Tag
 			$attr['VALUE'] = $this->mpdf->lesser_entity_decode($attr['VALUE']);
 			if ($this->mpdf->onlyCoreFonts) {
 				$attr['VALUE'] = $this->mpdf->utf8ToWin1252($attr['VALUE'], '');
+			}
+			// The line breaks an entity such as "&#10;" writes are only now in the value
+			if (self::isTextField($attr)) {
+				$attr['VALUE'] = str_replace(["\r", "\n"], '', $attr['VALUE']);
 			}
 			$objattr['value'] = $attr['VALUE'];
 		}
