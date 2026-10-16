@@ -63,9 +63,42 @@ class Tags
 	public static function startTagPattern($names)
 	{
 		$named = self::namedTagStart($names);
-		$other = '(?=<[a-zA-Z\/!])(?!' . $named . ')' . self::TAG_PATTERN . '(*SKIP)(*FAIL)';
 
-		return '(?|' . $other . '|(?=' . $named . ')' . self::TAG_PATTERN . ')';
+		return '(?:' . self::skipOthersPattern($named) . '|(?=' . $named . ')' . self::TAG_PATTERN . ')';
+	}
+
+	/**
+	 * A pattern for the start tags of the given names and the elements of another, in one pass. Each match captures
+	 * the start tag's content, then, for an element, what is between its start tag and the first end tag. A start tag
+	 * of the element with no end tag after it is skipped whole. Used with the "s" modifier
+	 *
+	 * @param string $names The names of the start tags, separated by "|"
+	 * @param string $element The name of the element
+	 *
+	 * @return string The pattern, without delimiters
+	 */
+	public static function startTagOrElementPattern($names, $element)
+	{
+		$tag = '(?=' . self::namedTagStart($names) . ')' . self::TAG_PATTERN;
+		$start = '(?=' . self::namedTagStart($element) . ')' . self::TAG_PATTERN;
+		$skip = self::skipOthersPattern(self::namedTagStart($names . '|' . $element));
+
+		return '(?|' . $skip . '|' . $tag . '|' . $start . '(?:(.*?)' . self::endTagPattern($element) . '|(*SKIP)(*FAIL)))';
+	}
+
+	/**
+	 * A pattern that steps over the text and other tags before the next named tag, each tag whole so the search does
+	 * not start again inside one. A "<" not followed by a letter, "/" or "!" is text. Up to 16 are taken per attempt:
+	 * one at a time restarts the search for each, and an unbounded run over a large document exceeds
+	 * pcre.backtrack_limit
+	 *
+	 * @param string $named A pattern for the start of a named tag
+	 *
+	 * @return string
+	 */
+	private static function skipOthersPattern($named)
+	{
+		return '(?:[^<]++|<(?![a-zA-Z\/!])|(?!' . $named . ')<' . self::CONTENT_PATTERN . '>){1,16}+(*SKIP)(*FAIL)';
 	}
 
 	/**

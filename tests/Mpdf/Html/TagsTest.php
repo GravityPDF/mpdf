@@ -39,6 +39,76 @@ class TagsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * HTML and the content of each pre start tag found in it
+	 *
+	 * @return array
+	 */
+	public static function startTagProvider()
+	{
+		return [
+			'among other tags' => ['<p>a</p><pre class="x">b</pre><PRE>', ['pre class="x"', 'PRE']],
+			'after more other tags than are stepped over at once' => [str_repeat('<b>x</b>', 20) . '<pre id="a">', ['pre id="a"']],
+			'in the value of another tag' => ['<p title="see <pre>">x</p><pre>', ['pre']],
+			'a "<" that starts no tag' => ['a < b <1> c <pre>', ['pre']],
+			'a tag whose name only starts with pre' => ['<prefix><pre/>', ['pre/']],
+			'in a tag whose quote is never closed' => ['<b title="x <pre>', []],
+			'a comment before it' => ['<!-- c --><pre>', ['pre']],
+		];
+	}
+
+	/**
+	 * Each start tag of the name is found, and none in another tag's value
+	 *
+	 * @dataProvider startTagProvider
+	 *
+	 * @param string $html
+	 * @param string[] $expected
+	 */
+	public function testStartTagPattern($html, array $expected)
+	{
+		preg_match_all('/' . Tags::startTagPattern('pre') . '/i', $html, $matches);
+
+		$this->assertSame($expected, $matches[1]);
+	}
+
+	/**
+	 * A start tag after a few MB of other tags is found within the default pcre.backtrack_limit
+	 */
+	public function testStartTagPatternStaysWithinTheBacktrackLimit()
+	{
+		$limit = ini_set('pcre.backtrack_limit', '1000000');
+		$html = str_repeat('<td class="a">x</td>' . "\n", 150000) . '<pre>';
+
+		$found = preg_match_all('/' . Tags::startTagPattern('pre') . '/i', $html, $matches);
+		ini_set('pcre.backtrack_limit', $limit);
+
+		$this->assertSame(1, $found);
+		$this->assertSame(PREG_NO_ERROR, preg_last_error());
+	}
+
+	/**
+	 * Link start tags and style elements are found in one pass, in the order they come, an element's content captured
+	 * after its start tag's. A style start tag with no end tag after it is skipped whole, so a tag in its value is not
+	 * found
+	 */
+	public function testStartTagOrElementPattern()
+	{
+		$html = '<link href="a.css"><p title="<style>x</style>"></p><style title="a > b">p {}</STYLE>'
+			. '<style media="print" title="<link href=b.css>"><link href=c.css>';
+
+		preg_match_all('/' . Tags::startTagOrElementPattern('link', 'style') . '/si', $html, $matches, PREG_SET_ORDER);
+
+		$this->assertSame(
+			[
+				['<link href="a.css">', 'link href="a.css"'],
+				['<style title="a > b">p {}</STYLE>', 'style title="a > b"', 'p {}'],
+				['<link href=c.css>', 'link href=c.css'],
+			],
+			$matches
+		);
+	}
+
+	/**
 	 * A tag not enabled is dropped whole, however its values are quoted, and an enabled one is left as it was written,
 	 * whatever its values hold
 	 */

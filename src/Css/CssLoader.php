@@ -76,36 +76,50 @@ class CssLoader
 	}
 
 	/**
-	 * Extract external stylesheet URLs from HTML.
+	 * Take the <style> blocks out of HTML, and find the external stylesheets it loads, in one pass.
 	 *
-	 * Finds all external CSS file references including:
-	 * - <link rel="stylesheet" href="...">, its attributes in any order
-	 * - @import url(...) and @import "..." in <style> blocks, whose media query list matches
+	 * The external stylesheets are those of each <link rel="stylesheet" href="...">, its attributes in any order, then
+	 * those of each @import url(...) and @import "..." in the <style> blocks whose media query list matches.
 	 *
 	 * @param string $html HTML content to scan
-	 * @return array Array of CSS file URLs
+	 * @return array The HTML without its <style> blocks, the URLs of the external stylesheets, and the CSS of the
+	 *               <style> blocks with their background URLs resolved
 	 */
-	public function extractExternalStylesheetUrls($html)
+	public function collectStylesheets($html)
 	{
-		$cssUrls = [];
+		$links = [];
+		$styles = [];
+		$html = preg_replace_callback('/' . Tags::startTagOrElementPattern('link', 'style') . '/si', function ($m) use (&$links, &$styles) {
+			if (!isset($m[2])) {
+				$links[] = $m[1];
 
-		if (stripos($html, '<link') !== false) {
-			preg_match_all('/' . Tags::startTagPattern('link') . '/i', $html, $links);
-			foreach ($links[1] as $link) {
-				list(, $attributes) = Tags::attributes($link);
-				if (isset($attributes['REL'], $attributes['HREF']) && strtolower(trim($attributes['REL'])) === 'stylesheet') {
-					$cssUrls[] = $attributes['HREF'];
-				}
+				return $m[0];
+			}
+
+			// A <link> in a <style> block's text links its stylesheet too
+			if (stripos($m[2], '<link') !== false) {
+				preg_match_all('/' . Tags::startTagPattern('link') . '/i', $m[2], $inner);
+				$links = array_merge($links, $inner[1]);
+			}
+
+			$styles[] = $m[2];
+
+			return '';
+		}, $html);
+
+		$urls = [];
+		foreach ($links as $link) {
+			list(, $attributes) = Tags::attributes($link);
+			if (isset($attributes['REL'], $attributes['HREF']) && strtolower(trim($attributes['REL'])) === 'stylesheet') {
+				$urls[] = $attributes['HREF'];
 			}
 		}
 
-		if (stripos($html, '<style') === false) {
-			return $cssUrls;
-		}
-
-		preg_match_all('/' . Tags::elementPattern('style') . '/si', $html, $styles);
-
-		return array_merge($cssUrls, $this->extractImportUrls($styles[2], true));
+		return [
+			$html,
+			array_merge($urls, $this->extractImportUrls($styles, true)),
+			array_map([$this, 'resolveBackgroundUrls'], $styles),
+		];
 	}
 
 	/**

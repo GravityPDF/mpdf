@@ -171,22 +171,19 @@ class CssParser
 		$this->cascadeCSS = [];
 		$this->compiledRules = [];
 
+		if (stripos($html, '<style') === false && stripos($html, '<link') === false) {
+			return $this->commentParser->removeHtmlComments($html);
+		}
+
 		$ind = 0;
 		$stylesheets = [];
 
-		$style = '/' . Tags::elementPattern('style') . '/si';
-
-		$hasStyle = stripos($html, '<style') !== false;
-		if ($hasStyle) {
-			$html = $this->mediaQueryProcessor->filterByMediaQuery($html, $style);
-		}
-		if (stripos($html, '<link') !== false) {
-			$html = $this->mediaQueryProcessor->filterByMediaQuery($html, '/' . Tags::startTagPattern('link') . '/i');
-		}
-		$html = $this->commentParser->removeCommentsFromStyleBlocks($html);
+		$html = $this->filterStylesheetsByMedium($html);
 		$html = $this->commentParser->removeHtmlComments($html);
 
-		$externalCss = $this->cssLoader->extractExternalStylesheetUrls($html);
+		// A <style> or <link> in <!--mpdf ... mpdf--> is read only once the markers are gone, and one in any other
+		// comment not at all, so the stylesheets are collected in a second pass
+		list($html, $externalCss, $styles) = $this->cssLoader->collectStylesheets($html);
 		$externalCssCount = count($externalCss);
 		while ($externalCssCount) {
 			$path = htmlspecialchars_decode($externalCss[$ind]);
@@ -204,21 +201,41 @@ class CssParser
 			$ind++;
 		}
 
-		// CSS as <style> in HTML document, taken out of it
-		if ($hasStyle) {
-			$html = preg_replace_callback($style, function ($m) use (&$stylesheets) {
-				$stylesheets[] = $this->cssLoader->resolveBackgroundUrls($m[2]);
-
-				return '';
-			}, $html);
-		}
-
-		// Each is read on its own, so a block or comment one leaves open ends with it
-		foreach ($stylesheets as $css) {
+		// The <style> blocks come after the stylesheets they and the <link> tags load. Each is read on its own, so a
+		// block or comment one leaves open ends with it
+		foreach (array_merge($stylesheets, $styles) as $css) {
 			$this->processCssString($this->tokenizer->removeComments($css));
 		}
 
 		return $html;
+	}
+
+	/**
+	 * Remove the <style> blocks and <link> tags for other media, and the HTML comment markers from the CSS of the
+	 * <style> blocks kept, in one pass
+	 *
+	 * @param string $html
+	 * @return string
+	 */
+	private function filterStylesheetsByMedium($html)
+	{
+		return preg_replace_callback('/' . Tags::startTagOrElementPattern('link', 'style') . '/si', function ($m) {
+			if (!$this->mediaQueryProcessor->isForSelectedMedium($m[1])) {
+				return '';
+			}
+
+			if (!isset($m[2])) {
+				return $m[0];
+			}
+
+			// A <link> in a <style> block's text is filtered too, as collectStylesheets() links its stylesheet
+			$css = $m[2];
+			if (stripos($css, '<link') !== false) {
+				$css = $this->mediaQueryProcessor->filterByMediaQuery($css, '/' . Tags::startTagPattern('link') . '/i');
+			}
+
+			return '<' . $m[1] . '>' . $this->commentParser->removeCommentMarkers($css) . '</style>';
+		}, $html);
 	}
 
 	/**

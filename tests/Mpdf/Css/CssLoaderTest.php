@@ -76,7 +76,7 @@ class CssLoaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			<style>@import "style4.css";</style>
 		';
 
-		$urls = $this->cssLoader->extractExternalStylesheetUrls($html);
+		$urls = $this->externalStylesheetUrls($html);
 
 		$this->assertCount(4, $urls);
 		$this->assertContains('style1.css', $urls);
@@ -106,7 +106,7 @@ class CssLoaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(
 			['print.css', 'wide.css', 'https://fonts.googleapis.com/css2?family=Roboto&display=swap', '/theme', 'spaced.css'],
-			$this->cssLoader->extractExternalStylesheetUrls($html)
+			$this->externalStylesheetUrls($html)
 		);
 	}
 
@@ -134,7 +134,7 @@ class CssLoaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(
 			['screen.css', 'print.css', 'layered.css', 'fallback.css', 'versioned.css?v=2', 'third.css', 'wide.css', 'narrow.css', 'second.css'],
-			$this->cssLoader->extractExternalStylesheetUrls($html)
+			$this->externalStylesheetUrls($html)
 		);
 	}
 
@@ -156,11 +156,11 @@ class CssLoaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(
 			['https://fonts.example/css2?family=Inter:wght@300;400&display=swap', 'after.css', 'next.css'],
-			$this->cssLoader->extractExternalStylesheetUrls($html)
+			$this->externalStylesheetUrls($html)
 		);
 
 		$this->mpdf->cssMode = CssMode::LEGACY;
-		$this->assertSame(['after.css', 'next.css'], $this->cssLoader->extractExternalStylesheetUrls($html));
+		$this->assertSame(['after.css', 'next.css'], $this->externalStylesheetUrls($html));
 	}
 
 	/**
@@ -221,6 +221,60 @@ class CssLoaderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$this->assertSame(['http://example.com/css/screen.css', 'http://example.com/css/print.css'], $externalCss);
 		$this->assertSame(2, $count);
+	}
+
+	/**
+	 * The <style> blocks are taken out and the <link> tags left. The linked stylesheets come first, a <link> in a
+	 * <style> block's text among them, then the imported ones
+	 */
+	public function testCollectStylesheets()
+	{
+		$this->mpdf->SetBasePath('http://example.com/dir/');
+		$html = '<link title="a > b" href="first.css" rel="stylesheet">'
+			. '<style title="a > b">@import url(imported.css); p { background: url(bg.png); }</style>'
+			. '<p title="<style>p { color: red; }</style>">Text</p>'
+			. '<style>/* <link rel="stylesheet" href="inner.css"> */ h1 { color: red; }</STYLE>'
+			. '<link rel="icon" href="icon.ico">'
+			. '<style media="print" title="<link rel=stylesheet href=hidden.css>">'
+			. '<link rel=stylesheet href=last.css>';
+
+		list($html, $urls, $styles) = $this->cssLoader->collectStylesheets($html);
+
+		$this->assertSame(
+			'<link title="a > b" href="first.css" rel="stylesheet"><p title="<style>p { color: red; }</style>">Text</p>'
+			. '<link rel="icon" href="icon.ico"><style media="print" title="<link rel=stylesheet href=hidden.css>">'
+			. '<link rel=stylesheet href=last.css>',
+			$html
+		);
+		$this->assertSame(['first.css', 'inner.css', 'last.css', 'imported.css'], $urls);
+		$this->assertSame(
+			[
+				'@import url(imported.css); p { background: url(http://example.com/dir/bg.png); }',
+				'/* <link rel="stylesheet" href="inner.css"> */ h1 { color: red; }',
+			],
+			$styles
+		);
+	}
+
+	/**
+	 * HTML with neither a <style> nor a <link> is returned as it is, with no stylesheets
+	 */
+	public function testCollectStylesheetsWithoutStylesheets()
+	{
+		$this->assertSame(['<p>Text</p>', [], []], $this->cssLoader->collectStylesheets('<p>Text</p>'));
+	}
+
+	/**
+	 * The URLs of the external stylesheets HTML loads
+	 *
+	 * @param string $html
+	 * @return string[]
+	 */
+	private function externalStylesheetUrls($html)
+	{
+		list(, $urls) = $this->cssLoader->collectStylesheets($html);
+
+		return $urls;
 	}
 
 	public function testResolveBackgroundUrls()
