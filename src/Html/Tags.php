@@ -75,6 +75,62 @@ class Tags
 	}
 
 	/**
+	 * Replaces each outermost element of the given name with what the callback returns for it. An end tag closes the
+	 * nearest start tag still open, so an element of the same name nested inside stays part of the outer one, and a
+	 * start tag never closed, or one that closes itself, is left as it was. Tags are found as startTagPattern() finds them
+	 *
+	 * @param string $html
+	 * @param string $name
+	 * @param callable $callback Given the element as elementPattern() captures it, with its end tag added: [element,
+	 *                           start tag content, what is between the tags, end tag]
+	 *
+	 * @return string
+	 */
+	public static function replaceElements($html, $name, callable $callback)
+	{
+		preg_match_all('/' . self::startTagPattern($name . '|\/' . $name) . '/i', $html, $tags, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+
+		$open = [];
+		$elements = [];
+		foreach ($tags as $tag) {
+			if ($tag[1][0][0] !== '/') {
+				// One that closes itself leaves nothing open
+				if (substr($tag[1][0], -1) !== '/') {
+					$open[] = $tag;
+				}
+			} elseif ($open) {
+				$start = array_pop($open);
+				$elements[$start[0][1]] = [$start, $tag];
+			}
+		}
+
+		ksort($elements);
+
+		$replaced = '';
+		$offset = 0;
+		foreach ($elements as $from => $element) {
+			// One inside an element already replaced is part of it
+			if ($from < $offset) {
+				continue;
+			}
+
+			list($start, $end) = $element;
+			$innerFrom = $from + strlen($start[0][0]);
+			$to = $end[0][1] + strlen($end[0][0]);
+
+			$replaced .= substr($html, $offset, $from - $offset) . call_user_func($callback, [
+				substr($html, $from, $to - $from),
+				$start[1][0],
+				substr($html, $innerFrom, $end[0][1] - $innerFrom),
+				$end[0][0],
+			]);
+			$offset = $to;
+		}
+
+		return $replaced . substr($html, $offset);
+	}
+
+	/**
 	 * Reads the content of a start tag into its name and its attributes, each value as it was written between its
 	 * quotes. Names are uppercased, as HTML ignores their case, and a later attribute of the same name replaces an
 	 * earlier one
