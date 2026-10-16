@@ -204,4 +204,24 @@ class TextRecordingMpdf extends UnwindCountingMpdf
 		return $pieces;
 	}
 
+	/**
+	 * The pages each line whose whole text matches a pattern was drawn on
+	 *
+	 * @param string $pattern Matched against the text without its surrounding whitespace
+	 *
+	 * @return int[][] The pages in drawing order, keyed by the text
+	 */
+	public function drawnPages($pattern)
+	{
+		$pages = [];
+		foreach ($this->drawnText as $i => $text) {
+			$text = trim($text);
+			if (preg_match($pattern, $text)) {
+				$pages[$text][] = $this->drawnBoxes[$i][0];
+			}
+		}
+
+		return $pages;
+	}
+
 }

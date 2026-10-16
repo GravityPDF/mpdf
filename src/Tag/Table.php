@@ -620,11 +620,15 @@ class Table extends Tag
 			$temptrbgi = [];
 			$temptrbgg = [];
 			$temptrbgc = [];
+			$temppb = [];
 			if (isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['bgcolor'][-1])) {
 				$temptrbgc[-1] = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['bgcolor'][-1];
 			}
 			for ($k = 0; $k < $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['nr']; $k++) {
 				if (!in_array($k, $tfrows)) {
+					if (isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'][$k])) {
+						$temppb[count($temptrbgi)] = $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'][$k];
+					}
 					$temptrbgi[] = isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trbackground-images'][$k])
 						? $this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trbackground-images'][$k]
 						: null;
@@ -652,6 +656,7 @@ class Table extends Tag
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trbackground-images'] = $temptrbgi;
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['trgradients'] = $temptrbgg;
 			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['bgcolor'] = $temptrbgc;
+			$this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['pagebreak-before'] = $temppb;
 			// Should Update all other arays set on row number, but cell properties have been set so not needed
 			// [bgcolor] [trborder-left] [trborder-right] [trborder-top] [trborder-bottom]
 		}
