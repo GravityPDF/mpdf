@@ -3,6 +3,7 @@
 namespace Mpdf\Tag;
 
 use Mpdf\Css\Border;
+use Mpdf\Css\TextAlign;
 use Mpdf\Css\TextVars;
 use Mpdf\CssMode;
 use Mpdf\Utils\Arrays;
@@ -248,6 +249,10 @@ class Td extends Tag
 		}
 		if (isset($properties['DIRECTION'])) {
 			$c['direction'] = strtolower($properties['DIRECTION']);
+		}
+
+		if ($this->appliesStandardCascade() && isset($properties['TEXT-ALIGN']) && in_array(strtolower($properties['TEXT-ALIGN']), ['start', 'end'], true)) {
+			$c['a'] = TextAlign::physical($properties['TEXT-ALIGN'], $c['direction']);
 		}
 
 		if (!$c['a']) {

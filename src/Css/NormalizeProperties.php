@@ -82,6 +82,7 @@ class NormalizeProperties
 		'BORDER-LEFT-WIDTH' => true, 'BORDER-SPACING' => true,
 		'BORDER-RADIUS' => true, 'BORDER-TOP-LEFT-RADIUS' => true, 'BORDER-TOP-RIGHT-RADIUS' => true,
 		'BORDER-BOTTOM-LEFT-RADIUS' => true, 'BORDER-BOTTOM-RIGHT-RADIUS' => true,
+		'TEXT-DECORATION-THICKNESS' => true, 'TEXT-UNDERLINE-OFFSET' => true,
 	];
 
 	/**
@@ -92,6 +93,7 @@ class NormalizeProperties
 	private static $colorProperties = [
 		'COLOR' => true, 'BACKGROUND-COLOR' => true,
 		'BORDER-TOP-COLOR' => true, 'BORDER-RIGHT-COLOR' => true, 'BORDER-BOTTOM-COLOR' => true, 'BORDER-LEFT-COLOR' => true,
+		'TEXT-DECORATION-COLOR' => true,
 	];
 
 	/**
@@ -140,6 +142,8 @@ class NormalizeProperties
 		],
 		'LIST-STYLE' => ['LIST-STYLE-TYPE', 'LIST-STYLE-IMAGE', 'LIST-STYLE-POSITION'],
 		'TEXT-OUTLINE' => ['TEXT-OUTLINE', 'TEXT-OUTLINE-WIDTH', 'TEXT-OUTLINE-COLOR'],
+		'TEXT-DECORATION' => ['TEXT-DECORATION', 'TEXT-DECORATION-STYLE', 'TEXT-DECORATION-COLOR', 'TEXT-DECORATION-THICKNESS'],
+		'TEXT-DECORATION-LINE' => ['TEXT-DECORATION'],
 		'BREAK-BEFORE' => ['PAGE-BREAK-BEFORE'],
 		'BREAK-AFTER' => ['PAGE-BREAK-AFTER'],
 		'BREAK-INSIDE' => ['PAGE-BREAK-INSIDE'],
@@ -230,6 +234,11 @@ class NormalizeProperties
 				$this->processBorderShorthandProperty($k, $v);
 			} elseif ($k === 'TEXT-OUTLINE') {
 				$this->processTextOutlineProperty($v);
+			} elseif ($standard && $k === 'TEXT-DECORATION') {
+				$this->processTextDecorationProperty($v);
+			} elseif ($standard && $k === 'TEXT-DECORATION-LINE') {
+				// TEXT-DECORATION holds the lines alone, so what reads it, and propagates it, reads this too
+				$this->properties['TEXT-DECORATION'] = $v;
 			} elseif ($k === 'SIZE' || $k === 'SHEET-SIZE') {
 				$this->processPageSizeProperty($k, $v);
 			} elseif ($k === 'BREAK-BEFORE' || $k === 'BREAK-AFTER' || $k === 'BREAK-INSIDE') {
@@ -1194,6 +1203,36 @@ class NormalizeProperties
 			$this->properties['TEXT-OUTLINE-WIDTH'] = $prop[0];
 			$this->properties['TEXT-OUTLINE-COLOR'] = 'currentcolor';
 		}
+	}
+
+	/**
+	 * Expands the text-decoration shorthand into the lines, kept as TEXT-DECORATION, and the style, colour and
+	 * thickness, each reset to its initial value where the shorthand leaves it out
+	 *
+	 * @param string $v Property value
+	 * @return void
+	 */
+	private function processTextDecorationProperty($v)
+	{
+		$lines = [];
+		$parts = [];
+		foreach (['TEXT-DECORATION-STYLE', 'TEXT-DECORATION-COLOR', 'TEXT-DECORATION-THICKNESS'] as $longhand) {
+			$parts[$longhand] = CssWideKeywords::initialValue($longhand);
+		}
+		foreach ($this->splitComponents($v) as $component) {
+			if ($component === 'none' || $component === 'blink' || in_array($component, TextDecorations::LINES, true)) {
+				$lines[] = $component;
+			} elseif (in_array($component, TextDecorations::STYLES, true)) {
+				$parts['TEXT-DECORATION-STYLE'] = $component;
+			} elseif ($component === 'auto' || $component === 'from-font' || $this->sizeConverter->isLength($component)) {
+				$parts['TEXT-DECORATION-THICKNESS'] = $component;
+			} else {
+				$parts['TEXT-DECORATION-COLOR'] = $component;
+			}
+		}
+
+		$this->properties['TEXT-DECORATION'] = $lines ? implode(' ', $lines) : 'none';
+		$this->properties = array_merge($this->properties, $parts);
 	}
 
 	/**

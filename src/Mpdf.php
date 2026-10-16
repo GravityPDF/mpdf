@@ -13,6 +13,7 @@ use Mpdf\Css\InheritedProperties;
 use Mpdf\Css\RelativeFontValues;
 use Mpdf\Css\TextSpacing;
 use Mpdf\Color\IccProfile;
+use Mpdf\Css\TextAlign;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\TextVars;
 use Mpdf\Css\WidthConstraints;
@@ -6190,7 +6191,20 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$up = -100;
 				}
 
-				$adjusty = (-$up / 1000 * $decorationfontsize) + $ut / 2;
+				$underline = isset($this->textparam['u-decoration']) ? $this->textparam['u-decoration'] : [];
+				if (isset($underline['thickness'])) {
+					$ut = $underline['thickness'] / $shrin_k;
+				}
+				if (isset($underline['offset']) || isset($underline['under'])) {
+					// An offset is from the alphabetic baseline, or from below the descenders, to the line's top
+					$top = 0;
+					if (isset($underline['under']) && isset($this->fonts[$decorationfontkey]['desc']['Descent'])) {
+						$top = -$this->fonts[$decorationfontkey]['desc']['Descent'] / 1000 * $decorationfontsize;
+					}
+					$adjusty = $top + (isset($underline['offset']) ? $underline['offset'] / $shrin_k : 0) + $ut / 2;
+				} else {
+					$adjusty = (-$up / 1000 * $decorationfontsize) + $ut / 2;
+				}
 				$ubaseline = isset($this->textparam['u-decoration']['baseline'])
 					? $glyphYorigin - $this->textparam['u-decoration']['baseline'] / $shrin_k
 					: $glyphYorigin;
@@ -6198,7 +6212,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$olw = $this->LineWidth;
 
 				$sub .= ' ' . (sprintf(' %.3F w 0 j 0 J ', $ut * Mpdf::SCALE));
-				$sub .= ' ' . $this->_dounderline($this->x + $dx, $this->y + $ubaseline + $adjusty, $txt, $OTLdata, $textvar);
+				$sub .= ' ' . $this->decorationStroke($underline, TextDecorations::UNDER, $ut, $this->x + $dx, $this->y + $ubaseline + $adjusty, $txt, $OTLdata, $textvar);
 				$sub .= ' ' . (sprintf(' %.3F w 2 j 2 J ', $olw * Mpdf::SCALE));
 
 				if ($this->FillColor != $c) {
@@ -6245,11 +6259,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				$sbaseline = $glyphYorigin - $this->textparam['s-decoration']['baseline'] / $shrin_k;
+				if (isset($this->textparam['s-decoration']['thickness'])) {
+					$ut = $this->textparam['s-decoration']['thickness'] / $shrin_k;
+				}
 
 				$olw = $this->LineWidth;
 
 				$sub .=' ' . (sprintf(' %.3F w 0 j 0 J ', $ut * Mpdf::SCALE));
-				$sub .=' ' . $this->_dounderline($this->x + $dx, $this->y + $sbaseline + $adjusty, $txt, $OTLdata, $textvar);
+				$sub .=' ' . $this->decorationStroke($this->textparam['s-decoration'], TextDecorations::THROUGH, $ut, $this->x + $dx, $this->y + $sbaseline + $adjusty, $txt, $OTLdata, $textvar);
 				$sub .=' ' . (sprintf(' %.3F w 2 j 2 J ', $olw * Mpdf::SCALE));
 
 				if ($this->FillColor != $c) {
@@ -6282,9 +6299,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				$adjusty = (-$ch / 1000 * $decorationfontsize) * $this->baselineO;
 				$obaseline = $glyphYorigin - $this->textparam['o-decoration']['baseline'] / $shrin_k;
+				if (isset($this->textparam['o-decoration']['thickness'])) {
+					$ut = $this->textparam['o-decoration']['thickness'] / $shrin_k;
+				}
 				$olw = $this->LineWidth;
 				$sub .=' ' . (sprintf(' %.3F w 0 j 0 J ', $ut * Mpdf::SCALE));
-				$sub .=' ' . $this->_dounderline($this->x + $dx, $this->y + $obaseline + $adjusty, $txt, $OTLdata, $textvar);
+				$sub .=' ' . $this->decorationStroke($this->textparam['o-decoration'], TextDecorations::OVER, $ut, $this->x + $dx, $this->y + $obaseline + $adjusty, $txt, $OTLdata, $textvar);
 				$sub .=' ' . (sprintf(' %.3F w 2 j 2 J ', $olw * Mpdf::SCALE));
 				if ($this->FillColor != $c) {
 					$sub .= ' ' . $this->FillColor . ' ';
@@ -11676,10 +11696,87 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function _dounderline($x, $y, $txt, $OTLdata = false, $textvar = 0)
 	{
 		// Now print line exactly where $y secifies - called from Text() and Cell() - adjust  position there
-		// WORD SPACING
-		$w = ($this->GetStringWidth($txt, false, $OTLdata, $textvar) * Mpdf::SCALE) + ($this->charspacing * mb_strlen($txt, $this->mb_enc)) + ( $this->ws * mb_substr_count($txt, ' ', $this->mb_enc));
+		$w = $this->decorationWidth($txt, $OTLdata, $textvar);
 		// Draw a line
 		return sprintf('%.3F %.3F m %.3F %.3F l S', $x * Mpdf::SCALE, ($this->h - $y) * Mpdf::SCALE, ($x * Mpdf::SCALE) + $w, ($this->h - $y) * Mpdf::SCALE);
+	}
+
+	/**
+	 * @param string $txt
+	 * @param array|false $OTLdata
+	 * @param int $textvar
+	 *
+	 * @return float The width a decoration under the text runs, word and letter spacing included, in PDF units
+	 */
+	private function decorationWidth($txt, $OTLdata, $textvar)
+	{
+		return ($this->GetStringWidth($txt, false, $OTLdata, $textvar) * Mpdf::SCALE) + ($this->charspacing * mb_strlen($txt, $this->mb_enc)) + ( $this->ws * mb_substr_count($txt, ' ', $this->mb_enc));
+	}
+
+	/**
+	 * Strokes a decoration in the style its element set, or as a plain line
+	 *
+	 * @param array $decoration The decoration's text parameter
+	 * @param int $side TextDecorations::UNDER, THROUGH or OVER
+	 * @param float $thickness In mm
+	 * @param float $x In mm
+	 * @param float $y Where the line's centre runs, in mm down the page
+	 * @param string $txt
+	 * @param array|false $OTLdata
+	 * @param int $textvar
+	 *
+	 * @return string
+	 */
+	private function decorationStroke(array $decoration, $side, $thickness, $x, $y, $txt, $OTLdata, $textvar)
+	{
+		return TextDecorations::stroke(
+			isset($decoration['style']) ? $decoration['style'] : 'solid',
+			$x * Mpdf::SCALE,
+			($this->h - $y) * Mpdf::SCALE,
+			$this->decorationWidth($txt, $OTLdata, $textvar),
+			$thickness * Mpdf::SCALE,
+			$side
+		);
+	}
+
+	/**
+	 * How an element's own decorations are drawn where its CSS asks for other than mPDF's plain line in the text
+	 * colour, at the font's thickness and position
+	 *
+	 * @param array $properties The element's merged CSS
+	 *
+	 * @return array Any of: style, one of TextDecorations::STYLES other than solid; color, the stroke colour operator;
+	 *               thickness and offset, in mm; under, set when the underline goes below the descenders
+	 */
+	private function decorationDrawing(array $properties)
+	{
+		$drawing = [];
+
+		$style = isset($properties['TEXT-DECORATION-STYLE']) ? strtolower(trim($properties['TEXT-DECORATION-STYLE'])) : 'solid';
+		if ($style !== 'solid' && in_array($style, TextDecorations::STYLES, true)) {
+			$drawing['style'] = $style;
+		}
+
+		if (isset($properties['TEXT-DECORATION-COLOR']) && strtolower(trim($properties['TEXT-DECORATION-COLOR'])) !== 'currentcolor') {
+			$color = $this->colorConverter->convert($properties['TEXT-DECORATION-COLOR'], $this->PDFAXwarnings);
+			if ($color) {
+				$drawing['color'] = $this->SetDColor($color, true);
+			}
+		}
+
+		// auto and from-font both take the font's own, which mPDF draws already. A percentage is of 1em
+		foreach (['thickness' => 'TEXT-DECORATION-THICKNESS', 'offset' => 'TEXT-UNDERLINE-OFFSET'] as $key => $property) {
+			if (isset($properties[$property]) && $this->sizeConverter->isLength($properties[$property])) {
+				$drawing[$key] = $this->sizeConverter->convert($properties[$property], $this->FontSize, $this->FontSize);
+			}
+		}
+
+		// left and right place the underline of vertical text, which mPDF does not set
+		if (isset($properties['TEXT-UNDERLINE-POSITION']) && stripos($properties['TEXT-UNDERLINE-POSITION'], 'under') !== false) {
+			$drawing['under'] = true;
+		}
+
+		return $drawing;
 	}
 
 
@@ -19143,6 +19240,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$preceeding_fontsize = $this->FontSize;
 		$spanbordset = false;
 		$spanbgset = false;
+		$logicalAlign = null;
 		// mPDF 6
 		$prevlevel = (($this->blklvl == 0) ? 0 : $this->blklvl - 1);
 
@@ -19416,6 +19514,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								break;
 							case 'JUSTIFY':
 								$this->blk[$this->blklvl]['align'] = "J";
+								break;
+							case 'START':
+							case 'END':
+								// Resolved once the block's direction is read
+								if ($this->cssMode === CssMode::STANDARD) {
+									$logicalAlign = strtolower($v);
+								}
 								break;
 						}
 						break;
@@ -19919,6 +20024,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					break;
 			}//end of switch($k)
 		}//end of foreach
+		if ($logicalAlign !== null) {
+			$this->blk[$this->blklvl]['align'] = TextAlign::physical($logicalAlign, isset($this->blk[$this->blklvl]['direction']) ? $this->blk[$this->blklvl]['direction'] : null);
+		}
 		// mPDF 5.7.3  inline text-decoration parameters
 		// Needs to be set at the end - after vertical-align = super/sub, so that textparam['text-baseline'] is set
 		if (isset($arrayaux['TEXT-DECORATION']) && TextDecorations::seen($this)) {
@@ -19958,6 +20066,17 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$this->textparam['o-decoration']['fontkey'] = $this->FontFamily . $this->FontStyle;
 				$this->textparam['o-decoration']['fontsize'] = $this->FontSize;
 				$this->textparam['o-decoration']['color'] = strtoupper($this->TextColor); // change 0 0 0 rg to 0 0 0 RG
+			}
+			if ($this->cssMode === CssMode::STANDARD) {
+				$drawing = null;
+				foreach (TextDecorations::PARAMETERS as $bit => $parameter) {
+					if (stristr($v, TextDecorations::LINES[$bit])) {
+						if ($drawing === null) {
+							$drawing = $this->decorationDrawing($arrayaux);
+						}
+						$this->textparam[$parameter] = array_merge(array_diff_key($this->textparam[$parameter], TextDecorations::DRAWN_AS), $drawing);
+					}
+				}
 			}
 			// Under standard the element has no decoration of its own, and those it is in still propagate to it
 			if ($this->cssMode === CssMode::LEGACY && stristr($v, 'NONE')) {

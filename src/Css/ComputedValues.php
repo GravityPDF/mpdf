@@ -53,6 +53,7 @@ final class ComputedValues
 		'TEXT-INDENT' => true,
 		'TEXT-SHADOW' => true,
 		'TEXT-OUTLINE-WIDTH' => true,
+		'TEXT-UNDERLINE-OFFSET' => true,
 		'PADDING-TOP' => true,
 		'PADDING-RIGHT' => true,
 		'PADDING-BOTTOM' => true,
@@ -185,6 +186,10 @@ final class ComputedValues
 			} else {
 				unset($properties['FONT-WEIGHT']);
 			}
+		}
+
+		if (isset($own['TEXT-ALIGN'], $properties['TEXT-ALIGN']) && strtolower($properties['TEXT-ALIGN']) === 'match-parent') {
+			$properties['TEXT-ALIGN'] = TextAlign::matchParent($parent);
 		}
 
 		if (isset($own['LINE-HEIGHT'], $properties['LINE-HEIGHT'])) {
