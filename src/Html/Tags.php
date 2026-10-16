@@ -3,8 +3,9 @@
 namespace Mpdf\Html;
 
 /**
- * Finds the tags in HTML, reading a value quoted after "=" whole, so a "<" or ">" inside it does not end the tag.
- * Any "<" starts a tag, and comments and raw text are not told apart, so this is not yet a browser's tokenizer
+ * Finds the tags in HTML and reads their attributes, a value quoted after "=" whole, so a "<" or ">" inside it does not
+ * end the tag. Any "<" starts a tag, and comments and raw text are not told apart, so this is not yet a browser's
+ * tokenizer
  */
 class Tags
 {
@@ -21,6 +22,12 @@ class Tags
 	const TAG_PATTERN = '<((?:[^>=]++|' . self::QUOTED_VALUE_PATTERN . ')*+)>';
 
 	/**
+	 * A name, then a value that may be double quoted, single quoted, unquoted, or absent altogether, as it is for
+	 * boolean attributes such as "selected". Names start with a letter, so the "/" that closes an empty tag is not one
+	 */
+	const ATTRIBUTE_PATTERN = '/([a-zA-Z][\w:.\-]*)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>"]+)))?/';
+
+	/**
 	 * Splits HTML into text and the content of its tags, text first and the two alternating
 	 *
 	 * @param string $html
@@ -30,6 +37,28 @@ class Tags
 	public static function split($html)
 	{
 		return preg_split('/' . self::TAG_PATTERN . '/', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+	}
+
+	/**
+	 * Reads the content of a start tag into its name and its attributes, each value as it was written between its
+	 * quotes. A later attribute of the same name replaces an earlier one
+	 *
+	 * @param string $content What is between the tag's angle brackets: 'a title="x = 1" href=b'
+	 *
+	 * @return array The tag name, and the attribute values by name: ['a', ['title' => 'x = 1', 'href' => 'b']]
+	 */
+	public static function attributes($content)
+	{
+		preg_match_all(self::ATTRIBUTE_PATTERN, $content, $matches, PREG_SET_ORDER);
+		$tag = array_shift($matches);
+
+		$attributes = [];
+		foreach ($matches as $match) {
+			// The value is the last group: PCRE drops the ones after the form that took part
+			$attributes[$match[1]] = count($match) > 2 ? end($match) : '';
+		}
+
+		return [$tag ? $tag[1] : '', $attributes];
 	}
 
 	/**

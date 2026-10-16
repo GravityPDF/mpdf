@@ -5,14 +5,37 @@ namespace Mpdf;
 class AttributeParsingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
-	private function render($html)
+	use DrawnStyles;
+
+	/**
+	 * Writes a document, uncompressed, with its paths relative to tests/data, and outputs it
+	 *
+	 * @param string $html
+	 * @param array $config
+	 *
+	 * @return string The PDF
+	 */
+	private function render($html, array $config = [])
 	{
-		$mpdf = new Mpdf();
+		return $this->write($html, $config)->Output('', 'S');
+	}
+
+	/**
+	 * Writes a document, uncompressed, with its paths relative to tests/data
+	 *
+	 * @param string $html
+	 * @param array $config
+	 *
+	 * @return Mpdf The document, not yet output
+	 */
+	private function write($html, array $config = [])
+	{
+		$mpdf = new Mpdf($config);
 		$mpdf->compress = false;
 		$mpdf->SetBasePath(__DIR__ . '/../data/');
 		$mpdf->WriteHTML($html);
 
-		return $mpdf->Output('', 'S');
+		return $mpdf;
 	}
 
 	private function red($output)
@@ -70,7 +93,7 @@ class AttributeParsingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * A hyphen is not a word character, so the step that quotes bare values never reached these
+	 * An unquoted value on a name holding a hyphen
 	 */
 	public function testAnUnquotedValueOnAHyphenatedAttribute()
 	{
@@ -189,10 +212,9 @@ class AttributeParsingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * <pagefooter> is one of the tags held back from the step that quotes bare values, so nothing
-	 * but the attribute regex itself can read these
+	 * <pagefooter> reads unquoted values like any other tag
 	 */
-	public function testATagHeldBackFromTheQuotingStepStillReadsBareValues()
+	public function testAPageFooterReadsUnquotedValues()
 	{
 		$html = '<pagefooter name=pf content-left=FOOT footer-style-left="color: #ff0000" />'
 			. '<setpagefooter name=pf page=ALL value=on />body';
@@ -204,11 +226,69 @@ class AttributeParsingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Relative paths are rewritten in the tag text before the attributes are read back out of it
+	 * A relative image path is resolved against the base path
 	 */
-	public function testARelativeImagePathIsStillResolved()
+	public function testARelativeImagePathIsResolved()
 	{
 		$this->assertStringContainsString('/Subtype /Image', $this->render('<img src=img/bayeux2.jpg />'));
+	}
+
+	/**
+	 * A relative link is resolved against the base path, its entities decoded
+	 */
+	public function testARelativeLinkIsResolved()
+	{
+		$output = $this->render('<a href="page.html?a=1&amp;b=2">x</a>');
+
+		$this->assertStringContainsString('/URI (' . __DIR__ . '/../data/page.html?a=1&b=2)', $output);
+	}
+
+	/**
+	 * A " name=value" inside a quoted value is part of it, whichever tag it is on
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param string $cssMode
+	 */
+	public function testANameAndValueInsideAQuotedValueStayInIt($cssMode)
+	{
+		$mpdf = $this->write('<bookmark content="Set x=1 first" /><bookmark content="see src=a.png now" /><bookmark content="a=\'b\' c" /><p>text</p>', ['cssMode' => $cssMode]);
+
+		$this->assertSame(['Set x=1 first', 'see src=a.png now', "a='b' c"], array_column($mpdf->BMoutlines, 't'));
+	}
+
+	/**
+	 * A text field draws the whole of a value holding " name=value"
+	 */
+	public function testATextFieldDrawsAValueHoldingANameAndValue()
+	{
+		$mpdf = $this->drawDocument('<input type="text" value="Set x=1 first">');
+
+		$this->assertSame(['Set x=1 first'], $mpdf->drawnText);
+	}
+
+	/**
+	 * A " href=" inside another attribute's value leaves the link its own href
+	 *
+	 * @dataProvider modes
+	 *
+	 * @param string $cssMode
+	 */
+	public function testAnHrefInsideATitleLeavesTheLinkItsOwn($cssMode)
+	{
+		$output = $this->render('<a title="see href=x now" href="https://example.com/a">link</a>', ['cssMode' => $cssMode]);
+
+		$this->assertStringContainsString('/URI (https://example.com/a)', $output);
+	}
+
+	/**
+	 * An apostrophe inside an unquoted value is part of it
+	 */
+	public function testAnUnquotedValueKeepsItsApostrophe()
+	{
+		$output = $this->render('<style>p[title="don\'t"] { color: #ff0000 }</style><p title=don\'t>x</p>');
+
+		$this->assertTrue($this->red($output));
 	}
 
 }
