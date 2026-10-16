@@ -366,6 +366,7 @@ Bugfixes
 * `OverWrite()` assumed every content stream was compressed the way the current instance compresses. It now reads each stream's compression from the document. [#52] [#53]
 * In a core-font document, `OverWrite()` did not find search text with characters outside ASCII, or with `(`, `)` or `\`. [#464] [#485]
 * An EAN or UPC code longer than the symbol holds is refused. [mpdf/mpdf#1334] [#39]
+* A `<title>` or `<meta>` written inside a `<script>`, `<style>`, `<textarea>` or HTML comment was read as the document's own: it became the PDF's title in place of the real `<title>` after it, or set its author, subject or keywords. These hold text, not elements, as they do in a browser. [#786] [#795]
 
 ### Font cache
 
@@ -1031,3 +1032,5 @@ These changes do not change output.
 [#805]: https://github.com/GravityPDF/mpdf/pull/805
 [#792]: https://github.com/GravityPDF/mpdf/issues/792
 [#799]: https://github.com/GravityPDF/mpdf/pull/799
+[#786]: https://github.com/GravityPDF/mpdf/issues/786
+[#795]: https://github.com/GravityPDF/mpdf/pull/795
