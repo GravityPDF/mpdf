@@ -31,7 +31,9 @@ class InitFontRegistryTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf = $this->makeMpdf([new TestFontRegistrationA(), new TestFontRegistrationB()]);
 
 		$fontDir = new \ReflectionProperty(Mpdf::class, 'fontDir');
-		$fontDir->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$fontDir->setAccessible(true);
+		}
 
 		// add() prepends, so the last package added is read first
 		$this->assertSame(['/tmp/b', '/tmp/a'], $fontDir->getValue($mpdf));

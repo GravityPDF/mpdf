@@ -206,7 +206,9 @@ class OtlTableCacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 
 		$property = new \ReflectionProperty('Mpdf\Otl', 'readers');
-		$property->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
 		$property->setValue($otl, $readers);
 
 		return $counting;
@@ -284,7 +286,9 @@ class OtlTableCacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function property($object, $name)
 	{
 		$property = new \ReflectionProperty(get_class($object), $name);
-		$property->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
 
 		return $property->getValue($object);
 	}

@@ -64,7 +64,9 @@ class DefaultGsubRowShapeTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$mpdf->WriteHTML('<p style="font-family:freeserif">&#x0926;&#x0947;&#x0935;&#x0928;</p>');
 
 		$otl = new \ReflectionProperty('Mpdf\Mpdf', 'otl');
-		$otl->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$otl->setAccessible(true);
+		}
 
 		$rows = [];
 		foreach ((array) $otl->getValue($mpdf)->GSUBdata as $key => $row) {

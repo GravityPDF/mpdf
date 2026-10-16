@@ -359,7 +359,9 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function skippedClassNames(OtlDump $dump, $flag, $markFilteringSet)
 	{
 		$reflected = new \ReflectionMethod(OtlDump::class, 'skippedClassNames');
-		$reflected->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$reflected->setAccessible(true);
+		}
 
 		return $reflected->invoke($dump, $flag, $markFilteringSet);
 	}
@@ -371,7 +373,9 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function callFormatReport($method)
 	{
 		$reflected = new \ReflectionMethod(OtlDump::class, $method);
-		$reflected->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$reflected->setAccessible(true);
+		}
 		$reflected->invoke($this->dumper(), [], 0, 4, 'kern', 'latn');
 	}
 
@@ -390,7 +394,9 @@ class OtlDumpTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertStringContainsString('LookupType 4: Ligature', $report);
 
 		$lookupFlag = new \ReflectionProperty('Mpdf\TTFontFile', 'lookupFlag');
-		$lookupFlag->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$lookupFlag->setAccessible(true);
+		}
 		$this->assertFalse($lookupFlag->getValue($dump)->skips(LookupFlag::USE_MARK_FILTERING_SET, '00041', 0));
 	}
 

@@ -28,7 +28,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		// Get CssMerger (private property of CssManager)
 		$reflection = new \ReflectionClass($this->cssManager);
 		$property   = $reflection->getProperty('cssMerger');
-		$property->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
 		$this->cssMerger = $property->getValue($this->cssManager);
 
 		$this->mpdf->AddPage();
@@ -45,7 +47,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$reflection = new \ReflectionClass($mpdf);
 		$property = $reflection->getProperty('cssManager');
-		$property->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
 
 		return $property->getValue($mpdf);
 	}
@@ -64,7 +68,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$reflection = new \ReflectionClass(get_class($object));
 		$method = $reflection->getMethod($methodName);
-		$method->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$method->setAccessible(true);
+		}
 		return $method->invokeArgs($object, $parameters);
 	}
 
@@ -72,7 +78,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$reflection = new \ReflectionClass($this->cssMerger);
 		$property = $reflection->getProperty('cssProperties');
-		$property->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
 		$property->setValue($this->cssMerger, $properties);
 	}
 
@@ -80,7 +88,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$reflection = new \ReflectionClass($this->cssMerger);
 		$property = $reflection->getProperty('cssProperties');
-		$property->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
 		return $property->getValue($this->cssMerger);
 	}
 
@@ -257,7 +267,9 @@ class CssMergerTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 
 		$reflection = new \ReflectionClass($this->mpdf);
 		$property = $reflection->getProperty('styledElement');
-		$property->setAccessible(true);
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
 		$property->setValue($this->mpdf, ['path' => [$tbody], 'tag' => 'TR', 'attr' => []]);
 	}
 
