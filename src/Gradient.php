@@ -669,24 +669,7 @@ class Gradient
 				list($angle, $startx, $starty, $endx, $endy) = $this->readDirection($bgr[0], $first, $prefixed);
 			}
 
-			// Check for %? ?% or %%
-			if (preg_match('/(\d+)[%]/i', $first[0], $m)) {
-				$startx = $m[1] / 100;
-			} elseif (!isset($startx) && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $first[0], $m)) {
-				$tmp = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false);
-				if ($tmp) {
-					$startx = $m[1];
-				}
-			}
-
-			if (isset($first[1]) && preg_match('/(\d+)[%]/i', $first[1], $m)) {
-				$starty = 1 - ($m[1] / 100);
-			} elseif (!isset($starty) && isset($first[1]) && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $first[1], $m)) {
-				$tmp = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false);
-				if ($tmp) {
-					$starty = $m[1];
-				}
-			}
+			list($startx, $starty) = $this->readPosition($first, $startx, $starty);
 
 			if (isset($startx) && !isset($starty)) {
 				$starty = 0.5;
@@ -771,7 +754,7 @@ class Gradient
 		if (preg_match('/([\-]*[0-9\.]+)(deg|grad|rad|turn)/i', $direction, $m)) {
 			$perTurn = ['deg' => 360, 'grad' => 400, 'rad' => 2 * M_PI, 'turn' => 1];
 			$angle = (float) $m[1] * 360 / $perTurn[strtolower($m[2])];
-		} elseif (trim($words[count($words) - 1]) === '0') {
+		} elseif ($this->isLoneZero($words)) {
 			$angle = 0;
 		}
 
@@ -837,7 +820,7 @@ class Gradient
 				$angle += 360;
 			}
 			$angle = (int) $angle % 360;
-		} elseif (trim($words[count($words) - 1]) === '0') {
+		} elseif ($this->isLoneZero($words)) {
 			$angle = 0;
 		}
 
@@ -883,7 +866,14 @@ class Gradient
 		$shapeOrSize = '/(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|contain|cover)/i';
 		if (!$this->isStop($first)) {
 			$startStops = 1;
-			if (preg_match($shapeOrSize, $bgr[0]) && !preg_match('/(left|center|right|bottom|top|deg|grad|rad)/i', $bgr[0])) {
+			$at = array_search('at', array_map('strtolower', $first), true);
+			if ($at !== false) {
+				// CSS Images: "<shape> <size> at <position>"
+				$pos_angle = implode(' ', array_slice($first, $at + 1));
+				if ($at > 0) {
+					$shape_size = implode(' ', array_slice($first, 0, $at));
+				}
+			} elseif (preg_match($shapeOrSize, $bgr[0]) && !preg_match('/(left|center|right|bottom|top|deg|grad|rad)/i', $bgr[0])) {
 				$shape_size = $bgr[0];
 			} else {
 				$pos_angle = $bgr[0];
@@ -897,6 +887,8 @@ class Gradient
 		// If valid point/angle?
 		if ($pos_angle) { // default values
 			// [<point> || <angle>,] = [<% em px left center right bottom top> || <deg grad rad 0>,]
+			$startx = null;
+			$starty = null;
 			if (stripos($pos_angle, 'left') !== false) {
 				$startx = 0;
 			} elseif (stripos($pos_angle, 'right') !== false) {
@@ -907,23 +899,7 @@ class Gradient
 			} elseif (stripos($pos_angle, 'bottom') !== false) {
 				$starty = 0;
 			}
-			// Check for %? ?% or %%
-			if (preg_match('/(\d+)[%]/i', $first[0], $m)) {
-				$startx = $m[1] / 100;
-			} elseif (!isset($startx) && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $first[0], $m)) {
-				$tmp = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false);
-				if ($tmp) {
-					$startx = $m[1];
-				}
-			}
-			if (isset($first[1]) && preg_match('/(\d+)[%]/i', $first[1], $m)) {
-				$starty = 1 - ($m[1] / 100);
-			} elseif (!isset($starty) && isset($first[1]) && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $first[1], $m)) {
-				$tmp = $this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false);
-				if ($tmp) {
-					$starty = $m[1];
-				}
-			}
+			list($startx, $starty) = $this->readPosition(preg_split('/\s+/', trim($pos_angle)), $startx, $starty);
 
 			if (!isset($starty)) {
 				$starty = 0.5;
@@ -1005,6 +981,61 @@ class Gradient
 	private function isStop(array $words)
 	{
 		return $words[0] !== '0' && $this->colorConverter->isColor($words[0]);
+	}
+
+	/**
+	 * Whether the argument is a bare 0 and nothing else, the unitless angle CSS allows. Beside another word, such as
+	 * "10px 0" or "left 0", the 0 is a coordinate of a position instead.
+	 *
+	 * @param string[] $words The argument split at whitespace
+	 *
+	 * @return bool
+	 */
+	private function isLoneZero(array $words)
+	{
+		return count($words) === 1 && $words[0] === '0';
+	}
+
+	/**
+	 * Read the x and y of a gradient's position from its percentages, lengths and unitless 0s. A percentage or a 0
+	 * replaces the coordinate a keyword gave; a length only fills one no keyword gave. A lone 0 is left to the caller,
+	 * as the angle or the default position.
+	 *
+	 * @param string[] $words The position split at whitespace
+	 * @param float|int|string|null $startx The x a keyword gave, or null
+	 * @param float|int|string|null $starty The y a keyword gave, or null, running up from the bottom
+	 *
+	 * @return array [x, y], each a fraction of the box, a length, or null when the position gives none
+	 */
+	private function readPosition(array $words, $startx, $starty)
+	{
+		if ($this->isLoneZero($words)) {
+			return [$startx, $starty];
+		}
+
+		$coords = [$startx, $starty];
+		foreach ([0, 1] as $index) {
+			if (!isset($words[$index])) {
+				continue;
+			}
+
+			$fraction = null;
+			if ($words[$index] === '0') {
+				$fraction = 0;
+			} elseif (preg_match('/(\d+)[%]/i', $words[$index], $m)) {
+				$fraction = $m[1] / 100;
+			}
+
+			if ($fraction !== null) {
+				$coords[$index] = $index === 1 ? 1 - $fraction : $fraction;
+			} elseif ($coords[$index] === null && preg_match('/([0-9.]+(px|em|ex|pc|pt|cm|mm|in))/i', $words[$index], $m)) {
+				if ($this->sizeConverter->convert($m[1], $this->mpdf->w, $this->mpdf->FontSize, false)) {
+					$coords[$index] = $m[1];
+				}
+			}
+		}
+
+		return $coords;
 	}
 
 	private function getStop($col, $el, $convertOffset = false)
