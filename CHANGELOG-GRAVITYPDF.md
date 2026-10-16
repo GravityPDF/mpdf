@@ -199,6 +199,7 @@ Bugfixes
 * The caption of a table with another table in a cell was drawn inside that cell, after the inner table, under `caption-side: bottom`. It is now drawn below the whole table. [#780] [#784]
 * A `<!--` or `<script>` inside a quoted attribute value, such as a `title`, hid everything after it up to the next real comment or script. A text field whose value held a comment, `<br>`, `<wbr>`, `<dottab>`, an empty `<tr></tr>`, a `<table>` with a `<caption>` or `</tts><tts>` showed it changed or emptied, and the caption was drawn as text after the field. Comments, scripts and the tags mPDF rewrites before reading the document are now found only outside tags. [#777] [#789]
 * A run of spaces inside a quoted attribute value was collapsed to one: `<bookmark content="Total:   42" />` was titled `Total: 42`, and a text field, index entry, annotation, watermark or title written with several spaces lost them. Spaces are now collapsed only between tags, so a value keeps them as written. [#788] [#797]
+* An end tag with a space, a newline or an attribute before its `>`, such as `</style >`, did not end its element, though a browser reads it as `</style>`. The stylesheet was not applied and the text up to the next `</style>` was lost. An inline SVG was not drawn, or swallowed the content up to the next `</svg>`. A `<title>` was not read, or took in the markup up to the next `</title>`. A `<pre>` or `<textarea>` lost its line breaks, an empty `<textarea>` was not drawn, a table's `<caption>` was not drawn and raised three warnings, and an `<htmlpageheader>` or `<htmlpagefooter>` was drawn in the body and raised a warning. With `use_kwt`, a heading was not kept with its table, and with `allow_charset_conversion` the charset of the `<head>` was not read. An SVG file ending `</svg >` was not recognised as an image, a gradient that borrowed the stops of one ending `</linearGradient >` was not drawn, and with `list_auto_mode` set to `mpdf` a nested list ending `</ol >` left room for its markers as if the items after it were its own. [#802] [#805]
 * A shadow colour written without spaces, such as `rgba(255,0,0,0.5)`, fell back to grey. Whitespace in shadows is now parsed as CSS writes it too. [#25]
 * A border that draws nothing was described with fewer keys than one that draws, and the border code read the missing keys anyway. [mpdf/mpdf#1892] [#29]
 * A `<tr>` border was read for sides the row did not set. [mpdf/mpdf#1893] [#30]
@@ -308,6 +309,7 @@ Bugfixes
 * An inline SVG holding another `<svg>` was cut at the inner `</svg>`: what followed it in the outer SVG was not drawn. [#780] [#784]
 * An SVG `<use>`, `<tref>` or gradient `xlink:href` drew nothing when another of its attributes held a `>`, as in `data-note="a > b"`, and an element with a `data-id` was taken for the one whose `id` was named. References are now found by the `id` attribute alone, and a `<use>`'s `x` and `y` move it after its own `transform` rather than being added to a `translate()` in it. An element named like `<markers>` or `<patterns>`, or an empty `<marker/>` or `<pattern/>`, was dropped with everything up to the next `</marker>` or `</pattern>`. An SVG that is not well-formed is still drawn as far as it can be read, but now logs a warning, or throws under `debug` or `showImageErrors`. [#778] [#791]
 * An SVG `<use>` of a `<g>` holding another `<g>` drew only what came before the inner `</g>`, and left the markup after it unbalanced. The referenced element now ends at the end tag that closes it, however deeply elements of its name nest inside it. [#790] [#796]
+* An `<svg>` nested in an SVG ignored its `x`, `y`, `width` and `height`, and its `viewBox` rescaled the whole outer SVG, changing the picture's size. It now sets up a viewport of its own: moved by `x` and `y`, clipped to its size unless `overflow` is `visible`, with its `viewBox` fitted in as `preserveAspectRatio` says. [#785] [#793]
 
 ### Forms
 
@@ -1022,3 +1024,7 @@ These changes do not change output.
 [#791]: https://github.com/GravityPDF/mpdf/pull/791
 [#790]: https://github.com/GravityPDF/mpdf/issues/790
 [#796]: https://github.com/GravityPDF/mpdf/pull/796
+[#785]: https://github.com/GravityPDF/mpdf/issues/785
+[#793]: https://github.com/GravityPDF/mpdf/pull/793
+[#802]: https://github.com/GravityPDF/mpdf/issues/802
+[#805]: https://github.com/GravityPDF/mpdf/pull/805

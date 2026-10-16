@@ -27,6 +27,12 @@ class Tags
 	const TAG_PATTERN = '<(' . self::CONTENT_PATTERN . ')>';
 
 	/**
+	 * What follows the name in an end tag. A browser reads "</p >", "</p\n>" and "</p class=x>" all as "</p>",
+	 * ignoring whatever comes before the ">", so the name only has to end there
+	 */
+	const END_TAG_REST_PATTERN = '(?:[\s\/]' . self::CONTENT_PATTERN . ')?>';
+
+	/**
 	 * A name, then a value that may be double quoted, single quoted, unquoted, or absent altogether, as it is for
 	 * boolean attributes such as "selected". Names start with a letter, so the "/" that closes an empty tag is not one
 	 */
@@ -61,6 +67,19 @@ class Tags
 	}
 
 	/**
+	 * A pattern for the end tags of the given names, written as a browser accepts them: "</pre>", "</pre >" or
+	 * "</pre class=x>", but not "</prefix>"
+	 *
+	 * @param string $names The tag names, separated by "|"
+	 *
+	 * @return string The pattern, without delimiters
+	 */
+	public static function endTagPattern($names)
+	{
+		return '<\/(?:' . $names . ')' . self::END_TAG_REST_PATTERN;
+	}
+
+	/**
 	 * A pattern for the elements of the given name, their start tag found as startTagPattern() finds it: the start
 	 * tag's content is captured first, then what is between it and the first end tag. Used with the "s" modifier
 	 *
@@ -70,7 +89,7 @@ class Tags
 	 */
 	public static function elementPattern($name)
 	{
-		return self::startTagPattern($name) . '(.*?)<\/' . $name . '>';
+		return self::startTagPattern($name) . '(.*?)' . self::endTagPattern($name);
 	}
 
 	/**
@@ -193,6 +212,18 @@ class Tags
 		}
 
 		return [$tag ? strtoupper($tag[1]) : '', $attributes];
+	}
+
+	/**
+	 * The name in the content of a start or an end tag, uppercased, without what follows it: "P" for '/p class="x"'
+	 *
+	 * @param string $content What is between the tag's angle brackets
+	 *
+	 * @return string
+	 */
+	public static function name($content)
+	{
+		return strtoupper((string) strtok($content, " \t\n\r\f/"));
 	}
 
 	/**
