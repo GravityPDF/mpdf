@@ -8,12 +8,13 @@ use Mpdf\Conversion\DecToGreek;
 use Mpdf\Conversion\DecToHebrew;
 use Mpdf\Conversion\DecToOther;
 use Mpdf\Conversion\DecToRoman;
+use Mpdf\Css\BorderRadius;
 use Mpdf\Css\TextDecorations;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\CssMode;
 use Mpdf\Mpdf;
+use Mpdf\RoundedBox;
 use Mpdf\Shaper\OtlData;
-use Mpdf\Utils\Arrays;
 use Mpdf\Utils\UtfString;
 
 abstract class BlockTag extends Tag
@@ -740,85 +741,11 @@ abstract class BlockTag extends Tag
 
 
 		/* -- BORDER-RADIUS -- */
-		// Automatically increase padding if required for border-radius
 		if ($this->mpdf->autoPadding && !$this->mpdf->ColActive) {
-			$currblk['border_radius_TL_H'] = Arrays::get($currblk, 'border_radius_TL_H', 0);
-			$currblk['border_radius_TL_V'] = Arrays::get($currblk, 'border_radius_TL_V', 0);
-			$currblk['border_radius_TR_H'] = Arrays::get($currblk, 'border_radius_TR_H', 0);
-			$currblk['border_radius_TR_V'] = Arrays::get($currblk, 'border_radius_TR_V', 0);
-			$currblk['border_radius_BL_H'] = Arrays::get($currblk, 'border_radius_BL_H', 0);
-			$currblk['border_radius_BL_V'] = Arrays::get($currblk, 'border_radius_BL_V', 0);
-			$currblk['border_radius_BR_H'] = Arrays::get($currblk, 'border_radius_BR_H', 0);
-			$currblk['border_radius_BR_V'] = Arrays::get($currblk, 'border_radius_BR_V', 0);
-
-			if ($currblk['border_radius_TL_H'] > $currblk['padding_left'] && $currblk['border_radius_TL_V'] > $currblk['padding_top']) {
-				if ($currblk['border_radius_TL_H'] > $currblk['border_radius_TL_V']) {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_TL_H'],
-						$currblk['border_radius_TL_V'],
-						$currblk['padding_left'],
-						$currblk['padding_top']
-					);
-				} else {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_TL_V'],
-						$currblk['border_radius_TL_H'],
-						$currblk['padding_top'],
-						$currblk['padding_left']
-					);
-				}
-			}
-			if ($currblk['border_radius_TR_H'] > $currblk['padding_right'] && $currblk['border_radius_TR_V'] > $currblk['padding_top']) {
-				if ($currblk['border_radius_TR_H'] > $currblk['border_radius_TR_V']) {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_TR_H'],
-						$currblk['border_radius_TR_V'],
-						$currblk['padding_right'],
-						$currblk['padding_top']
-					);
-				} else {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_TR_V'],
-						$currblk['border_radius_TR_H'],
-						$currblk['padding_top'],
-						$currblk['padding_right']
-					);
-				}
-			}
-			if ($currblk['border_radius_BL_H'] > $currblk['padding_left'] && $currblk['border_radius_BL_V'] > $currblk['padding_bottom']) {
-				if ($currblk['border_radius_BL_H'] > $currblk['border_radius_BL_V']) {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_BL_H'],
-						$currblk['border_radius_BL_V'],
-						$currblk['padding_left'],
-						$currblk['padding_bottom']
-					);
-				} else {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_BL_V'],
-						$currblk['border_radius_BL_H'],
-						$currblk['padding_bottom'],
-						$currblk['padding_left']
-					);
-				}
-			}
-			if ($currblk['border_radius_BR_H'] > $currblk['padding_right'] && $currblk['border_radius_BR_V'] > $currblk['padding_bottom']) {
-				if ($currblk['border_radius_BR_H'] > $currblk['border_radius_BR_V']) {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_BR_H'],
-						$currblk['border_radius_BR_V'],
-						$currblk['padding_right'],
-						$currblk['padding_bottom']
-					);
-				} else {
-					$this->mpdf->_borderPadding(
-						$currblk['border_radius_BR_V'],
-						$currblk['border_radius_BR_H'],
-						$currblk['padding_bottom'],
-						$currblk['padding_right']
-					);
-				}
-			}
+			$edges = $bdl + $currblk['padding_left'] + $bdr + $currblk['padding_right'];
+			$this->padForBorderRadius($currblk, $this->contentWidth($currblk, $container_w, $edges) + $edges);
+			// Under autoPadding every block carries these keys, so PaintDivBB() draws its borders as a rounded block's
+			$currblk += array_fill_keys(array_column(BorderRadius::PROPERTIES, 2), 0);
 		}
 		/* -- END BORDER-RADIUS -- */
 
@@ -1136,6 +1063,29 @@ abstract class BlockTag extends Tag
 	}
 
 	/**
+	 * With autoPadding, pad a block so its content clears the curve of each rounded corner.
+	 *
+	 * A percentage radius is resolved against the border box. Its width is known when the block opens, but its height
+	 * is not, and depends on the padding set here, so a vertical percentage is taken of the width too, as if the box
+	 * were square.
+	 *
+	 * @param array $blk
+	 * @param float $borderBoxWidth
+	 */
+	private function padForBorderRadius(array &$blk, $borderBoxWidth)
+	{
+		$radii = BorderRadius::radii($blk, $borderBoxWidth, $borderBoxWidth);
+
+		$paddings = [];
+		foreach (['top', 'right', 'bottom', 'left'] as $side) {
+			$paddings[$side] = $blk['padding_' . $side];
+		}
+		foreach ((new RoundedBox())->clear($radii, $paddings) as $side => $padding) {
+			$blk['padding_' . $side] = $padding;
+		}
+	}
+
+	/**
 	 * Holds the block's width within its min-width and max-width. A width the limits change is set on the block as
 	 * a width would be, so that its auto margins, float or direction place the box. A block without a width starts
 	 * from the width its container leaves it.
@@ -1148,9 +1098,7 @@ abstract class BlockTag extends Tag
 	private function constrainWidth(array &$blk, array $properties, $containerWidth, $edges)
 	{
 		$constraints = new WidthConstraints($this->sizeConverter, $properties, $containerWidth, $this->mpdf->FontSize);
-		$width = isset($blk['css_set_width'])
-			? $blk['css_set_width']
-			: $containerWidth - $blk['margin_left'] - $blk['margin_right'] - $edges;
+		$width = $this->contentWidth($blk, $containerWidth, $edges);
 		$clamped = $constraints->clamp($width);
 		if ($clamped != $width) {
 			$blk['css_set_width'] = $clamped;
@@ -1180,6 +1128,22 @@ abstract class BlockTag extends Tag
 			$side = $blk['slack_margin'];
 		}
 		$blk['margin_' . $side] -= $overflow;
+	}
+
+	/**
+	 * The block's content width: its width if set, or else what its container leaves it
+	 *
+	 * @param array $blk The block being opened
+	 * @param float $containerWidth The inner width of the containing block
+	 * @param float $edges The block's left and right borders and padding
+	 *
+	 * @return float
+	 */
+	private function contentWidth(array $blk, $containerWidth, $edges)
+	{
+		return isset($blk['css_set_width'])
+			? $blk['css_set_width']
+			: $containerWidth - $blk['margin_left'] - $blk['margin_right'] - $edges;
 	}
 
 	public function close(&$ahtml, &$ihtml)

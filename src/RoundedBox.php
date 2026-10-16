@@ -150,6 +150,44 @@ class RoundedBox
 	}
 
 	/**
+	 * Paddings that keep the content clear of each corner's curve. A corner whose content corner falls outside its
+	 * curve has it moved onto the curve where the curve runs at 45 degrees, which adds the least padding across and
+	 * down together; on a flat corner most of it goes on the short side. Where the padding on one side already clears
+	 * that point, only the other side is raised. Corners are taken in turn, each from the paddings the ones before it
+	 * left. $paddings is keyed top/right/bottom/left.
+	 */
+	public function clear($radii, $paddings)
+	{
+		foreach (self::CORNER_SIDES as $corner => $sides) {
+			list($a, $b) = $radii[$corner];
+			$px = $paddings[$sides[0]];
+			$py = $paddings[$sides[1]];
+
+			// The content corner, from the centre of the curve, as a fraction of each radius
+			$u = $a > $px ? 1 - $px / $a : 0;
+			$v = $b > $py ? 1 - $py / $b : 0;
+			if ($u * $u + $v * $v <= 1) {
+				continue;
+			}
+
+			$hypot = sqrt($a * $a + $b * $b);
+			$tangentX = $a - $a * $a / $hypot;
+			$tangentY = $b - $b * $b / $hypot;
+
+			if ($px > $tangentX) {
+				$paddings[$sides[1]] = $b * (1 - sqrt(1 - $u * $u));
+			} elseif ($py > $tangentY) {
+				$paddings[$sides[0]] = $a * (1 - sqrt(1 - $v * $v));
+			} else {
+				$paddings[$sides[0]] = $tangentX;
+				$paddings[$sides[1]] = $tangentY;
+			}
+		}
+
+		return $paddings;
+	}
+
+	/**
 	 * The border box of an image object, with the radii of its corners fitted to it and those of the content edge
 	 * inside it.
 	 *
