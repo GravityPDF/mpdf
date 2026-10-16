@@ -16270,29 +16270,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	/* -- END HTML-CSS -- */
 
 
-	/* -- BORDER-RADIUS -- */
-
-	function _borderPadding($a, $b, &$px, &$py)
-	{
-		// $px and py are padding long axis (x) and short axis (y)
-		$added = 0; // extra padding
-
-		$x = $a - $px;
-		$y = $b - $py;
-		// Check if Falls within ellipse of border radius
-		if (( (($x + $added) * ($x + $added)) / ($a * $a) + (($y + $added) * ($y + $added)) / ($b * $b) ) <= 1) {
-			return false;
-		}
-
-		$t = atan2($y, $x);
-
-		$newx = $b / sqrt((($b * $b) / ($a * $a)) + ( tan($t) * tan($t) ));
-		$newy = $a / sqrt((($a * $a) / ($b * $b)) + ( (1 / tan($t)) * (1 / tan($t)) ));
-		$px = max($px, $a - $newx + $added);
-		$py = max($py, $b - $newy + $added);
-	}
-
-	/* -- END BORDER-RADIUS -- */
 	/* -- HTML-CSS -- */
 	/* -- CSS-PAGE -- */
 
