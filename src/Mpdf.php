@@ -23165,11 +23165,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// Get Maximum row/cell height in row - including rowspan>1 + 1 overlapping
 			$maxrowheight = $this->_tableGetMaxRowHeight($table, $i);
 
-			// page-break-before: always on a row restarts the table on a new page as an overflowing row does, so the
+			// A forced break before a row restarts the table on a new page as an overflowing row does, so the
 			// header and footer rows repeat. Not before the first body row, nor on the row a split table resumes at,
 			// nor in a nested table, whose breaks the outer table makes
 			$forcedbreak = $level == 1 && $i > $startrow && $i > $table['headernrows']
-				&& isset($table['pagebreak-before'][$i]) && $table['pagebreak-before'][$i] == 'always';
+				&& isset($table['pagebreak-before'][$i]) && $table['pagebreak-before'][$i] != 'avoid';
 
 			$skippage = false;
 			$newpagestarted = false;
@@ -23444,7 +23444,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									return [false, $startrow, $startcol, $splitpg, $returny, $y0];
 								}
 
-								$this->AddPage($this->CurOrientation);
+								// left and right add a blank page when the next one is on the wrong side
+								$side = $forcedbreak ? strtoupper($table['pagebreak-before'][$i]) : '';
+								$this->AddPage($this->CurOrientation, array_key_exists($side, Tag\Tag::PAGE_CONDITIONS) ? Tag\Tag::PAGE_CONDITIONS[$side] : '');
 
 								$this->writer->write('___TABLE___BACKGROUNDS' . $this->uniqstr);
 

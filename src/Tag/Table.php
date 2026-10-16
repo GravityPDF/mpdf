@@ -585,6 +585,10 @@ class Table extends Tag
 			0
 		);
 
+		if ($this->mpdf->tableLevel == 1) {
+			$this->carryLastRowBreakToTable($this->mpdf->table[1][$this->mpdf->tbctr[1]]);
+		}
+
 		// Move table footer <tfoot> row to end of table
 		if (isset($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['is_tfoot'])
 			&& count($this->mpdf->table[$this->mpdf->tableLevel][$this->mpdf->tbctr[$this->mpdf->tableLevel]]['is_tfoot'])) {
@@ -1249,6 +1253,38 @@ class Table extends Tag
 		if ($page_break_after) {
 			$this->forcePageBreak($page_break_after);
 		}
+	}
+
+	/**
+	 * Moves a forced break after the last body row to the table's own page-break-after, as a browser does. Left past
+	 * the body, no row would read it. The stronger of the two breaks wins, and the table's on a tie
+	 *
+	 * @param array $table The top-level table, before its footer rows are moved to the end
+	 */
+	private function carryLastRowBreakToTable(array &$table)
+	{
+		$lastBodyRow = null;
+		for ($r = $table['nr'] - 1; $r >= 0; $r--) {
+			if (empty($table['is_thead'][$r]) && empty($table['is_tfoot'][$r])) {
+				$lastBodyRow = $r;
+				break;
+			}
+		}
+
+		if ($lastBodyRow === null || !isset($table['pagebreak-before'][$lastBodyRow + 1])) {
+			return;
+		}
+
+		$break = $table['pagebreak-before'][$lastBodyRow + 1];
+		if ($this->pageBreakRank($break) < 1) {
+			return;
+		}
+
+		$own = isset($table['page_break_after']) ? $table['page_break_after'] : null;
+		if ($this->pageBreakRank($break) > $this->pageBreakRank($own)) {
+			$table['page_break_after'] = strtoupper($break);
+		}
+		unset($table['pagebreak-before'][$lastBodyRow + 1]);
 	}
 
 	/**

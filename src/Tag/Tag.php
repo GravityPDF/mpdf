@@ -24,6 +24,11 @@ abstract class Tag
 	use Strict;
 
 	/**
+	 * The AddPage() condition for a left or right page break
+	 */
+	const PAGE_CONDITIONS = ['LEFT' => 'NEXT-EVEN', 'RIGHT' => 'NEXT-ODD'];
+
+	/**
 	 * @var \Mpdf\Mpdf
 	 */
 	protected $mpdf;
@@ -145,7 +150,23 @@ abstract class Tag
 	 */
 	protected function forcesPageBreak(array $properties, $property)
 	{
-		return isset($properties[$property]) && in_array(strtoupper($properties[$property]), ['ALWAYS', 'LEFT', 'RIGHT'], true);
+		return isset($properties[$property]) && $this->pageBreakRank($properties[$property]) > 0;
+	}
+
+	/**
+	 * Which of two page break values at the same point wins: a forced break beats avoid, and left or right beats
+	 * always
+	 *
+	 * @param string|null $break a page-break-before or page-break-after value, in any case
+	 *
+	 * @return int -1 for a value that is neither forced nor avoid
+	 */
+	protected function pageBreakRank($break)
+	{
+		$ranks = ['AVOID' => 0, 'ALWAYS' => 1, 'LEFT' => 2, 'RIGHT' => 2];
+		$break = strtoupper((string) $break);
+
+		return isset($ranks[$break]) ? $ranks[$break] : -1;
 	}
 
 	/**
@@ -174,13 +195,7 @@ abstract class Tag
 		// mPDF 6 pagebreaktype
 		$this->mpdf->_preForcedPagebreak($pagebreaktype);
 
-		if ($pageBreak === 'RIGHT') {
-			$this->mpdf->AddPage($this->mpdf->CurOrientation, 'NEXT-ODD');
-		} elseif ($pageBreak === 'LEFT') {
-			$this->mpdf->AddPage($this->mpdf->CurOrientation, 'NEXT-EVEN');
-		} else {
-			$this->mpdf->AddPage($this->mpdf->CurOrientation);
-		}
+		$this->mpdf->AddPage($this->mpdf->CurOrientation, array_key_exists($pageBreak, self::PAGE_CONDITIONS) ? self::PAGE_CONDITIONS[$pageBreak] : '');
 
 		// mPDF 6 pagebreaktype
 		$this->mpdf->_postForcedPagebreak($pagebreaktype, $startpage, $save_blk, $save_blklvl);
