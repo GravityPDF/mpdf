@@ -1009,6 +1009,18 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->failedImages[$file] = true;
 
+		$this->imageWarning($file, $firstTime, $msg);
+	}
+
+	/**
+	 * Throw an exception under showImageErrors or debug the first time an image is met, otherwise log a warning
+	 *
+	 * @param string $file
+	 * @param bool $firstTime
+	 * @param string $msg
+	 */
+	private function imageWarning($file, $firstTime, $msg)
+	{
 		if ($firstTime && ($this->mpdf->showImageErrors || $this->mpdf->debug)) {
 			throw new \Mpdf\MpdfImageException(sprintf('%s (%s)', $msg, substr($file, 0, 256)));
 		}
@@ -1807,8 +1819,15 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			$this->mpdf->SetFont($family, $style, $size, false);
 		}
 
+		$parseError = $svg->parseError();
+
 		if (!$info) {
-			return $this->imageError($file, $firstTime, 'Error parsing SVG file');
+			return $this->imageError($file, $firstTime, 'Error parsing SVG file' . ($parseError ? ': ' . $parseError : ''));
+		}
+
+		// What was read before the error is still drawn, so the image is not marked as failed
+		if ($parseError) {
+			$this->imageWarning($file, $firstTime, 'SVG file is not well-formed, drawn as far as it could be read: ' . $parseError);
 		}
 
 		$info['type'] = 'svg';
