@@ -51,17 +51,35 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	private function bottoms($html, $config = [])
 	{
 		$page = $this->pages($this->render($html, $config))[0];
-		preg_match_all('/BT [-\d.]+ ([-\d.]+) Td\s+\((.*?)\) Tj/', $page, $drawn, PREG_SET_ORDER);
 
-		$bottoms = [];
-		foreach ($drawn as $text) {
-			$bottoms[$text[2]] = $text[1] / Mpdf::SCALE;
-		}
+		$bottoms = array_map(function ($origin) {
+			return $origin['y'];
+		}, $this->textOrigins($page));
 		$placements = $this->placementsIn($page);
 		$this->assertCount(1, $placements);
 		$bottoms['image'] = $placements[0]['y'];
 
 		return $bottoms;
+	}
+
+	/**
+	 * Where each piece of text in a page's content stream starts, keyed by the text, as x/y in millimetres, y measured
+	 * up from the page's bottom
+	 *
+	 * @param string $page
+	 *
+	 * @return array[]
+	 */
+	private function textOrigins($page)
+	{
+		preg_match_all('/BT ([-\d.]+) ([-\d.]+) Td\s+\((.*?)\) Tj/', $page, $drawn, PREG_SET_ORDER);
+
+		$origins = [];
+		foreach ($drawn as $text) {
+			$origins[$text[3]] = ['x' => $text[1] / Mpdf::SCALE, 'y' => $text[2] / Mpdf::SCALE];
+		}
+
+		return $origins;
 	}
 
 	/**
@@ -251,5 +269,94 @@ class BlockImageTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertEqualsWithDelta(80, $placements[0]['x'], 0.01);
 		$this->assertEqualsWithDelta(145, $placements[1]['x'], 0.01);
 		$this->assertGreaterThan($placements[1]['y'], $placements[0]['y'], 'the second is below the first');
+	}
+
+	/**
+	 * A 150mm image after a 50mm margin does not fit the 180mm line. mPDF narrows it to the 130mm left, in proportion,
+	 * as it narrows any image, rather than let it run past the page area as a browser would.
+	 *
+	 * @param string $style
+	 * @param float $x Where the image starts, in millimetres
+	 *
+	 * @dataProvider overflowProvider
+	 */
+	public function testABlockImageWiderThanItsLineIsNarrowed($style, $x)
+	{
+		$placement = $this->placement($this->image('display: block; width: 150mm; ' . $style));
+
+		$this->assertEqualsWithDelta($x, $placement['x'], 0.01);
+		$this->assertEqualsWithDelta(130, $placement['w'], 0.01);
+		$this->assertEqualsWithDelta(130, $placement['h'], 0.01);
+	}
+
+	/**
+	 * Margins that leave a 150mm image too little room, and where the narrowed image sits
+	 *
+	 * @return array[]
+	 */
+	public function overflowProvider()
+	{
+		return [
+			'margin-left' => ['margin-left: 50mm', 65],
+			'margin-left and an auto right margin' => ['margin-left: 50mm; margin-right: auto', 65],
+			'margin-right and an auto left margin' => ['margin-right: 50mm; margin-left: auto', 15],
+		];
+	}
+
+	/**
+	 * Beside a 40mm float the line is 140mm, so the picture after a 50mm margin is narrowed to 90mm, and keeps its
+	 * square proportions
+	 */
+	public function testABlockImageBesideAFloatIsNarrowedInProportion()
+	{
+		$placements = $this->imagePlacements('<div>' . $this->image('float: left; width: 40mm') . $this->image('display: block; width: 150mm; margin-left: 50mm') . '</div>');
+
+		$this->assertCount(2, $placements);
+		$this->assertEqualsWithDelta(105, $placements[0]['x'], 0.01, '50mm in from the float');
+		$this->assertEqualsWithDelta(90, $placements[0]['w'], 0.01);
+		$this->assertEqualsWithDelta(90, $placements[0]['h'], 0.01);
+	}
+
+	/**
+	 * A block-level image is not part of a line of text, so the paragraph's text-indent does not move it, and does not
+	 * push a full-width image past the page area
+	 *
+	 * @param string $html
+	 * @param float $x Where the image starts, in millimetres
+	 *
+	 * @dataProvider indentProvider
+	 */
+	public function testTextIndentDoesNotMoveABlockImage($html, $x)
+	{
+		$this->assertEqualsWithDelta($x, $this->placement($html)['x'], 0.01);
+	}
+
+	/**
+	 * A block image first in a paragraph with a 10mm text-indent, and where it sits without the indent
+	 *
+	 * @return array[]
+	 */
+	public function indentProvider()
+	{
+		return [
+			'at the start' => ['<p style="text-indent: 10mm">' . $this->image('display: block') . 'after</p>', 15],
+			'centred' => ['<p style="text-indent: 10mm">' . $this->image('display: block; margin: 0 auto') . 'after</p>', 80],
+			'right to left' => ['<p dir="rtl" style="text-indent: 10mm">' . $this->image('display: block') . 'after</p>', 145],
+			'as wide as the line' => ['<p style="text-indent: 10mm">' . $this->image('display: block; width: 180mm') . 'after</p>', 15],
+			'the only content' => ['<p style="text-indent: 10mm">' . $this->image('display: block; margin-left: auto') . '</p>', 145],
+		];
+	}
+
+	/**
+	 * Text before a block image is the paragraph's first line, and keeps its indent
+	 */
+	public function testTextIndentStillIndentsTheTextBeforeABlockImage()
+	{
+		$page = $this->pages($this->render('<p style="text-indent: 10mm">before ' . $this->image('display: block') . ' after</p>'))[0];
+		$origins = $this->textOrigins($page);
+
+		$this->assertSame(['before', 'after'], array_keys($origins));
+		$this->assertEqualsWithDelta(25, $origins['before']['x'], 0.01);
+		$this->assertEqualsWithDelta(15, $this->placementsIn($page)[0]['x'], 0.01);
 	}
 }

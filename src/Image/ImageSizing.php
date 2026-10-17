@@ -130,8 +130,10 @@ class ImageSizing
 
 	/**
 	 * Resolves a block-level image's margins so it fills its line. The margin away from the image's side takes the room
-	 * left over, or both margins share it to centre the image. Filling the line means text-align cannot move it. An
-	 * image too wide for the line is returned unchanged, and narrowed to the line as any image is
+	 * left over, or both margins share it to centre the image. Filling the line means text-align cannot move it.
+	 *
+	 * On a line too narrow for it, as beside a float, the picture is narrowed in proportion, as mPDF narrows any image
+	 * to the room it has. Only margins wider than the line leave the image to inlineObject()
 	 *
 	 * @param array $objattr The image, with 'block' the side it sits on: L, C or R
 	 * @param float $available The width of the line, in millimetres
@@ -144,7 +146,16 @@ class ImageSizing
 		$free = $available - ($objattr['width'] - $objattr[$gives]);
 
 		if ($free < 0) {
-			return $objattr;
+			$picture = $objattr['image_width'] + $free;
+			if ($picture <= 0) {
+				return $objattr;
+			}
+
+			$pictureH = $objattr['image_height'] * $picture / $objattr['image_width'];
+			$objattr['height'] += $pictureH - $objattr['image_height'];
+			$objattr['image_height'] = $pictureH;
+			$objattr['image_width'] = $picture;
+			$free = 0;
 		}
 
 		if ($objattr['block'] === 'C') {
@@ -156,6 +167,25 @@ class ImageSizing
 		$objattr['width'] = $available;
 
 		return $objattr;
+	}
+
+	/**
+	 * Whether a line holds a block-level image. Such a line holds nothing else and is not a line of text, so the
+	 * block's text-indent does not move it.
+	 *
+	 * @param array $objects The line's objects, as in Mpdf::$objectbuffer
+	 *
+	 * @return bool
+	 */
+	public static function holdsBlock(array $objects)
+	{
+		foreach ($objects as $objattr) {
+			if (isset($objattr['block'])) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
