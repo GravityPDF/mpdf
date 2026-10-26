@@ -170,4 +170,20 @@ class CacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			@rmdir($this->path("tmp/test7a"));
 		}
 	}
+
+	public function testExistingDirectoryReportedAsReadOnlyIsAccepted()
+	{
+		$dir = $this->path("tmp/test8");
+		mkdir($dir);
+		stream_wrapper_register("ro-stat", ReadOnlyStatStream::class);
+
+		try {
+			$this->assertFalse(is_writable("ro-stat://" . $dir));
+
+			new Cache("ro-stat://" . $dir);
+		} finally {
+			stream_wrapper_unregister("ro-stat");
+			@rmdir($dir);
+		}
+	}
 }
