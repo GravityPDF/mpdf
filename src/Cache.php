@@ -33,7 +33,8 @@ class Cache
 			}
 		}
 
-		if (!is_writable($basePath) || !is_dir($basePath)) {
+		// is_writable() can report a writable network share as read-only, so a directory existing is enough
+		if (!is_dir($basePath)) {
 			return false;
 		}
 
