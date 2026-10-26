@@ -9,6 +9,8 @@ on:
       - "master"
       - "development"
       - "test"
+      - "gravitypdf-v6"
+  workflow_dispatch:
 
 jobs:
 
@@ -38,7 +40,7 @@ jobs:
           tools: composer:v2
 
       - name: "Install dependencies"
-        run: "composer install --no-interaction --no-progress && composer require \"phpstan/phpstan:^2.0\""
+        run: "composer install --no-interaction --no-progress && composer require \"phpstan/phpstan:2.3.1\""
 
       - name: "Static Analysis check"
         run: vendor/bin/phpstan --no-progress
