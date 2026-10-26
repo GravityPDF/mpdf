@@ -9,6 +9,8 @@ on:
       - "master"
       - "development"
       - "test"
+      - "gravitypdf-v6"
+  workflow_dispatch:
 
 jobs:
 
