@@ -33,7 +33,7 @@ jobs:
 
       - name: Change ImageMagick policy to allow pdf->png conversion.
         run: |
-          sudo sed -i 's/none/read|write/' /etc/ImageMagick-6/policy.xml               
+          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-*/policy.xml
 
       - name: "Install PHP"
         uses: "shivammathur/setup-php@v2"
