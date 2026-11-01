@@ -61,7 +61,7 @@ jobs:
 
       - name: "Install dependencies"
         id: install
-        run: "composer require \"phpstan/phpstan:^2.0\" --no-update && composer install --no-interaction --no-progress"
+        run: "composer require \"phpstan/phpstan:2.3.1\" --no-update && composer install --no-interaction --no-progress"
 
       - name: "Coding standard"
         if: matrix.php-version == '8.2'
