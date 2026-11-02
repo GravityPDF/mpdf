@@ -44,4 +44,24 @@ class FontCacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->fontCache->jsonRemove($filename);
 		$this->assertFalse($this->fontCache->jsonHas($filename));
 	}
+
+	/**
+	 * Mpdf::AddFont() reads a font's metrics, finds them stale, writes them again and reads them back.
+	 * The second read has to be of the entry just written, not of the one the first read remembered.
+	 */
+	public function testAnEntryReadBackAfterItIsWrittenIsTheOneWritten()
+	{
+		$filename = 'jsonRewriteTest.json';
+
+		$this->fontCache->jsonWrite($filename, ['cacheFormat' => 1]);
+		$this->assertSame(['cacheFormat' => 1], $this->fontCache->jsonLoad($filename));
+
+		$this->fontCache->jsonWrite($filename, ['cacheFormat' => 2]);
+
+		try {
+			$this->assertSame(['cacheFormat' => 2], $this->fontCache->jsonLoad($filename));
+		} finally {
+			$this->fontCache->jsonRemove($filename);
+		}
+	}
 }
