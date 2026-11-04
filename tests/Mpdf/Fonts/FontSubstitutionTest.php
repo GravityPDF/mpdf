@@ -94,6 +94,40 @@ class FontSubstitutionTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
+	 * A Plane 2 character goes to the current font's sip-ext font, then to backupSIPFont, whichever
+	 * has it first; anything outside Plane 2 goes to neither
+	 *
+	 * @dataProvider sipFontProvider
+	 *
+	 * @param string      $family The current font
+	 * @param int         $char
+	 * @param string|null $font   The SIP font it goes to
+	 */
+	public function testAPlaneTwoCharacterGoesToTheSipFontThatHasIt($family, $char, $font)
+	{
+		$mpdf = $this->mpdf;
+		$mpdf->CurrentFont = ['sipext' => isset($mpdf->fontdata[$family]['sip-ext']) ? $mpdf->fontdata[$family]['sip-ext'] : ''];
+		$mpdf->currentfontfamily = $family;
+
+		$this->assertSame($font, $this->substitution->sipFontFor($char));
+	}
+
+	/**
+	 * @return array[]
+	 */
+	public function sipFontProvider()
+	{
+		return [
+			'Extension B, through backupSIPFont' => ['dejavusans', 0x20BB7, 'sun-extb'],
+			'Extension B, through sip-ext' => ['sun-exta', 0x20BB7, 'sun-extb'],
+			'Extension E, which Sun-ExtB lacks' => ['dejavusans', 0x2B820, null],
+			'Plane 3' => ['dejavusans', 0x30000, null],
+			'the Basic Multilingual Plane' => ['dejavusans', 0x4E00, null],
+			'backupSIPFont is the current font' => ['sun-extb', 0x20BB7, null],
+		];
+	}
+
+	/**
 	 * A family fontdata does not name has no widths
 	 */
 	public function testAnUnknownFamilyHasNoWidths()

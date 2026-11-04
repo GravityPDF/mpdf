@@ -15,6 +15,9 @@ class TextRecordingMpdf extends Mpdf
 	/** The text of each line drawn, in the order it is drawn in. */
 	public $drawnText = [];
 
+	/** The font family of each line drawn, by the same index as the text. */
+	public $drawnFontFamily = [];
+
 	/**
 	 * Records the text of a line before drawing it
 	 *
@@ -24,9 +27,23 @@ class TextRecordingMpdf extends Mpdf
 	{
 		if (is_string($txt) && trim($txt) !== '') {
 			$this->drawnText[] = $txt;
+			$this->drawnFontFamily[] = $this->FontFamily;
 		}
 
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);
+	}
+
+	/**
+	 * @return array[] Each piece of text drawn, in order: [font family, its codepoints]
+	 */
+	public function drawnPieces()
+	{
+		$pieces = [];
+		foreach ($this->drawnText as $i => $text) {
+			$pieces[] = [$this->drawnFontFamily[$i], $this->UTF8StringToArray($text, false)];
+		}
+
+		return $pieces;
 	}
 
 }
