@@ -56,4 +56,31 @@ class ReleaseFinishedTestsTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 		$this->assertSame('testOnlyTheTestsOwnInstancePropertiesAreEmptied', $finished->getName());
 	}
 
+	/**
+	 * The copy of the declared classes PHPUnit before 8.5 keeps in each suite is let go when the run starts, in
+	 * the suite of each class and in the suite of each data provider inside it
+	 */
+	public function testEverySuiteLetsGoOfItsDeclaredClasses()
+	{
+		$property = ReleaseFinishedTests::declaredClassesProperty();
+		if ($property === null) {
+			$this->markTestSkipped('This PHPUnit keeps a count of the declared classes rather than a copy');
+		}
+
+		$owner = $property->class;
+		$run = new $owner('run');
+		$run->addTestSuite(new \ReflectionClass('Mpdf\Color\ColorConverterTest'));
+		$classSuite = $run->tests()[0];
+		$providerSuite = $classSuite->tests()[0];
+		$this->assertInstanceOf($owner, $providerSuite, 'the first test of the class has a data provider');
+		$this->assertNotEmpty($property->getValue($providerSuite));
+
+		$listener = new ReleaseFinishedTests();
+		$listener->start_test_suite($run);
+
+		$this->assertNull($property->getValue($run));
+		$this->assertNull($property->getValue($classSuite));
+		$this->assertNull($property->getValue($providerSuite));
+	}
+
 }
