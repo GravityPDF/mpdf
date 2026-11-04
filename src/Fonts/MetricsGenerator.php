@@ -3,9 +3,106 @@
 namespace Mpdf\Fonts;
 
 use Mpdf\TTFontFile;
+use Psr\Log\LoggerInterface;
 
 class MetricsGenerator
 {
+
+	/**
+	 * What generateMetrics() writes, in the font's metrics and the files beside them. Raise it whenever
+	 * that changes. Mpdf::fontMetrics() compares it and regenerates on a mismatch, so a cache from before
+	 * the font's ranges were written gains them on its next load.
+	 */
+	const CACHE_FORMAT = 1;
+
+	/**
+	 * Whether cached metrics are in the shape this release writes - see CACHE_FORMAT
+	 *
+	 * @param array $metrics The cached metrics
+	 *
+	 * @return bool
+	 */
+	public static function isCurrent(array $metrics)
+	{
+		return isset($metrics['cacheFormat']) && $metrics['cacheFormat'] === self::CACHE_FORMAT;
+	}
+
+	/**
+	 * Writes the ranges of the family's font into the font cache, with the font they were built from.
+	 *
+	 * @param FontCache       $fontCache
+	 * @param string          $family
+	 * @param CharacterRanges $ranges
+	 * @param string          $file      The font file's name
+	 * @param int             $TTCfontID
+	 * @param int|bool        $useOTL
+	 */
+	public static function writeCachedRanges(FontCache $fontCache, $family, CharacterRanges $ranges, $file, $TTCfontID, $useOTL)
+	{
+		$fontCache->jsonWrite(self::rangesFile($family), $ranges->toArray() + self::rangesSource($file, $TTCfontID, $useOTL));
+	}
+
+	/**
+	 * The ranges writeCachedRanges() wrote for the family, where they were written for the font file,
+	 * TTCfontID and useOTL it has now. Read past FontCache's memory, so the decoded file is not kept for
+	 * the rest of the document.
+	 *
+	 * @param FontCache       $fontCache
+	 * @param string          $family
+	 * @param array           $fontdata The family's entry in fontdata
+	 * @param bool            $bmpOnly  Whether the family is in BMPonly, which gets no ranges file
+	 * @param LoggerInterface $logger   Told of a file that is not a valid ranges file
+	 *
+	 * @return CharacterRanges|null
+	 */
+	public static function cachedRanges(FontCache $fontCache, $family, array $fontdata, $bmpOnly, LoggerInterface $logger)
+	{
+		if ($bmpOnly) {
+			return null;
+		}
+
+		$file = self::rangesFile($family);
+		$contents = $fontCache->loadIfPresent($file);
+		if ($contents === null) {
+			return null;
+		}
+
+		$cached = json_decode($contents, true);
+		$source = self::rangesSource(
+			basename($fontdata['R']),
+			isset($fontdata['TTCfontID']['R']) ? $fontdata['TTCfontID']['R'] : 0,
+			isset($fontdata['useOTL']) ? $fontdata['useOTL'] : 0
+		);
+		if (is_array($cached) && array_intersect_key($cached, $source) !== $source) {
+			return null;
+		}
+
+		return CharacterRanges::fromData($cached, $fontCache->tempFilename($file), $logger);
+	}
+
+	/**
+	 * @param string $family
+	 *
+	 * @return string The name of the family's ranges file in the font cache
+	 */
+	private static function rangesFile($family)
+	{
+		return $family . '.ranges.json';
+	}
+
+	/**
+	 * @param string   $file      The font file's name
+	 * @param int      $TTCfontID
+	 * @param int|bool $useOTL
+	 *
+	 * @return array What a ranges file in the font cache records of the font it was built from. The cache
+	 *               is keyed by family, so a file another config wrote can be of another font, or carry
+	 *               the Private Use codepoints useOTL gives unmapped glyphs.
+	 */
+	private static function rangesSource($file, $TTCfontID, $useOTL)
+	{
+		return ['font' => (string) $file, 'TTCfontID' => (int) $TTCfontID, 'useOTL' => (int) $useOTL];
+	}
 
 	private $fontCache;
 
@@ -65,11 +162,23 @@ class MetricsGenerator
 			'GPOSFeatures' => $ttf->GPOSFeatures,
 			'GPOSLookups' => $ttf->GPOSLookups,
 			'kerninfo' => $ttf->kerninfo,
+			'cacheFormat' => self::CACHE_FORMAT,
 		];
 
 		$this->fontCache->jsonWrite($fontkey . '.mtx.json', $font);
 		$this->fontCache->binaryWrite($fontkey . '.cw.dat', $ttf->charWidths);
 		$this->fontCache->binaryWrite($fontkey . '.gid.dat', $ttf->glyphIDtoUni);
+
+		// A BMPonly font's widths stop at U+FFFF, so its ranges would say the planes above are missing to
+		// a document with another config sharing the cache
+		if ($BMPonly) {
+			if ($this->fontCache->jsonHas(self::rangesFile($fontkey))) {
+				$this->fontCache->jsonRemove(self::rangesFile($fontkey));
+			}
+		} else {
+			$ranges = CharacterRanges::fromWidths($ttf->charWidths, $font['originalsize']);
+			self::writeCachedRanges($this->fontCache, $fontkey, $ranges, basename($ttffile), $TTCfontID, $fontUseOTL);
+		}
 
 		if ($this->fontCache->has($fontkey . '.cgm')) {
 			$this->fontCache->remove($fontkey . '.cgm');

@@ -37,6 +37,9 @@ class MetricsGeneratorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->fontCache->shouldReceive('jsonWrite')->with('angerthas.mtx.json', Mockery::any())->once();
 		$this->fontCache->shouldReceive('binaryWrite')->with('angerthas.cw.dat', Mockery::any())->once();
 		$this->fontCache->shouldReceive('binaryWrite')->with('angerthas.gid.dat', Mockery::any())->once();
+		$this->fontCache->shouldReceive('jsonWrite')->with('angerthas.ranges.json', Mockery::on(function ($ranges) {
+			return $ranges['format'] === CharacterRanges::FORMAT && $ranges['size'] === filesize(__DIR__ . '/../../data/ttf/angerthas.ttf') && count($ranges['ranges']) > 0;
+		}))->once();
 
 		$this->fontCache->shouldReceive('has')->times(3)->andReturn(true);
 		$this->fontCache->shouldReceive('remove')->times(3);

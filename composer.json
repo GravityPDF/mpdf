@@ -45,6 +45,9 @@
 		"ext-xml": "Needed mainly for SVG manipulation",
         "ext-imagick": "Needed if developing the Mpdf library"
     },
+	"bin": [
+		"bin/mpdf-font-ranges"
+	],
 	"autoload": {
 		"psr-4": {
 			"Mpdf\\": "src/"
@@ -70,6 +73,7 @@
 		"cs": "@php vendor/bin/phpcs --report-width=160 --standard=ruleset.xml --severity=1 --warning-severity=0 --extensions=php src utils tests",
         "cs:fix": "@php vendor/bin/phpcbf --standard=ruleset.xml --extensions=php src utils tests",
 		"test": "@php vendor/bin/phpunit",
+		"ranges:update": "@php utils/ranges_update.php",
 		"coverage": "@php vendor/bin/phpunit --coverage-text"
 	},
 	"config": {
