@@ -18,6 +18,7 @@ use Mpdf\Css\TextVars;
 use Mpdf\Css\WidthConstraints;
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\Fonts\FontRegistry;
+use Mpdf\Fonts\FontSubstitution;
 use Mpdf\Html\Tags as HtmlTags;
 use Mpdf\Tag\Input as InputTag;
 use Mpdf\Log\Context as LogContext;
@@ -14795,7 +14796,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (preg_match("/([" . $this->pregRTLchars . "])/u", $html)) {
 				$this->biDirectional = true;
 			} // *OTL*
-			if (preg_match("/([\x{20000}-\x{2FFFF}])/u", $html)) {
+			if (preg_match(FontSubstitution::SIP_PATTERN, $html)) {
 				$this->checkSIP = true;
 			}
 			if (preg_match("/([\x{10000}-\x{1FFFF}])/u", $html)) {
@@ -14897,12 +14898,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$e = mb_convert_case($e, MB_CASE_TITLE, "UTF-8");
 					} // mPDF 5.7.1
 				} else {
-					if ($this->checkSIP && (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) && $this->subPos < $i && (!$this->specialcontent || !$this->activeForms())) {
-						$cnt += $this->SubstituteCharsSIP($a, $i, $e);
-					}
-
-					if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->CurrentFont['type'] != 'Type0' && $this->subPos < $i && (!$this->specialcontent || !$this->activeForms())) {
-						$cnt += $this->SubstituteCharsMB($a, $i, $e);
+					if ($this->subPos < $i && (!$this->specialcontent || !$this->activeForms())) {
+						// The substitution scan moves Plane 2 into the sip-ext font itself, so the SIP pass
+						// is for text the scan does not reach
+						if ($this->useSubstitutions && !$this->onlyCoreFonts && $this->CurrentFont['type'] != 'Type0') {
+							$cnt += $this->SubstituteCharsMB($a, $i, $e);
+						} elseif ($this->checkSIP && !empty($this->CurrentFont['sipext'])) {
+							$cnt += $this->SubstituteCharsSIP($a, $i, $e);
+						}
 					}
 
 					if ($this->textvar & TextVars::FT_UPPERCASE) {
@@ -26699,22 +26702,45 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $html;
 	}
 
+	/**
+	 * Moves the first run of Plane 2 characters the current font's sip-ext font has into that font, for
+	 * text the substitution scan does not reach. The text after the run is looked at on its own turn.
+	 *
+	 * @param string[] $writehtml_a The tokens WriteHTML() is walking
+	 * @param int      $writehtml_i Where this token is among them
+	 * @param string   $writehtml_e The token's text, in a font with a sip-ext font
+	 *
+	 * @return int How many tokens were inserted after it
+	 */
 	function SubstituteCharsSIP(&$writehtml_a, &$writehtml_i, &$writehtml_e)
 	{
-		if (preg_match("/^(.*?)([\x{20000}-\x{2FFFF}]+)(.*)/su", $writehtml_e, $m)) {
-			if (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) {
-				$font = $this->CurrentFont['sipext'];
-				if (!in_array($font, $this->available_unifonts)) {
-					return 0;
-				}
-				$writehtml_a[$writehtml_i] = $writehtml_e = $m[1];
-				array_splice($writehtml_a, $writehtml_i + 1, 0, ['span data-mpdf-script-run style="font-family: ' . $font . '"', $m[2], '/span', $m[3]]);
-				$this->subPos = $writehtml_i;
-				return 4;
+		$font = $this->CurrentFont['sipext'];
+		if (!in_array($font, $this->available_unifonts) || !preg_match(FontSubstitution::SIP_PATTERN, $writehtml_e)) {
+			return 0;
+		}
+
+		$unicode = $this->UTF8StringToArray($writehtml_e, false);
+		$start = null;
+		$end = count($unicode);
+		foreach ($unicode as $c => $char) {
+			$taken = $this->fontSubstitution->sipFontHas($font, $char);
+			if ($taken && $start === null) {
+				$start = $c;
+			} elseif (!$taken && $start !== null) {
+				$end = $c;
+				break;
 			}
 		}
 
-		return 0;
+		if ($start === null) {
+			return 0;
+		}
+
+		$step = $this->substitutionStep($writehtml_e, 0, $start, $end - $start, $font);
+		$writehtml_a[$writehtml_i] = $writehtml_e = $step['before'];
+		array_splice($writehtml_a, $writehtml_i + 1, 0, array_merge($step['insert'], [$step['rest']]));
+
+		return count($step['insert']) + 1;
 	}
 
 	/**
@@ -26890,6 +26916,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$start = -1;
 		$flag = 0;
 		$ftype = '';
+		$sipFont = null;
 		$codepointCount = count($unicode);
 
 		// Not foreach, so the loop can jump past the rest of a multi-codepoint sequence once it has been handled
@@ -26920,7 +26947,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				continue;
 			}
 
-			if (($flag == 0 || $flag == 2) && !$this->_charDefined($cw, $char) && $this->checkSIP && $char > 131071) {  // Unicode Plane 2 (SIP)
+			// A Plane 2 character a SIP font has goes to that font, one font to a run. Anything else the
+			// current font lacks, Plane 2 included, is offered to the backup fonts like any other character
+			$charSipFont = $flag != 1 && $this->checkSIP && !$this->_charDefined($cw, $char)
+				? $this->fontSubstitution->sipFontFor($char)
+				: null;
+
+			if ($charSipFont !== null && ($flag == 0 || $charSipFont === $sipFont)) {
 
 				if (in_array($this->FontFamily, $this->available_CJK_fonts)) {
 					return null;
@@ -26928,6 +26961,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 				if ($flag == 0) {
 					$start = $c;
+					$sipFont = $charSipFont;
 				}
 
 				$flag = 2;
@@ -26951,66 +26985,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			return null;
 		}
 
-		// Every codepoint from where the run starts to where the scan stopped: the loop breaks at the
-		// first one that does not belong to it
-		$u = array_slice($unicode, $start, $c - $start);
-
-		if ($flag == 2) { // SIP
-
-			// Check if current CJK font has a ext-B related font
-			if (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) {
-				$font = $this->CurrentFont['sipext'];
-				$cw = $this->fontSubstitution->widths($font);
-
-				if (!$cw) {
-					return null;
-				}
-
-				$l = 0;
-				foreach ($u as $char) {
-					if ($this->_charDefined($cw, $char) || $char > 131071) {
-						$l++;
-					} else {
-						break;
-					}
-				}
-
-				if ($l > 0) {
-					return $this->substitutionStep($text, $from, $start, $l, $font);
-				}
-			}
-
-			// Check Backup SIP font (defined in Config\FontVariables)
-			if (isset($this->backupSIPFont) && $this->backupSIPFont) {
-
-				if ($this->currentfontfamily != $this->backupSIPFont) {
-					$font = $this->backupSIPFont;
-				} else {
-					return null;
-				}
-
-				$cw = $this->fontSubstitution->widths($font);
-
-				if (!$cw) {
-					return null;
-				}
-
-				$l = 0;
-				foreach ($u as $char) {
-					if ($this->_charDefined($cw, $char) || $char > 131071) {
-						$l++;
-					} else {
-						break;
-					}
-				}
-
-				if ($l > 0) {
-					return $this->substitutionStep($text, $from, $start, $l, $font);
-				}
-			}
-
-			return null;
+		// The loop breaks at the first codepoint that does not belong to the run
+		if ($flag == 2) {
+			return $this->substitutionStep($text, $from, $start, $c - $start, $sipFont);
 		}
+
+		$u = array_slice($unicode, $start, $c - $start);
 
 		$presentation = isset($clusters[$start]) ? $clusters[$start][1] : Emoji::PRESENTATION_DEFAULT;
 		list($backupFonts, $preferred) = $this->fontSubstitution->backupFontOrder($presentation);

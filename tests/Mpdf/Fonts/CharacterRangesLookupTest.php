@@ -20,15 +20,7 @@ use Snapshots\Snapshot;
 class CharacterRangesLookupTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
 
-	/**
-	 * @var string A tempDir of the test's own, so the font cache starts empty
-	 */
-	private $tempDir;
-
-	/**
-	 * @var string A directory the test writes fonts and ranges files into
-	 */
-	private $fontDir;
+	use TempFontDirectory;
 
 	/**
 	 * Gives each test an empty font cache and an empty font directory
@@ -37,9 +29,7 @@ class CharacterRangesLookupTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	{
 		parent::set_up();
 
-		$this->tempDir = sys_get_temp_dir() . '/mpdf-character-ranges-lookup-' . uniqid('', true);
-		$this->fontDir = $this->tempDir . '/fonts';
-		mkdir($this->fontDir, 0777, true);
+		$this->makeTempFontDirectory('character-ranges-lookup');
 		unset($GLOBALS['mpdfCharacterRangesIncluded']);
 	}
 
@@ -48,11 +38,7 @@ class CharacterRangesLookupTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	 */
 	protected function tear_down()
 	{
-		$files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->tempDir, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
-		foreach ($files as $file) {
-			$file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
-		}
-		rmdir($this->tempDir);
+		$this->removeTempFontDirectory();
 		unset($GLOBALS['mpdfCharacterRangesIncluded']);
 
 		parent::tear_down();
@@ -380,26 +366,6 @@ class CharacterRangesLookupTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	}
 
 	/**
-	 * @param string $font
-	 */
-	private function copyFont($font)
-	{
-		copy($font, $this->fontDir . '/' . basename($font));
-	}
-
-	/**
-	 * Writes a PHP ranges file as mpdf-font-ranges writes one
-	 *
-	 * @param string  $path
-	 * @param int[][] $ranges
-	 * @param int     $size   The size of font it says it was written for
-	 */
-	private function writeRanges($path, array $ranges, $size = 1)
-	{
-		file_put_contents($path, $this->ranges($ranges, $size)->toPhp());
-	}
-
-	/**
 	 * Writes a ranges file into the font cache as MetricsGenerator writes one
 	 *
 	 * @param string  $family
@@ -409,17 +375,6 @@ class CharacterRangesLookupTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	private function writeCachedRanges($family, array $ranges, $font)
 	{
 		MetricsGenerator::writeCachedRanges(new FontCache(new Cache($this->tempDir . '/mpdf/ttfontdata')), $family, $this->ranges($ranges), $font, 0, 0);
-	}
-
-	/**
-	 * @param int[][] $ranges
-	 * @param int     $size
-	 *
-	 * @return CharacterRanges
-	 */
-	private function ranges(array $ranges, $size = 1)
-	{
-		return CharacterRanges::fromData(['format' => CharacterRanges::FORMAT, 'size' => $size, 'ranges' => $ranges], 'test', new NullLogger());
 	}
 
 	/**

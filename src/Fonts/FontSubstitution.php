@@ -11,14 +11,25 @@ use Mpdf\Unicode\Emoji;
 use Psr\Log\LoggerInterface;
 
 /**
- * Which backup font Mpdf::SubstituteCharsMB() moves a run of text into, and whether an emoji the
- * current font can draw should move at all.
+ * Which backup or SIP font Mpdf::SubstituteCharsMB() moves a run of text into, and whether an emoji
+ * the current font can draw should move at all.
  */
 class FontSubstitution implements \Psr\Log\LoggerAwareInterface
 {
 
 	use Strict;
 	use PsrLogAwareTrait;
+
+	/**
+	 * The first and last codepoints of Plane 2, the Supplementary Ideographic Plane
+	 */
+	const SIP_FIRST = 0x20000;
+	const SIP_LAST = 0x2FFFF;
+
+	/**
+	 * Matches a Plane 2 character in UTF-8
+	 */
+	const SIP_PATTERN = '/[\x{20000}-\x{2FFFF}]/u';
 
 	/**
 	 * @var \Mpdf\Mpdf
@@ -134,6 +145,46 @@ class FontSubstitution implements \Psr\Log\LoggerAwareInterface
 		}
 
 		return [array_merge($preferred, $rest), $preferred];
+	}
+
+	/**
+	 * Only Plane 2 moves to a SIP font, so Plane 3 and above never depend on checkSIP.
+	 *
+	 * @param int $char A codepoint
+	 *
+	 * @return string|null The current font's sip-ext font, else backupSIPFont, the first that has the
+	 *                     character, or null
+	 */
+	public function sipFontFor($char)
+	{
+		if (!empty($this->mpdf->CurrentFont['sipext']) && $this->sipFontHas($this->mpdf->CurrentFont['sipext'], $char)) {
+			return $this->mpdf->CurrentFont['sipext'];
+		}
+
+		$backup = $this->mpdf->backupSIPFont;
+		if (!empty($backup) && $this->mpdf->currentfontfamily != $backup && $this->sipFontHas($backup, $char)) {
+			return $backup;
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param string $family The font's key in fontdata
+	 * @param int    $char   A codepoint
+	 *
+	 * @return bool Whether the character is in Plane 2 and the font's widths have it, read from its
+	 *              ranges file where the document has not loaded it
+	 */
+	public function sipFontHas($family, $char)
+	{
+		if ($char < self::SIP_FIRST || $char > self::SIP_LAST) {
+			return false;
+		}
+
+		$cw = $this->widths($family);
+
+		return $cw && $this->mpdf->_charDefined($cw, $char);
 	}
 
 	/**
