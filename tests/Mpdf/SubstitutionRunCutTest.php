@@ -26,6 +26,7 @@ class SubstitutionRunCutTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'fontDir' => [
 				__DIR__ . '/../../packages/Dejavu-Family/fonts',
 				__DIR__ . '/../../packages/Garuda/fonts',
+				__DIR__ . '/../../packages/SunExt/fonts',
 			],
 			'fontdata' => [
 				'dejavusans' => ['R' => 'DejaVuSans.ttf'],

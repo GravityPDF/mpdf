@@ -399,6 +399,7 @@ Bugfixes
 * A backup font that the substitution scan tried and rejected was still added to the document, so the same document gave different bytes with a cold and a warm font cache. [#315] [#318] [#342] [#381]
 * Text in a core font such as `chelvetica` that the core font cannot draw, like Cyrillic, came out as question marks the first time its backup font was used with nothing of that font in the font cache. With more than one backup font it went to a later one instead. Rendering again worked. [#829]
 * A run of Plane 2 characters next to a newline was not moved into its SIP font, and text after the newline could be dropped. [#411]
+* A CJK Extension E or later character, or a Plane 3 character in a document that also had a Plane 2 character, was moved into Sun-ExtB, which lacks it, and drawn as Sun-ExtB's missing-character box. Sun-ExtB was loaded for it, and the other backup fonts were never tried. This happened with or without `useSubstitutions` in text set in Sun-ExtA, or in any font whose `sip-ext` font is Sun-ExtB. Now a character above U+1FFFF goes to the SIP font only where that font has it, and is otherwise offered to the backup fonts like any other. With `useSubstitutions` on, text in such a font is substituted in one pass: the text ahead of a Plane 2 character, which used to be skipped, is substituted too, and a Plane 2 character the font has itself stays in it. [#837]
 * `haskernGPOS` was read for core fonts, which have no GPOS. [#141] [#149]
 * Core-font text is held in Windows-1252 but was decoded as UTF-8 when given bidi data, which dropped some bytes such as a lone `0xA0`. [#383]
 * debugfont mode read the wrong byte offsets in `hhea`, `post` and `maxp`. [mpdf/mpdf#2053] [#23]
@@ -1053,5 +1054,6 @@ These changes do not change output.
 [#703]: https://github.com/GravityPDF/mpdf/issues/703
 [#829]: https://github.com/GravityPDF/mpdf/issues/829
 [#827]: https://github.com/GravityPDF/mpdf/issues/827
+[#837]: https://github.com/GravityPDF/mpdf/issues/837
 [#841]: https://github.com/GravityPDF/mpdf/pull/841
 [#843]: https://github.com/GravityPDF/mpdf/pull/843

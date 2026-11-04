@@ -41,6 +41,7 @@ class SubstitutionRunSplitTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 				'sunexta' => ['R' => 'Sun-ExtA.ttf'],
 				'sunextb' => ['R' => 'Sun-ExtB.ttf'],
 				'sipfont' => ['R' => 'Sun-ExtB.ttf'],
+				'sunextbwithsip' => ['R' => 'Sun-ExtB.ttf', 'sip-ext' => 'sipfont'],
 			],
 			'default_font' => 'dejavusans',
 			'useSubstitutions' => true,
@@ -164,6 +165,19 @@ class SubstitutionRunSplitTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCas
 		$this->assertSame(
 			[['sipfont', [0x20000, 0x20001, 0x20002]]],
 			$this->drawn($text, array_merge($config, ['BMPonly' => ['sunextb']]))
+		);
+	}
+
+	/**
+	 * A font with a sip-ext font keeps the Plane 2 text it has itself when substitution is on: only
+	 * what it lacks is moved. Sun-ExtB is registered a third time here, naming another registration of
+	 * itself as its sip-ext font.
+	 */
+	public function testPlaneTwoTextAFontWithASipExtFontHasStaysInIt()
+	{
+		$this->assertSame(
+			[['sunextbwithsip', [0x20000, 0x20001]]],
+			$this->drawn($this->text([0x20000, 0x20001]), ['default_font' => 'sunextbwithsip'])
 		);
 	}
 
