@@ -4,6 +4,7 @@ namespace Mpdf\Fonts;
 
 use Mpdf\Fonts\Color\ColorFormats;
 use Mpdf\TTFontFile;
+use Psr\Log\LoggerInterface;
 
 class MetricsGenerator
 {
@@ -17,7 +18,7 @@ class MetricsGenerator
 	 * whenever that happens, and when ColorFormats::SOURCES gains a format. Mpdf::AddFont() compares it
 	 * and regenerates on a mismatch.
 	 */
-	const CACHE_FORMAT = 9;
+	const CACHE_FORMAT = 10;
 
 	/**
 	 * Whether cached metrics are in the shape this release writes - see CACHE_FORMAT
@@ -29,6 +30,83 @@ class MetricsGenerator
 	public static function isCurrent($metrics)
 	{
 		return isset($metrics['cacheFormat']) && $metrics['cacheFormat'] === self::CACHE_FORMAT;
+	}
+
+	/**
+	 * Writes the ranges of the family's font into the font cache, with the font they were built from.
+	 *
+	 * @param FontCache       $fontCache
+	 * @param string          $family
+	 * @param CharacterRanges $ranges
+	 * @param string          $file      The font file's name
+	 * @param int             $TTCfontID
+	 * @param int|bool        $useOTL
+	 */
+	public static function writeCachedRanges(FontCache $fontCache, $family, CharacterRanges $ranges, $file, $TTCfontID, $useOTL)
+	{
+		$fontCache->jsonWrite(self::rangesFile($family), $ranges->toArray() + self::rangesSource($file, $TTCfontID, $useOTL));
+	}
+
+	/**
+	 * The ranges writeCachedRanges() wrote for the family, where they were written for the font file,
+	 * TTCfontID and useOTL it has now. Read past FontCache's memory, so the decoded file is not kept for
+	 * the rest of the document.
+	 *
+	 * @param FontCache       $fontCache
+	 * @param string          $family
+	 * @param array           $fontdata The family's entry in fontdata
+	 * @param bool            $bmpOnly  Whether the family is in BMPonly, which gets no ranges file
+	 * @param LoggerInterface $logger   Told of a file that is not a valid ranges file
+	 *
+	 * @return CharacterRanges|null
+	 */
+	public static function cachedRanges(FontCache $fontCache, $family, array $fontdata, $bmpOnly, LoggerInterface $logger)
+	{
+		if ($bmpOnly) {
+			return null;
+		}
+
+		$file = self::rangesFile($family);
+		$contents = $fontCache->loadIfPresent($file);
+		if ($contents === null) {
+			return null;
+		}
+
+		$cached = json_decode($contents, true);
+		$source = self::rangesSource(
+			basename($fontdata['R']),
+			isset($fontdata['TTCfontID']['R']) ? $fontdata['TTCfontID']['R'] : 0,
+			isset($fontdata['useOTL']) ? $fontdata['useOTL'] : 0
+		);
+		if (is_array($cached) && array_intersect_key($cached, $source) !== $source) {
+			return null;
+		}
+
+		return CharacterRanges::fromData($cached, $fontCache->tempFilename($file), $logger);
+	}
+
+	/**
+	 * @param string $family
+	 *
+	 * @return string The name of the family's ranges file in the font cache
+	 */
+	private static function rangesFile($family)
+	{
+		return $family . '.ranges.json';
+	}
+
+	/**
+	 * @param string   $file      The font file's name
+	 * @param int      $TTCfontID
+	 * @param int|bool $useOTL
+	 *
+	 * @return array What a ranges file in the font cache records of the font it was built from. The cache
+	 *               is keyed by family, so a file another config wrote can be of another font, or carry
+	 *               the Private Use codepoints useOTL gives unmapped glyphs.
+	 */
+	private static function rangesSource($file, $TTCfontID, $useOTL)
+	{
+		return ['font' => (string) $file, 'TTCfontID' => (int) $TTCfontID, 'useOTL' => (int) $useOTL];
 	}
 
 	private $fontCache;
@@ -99,6 +177,15 @@ class MetricsGenerator
 		$this->fontCache->jsonWrite($fontkey . '.mtx.json', $font);
 		$this->fontCache->binaryWrite($fontkey . '.cw.dat', $ttf->charWidths);
 		$this->fontCache->binaryWrite($fontkey . '.gid.dat', $ttf->glyphIDtoUni);
+
+		// A BMPonly font's widths stop at U+FFFF, so its ranges would say the planes above are missing to
+		// a document with another config sharing the cache
+		if ($BMPonly) {
+			$this->fontCache->jsonRemove(self::rangesFile($fontkey));
+		} else {
+			$ranges = CharacterRanges::fromWidths($ttf->charWidths, $font['originalsize'], $ttf->colorFormats, $ttf->hasOutlines);
+			self::writeCachedRanges($this->fontCache, $fontkey, $ranges, basename($ttffile), $TTCfontID, $fontUseOTL);
+		}
 
 		// A font written as Type3 is drawn glyph by glyph, so the writer needs to know which glyph each
 		// character is, Private Use codes included

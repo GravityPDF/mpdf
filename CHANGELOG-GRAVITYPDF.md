@@ -178,6 +178,7 @@ Performance
 * **Selector matching.** A chain of descendant combinators stops trying ancestors once none left can match, instead of trying every combination of them, and a general sibling combinator skips a tag the parent has no child of and looks from the first sibling. `.x div div div div div p` is matched on a path 50 deep in well under a millisecond instead of 4 seconds, and `h2 ~ p` against 5,000 paragraphs after an `<h2>` in 20 ms instead of 5 seconds. [#535] [#631]
 * **Finding `<style>` and `<link>`.** The stylesheets in the HTML are found in two passes, one before HTML comments are removed and one after, instead of up to six. The search for a tag also steps over up to 16 other tags in one attempt instead of starting again after each. On a 1 MB table with one `<style>` and one `<link>`, reading the stylesheets takes about 2.5 ms instead of 7.7 ms with PCRE's JIT, and 30 ms instead of 80 ms without it. [#781] [#800]
 * **Line breaking and colours.** A flowing block works out the width a line may take, after its text-indent, a dot tab's outdent and the floats beside it, once per line instead of once per character. `SetColor()` keeps the operator it builds for each colour instead of formatting it each time a colour is set. A 57-page document of justified paragraphs renders about 10% faster, and pages of bordered boxes about 7%. [#843]
+* **Character ranges.** Substitution reads which characters a backup font has from a small file instead of the font, so only the font it uses is loaded. Every font package ships them beside its fonts, mPDF writes one into the font cache for any other font the first time it builds its metrics, and `vendor/bin/mpdf-font-ranges` writes one for a font package of your own to ship. [#827]
 
 Bugfixes
 --------
@@ -1051,5 +1052,6 @@ These changes do not change output.
 [#693]: https://github.com/GravityPDF/mpdf/pull/693
 [#703]: https://github.com/GravityPDF/mpdf/issues/703
 [#829]: https://github.com/GravityPDF/mpdf/issues/829
+[#827]: https://github.com/GravityPDF/mpdf/issues/827
 [#841]: https://github.com/GravityPDF/mpdf/pull/841
 [#843]: https://github.com/GravityPDF/mpdf/pull/843

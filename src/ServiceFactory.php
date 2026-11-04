@@ -80,7 +80,7 @@ class ServiceFactory
 		$cache = new Cache($cacheBasePath, $config['cacheCleanupInterval']);
 		$fontCache = new FontCache(new Cache($cacheBasePath . '/ttfontdata', $config['cacheCleanupInterval']));
 
-		$fontSubstitution = new FontSubstitution($mpdf);
+		$fontSubstitution = new FontSubstitution($mpdf, $fontCache, $logger);
 
 		$fontFileFinder = $this->container && $this->container->has('fontFileFinder')
 			? $this->container->get('fontFileFinder')

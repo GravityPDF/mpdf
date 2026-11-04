@@ -379,6 +379,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	private $fontDir;
 
+	/**
+	 * @var string[] The directory of the font package each family was registered from, by family
+	 */
+	private $fontPackageDirectories = [];
+
 	var $tempDir;
 
 	var $cacheCleanupInterval;
@@ -2020,7 +2025,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$autoloadFontConfig = $fontRegistry->getAutoloadConfigSetting();
 
 		foreach ($fontRegistry->getAll() as $fontPackage) {
-			$this->AddFontDirectory($fontPackage->getDirectory());
+			$fontPackageDirectory = $fontPackage->getDirectory();
+			$this->AddFontDirectory($fontPackageDirectory);
 			foreach ($fontPackage->getFonts() as $fontName => $fontData) {
 				if (isset($this->fontdata[$fontName])) {
 					if ($this->debug) {
@@ -2039,6 +2045,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				$this->fontdata[$fontName] = $fontData;
+				$this->fontPackageDirectories[$fontName] = $fontPackageDirectory;
 			}
 
 			/* First package to claim a shaper letter wins, like fontdata above */
@@ -28690,6 +28697,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	public function getFontDescriptor()
 	{
 		return $this->fontDescriptor;
+	}
+
+	/**
+	 * @return string[] The directory of the font package each family was registered from, by family
+	 */
+	public function getFontPackageDirectories()
+	{
+		return $this->fontPackageDirectories;
 	}
 
 	/**
