@@ -36,6 +36,16 @@ class FontCache
 		return $this->cache->load($filename);
 	}
 
+	/**
+	 * @param string $filename
+	 *
+	 * @return string|null The entry's contents, or null where it is not there
+	 */
+	public function loadIfPresent($filename)
+	{
+		return $this->cache->loadIfPresent($filename);
+	}
+
 	public function jsonLoad($filename)
 	{
 		if (isset($this->memoryCache[$filename])) {

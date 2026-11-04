@@ -4174,6 +4174,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$regenerate = true;
 		} // mPDF 6
 
+		// A cache written by a release that laid its files out differently cannot be read by this one
+		if (!MetricsGenerator::isCurrent($font)) {
+			$regenerate = true;
+		}
+
 		$cw = null;
 		$glyphIDtoUni = null;
 		if (empty($font['name']) || $font['originalsize'] != $ttfstat['size'] || $regenerate) {
