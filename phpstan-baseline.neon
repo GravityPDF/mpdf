@@ -52,6 +52,12 @@ parameters:
 			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
 			identifier: phpDoc.parseError
 			count: 2
+			path: src/Fonts/FontSubstitution.php
+
+		-
+			message: '#^PHPDoc tag @throws has invalid value \(\\Kdyby\\StrictObjects\\\\Mpdf\\MpdfException\)\: Unexpected token "\\\\\\\\Mpdf\\\\MpdfException", expected TOKEN_HORIZONTAL_WS at offset 74 on line 3$#'
+			identifier: phpDoc.parseError
+			count: 2
 			path: src/Form.php
 
 		-
@@ -502,12 +508,6 @@ parameters:
 			message: '#^Variable \$codestr_fontsize might not be defined\.$#'
 			identifier: variable.undefined
 			count: 5
-			path: src/Mpdf.php
-
-		-
-			message: '#^Variable \$cw might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
 			path: src/Mpdf.php
 
 		-

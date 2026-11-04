@@ -892,6 +892,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private $fontCache;
 
 	/**
+	 * @var \Mpdf\Fonts\FontSubstitution
+	 */
+	private $fontSubstitution;
+
+	/**
 	 * @var \Mpdf\Fonts\FontFileFinder
 	 */
 	private $fontFileFinder;
@@ -3835,9 +3840,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		/* -- CJK-FONTS -- */
 		if (in_array($family, $this->available_CJK_fonts)) {
-			if (empty($this->Big5_widths)) {
-				require __DIR__ . '/../data/CJKdata.php';
-			}
 			$this->AddCJKFont($family); // don't need to add style
 			return;
 		}
@@ -3856,7 +3858,111 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException(sprintf('Font "%s%s%s" is not supported', $family, $style ? ' - ' : '', $style));
 		}
 
-		/* Setup defaults */
+		$font = $this->fontMetrics($family, $style);
+		$this->registerFont($fontkey, $family, $font);
+	}
+
+	/**
+	 * Adds a TrueType font to the document under the next font number, from the metrics fontMetrics()
+	 * gave for it
+	 *
+	 * @param string $fontkey The font's family and style, as Mpdf::$fonts is keyed
+	 * @param string $family  The font's key in fontdata, lower case
+	 * @param array  $font    What fontMetrics() returned for the font
+	 */
+	private function registerFont($fontkey, $family, array $font)
+	{
+		$fontUseOTL = isset($this->fontdata[$family]['useOTL']) ? $this->fontdata[$family]['useOTL'] : false;
+
+		if (isset($this->fontdata[$family]['sip-ext']) && $this->fontdata[$family]['sip-ext']) {
+			$sipext = $this->fontdata[$family]['sip-ext'];
+		} else {
+			$sipext = '';
+		}
+
+		// Override with values from config_font.php
+		if (isset($this->fontdata[$family]['Ascent']) && $this->fontdata[$family]['Ascent']) {
+			$desc['Ascent'] = $this->fontdata[$family]['Ascent'];
+		}
+		if (isset($this->fontdata[$family]['Descent']) && $this->fontdata[$family]['Descent']) {
+			$desc['Descent'] = $this->fontdata[$family]['Descent'];
+		}
+		if (isset($this->fontdata[$family]['Leading']) && $this->fontdata[$family]['Leading']) {
+			$desc['Leading'] = $this->fontdata[$family]['Leading'];
+		}
+
+		$i = count($this->fonts) + $this->extraFontSubsets + 1;
+
+		$this->fonts[$fontkey] = [
+			'i' => $i,
+			'name' => $font['name'],
+			'type' => $font['type'],
+			'desc' => $font['desc'],
+			'panose' => $font['panose'],
+			'unitsPerEm' => $font['unitsPerEm'],
+			'up' => $font['up'],
+			'ut' => $font['ut'],
+			'strs' => $font['strs'],
+			'strp' => $font['strp'],
+			'cw' => $font['cw'],
+			'ttffile' => $font['ttffile'],
+			'fontkey' => $fontkey,
+			'used' => false,
+			'sip' => $font['sip'],
+			'sipext' => $sipext,
+			'smp' => $font['smp'],
+			'TTCfontID' => $font['TTCfontID'],
+			'useOTL' => $fontUseOTL,
+			'useKashida' => (isset($this->fontdata[$family]['useKashida']) ? $this->fontdata[$family]['useKashida'] : false),
+			'GSUBScriptLang' => $font['GSUBScriptLang'],
+			'GSUBFeatures' => $font['GSUBFeatures'],
+			'GSUBLookups' => $font['GSUBLookups'],
+			'GPOSScriptLang' => $font['GPOSScriptLang'],
+			'GPOSFeatures' => $font['GPOSFeatures'],
+			'GPOSLookups' => $font['GPOSLookups'],
+			'rtlPUAstr' => $font['rtlPUAstr'],
+			'glyphIDtoUni' => $font['glyphIDtoUni'],
+			'haskerninfo' => $font['haskerninfo'],
+			'haskernGPOS' => $font['haskernGPOS'],
+			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
+		];
+
+		if (!$font['sip'] && !$font['smp']) {
+			$subsetRange = range(32, 127);
+			$this->fonts[$fontkey]['subset'] = array_combine($subsetRange, $subsetRange);
+		} else {
+			$this->fonts[$fontkey]['subsets'] = [0 => range(0, 127)];
+			$this->fonts[$fontkey]['subsetfontids'] = [$i];
+		}
+
+		if ($font['haskerninfo']) {
+			$this->fonts[$fontkey]['kerninfo'] = $font['kerninfo'];
+		}
+
+		$this->FontFiles[$fontkey] = [
+			'length1' => $font['originalsize'],
+			'type' => 'TTF',
+			'ttffile' => $font['ttffile'],
+			'sip' => $font['sip'],
+			'smp' => $font['smp'],
+		];
+	}
+
+	/**
+	 * A TrueType font's metrics as AddFont() registers them, read from the font cache, or generated
+	 * into it where the cache has none current for the font. The font is not added to the document.
+	 *
+	 * @param string $family The font's key in fontdata, lower case
+	 * @param string $style  '', 'B', 'I' or 'BI'
+	 *
+	 * @return array The cached metrics, with the font's character widths as 'cw', its glyph map as
+	 *               'glyphIDtoUni', and the 'ttffile' and 'TTCfontID' it is read from
+	 */
+	public function fontMetrics($family, $style)
+	{
+		$fontkey = $family . $style;
+		$stylekey = $style ? $style : 'R';
+
 		$font = [
 			'name' => '',
 			'type' => '',
@@ -3915,6 +4021,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$regenerate = true;
 		} // mPDF 6
 
+		$cw = null;
 		$glyphIDtoUni = null;
 		if (empty($font['name']) || $font['originalsize'] != $ttfstat['size'] || $regenerate) {
 			$generator = new MetricsGenerator($this->fontCache, $this->fontDescriptor);
@@ -3943,81 +4050,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
-		if (isset($this->fontdata[$family]['sip-ext']) && $this->fontdata[$family]['sip-ext']) {
-			$sipext = $this->fontdata[$family]['sip-ext'];
-		} else {
-			$sipext = '';
-		}
+		$font['cw'] = $cw;
+		$font['glyphIDtoUni'] = $glyphIDtoUni;
+		$font['ttffile'] = $ttffile;
+		$font['TTCfontID'] = $TTCfontID;
 
-		// Override with values from config_font.php
-		if (isset($this->fontdata[$family]['Ascent']) && $this->fontdata[$family]['Ascent']) {
-			$desc['Ascent'] = $this->fontdata[$family]['Ascent'];
-		}
-		if (isset($this->fontdata[$family]['Descent']) && $this->fontdata[$family]['Descent']) {
-			$desc['Descent'] = $this->fontdata[$family]['Descent'];
-		}
-		if (isset($this->fontdata[$family]['Leading']) && $this->fontdata[$family]['Leading']) {
-			$desc['Leading'] = $this->fontdata[$family]['Leading'];
-		}
-
-		$i = count($this->fonts) + $this->extraFontSubsets + 1;
-
-		$this->fonts[$fontkey] = [
-			'i' => $i,
-			'name' => $font['name'],
-			'type' => $font['type'],
-			'desc' => $font['desc'],
-			'panose' => $font['panose'],
-			'unitsPerEm' => $font['unitsPerEm'],
-			'up' => $font['up'],
-			'ut' => $font['ut'],
-			'strs' => $font['strs'],
-			'strp' => $font['strp'],
-			'cw' => $cw,
-			'ttffile' => $ttffile,
-			'fontkey' => $fontkey,
-			'used' => false,
-			'sip' => $font['sip'],
-			'sipext' => $sipext,
-			'smp' => $font['smp'],
-			'TTCfontID' => $TTCfontID,
-			'useOTL' => $fontUseOTL,
-			'useKashida' => (isset($this->fontdata[$family]['useKashida']) ? $this->fontdata[$family]['useKashida'] : false),
-			'GSUBScriptLang' => $font['GSUBScriptLang'],
-			'GSUBFeatures' => $font['GSUBFeatures'],
-			'GSUBLookups' => $font['GSUBLookups'],
-			'GPOSScriptLang' => $font['GPOSScriptLang'],
-			'GPOSFeatures' => $font['GPOSFeatures'],
-			'GPOSLookups' => $font['GPOSLookups'],
-			'rtlPUAstr' => $font['rtlPUAstr'],
-			'glyphIDtoUni' => $glyphIDtoUni,
-			'haskerninfo' => $font['haskerninfo'],
-			'haskernGPOS' => $font['haskernGPOS'],
-			'hassmallcapsGSUB' => $font['hassmallcapsGSUB'],
-		];
-
-
-		if (!$font['sip'] && !$font['smp']) {
-			$subsetRange = range(32, 127);
-			$this->fonts[$fontkey]['subset'] = array_combine($subsetRange, $subsetRange);
-		} else {
-			$this->fonts[$fontkey]['subsets'] = [0 => range(0, 127)];
-			$this->fonts[$fontkey]['subsetfontids'] = [$i];
-		}
-
-		if ($font['haskerninfo']) {
-			$this->fonts[$fontkey]['kerninfo'] = $font['kerninfo'];
-		}
-
-		$this->FontFiles[$fontkey] = [
-			'length1' => $font['originalsize'],
-			'type' => 'TTF',
-			'ttffile' => $ttffile,
-			'sip' => $font['sip'],
-			'smp' => $font['smp'],
-		];
-
-		unset($cw);
+		return $font;
 	}
 
 	function SetFont($family, $style = '', $size = 0, $write = true, $forcewrite = false)
@@ -4108,9 +4146,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				/* -- CJK-FONTS -- */
 				if (in_array($fontkey, $this->available_CJK_fonts)) {
 					if (!isset($this->fonts[$fontkey])) { // already added
-						if (empty($this->Big5_widths)) {
-							require __DIR__ . '/../data/CJKdata.php';
-						}
 						$this->AddCJKFont($family); // don't need to add style
 					}
 				} else { // Test to see if requested font/style is available - or substitute /* -- END CJK-FONTS -- */
@@ -10849,6 +10884,29 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$this->fonts[$fontkey] = ['i' => $i, 'type' => 'Type0', 'name' => $name, 'up' => $up, 'ut' => 40, 'cw' => $cw, 'CMap' => $CMap, 'registry' => $registry, 'MissingWidth' => 1000, 'desc' => $desc];
 	}
 
+	/**
+	 * The character widths AddCJKFont() gives an Adobe CJK font. The font is not added to the document.
+	 *
+	 * @param string $family 'big5', 'gb', 'sjis' or 'uhc'
+	 *
+	 * @return array|null Null for any other family
+	 */
+	public function cjkWidths($family)
+	{
+		if (empty($this->Big5_widths)) {
+			require __DIR__ . '/../data/CJKdata.php';
+		}
+
+		$widths = [
+			'big5' => $this->Big5_widths,
+			'gb' => $this->GB_widths,
+			'sjis' => $this->SJIS_widths,
+			'uhc' => $this->UHC_widths,
+		];
+
+		return isset($widths[$family]) ? $widths[$family] : null;
+	}
+
 	function AddCJKFont($family)
 	{
 
@@ -10871,7 +10929,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add Big5 font with proportional Latin
 		$family = 'big5';
 		$name = 'MSungStd-Light-Acro';
-		$cw = $this->Big5_widths;
+		$cw = $this->cjkWidths('big5');
 		$CMap = 'UniCNS-UTF16-H';
 		$registry = ['ordering' => 'CNS1', 'supplement' => 4];
 		$desc = [
@@ -10894,7 +10952,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add GB font with proportional Latin
 		$family = 'gb';
 		$name = 'STSongStd-Light-Acro';
-		$cw = $this->GB_widths;
+		$cw = $this->cjkWidths('gb');
 		$CMap = 'UniGB-UTF16-H';
 		$registry = ['ordering' => 'GB1', 'supplement' => 4];
 		$desc = [
@@ -10918,7 +10976,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add SJIS font with proportional Latin
 		$family = 'sjis';
 		$name = 'KozMinPro-Regular-Acro';
-		$cw = $this->SJIS_widths;
+		$cw = $this->cjkWidths('sjis');
 		$CMap = 'UniJIS-UTF16-H';
 		$registry = ['ordering' => 'Japan1', 'supplement' => 5];
 		$desc = [
@@ -10942,7 +11000,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Add UHC font with proportional Latin
 		$family = 'uhc';
 		$name = 'HYSMyeongJoStd-Medium-Acro';
-		$cw = $this->UHC_widths;
+		$cw = $this->cjkWidths('uhc');
 		$CMap = 'UniKS-UTF16-H';
 		$registry = ['ordering' => 'Korea1', 'supplement' => 2];
 		$desc = [
@@ -25746,22 +25804,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 			$font = $bsf;
 			unset($cw);
-			$cw = '';
-
-			if (isset($this->fonts[$font])) {
-				$cw = &$this->fonts[$font]['cw'];
-			} elseif ($this->fontCache->has($font . '.cw.dat')) {
-				$cw = $this->fontCache->load($font . '.cw.dat');
-			} else {
-				$prevFontFamily = $this->FontFamily;
-				$prevFontStyle = $this->currentfontstyle;
-				$prevFontSizePt = $this->FontSizePt;
-				$this->SetFont($bsf, '', '', false);
-				$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-				if (isset($this->fonts[$font])) {
-					$cw = &$this->fonts[$font]['cw'];
-				}
-			}
+			$cw = $this->fontSubstitution->widths($font);
 
 			if (!$cw) {
 				continue;
@@ -25865,22 +25908,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			if (isset($this->CurrentFont['sipext']) && $this->CurrentFont['sipext']) {
 				$font = $this->CurrentFont['sipext'];
 				unset($cw);
-				$cw = '';
-
-				if (isset($this->fonts[$font])) {
-					$cw = &$this->fonts[$font]['cw'];
-				} elseif ($this->fontCache->has($font . '.cw.dat')) {
-					$cw = $this->fontCache->load($font . '.cw.dat');
-				} else {
-					$prevFontFamily = $this->FontFamily;
-					$prevFontStyle = $this->currentfontstyle;
-					$prevFontSizePt = $this->FontSizePt;
-					$this->SetFont($font, '', '', false);
-					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-					if (isset($this->fonts[$font])) {
-						$cw = &$this->fonts[$font]['cw'];
-					}
-				}
+				$cw = $this->fontSubstitution->widths($font);
 
 				if (!$cw) {
 					return 0;
@@ -25917,22 +25945,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				unset($cw);
-				$cw = '';
-
-				if (isset($this->fonts[$font])) {
-					$cw = &$this->fonts[$font]['cw'];
-				} elseif ($this->fontCache->has($font . '.cw.dat')) {
-					$cw = $this->fontCache->load($font . '.cw.dat');
-				} else {
-					$prevFontFamily = $this->FontFamily;
-					$prevFontStyle = $this->currentfontstyle;
-					$prevFontSizePt = $this->FontSizePt;
-					$this->SetFont($font, '', '', false);
-					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-					if (isset($this->fonts[$font])) {
-						$cw = &$this->fonts[$font]['cw'];
-					}
-				}
+				$cw = $this->fontSubstitution->widths($font);
 
 				if (!$cw) {
 					return 0;
@@ -26026,22 +26039,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 
 			unset($cw);
-			$cw = '';
-
-			if (isset($this->fonts[$font])) {
-				$cw = &$this->fonts[$font]['cw'];
-			} elseif ($this->fontCache->has($font . '.cw.dat')) {
-				$cw = $this->fontCache->load($font . '.cw.dat');
-			} else {
-				$prevFontFamily = $this->FontFamily;
-				$prevFontStyle = $this->currentfontstyle;
-				$prevFontSizePt = $this->FontSizePt;
-				$this->SetFont($bsf, '', '', false);
-				$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-				if (isset($this->fonts[$font])) {
-					$cw = &$this->fonts[$font]['cw'];
-				}
-			}
+			$cw = $this->fontSubstitution->widths($font);
 
 			if (!$cw) {
 				continue;
