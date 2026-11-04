@@ -76,6 +76,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $PDFX;
 	var $PDFXauto;
 
+	/**
+	 * @var string[][] The operator SetColor() writes for a colour, by type and then colour
+	 */
+	private $deviceColorOperators = [];
+
 	var $PDFA;
 	var $PDFAversion;
 	var $PDFAauto;
@@ -3366,6 +3371,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (!$col) {
 			return '';
 		} // mPDF 6
+
+		if (isset($this->deviceColorOperators[$type][$col])) {
+			return $this->deviceColorOperators[$type][$col];
+		}
+
 		if ($col[0] == 3 || $col[0] == 5) { // RGB / RGBa
 			$out = sprintf('%.3F %.3F %.3F rg', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255);
 		} elseif ($col[0] == 1) { // GRAYSCALE
@@ -3381,6 +3391,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		elseif ($type == 'CodeOnly') {
 			$out = preg_replace('/\s(rg|g|k)/', '', $out);
 		}
+		$this->deviceColorOperators[$type][$col] = $out;
+
 		return $out;
 	}
 
