@@ -27,6 +27,73 @@ class ReleaseFinishedTests implements TestListener
 	private $collectedAt = 0;
 
 	/**
+	 * @var bool Whether the suites have let go of their lists of declared classes
+	 */
+	private $suitesReleased = false;
+
+	/**
+	 * Before the first test runs, empty the list of declared classes each suite took when it was built.
+	 *
+	 * PHPUnit before 8.5 has every suite, down to the one for each data provider, keep a copy of
+	 * get_declared_classes() so it can tell which classes a test file adds. It only reads the copy while it
+	 * loads the files, but holds it for the whole run: some 1,500 copies of up to 1,100 names, up to 180MB
+	 * on PHP 5.6. Later versions keep a count instead.
+	 *
+	 * @param \PHPUnit\Framework\TestSuite $suite
+	 */
+	public function start_test_suite($suite)
+	{
+		if ($this->suitesReleased) {
+			return;
+		}
+
+		$this->suitesReleased = true;
+
+		$property = self::declaredClassesProperty();
+		if ($property !== null) {
+			$this->releaseDeclaredClasses($suite, $property);
+		}
+	}
+
+	/**
+	 * The suite's copy of the declared classes, readable from outside, or null where this PHPUnit keeps a count instead
+	 *
+	 * @return \ReflectionProperty|null
+	 */
+	public static function declaredClassesProperty()
+	{
+		$owner = class_exists('PHPUnit_Framework_TestSuite', false) ? 'PHPUnit_Framework_TestSuite' : 'PHPUnit\Framework\TestSuite';
+		if (!property_exists($owner, 'declaredClasses')) {
+			return null;
+		}
+
+		$property = new \ReflectionProperty($owner, 'declaredClasses');
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
+
+		return $property;
+	}
+
+	/**
+	 * Empty the list of declared classes of $suite and of every suite inside it
+	 *
+	 * @param \PHPUnit\Framework\TestSuite $suite
+	 * @param \ReflectionProperty $property
+	 */
+	private function releaseDeclaredClasses($suite, \ReflectionProperty $property)
+	{
+		$property->setValue($suite, null);
+
+		$owner = $property->class;
+		foreach ($suite->tests() as $test) {
+			if ($test instanceof $owner) {
+				$this->releaseDeclaredClasses($test, $property);
+			}
+		}
+	}
+
+	/**
 	 * Empty the properties the test class and its parents declare, leaving those of PHPUnit and the
 	 * polyfills, which PHPUnit still reads to report the result, then collect the cycles if enough are waiting.
 	 *
