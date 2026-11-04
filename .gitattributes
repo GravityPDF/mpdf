@@ -24,6 +24,10 @@ tests/data/otldump/** text eol=lf
 tests/data/shaping/** text eol=lf
 tests/data/subset/** text eol=lf
 
+# The ranges files a font package ships are compared in the same way with what
+# composer ranges:update writes for the font, so they keep "\n" on Windows too.
+packages/*/fonts/*.ranges.php text eol=lf
+
 # Denote all files that are truly binary and should not be modified.
 *.png binary
 *.jpg binary

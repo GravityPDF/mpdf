@@ -49,11 +49,14 @@ abstract class Snapshot extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	 * version in the Producer, and streams left uncompressed so a fixture's diff is readable. $config adds to that,
 	 * or overrides it.
 	 *
+	 * @param array                                     $config
+	 * @param \Mpdf\Container\ContainerInterface|null $container
+	 *
 	 * @return Mpdf
 	 */
-	protected function createMpdf(array $config = [])
+	protected function createMpdf(array $config = [], $container = null)
 	{
-		$mpdf = new Mpdf($config + ['creationDate' => self::CREATION_DATE, 'exposeVersion' => false]);
+		$mpdf = new Mpdf($config + ['creationDate' => self::CREATION_DATE, 'exposeVersion' => false], $container);
 		$mpdf->SetCompression(false);
 
 		return $mpdf;
