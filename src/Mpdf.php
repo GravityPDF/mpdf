@@ -8076,6 +8076,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$clen = count($chars);
 		}
 
+		// The width a line can take, after its indent, the padding and any floats. None of that changes until the line
+		// breaks, so it is worked out at the line's first character and kept until then
+		$lineLimit = null;
+		$WidthCorrection = 0;
+
 		// for every character in the string
 		for ($i = 0; $i < $clen; $i++) {
 			// extract the current character
@@ -8123,55 +8128,60 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				continue;
 			}
 
-			// Paragraph INDENT
-			$WidthCorrection = 0;
-			if (($newblock) && ($blockstate == 1 || $blockstate == 3) && isset($this->blk[$this->blklvl]['text_indent']) && ($lineCount == 0) && (!$is_table) && ($align != 'C')) {
-				$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
-				$WidthCorrection = ($ti * Mpdf::SCALE);
-			}
-			// OUTDENT
-			foreach ($this->objectbuffer as $k => $objattr) {   // mPDF 6 DOTTAB
-				if ($objattr['type'] == 'dottab') {
-					$WidthCorrection -= ($objattr['outdent'] * Mpdf::SCALE);
-					break;
+			if ($lineLimit === null) {
+				// Paragraph INDENT
+				$WidthCorrection = 0;
+				if (($newblock) && ($blockstate == 1 || $blockstate == 3) && isset($this->blk[$this->blklvl]['text_indent']) && ($lineCount == 0) && (!$is_table) && ($align != 'C')) {
+					$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
+					$WidthCorrection = ($ti * Mpdf::SCALE);
 				}
-			}
-
-
-			// Added mPDF 3.0 Float DIV
-			$fpaddingR = 0;
-			$fpaddingL = 0;
-			/* -- CSS-FLOAT -- */
-			if ($this->floatDivs) {
-				list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->GetFloatDivInfo($this->blklvl);
-				if ($r_exists) {
-					$fpaddingR = $r_width;
+				// OUTDENT
+				foreach ($this->objectbuffer as $k => $objattr) {   // mPDF 6 DOTTAB
+					if ($objattr['type'] == 'dottab') {
+						$WidthCorrection -= ($objattr['outdent'] * Mpdf::SCALE);
+						break;
+					}
 				}
-				if ($l_exists) {
-					$fpaddingL = $l_width;
+
+
+				// Added mPDF 3.0 Float DIV
+				$fpaddingR = 0;
+				$fpaddingL = 0;
+				/* -- CSS-FLOAT -- */
+				if ($this->floatDivs) {
+					list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->GetFloatDivInfo($this->blklvl);
+					if ($r_exists) {
+						$fpaddingR = $r_width;
+					}
+					if ($l_exists) {
+						$fpaddingL = $l_width;
+					}
 				}
-			}
-			/* -- END CSS-FLOAT -- */
+				/* -- END CSS-FLOAT -- */
 
-			$usey = $this->y + 0.002;
-			if (($newblock) && ($blockstate == 1 || $blockstate == 3) && ($lineCount == 0)) {
-				$usey += $this->blk[$this->blklvl]['margin_top'] + $this->blk[$this->blklvl]['padding_top'] + $this->blk[$this->blklvl]['border_top']['w'];
-			}
+				$usey = $this->y + 0.002;
+				if (($newblock) && ($blockstate == 1 || $blockstate == 3) && ($lineCount == 0)) {
+					$usey += $this->blk[$this->blklvl]['margin_top'] + $this->blk[$this->blklvl]['padding_top'] + $this->blk[$this->blklvl]['border_top']['w'];
+				}
 
-			/* -- CSS-IMAGE-FLOAT -- */
-			// If float exists at this level
-			if (isset($this->floatmargins['R']) && $usey <= $this->floatmargins['R']['y1'] && $usey >= $this->floatmargins['R']['y0'] && !$this->floatmargins['R']['skipline']) {
-				$fpaddingR += $this->floatmargins['R']['w'];
+				/* -- CSS-IMAGE-FLOAT -- */
+				// If float exists at this level
+				if (isset($this->floatmargins['R']) && $usey <= $this->floatmargins['R']['y1'] && $usey >= $this->floatmargins['R']['y0'] && !$this->floatmargins['R']['skipline']) {
+					$fpaddingR += $this->floatmargins['R']['w'];
+				}
+				if (isset($this->floatmargins['L']) && $usey <= $this->floatmargins['L']['y1'] && $usey >= $this->floatmargins['L']['y0'] && !$this->floatmargins['L']['skipline']) {
+					$fpaddingL += $this->floatmargins['L']['w'];
+				}
+				/* -- END CSS-IMAGE-FLOAT -- */
+
+				$lineLimit = $maxWidth - $WidthCorrection - (($this->cMarginL + $this->cMarginR) * Mpdf::SCALE) - ($paddingL + $paddingR + (($fpaddingL + $fpaddingR) * Mpdf::SCALE) ) + 0.001; // 0.001 is to correct for deviations converting mm=>pts
 			}
-			if (isset($this->floatmargins['L']) && $usey <= $this->floatmargins['L']['y1'] && $usey >= $this->floatmargins['L']['y0'] && !$this->floatmargins['L']['skipline']) {
-				$fpaddingL += $this->floatmargins['L']['w'];
-			}
-			/* -- END CSS-IMAGE-FLOAT -- */
 
 
 			// try adding another char
-			if (( $contentWidth + $cw > $maxWidth - $WidthCorrection - (($this->cMarginL + $this->cMarginR) * Mpdf::SCALE) - ($paddingL + $paddingR + (($fpaddingL + $fpaddingR) * Mpdf::SCALE) ) + 0.001)) {// 0.001 is to correct for deviations converting mm=>pts
+			if ($contentWidth + $cw > $lineLimit) {
 				// it won't fit, output what we already have
+				$lineLimit = null;
 				$lineCount++;
 
 				// contains any content that didn't make it into this print
