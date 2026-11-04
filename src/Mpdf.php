@@ -25740,7 +25740,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		foreach ($this->backupSubsFont as $bsfctr => $bsf) {
 
-			if ($this->fonttrans[$bsf] == 'chelvetica' || $this->fonttrans[$bsf] == 'ctimes' || $this->fonttrans[$bsf] == 'ccourier') {
+			if (isset($this->fonttrans[$bsf]) && in_array($this->fonttrans[$bsf], ['chelvetica', 'ctimes', 'ccourier'])) {
 				continue;
 			}
 
@@ -25758,6 +25758,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$prevFontSizePt = $this->FontSizePt;
 				$this->SetFont($bsf, '', '', false);
 				$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+				if (isset($this->fonts[$font])) {
+					$cw = &$this->fonts[$font]['cw'];
+				}
 			}
 
 			if (!$cw) {
@@ -25874,6 +25877,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$prevFontSizePt = $this->FontSizePt;
 					$this->SetFont($font, '', '', false);
 					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+					if (isset($this->fonts[$font])) {
+						$cw = &$this->fonts[$font]['cw'];
+					}
 				}
 
 				if (!$cw) {
@@ -25921,8 +25927,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$prevFontFamily = $this->FontFamily;
 					$prevFontStyle = $this->currentfontstyle;
 					$prevFontSizePt = $this->FontSizePt;
-					$this->SetFont($this->backupSIPFont, '', '', false);
+					$this->SetFont($font, '', '', false);
 					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
+					if (isset($this->fonts[$font])) {
+						$cw = &$this->fonts[$font]['cw'];
+					}
 				}
 
 				if (!$cw) {
@@ -26029,8 +26038,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$prevFontSizePt = $this->FontSizePt;
 				$this->SetFont($bsf, '', '', false);
 				$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-				if ($this->fontCache->has($font . '.cw.dat')) {
-					$cw = $this->fontCache->load($font . '.cw.dat');
+				if (isset($this->fonts[$font])) {
+					$cw = &$this->fonts[$font]['cw'];
 				}
 			}
 
