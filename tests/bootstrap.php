@@ -12,9 +12,6 @@ namespace Mpdf;
  * @since      GPL-2.0
  */
 
+// No Mpdf instance is made here. PHPUnit before 8.5 has every suite it builds keep a copy of the list of declared
+// classes, so each class loaded before the suite is built costs memory in all of them
 require_once __DIR__ . '/../vendor/autoload.php';
-
-// Create a new instance of the mPDF class
-// We do this here to force the autoloader to include the actual file and its constants
-// It means tests will have access to all of mPDF's constants without first creating a new instance (and everything is loaded)
-new Mpdf();
