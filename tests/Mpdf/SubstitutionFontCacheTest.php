@@ -58,7 +58,7 @@ class SubstitutionFontCacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 		$mpdf = $this->createMpdf();
 		$mpdf->WriteHTML('<p style="font-family: garuda">Next &#x20000; then &#x21D2; &#x101;</p>');
 
-		$this->assertArrayHasKey(0x20000, $mpdf->fonts['dejavusans']['subset']);
+		$this->assertContains(0x20000, call_user_func_array('array_merge', $mpdf->fonts['sun-extb']['subsets']));
 		$this->assertArrayHasKey('csymbol', $mpdf->fonts);
 		$this->assertArrayNotHasKey(0x21D2, $mpdf->fonts['garuda']['subset']);
 		$this->assertArrayHasKey(0x101, $mpdf->fonts['dejavusanscondensed']['subset']);
@@ -85,7 +85,7 @@ class SubstitutionFontCacheTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 		return new Mpdf(array_merge([
 			'tempDir' => $this->tempDir,
 			'useSubstitutions' => true,
-			'backupSIPFont' => 'dejavusans',
+			'backupSIPFont' => 'sun-extb',
 			'backupSubsFont' => ['dejavusanscondensed'],
 		], $config));
 	}
