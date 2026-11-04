@@ -157,6 +157,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	private $usesCalibratedGray = false;
 
+	/**
+	 * @var string[][] The operator SetColor() writes for a colour in a device colour space, by type and then colour
+	 */
+	private $deviceColorOperators = [];
+
 	var $PDFA;
 	var $PDFAversion;
 	var $PDFAauto;
@@ -4058,6 +4063,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				: sprintf('/%s cs %s sc', $calibrated[0], $calibrated[1]);
 		}
 
+		if (isset($this->deviceColorOperators[$type][$col])) {
+			return $this->deviceColorOperators[$type][$col];
+		}
+
 		if ($col[0] == 3 || $col[0] == 5) { // RGB / RGBa
 			$out = sprintf('%.3F %.3F %.3F rg', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255);
 		} elseif ($col[0] == 1) { // GRAYSCALE
@@ -4073,6 +4082,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		elseif ($type == 'CodeOnly') {
 			$out = preg_replace('/\s(rg|g|k)/', '', $out);
 		}
+		$this->deviceColorOperators[$type][$col] = $out;
+
 		return $out;
 	}
 
@@ -28747,8 +28758,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$snapshot = $this->snapshotOwnState();
 
 		// The loader caches stay live: the pass being unwound only adds to them and the pass that follows needs every
-		// entry. So does the counter that numbers fonts alongside them, and the reference into one of them
-		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont']);
+		// entry. So does the counter that numbers fonts alongside them, the reference into one of them, and the colour
+		// operators SetColor() has built
+		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators']);
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();

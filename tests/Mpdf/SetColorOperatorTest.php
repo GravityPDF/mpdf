@@ -1,0 +1,124 @@
+<?php
+
+namespace Mpdf;
+
+use Mpdf\Color\ColorConverter;
+use Mpdf\Color\ColorModeConverter;
+use Mpdf\Color\ColorSpaceRestrictor;
+use Mpdf\Writer\BaseWriter;
+
+/**
+ * SetColor() keeps the operator it builds for a colour in a device colour space, so that the next
+ * time the colour is set the operator is not built again. What it keeps is told apart by the type
+ * of operator asked for, and the colour spaces that PDF/X-4 calls for are still decided on each call.
+ */
+class SetColorOperatorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
+{
+
+	/**
+	 * @var Mpdf
+	 */
+	private $mpdf;
+
+	/**
+	 * @var ColorConverter
+	 */
+	private $colorConverter;
+
+	/**
+	 * A document the colours are set in, and a converter for the colours set in it.
+	 */
+	protected function set_up()
+	{
+		parent::set_up();
+
+		$this->mpdf = new Mpdf(['mode' => 'utf-8']);
+		$colorModeConverter = new ColorModeConverter();
+		$this->colorConverter = new ColorConverter($this->mpdf, $colorModeConverter, new ColorSpaceRestrictor($this->mpdf, $colorModeConverter));
+	}
+
+	/**
+	 * Lets go of the document.
+	 */
+	protected function tear_down()
+	{
+		$this->mpdf->cleanup();
+		$this->mpdf = null;
+		$this->colorConverter = null;
+
+		parent::tear_down();
+	}
+
+	/**
+	 * The same colour set for filling, stroking, text and as bare components gives each its own operator,
+	 * whichever was asked for first and however often.
+	 */
+	public function testEachTypeOfOperatorIsKeptApart()
+	{
+		$red = $this->colorConverter->convert('#ff0000');
+		$expected = [
+			'Fill' => '1.000 0.000 0.000 rg',
+			'Draw' => '1.000 0.000 0.000 RG',
+			'Text' => '1.000 0.000 0.000 rg',
+			'CodeOnly' => '1.000 0.000 0.000',
+		];
+
+		foreach ([1, 2] as $round) {
+			foreach ($expected as $type => $operator) {
+				$this->assertSame($operator, $this->mpdf->SetColor($red, $type), $type . ', round ' . $round);
+			}
+		}
+	}
+
+	/**
+	 * Two colours that differ in one component, and the same components in two colour spaces, each keep their
+	 * own operator.
+	 */
+	public function testEachColourIsKeptApart()
+	{
+		$colours = [
+			'#ff0000' => '1.000 0.000 0.000 rg',
+			'#ff0001' => '1.000 0.000 0.004 rg',
+			'#808080' => '0.502 0.502 0.502 rg',
+			'cmyk(0, 100, 100, 0)' => '0.000 1.000 1.000 0.000 k',
+			'0' => '0.000 g',
+		];
+
+		foreach ([1, 2] as $round) {
+			foreach ($colours as $css => $operator) {
+				$colour = $this->colorConverter->convert($css);
+				$this->assertSame($operator, $this->mpdf->SetColor($colour, 'Fill'), $css . ', round ' . $round);
+			}
+		}
+	}
+
+	/**
+	 * A colour set in DeviceRGB is set in the calibrated sRGB space once the document is made PDF/X-4, and in
+	 * DeviceRGB again once it is not.
+	 */
+	public function testTheCalibratedSpaceIsDecidedOnEveryCall()
+	{
+		$red = $this->colorConverter->convert('#ff0000');
+		$this->assertSame('1.000 0.000 0.000 rg', $this->mpdf->SetColor($red, 'Fill'));
+
+		$this->mpdf->PDFX = true;
+		$this->mpdf->PDFXversion = '4';
+		$this->assertSame('/' . BaseWriter::CALIBRATED_RGB . ' cs 1.000 0.000 0.000 sc', $this->mpdf->SetColor($red, 'Fill'));
+		$this->assertTrue($this->mpdf->usesCalibratedRgb());
+
+		$this->mpdf->PDFX = false;
+		$this->assertSame('1.000 0.000 0.000 rg', $this->mpdf->SetColor($red, 'Fill'));
+	}
+
+	/**
+	 * The operators are a cache, so a measuring pass that is unwound leaves them for the pass after it, as it leaves
+	 * the fonts and images it loaded.
+	 */
+	public function testAnUnwoundPassKeepsTheOperators()
+	{
+		$this->mpdf->SetColor($this->colorConverter->convert('#ff0000'), 'Fill');
+
+		$this->assertArrayNotHasKey('deviceColorOperators', $this->mpdf->getStateSnapshot());
+	}
+
+}
