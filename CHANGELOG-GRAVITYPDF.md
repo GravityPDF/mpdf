@@ -395,6 +395,7 @@ Bugfixes
 * Since mPDF 7.1.8, the `Ascent`, `Descent` and `Leading` overrides in `fontdata` had no effect, and `TTCfontID` always picked the first font of a collection. [#321] [#322]
 * Font substitution moved characters the document font has into the backup font. A space between two emoji was drawn in the emoji font and left an emoji-sized gap. [#303]
 * A backup font that the substitution scan tried and rejected was still added to the document, so the same document gave different bytes with a cold and a warm font cache. [#315] [#318] [#342] [#381]
+* Text in a core font such as `chelvetica` that the core font cannot draw, like Cyrillic, came out as question marks the first time its backup font was used with nothing of that font in the font cache. With more than one backup font it went to a later one instead. Rendering again worked. [#829]
 * A run of Plane 2 characters next to a newline was not moved into its SIP font, and text after the newline could be dropped. [#411]
 * `haskernGPOS` was read for core fonts, which have no GPOS. [#141] [#149]
 * Core-font text is held in Windows-1252 but was decoded as UTF-8 when given bidi data, which dropped some bytes such as a lone `0xA0`. [#383]
@@ -1047,3 +1048,4 @@ These changes do not change output.
 [#589]: https://github.com/GravityPDF/mpdf/issues/589
 [#693]: https://github.com/GravityPDF/mpdf/pull/693
 [#703]: https://github.com/GravityPDF/mpdf/issues/703
+[#829]: https://github.com/GravityPDF/mpdf/issues/829
