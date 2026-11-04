@@ -26747,30 +26747,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->backupSubsFont = ["$this->backupSubsFont"];
 		}
 
-		foreach ($this->backupSubsFont as $bsfctr => $bsf) {
+		foreach ($this->backupSubsFont as $bsfctr => $font) {
 
-			// A backup font that is a core font's name draws nothing a core font does not
-			if (isset($this->fonttrans[$bsf]) && in_array($this->fonttrans[$bsf], ['chelvetica', 'ctimes', 'ccourier'], true)) {
-				continue;
-			}
-
-			$font = $bsf;
+			// $cw still points at the current font's widths: let go of it before reading the backup font's.
+			// Its widths are read whether or not the font is loaded or cached. A fonttrans alias, such as
+			// a core font's name, has none, so it is passed over: it draws nothing a core font does not
 			unset($cw);
-			$cw = '';
-
-			if (isset($this->fonts[$font])) {
-				$cw = &$this->fonts[$font]['cw'];
-			} else {
-				$cw = $this->fontCache->loadIfPresent($font . '.cw.dat');
-
-				if (null === $cw) {
-					$prevFontFamily = $this->FontFamily;
-					$prevFontStyle = $this->currentfontstyle;
-					$prevFontSizePt = $this->FontSizePt;
-					$this->SetFont($bsf, '', '', false);
-					$this->SetFont($prevFontFamily, $prevFontStyle, $prevFontSizePt, false);
-				}
-			}
+			$cw = $this->fontSubstitution->widths($font);
 
 			if (!$cw) {
 				continue;
