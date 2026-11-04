@@ -8,14 +8,6 @@ namespace Snapshots;
 class SipSubstitutionSnapshotTest extends Snapshot
 {
 	/**
-	 * Fonts the document substitutes into, whose cached metrics are removed so it renders with each
-	 * of them for the first time.
-	 *
-	 * @var string[]
-	 */
-	private $uncachedFonts = ['garuda', 'sun-extb', 'dejavusanscondensed'];
-
-	/**
 	 * @return string A unique identifier / name for the snapshot
 	 */
 	public function getId()
@@ -38,7 +30,12 @@ class SipSubstitutionSnapshotTest extends Snapshot
 			'backupSubsFont' => ['dejavusanscondensed'],
 		]);
 
-		$this->removeCachedMetrics($this->mpdf->tempDir . '/mpdf/ttfontdata');
+		// Render with each font for the first time
+		foreach (['garuda', 'sun-extb', 'dejavusanscondensed'] as $font) {
+			foreach ((array) glob($this->mpdf->tempDir . '/mpdf/ttfontdata/' . $font . '.*') as $file) {
+				unlink($file);
+			}
+		}
 
 		$this->mpdf->WriteHTML('
 			<p>The Garuda paragraph below is rendered with the font cache empty for Garuda, Sun-ExtB and DejaVu Sans Condensed.
@@ -47,19 +44,5 @@ class SipSubstitutionSnapshotTest extends Snapshot
 			Before the fix, all three were missing glyphs.</p>
 			<p style="font-family: garuda; font-size: 24pt">Next &#x20000; then &#x21D2; &#x101;</p>
 		');
-	}
-
-	/**
-	 * Removes every cached metrics file of the fonts the document substitutes into.
-	 *
-	 * @param string $directory The font cache directory
-	 */
-	private function removeCachedMetrics($directory)
-	{
-		foreach ($this->uncachedFonts as $font) {
-			foreach ((array) glob($directory . '/' . $font . '.*') as $file) {
-				unlink($file);
-			}
-		}
 	}
 }
