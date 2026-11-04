@@ -76,6 +76,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $PDFX;
 	var $PDFXauto;
 
+	/**
+	 * @var string[][] The operator SetColor() writes for a colour, by type and then colour
+	 */
+	private $deviceColorOperators = [];
+
 	var $PDFA;
 	var $PDFAversion;
 	var $PDFAauto;
@@ -3366,6 +3371,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (!$col) {
 			return '';
 		} // mPDF 6
+
+		if (isset($this->deviceColorOperators[$type][$col])) {
+			return $this->deviceColorOperators[$type][$col];
+		}
+
 		if ($col[0] == 3 || $col[0] == 5) { // RGB / RGBa
 			$out = sprintf('%.3F %.3F %.3F rg', ord($col[1]) / 255, ord($col[2]) / 255, ord($col[3]) / 255);
 		} elseif ($col[0] == 1) { // GRAYSCALE
@@ -3381,6 +3391,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		elseif ($type == 'CodeOnly') {
 			$out = preg_replace('/\s(rg|g|k)/', '', $out);
 		}
+		$this->deviceColorOperators[$type][$col] = $out;
+
 		return $out;
 	}
 
@@ -3475,6 +3487,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $out;
 	}
 
+	/**
+	 * codePointsWidth() has this inlined for the characters it measures, so a change here belongs there too.
+	 */
 	function _getCharWidth(&$cw, $u, $isdef = true)
 	{
 		$w = 0;
@@ -3544,9 +3559,22 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		// Get width of a single character in the current Non-Core font
 		$c = (string) $c;
-		$w = 0;
 		$unicode = $this->UTF8StringToArray($c, $addSubset);
-		$char = $unicode[0];
+
+		return $this->codePointWidthNonCore($unicode[0], $c == ' ');
+	}
+
+	/**
+	 * Width of one code point in the current non-core font, in user units.
+	 *
+	 * @param int $char The code point.
+	 * @param bool $isSpace Whether the character is a space, which also takes the word spacing.
+	 *
+	 * @return float|int
+	 */
+	private function codePointWidthNonCore($char, $isSpace)
+	{
+		$w = 0;
 		/* -- CJK-FONTS -- */
 		if ($this->CurrentFont['type'] == 'Type0') { // CJK Adobe fonts
 			if ($char == 173) {
@@ -3591,14 +3619,40 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // *CJK-FONTS*
 		$w *= ($this->FontSize / 1000);
 		if ($this->minwSpacing || $this->fixedlSpacing) {
-			if ($c == ' ') {
-				$nb_spaces = 1;
-			} else {
-				$nb_spaces = 0;
-			}
-			$w += $this->fixedlSpacing + ($nb_spaces * $this->minwSpacing);
+			$w += $this->fixedlSpacing + ($isSpace ? $this->minwSpacing : 0);
 		}
 		return ($w);
+	}
+
+	/**
+	 * Split a UTF-8 string into its characters and their code points, index for index.
+	 *
+	 * UTF8StringToArray() skips stray bytes that mb_substr() counts as characters, so a string that is not
+	 * valid UTF-8 is split one mb_substr() character at a time, as WriteFlowingBlock() always did.
+	 *
+	 * @param string $s
+	 *
+	 * @return array The characters, then the code points.
+	 */
+	private function splitCharacters($s)
+	{
+		$chars = preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);
+		if ($chars !== false) {
+			// Valid UTF-8, so the code points are what UTF8StringToArray() would give, decoded in C
+			return [$chars, $chars ? array_values(unpack('N*', mb_convert_encoding($s, 'UTF-32BE', 'UTF-8'))) : []];
+		}
+
+		$chars = [];
+		$codePoints = [];
+		$clen = mb_strlen($s, $this->mb_enc);
+		for ($i = 0; $i < $clen; $i++) {
+			$c = mb_substr($s, $i, 1, $this->mb_enc);
+			$unicode = $this->UTF8StringToArray($c, false);
+			$chars[] = $c;
+			$codePoints[] = isset($unicode[0]) ? $unicode[0] : null;
+		}
+
+		return [$chars, $codePoints];
 	}
 
 	function GetCharWidth($c, $addSubset = true)
@@ -3615,126 +3669,39 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	// mPDF 5.7.1
 		// Get width of a string in the current font
 		$s = (string) $s;
+
+		if (!$this->usingCoreFont) {
+			return $this->codePointsWidth($this->decodeForWidth($s, $addSubset), $OTLdata, $textvar, $includeKashida);
+		}
+
+		$s = $this->replaceIterationAliases($s);
+
 		$cw = &$this->CurrentFont['cw'];
 		$w = 0;
 		$kerning = 0;
-		$lastchar = 0;
-		$nb_carac = 0;
 		$nb_spaces = 0;
-		$kashida = 0;
-		// mPDF ITERATION
-		if ($this->iterationCounter) {
-			$s = preg_replace('/{iteration ([a-zA-Z0-9_]+)}/', '\\1', $s);
+		if ($this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
+			$s = str_replace(chr(173), '', $s);
 		}
-		if (!$this->usingCoreFont) {
-			$discards = substr_count($s, "\xc2\xad"); // mPDF 6 soft hyphens [U+00AD]
-			$unicode = $this->UTF8StringToArray($s, $addSubset);
-			if ($this->minwSpacing || $this->fixedlSpacing) {
-				$nb_spaces = mb_substr_count($s, ' ', $this->mb_enc);
-				$nb_carac = count($unicode) - $discards; // mPDF 6
-				// mPDF 5.7.1
-				// Use GPOS OTL
-				if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
-					if (isset($OTLdata['group']) && $OTLdata['group']) {
-						$nb_carac -= substr_count($OTLdata['group'], 'M');
-					}
+		$nb_carac = $l = strlen($s);
+		if ($this->minwSpacing || $this->fixedlSpacing) {
+			$nb_spaces = substr_count($s, ' ');
+		}
+		for ($i = 0; $i < $l; $i++) {
+			if (($textvar & TextVars::FC_SMALLCAPS) && isset($this->upperCase[ord($s[$i])])) {  // mPDF 5.7.1
+				$charw = $cw[chr($this->upperCase[ord($s[$i])])];
+				if ($charw !== false) {
+					$charw = $charw * $this->smCapsScale * $this->smCapsStretch / 100;
+					$w+=$charw;
 				}
+			} elseif (isset($cw[$s[$i]])) {
+				$w += $cw[$s[$i]];
+			} elseif (isset($cw[ord($s[$i])])) {
+				$w += $cw[ord($s[$i])];
 			}
-			/* -- CJK-FONTS -- */
-			if ($this->CurrentFont['type'] == 'Type0') { // CJK Adobe fonts
-				foreach ($unicode as $char) {
-					if ($char == 0x00AD) {
-						continue;
-					} // mPDF 6 soft hyphens [U+00AD]
-					if (isset($cw[$char])) {
-						$w+=$cw[$char];
-					} elseif (isset($this->CurrentFont['MissingWidth'])) {
-						$w += $this->CurrentFont['MissingWidth'];
-					} else {
-						$w += 500;
-					}
-				}
-			} else {
-				/* -- END CJK-FONTS -- */
-				foreach ($unicode as $i => $char) {
-					if ($char == 0x00AD) {
-						continue;
-					} // mPDF 6 soft hyphens [U+00AD]
-					if (($textvar & TextVars::FC_SMALLCAPS) && isset($this->upperCase[$char])) {
-						$charw = $this->_getCharWidth($cw, $this->upperCase[$char]);
-						if ($charw !== false) {
-							$charw = $charw * $this->smCapsScale * $this->smCapsStretch / 100;
-							$w+=$charw;
-						} elseif (isset($this->CurrentFont['desc']['MissingWidth'])) {
-							$w += $this->CurrentFont['desc']['MissingWidth'];
-						} elseif (isset($this->CurrentFont['MissingWidth'])) {
-							$w += $this->CurrentFont['MissingWidth'];
-						} else {
-							$w += 500;
-						}
-					} else {
-						$charw = $this->_getCharWidth($cw, $char);
-						if ($charw !== false) {
-							$w+=$charw;
-						} elseif (isset($this->CurrentFont['desc']['MissingWidth'])) {
-							$w += $this->CurrentFont['desc']['MissingWidth'];
-						} elseif (isset($this->CurrentFont['MissingWidth'])) {
-							$w += $this->CurrentFont['MissingWidth'];
-						} else {
-							$w += 500;
-						}
-						// mPDF 5.7.1
-						// Use GPOS OTL
-						// ...GetStringWidth...
-						if (isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0xFF) && !empty($OTLdata)) {
-							if (isset($OTLdata['GPOSinfo'][$i]['wDir']) && $OTLdata['GPOSinfo'][$i]['wDir'] == 'RTL') {
-								if (isset($OTLdata['GPOSinfo'][$i]['XAdvanceR']) && $OTLdata['GPOSinfo'][$i]['XAdvanceR']) {
-									$w += $OTLdata['GPOSinfo'][$i]['XAdvanceR'] * 1000 / $this->CurrentFont['unitsPerEm'];
-								}
-							} else {
-								if (isset($OTLdata['GPOSinfo'][$i]['XAdvanceL']) && $OTLdata['GPOSinfo'][$i]['XAdvanceL']) {
-									$w += $OTLdata['GPOSinfo'][$i]['XAdvanceL'] * 1000 / $this->CurrentFont['unitsPerEm'];
-								}
-							}
-							// Kashida from GPOS
-							// Kashida is set as an absolute length value (already set as a proportion based on useKashida %)
-							if ($includeKashida && isset($OTLdata['GPOSinfo'][$i]['kashida_space']) && $OTLdata['GPOSinfo'][$i]['kashida_space']) {
-								$kashida += $OTLdata['GPOSinfo'][$i]['kashida_space'];
-							}
-						}
-						if (($textvar & TextVars::FC_KERNING) && $lastchar) {
-							if (isset($this->CurrentFont['kerninfo'][$lastchar][$char])) {
-								$kerning += $this->CurrentFont['kerninfo'][$lastchar][$char];
-							}
-						}
-						$lastchar = $char;
-					}
-				}
-			} // *CJK-FONTS*
-		} else {
-			if ($this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
-				$s = str_replace(chr(173), '', $s);
-			}
-			$nb_carac = $l = strlen($s);
-			if ($this->minwSpacing || $this->fixedlSpacing) {
-				$nb_spaces = substr_count($s, ' ');
-			}
-			for ($i = 0; $i < $l; $i++) {
-				if (($textvar & TextVars::FC_SMALLCAPS) && isset($this->upperCase[ord($s[$i])])) {  // mPDF 5.7.1
-					$charw = $cw[chr($this->upperCase[ord($s[$i])])];
-					if ($charw !== false) {
-						$charw = $charw * $this->smCapsScale * $this->smCapsStretch / 100;
-						$w+=$charw;
-					}
-				} elseif (isset($cw[$s[$i]])) {
-					$w += $cw[$s[$i]];
-				} elseif (isset($cw[ord($s[$i])])) {
-					$w += $cw[ord($s[$i])];
-				}
-				if (($textvar & TextVars::FC_KERNING) && $i > 0) { // mPDF 5.7.1
-					if (isset($this->CurrentFont['kerninfo'][$s[($i - 1)]][$s[$i]])) {
-						$kerning += $this->CurrentFont['kerninfo'][$s[($i - 1)]][$s[$i]];
-					}
+			if (($textvar & TextVars::FC_KERNING) && $i > 0) { // mPDF 5.7.1
+				if (isset($this->CurrentFont['kerninfo'][$s[($i - 1)]][$s[$i]])) {
+					$kerning += $this->CurrentFont['kerninfo'][$s[($i - 1)]][$s[$i]];
 				}
 			}
 		}
@@ -3744,9 +3711,195 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		} // mPDF 5.7.1
 		$w *= ($this->FontSize / 1000);
 		$w += (($nb_carac + $nb_spaces) * $this->fixedlSpacing) + ($nb_spaces * $this->minwSpacing);
-		$w += $kashida / Mpdf::SCALE;
 
 		return ($w);
+	}
+
+	/**
+	 * A string with its {iteration name} placeholders replaced by their names, which is the text a width is
+	 * measured on because it is the text that will be drawn.
+	 *
+	 * @param string $s
+	 *
+	 * @return string
+	 */
+	private function replaceIterationAliases($s)
+	{
+		// mPDF ITERATION
+		return $this->iterationCounter ? preg_replace('/{iteration ([a-zA-Z0-9_]+)}/', '\\1', $s) : $s;
+	}
+
+	/**
+	 * The code points GetStringWidth() measures a string as, in a non-core font.
+	 *
+	 * @param string $s
+	 * @param bool $addSubset Whether the characters join the font's subset, as UTF8StringToArray() decides.
+	 *
+	 * @return int[]
+	 */
+	private function decodeForWidth($s, $addSubset)
+	{
+		return $this->UTF8StringToArray($this->replaceIterationAliases($s), $addSubset);
+	}
+
+	/**
+	 * Width of a run of decoded code points in the current non-core font, in user units.
+	 *
+	 * This is what GetStringWidth() does once a string has been decoded, so that a caller which already
+	 * holds the code points measures them without handing the string back to be decoded again. The tests
+	 * that do not vary over the run are settled before the loop rather than made per character.
+	 *
+	 * @param int[] $unicode The code points.
+	 * @param array|false $OTLdata
+	 * @param int $textvar
+	 * @param bool $includeKashida
+	 *
+	 * @return float|int
+	 */
+	private function codePointsWidth($unicode, $OTLdata, $textvar, $includeKashida)
+	{
+		$cw = &$this->CurrentFont['cw'];
+		$w = 0;
+		$kerning = 0;
+		$kashida = 0;
+		$discards = 0;
+
+		/* -- CJK-FONTS -- */
+		if ($this->CurrentFont['type'] == 'Type0') { // CJK Adobe fonts
+			$missingWidth = isset($this->CurrentFont['MissingWidth']) ? $this->CurrentFont['MissingWidth'] : 500;
+
+			foreach ($unicode as $char) {
+				if ($char == 0x00AD) {
+					$discards++;
+					continue;
+				} // mPDF 6 soft hyphens [U+00AD]
+				$w += isset($cw[$char]) ? $cw[$char] : $missingWidth;
+			}
+		} else {
+			/* -- END CJK-FONTS -- */
+			if (isset($this->CurrentFont['desc']['MissingWidth'])) {
+				$missingWidth = $this->CurrentFont['desc']['MissingWidth'];
+			} elseif (isset($this->CurrentFont['MissingWidth'])) {
+				$missingWidth = $this->CurrentFont['MissingWidth'];
+			} else {
+				$missingWidth = 500;
+			}
+
+			// mPDF 5.7.1
+			$smallCaps = (bool) ($textvar & TextVars::FC_SMALLCAPS);
+			$smCapsFactor = $smallCaps ? $this->smCapsScale * $this->smCapsStretch / 100 : 0;
+			$kerninfo = ($textvar & TextVars::FC_KERNING) && isset($this->CurrentFont['kerninfo'])
+				? $this->CurrentFont['kerninfo']
+				: null;
+
+			// mPDF 5.7.1
+			// Use GPOS OTL
+			// ...GetStringWidth...
+			$gpos = null;
+			$gposScale = 0;
+			if (isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0xFF) && !empty($OTLdata) && isset($OTLdata['GPOSinfo'])) {
+				$gpos = $OTLdata['GPOSinfo'];
+				$gposScale = 1000 / $this->CurrentFont['unitsPerEm'];
+			}
+
+			$lastchar = 0;
+
+			foreach ($unicode as $i => $char) {
+				if ($char == 0x00AD) {
+					$discards++;
+					continue;
+				} // mPDF 6 soft hyphens [U+00AD]
+
+				if ($smallCaps && isset($this->upperCase[$char])) {
+					$charw = $this->_getCharWidth($cw, $this->upperCase[$char]);
+					$w += $charw !== false ? $charw * $smCapsFactor : $missingWidth;
+					continue;
+				}
+
+				// _getCharWidth() inlined: at one call per character of the document, the call is the cost
+				$charw = $char && isset($cw[$char * 2 + 1]) ? (ord($cw[$char * 2]) << 8) + ord($cw[$char * 2 + 1]) : 0;
+				if ($charw === 65535) {
+					$charw = 0;
+				} elseif (!$charw) {
+					$charw = $missingWidth;
+				}
+				$w += $charw;
+
+				if ($gpos !== null && isset($gpos[$i])) {
+					$charGpos = $gpos[$i];
+					if (isset($charGpos['wDir']) && $charGpos['wDir'] == 'RTL') {
+						if (isset($charGpos['XAdvanceR']) && $charGpos['XAdvanceR']) {
+							$w += $charGpos['XAdvanceR'] * $gposScale;
+						}
+					} elseif (isset($charGpos['XAdvanceL']) && $charGpos['XAdvanceL']) {
+						$w += $charGpos['XAdvanceL'] * $gposScale;
+					}
+					// Kashida from GPOS
+					// Kashida is set as an absolute length value (already set as a proportion based on useKashida %)
+					if ($includeKashida && isset($charGpos['kashida_space']) && $charGpos['kashida_space']) {
+						$kashida += $charGpos['kashida_space'];
+					}
+				}
+
+				if ($kerninfo !== null && $lastchar && isset($kerninfo[$lastchar][$char])) {
+					$kerning += $kerninfo[$lastchar][$char];
+				}
+				$lastchar = $char;
+			}
+		} // *CJK-FONTS*
+
+		$w += $kerning; // mPDF 5.7.1 - nothing is accumulated unless $textvar asked for kerning
+		$w *= ($this->FontSize / 1000);
+
+		if ($this->minwSpacing || $this->fixedlSpacing) {
+			$nbSpaces = count(array_keys($unicode, 0x20, true));
+			$nbCarac = count($unicode) - $discards; // mPDF 6
+			// mPDF 5.7.1
+			// Use GPOS OTL
+			if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
+				if (isset($OTLdata['group']) && $OTLdata['group']) {
+					$nbCarac -= substr_count($OTLdata['group'], 'M');
+				}
+			}
+			$w += (($nbCarac + $nbSpaces) * $this->fixedlSpacing) + ($nbSpaces * $this->minwSpacing);
+		}
+
+		$w += $kashida / Mpdf::SCALE;
+
+		return $w;
+	}
+
+	/**
+	 * Width of one chunk of a line, decoding it only the first time the line measures it.
+	 *
+	 * A line is measured twice, once to find where it breaks and once to draw it, and each pass hands the
+	 * same text over. $decoded holds the code points of the chunks measured so far, keyed by the text rather
+	 * than by the chunk's place on the line, so that a chunk which the line-breaking rewrote, or whose page
+	 * number has moved on, is decoded afresh instead of measured as it was.
+	 *
+	 * Decoding also puts the characters in the current font's subset, so the key carries the font too: the
+	 * same text in two fonts on one line has to reach both of their subsets.
+	 *
+	 * @param string $chunk
+	 * @param int[][][] $decoded The line's chunks decoded so far, by font and then by their text.
+	 * @param array|false $OTLdata
+	 * @param int $textvar
+	 * @param bool $includeKashida
+	 *
+	 * @return float|int
+	 */
+	private function chunkWidth($chunk, &$decoded, $OTLdata, $textvar, $includeKashida)
+	{
+		if ($this->usingCoreFont) {
+			return $this->GetStringWidth($chunk, true, $OTLdata, $textvar, $includeKashida);
+		}
+
+		$font = $this->CurrentFont['i'];
+		if (!isset($decoded[$font][$chunk])) {
+			$decoded[$font][$chunk] = $this->decodeForWidth($chunk, true);
+		}
+
+		return $this->codePointsWidth($decoded[$font][$chunk], $OTLdata, $textvar, $includeKashida);
 	}
 
 	function SetLineWidth($width)
@@ -6560,7 +6713,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$fpaddingR = 0;
 			$fpaddingL = 0;
 			/* -- CSS-FLOAT -- */
-			if (count($this->floatDivs)) {
+			if ($this->floatDivs) {
 				list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->GetFloatDivInfo($this->blklvl);
 				if ($r_exists) {
 					$fpaddingR = $r_width;
@@ -6605,6 +6758,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// Change NBSP to SPACE.
 		// Re-calculate contentWidth
 		$contentWidth = 0;
+		$chunkCodePoints = []; // The line's chunks as chunkWidth() decodes them, shared with the pass below
 
 		foreach ($content as $k => $chunk) {
 			$this->restoreFont($font[$k], false);
@@ -6626,7 +6780,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					$content[$k] = $chunk = str_replace(chr(160), chr(32), $chunk);
 				}
 				$widthChunk = $this->aliasReplaceForWidth($chunk);
-				$contentWidth += $this->GetStringWidth($widthChunk, true, (isset($cOTLdata[$k]) ? $cOTLdata[$k] : false), $this->textvar) * Mpdf::SCALE;
+				$contentWidth += $this->chunkWidth($widthChunk, $chunkCodePoints, (isset($cOTLdata[$k]) ? $cOTLdata[$k] : false), $this->textvar, false) * Mpdf::SCALE;
 			} elseif (isset($this->objectbuffer[$k]) && $this->objectbuffer[$k]) {
 				// LIST MARKERS	// mPDF 6  Lists
 				if ($this->objectbuffer[$k]['type'] == 'image' && isset($this->objectbuffer[$k]['listmarker']) && $this->objectbuffer[$k]['listmarker'] && $this->objectbuffer[$k]['listmarkerposition'] == 'outside') {
@@ -6762,7 +6916,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		$fpaddingR = 0;
 		$fpaddingL = 0;
 		/* -- CSS-FLOAT -- */
-		if (count($this->floatDivs)) {
+		if ($this->floatDivs) {
 			list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->GetFloatDivInfo($this->blklvl);
 			if ($r_exists) {
 				$fpaddingR = $r_width;
@@ -6837,11 +6991,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			// Remove any XAdvance from OTL data at end of line
 			// And correct for XPlacement on last character
 			// BIDI is applied
+			$lastOrder = count($chunkorder) - 1;
 			foreach ($chunkorder as $aord => $k) {
-				if (count($cOTLdata)) {
+				if ($cOTLdata) {
 					$this->restoreFont($font[$k], false);
 					// ...FinishFlowingBlock...
-					if ($aord == count($chunkorder) - 1 && isset($cOTLdata[$aord]['group'])) { // Last chunk on line
+					if ($aord == $lastOrder && isset($cOTLdata[$aord]['group'])) { // Last chunk on line
 						$nGPOS = strlen($cOTLdata[$aord]['group']) - 1; // Last character
 						if (isset($cOTLdata[$aord]['GPOSinfo'][$nGPOS]['XAdvanceL']) || isset($cOTLdata[$aord]['GPOSinfo'][$nGPOS]['XAdvanceR'])) {
 							if (isset($cOTLdata[$aord]['GPOSinfo'][$nGPOS]['XAdvanceL'])) {
@@ -7012,7 +7167,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				// WORD SPACING
 				// mPDF 5.7.1
 				$widthChunk = $this->aliasReplaceForWidth($chunk);
-				$stringWidth = $this->GetStringWidth($widthChunk, true, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar);
+				$stringWidth = $this->chunkWidth($widthChunk, $chunkCodePoints, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, false);
 				$nch = mb_strlen($widthChunk, $this->mb_enc);
 				// Use GPOS OTL
 				if (isset($this->CurrentFont['useOTL']) && $this->CurrentFont['useOTL']) {
@@ -7862,7 +8017,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$fpaddingR = 0;
 			$fpaddingL = 0;
 			/* -- CSS-FLOAT -- */
-			if (count($this->floatDivs)) {
+			if ($this->floatDivs) {
 				list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->GetFloatDivInfo($this->blklvl);
 				if ($r_exists) {
 					$fpaddingR = $r_width;
@@ -7929,8 +8084,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if ($this->usingCoreFont) {
 			$clen = strlen($s);
 		} else {
-			$clen = mb_strlen($s, $this->mb_enc);
+			list($chars, $codePoints) = $this->splitCharacters($s);
+			$clen = count($chars);
 		}
+
+		// The width a line can take, after its indent, the padding and any floats. None of that changes until the line
+		// breaks, so it is worked out at the line's first character and kept until then
+		$lineLimit = null;
+		$WidthCorrection = 0;
 
 		// for every character in the string
 		for ($i = 0; $i < $clen; $i++) {
@@ -7946,8 +8107,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 			} else {
-				$c = mb_substr($s, $i, 1, $this->mb_enc);
-				$cw = ($this->GetCharWidthNonCore($c, false) * Mpdf::SCALE);
+				$c = $chars[$i];
+				$cw = ($this->codePointWidthNonCore($codePoints[$i], $c == ' ') * Mpdf::SCALE);
 				// mPDF 5.7.1
 				// Use OTL GPOS
 				if (isset($this->CurrentFont['useOTL']) && ($this->CurrentFont['useOTL'] & 0xFF)) {
@@ -7959,11 +8120,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 				if (($this->textvar & TextVars::FC_KERNING) && $i > 0) { // mPDF 5.7.1
-					$lastc = mb_substr($s, ($i - 1), 1, $this->mb_enc);
-					$ulastc = $this->UTF8StringToArray($lastc, false);
-					$uc = $this->UTF8StringToArray($c, false);
-					if (isset($this->CurrentFont['kerninfo'][$ulastc[0]][$uc[0]])) {
-						$cw += ($this->CurrentFont['kerninfo'][$ulastc[0]][$uc[0]] * $this->FontSizePt / 1000 );
+					if (isset($this->CurrentFont['kerninfo'][$codePoints[$i - 1]][$codePoints[$i]])) {
+						$cw += ($this->CurrentFont['kerninfo'][$codePoints[$i - 1]][$codePoints[$i]] * $this->FontSizePt / 1000 );
 					}
 				}
 			}
@@ -7982,55 +8140,60 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				continue;
 			}
 
-			// Paragraph INDENT
-			$WidthCorrection = 0;
-			if (($newblock) && ($blockstate == 1 || $blockstate == 3) && isset($this->blk[$this->blklvl]['text_indent']) && ($lineCount == 0) && (!$is_table) && ($align != 'C')) {
-				$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
-				$WidthCorrection = ($ti * Mpdf::SCALE);
-			}
-			// OUTDENT
-			foreach ($this->objectbuffer as $k => $objattr) {   // mPDF 6 DOTTAB
-				if ($objattr['type'] == 'dottab') {
-					$WidthCorrection -= ($objattr['outdent'] * Mpdf::SCALE);
-					break;
+			if ($lineLimit === null) {
+				// Paragraph INDENT
+				$WidthCorrection = 0;
+				if (($newblock) && ($blockstate == 1 || $blockstate == 3) && isset($this->blk[$this->blklvl]['text_indent']) && ($lineCount == 0) && (!$is_table) && ($align != 'C')) {
+					$ti = $this->sizeConverter->convert($this->blk[$this->blklvl]['text_indent'], $this->blk[$this->blklvl]['inner_width'], $this->blk[$this->blklvl]['InlineProperties']['size'], false);  // mPDF 5.7.4
+					$WidthCorrection = ($ti * Mpdf::SCALE);
 				}
-			}
-
-
-			// Added mPDF 3.0 Float DIV
-			$fpaddingR = 0;
-			$fpaddingL = 0;
-			/* -- CSS-FLOAT -- */
-			if (count($this->floatDivs)) {
-				list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->GetFloatDivInfo($this->blklvl);
-				if ($r_exists) {
-					$fpaddingR = $r_width;
+				// OUTDENT
+				foreach ($this->objectbuffer as $k => $objattr) {   // mPDF 6 DOTTAB
+					if ($objattr['type'] == 'dottab') {
+						$WidthCorrection -= ($objattr['outdent'] * Mpdf::SCALE);
+						break;
+					}
 				}
-				if ($l_exists) {
-					$fpaddingL = $l_width;
+
+
+				// Added mPDF 3.0 Float DIV
+				$fpaddingR = 0;
+				$fpaddingL = 0;
+				/* -- CSS-FLOAT -- */
+				if ($this->floatDivs) {
+					list($l_exists, $r_exists, $l_max, $r_max, $l_width, $r_width) = $this->GetFloatDivInfo($this->blklvl);
+					if ($r_exists) {
+						$fpaddingR = $r_width;
+					}
+					if ($l_exists) {
+						$fpaddingL = $l_width;
+					}
 				}
-			}
-			/* -- END CSS-FLOAT -- */
+				/* -- END CSS-FLOAT -- */
 
-			$usey = $this->y + 0.002;
-			if (($newblock) && ($blockstate == 1 || $blockstate == 3) && ($lineCount == 0)) {
-				$usey += $this->blk[$this->blklvl]['margin_top'] + $this->blk[$this->blklvl]['padding_top'] + $this->blk[$this->blklvl]['border_top']['w'];
-			}
+				$usey = $this->y + 0.002;
+				if (($newblock) && ($blockstate == 1 || $blockstate == 3) && ($lineCount == 0)) {
+					$usey += $this->blk[$this->blklvl]['margin_top'] + $this->blk[$this->blklvl]['padding_top'] + $this->blk[$this->blklvl]['border_top']['w'];
+				}
 
-			/* -- CSS-IMAGE-FLOAT -- */
-			// If float exists at this level
-			if (isset($this->floatmargins['R']) && $usey <= $this->floatmargins['R']['y1'] && $usey >= $this->floatmargins['R']['y0'] && !$this->floatmargins['R']['skipline']) {
-				$fpaddingR += $this->floatmargins['R']['w'];
+				/* -- CSS-IMAGE-FLOAT -- */
+				// If float exists at this level
+				if (isset($this->floatmargins['R']) && $usey <= $this->floatmargins['R']['y1'] && $usey >= $this->floatmargins['R']['y0'] && !$this->floatmargins['R']['skipline']) {
+					$fpaddingR += $this->floatmargins['R']['w'];
+				}
+				if (isset($this->floatmargins['L']) && $usey <= $this->floatmargins['L']['y1'] && $usey >= $this->floatmargins['L']['y0'] && !$this->floatmargins['L']['skipline']) {
+					$fpaddingL += $this->floatmargins['L']['w'];
+				}
+				/* -- END CSS-IMAGE-FLOAT -- */
+
+				$lineLimit = $maxWidth - $WidthCorrection - (($this->cMarginL + $this->cMarginR) * Mpdf::SCALE) - ($paddingL + $paddingR + (($fpaddingL + $fpaddingR) * Mpdf::SCALE) ) + 0.001; // 0.001 is to correct for deviations converting mm=>pts
 			}
-			if (isset($this->floatmargins['L']) && $usey <= $this->floatmargins['L']['y1'] && $usey >= $this->floatmargins['L']['y0'] && !$this->floatmargins['L']['skipline']) {
-				$fpaddingL += $this->floatmargins['L']['w'];
-			}
-			/* -- END CSS-IMAGE-FLOAT -- */
 
 
 			// try adding another char
-			if (( $contentWidth + $cw > $maxWidth - $WidthCorrection - (($this->cMarginL + $this->cMarginR) * Mpdf::SCALE) - ($paddingL + $paddingR + (($fpaddingL + $fpaddingR) * Mpdf::SCALE) ) + 0.001)) {// 0.001 is to correct for deviations converting mm=>pts
+			if ($contentWidth + $cw > $lineLimit) {
 				// it won't fit, output what we already have
+				$lineLimit = null;
 				$lineCount++;
 
 				// contains any content that didn't make it into this print
@@ -8075,7 +8238,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if ($this->usingCoreFont) {
 							$followingchar = $s[$i + 1];
 						} else {
-							$followingchar = mb_substr($s, $i + 1, 1, $this->mb_enc);
+							$followingchar = $chars[$i + 1];
 						}
 					}
 
@@ -8124,7 +8287,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if ($this->usingCoreFont) {
 							$addc = substr($s, $ac, 1);
 						} else {
-							$addc = mb_substr($s, $ac, 1, $this->mb_enc);
+							$addc = $chars[$ac];
 						}
 						if ($addc == ' ') {
 							break;
@@ -8342,6 +8505,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$contentWidth = 0;
 
 				$inclCursive = false;
+				$chunkCodePoints = []; // The line's chunks as chunkWidth() decodes them, shared with the pass below
+
 				foreach ($content as $k => $chunk) {
 					if (isset($this->objectbuffer[$k]) && $this->objectbuffer[$k]) {
 						// LIST MARKERS
@@ -8380,7 +8545,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$content[$k] = $chunk = str_replace(chr(160), chr(32), $chunk);
 						}
 
-						$contentWidth += $this->GetStringWidth($chunk, true, (isset($cOTLdata[$k]) ? $cOTLdata[$k] : false), $this->textvar) * Mpdf::SCALE;  // mPDF 5.7.1
+						// mPDF 5.7.1
+						$contentWidth += $this->chunkWidth($chunk, $chunkCodePoints, (isset($cOTLdata[$k]) ? $cOTLdata[$k] : false), $this->textvar, false) * Mpdf::SCALE;
 						if (!empty($this->spanborddet)) {
 							if (isset($this->spanborddet['L']['w']) && strpos($contentB[$k], 'L') !== false) {
 								$contentWidth += $this->spanborddet['L']['w'] * Mpdf::SCALE;
@@ -8417,11 +8583,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					/* -- END OTL -- */
 					// Remove any XAdvance from OTL data at end of line
+					$lastOrder = count($chunkorder) - 1;
 					foreach ($chunkorder as $aord => $k) {
-						if (count($cOTLdata)) {
+						if ($cOTLdata) {
 							$this->restoreFont($font[$k], false);
 							// ...WriteFlowingBlock...
-							if ($aord == count($chunkorder) - 1 && isset($cOTLdata[$aord]['group'])) { // Last chunk on line
+							if ($aord == $lastOrder && isset($cOTLdata[$aord]['group'])) { // Last chunk on line
 								$nGPOS = strlen($cOTLdata[$aord]['group']) - 1; // Last character
 								if (isset($cOTLdata[$aord]['GPOSinfo'][$nGPOS]['XAdvanceL']) || isset($cOTLdata[$aord]['GPOSinfo'][$nGPOS]['XAdvanceR'])) {
 									if (isset($cOTLdata[$aord]['GPOSinfo'][$nGPOS]['XAdvanceL'])) {
@@ -8644,7 +8811,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 						// WORD SPACING
 						// StringWidth this time includes any kashida spacing
-						$stringWidth = $this->GetStringWidth($chunk, true, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, true);
+						$stringWidth = $this->chunkWidth($chunk, $chunkCodePoints, (isset($cOTLdata[$aord]) ? $cOTLdata[$aord] : false), $this->textvar, true);
 
 						$nch = mb_strlen($chunk, $this->mb_enc);
 						// Use GPOS OTL
@@ -19268,23 +19435,27 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				$letters = preg_split('//u', $line);
+				$lastLetter = $letters ? count($letters) - 1 : 0;
+				$leading = "/[" . $this->CJKleading . "]/u";
+				$following = "/[" . $this->CJKfollowing . "]/u";
+
 				foreach ($letters as $k => $letter) {
 					// mPDF 6
 					if ($checkCJK) {
-						if (preg_match("/[" . $this->CJKleading . "]/u", $letter) && $k > 0) {
+						if (preg_match($leading, $letter) && $k > 0) {
 							$letter = $letters[$k - 1] . $letter;
 						}
-						if (preg_match("/[" . $this->CJKfollowing . "]/u", $letter) && $k < (count($letters) - 1)) {
+						if (preg_match($following, $letter) && $k < $lastLetter) {
 							$letter = $letter . $letters[$k + 1];
 						}
 					}
 
-					$letterwidth = $this->GetStringWidth($letter, false, false, $chunk[8]); // Pass $textvar ($chunk[8]), but do OTLdata here
-					// so don't have to split OTLdata for each word
+					// Pass $textvar ($chunk[8]), but do OTLdata here so don't have to split OTLdata for each word
+					$letterwidth = $this->GetStringWidth($letter, false, false, $chunk[8]);
 					if ($k == 0) {
 						$letterwidth += $lbw;
 					}
-					if ($k == (count($letters) - 1)) {
+					if ($k == $lastLetter) {
 						$letterwidth += $rbw;
 					}
 
@@ -19333,32 +19504,31 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 
 				$words = preg_split('/(\xe2\x80\x8b| )/', $line); // U+200B Zero Width word boundary, or space
+				$lastWord = count($words) - 1;
+				$startsWithSpace = substr($chunk[0], 0, 1) == ' ';
+				$endsWithSpace = substr($chunk[0], -1, 1) == ' ';
+
 				foreach ($words as $k => $word) {
-					$word = trim($word);
-					$wordwidth = $this->GetStringWidth($word, false, false, $chunk[8]); // Pass $textvar ($chunk[8]), but do OTLdata here
-					// so don't have to split OTLdata for each word
+					// Pass $textvar ($chunk[8]), but do OTLdata here so don't have to split OTLdata for each word
+					$wordwidth = $this->GetStringWidth(trim($word), false, false, $chunk[8]);
 					if (isset($wordXAdvance[$k])) {
 						$wordwidth += ($wordXAdvance[$k] * 1000 / $this->CurrentFont['unitsPerEm']) * ($this->FontSize / 1000);
 					}
 					if ($k == 0) {
 						$wordwidth += $lbw;
 					}
-					if ($k == (count($words) - 1)) {
+					if ($k == $lastWord) {
 						$wordwidth += $rbw;
 					}
 
 					// mPDF 6
-					if (count($words) == 1 && substr($chunk[0], 0, 1) != ' ') {
-						$acclength += $wordwidth;
-					} elseif (count($words) > 1 && $k == 0 && substr($chunk[0], 0, 1) != ' ') {
+					if ($k == 0 && !$startsWithSpace) {
 						$acclength += $wordwidth;
 					} else {
 						$acclength = $wordwidth;
 					}
 					$acclongest = max($acclongest, $acclength);
-					if (count($words) == 1 && substr($chunk[0], -1, 1) == ' ') {
-						$acclength = 0;
-					} elseif (count($words) > 1 && ($k != (count($words) - 1) || substr($chunk[0], -1, 1) == ' ')) {
+					if ($k != $lastWord || $endsWithSpace) {
 						$acclength = 0;
 					}
 
