@@ -490,7 +490,7 @@ These changes do not change output.
   * Every workflow, code coverage included, also runs nightly on `gravitypdf` and can be run by hand.
   * The Windows test jobs no longer spend minutes on HTTP requests to localhost. A test left `$_SERVER['HTTP_HOST']` set, so every later test fetched each missing stylesheet or image from `http://localhost`, and on Windows each refused connection takes about two seconds. [#674]
   * The coding standard and PHPStan run as one Lint workflow. The e-invoice and PDF/X-4 checks run on a pull request only when it changes the code they cover.
-* **Test memory.** On PHP 5.6 the test suite peaks at about 330MB instead of 470MB. PHPUnit before 8.5 has every suite keep its own copy of the list of declared classes. The test listener now empties those copies before the first test runs, and the bootstrap no longer creates an Mpdf instance, which made every copy longer. [#840]
+* **Test memory.** On PHP 5.6 the test suite peaks at about 330MB instead of 470MB. PHPUnit before 8.5 has every suite keep its own copy of the list of declared classes. The test listener now empties those copies before the first test runs, and the bootstrap no longer creates an Mpdf instance, which made every copy longer. [#841]
 * **PHPStan.** Fixes for newer PHP versions and PHPStan 2.2.15. [#6] [#295] [#319] [#451]
 * **Branch alias.** The Composer branch alias maps `dev-gravitypdf` to `8.x-dev`. [#3]
 * **Open elements.** `WriteHTML()` keeps a stack of the elements open in the HTML it reads, so that CSS rules can be matched against an element's parents, ancestors and earlier siblings rather than only the blocks mPDF lays out. Each element carries its position among its siblings and a record of the siblings before it. `Mpdf::getOpenElements()` reads it. [#533]
@@ -1050,4 +1050,4 @@ These changes do not change output.
 [#693]: https://github.com/GravityPDF/mpdf/pull/693
 [#703]: https://github.com/GravityPDF/mpdf/issues/703
 [#829]: https://github.com/GravityPDF/mpdf/issues/829
-[#840]: https://github.com/GravityPDF/mpdf/pull/840
+[#841]: https://github.com/GravityPDF/mpdf/pull/841
