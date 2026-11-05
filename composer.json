@@ -56,9 +56,9 @@
 		"ext-imagick": "Needed if developing the Mpdf library",
 		"easybill/e-invoicing": "Writes the Factur-X / ZUGFeRD / XRechnung XML that SetEmbeddedInvoice() embeds, and UBL; HtmlInvoiceWriter prints both (PHP 8.3+)",
 		"horstoeko/zugferd": "Writes the Factur-X / ZUGFeRD / XRechnung XML that SetEmbeddedInvoice() embeds, on PHP older than 8.3",
-		"mpdf/font-bundle-all": "All official mPDF fonts that offers coverage for common and uncommon scripts worldwide. Uses 110MB of disk space.",
-		"mpdf/font-bundle-lite": "A subset of official mPDF fonts that offers coverage for most common scripts. Uses 30MB of disk space.",
-		"mpdf/font-dejavu-family": "A unicode font family with reasonable coverage of common scripts. Uses 10MB of disk space."
+		"mpdf/font-bundle-all": "All official mPDF fonts that offers coverage for common and uncommon scripts worldwide. Uses 99MB of disk space.",
+		"mpdf/font-bundle-lite": "A subset of official mPDF fonts that offers coverage for most common scripts. Uses 26MB of disk space.",
+		"mpdf/font-dejavu-family": "A unicode font family with reasonable coverage of common scripts. Uses 9MB of disk space."
 	},
 	"bin": [
 		"bin/mpdf-font-ranges"
