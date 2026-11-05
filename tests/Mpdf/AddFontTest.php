@@ -34,7 +34,7 @@ class AddFontTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	public function testDejavuSerifCondensed()
 	{
 		$ttf = $this->mpdf->FontFiles['dejavuserifcondensed'];
-		$this->assertEquals(334040, $ttf['length1']);
+		$this->assertEquals(filesize($ttf['ttffile']), $ttf['length1']);
 		$this->assertSame('TTF', $ttf['type']);
 		$this->assertFalse($ttf['sip']);
 		$this->assertFalse($ttf['smp']);
