@@ -8,6 +8,7 @@ New features
 * Reduce memory usage by using array buffer (@jorrit #2151)
 * Add support for custom `AssetFetcher` via the service container (@splitbrain, #2165) 
 * AVIF images Support
+* Strip TrueType hinting from the bundled fonts whose licences allow it, making the files and the PDFs embedding them smaller (`utils/dehint_fonts.py`)
 
 Bugfixes
 --------
