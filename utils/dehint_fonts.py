@@ -8,7 +8,7 @@ Strips TrueType hinting from the fonts below, leaving their outlines and metrics
 Needs fontTools. The ranges files record each font's size, so they follow the fonts.
 
 A font not listed either has next to no hinting, or a licence that rules this out: a Reserved Font
-Name (Abyssinica, Dai Banna, Dhyana, Jomolhari, Khmer OS, Lateef, Padauk, Taamey David, Tai Heritage,
+Name (Abyssinica, Dai Banna, Dhyana, Jomolhari, Lateef, Padauk, Taamey David, Tai Heritage,
 TharLon), no modification (Uthman, Estrangelo Edessa, Sun-ExtA) or none stated.
 """
 
@@ -54,6 +54,7 @@ FONTS = [
 	"Garuda-BoldOblique.ttf",
 	"Garuda-Oblique.ttf",
 	"Garuda.ttf",
+	"KhmerOS.ttf",
 	"Lohit-Kannada.ttf",
 	"Pothana2000.ttf",
 	"UnBatang_0613.ttf",
@@ -61,6 +62,8 @@ FONTS = [
 	"XB RiyazBd.ttf",
 	"XB RiyazBdIt.ttf",
 	"XB RiyazIt.ttf",
+	"ayar.ttf",
+	"damase_v.2.ttf",
 ]
 
 # DSIG goes too: a signature over the original font doesn't hold for this one
