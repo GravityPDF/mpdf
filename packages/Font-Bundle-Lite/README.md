@@ -2,7 +2,7 @@
 
 ## Introduction
 
-A helper package that installs a subset of fonts (30MB) designed to support most common languages worldwide. This package is used with the [mPDF library](https://github.com/mpdf/mpdf).
+A helper package that installs a subset of fonts (26MB) designed to support most common languages worldwide. This package is used with the [mPDF library](https://github.com/mpdf/mpdf).
 
 ## Installation
 

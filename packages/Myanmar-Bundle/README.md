@@ -88,4 +88,6 @@ This package is licensed under the MIT License. Fonts are licensed separately by
 - `ayar`: [LICENSE-Ayar.txt](./fonts/LICENSE-Ayar.txt)
 - `padaukbook`: [LICENSE-Padauk.txt](./fonts/LICENSE-Padauk.txt)
 - `tharlon`: [LICENSE-Tharlon.txt](./fonts/LICENSE-Tharlon.txt)
-- `zawgyi-one`: [LICENSE-ZawgyiOne.txt](./fonts/LICENSE-ZawgyiOne.txt)  
+- `zawgyi-one`: [LICENSE-ZawgyiOne.txt](./fonts/LICENSE-ZawgyiOne.txt)
+
+The `ayar` font here is modified: its TrueType hinting has been removed by `utils/dehint_fonts.py` in the mPDF repository. Its outlines and metrics are unchanged.

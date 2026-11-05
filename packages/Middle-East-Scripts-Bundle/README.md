@@ -89,3 +89,5 @@ This package is licensed under the MIT License. Fonts are licensed separately by
 - `xbriyaz`: [LICENSE-XB-Riyaz.txt](./fonts/LICENSE-XB-Riyaz.txt)
 - `estrangeloedessa`: [LICENSE-Estrangelo-Edessa.txt](./fonts/LICENSE-Estrangelo-Edessa.txt)
 - `taameydavidclm`: [LICENSE-TaameyDavidCLM.txt](./fonts/LICENSE-TaameyDavidCLM.txt)
+
+The XB Riyaz fonts here are modified: their TrueType hinting has been removed by `utils/dehint_fonts.py` in the mPDF repository. Their outlines and metrics are unchanged.

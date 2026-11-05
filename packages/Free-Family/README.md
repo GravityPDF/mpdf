@@ -107,3 +107,5 @@ mPDF reads a `.ranges.php` file only from the directory of the font package that
 ## License
 
 This package is licensed under the MIT License. Fonts are licensed separately by their authors, and can be found in the [`/fonts/LICENSE.txt`](./fonts/LICENSE.txt) file.
+
+The fonts here are modified: their TrueType hinting has been removed by `utils/dehint_fonts.py` in the mPDF repository. Their outlines and metrics are unchanged.
