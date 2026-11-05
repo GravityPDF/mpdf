@@ -11,7 +11,7 @@ A font not listed has next to no hinting, a licence that rules this out or one t
 it: a Reserved Font Name (Abyssinica, Dai Banna, Dhyana, Eeyek, Jomolhari, Lateef, Padauk, Tai Heritage,
 TharLon), no modification (Estrangelo Edessa, Sun-ExtA, Aboriginal Serif, whose name table forbids copying
 despite the package's GPL) or none stated (Zawgyi-One, Kaputa, Lanna Alif). Sun-ExtB has no glyph
-instructions, and fontTools can't re-save it. Khmer OS, Ayar and Damase are left as the v6 branch leaves them.
+instructions, and fontTools can't re-save it.
 """
 
 import os
@@ -67,6 +67,7 @@ FONTS = {
 		"Garuda-Oblique.ttf",
 		"Garuda.ttf",
 	],
+	"Khmer-OS": ["KhmerOS.ttf"],
 	"Lohit-Kannada": ["Lohit-Kannada.ttf"],
 	"Middle-East-Scripts-Bundle": [
 		"XB Riyaz.ttf",
@@ -74,6 +75,8 @@ FONTS = {
 		"XB RiyazBdIt.ttf",
 		"XB RiyazIt.ttf",
 	],
+	"Mph2bDamase": ["damase_v.2.ttf"],
+	"Myanmar-Bundle": ["ayar.ttf"],
 	"Pothana2000": ["Pothana2000.ttf"],
 	"UnBatang": [
 		"UnBatang.ttf",
