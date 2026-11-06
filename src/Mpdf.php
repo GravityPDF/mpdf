@@ -14971,7 +14971,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							$listBox = !$this->activeForms() && (isset($this->selectoption['MULTIPLE']) || isset($this->selectoption['SIZE']));
 							$this->selectoption['ITEMS'][] = ['exportValue' => $this->selectoption['currentVAL'], 'content' => $e, 'selected' => $this->selectoption['currentSEL'], 'OTLdata' => $listBox && !empty($this->OTLdata) ? $this->OTLdata : false];
 						}
-						$this->OTLdata = [];
 					} // TEXTAREA
 					else {
 						$objattr = unserialize($this->specialcontent);
@@ -15072,6 +15071,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (substr($e, -1, 1) == ' ' && !$this->ispre && $this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
 					$this->ignorefollowingspaces = true;
 				}
+				// Text that came to nothing saved no chunk, and the next chunk must not take its run:
+				// printbuffer() takes any run for that chunk's own, and an inline object needs one of its own to be drawn
+				$this->OTLdata = [];
 			} else { // TAG **
 				if (isset($e[0]) && $e[0] == '/') {
 					$endtag = HtmlTags::name($e);
