@@ -27,4 +27,19 @@ class StateSnapshotTest extends BaseMpdfTest
 		$this->assertSame('dejavusans', $this->mpdf->FontFamily . $this->mpdf->FontStyle);
 		$this->assertArrayHasKey(937, $this->mpdf->fonts['dejavusans']['subset']);
 	}
+
+	/**
+	 * An index paints the pending contents ahead of time to number its entries. The @page the contents selects
+	 * has to go when that is unwound, or the index is laid out in the contents' margins
+	 */
+	public function testAnIndexIsNotLaidOutInThePageSelectedByTheContents()
+	{
+		$this->mpdf->WriteHTML('<style>@page tocpage { margin-left: 70mm; margin-top: 90mm; }</style>'
+			. '<tocpagebreak toc-page-selector="tocpage" /><tocentry content="One" /><indexentry content="One" />'
+			. '<p>Body</p><pagebreak /><indexinsert />');
+
+		$this->assertNull($this->mpdf->page_box['current']);
+		$this->assertEquals(15, $this->mpdf->lMargin);
+		$this->assertEquals(16, $this->mpdf->tMargin);
+	}
 }

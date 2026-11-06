@@ -353,6 +353,7 @@ Bugfixes
 * With a table of contents at the front, index page numbers were counted from before the table moved into place. [#56] [#64]
 * An index entry with a run of three or more pages followed by a later page printed only the later page: pages 1, 2, 3 and 5 came out as `5`. [#66] [#67]
 * Index entries whose keys collate the same, such as `Term` and `term`, came out in a different order on PHP 7 and PHP 8. They now keep the order they were made in. [#74]
+* With a `toc-page-selector`, a long index and whatever followed it were laid out in the table of contents' `@page` margins, header and footer. [#856]
 
 ### PDF/A and PDF/X
 
@@ -1058,3 +1059,4 @@ These changes do not change output.
 [#837]: https://github.com/GravityPDF/mpdf/issues/837
 [#841]: https://github.com/GravityPDF/mpdf/pull/841
 [#843]: https://github.com/GravityPDF/mpdf/pull/843
+[#856]: https://github.com/GravityPDF/mpdf/pull/856

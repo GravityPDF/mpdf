@@ -28741,8 +28741,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * can only be computed by writing to the document. For example, {@see TableOfContents::insertTOC}
 	 * uses this functionality to determine the correct page numbers.
 	 *
-	 * Only scalar and array values are captured in the snapshot, plus the state of the Form and
-	 * TableOfContents objects, where a document registers its fields and contents entries.
+	 * Only scalar and array values are captured in the snapshot, plus the state of the Form, TableOfContents
+	 * and PageBox objects, where a document registers its fields and contents entries and selects its @page.
 	 *
 	 * @return array<string, mixed>
 	 *
@@ -28759,6 +28759,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
+		$snapshot['page_box'] = $this->page_box->getStateSnapshot();
 
 		return $snapshot;
 	}
@@ -28776,7 +28777,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		$this->form->restoreStateSnapshot($snapshot['form']);
 		$this->tableOfContents->restoreStateSnapshot($snapshot['tableOfContents']);
-		unset($snapshot['form'], $snapshot['tableOfContents']);
+		$this->page_box->restoreStateSnapshot($snapshot['page_box']);
+		unset($snapshot['form'], $snapshot['tableOfContents'], $snapshot['page_box']);
 
 		$this->restoreOwnState($snapshot);
 
