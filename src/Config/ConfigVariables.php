@@ -507,6 +507,7 @@ class ConfigVariables
 			'cacheCleanupInterval' => 3600,
 
 			// Embed the files annotations attach. When off, each such annotation is written as a text note
+			// A file that cannot be embedded is written as a note too, with a warning, or throws with debug on
 			'allowAnnotationFiles' => false,
 
 			// Let <annotation file=""> in HTML attach a file; allowAnnotationFiles must be on too. When off, the
@@ -515,17 +516,13 @@ class ConfigVariables
 
 			// The file extensions annotations may embed, each mapped to the MIME type(s) ext-fileinfo may detect in
 			// the file, e.g. ['xml' => ['application/xml', 'text/xml'], 'pdf' => 'application/pdf']. A file whose
-			// extension or detected type is not listed is not embedded (see showAnnotationErrors).
+			// extension or detected type is not listed is not embedded.
 			// Setting it replaces the defaults; extend them with ConfigVariables::ANNOTATION_FILE_TYPES + [...]
 			'annotationFileAllowList' => self::ANNOTATION_FILE_TYPES,
 
-			// The largest file, in bytes, an annotation may attach; a larger one is not embedded (see
-			// showAnnotationErrors). The file is held in memory and compressed whole. 0 means no limit
+			// The largest file, in bytes, an annotation may attach; a larger one is not embedded.
+			// The file is held in memory and compressed whole. 0 means no limit
 			'annotationFileMaxSize' => 10 * 1024 * 1024,
-
-			// Throw an MpdfAnnotationException where an annotation's file cannot be embedded. Otherwise (the default,
-			// unless debug is on) a warning is logged and the annotation is written as a text note without the file
-			'showAnnotationErrors' => false,
 
 			'hyphenationDictionaryFile' => __DIR__ . '/../../data/patterns/dictionary.txt',
 

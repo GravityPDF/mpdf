@@ -113,7 +113,7 @@ New features
 * **Opening on the attachments pane.** `SetDisplayPreferences('UseAttachments')` opens the reader with its attachments pane showing. [mpdf/mpdf#2142] [#17]
 * **Safer annotation files.** Annotation files are loaded through the asset fetcher, like images and stylesheets. [#375]
   * Only file types listed in `annotationFileAllowList` are embedded, and only up to `annotationFileMaxSize`.
-  * A file that cannot be embedded becomes a text note and a logged warning. With `showAnnotationErrors`, it throws `MpdfAnnotationException` instead.
+  * A file that cannot be embedded becomes a text note and a logged warning. With `debug` on, it throws `MpdfAnnotationException` instead.
 * **A fixed creation date.** The `creationDate` config option sets the document's creation date, for reproducible output. [#72]
 
 ### Fonts, emoji and text

@@ -761,7 +761,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 	 * that fails is cleared from its annotation, which is then written as a text note; each path is loaded once
 	 * for the document
 	 *
-	 * @throws \Mpdf\MpdfAnnotationException Where a file fails with `showAnnotationErrors` or `debug` on
+	 * @throws \Mpdf\MpdfAnnotationException Where a file fails with `debug` on
 	 */
 	private function loadAnnotationFiles()
 	{
@@ -785,7 +785,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 
 	/**
 	 * An annotation's file as loadAnnotationFile() gives it, or false with a warning where it fails and
-	 * `showAnnotationErrors` and `debug` are off
+	 * `debug` is off
 	 *
 	 * @param string $path
 	 *
@@ -798,7 +798,7 @@ class MetadataWriter implements \Psr\Log\LoggerAwareInterface
 		try {
 			return $this->loadAnnotationFile($path);
 		} catch (MpdfAnnotationException $e) {
-			if ($this->mpdf->showAnnotationErrors || $this->mpdf->debug) {
+			if ($this->mpdf->debug) {
 				throw $e;
 			}
 

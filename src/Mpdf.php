@@ -399,7 +399,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $allowHtmlAnnotationFiles;
 	var $annotationFileAllowList;
 	var $annotationFileMaxSize;
-	var $showAnnotationErrors;
 
 	var $fontdata;
 

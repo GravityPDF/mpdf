@@ -15,7 +15,7 @@ use Psr\Http\Message\RequestInterface;
  * An annotation's file is read through the asset fetcher when the document is output, no larger than
  * annotationFileMaxSize, and embedded only when annotationFileAllowList lists its extension with the MIME type
  * detected in it, which becomes its /Subtype. A file that cannot be embedded is left out with a warning, or
- * throws with showAnnotationErrors or debug on. <annotation file=""> in HTML also needs allowHtmlAnnotationFiles
+ * throws with debug on. <annotation file=""> in HTML also needs allowHtmlAnnotationFiles
  */
 class AnnotationFileLoadingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 {
@@ -167,23 +167,7 @@ class AnnotationFileLoadingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	}
 
 	/**
-	 * With showAnnotationErrors on, a file that cannot be embedded throws, naming it
-	 *
-	 * @dataProvider failures
-	 *
-	 * @param bool $html
-	 * @param string $file
-	 * @param array $config
-	 * @param array|null $http
-	 * @param string $reason
-	 */
-	public function testAFileThatFailsThrowsWithShowAnnotationErrors($html, $file, array $config, $http, $reason)
-	{
-		$this->assertFailureThrows($html, $file, $config + ['showAnnotationErrors' => true], $http, $reason);
-	}
-
-	/**
-	 * With debug on, a file that cannot be embedded throws as it does with showAnnotationErrors
+	 * With debug on, a file that cannot be embedded throws, naming it
 	 *
 	 * @dataProvider failures
 	 *
