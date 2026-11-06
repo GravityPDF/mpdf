@@ -144,4 +144,12 @@ trait PageStreams
 	{
 		return '<div style="page-break-inside: avoid;">' . $inner . str_repeat('<p>Kept</p>', $lines) . '</div>';
 	}
+
+	/**
+	 * A 5x5 PNG with an alpha channel
+	 */
+	private function pngImage()
+	{
+		return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+	}
 }

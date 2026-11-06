@@ -27748,10 +27748,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// The loader caches stay live: the pass being unwound only adds to them and the pass that follows needs every
 		// entry. So does the counter that numbers fonts alongside them, the reference into one of them, and the colour
-		// operators SetColor() has built. The spot colours stay live too: the colour cache registers
-		// them only on a miss, and holds their numbers. The form objects are unwound, as one holds the numbers of the
-		// gradients and graphics states it draws with, and those are not live
-		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators'], $snapshot['spotColors'], $snapshot['spotColorIDs']);
+		// operators SetColor() has built. The spot colours and the PDF/A and PDF/X warnings stay live too: the colour and
+		// image caches register them only on a miss, and hold the spot colours' numbers. The form objects are unwound, as
+		// one holds the numbers of the gradients and graphics states it draws with, and those are not live
+		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators'], $snapshot['spotColors'], $snapshot['spotColorIDs'], $snapshot['PDFAXwarnings']);
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
