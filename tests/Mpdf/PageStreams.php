@@ -12,9 +12,9 @@ trait PageStreams
 	/**
 	 * A document in core fonts that writes its streams uncompressed
 	 */
-	private function mpdf($config = [])
+	private function mpdf($config = [], $container = null)
 	{
-		$mpdf = new Mpdf($config + ['mode' => 'c']);
+		$mpdf = new Mpdf($config + ['mode' => 'c'], $container);
 		$mpdf->compress = false;
 
 		return $mpdf;
@@ -127,5 +127,29 @@ trait PageStreams
 	private function assertTextCount($expected, $text, $stream, $message = '')
 	{
 		$this->assertSame($expected, substr_count($stream, '(' . $text . ')'), $message ?: "'$text' should appear $expected time(s)");
+	}
+
+	/**
+	 * $paragraphs short paragraphs, to fill a page ahead of a kept block
+	 */
+	private function filler($paragraphs)
+	{
+		return str_repeat('<p>Filler</p>', $paragraphs);
+	}
+
+	/**
+	 * A kept block of $lines lines, with $inner ahead of them
+	 */
+	private function keptBlock($lines, $inner = '')
+	{
+		return '<div style="page-break-inside: avoid;">' . $inner . str_repeat('<p>Kept</p>', $lines) . '</div>';
+	}
+
+	/**
+	 * A 5x5 PNG with an alpha channel
+	 */
+	private function pngImage()
+	{
+		return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
 	}
 }

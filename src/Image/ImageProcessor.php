@@ -68,6 +68,12 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 	private $failedImages;
 
 	/**
+	 * @var string[] The bytes of each vector image read, by file. An unwound pass takes its form objects with it, and
+	 *               the next one parses the file again without fetching it again
+	 */
+	private $vectorData = [];
+
+	/**
 	 * @var \Mpdf\Image\Bmp
 	 */
 	private $bmp;
@@ -185,6 +191,10 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			return $this->imageError($file, $firstTime, '');
 		}
 
+		if (!$data && isset($this->vectorData[$file])) {
+			$data = $this->vectorData[$file];
+		}
+
 		if (!$data) {
 			try {
 				$data = $this->assetFetcher->fetchDataFromPath($file, $orig_srcpath);
@@ -205,6 +215,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			if (!$allowvector) {
 				return $this->imageError($file, $firstTime, 'SVG image file not supported in this context');
 			}
+			$this->vectorData[$file] = $data;
 			return $this->processSvg($data, $file, $firstTime);
 		}
 
@@ -212,6 +223,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			if (!$allowvector) {
 				return $this->imageError($file, $firstTime, 'WMF image file not supported in this context');
 			}
+			$this->vectorData[$file] = $data;
 			return $this->processWmf($data, $file, $firstTime);
 		}
 
