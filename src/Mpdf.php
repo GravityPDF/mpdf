@@ -17007,13 +17007,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($this->textshadow) && $this->textshadow) {
 			$arr[17] = $this->textshadow;
 		}
-		if (isset($this->OTLdata) && $this->OTLdata) {
-			$arr[18] = $this->OTLdata;
-			$this->OTLdata = [];
-		} // mPDF 5.7.1
-		else {
-			$arr[18] = null;
-		}
+		$arr[18] = empty($this->OTLdata) ? null : $this->OTLdata;
 		// mPDF 6  Lists
 		if ($return) {
 			return ($arr);
@@ -17073,6 +17067,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($this->OTLdata) && $this->OTLdata) {
 			$arr[18] = $this->OTLdata;
 			$this->OTLdata = [];
+			// A text node after a block saves its line break first, which takes the run, and the text must not as well
 		} // mPDF 5.7.1
 		else {
 			$arr[18] = null;
