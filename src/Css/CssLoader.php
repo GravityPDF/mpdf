@@ -2,7 +2,7 @@
 
 namespace Mpdf\Css;
 
-use Mpdf\AssetFetcher;
+use Mpdf\AssetFetcherInterface;
 use Mpdf\Cache;
 use Mpdf\Exception\AssetFetchingException;
 use Mpdf\Mpdf;
@@ -18,7 +18,7 @@ class CssLoader
 	private $mpdf;
 
 	/**
-	 * @var AssetFetcher
+	 * @var AssetFetcherInterface
 	 */
 	private $assetFetcher;
 
@@ -27,7 +27,7 @@ class CssLoader
 	 */
 	private $cache;
 
-	public function __construct(Mpdf $mpdf, AssetFetcher $assetFetcher, Cache $cache)
+	public function __construct(Mpdf $mpdf, AssetFetcherInterface $assetFetcher, Cache $cache)
 	{
 		$this->mpdf = $mpdf;
 		$this->assetFetcher = $assetFetcher;
