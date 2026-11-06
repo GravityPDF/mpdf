@@ -97,17 +97,17 @@ class ByteOrderMarkTest extends TestCase
 	}
 
 	/**
-	 * Invalid UTF-8 throws, with or without a leading byte order mark
+	 * With debug on, invalid UTF-8 throws, with or without a leading byte order mark
 	 *
 	 * @dataProvider invalidUtf8
 	 *
 	 * @param string $html
 	 */
-	public function testInvalidUtf8StillThrows($html)
+	public function testInvalidUtf8ThrowsWithDebugOn($html)
 	{
 		$this->expectException(MpdfException::class);
 
-		$this->mpdf()->WriteHTML($html);
+		$this->mpdf(['debug' => true])->WriteHTML($html);
 	}
 
 	/**
