@@ -107,4 +107,15 @@ class SetColorOperatorTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 	}
 
+	/**
+	 * The operators are a cache, so a measuring pass that is unwound leaves them for the pass after it, as it leaves
+	 * the fonts and images it loaded.
+	 */
+	public function testAnUnwoundPassKeepsTheOperators()
+	{
+		$this->mpdf->SetColor($this->colorConverter->convert('#ff0000'), 'Fill');
+
+		$this->assertArrayNotHasKey('deviceColorOperators', $this->mpdf->getStateSnapshot());
+	}
+
 }
