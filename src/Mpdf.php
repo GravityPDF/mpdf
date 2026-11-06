@@ -2055,7 +2055,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->InFooter = false;
 		}
 
-		if ($this->tableOfContents->TOCmark || count($this->tableOfContents->m_TOC)) {
+		if ($this->tableOfContents->hasToc()) {
 			$this->tableOfContents->insertTOC();
 		}
 
@@ -24063,6 +24063,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+		/* -- INDEX -- */
+		// Update Index entries
+		foreach ($this->Reference as $i => $r) {
+			foreach ($r['p'] as $key => $p) {
+				if ($p >= $start_page && $p <= $end_page) {
+					$this->Reference[$i]['p'][$key] += ($target_page - $start_page);
+				} elseif ($p >= $target_page && $p < $start_page) {
+					$this->Reference[$i]['p'][$key] += $n_toc;
+				}
+			}
+		}
+		/* -- END INDEX -- */
+
 		// Update PageNumSubstitutions
 		if (count($this->PageNumSubstitutions)) {
 			$newarr = [];
@@ -24345,10 +24358,46 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function InsertIndex($usedivletters = 1, $useLinking = false, $indexCollationLocale = '', $indexCollationGroup = '')
 	{
-		$size = count($this->Reference);
-		if ($size == 0) {
+		if (!count($this->Reference)) {
 			return false;
 		}
+
+		// A table of contents is written last and moved into place (see TableOfContents::insertTOC), which shifts
+		// every page after it. The index is painted here and now, so the contents are painted ahead of time, the
+		// entries numbered from where their pages end up, and everything put back. Not from inside a header or
+		// footer write, where there is no page to paint the contents on
+		if ($this->tableOfContents->hasToc() && !$this->bufferoutput) {
+			$snapshot = $this->getStateSnapshot();
+			// Only the shift is wanted, not the numbers the contents print, so its own look-ahead is skipped
+			$this->tableOfContents->beginTocPaint();
+			$this->tableOfContents->insertTOC();
+			// The links are moved with the pages when the contents is really inserted, so they point at the pages
+			// as they are now, while the numbers print as the pages end up
+			$targets = [];
+			foreach ($snapshot['Reference'] as $i => $r) {
+				foreach ($r['p'] as $key => $p) {
+					$targets[$this->Reference[$i]['p'][$key]] = $p;
+				}
+			}
+			$html = $this->indexHtml($usedivletters, $useLinking, $indexCollationLocale, $indexCollationGroup, $targets);
+			$this->restoreStateSnapshot($snapshot);
+		} else {
+			$html = $this->indexHtml($usedivletters, $useLinking, $indexCollationLocale, $indexCollationGroup);
+		}
+
+		$save_fpb = $this->fixedPosBlockSave;
+		$this->WriteHTML($html);
+		$this->fixedPosBlockSave = $save_fpb;
+
+		$this->breakpoints[$this->CurrCol][] = $this->y;  // *COLUMNS*
+	}
+
+	/**
+	 * The index as HTML, each entry numbered from the pages it is on now and linked to $targets[page] where set
+	 */
+	private function indexHtml($usedivletters, $useLinking, $indexCollationLocale, $indexCollationGroup, array $targets = [])
+	{
+		$size = count($this->Reference);
 
 		// $spacer used after named entry
 		// $sep  separates number [groups], $joiner joins numbers in range
@@ -24483,7 +24532,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							if ($range_end) {
 								if ($range_end == $range_start + 1) {
 									if ($useLinking) {
-										$html .= '<a class="mpdf_index_link" href="@' . $range_start . '">';
+										$html .= $this->indexLink($range_start, $targets);
 									}
 									$html .= $this->docPageNum($range_start);
 									if ($useLinking) {
@@ -24492,7 +24541,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 									$html .= $sep;
 
 									if ($useLinking) {
-										$html .= '<a class="mpdf_index_link" href="@' . $ppp[$zi - 1] . '">';
+										$html .= $this->indexLink($ppp[$zi - 1], $targets);
 									}
 									$html .= $this->docPageNum($ppp[$zi - 1]);
 									if ($useLinking) {
@@ -24502,7 +24551,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 								}
 							} else {
 								if ($useLinking) {
-									$html .= '<a class="mpdf_index_link" href="@' . $ppp[$zi - 1] . '">';
+									$html .= $this->indexLink($ppp[$zi - 1], $targets);
 								}
 								$html .= $this->docPageNum($ppp[$zi - 1]);
 								if ($useLinking) {
@@ -24517,7 +24566,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 					if ($range_end) {
 						if ($useLinking) {
-							$html .= '<a class="mpdf_index_link" href="@' . $range_start . '">';
+							$html .= $this->indexLink($range_start, $targets);
 						}
 						$html .= $this->docPageNum($range_start);
 						if ($range_end == $range_start + 1) {
@@ -24526,7 +24575,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 							}
 							$html .= $sep;
 							if ($useLinking) {
-								$html .= '<a class="mpdf_index_link" href="@' . $range_end . '">';
+								$html .= $this->indexLink($range_end, $targets);
 							}
 							$html .= $this->docPageNum($range_end);
 							if ($useLinking) {
@@ -24541,7 +24590,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 					} else {
 						if ($useLinking) {
-							$html .= '<a class="mpdf_index_link" href="@' . $ppp[(count($ppp) - 1)] . '">';
+							$html .= $this->indexLink($ppp[(count($ppp) - 1)], $targets);
 						}
 						$html .= $this->docPageNum($ppp[(count($ppp) - 1)]);
 						if ($useLinking) {
@@ -24554,11 +24603,13 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$last_lett = $lett;
 		}
 		$html .= '</div>';
-		$save_fpb = $this->fixedPosBlockSave;
-		$this->WriteHTML($html);
-		$this->fixedPosBlockSave = $save_fpb;
 
-		$this->breakpoints[$this->CurrCol][] = $this->y;  // *COLUMNS*
+		return $html;
+	}
+
+	private function indexLink($page, array $targets)
+	{
+		return '<a class="mpdf_index_link" href="@' . (isset($targets[$page]) ? $targets[$page] : $page) . '">';
 	}
 
 	/* -- END INDEX -- */
