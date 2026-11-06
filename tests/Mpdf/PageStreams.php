@@ -140,6 +140,16 @@ trait PageStreams
 	}
 
 	/**
+	 * An SVG filled with a half-transparent gradient, which writes two shadings: the gradient and its opacity mask
+	 *
+	 * @return string
+	 */
+	private static function gradientSvg()
+	{
+		return '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><linearGradient id="g"><stop offset="0" stop-color="#f0f" stop-opacity="0.5"/><stop offset="1" stop-color="#0ff"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)" fill-opacity="0.5"/></svg>';
+	}
+
+	/**
 	 * An opaque JPEG, which a cell or block tiles as a pattern; the trait's PNG has an alpha channel and is not
 	 */
 	private function backgroundImage()
