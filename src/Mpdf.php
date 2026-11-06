@@ -27199,27 +27199,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function purify_utf8($html, $lo = true)
 	{
 		if (!$this->is_utf8($html)) {
+			// mbstring replaces or drops what it cannot read, so the first difference is the first bad byte
+			$roundTrip = mb_convert_encoding(mb_convert_encoding($html, "UTF-32", "UTF-8"), "UTF-8", "UTF-32");
+			$pos = strspn($html ^ $roundTrip, "\0");
 
-			while (mb_convert_encoding(mb_convert_encoding($html, "UTF-32", "UTF-8"), "UTF-8", "UTF-32") !== $html) {
-
-				$a = @iconv('UTF-8', 'UTF-8', $html);
-				$error = error_get_last();
-				if ($error && $error['message'] === 'iconv(): Detected an illegal character in input string') {
-					throw new \Mpdf\MpdfException('Invalid input characters. Did you set $mpdf->in_charset properly?');
-				}
-
-				$pos = $start = strlen($a);
-				$err = '';
-				while (ord(substr($html, $pos, 1)) > 128) {
-					$err .= '[[#' . ord(substr($html, $pos, 1)) . ']]';
-					$pos++;
-				}
-
-				$this->logger->error($err, ['context' => LogContext::UTF8]);
-				$html = substr($html, $pos);
+			$err = '';
+			while (ord(substr($html, $pos, 1)) >= 128) {
+				$err .= '[[#' . ord(substr($html, $pos, 1)) . ']]';
+				$pos++;
 			}
 
-			throw new \Mpdf\MpdfException("HTML contains invalid UTF-8 character(s). See log for further details");
+			$this->logger->error($err, ['context' => LogContext::UTF8]);
+
+			throw new \Mpdf\MpdfException('Invalid input characters. Did you set $mpdf->in_charset properly?');
 		}
 
 		$html = preg_replace("/\r/", "", $html);
