@@ -31,7 +31,7 @@ class RecordingAssetFetcher implements AssetFetcherInterface
 	}
 
 	/**
-	 * Records the path, and returns what it holds
+	 * Records the path, and returns what it holds: nothing where it is not one of the assets
 	 *
 	 * @param string $path
 	 * @param string|null $originalSrc
@@ -42,7 +42,7 @@ class RecordingAssetFetcher implements AssetFetcherInterface
 	{
 		$this->requested[] = $path;
 
-		return $this->assets[$path];
+		return isset($this->assets[$path]) ? $this->assets[$path] : '';
 	}
 
 }

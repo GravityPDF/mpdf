@@ -17,6 +17,7 @@ use Mpdf\Css\PresentationalHints;
 use Mpdf\Css\SelectorParser;
 use Mpdf\Css\ShadowParser;
 use Mpdf\File\LocalContentLoader;
+use Mpdf\File\StreamWrapperChecker;
 use Mpdf\Fonts\FontCache;
 use Mpdf\Fonts\FontFileFinder;
 use Mpdf\Fonts\FontSubstitution;
@@ -98,9 +99,11 @@ class ServiceFactory
 			? $this->container->get('localContentLoader')
 			: new LocalContentLoader();
 
-		$assetFetcher = $this->container && $this->container->has('assetFetcher')
+		$rawAssetFetcher = $this->container && $this->container->has('assetFetcher')
 			? $this->container->get('assetFetcher')
 			: new AssetFetcher($mpdf, $localContentLoader, $httpClient, $logger);
+
+		$assetFetcher = new CheckedAssetFetcher($rawAssetFetcher, new StreamWrapperChecker($mpdf));
 
 		$normalizeProperties = new NormalizeProperties($mpdf, $sizeConverter, $colorConverter);
 		$selectorParser = new SelectorParser($mpdf);
@@ -215,7 +218,7 @@ class ServiceFactory
 			'hyphenator' => $hyphenator,
 			'localContentLoader' => $localContentLoader,
 			'httpClient' => $httpClient,
-			'assetFetcher' => $assetFetcher,
+			'assetFetcher' => $rawAssetFetcher, // Mpdf::setLogger() passes the logger on to the fetcher itself
 			'imageProcessor' => $imageProcessor,
 			'protection' => $protection,
 
