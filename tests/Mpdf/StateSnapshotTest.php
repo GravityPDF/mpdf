@@ -108,6 +108,50 @@ class StateSnapshotTest extends BaseMpdfTest
 	}
 
 	/**
+	 * Only a fetched image needs its bytes held for the next pass: a data URI or an imageVars entry brings them again
+	 */
+	public function testAnSvgIsHeldOnlyWhenItWasFetched()
+	{
+		$svg = $this->gradientSvg();
+		$file = tempnam(sys_get_temp_dir(), 'mpdf');
+		$loader = new CountingContentLoader($svg);
+		$cases = self::svgThroughAnUnwoundPass();
+		$html = $cases['in the contents, then after an index'][0];
+
+		foreach (['data:image/svg+xml;base64,' . base64_encode($svg) => 0, 'var:logo' => 0, $file => 1] as $src => $held) {
+			$img = '<img src="' . $src . '" />';
+			$mpdf = $this->mpdf([], new SimpleContainer(['localContentLoader' => $loader]));
+			$mpdf->imageVars['logo'] = $svg;
+			$mpdf->WriteHTML(sprintf($html, htmlspecialchars($img, ENT_QUOTES), $img));
+			$pdf = $this->output($mpdf);
+
+			$this->assertCount($held, $this->property($this->property($mpdf, 'imageProcessor'), 'vectorData'), $src);
+			$this->assertSame(2, substr_count($pdf, '/ShadingType'), $src);
+		}
+
+		unlink($file);
+	}
+
+	/**
+	 * Reads a private property
+	 *
+	 * @param object $object
+	 * @param string $name
+	 *
+	 * @return mixed
+	 */
+	private function property($object, $name)
+	{
+		$property = new \ReflectionProperty($object, $name);
+
+		if (PHP_VERSION_ID < 80100) {
+			$property->setAccessible(true);
+		}
+
+		return $property->getValue($object);
+	}
+
+	/**
 	 * A spot colour first met in the contents' look-ahead stays defined: the colour cache will not register it again
 	 * when the pass that draws the contents for good finds the colour there
 	 */
@@ -242,16 +286,6 @@ class StateSnapshotTest extends BaseMpdfTest
 		}
 
 		$this->assertCount(1, preg_grep('/^' . $warning . '/', $mpdf->PDFAXwarnings), implode("\n", $mpdf->PDFAXwarnings));
-	}
-
-	/**
-	 * An SVG filled with a half-transparent gradient
-	 *
-	 * @return string
-	 */
-	private function gradientSvg()
-	{
-		return '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><linearGradient id="g"><stop offset="0" stop-color="#f0f" stop-opacity="0.5"/><stop offset="1" stop-color="#0ff"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)" fill-opacity="0.5"/></svg>';
 	}
 
 	/**

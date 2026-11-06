@@ -73,8 +73,9 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 	private $failedImages;
 
 	/**
-	 * @var string[] The bytes of each vector image read, by file. An unwound pass takes its form objects with it, and
-	 *               the next one parses the file again without fetching it again
+	 * @var string[] The bytes of each vector image fetched, by file. An unwound pass takes its form objects with it, and
+	 *               the next one parses the file again without fetching it again. A data URI or an imageVars entry
+	 *               comes with its bytes each time, so is not held
 	 */
 	private $vectorData = [];
 
@@ -143,6 +144,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 
 		$type = null;
 		$data = '';
+		$fetched = false;
 
 		if (preg_match('/var:\s*(.*)/', $file, $v)) {
 			if (!isset($this->mpdf->imageVars[$v[1]])) {
@@ -205,6 +207,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 		if (!$data) {
 			try {
 				$data = $this->assetFetcher->fetchDataFromPath($file, $orig_srcpath);
+				$fetched = true;
 			} catch (\Mpdf\Exception\AssetFetchingException $e) {
 				return $this->imageError($orig_srcpath, $firstTime, $e->getMessage());
 			}
@@ -222,7 +225,9 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			if (!$allowvector) {
 				return $this->imageError($file, $firstTime, 'SVG image file not supported in this context');
 			}
-			$this->vectorData[$file] = $data;
+			if ($fetched) {
+				$this->vectorData[$file] = $data;
+			}
 			return $this->processSvg($data, $file, $firstTime);
 		}
 
@@ -230,7 +235,9 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 			if (!$allowvector) {
 				return $this->imageError($file, $firstTime, 'WMF image file not supported in this context');
 			}
-			$this->vectorData[$file] = $data;
+			if ($fetched) {
+				$this->vectorData[$file] = $data;
+			}
 			return $this->processWmf($data, $file, $firstTime);
 		}
 

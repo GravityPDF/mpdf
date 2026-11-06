@@ -181,6 +181,7 @@ Performance
 * **Line breaking and colours.** A flowing block works out the width a line may take, after its text-indent, a dot tab's outdent and the floats beside it, once per line instead of once per character. `SetColor()` keeps the operator it builds for each colour instead of formatting it each time a colour is set. A 57-page document of justified paragraphs renders about 10% faster, and pages of bordered boxes about 7%. [#843]
 * **Character ranges.** Substitution reads which characters a backup font has from a small file instead of the font, so only the font it uses is loaded. Every font package ships them beside its fonts, mPDF writes one into the font cache for any other font the first time it builds its metrics, and `vendor/bin/mpdf-font-ranges` writes one for a font package of your own to ship. [#827]
 * **Packaged fonts.** TrueType hinting is removed from the 51 packaged fonts whose licences allow it: Aboriginal Sans, Ayar, DejaVu, GNU FreeFont, Garuda, Khmer OS, Lohit Kannada, MPH 2B Damase, Pothana 2000, UnBatang and XB Riyaz. Those files are 10.94 MB (24.3%) smaller, and PDFs embedding them about 24% smaller, with the same outlines and metrics. `utils/dehint_fonts.py` holds the list. [#850] [#853]
+* **Vector images in data URIs.** An SVG or WMF from a data URI or `imageVars` is no longer held in memory until the document ends, as it comes with its bytes each time it is parsed. A 6.9 MB SVG data URI in the contents, with an index, peaks at about 132 MB instead of 140 MB. [#860]
 
 Bugfixes
 --------
@@ -1068,4 +1069,5 @@ These changes do not change output.
 [#856]: https://github.com/GravityPDF/mpdf/pull/856
 [#857]: https://github.com/GravityPDF/mpdf/pull/857
 [#858]: https://github.com/GravityPDF/mpdf/issues/858
+[#860]: https://github.com/GravityPDF/mpdf/issues/860
 [#864]: https://github.com/GravityPDF/mpdf/issues/864
