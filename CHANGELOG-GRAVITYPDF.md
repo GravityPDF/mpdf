@@ -380,6 +380,7 @@ Bugfixes
 * In a core-font document, `OverWrite()` did not find search text with characters outside ASCII, or with `(`, `)` or `\`. [#464] [#485]
 * An EAN or UPC code longer than the symbol holds is refused. [mpdf/mpdf#1334] [#39]
 * A `<title>` or `<meta>` written inside a `<script>`, `<style>`, `<textarea>` or HTML comment was read as the document's own: it became the PDF's title in place of the real `<title>` after it, or set its author, subject or keywords. These hold text, not elements, as they do in a browser. [#786] [#795]
+* Passing a class that only implements `AssetFetcherInterface` through the container as `assetFetcher` threw a `TypeError` while `Mpdf` was constructed. Only `AssetFetcher` or a subclass of it was accepted. Such a class must refuse stream wrappers such as `phar://` itself, as `AssetFetcher` does. [#858]
 
 ### Font cache
 
@@ -1065,3 +1066,4 @@ These changes do not change output.
 [#843]: https://github.com/GravityPDF/mpdf/pull/843
 [#856]: https://github.com/GravityPDF/mpdf/pull/856
 [#857]: https://github.com/GravityPDF/mpdf/pull/857
+[#858]: https://github.com/GravityPDF/mpdf/issues/858

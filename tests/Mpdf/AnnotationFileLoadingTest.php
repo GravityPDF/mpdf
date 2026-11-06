@@ -387,6 +387,22 @@ class AnnotationFileLoadingTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCa
 	}
 
 	/**
+	 * A fetcher that implements only AssetFetcherInterface supplies the file
+	 */
+	public function testTheFileComesFromAnInterfaceOnlyFetcher()
+	{
+		$this->requireFileinfo();
+
+		$url = 'https://assets.test/notes.txt';
+		$fetcher = new RecordingAssetFetcher([$url => self::FILES['notes.txt']]);
+
+		$pdf = $this->apiDocument($url, [], null, new SimpleContainer(['assetFetcher' => $fetcher]));
+
+		$this->assertSame([$url], $fetcher->requested);
+		$this->assertEmbedded($pdf, self::FILES['notes.txt']);
+	}
+
+	/**
 	 * Build the document for a failure case and expect it to throw an MpdfAnnotationException naming the file
 	 *
 	 * @param bool $html
