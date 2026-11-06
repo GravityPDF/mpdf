@@ -107,6 +107,61 @@ class StateSnapshotTest extends BaseMpdfTest
 	}
 
 	/**
+	 * A spot colour first met in the contents' look-ahead stays defined: the colour cache will not register it again
+	 * when the pass that draws the contents for good finds the colour there
+	 */
+	public function testASpotColourInTheContentsIsDefined()
+	{
+		$pdf = $this->render('<style>.mpdf_toc_t_level_0 { color: spot(ZED,50,0,100,0,0); }</style><tocpagebreak /><tocentry content="One" /><p>Body</p>');
+
+		$this->assertSame(1, substr_count($pdf, '/Separation /ZED'));
+		$this->assertSame('1', $this->spotInkOf('One', $pdf));
+	}
+
+	/**
+	 * A spot colour in the contents, painted ahead of time for an index, keeps its number from the colour the body goes
+	 * on to use: each text prints in its own ink
+	 */
+	public function testTheContentsAndTheBodyAfterAnIndexKeepTheirOwnSpotColours()
+	{
+		$mpdf = $this->mpdf();
+		$mpdf->WriteHTML('<style>.mpdf_toc_t_level_0 { color: spot(TOCINK,50,0,100,0,0); } .later { color: spot(BODYINK,50,100,0,0,0); }</style>'
+			. '<tocpagebreak /><tocentry content="One" /><indexentry content="Term" /><p>Body</p><pagebreak /><indexinsert /><p class="later">Later</p>');
+		$pdf = $this->output($mpdf);
+
+		$this->assertSame(1, substr_count($pdf, '/Separation /TOCINK'));
+		$this->assertSame(1, substr_count($pdf, '/Separation /BODYINK'));
+		$this->assertEquals($mpdf->spotColors['TOCINK']['i'], $this->spotInkOf('One', $pdf));
+		$this->assertEquals($mpdf->spotColors['BODYINK']['i'], $this->spotInkOf('Later', $pdf));
+	}
+
+	/**
+	 * A spot colour first met in a kept block that moves stays defined when the block is laid out on its new page
+	 */
+	public function testASpotColourInAKeptBlockThatMovesIsDefined()
+	{
+		$mpdf = $this->mpdf();
+		$mpdf->WriteHTML($this->filler(27) . $this->keptBlock(4, '', 'color: spot(ZED,50,0,100,0,0);'));
+		$pdf = $this->output($mpdf);
+
+		$this->assertCount(2, $mpdf->pages);
+		$this->assertSame(1, substr_count($pdf, '/Separation /ZED'));
+		$this->assertSame('1', $this->spotInkOf('Kept', $pdf));
+	}
+
+	/**
+	 * A spot colour met before a kept block moves survives the block's unwinding, under the same number
+	 */
+	public function testASpotColourMetBeforeAKeptBlockMovesKeepsItsNumber()
+	{
+		$pdf = $this->render('<p style="color: spot(FIRST,50,0,100,0,0);">Before</p>' . $this->filler(27) . $this->keptBlock(4, '', 'color: spot(FIRST,50,0,100,0,0);'));
+
+		$this->assertSame(1, substr_count($pdf, '/Separation /FIRST'));
+		$this->assertSame('1', $this->spotInkOf('Before', $pdf));
+		$this->assertSame('1', $this->spotInkOf('Kept', $pdf));
+	}
+
+	/**
 	 * An SVG filled with a half-transparent gradient
 	 *
 	 * @return string
@@ -114,5 +169,20 @@ class StateSnapshotTest extends BaseMpdfTest
 	private function gradientSvg()
 	{
 		return '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><linearGradient id="g"><stop offset="0" stop-color="#f0f" stop-opacity="0.5"/><stop offset="1" stop-color="#0ff"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)" fill-opacity="0.5"/></svg>';
+	}
+
+	/**
+	 * The number of the spot colour a piece of text is printed in
+	 *
+	 * @param string $text
+	 * @param string $pdf
+	 *
+	 * @return string
+	 */
+	private function spotInkOf($text, $pdf)
+	{
+		$this->assertSame(1, preg_match('#/CS(\d+) cs [^\n]*\(' . $text . '\) Tj#', $pdf, $match), $text);
+
+		return $match[1];
 	}
 }

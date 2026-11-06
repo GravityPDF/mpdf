@@ -355,6 +355,7 @@ Bugfixes
 * Index entries whose keys collate the same, such as `Term` and `term`, came out in a different order on PHP 7 and PHP 8. They now keep the order they were made in. [#74]
 * With a `toc-page-selector`, a long index and whatever followed it were laid out in the table of contents' `@page` margins, header and footer. [#856]
 * An SVG with a gradient or opacity came out blank when first drawn in the table of contents, or in a `page-break-inside: avoid` block that moved to the next page. The same SVG drawn later in the body after an index was blank too. [#857]
+* A spot colour first used in the table of contents, or in a `page-break-inside: avoid` block that moved to the next page, was left undefined. After an index, the contents could print in the ink of a spot colour the body went on to use. [#857]
 
 ### PDF/A and PDF/X
 
