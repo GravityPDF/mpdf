@@ -18,6 +18,12 @@ class TextRecordingMpdf extends Mpdf
 	/** The font family of each line drawn, by the same index as the text. */
 	public $drawnFontFamily = [];
 
+	/** The font size, in points, of each line drawn, by the same index as the text. */
+	public $drawnFontSize = [];
+
+	/** The operator that sets the text colour of each line drawn, by the same index as the text. */
+	public $drawnColours = [];
+
 	/**
 	 * Records the text of a line before drawing it
 	 *
@@ -28,6 +34,8 @@ class TextRecordingMpdf extends Mpdf
 		if (is_string($txt) && trim($txt) !== '') {
 			$this->drawnText[] = $txt;
 			$this->drawnFontFamily[] = $this->FontFamily;
+			$this->drawnFontSize[] = $this->FontSizePt;
+			$this->drawnColours[] = $this->TextColor;
 		}
 
 		return parent::Cell($w, $h, $txt, $border, $ln, $align, $fill, $link, $currentx, $lcpaddingL, $lcpaddingR, $valign, $spanfill, $exactWidth, $OTLdata, $textvar, $lineBox);

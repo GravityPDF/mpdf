@@ -9,6 +9,8 @@ use Mpdf\Css\CssParser;
 
 class CssManager
 {
+	use StateSnapshot;
+
 	/**
 	 * @var \Mpdf\Css\CssParser
 	 */

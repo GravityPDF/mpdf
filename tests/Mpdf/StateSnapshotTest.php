@@ -10,6 +10,7 @@ use Mpdf\Container\SimpleContainer;
 class StateSnapshotTest extends BaseMpdfTest
 {
 
+	use DrawnStyles;
 	use PageStreams;
 
 	/**
@@ -158,6 +159,39 @@ class StateSnapshotTest extends BaseMpdfTest
 		$this->assertSame(1, substr_count($pdf, '/Separation /FIRST'));
 		$this->assertSame('1', $this->spotInkOf('Before', $pdf));
 		$this->assertSame('1', $this->spotInkOf('Kept', $pdf));
+	}
+
+	/**
+	 * A stylesheet in the contents' pre-HTML is for the contents. Painting them ahead of time for an index must not
+	 * leave it applying to what follows the index, and the contents still have it when they are drawn for good
+	 */
+	public function testAStylesheetInTheContentsDoesNotReachTheBodyAfterAnIndex()
+	{
+		$preHtml = htmlspecialchars('<style>.after { color: #f00; font-size: 30pt; }</style><p class="after">INCONTENTS</p>', ENT_QUOTES);
+		$mpdf = $this->drawDocument('<tocpagebreak toc-prehtml="' . $preHtml . '" /><tocentry content="One" /><indexentry content="Term" />'
+			. '<p>Body</p><pagebreak /><indexinsert /><p class="after">AFTERINDEX</p>');
+		$mpdf->Close();
+		$sizes = $this->keyedByText($mpdf, $mpdf->drawnFontSize);
+		$colours = $this->keyedByText($mpdf, $mpdf->drawnColours);
+
+		$this->assertEquals(11, $sizes['AFTERINDEX']);
+		$this->assertSame('0.000 g', $colours['AFTERINDEX']);
+		$this->assertEquals(30, $sizes['INCONTENTS']);
+		$this->assertSame('1.000 0.000 0.000 rg', $colours['INCONTENTS']);
+	}
+
+	/**
+	 * A stylesheet read before a kept block moves still applies to the block on its new page and to what follows it
+	 */
+	public function testAStylesheetReadBeforeAKeptBlockMovesStillApplies()
+	{
+		$mpdf = $this->drawDocument('<style>.styled { font-size: 20pt; }</style>' . $this->filler(26)
+			. $this->keptBlock(2, '<p class="styled">INBLOCK</p>') . '<p class="styled">AFTERBLOCK</p>');
+		$sizes = $this->keyedByText($mpdf, $mpdf->drawnFontSize);
+
+		$this->assertCount(2, $mpdf->pages);
+		$this->assertEquals(20, $sizes['INBLOCK']);
+		$this->assertEquals(20, $sizes['AFTERBLOCK']);
 	}
 
 	/**

@@ -83,6 +83,12 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	var $PDFXauto;
 
 	/**
+	 * @var string[] The services a look-ahead has to unwind: where a document registers its fields and contents entries,
+	 *               selects its @page and reads its stylesheets
+	 */
+	private static $snapshottedServices = ['form', 'tableOfContents', 'page_box', 'cssManager'];
+
+	/**
 	 * @var string[][] The operator SetColor() writes for a colour, by type and then colour
 	 */
 	private $deviceColorOperators = [];
@@ -27735,8 +27741,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * can only be computed by writing to the document. For example, {@see TableOfContents::insertTOC}
 	 * uses this functionality to determine the correct page numbers.
 	 *
-	 * Only scalar and array values are captured in the snapshot, plus the state of the Form, TableOfContents
-	 * and PageBox objects, where a document registers its fields and contents entries and selects its @page.
+	 * Only scalar and array values are captured in the snapshot, plus the state of the services that hold document
+	 * state of their own, {@see $snapshottedServices}.
 	 *
 	 * @return array<string, mixed>
 	 *
@@ -27753,9 +27759,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		// one holds the numbers of the gradients and graphics states it draws with, and those are not live
 		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators'], $snapshot['spotColors'], $snapshot['spotColorIDs'], $snapshot['PDFAXwarnings']);
 
-		$snapshot['form'] = $this->form->getStateSnapshot();
-		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
-		$snapshot['page_box'] = $this->page_box->getStateSnapshot();
+		foreach (self::$snapshottedServices as $service) {
+			$snapshot[$service] = $this->{$service}->getStateSnapshot();
+		}
 
 		return $snapshot;
 	}
@@ -27771,10 +27777,10 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function restoreStateSnapshot(array $snapshot)
 	{
-		$this->form->restoreStateSnapshot($snapshot['form']);
-		$this->tableOfContents->restoreStateSnapshot($snapshot['tableOfContents']);
-		$this->page_box->restoreStateSnapshot($snapshot['page_box']);
-		unset($snapshot['form'], $snapshot['tableOfContents'], $snapshot['page_box']);
+		foreach (self::$snapshottedServices as $service) {
+			$this->{$service}->restoreStateSnapshot($snapshot[$service]);
+			unset($snapshot[$service]);
+		}
 
 		$this->restoreOwnState($snapshot);
 
