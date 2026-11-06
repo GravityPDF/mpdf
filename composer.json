@@ -42,6 +42,7 @@
 		"ext-bcmath": "Needed for generation of some types of barcodes",
 		"ext-zlib": "Needed for compression of embedded resources, such as fonts",
 		"ext-xml": "Needed mainly for SVG manipulation",
+		"ext-fileinfo": "Needed to check the type of the files annotations embed",
         "ext-imagick": "Needed if developing the Mpdf library"
     },
 	"bin": [

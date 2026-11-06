@@ -86,6 +86,35 @@ class Path
 	}
 
 	/**
+	 * Whether a path names a local file: a file:// URL or anything with no scheme
+	 *
+	 * @param string $path
+	 *
+	 * @return bool
+	 */
+	public static function isLocal($path)
+	{
+		return strpos($path, 'file://') === 0 || strpos($path, '://') === false; // @todo More robust implementation
+	}
+
+	/**
+	 * A file's lower-case extension: what follows the last dot of its name, from a URL's path only. Empty when
+	 * the name has no dot
+	 *
+	 * @param string $path A local path or a URL
+	 *
+	 * @return string
+	 */
+	public static function extension($path)
+	{
+		if (!self::isLocal($path)) {
+			$path = (string) parse_url($path, PHP_URL_PATH);
+		}
+
+		return strtolower(pathinfo(str_replace('\\', '/', $path), PATHINFO_EXTENSION));
+	}
+
+	/**
 	 * Normalize file path for local file system access.
 	 *
 	 * Converts URLs to local file paths when the base path is local.
