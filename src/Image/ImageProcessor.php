@@ -2,7 +2,7 @@
 
 namespace Mpdf\Image;
 
-use Mpdf\AssetFetcher;
+use Mpdf\AssetFetcherInterface;
 use Mpdf\Cache;
 use Mpdf\Color\ColorConverter;
 use Mpdf\Color\ColorModeConverter;
@@ -94,7 +94,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 	public $scriptToLanguage;
 
 	/**
-	 * @var \Mpdf\AssetFetcher
+	 * @var \Mpdf\AssetFetcherInterface
 	 */
 	private $assetFetcher;
 
@@ -108,7 +108,7 @@ class ImageProcessor implements \Psr\Log\LoggerAwareInterface
 		Cache $cache,
 		LanguageToFontInterface $languageToFont,
 		ScriptToLanguageInterface $scriptToLanguage,
-		AssetFetcher $assetFetcher,
+		AssetFetcherInterface $assetFetcher,
 		LoggerInterface $logger
 	) {
 

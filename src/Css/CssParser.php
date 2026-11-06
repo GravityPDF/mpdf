@@ -8,7 +8,7 @@ use Mpdf\Mpdf;
 use Mpdf\Cache;
 use Mpdf\SizeConverter;
 use Mpdf\Color\ColorConverter;
-use Mpdf\AssetFetcher;
+use Mpdf\AssetFetcherInterface;
 
 class CssParser
 {
@@ -108,7 +108,7 @@ class CssParser
 		Cache $cache,
 		SizeConverter $sizeConverter,
 		ColorConverter $colorConverter,
-		AssetFetcher $assetFetcher
+		AssetFetcherInterface $assetFetcher
 	) {
 		$this->mpdf = $mpdf;
 		$this->normalizeProperties = new NormalizeProperties($mpdf, $sizeConverter, $colorConverter);
