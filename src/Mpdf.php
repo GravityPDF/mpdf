@@ -30,6 +30,11 @@ use Psr\Log\NullLogger;
 class Mpdf implements \Psr\Log\LoggerAwareInterface
 {
 
+	use StateSnapshot {
+		getStateSnapshot as private snapshotOwnState;
+		restoreStateSnapshot as private restoreOwnState;
+	}
+
 	use Strict;
 	use FpdiTrait;
 	use MpdfPsrLogAwareTrait;
@@ -2050,7 +2055,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$this->InFooter = false;
 		}
 
-		if ($this->tableOfContents->TOCmark || count($this->tableOfContents->m_TOC)) {
+		if ($this->tableOfContents->hasToc()) {
 			$this->tableOfContents->insertTOC();
 		}
 
@@ -24058,6 +24063,19 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			}
 		}
 
+		/* -- INDEX -- */
+		// Update Index entries
+		foreach ($this->Reference as $i => $r) {
+			foreach ($r['p'] as $key => $p) {
+				if ($p >= $start_page && $p <= $end_page) {
+					$this->Reference[$i]['p'][$key] += ($target_page - $start_page);
+				} elseif ($p >= $target_page && $p < $start_page) {
+					$this->Reference[$i]['p'][$key] += $n_toc;
+				}
+			}
+		}
+		/* -- END INDEX -- */
+
 		// Update PageNumSubstitutions
 		if (count($this->PageNumSubstitutions)) {
 			$newarr = [];
@@ -24340,10 +24358,46 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 	function InsertIndex($usedivletters = 1, $useLinking = false, $indexCollationLocale = '', $indexCollationGroup = '')
 	{
-		$size = count($this->Reference);
-		if ($size == 0) {
+		if (!count($this->Reference)) {
 			return false;
 		}
+
+		// A table of contents is written last and moved into place (see TableOfContents::insertTOC), which shifts
+		// every page after it. The index is painted here and now, so the contents are painted ahead of time, the
+		// entries numbered from where their pages end up, and everything put back. Not from inside a header or
+		// footer write, where there is no page to paint the contents on
+		if ($this->tableOfContents->hasToc() && !$this->bufferoutput) {
+			$snapshot = $this->getStateSnapshot();
+			// Only the shift is wanted, not the numbers the contents print, so its own look-ahead is skipped
+			$this->tableOfContents->beginTocPaint();
+			$this->tableOfContents->insertTOC();
+			// The links are moved with the pages when the contents is really inserted, so they point at the pages
+			// as they are now, while the numbers print as the pages end up
+			$targets = [];
+			foreach ($snapshot['Reference'] as $i => $r) {
+				foreach ($r['p'] as $key => $p) {
+					$targets[$this->Reference[$i]['p'][$key]] = $p;
+				}
+			}
+			$html = $this->indexHtml($usedivletters, $useLinking, $indexCollationLocale, $indexCollationGroup, $targets);
+			$this->restoreStateSnapshot($snapshot);
+		} else {
+			$html = $this->indexHtml($usedivletters, $useLinking, $indexCollationLocale, $indexCollationGroup);
+		}
+
+		$save_fpb = $this->fixedPosBlockSave;
+		$this->WriteHTML($html);
+		$this->fixedPosBlockSave = $save_fpb;
+
+		$this->breakpoints[$this->CurrCol][] = $this->y;  // *COLUMNS*
+	}
+
+	/**
+	 * The index as HTML, each entry numbered from the pages it is on now and linked to $targets[page] where set
+	 */
+	private function indexHtml($usedivletters, $useLinking, $indexCollationLocale, $indexCollationGroup, array $targets = [])
+	{
+		$size = count($this->Reference);
 
 		// $spacer used after named entry
 		// $sep  separates number [groups], $joiner joins numbers in range
@@ -24371,6 +24425,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$txt = $this->purify_utf8($txt);
 			$this->Reference[$i]['uf'] = $txt; // Unformatted e.g. pure utf-8 encoded characters, no mark-up/tags
 			// Used for ordering and collation
+			$this->Reference[$i]['order'] = $i; // Entries that collate the same keep this order, on every PHP version
 		}
 
 		if ($usedivletters) {
@@ -24406,7 +24461,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 
 		usort($this->Reference, function ($a, $b) {
-			return strcoll(strtolower($a['uf']), strtolower($b['uf']));
+			return strcoll(mb_strtolower($a['uf'], 'UTF-8'), mb_strtolower($b['uf'], 'UTF-8')) ?: $a['order'] - $b['order'];
 		});
 
 		if ($indexCollationLocale) {
@@ -24465,95 +24520,52 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				$ppp = $this->Reference[$i]['p']; // = array of page numbers to point to
 				if (count($ppp)) {
 					sort($ppp);
-					$newarr = [];
-					$range_start = $ppp[0];
-					$range_end = 0;
-
-					$html .= $spacer;
-
-					for ($zi = 1; $zi < count($ppp); $zi++) {
-						if ($ppp[$zi] == ($ppp[($zi - 1)] + 1)) {
-							$range_end = $ppp[$zi];
+					// Consecutive pages are gathered into runs: three or more print as "a-b", a pair as "a, b"
+					$runs = [];
+					foreach ($ppp as $zi => $p) {
+						if ($zi && $p == $ppp[$zi - 1] + 1) {
+							$runs[count($runs) - 1][] = $p;
 						} else {
-							if ($range_end) {
-								if ($range_end == $range_start + 1) {
-									if ($useLinking) {
-										$html .= '<a class="mpdf_index_link" href="@' . $range_start . '">';
-									}
-									$html .= $this->docPageNum($range_start);
-									if ($useLinking) {
-										$html .= '</a>';
-									}
-									$html .= $sep;
-
-									if ($useLinking) {
-										$html .= '<a class="mpdf_index_link" href="@' . $ppp[$zi - 1] . '">';
-									}
-									$html .= $this->docPageNum($ppp[$zi - 1]);
-									if ($useLinking) {
-										$html .= '</a>';
-									}
-									$html .= $sep;
-								}
-							} else {
-								if ($useLinking) {
-									$html .= '<a class="mpdf_index_link" href="@' . $ppp[$zi - 1] . '">';
-								}
-								$html .= $this->docPageNum($ppp[$zi - 1]);
-								if ($useLinking) {
-									$html .= '</a>';
-								}
-								$html .= $sep;
-							}
-							$range_start = $ppp[$zi];
-							$range_end = 0;
+							$runs[] = [$p];
 						}
 					}
-
-					if ($range_end) {
-						if ($useLinking) {
-							$html .= '<a class="mpdf_index_link" href="@' . $range_start . '">';
-						}
-						$html .= $this->docPageNum($range_start);
-						if ($range_end == $range_start + 1) {
-							if ($useLinking) {
-								$html .= '</a>';
-							}
-							$html .= $sep;
-							if ($useLinking) {
-								$html .= '<a class="mpdf_index_link" href="@' . $range_end . '">';
-							}
-							$html .= $this->docPageNum($range_end);
-							if ($useLinking) {
-								$html .= '</a>';
-							}
+					$refs = [];
+					foreach ($runs as $run) {
+						if (count($run) > 2) {
+							$refs[] = $this->indexPageRef($run, $useLinking, $targets, $joiner);
 						} else {
-							$html .= $joiner;
-							$html .= $this->docPageNum($range_end);
-							if ($useLinking) {
-								$html .= '</a>';
+							foreach ($run as $p) {
+								$refs[] = $this->indexPageRef([$p], $useLinking, $targets, $joiner);
 							}
-						}
-					} else {
-						if ($useLinking) {
-							$html .= '<a class="mpdf_index_link" href="@' . $ppp[(count($ppp) - 1)] . '">';
-						}
-						$html .= $this->docPageNum($ppp[(count($ppp) - 1)]);
-						if ($useLinking) {
-							$html .= '</a>';
 						}
 					}
+					$html .= $spacer . implode($sep, $refs);
 				}
 			}
 			$html .= '</div>';
 			$last_lett = $lett;
 		}
 		$html .= '</div>';
-		$save_fpb = $this->fixedPosBlockSave;
-		$this->WriteHTML($html);
-		$this->fixedPosBlockSave = $save_fpb;
 
-		$this->breakpoints[$this->CurrCol][] = $this->y;  // *COLUMNS*
+		return $html;
+	}
+
+	/**
+	 * One page reference in an index entry: the page number, or "a-b" for a run of pages, linked to the first page of
+	 * the run when links are on
+	 */
+	private function indexPageRef(array $run, $useLinking, array $targets, $joiner)
+	{
+		$text = $this->docPageNum($run[0]);
+		if (count($run) > 1) {
+			$text .= $joiner . $this->docPageNum(end($run));
+		}
+		if (!$useLinking) {
+			return $text;
+		}
+		$page = isset($targets[$run[0]]) ? $targets[$run[0]] : $run[0];
+
+		return '<a class="mpdf_index_link" href="@' . $page . '">' . $text . '</a>';
 	}
 
 	/* -- END INDEX -- */
@@ -27716,4 +27728,59 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		return $html;
 	}
 
+	/**
+	 * Capture a snapshot of mPDFs mutable document state
+	 *
+	 * In combination with {@see restoreStateSnapshot()} this allows for document look-aheads that
+	 * can only be computed by writing to the document. For example, {@see TableOfContents::insertTOC}
+	 * uses this functionality to determine the correct page numbers.
+	 *
+	 * Only scalar and array values are captured in the snapshot, plus the state of the Form, TableOfContents
+	 * and PageBox objects, where a document registers its fields and contents entries and selects its @page.
+	 *
+	 * @return array<string, mixed>
+	 *
+	 * @internal Needs to be public to let internal mPDF classes use it, but is not part of the public API
+	 */
+	public function getStateSnapshot()
+	{
+		$snapshot = $this->snapshotOwnState();
+
+		// The loader caches stay live: the pass being unwound only adds to them and the pass that follows needs every
+		// entry. So does the counter that numbers fonts alongside them, the reference into one of them, and the colour
+		// operators SetColor() has built
+		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators']);
+
+		$snapshot['form'] = $this->form->getStateSnapshot();
+		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
+		$snapshot['page_box'] = $this->page_box->getStateSnapshot();
+
+		return $snapshot;
+	}
+
+	/**
+	 * Restore document state previously captured by {@see getStateSnapshot()}.
+	 *
+	 * @param array<string, mixed> $snapshot
+	 *
+	 * @return void
+	 *
+	 * @internal Needs to be public to let internal mPDF classes use it, but is not part of the public API
+	 */
+	public function restoreStateSnapshot(array $snapshot)
+	{
+		$this->form->restoreStateSnapshot($snapshot['form']);
+		$this->tableOfContents->restoreStateSnapshot($snapshot['tableOfContents']);
+		$this->page_box->restoreStateSnapshot($snapshot['page_box']);
+		unset($snapshot['form'], $snapshot['tableOfContents'], $snapshot['page_box']);
+
+		$this->restoreOwnState($snapshot);
+
+		// CurrentFont is a reference into fonts[], which stays live, so it is bound to the restored selection here:
+		// SetFont() will not do it while the family, style and size already match
+		$fontkey = $this->FontFamily . $this->FontStyle;
+		if (isset($this->fonts[$fontkey])) {
+			$this->CurrentFont = &$this->fonts[$fontkey];
+		}
+	}
 }

@@ -10,6 +10,8 @@ use Mpdf\Writer\FormWriter;
 class Form
 {
 
+	use StateSnapshot;
+
 	use Strict;
 
 	// Input flags

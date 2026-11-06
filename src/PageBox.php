@@ -5,6 +5,8 @@ namespace Mpdf;
 class PageBox implements \ArrayAccess
 {
 
+	use StateSnapshot;
+
 	private $container = [];
 
 	public function __construct()
