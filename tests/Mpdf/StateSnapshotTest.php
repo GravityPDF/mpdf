@@ -162,6 +162,55 @@ class StateSnapshotTest extends BaseMpdfTest
 	}
 
 	/**
+	 * What a PDF/A or PDF/X document cannot use, drawn only in the contents or only in a kept block that moves, in the
+	 * colour each standard refuses and the image every one does
+	 *
+	 * @return array[]
+	 */
+	public static function refusedThroughAnUnwoundPass()
+	{
+		$contents = '<style>.mpdf_toc_t_level_0 { color: %s; }</style><tocpagebreak /><tocentry content="One" /><p>Body</p>';
+		$filler = str_repeat('<p>Filler</p>', 27);
+		$lines = str_repeat('<p>Kept</p>', 4);
+		$kept = $filler . '<div style="page-break-inside: avoid; color: %s;">' . $lines . '</div>';
+
+		return [
+			'PDF/A, colour in the contents' => ['PDFA', sprintf($contents, 'cmyk(0,50,100,0)'), 'CMYK color'],
+			'PDF/A, colour in a kept block' => ['PDFA', sprintf($kept, 'cmyk(0,50,100,0)'), 'CMYK color'],
+			'PDF/X, colour in the contents' => ['PDFX', sprintf($contents, 'rgb(255,0,0)'), 'RGB color'],
+			'PDF/X, colour in a kept block' => ['PDFX', sprintf($kept, 'rgb(255,0,0)'), 'RGB color'],
+			'PDF/A, image in the contents' => ['PDFA', '<tocpagebreak toc-prehtml="&lt;img src=&quot;%s&quot; /&gt;" /><tocentry content="One" /><p>Body</p>', 'Transparency'],
+			'PDF/A, image in a kept block' => ['PDFA', $filler . '<div style="page-break-inside: avoid;"><img src="%s" />' . $lines . '</div>', 'Transparency'],
+		];
+	}
+
+	/**
+	 * A warning is raised only when a colour or image is first converted, and the pass that follows finds it cached.
+	 * It has to survive the unwinding, and be reported once
+	 *
+	 * @dataProvider refusedThroughAnUnwoundPass
+	 *
+	 * @param string $standard PDFA or PDFX
+	 * @param string $html
+	 * @param string $warning What the one warning starts with
+	 */
+	public function testAWarningRaisedInAnUnwoundPassIsReportedOnce($standard, $html, $warning)
+	{
+		$mpdf = $this->mpdf(['mode' => '', 'default_font' => 'dejavusans', 'PDFAversion' => '1-B', 'PDFXversion' => '1a', $standard => true]);
+		$mpdf->SetTitle('Title');
+		$mpdf->WriteHTML(sprintf($html, $this->pngImage()));
+
+		try {
+			$this->output($mpdf);
+			$this->fail('The document should have been refused');
+		} catch (MpdfException $e) {
+			$this->assertStringContainsString('PDFA/PDFX warnings generated', $e->getMessage());
+		}
+
+		$this->assertCount(1, preg_grep('/^' . $warning . '/', $mpdf->PDFAXwarnings), implode("\n", $mpdf->PDFAXwarnings));
+	}
+
+	/**
 	 * An SVG filled with a half-transparent gradient
 	 *
 	 * @return string
