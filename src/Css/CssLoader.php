@@ -2,7 +2,7 @@
 
 namespace Mpdf\Css;
 
-use Mpdf\AssetFetcher;
+use Mpdf\AssetFetcherInterface;
 use Mpdf\Cache;
 use Mpdf\CssMode;
 use Mpdf\Exception\AssetFetchingException;
@@ -20,7 +20,7 @@ class CssLoader
 	private $mpdf;
 
 	/**
-	 * @var AssetFetcher
+	 * @var AssetFetcherInterface
 	 */
 	private $assetFetcher;
 
@@ -39,7 +39,7 @@ class CssLoader
 	 */
 	private $tokenizer;
 
-	public function __construct(Mpdf $mpdf, AssetFetcher $assetFetcher, Cache $cache, MediaQueryProcessor $mediaQueryProcessor)
+	public function __construct(Mpdf $mpdf, AssetFetcherInterface $assetFetcher, Cache $cache, MediaQueryProcessor $mediaQueryProcessor)
 	{
 		$this->mpdf = $mpdf;
 		$this->assetFetcher = $assetFetcher;

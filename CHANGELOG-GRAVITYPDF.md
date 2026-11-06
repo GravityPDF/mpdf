@@ -84,6 +84,7 @@ Read this section before upgrading from upstream mPDF. Each entry says what chan
 * **A block wider than its container sticks out of it**, as in a browser, in standard mode. mPDF cut a block's `width` or `min-width` down to the space its container left, so `<div style="width: 50mm"><div style="min-width: 80mm">` drew a 50mm box, and so did `width: 50mm; padding: 0 5mm` in a 50mm container less its padding. Now the box keeps its width and sticks out on the right, or on the left where `direction` is `rtl`. Auto margins count as 0 when the box does not fit. A left float sticks out on the right; a right float already stuck out on the left. A block wider than the page area runs into the page margin. Text inside wraps at the block's width. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep holding blocks within their container. [#552] [#701]
 * **An image with `display: block` has a line of its own and is placed by its margins**, as in a browser, in standard mode. mPDF kept the image inline and read an `auto` margin as 0, so `img { display: block; margin: 0 auto }`, the usual way to centre an image, did nothing. Now the line ends before and after the image, `margin: 0 auto` centres it, `margin-left: auto` pushes it to the right edge, and in a right-to-left block an image with no auto margin sits at the right. `text-align` does not move a block-level image, and `justify` leaves the line before it unstretched. Text that followed such an image on its line moves down a line. Floats, images in table cells and images inside `<columns>` are placed as before. Set `'cssMode' => \Mpdf\CssMode::LEGACY` to keep the image inline with margins of 0. [#589] [#693]
   * A paragraph's `text-indent` does not move a block-level image on its first line, as the image is not part of a line of text; before, the image was shifted by the indent, and one as wide as the line ran past the page area. An image too wide for the room beside a float is narrowed in proportion, its margins kept; mPDF took the margins out of its width only, so it was drawn too tall. As mPDF narrows any image to fit, a block-level image wider than its line is narrowed rather than overflowing as in a browser. [#703]
+* **A stream wrapper is checked for every asset fetcher, not only `AssetFetcher`.** A fetcher from the container, or a subclass of `AssetFetcher` that replaced `fetchDataFromPath()`, could be handed `phar://` and other stream wrappers from the document's HTML and CSS. mPDF now refuses them before the call, as `AssetFetcher` does. A scheme not registered with PHP still reaches the fetcher. If yours serves a registered wrapper such as `s3://`, add it to `whitelistStreamWrappers`. `phar` cannot be allowed. [#864]
 
 New features
 ------------
@@ -380,6 +381,7 @@ Bugfixes
 * In a core-font document, `OverWrite()` did not find search text with characters outside ASCII, or with `(`, `)` or `\`. [#464] [#485]
 * An EAN or UPC code longer than the symbol holds is refused. [mpdf/mpdf#1334] [#39]
 * A `<title>` or `<meta>` written inside a `<script>`, `<style>`, `<textarea>` or HTML comment was read as the document's own: it became the PDF's title in place of the real `<title>` after it, or set its author, subject or keywords. These hold text, not elements, as they do in a browser. [#786] [#795]
+* Passing a class that only implements `AssetFetcherInterface` through the container as `assetFetcher` threw a `TypeError` while `Mpdf` was constructed. Only `AssetFetcher` or a subclass of it was accepted. [#858]
 
 ### Font cache
 
@@ -1065,3 +1067,5 @@ These changes do not change output.
 [#843]: https://github.com/GravityPDF/mpdf/pull/843
 [#856]: https://github.com/GravityPDF/mpdf/pull/856
 [#857]: https://github.com/GravityPDF/mpdf/pull/857
+[#858]: https://github.com/GravityPDF/mpdf/issues/858
+[#864]: https://github.com/GravityPDF/mpdf/issues/864

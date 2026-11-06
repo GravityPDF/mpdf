@@ -1083,7 +1083,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	private $localContentLoader;
 
 	/**
-	 * @var \Mpdf\AssetFetcher
+	 * @var \Mpdf\AssetFetcherInterface
 	 */
 	private $assetFetcher;
 

@@ -2,6 +2,7 @@
 
 namespace Mpdf\File;
 
+use Mpdf\Exception\AssetFetchingException;
 use Mpdf\Mpdf;
 
 final class StreamWrapperChecker
@@ -36,6 +37,24 @@ final class StreamWrapperChecker
 		}
 
 		return false;
+	}
+
+	/**
+	 * Prevents insecure PHP object injection through phar:// wrapper
+	 *
+	 * @see https://github.com/mpdf/mpdf/issues/949
+	 * @see https://github.com/mpdf/mpdf/issues/1381
+	 *
+	 * @param string $path
+	 * @param string|null $originalSrc
+	 *
+	 * @throws \Mpdf\Exception\AssetFetchingException Where either uses a stream wrapper that is not allowed
+	 */
+	public function assertAllowed($path, $originalSrc)
+	{
+		if ($this->hasBlacklistedStreamWrapper($path) || ($originalSrc && $this->hasBlacklistedStreamWrapper($originalSrc))) {
+			throw new AssetFetchingException('File contains an invalid stream. Only ' . implode(', ', $this->getWhitelistedStreamWrappers()) . ' streams are allowed.');
+		}
 	}
 
 	public function getWhitelistedStreamWrappers()
