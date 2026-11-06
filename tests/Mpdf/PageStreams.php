@@ -12,9 +12,9 @@ trait PageStreams
 	/**
 	 * A document in core fonts that writes its streams uncompressed
 	 */
-	private function mpdf($config = [])
+	private function mpdf($config = [], $container = null)
 	{
-		$mpdf = new Mpdf($config + ['mode' => 'c']);
+		$mpdf = new Mpdf($config + ['mode' => 'c'], $container);
 		$mpdf->compress = false;
 
 		return $mpdf;

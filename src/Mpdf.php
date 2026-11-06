@@ -27748,8 +27748,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 
 		// The loader caches stay live: the pass being unwound only adds to them and the pass that follows needs every
 		// entry. So does the counter that numbers fonts alongside them, the reference into one of them, and the colour
-		// operators SetColor() has built
-		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators']);
+		// operators SetColor() has built. The form objects are unwound, as one holds the numbers
+		// of the gradients and graphics states it draws with, and those are not live
+		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators']);
 
 		$snapshot['form'] = $this->form->getStateSnapshot();
 		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
