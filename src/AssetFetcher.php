@@ -31,20 +31,8 @@ class AssetFetcher implements \Psr\Log\LoggerAwareInterface, \Mpdf\AssetFetcherI
 
 	public function fetchDataFromPath($path, $originalSrc = null)
 	{
-		/**
-		 * Prevents insecure PHP object injection through phar:// wrapper
-		 * @see https://github.com/mpdf/mpdf/issues/949
-		 * @see https://github.com/mpdf/mpdf/issues/1381
-		 */
-		$wrapperChecker = new StreamWrapperChecker($this->mpdf);
-
-		if ($wrapperChecker->hasBlacklistedStreamWrapper($path)) {
-			throw new \Mpdf\Exception\AssetFetchingException('File contains an invalid stream. Only ' . implode(', ', $wrapperChecker->getWhitelistedStreamWrappers()) . ' streams are allowed.');
-		}
-
-		if ($originalSrc && $wrapperChecker->hasBlacklistedStreamWrapper($originalSrc)) {
-			throw new \Mpdf\Exception\AssetFetchingException('File contains an invalid stream. Only ' . implode(', ', $wrapperChecker->getWhitelistedStreamWrappers()) . ' streams are allowed.');
-		}
+		// ServiceFactory checks too, through CheckedAssetFetcher. This covers an AssetFetcher built directly
+		(new StreamWrapperChecker($this->mpdf))->assertAllowed($path, $originalSrc);
 
 		$this->mpdf->GetFullPath($path);
 
