@@ -128,4 +128,20 @@ trait PageStreams
 	{
 		$this->assertSame($expected, substr_count($stream, '(' . $text . ')'), $message ?: "'$text' should appear $expected time(s)");
 	}
+
+	/**
+	 * $paragraphs short paragraphs, to fill a page ahead of a kept block
+	 */
+	private function filler($paragraphs)
+	{
+		return str_repeat('<p>Filler</p>', $paragraphs);
+	}
+
+	/**
+	 * A kept block of $lines lines, with $inner ahead of them
+	 */
+	private function keptBlock($lines, $inner = '')
+	{
+		return '<div style="page-break-inside: avoid;">' . $inner . str_repeat('<p>Kept</p>', $lines) . '</div>';
+	}
 }
