@@ -58,6 +58,7 @@ class CheckedAssetFetcherTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 			'a <link>' => ['<link rel="stylesheet" href="%s.css"><p>Text</p>', '%s.css'],
 			'an @import' => ['<style>@import url("%s.css");</style><p>Text</p>', '%s.css'],
 			'an <img>' => ['<img src="%s.jpg" width="20" height="20">', '%s.jpg'],
+			'an <annotation>' => ['<p><annotation content="Note" icon="Paperclip" file="%s.txt" /> Text</p>', '%s.txt'],
 		];
 	}
 
@@ -150,7 +151,7 @@ class CheckedAssetFetcherTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Render the HTML with a fetcher in place of mPDF's own that holds no assets
+	 * Render the HTML with a fetcher in place of mPDF's own that holds no assets, and files on <annotation> allowed
 	 *
 	 * @param string $html
 	 * @param array $config
@@ -161,7 +162,7 @@ class CheckedAssetFetcherTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	{
 		$fetcher = new RecordingAssetFetcher([]);
 
-		$mpdf = $this->mpdf($config, new SimpleContainer(['assetFetcher' => $fetcher]));
+		$mpdf = $this->mpdf($config + ['allowAnnotationFiles' => true, 'allowHtmlAnnotationFiles' => true], new SimpleContainer(['assetFetcher' => $fetcher]));
 		$mpdf->WriteHTML($html);
 		$this->output($mpdf);
 

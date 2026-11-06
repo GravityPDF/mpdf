@@ -54,6 +54,11 @@ final class PageWriter
 
 		$annotid = (3 + 2 * $nb);
 
+		/* -- ANNOTATIONS -- */
+		// Files that cannot be embedded are dropped here, before any annotation's objects are counted
+		$this->metadataWriter->loadAnnotationFiles();
+		/* -- END ANNOTATIONS -- */
+
 		// Active Forms
 		$totaladdnum = 0;
 		for ($n = 1; $n <= $nb; $n++) {
