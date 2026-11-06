@@ -8665,7 +8665,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function utf8ToWin1252($text, $zeroWidthSpace = self::ZERO_WIDTH_SPACE_WIN1252)
 	{
-		$text = str_replace([self::ZERO_WIDTH_SPACE_WIN1252, self::ZERO_WIDTH_SPACE_UTF8], ['', $zeroWidthSpace], $text);
+		// U+FEFF draws nothing, and windows-1252 would turn it into a question mark
+		$text = str_replace([self::ZERO_WIDTH_SPACE_WIN1252, self::ZERO_WIDTH_SPACE_UTF8, "\xEF\xBB\xBF"], ['', $zeroWidthSpace, ''], $text);
 
 		return mb_convert_encoding($text, 'windows-1252', 'UTF-8');
 	}
@@ -17066,8 +17067,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		}
 		if (isset($this->OTLdata) && $this->OTLdata) {
 			$arr[18] = $this->OTLdata;
-			$this->OTLdata = [];
 			// A text node after a block saves its line break first, which takes the run, and the text must not as well
+			$this->OTLdata = [];
 		} // mPDF 5.7.1
 		else {
 			$arr[18] = null;
@@ -27173,7 +27174,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	function is_utf8(&$string)
 	{
-		if ($string === mb_convert_encoding(mb_convert_encoding($string, "UTF-32", "UTF-8"), "UTF-8", "UTF-32")) {
+		if (mb_check_encoding($string, 'UTF-8')) {
 			return true;
 		}
 
@@ -27197,7 +27198,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		if (!$this->is_utf8($html)) {
 
-			while (mb_convert_encoding(mb_convert_encoding($html, "UTF-32", "UTF-8"), "UTF-8", "UTF-32") !== $html) {
+			while (!mb_check_encoding($html, 'UTF-8')) {
 
 				$a = @iconv('UTF-8', 'UTF-8', $html);
 				$error = error_get_last();
@@ -27242,7 +27243,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			throw new \Mpdf\MpdfException("Text contains invalid UTF-8 character(s)");
 		}
 
-		$txt = preg_replace("/\r/", "", $txt);
+		// U+FEFF draws nothing, and is removed from HTML text the same way
+		$txt = preg_replace("/\xEF\xBB\xBF|\r/", "", $txt);
 
 		return ($txt);
 	}

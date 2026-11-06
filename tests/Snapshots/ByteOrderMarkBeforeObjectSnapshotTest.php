@@ -61,6 +61,6 @@ class ByteOrderMarkBeforeObjectSnapshotTest extends Snapshot
 		$html = ob_get_clean();
 
 		$this->mpdf = $this->createMpdf(['default_font' => 'dejavusanscondensed']);
-		$this->mpdf->WriteHTML($html);
+		$this->mpdf->WriteHTML($bom . $html);
 	}
 }
