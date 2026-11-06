@@ -30,6 +30,11 @@ use Psr\Log\NullLogger;
 class Mpdf implements \Psr\Log\LoggerAwareInterface
 {
 
+	use StateSnapshot {
+		getStateSnapshot as private snapshotOwnState;
+		restoreStateSnapshot as private restoreOwnState;
+	}
+
 	use Strict;
 	use FpdiTrait;
 	use MpdfPsrLogAwareTrait;
@@ -27723,7 +27728,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 * can only be computed by writing to the document. For example, {@see TableOfContents::insertTOC}
 	 * uses this functionality to determine the correct page numbers.
 	 *
-	 * Only scalar and array values are captured in the snapshot. All objects and resources are excluded.
+	 * Only scalar and array values are captured in the snapshot, plus the state of the Form, TableOfContents
+	 * and PageBox objects, where a document registers its fields and contents entries and selects its @page.
 	 *
 	 * @return array<string, mixed>
 	 *
@@ -27731,14 +27737,16 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function getStateSnapshot()
 	{
-		$snapshot = [];
-		foreach (get_object_vars($this) as $key => $value) {
-			if (is_object($value) || is_resource($value)) {
-				continue;
-			}
+		$snapshot = $this->snapshotOwnState();
 
-			$snapshot[$key] = $value;
-		}
+		// The loader caches stay live: the pass being unwound only adds to them and the pass that follows needs every
+		// entry. So does the counter that numbers fonts alongside them, the reference into one of them, and the colour
+		// operators SetColor() has built
+		unset($snapshot['fonts'], $snapshot['FontFiles'], $snapshot['extraFontSubsets'], $snapshot['images'], $snapshot['formobjects'], $snapshot['CurrentFont'], $snapshot['deviceColorOperators']);
+
+		$snapshot['form'] = $this->form->getStateSnapshot();
+		$snapshot['tableOfContents'] = $this->tableOfContents->getStateSnapshot();
+		$snapshot['page_box'] = $this->page_box->getStateSnapshot();
 
 		return $snapshot;
 	}
@@ -27754,8 +27762,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	public function restoreStateSnapshot(array $snapshot)
 	{
-		foreach ($snapshot as $key => $value) {
-			$this->{$key} = $value;
+		$this->form->restoreStateSnapshot($snapshot['form']);
+		$this->tableOfContents->restoreStateSnapshot($snapshot['tableOfContents']);
+		$this->page_box->restoreStateSnapshot($snapshot['page_box']);
+		unset($snapshot['form'], $snapshot['tableOfContents'], $snapshot['page_box']);
+
+		$this->restoreOwnState($snapshot);
+
+		// CurrentFont is a reference into fonts[], which stays live, so it is bound to the restored selection here:
+		// SetFont() will not do it while the family, style and size already match
+		$fontkey = $this->FontFamily . $this->FontStyle;
+		if (isset($this->fonts[$fontkey])) {
+			$this->CurrentFont = &$this->fonts[$fontkey];
 		}
 	}
 }
