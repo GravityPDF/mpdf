@@ -10,6 +10,10 @@ use Mpdf\Css\CssParser;
 
 class CssManager
 {
+	use StateSnapshot {
+		getStateSnapshot as private snapshotOwnState;
+	}
+
 	/**
 	 * @var \Mpdf\Css\CssParser
 	 */
@@ -124,6 +128,19 @@ class CssManager
 		$this->cssMerger->setCssManager($this);
 		$this->rules = new RuleSet();
 		$this->defaultRules = new RuleSet();
+	}
+
+	/**
+	 * The stylesheets read so far and the table cascade. The compiled rules are an object, so a copy of them goes along
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function getStateSnapshot()
+	{
+		$snapshot = $this->snapshotOwnState();
+		$snapshot['rules'] = clone $this->rules;
+
+		return $snapshot;
 	}
 
 	/**

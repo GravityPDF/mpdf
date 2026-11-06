@@ -354,6 +354,10 @@ Bugfixes
 * An index entry with a run of three or more pages followed by a later page printed only the later page: pages 1, 2, 3 and 5 came out as `5`. [#66] [#67]
 * Index entries whose keys collate the same, such as `Term` and `term`, came out in a different order on PHP 7 and PHP 8. They now keep the order they were made in. [#74]
 * With a `toc-page-selector`, a long index and whatever followed it were laid out in the table of contents' `@page` margins, header and footer. [#856]
+* An SVG with a gradient or opacity came out blank when first drawn in the table of contents, or in a `page-break-inside: avoid` block that moved to the next page. The same SVG drawn later in the body after an index was blank too. [#857]
+* A spot colour first used in the table of contents, or in a `page-break-inside: avoid` block that moved to the next page, was left undefined. After an index, the contents could print in the ink of a spot colour the body went on to use. [#857]
+* A `<style>` in `toc-preHTML` also applied to whatever followed an index, as well as to the table of contents. [#857]
+* A colour or image PDF/A or PDF/X does not allow went unreported when first used in the table of contents or in a `page-break-inside: avoid` block that moved to the next page, so the document was output instead of refused. [#857]
 
 ### PDF/A and PDF/X
 
@@ -1060,3 +1064,4 @@ These changes do not change output.
 [#841]: https://github.com/GravityPDF/mpdf/pull/841
 [#843]: https://github.com/GravityPDF/mpdf/pull/843
 [#856]: https://github.com/GravityPDF/mpdf/pull/856
+[#857]: https://github.com/GravityPDF/mpdf/pull/857
