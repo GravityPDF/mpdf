@@ -168,7 +168,6 @@ abstract class InlineTag extends Tag
 			if ($bdf2) {
 				$bdf2 = UtfString::code2utf($bdf);
 			}
-			$this->mpdf->OTLdata = [];
 			if ($this->mpdf->tableLevel) {
 				$this->mpdf->_saveCellTextBuffer(UtfString::code2utf($bdf) . $bdf2);
 			} else {
@@ -224,7 +223,6 @@ abstract class InlineTag extends Tag
 		// mPDF 6 Bidirectional formatting for inline elements
 		if ($bdf) {
 			$popf = $this->mpdf->_setBidiCodes('end', $bdf);
-			$this->mpdf->OTLdata = [];
 			if ($this->mpdf->tableLevel) {
 				$this->mpdf->_saveCellTextBuffer($popf);
 			} else {

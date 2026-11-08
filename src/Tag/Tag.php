@@ -378,7 +378,6 @@ abstract class Tag
 			$codes .= $this->mpdf->_setBidiCodes('start', $popd);
 		}
 		if ($codes !== '') {
-			$this->mpdf->OTLdata = [];
 			$this->mpdf->_saveTextBuffer($codes);
 			$this->mpdf->biDirectional = true;
 		}
