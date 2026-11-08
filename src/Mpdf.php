@@ -14882,8 +14882,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				$this->OTLdata = null;  // mPDF 5.7.1
-
 				$e = UtfString::strcode2utf($e);
 				$e = $this->lesser_entity_decode($e);
 
@@ -14999,6 +14997,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if ($e || $e === '0') {
 							if ($this->blockjustfinished && $this->cell[$this->row][$this->col]['s'] > 0) {
 								$this->_saveCellTextBuffer("\n");
+								// The line break has taken this text's run, so the text is saved without one
+								$this->OTLdata = [];
 								if (!isset($this->cell[$this->row][$this->col]['maxs'])) {
 									$this->cell[$this->row][$this->col]['maxs'] = $this->cell[$this->row][$this->col]['s'];
 								} elseif ($this->cell[$this->row][$this->col]['maxs'] < $this->cell[$this->row][$this->col]['s']) {
@@ -15074,7 +15074,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				}
 				// Text that came to nothing saved no chunk, and the next chunk must not take its run:
 				// printbuffer() takes any run for that chunk's own, and an inline object needs one of its own to be drawn
-				$this->OTLdata = [];
+				$this->OTLdata = null;
 			} else { // TAG **
 				if (isset($e[0]) && $e[0] == '/') {
 					$endtag = HtmlTags::name($e);
@@ -17065,14 +17065,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($this->textshadow) && $this->textshadow) {
 			$arr[17] = $this->textshadow;
 		}
-		if (isset($this->OTLdata) && $this->OTLdata) {
-			$arr[18] = $this->OTLdata;
-			// A text node after a block saves its line break first, which takes the run, and the text must not as well
-			$this->OTLdata = [];
-		} // mPDF 5.7.1
-		else {
-			$arr[18] = null;
-		}
+		$arr[18] = empty($this->OTLdata) ? null : $this->OTLdata;
 		$this->cell[$this->row][$this->col]['textbuffer'][] = $arr;
 	}
 
@@ -27198,7 +27191,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		if (!$this->is_utf8($html)) {
 
-			while (!mb_check_encoding($html, 'UTF-8')) {
+			while (!$this->is_utf8($html)) {
 
 				$a = @iconv('UTF-8', 'UTF-8', $html);
 				$error = error_get_last();

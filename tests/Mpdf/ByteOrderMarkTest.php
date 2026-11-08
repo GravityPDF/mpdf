@@ -25,8 +25,11 @@ class ByteOrderMarkTest extends TestCase
 	 */
 	public function testATextNodeThatComesToNothingChangesNothing($html, $mark = self::BOM)
 	{
-		foreach (['', 'c'] as $mode) {
-			$this->assertSame($this->page(sprintf($html, ''), $mode), $this->page(sprintf($html, $mark), $mode));
+		foreach ([['mode' => '', 'default_font' => 'dejavusanscondensed'], ['mode' => 'c']] as $config) {
+			$this->assertSame(
+				$this->pageContents($this->render(sprintf($html, ''), $config)),
+				$this->pageContents($this->render(sprintf($html, $mark), $config))
+			);
 		}
 	}
 
@@ -54,7 +57,7 @@ class ByteOrderMarkTest extends TestCase
 	 * @param callable $write
 	 * @param string $text
 	 *
-	 * @return string[]
+	 * @return string
 	 */
 	private function drawn($mode, $write, $text)
 	{
@@ -62,7 +65,7 @@ class ByteOrderMarkTest extends TestCase
 		$mpdf->AddPage();
 		$write($mpdf, $text);
 
-		return $this->pageContents($this->output($mpdf));
+		return $this->joinedPageContents($mpdf);
 	}
 
 	/**
@@ -154,21 +157,5 @@ class ByteOrderMarkTest extends TestCase
 			'at the start, before a document' => ['%s<!DOCTYPE html><html><head><title>T</title></head><body><p>Text</p></body></html>'],
 			'at the start, then a line break' => ['%s' . "\n" . '<p>Text</p>'],
 		];
-	}
-
-	/**
-	 * The first page's content stream
-	 *
-	 * @param string $html
-	 * @param string $mode
-	 *
-	 * @return string
-	 */
-	private function page($html, $mode)
-	{
-		$config = $mode === 'c' ? ['mode' => 'c'] : ['mode' => '', 'default_font' => 'dejavusanscondensed'];
-		$pages = $this->pageContents($this->render($html, $config));
-
-		return $pages[0];
 	}
 }
