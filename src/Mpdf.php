@@ -16121,7 +16121,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($intlink) && $intlink) {
 			$arr[7] = $intlink;
 		}
-		$arr[8] = $this->textvar; // mPDF 5.7.1
+		$arr[8] = $this->textvar;
 		// mPDF 6
 		// If Kerning set for OTL, and useOTL has positive value, but has not set for this particular script,
 		// set for kerning via kern table
@@ -16184,7 +16184,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($intlink) && $intlink) {
 			$arr[7] = $intlink;
 		}
-		$arr[8] = $this->textvar; // mPDF 5.7.1
+		$arr[8] = $this->textvar;
 		// mPDF 6
 		// If Kerning set for OTL, and useOTL has positive value, but has not set for this particular script,
 		// set for kerning via kern table
