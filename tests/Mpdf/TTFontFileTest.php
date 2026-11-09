@@ -38,4 +38,14 @@ class TTFontFileTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		$this->assertSame('NotoSans-Regular', $this->ttf->fullName);
 	}
 
+	/**
+	 * A GSUB lookup whose subtable has no entries, as Sun-ExtA's ccmp ligatures do, is read as empty
+	 */
+	public function testGetMetricWithOtlReadsALookupWithNoEntries()
+	{
+		$this->ttf->getMetrics(__DIR__ . '/../../ttfonts/Sun-ExtA.ttf', (string) time(), 0, false, false, 0xFF);
+
+		$this->assertSame('Sun-ExtA', $this->ttf->fullName);
+	}
+
 }
