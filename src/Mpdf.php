@@ -13860,7 +13860,11 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						}
 						if ($e || $e === '0') {
 							if ($this->blockjustfinished && $this->cell[$this->row][$this->col]['s'] > 0) {
+								// The run belongs to this text, not to the line break saved ahead of it
+								$otlData = $this->OTLdata;
+								$this->OTLdata = [];
 								$this->_saveCellTextBuffer("\n");
+								$this->OTLdata = $otlData;
 								if (!isset($this->cell[$this->row][$this->col]['maxs'])) {
 									$this->cell[$this->row][$this->col]['maxs'] = $this->cell[$this->row][$this->col]['s'];
 								} elseif ($this->cell[$this->row][$this->col]['maxs'] < $this->cell[$this->row][$this->col]['s']) {
@@ -16117,14 +16121,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($intlink) && $intlink) {
 			$arr[7] = $intlink;
 		}
+		$arr[8] = $this->textvar;
 		// mPDF 6
 		// If Kerning set for OTL, and useOTL has positive value, but has not set for this particular script,
 		// set for kerning via kern table
 		// e.g. Latin script when useOTL set as 0x80
 		if (isset($this->OTLtags['Plus']) && strpos($this->OTLtags['Plus'], 'kern') !== false && empty($this->OTLdata['GPOSinfo'])) {
-			$this->textvar = ($this->textvar | TextVars::FC_KERNING);
+			$arr[8] |= TextVars::FC_KERNING;
 		}
-		$arr[8] = $this->textvar; // mPDF 5.7.1
 		if (isset($this->textparam) && $this->textparam) {
 			$arr[9] = $this->textparam;
 		}
@@ -16180,14 +16184,14 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($intlink) && $intlink) {
 			$arr[7] = $intlink;
 		}
+		$arr[8] = $this->textvar;
 		// mPDF 6
 		// If Kerning set for OTL, and useOTL has positive value, but has not set for this particular script,
 		// set for kerning via kern table
 		// e.g. Latin script when useOTL set as 0x80
 		if (isset($this->OTLtags['Plus']) && strpos($this->OTLtags['Plus'], 'kern') !== false && empty($this->OTLdata['GPOSinfo'])) {
-			$this->textvar = ($this->textvar | TextVars::FC_KERNING);
+			$arr[8] |= TextVars::FC_KERNING;
 		}
-		$arr[8] = $this->textvar; // mPDF 5.7.1
 		if (isset($this->textparam) && $this->textparam) {
 			$arr[9] = $this->textparam;
 		}
