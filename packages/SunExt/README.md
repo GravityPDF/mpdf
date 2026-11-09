@@ -111,4 +111,4 @@ mPDF reads a `.ranges.php` file only from the directory of the font package that
 
 This package is licensed under the MIT License. Fonts are licensed separately by their authors, and can be found in the [`/fonts/LICENSE.txt`](./fonts/LICENSE.txt) file.
 
-The fonts here are modified: `utils/repair_sun_ext_fonts.py` in the mPDF repository removes their malformed vertical layout tables, and the substitutions in Sun-ExtA that name glyphs it does not have, so browsers can load them. Their outlines and horizontal metrics are unchanged.
+The fonts here are modified: their malformed vertical layout tables have been removed, as have the substitutions in Sun-ExtA that name glyphs it does not have, so browsers can load them. Their outlines and horizontal metrics are unchanged.
