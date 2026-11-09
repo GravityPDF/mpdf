@@ -28,7 +28,6 @@ abstract class BlockTag extends Tag
 		if (isset($this->mpdf->blk[$this->mpdf->blklvl]['bidicode'])) {
 			$blockpost = $this->mpdf->_setBidiCodes('end', $this->mpdf->blk[$this->mpdf->blklvl]['bidicode']);
 			if ($blockpost) {
-				$this->mpdf->OTLdata = [];
 				if ($this->mpdf->tableLevel) {
 					$this->mpdf->_saveCellTextBuffer($blockpost);
 				} else {
@@ -1079,7 +1078,6 @@ abstract class BlockTag extends Tag
 			if ($bdf2) {
 				$bdf2 = UtfString::code2utf($bdf);
 			}
-			$this->mpdf->OTLdata = [];
 			if ($this->mpdf->tableLevel) {
 				$this->mpdf->_saveCellTextBuffer(UtfString::code2utf($bdf) . $bdf2);
 			} else {
@@ -1100,7 +1098,6 @@ abstract class BlockTag extends Tag
 		if (isset($this->mpdf->blk[$this->mpdf->blklvl]['bidicode'])) {
 			$blockpost = $this->mpdf->_setBidiCodes('end', $this->mpdf->blk[$this->mpdf->blklvl]['bidicode']);
 			if ($blockpost) {
-				$this->mpdf->OTLdata = [];
 				if ($this->mpdf->tableLevel) {
 					$this->mpdf->_saveCellTextBuffer($blockpost);
 				} else {
@@ -1481,7 +1478,6 @@ abstract class BlockTag extends Tag
 		if (isset($this->mpdf->blk[$this->mpdf->blklvl]['bidicode'])) {
 			$blockpre = $this->mpdf->_setBidiCodes('start', $this->mpdf->blk[$this->mpdf->blklvl]['bidicode']);
 			if ($blockpre) {
-				$this->mpdf->OTLdata = [];
 				if ($this->mpdf->tableLevel) {
 					$this->mpdf->_saveCellTextBuffer($blockpre);
 				} else {
