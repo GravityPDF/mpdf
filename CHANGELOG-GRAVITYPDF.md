@@ -423,6 +423,8 @@ Bugfixes
 * The first `font-variant-position: super` or `sub` in a document raised an undefined-key warning. [mpdf/mpdf#2136] [#16]
 * `font-feature-settings` could not turn off the features a script's shaper applies itself, such as `blwf`, `pref`, `half` or `rphf`. It now can, at the stage the shaper applies them, as in HarfBuzz. [#384]
 * The `kern` feature was appended to a run's empty feature set instead of being set on it. [#157]
+* Text straight after a block in a table cell lost its kerning and mark positions, and in some fonts, such as XB Riyaz, its glyphs came out in the wrong order. It now draws as it does alone in a cell. [#872]
+* Text was kerned twice, drawing its pairs too close, when it followed text with no GPOS kerning of its own in a font that also has a `kern` table. [#872]
 * A character added to Unicode since 6.1 was read as unassigned. [#99] [#101] [#103]
 * The `lang` attribute now selects the language system HarfBuzz would for variant, script, region and extended language subtags. That includes ZHH, ZHS, ZHT and ZHTM for Chinese. [#191] [#201] [#206] [#218] [#220] [#221]
 
@@ -1074,4 +1076,5 @@ These changes do not change output.
 [#858]: https://github.com/GravityPDF/mpdf/issues/858
 [#864]: https://github.com/GravityPDF/mpdf/issues/864
 [#870]: https://github.com/GravityPDF/mpdf/issues/870
+[#872]: https://github.com/GravityPDF/mpdf/issues/872
 [#873]: https://github.com/GravityPDF/mpdf/pull/873
