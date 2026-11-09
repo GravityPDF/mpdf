@@ -13745,8 +13745,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 					}
 				}
 
-				$this->OTLdata = null;  // mPDF 5.7.1
-
 				$e = UtfString::strcode2utf($e);
 				$e = $this->lesser_entity_decode($e);
 
@@ -13756,7 +13754,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						$cnt += $this->SubstituteCharsNonCore($a, $i, $e);
 					}
 					// CONVERT ENCODING
-					$e = mb_convert_encoding($e, $this->mb_enc, 'UTF-8');
+					// U+FEFF draws nothing, and windows-1252 would turn it into a question mark
+					$e = mb_convert_encoding(str_replace("\xEF\xBB\xBF", '', $e), $this->mb_enc, 'UTF-8');
 					if ($this->textvar & TextVars::FT_UPPERCASE) {
 						$e = mb_strtoupper($e, $this->mb_enc);
 					} // mPDF 5.7.1
@@ -13833,7 +13832,6 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 						if (isset($this->selectoption['ACTIVE']) && $this->selectoption['ACTIVE']) {
 							$this->selectoption['ITEMS'][] = ['exportValue' => $this->selectoption['currentVAL'], 'content' => $e, 'selected' => $this->selectoption['currentSEL']];
 						}
-						$this->OTLdata = [];
 					} // TEXTAREA
 					else {
 						$objattr = unserialize($this->specialcontent);
@@ -13938,6 +13936,9 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 				if (substr($e, -1, 1) == ' ' && !$this->ispre && $this->FontFamily != 'csymbol' && $this->FontFamily != 'czapfdingbats') {
 					$this->ignorefollowingspaces = true;
 				}
+				// Text that came to nothing saved no chunk, and the next chunk must not take its run:
+				// printbuffer() takes any run for that chunk's own, and an inline object needs one of its own to be drawn
+				$this->OTLdata = null;
 			} else { // TAG **
 				if (isset($e[0]) && $e[0] == '/') {
 					$endtag = trim(strtoupper(substr($e, 1)));
@@ -16151,13 +16152,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($this->textshadow) && $this->textshadow) {
 			$arr[17] = $this->textshadow;
 		}
-		if (isset($this->OTLdata) && $this->OTLdata) {
-			$arr[18] = $this->OTLdata;
-			$this->OTLdata = [];
-		} // mPDF 5.7.1
-		else {
-			$arr[18] = null;
-		}
+		$arr[18] = empty($this->OTLdata) ? null : $this->OTLdata;
 		// mPDF 6  Lists
 		if ($return) {
 			return ($arr);
@@ -16214,13 +16209,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 		if (isset($this->textshadow) && $this->textshadow) {
 			$arr[17] = $this->textshadow;
 		}
-		if (isset($this->OTLdata) && $this->OTLdata) {
-			$arr[18] = $this->OTLdata;
-			$this->OTLdata = [];
-		} // mPDF 5.7.1
-		else {
-			$arr[18] = null;
-		}
+		$arr[18] = empty($this->OTLdata) ? null : $this->OTLdata;
 		$this->cell[$this->row][$this->col]['textbuffer'][] = $arr;
 	}
 
@@ -26314,7 +26303,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	 */
 	function is_utf8(&$string)
 	{
-		if ($string === mb_convert_encoding(mb_convert_encoding($string, "UTF-32", "UTF-8"), "UTF-8", "UTF-32")) {
+		if (mb_check_encoding($string, 'UTF-8')) {
 			return true;
 		}
 
@@ -26363,7 +26352,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			$txt = $this->repairInvalidUtf8($txt, 'Text contains invalid UTF-8 character(s)');
 		}
 
-		$txt = preg_replace("/\r/", "", $txt);
+		// U+FEFF draws nothing, and is removed from HTML text the same way
+		$txt = preg_replace("/\xEF\xBB\xBF|\r/", "", $txt);
 
 		return ($txt);
 	}
