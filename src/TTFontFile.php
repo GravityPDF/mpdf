@@ -1854,6 +1854,10 @@ class TTFontFile
 			for ($c = 0; $c < $Lookup[$i]['SubtableCount']; $c++) {
 				$SubstFormat = $Lookup[$i]['Subtable'][$c]['Format'];
 
+				// Stated even where nothing is recorded, so that a subtable with no entries reads as
+				// empty rather than absent, and the readers below can count it without asking
+				$Lookup[$i]['Subtable'][$c]['subs'] = [];
+
 				// LookupType 1: Single Substitution Subtable 1 => 1
 				if ($Lookup[$i]['Type'] == 1) {
 					$this->seek($Lookup[$i]['Subtable'][$c]['CoverageTableOffset']);

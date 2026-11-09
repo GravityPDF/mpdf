@@ -21,6 +21,7 @@ Bugfixes
 * Fixed division by zero error with invalid (<= 0>) `@page` `size` values, allowed standard values such as `size: A4` (#2101)
 * Fixed internal links being written with `/Border` outside their annotation dictionary, which drew a box around them in some viewers (#851)
 * Fixed Sun-ExtA and Sun-ExtB being rejected as web fonts by Chromium and Firefox. Their malformed vertical layout tables, Sun-ExtB's stale `DSIG` and the substitutions in Sun-ExtA that name glyphs it does not have are removed from the bundled fonts (#881)
+* Fixed a `TypeError` when reading a font with `useOTL` on, such as Sun-ExtA, where a GSUB subtable records no substitutions (#881)
 
 mPDF 8.2.x
 ===========================
