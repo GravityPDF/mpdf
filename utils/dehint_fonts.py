@@ -11,7 +11,7 @@ A font not listed has next to no hinting, a licence that rules this out or one t
 it: a Reserved Font Name (Abyssinica, Dai Banna, Dhyana, Eeyek, Jomolhari, Lateef, Padauk, Tai Heritage,
 TharLon), no modification (Estrangelo Edessa, Sun-ExtA, Aboriginal Serif, whose name table forbids copying
 despite the package's GPL) or none stated (Zawgyi-One, Kaputa, Lanna Alif). Sun-ExtB has no glyph
-instructions, and fontTools can't re-save it.
+instructions.
 """
 
 import os

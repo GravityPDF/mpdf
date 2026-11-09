@@ -415,6 +415,7 @@ Bugfixes
 * `haskernGPOS` was read for core fonts, which have no GPOS. [#141] [#149]
 * Core-font text is held in Windows-1252 but was decoded as UTF-8 when given bidi data, which dropped some bytes such as a lone `0xA0`. [#383]
 * debugfont mode read the wrong byte offsets in `hhea`, `post` and `maxp`. [mpdf/mpdf#2053] [#23]
+* Sun-ExtA and Sun-ExtB could not be loaded as web fonts: Chromium and Firefox rejected both for their malformed vertical metrics. `vhea`, `vmtx`, `VORG` and Sun-ExtB's stale `DSIG` are removed, as are the substitutions in Sun-ExtA's GSUB that name glyphs it does not have. PDFs using them look the same. [#881]
 
 ### Text shaping: general
 
@@ -1078,3 +1079,4 @@ These changes do not change output.
 [#870]: https://github.com/GravityPDF/mpdf/issues/870
 [#872]: https://github.com/GravityPDF/mpdf/issues/872
 [#873]: https://github.com/GravityPDF/mpdf/pull/873
+[#881]: https://github.com/GravityPDF/mpdf/issues/881
