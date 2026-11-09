@@ -26333,27 +26333,7 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	function purify_utf8($html, $lo = true)
 	{
 		if (!$this->is_utf8($html)) {
-
-			while (mb_convert_encoding(mb_convert_encoding($html, "UTF-32", "UTF-8"), "UTF-8", "UTF-32") !== $html) {
-
-				$a = @iconv('UTF-8', 'UTF-8', $html);
-				$error = error_get_last();
-				if ($error && $error['message'] === 'iconv(): Detected an illegal character in input string') {
-					throw new \Mpdf\MpdfException('Invalid input characters. Did you set $mpdf->in_charset properly?');
-				}
-
-				$pos = $start = strlen($a);
-				$err = '';
-				while (ord(substr($html, $pos, 1)) > 128) {
-					$err .= '[[#' . ord(substr($html, $pos, 1)) . ']]';
-					$pos++;
-				}
-
-				$this->logger->error($err, ['context' => LogContext::UTF8]);
-				$html = substr($html, $pos);
-			}
-
-			throw new \Mpdf\MpdfException("HTML contains invalid UTF-8 character(s). See log for further details");
+			$html = $this->repairInvalidUtf8($html, 'Invalid input characters. Did you set $mpdf->charset_in properly?');
 		}
 
 		$html = preg_replace("/\r/", "", $html);
@@ -26376,12 +26356,43 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 	{
 		// Make sure UTF-8 string of characters
 		if (!$this->is_utf8($txt)) {
-			throw new \Mpdf\MpdfException("Text contains invalid UTF-8 character(s)");
+			$txt = $this->repairInvalidUtf8($txt, 'Text contains invalid UTF-8 character(s)');
 		}
 
 		$txt = preg_replace("/\r/", "", $txt);
 
 		return ($txt);
+	}
+
+	/**
+	 * Logs the first run of bytes that are not UTF-8 and replaces every invalid sequence
+	 *
+	 * @param string $string
+	 * @param string $message What to throw with debug on
+	 *
+	 * @return string
+	 *
+	 * @throws \Mpdf\MpdfException With debug on
+	 */
+	private function repairInvalidUtf8($string, $message)
+	{
+		// mbstring replaces or drops what it cannot read, so the first difference is the first bad byte
+		$repaired = (string) mb_convert_encoding($string, 'UTF-8', 'UTF-8');
+		$pos = strspn($string ^ $repaired, "\0");
+
+		$err = '';
+		while (isset($string[$pos]) && ord($string[$pos]) >= 128) {
+			$err .= '[[#' . ord($string[$pos]) . ']]';
+			$pos++;
+		}
+
+		$this->logger->error($err, ['context' => LogContext::UTF8]);
+
+		if ($this->debug) {
+			throw new \Mpdf\MpdfException($message);
+		}
+
+		return $repaired;
 	}
 
 	function all_entities_to_utf8($txt)
