@@ -36,8 +36,7 @@ class IndexOrderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * Without a collation locale the entries are compared byte by byte once lower-cased, as strcoll() did in the "C"
-	 * locale, so the accented words come after "zebra"
+	 * Without a collation locale, lower-cased entries sort byte by byte, so accented words come after "zebra"
 	 */
 	public function testEntriesSortByteWiseWithoutACollationLocale()
 	{
@@ -48,7 +47,7 @@ class IndexOrderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * With a collation locale, ext-intl sorts the accented words among the others, ignoring case
+	 * With a collation locale and ext-intl, accented words sort among the others
 	 */
 	public function testEntriesSortByTheCollationLocale()
 	{
@@ -71,7 +70,7 @@ class IndexOrderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 	}
 
 	/**
-	 * The entry names of an index of mixed-case and accented words, sorted in $locale
+	 * Index entry names for a set of mixed-case and accented words, sorted in $locale
 	 */
 	private function sortedEntries($locale)
 	{

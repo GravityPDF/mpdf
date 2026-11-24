@@ -24486,8 +24486,8 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			setlocale(LC_COLLATE, $indexCollationLocale);
 		}
 
-		// strcoll() is deprecated from PHP 8.6: collate with ext-intl in the locale it would have used (an uninstalled
-		// $indexCollationLocale leaves the current one), or compare bytes in the "C" locale (or without ext-intl), as it does
+		// strcoll() is deprecated in PHP 8.6. Collate with ext-intl in the active LC_COLLATE locale instead, or compare bytes
+		// as strcoll() does in the "C" locale
 		$collationLocale = (string) setlocale(LC_COLLATE, 0);
 		$collator = class_exists('Collator') && !preg_match('/^(C|POSIX)?([.@]|$)/i', $collationLocale) ? \Collator::create($collationLocale) : null;
 		foreach ($this->Reference as $i => $reference) {
