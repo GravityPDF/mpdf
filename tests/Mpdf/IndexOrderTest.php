@@ -34,4 +34,61 @@ class IndexOrderTest extends \Yoast\PHPUnitPolyfills\TestCases\TestCase
 		}
 		$this->assertSame($expected, $listed[1]);
 	}
+
+	/**
+	 * Without a collation locale the entries are compared byte by byte once lower-cased, as strcoll() did in the "C"
+	 * locale, so the accented words come after "zebra"
+	 */
+	public function testEntriesSortByteWiseWithoutACollationLocale()
+	{
+		$this->assertSame(
+			['apple', 'Banana', 'eagle', 'Zebra', 'Éclair', 'église'],
+			$this->sortedEntries('')
+		);
+	}
+
+	/**
+	 * With a collation locale, ext-intl sorts the accented words among the others, ignoring case
+	 */
+	public function testEntriesSortByTheCollationLocale()
+	{
+		if (!class_exists('Collator')) {
+			$this->markTestSkipped('ext-intl is not loaded');
+		}
+
+		$originalLocale = setlocale(LC_COLLATE, 0);
+		$locale = setlocale(LC_COLLATE, ['en_US.UTF-8', 'en_US.utf8', 'en_US']);
+		setlocale(LC_COLLATE, $originalLocale);
+		if (!$locale) {
+			$this->markTestSkipped('No en_US locale is installed');
+		}
+
+		$this->assertSame(
+			['apple', 'Banana', 'eagle', 'Éclair', 'église', 'Zebra'],
+			$this->sortedEntries($locale)
+		);
+		$this->assertSame($originalLocale, setlocale(LC_COLLATE, 0));
+	}
+
+	/**
+	 * The entry names of an index of mixed-case and accented words, sorted in $locale
+	 */
+	private function sortedEntries($locale)
+	{
+		$mpdf = $this->mpdf();
+		$html = '';
+		foreach (['Zebra', 'église', 'apple', 'Éclair', 'Banana', 'eagle'] as $word) {
+			$html .= '<p>' . $word . '</p><indexentry content="' . $word . '" />';
+		}
+		$mpdf->WriteHTML($html);
+
+		$indexHtml = new \ReflectionMethod($mpdf, 'indexHtml');
+		if (PHP_VERSION_ID < 80100) {
+			$indexHtml->setAccessible(true);
+		}
+		preg_match_all('/mpdf_index_entry">(.*?)\x{a0}/u', $indexHtml->invoke($mpdf, 0, false, $locale, ''), $listed);
+		$mpdf->cleanup();
+
+		return $listed[1];
+	}
 }
