@@ -25260,21 +25260,18 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			setlocale(LC_COLLATE, $indexCollationLocale);
 		}
 
-		// strcoll() is deprecated from PHP 8.6: collate with ext-intl in the locale strcoll() would have used, or
-		// compare bytes in the "C" locale (or without ext-intl), which is what strcoll() does there
-		$collator = null;
+		// strcoll() is deprecated from PHP 8.6: collate with ext-intl in the locale it would have used (an uninstalled
+		// $indexCollationLocale leaves the current one), or compare bytes in the "C" locale (or without ext-intl), as it does
 		$collationLocale = (string) setlocale(LC_COLLATE, 0);
-		$collationLanguage = strtoupper(preg_replace('/[.@].*$/', '', $collationLocale));
-		if (class_exists('Collator') && !in_array($collationLanguage, ['', 'C', 'POSIX'], true)) {
-			$collator = \Collator::create($collationLocale);
+		$collator = class_exists('Collator') && !preg_match('/^(C|POSIX)?([.@]|$)/i', $collationLocale) ? \Collator::create($collationLocale) : null;
+		foreach ($this->Reference as $i => $reference) {
+			$key = mb_strtolower($reference['uf'], 'UTF-8');
+			$sortKey = $collator ? $collator->getSortKey($key) : false;
+			$this->Reference[$i]['k'] = $sortKey === false ? $key : $sortKey;
 		}
 
-		usort($this->Reference, function ($a, $b) use ($collator) {
-			$first = mb_strtolower($a['uf'], 'UTF-8');
-			$second = mb_strtolower($b['uf'], 'UTF-8');
-			$compared = $collator ? $collator->compare($first, $second) : strcmp($first, $second);
-
-			return $compared ?: $a['order'] - $b['order'];
+		usort($this->Reference, function ($a, $b) {
+			return strcmp($a['k'], $b['k']) ?: $a['order'] - $b['order'];
 		});
 
 		if ($indexCollationLocale) {
