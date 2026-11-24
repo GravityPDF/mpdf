@@ -24486,8 +24486,21 @@ class Mpdf implements \Psr\Log\LoggerAwareInterface
 			setlocale(LC_COLLATE, $indexCollationLocale);
 		}
 
-		usort($this->Reference, function ($a, $b) {
-			return strcoll(mb_strtolower($a['uf'], 'UTF-8'), mb_strtolower($b['uf'], 'UTF-8')) ?: $a['order'] - $b['order'];
+		// strcoll() is deprecated from PHP 8.6: collate with ext-intl in the locale strcoll() would have used, or
+		// compare bytes in the "C" locale (or without ext-intl), which is what strcoll() does there
+		$collator = null;
+		$collationLocale = (string) setlocale(LC_COLLATE, 0);
+		$collationLanguage = strtoupper(preg_replace('/[.@].*$/', '', $collationLocale));
+		if (class_exists('Collator') && !in_array($collationLanguage, ['', 'C', 'POSIX'], true)) {
+			$collator = \Collator::create($collationLocale);
+		}
+
+		usort($this->Reference, function ($a, $b) use ($collator) {
+			$first = mb_strtolower($a['uf'], 'UTF-8');
+			$second = mb_strtolower($b['uf'], 'UTF-8');
+			$compared = $collator ? $collator->compare($first, $second) : strcmp($first, $second);
+
+			return $compared ?: $a['order'] - $b['order'];
 		});
 
 		if ($indexCollationLocale) {
