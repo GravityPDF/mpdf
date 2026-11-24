@@ -16,6 +16,7 @@ Bugfixes
 * Small change to better support list-style-type on list items within tables
 * Fixed parsing sheet-size CSS property for @page
 * Conditional calls to functions removed in PHP 8.5
+* Replaced the `strcoll()` call deprecated in PHP 8.6 when sorting an index: entries are collated with ext-intl's `Collator`, or by byte without it
 
 mPDF 8.2.x
 ===========================
